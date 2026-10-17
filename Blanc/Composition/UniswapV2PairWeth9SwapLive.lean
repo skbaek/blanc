@@ -110,7 +110,7 @@ def SwapBackCalleeEnvW1.toEnv {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : 
     first := env.first, second := second, sentries := env.sentries, unlock := env.unlock }
 
 /-- The back environment carried to a gas-shifted join world: its records read the join world only
-off non-gas fields (`swapBalanceEnv_withGasLeft`, `swapRequestCharge_withGasLeft`), and the WETH9
+off non-gas fields (`swapBalanceEnv_withGasLeft`), and the WETH9
 query is staged over the first query's result. -/
 theorem SwapBackCalleeEnvW1.transport {sevm : Sevm} {d d' : Devm} {M M' : Mem} {n n' : Nat}
     {p p' : B256} {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}

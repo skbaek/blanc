@@ -80,14 +80,6 @@ section Skel
 
 variable (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B256)
 
-theorem xBalanceCallAt_eq (g k f r : Nat) :
-    xBalanceCallAt sevm B S M p t g k f r =
-      (xBalanceSkel sevm B S M p t).withGasLeft (g - k + r) := by
-  unfold xBalanceCallAt xBalanceSkel
-  rw [balMsg_sevm, balMsg_devm, balanceOfPost_reframe, balParent_eq]
-  unfold balanceOfPost
-  rw [retPost_gasLeft _ _ _ r 0, callChildPost_withGasLeft]
-
 end Skel
 
 section Spec

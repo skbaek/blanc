@@ -188,7 +188,6 @@ end Call
 /-! ## The instance's `transfer` leg -/
 
 theorem tx2St_token1 : tx2St.token1 = weth := rfl
-theorem tx2St_token0 : tx2St.token0 = tokenX := rfl
 
 /-- The `transfer` child's entry machine. -/
 abbrev tx2XferSevm (sevm : Sevm) (b : Devm) : Sevm :=
@@ -218,7 +217,6 @@ theorem tx2PrefixState_weth : (tx2PrefixState b).getStor weth = b.state.getStor 
 abbrev tx2D1 (sevm : Sevm) (b : Devm) : Devm :=
   wethTransferSkel sevm (swapPrefixWorld sevm b) (swapLocalsStack sevm tx2St) getterInitMemory 128
     swapOut trader.toB256 weth.toB256 0x8e1
-
 
 section Leg
 
@@ -292,6 +290,5 @@ theorem tx2_xferExt : xferExt (swapPrefixWorld sevm b) (swapLocalsStack sevm tx2
   decide +kernel
 
 end Leg
-
 
 end Blanc.Composition.UniswapV2PairWeth9Instance

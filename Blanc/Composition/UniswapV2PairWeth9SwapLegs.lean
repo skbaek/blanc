@@ -323,35 +323,4 @@ theorem swapWethRead1_spec {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B25
     unfold readCharge readUsed
     omega
 
-/-- The read leg's answer: the pair's WETH9 balance at `d0`. -/
-theorem swapWethRead1_answer {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
-    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat} {d0 : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
-    (wethCode : d0.state.getCode (swapTokenWord w.token1).toAdr = Weth9.code)
-    (notPrecompile : sevm.benvStat.rules.isPrecomp (swapTokenWord w.token1).toAdr = false)
-    (wf : Mem.Wf M) (width : p.toNat + 260 < 2 ^ 256)
-    (stackRoom : (swapCutTail w ρ R).length < 1014)
-    (fits : (swapWethRead1 sevm d M n p w ρ R G d0).2 < 2 ^ 256)
-    (room : readUsed sevm M p w ρ R d0 ≤
-      except64th (readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0)) :
-    swapBalanceWord (swapWethRead1 sevm d M n p w ρ R G d0).1.returnData =
-      d0.getStorVal (swapTokenWord w.token1).toAdr (Weth9.balSlot sevm.currentTarget) := by
-  have spec := wethBalanceCall_spec (sevm := sevm) (B := d0) (S := readStack w ρ R d0)
-    (M := readMem sevm M p d0) (p := p) (t := w.token1)
-    (cg := readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0) fork wethCode depth
-    notPrecompile (by simp only [readStack, List.length_cons]; omega) (swapBalanceReply_wf wf) width
-    fits (by unfold readCharge; omega)
-    (by
-      have e : readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0 -
-          balExt sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1 - balAcc d0 w.token1 =
-          readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0 := by
-        unfold readCharge readUsed; omega
-      rw [e]
-      exact room)
-  change swapBalanceWord (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
-      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).returnData = _
-  rw [spec.2.2.1, swapBalanceWord, List.take_of_length_le (by rw [B256.length_toBytes]),
-    B256.toB256_toBytes]
-  rfl
-
 end Blanc.Composition.UniswapV2PairWeth9Joint

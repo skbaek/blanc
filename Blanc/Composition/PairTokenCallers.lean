@@ -17,8 +17,7 @@ Against the token core only (no token storage layout), under the C3 hypotheses (
   (`SelfCaller`), and the Pair originates no settled root (EIP-3607, `pair ≠ systemAddress`));
 * `Core.good_along`: every ledger along the replay of a settled prefix is good;
 * `pair_token_segment`: along any contiguous run of settled frames, the Pair loses at most the
-  amounts of its own `transfer` entries and keeps a zero allowance (`BookLaws.run_holder`, A5 form);
-* `pair_token_allowZero`: the Pair's allowances stay zero at every settled frame and at the end.
+  amounts of its own `transfer` entries and keeps a zero allowance (`BookLaws.run_holder`, A5 form).
 -/
 
 namespace Blanc.Composition.PairTokenJoint
@@ -146,30 +145,5 @@ theorem pair_token_segment {pair T : Adr} {B : Book} (C : Core T B) (laws : Book
     initial fresh hist token unlocked apart notSystem factoryQuiet F settled entry static caller
   rw [op]
   trivial
-
-/-- **The Pair's allowances stay zero** at every settled frame and at the history's end. -/
-theorem pair_token_allowZero {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    (hist : C.Hist trace) (token : st₀.tokenOn side = T) (unlocked : st₀.unlocked = 1)
-    (apart : pair ≠ T) (notSystem : pair ≠ systemAddress)
-    (factoryQuiet : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
-      G.sevm.isStatic = false → G.sevm.caller ≠ st₀.factory)
-    (start : ∀ g, B.allow (C.ledgerOf trace checkpoint.state) pair g = 0) :
-    (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
-      trace.settledFrames = before ++ f :: after →
-      ∀ g, B.allow (C.ledgerOf trace f.pre.state) pair g = 0) ∧
-    ∀ g, B.allow (C.ledgerOf trace future.state) pair g = 0 := by
-  refine ⟨fun before f after split => ?_, ?_⟩
-  · exact (pair_token_segment C laws abi self side trace installed initial fresh hist token
-      unlocked apart notSystem factoryQuiet (pre := []) (mid := before) (post := f :: after)
-      (by rw [split]; rfl) rfl (C.replayAt trace hist before f after split) start).2
-  · exact (pair_token_segment C laws abi self side trace installed initial fresh hist token
-      unlocked apart notSystem factoryQuiet (pre := []) (mid := trace.settledFrames) (post := [])
-      (by rw [List.nil_append, List.append_nil]) rfl (C.replayEnd trace hist) start).2
 
 end Blanc.Composition.PairTokenJoint
