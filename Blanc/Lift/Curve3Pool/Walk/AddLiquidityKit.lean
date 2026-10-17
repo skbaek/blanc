@@ -30,6 +30,15 @@ macro "xma " pc:term:max n:term:max ri:term:max : tactic => `(tactic| (
   clear s hR hW hA
   obtain ⟨M, _, rfl, hR, hW, hA⟩ := e))
 
+
+set_option hygiene false in
+/-- An aligned `MLOAD` at `o` whose word is read off `hf : WordAt img₀ o w`, past any word
+writes disjoint from it on top of `img₀`. -/
+macro "xml " pc:term:max o:term:max hf:term:max : tactic => `(tactic| (
+  xma $pc (.reg .mload) (ri_mload_imgAtA (o := $o) rfl)
+  try simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint] at h
+  rw [($hf).read] at h))
+
 /-- **Crossing a certified exec-free callee** (`xa_callee` with the checked certificate as a
 hypothesis). -/
 theorem xa_al_callee {k : Nat} {e : Entry} {f : SFunc} {E : List Nat}
