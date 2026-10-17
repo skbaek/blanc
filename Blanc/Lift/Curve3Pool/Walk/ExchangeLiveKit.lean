@@ -129,6 +129,45 @@ theorem rxe_pcCall {Q : Outcome → Prop} {p k : Nat} {t0 t1 : UInt8} {D : Devm}
 
 end Fwd
 
+/-! ## The base a forward walk carries -/
+
+/-- **The forward walk's base**: the pool's storage is `σ` slot by slot, the identity precompile
+is ready, and the world invariant `W` (closed under the pool's own steps) holds. -/
+structure ExLive (sevm : Sevm) (W : Devm → Prop) (b : Devm) (σ : Stor) : Prop where
+  stor : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x
+  id : IdReady sevm b
+  wc : WClosed sevm W
+  w : W b
+
+namespace ExLive
+
+variable {sevm : Sevm} {W : Devm → Prop} {b b' : Devm} {σ : Stor}
+
+theorem sloadE {k : B256} (h : ExLive sevm W b σ) (e : b' = afterSload sevm b k) :
+    ExLive sevm W b' σ := by
+  subst e
+  exact ⟨fun x => by rw [afterSload_getStor]; exact h.stor x, h.id.afterSload k, h.wc,
+    h.wc.sload _ _ h.w⟩
+
+theorem sstoreE {k v : B256} (h : ExLive sevm W b σ) (e : b' = afterSstore sevm b k v) :
+    ExLive sevm W b' (σ.set k v) := by
+  subst e
+  exact ⟨fun x => by simp only [afterSstore_getStor_self, Stor.get_set_ite, h.stor],
+    h.id.afterSstore k v, h.wc, h.wc.sstore _ _ _ h.w⟩
+
+/-- The word an `SLOAD` read, as `σ`'s. -/
+theorem val {k v : B256} (h : ExLive sevm W b σ) (hv : v = b.getStorVal sevm.currentTarget k) :
+    v = σ.get k := by
+  rw [hv, getStorVal_eq, h.stor]
+
+theorem sha {rd : Bytes} (h : ExLive sevm W b σ) (hs : ShaCallPost b b' rd) :
+    ExLive sevm W b' σ :=
+  ⟨fun x => by rw [hs.stor]; exact h.stor x,
+    h.id.of_rel ⟨hs.stor, hs.code, hs.addrs, hs.logs, hs.output, hs.error⟩, h.wc,
+    h.wc.sha _ _ _ hs h.w⟩
+
+end ExLive
+
 /-- A branch condition the walk's context or the kernel settles. -/
 macro "xbr" : tactic => `(tactic| first | assumption | decide)
 
@@ -137,8 +176,11 @@ macro "xbr0" : tactic => `(tactic| first | assumption | decide)
 
 /-- Normalize the words a walk's `MLOAD`s pushed: a word write at the read's offset gives its
 word, a disjoint one is skipped. -/
-macro "wsimp" : tactic => `(tactic| simp (disch := decide) only
-  [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self])
+macro "wsimp" : tactic => `(tactic| simp (disch := first | decide | (simp only
+    [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons, List.length_nil,
+      List.length_append, transferFromSel, transferSel, burnFromSel, mintSel, balanceOfSel]; omega))
+  only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self,
+    Bytes.sliceD_writeAt_before, Bytes.sliceD_writeAt_after])
 
 /-- A word write read back at an offset proved equal to the write's. -/
 theorem WordAt.write_eq {img : Bytes} {o n : Nat} {w v : B256} (h : n = o) (hv : w = v) :
@@ -147,11 +189,12 @@ theorem WordAt.write_eq {img : Bytes} {o n : Nat} {w v : B256} (h : n = o) (hv :
 /-- One step of a carried-word search: a word write at the offset settles it, a disjoint word
 write is skipped. -/
 macro "wstep1" : tactic => `(tactic| first
-  | exact WordAt.write_eq (by decide) (by rfl)
   | refine WordAt.write_other ?_ (by
       simp only [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons,
-        List.length_nil, List.length_append]
-      omega))
+        List.length_nil, List.length_append, transferFromSel, transferSel, burnFromSel, mintSel,
+        balanceOfSel]
+      omega)
+  | exact WordAt.write_eq (by decide) (by rfl))
 
 /-- A carried word: peel the image's writes, then the context. -/
 macro "wauto" : tactic => `(tactic| (repeat wstep1) <;> try assumption)
