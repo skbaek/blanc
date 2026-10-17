@@ -4755,6 +4755,23 @@ contract-neutral.
   saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
   `memWord`/`Mem.AgreeOutside`; all in
   [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Vyper 0.2.x checked `uint256` arithmetic and word-slot frames: the idiom trees
+  `vyMulT`/`vyAddT`/`vySubT`/`vyDivT` (guard, `PUSH2 ok JUMPI` over `vyRevertT`, clean-up),
+  inverted by `ric_vyMulT`/`ric_vyAddT`/`ric_vySubT`/`ric_vyDivT` (the guard as a `Nat` fact:
+  `B256.Nofm`, no-wrap sum, no underflow, nonzero divisor) and built by
+  `rxc_vyMulT`/`rxc_vyAddT`/`rxc_vySubT`/`rxc_vyDivT` (69/51/45/38 gas); the bridges to the
+  checked naturals of `StableSwapNewton/Defs.lean` (`chkMul_toNat_of_nofm`, `chkAdd_toNat_of_lt`,
+  `chkSub_toNat_of_le`, `chkDiv_toNat_of_ne` and their inverses `chkMul_inv` … `chkDiv_inv`);
+  the frame carrier `WordFrame M0 M lo ws` (`ws` at `lo + 32 j`, `M0`'s size, agreement off the
+  window, `Mem.Wf` kept) with `ric_mloadF`/`ric_mstoreF` (and `PUSH2` forms) and their forward
+  `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
+  (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
+  `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
+  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`, …) and the
+  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_succ`; all in
+  [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
+  whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
 - Walking a successful frame along its own derivation (`XAt sevm post pc d L`: the actual state
   at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
   `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps

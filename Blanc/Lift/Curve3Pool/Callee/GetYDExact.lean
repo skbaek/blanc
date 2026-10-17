@@ -14,9 +14,6 @@ namespace Blanc.Lift.Curve3Pool
 open Jaune
 open Blanc.StableSwapNewton
 
-/-- Stack room, whatever the shape of the stack's known prefix. -/
-macro "room" : tactic => `(tactic| first | omega | (simp only [List.length_cons]; omega))
-
 theorem bodyYChk_inv {yw c bw D : B256} {y' : Nat}
     (h : bodyYChk c.toNat bw.toNat D.toNat yw.toNat = some y') :
     B256.Nofm yw yw ∧ (yw * yw).toNat + c.toNat < 2 ^ 256 ∧
@@ -65,20 +62,20 @@ theorem rxc_ydExit (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {yw ρ
   unfold ydExit
   refine rxc_dest (rxc_pop (rxc_pop ?_))
   refine rxc_pushMloadF hF 14 (by decide) hy (by omega) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   refine rxc_mstore (c := 3) (i := Bytes.toB256 [0x00]) (mstore_covered_cost' hsz
     (by rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide]; omega))
     (by rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide]) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   refine rxc_mload (c := 3) (i := Bytes.toB256 [0x00]) (v := yw) (mload_covered_cost' hsz1
     (by rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide]; omega)) hout.word0
     (read_covered rfl hsz1 (by rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide]; omega))
     (by omega) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   have e200 : (Bytes.toB256 [0x02, 0x00]).toNat = 0x140 + 32 * 6 := by decide
   refine rxc_mload (c := 3) (i := Bytes.toB256 [0x02, 0x00]) (v := ρ) (mload_covered_cost' hsz1
     (by rw [e200]; omega)) (by rw [e200]; exact hw 6 ρ hρ)
-    (read_covered rfl hsz1 (by rw [e200]; omega)) (by room) ?_
+    (read_covered rfl hsz1 (by rw [e200]; omega)) (by vy_room) ?_
   exact rxc_ret
 
 /-- The tail's test word: nonzero below `255`. -/
@@ -98,17 +95,17 @@ theorem rxc_ydTail_next (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {
       (.at k (St b (ydStk S) (M.write (0x140 + 32 * 15) (Nat.toB256 (n + 1)).toBytes) G)) := by
   unfold ydTail
   refine rxc_dest (rxc_dest ?_)
-  refine rxc_dup (w := Nat.toB256 0x320) rfl (by room) ?_
-  refine rxc_mloadF hF 15 (by decide) hn (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by room) ?_
-  refine rxc_dup (w := Nat.toB256 (n + 1)) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x320) rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 0x320) rfl (by vy_room) ?_
+  refine rxc_mloadF hF 15 (by decide) hn (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 (n + 1)) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x320) rfl (by vy_room) ?_
   refine rxc_mstoreF hF 15 (by decide) (by rw [hlen]; decide) ?_
-  refine rxc_dup (w := Nat.toB256 255) rfl (by room) ?_
-  refine rxc_eq rfl (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 255) rfl (by vy_room) ?_
+  refine rxc_eq rfl (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   exact rxc_branchTo_cut (iszero_eq255_ne (by omega) (by omega)) hk
 
 /-- **The counter tail**, forward, falling through after the last pass (45 gas). -/
@@ -120,17 +117,17 @@ theorem rxc_ydTail_last (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {
     SFunc.RunExactCut progYD sevm C (St b (ydStk S) M (G + 45)) (ydTail k fall) r := by
   unfold ydTail
   refine rxc_dest (rxc_dest ?_)
-  refine rxc_dup (w := Nat.toB256 0x320) rfl (by room) ?_
-  refine rxc_mloadF hF 15 (by decide) hn (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by room) ?_
-  refine rxc_dup (w := Nat.toB256 (n + 1)) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x320) rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 0x320) rfl (by vy_room) ?_
+  refine rxc_mloadF hF 15 (by decide) hn (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 (n + 1)) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x320) rfl (by vy_room) ?_
   refine rxc_mstoreF hF 15 (by decide) (by rw [hlen]; decide) ?_
-  refine rxc_dup (w := Nat.toB256 255) rfl (by room) ?_
-  refine rxc_eq rfl (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 255) rfl (by vy_room) ?_
+  refine rxc_eq rfl (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   have hw : B256.eqCheck (B256.eqCheck (Nat.toB256 255) (Nat.toB256 (n + 1))) 0 = 0 := by
     rw [hn1]; decide
   rw [hw]
@@ -166,34 +163,28 @@ theorem rxc_ydHeadPre (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {yw
     rw [List.getElem?_set_self (by rw [List.length_set, hlen]; decide)]
   unfold ydHead
   refine rxc_dest ?_
-  refine rxc_pushMloadF hF 14 (by decide) hy (by room) ?_
-  refine rxc_pushMstoreF hF 13 (by decide) (by rw [hlen]; decide) (by room) ?_
-  refine rxc_pushMloadF hF13 14 (by decide) h13y (by room) ?_
-  refine rxc_pushMloadF hF13 14 (by decide) h13y (by room) ?_
-  refine rxc_vyMulT hm1 (by room) ?_
-  refine rxc_pushMloadF hF13 7 (by decide) h13c (by room) ?_
-  refine rxc_vyAddT ha1 (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_pushMloadF hF13 14 (by decide) h13y (by room) ?_
-  refine rxc_vyMulT hm2 (by room) ?_
-  refine rxc_pushMloadF hF13 12 (by decide) h13b (by room) ?_
-  refine rxc_vyAddT ha2 (by room) ?_
-  refine rxc_pushMloadF hF13 5 (by decide) h13D (by room) ?_
-  refine rxc_vySubT hs (by room) ?_
-  refine rxc_vyDivT hd (by room) ?_
-  refine rxc_pushMstoreF hF13 14 (by decide) (by rw [List.length_set, hlen]; decide) (by room) ?_
-  refine rxc_pushMloadF hF14 13 (by decide) h14y (by room) ?_
-  refine rxc_pushMloadF hF14 14 (by decide) h14q (by room) ?_
+  refine rxc_pushMloadF hF 14 (by decide) hy (by vy_room) ?_
+  refine rxc_pushMstoreF hF 13 (by decide) (by rw [hlen]; decide) (by vy_room) ?_
+  refine rxc_pushMloadF hF13 14 (by decide) h13y (by vy_room) ?_
+  refine rxc_pushMloadF hF13 14 (by decide) h13y (by vy_room) ?_
+  refine rxc_vyMulT hm1 (by vy_room) ?_
+  refine rxc_pushMloadF hF13 7 (by decide) h13c (by vy_room) ?_
+  refine rxc_vyAddT ha1 (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_pushMloadF hF13 14 (by decide) h13y (by vy_room) ?_
+  refine rxc_vyMulT hm2 (by vy_room) ?_
+  refine rxc_pushMloadF hF13 12 (by decide) h13b (by vy_room) ?_
+  refine rxc_vyAddT ha2 (by vy_room) ?_
+  refine rxc_pushMloadF hF13 5 (by decide) h13D (by vy_room) ?_
+  refine rxc_vySubT hs (by vy_room) ?_
+  refine rxc_vyDivT hd (by vy_room) ?_
+  refine rxc_pushMstoreF hF13 14 (by decide) (by rw [List.length_set, hlen]; decide) (by vy_room) ?_
+  refine rxc_pushMloadF hF14 13 (by decide) h14y (by vy_room) ?_
+  refine rxc_pushMloadF hF14 14 (by decide) h14q (by vy_room) ?_
   refine rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-    (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  exact rxc_push rfl (by room) kk
-
-theorem gtCheck_toNat (x y : B256) : B256.gtCheck x y = if y.toNat < x.toNat then 1 else 0 := by
-  unfold B256.gtCheck
-  by_cases h : y.toNat < x.toNat
-  · rw [ite_eq_left h, ite_eq_left (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
-  · rw [ite_eq_right h, ite_eq_right (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
+    (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  exact rxc_push rfl (by vy_room) kk
 
 -- SEGMENT: rxc_ydHeadBr
 /-- **The stopping test, stopping**, forward: on to the exit `e`. -/
@@ -210,39 +201,39 @@ theorem rxc_ydHeadBr_close (hF : WordFrame M0 M 0x140 ws) {yw q : B256} {e t k :
   by_cases hgt : yw.toNat < q.toNat
   · rw [ite_eq_left hgt, gtCheck_toNat, ite_eq_left hgt]
     refine rxc_branch_zero (d := Bytes.toB256 [0x3c, 0x72]) ?_
-    refine rxc_push rfl (by room) ?_
-    refine rxc_pushMloadF hF 14 (by decide) h14 (by room) ?_
-    refine rxc_pushMloadF hF 13 (by decide) h13 (by room) ?_
-    refine rxc_vySubT (x := q) (y := yw) (by omega) (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
+    refine rxc_pushMloadF hF 14 (by decide) h14 (by vy_room) ?_
+    refine rxc_pushMloadF hF 13 (by decide) h13 (by vy_room) ?_
+    refine rxc_vySubT (x := q) (y := yw) (by omega) (by vy_room) ?_
     refine rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-      (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_push rfl (by room) ?_
+      (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     have hle : (q - yw).toNat ≤ 1 := by
       unfold closeEnough at hc; rw [ite_eq_left hgt] at hc
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]; exact hc
     rw [gtCheck_toNat, h1, ite_eq_right (by omega)]
     refine rxc_branch_zero (d := Bytes.toB256 [0x3c, 0x6d]) ?_
-    refine rxc_push rfl (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     exact rxc_jump he heC kk
   · rw [ite_eq_right hgt, gtCheck_toNat, ite_eq_right hgt]
     refine rxc_branch_succ (by decide) (rxc_dest ?_)
-    refine rxc_push rfl (by room) ?_
-    refine rxc_pushMloadF hF 13 (by decide) h13 (by room) ?_
-    refine rxc_pushMloadF hF 14 (by decide) h14 (by room) ?_
-    refine rxc_vySubT (x := yw) (y := q) (by omega) (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
+    refine rxc_pushMloadF hF 13 (by decide) h13 (by vy_room) ?_
+    refine rxc_pushMloadF hF 14 (by decide) h14 (by vy_room) ?_
+    refine rxc_vySubT (x := yw) (y := q) (by omega) (by vy_room) ?_
     refine rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-      (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_push rfl (by room) ?_
+      (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     have hle : (yw - q).toNat ≤ 1 := by
       unfold closeEnough at hc; rw [ite_eq_right (by omega)] at hc
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]; exact hc
     rw [gtCheck_toNat, h1, ite_eq_right (by omega)]
     refine rxc_branch_zero (d := Bytes.toB256 [0x3c, 0x9c]) ?_
-    refine rxc_push rfl (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     exact rxc_jump he heC kk
 
 /-- **The stopping test, going on**, forward: on to the counter tail. -/
@@ -262,33 +253,33 @@ theorem rxc_ydHeadBr_next (hF : WordFrame M0 M 0x140 ws) {yw q : B256} {e t k : 
   by_cases hgt : yw.toNat < q.toNat
   · rw [ite_eq_left hgt, gtCheck_toNat, ite_eq_left hgt]
     refine rxc_branch_zero (d := Bytes.toB256 [0x3c, 0x72]) ?_
-    refine rxc_push rfl (by room) ?_
-    refine rxc_pushMloadF hF 14 (by decide) h14 (by room) ?_
-    refine rxc_pushMloadF hF 13 (by decide) h13 (by room) ?_
-    refine rxc_vySubT (x := q) (y := yw) (by omega) (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
+    refine rxc_pushMloadF hF 14 (by decide) h14 (by vy_room) ?_
+    refine rxc_pushMloadF hF 13 (by decide) h13 (by vy_room) ?_
+    refine rxc_vySubT (x := q) (y := yw) (by omega) (by vy_room) ?_
     refine rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-      (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_push rfl (by room) ?_
+      (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     have hgt1 : 1 < (q - yw).toNat := by
       unfold closeEnough at hnc; rw [ite_eq_left hgt] at hnc
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]; omega
     rw [gtCheck_toNat, h1, ite_eq_left hgt1]
     refine rxc_branch_succ (by decide) (rxc_dest ?_)
-    refine rxc_push rfl (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     exact rxc_jump ht htC (kA hgt)
   · rw [ite_eq_right hgt, gtCheck_toNat, ite_eq_right hgt]
     refine rxc_branch_succ (by decide) (rxc_dest ?_)
-    refine rxc_push rfl (by room) ?_
-    refine rxc_pushMloadF hF 13 (by decide) h13 (by room) ?_
-    refine rxc_pushMloadF hF 14 (by decide) h14 (by room) ?_
-    refine rxc_vySubT (x := yw) (y := q) (by omega) (by room) ?_
+    refine rxc_push rfl (by vy_room) ?_
+    refine rxc_pushMloadF hF 13 (by decide) h13 (by vy_room) ?_
+    refine rxc_pushMloadF hF 14 (by decide) h14 (by vy_room) ?_
+    refine rxc_vySubT (x := yw) (y := q) (by omega) (by vy_room) ?_
     refine rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-      (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_iszero rfl (by room) ?_
-    refine rxc_push rfl (by room) ?_
+      (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_iszero rfl (by vy_room) ?_
+    refine rxc_push rfl (by vy_room) ?_
     have hgt1 : 1 < (yw - q).toNat := by
       unfold closeEnough at hnc; rw [ite_eq_right (by omega)] at hnc
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]; omega
@@ -297,57 +288,6 @@ theorem rxc_ydHeadBr_next (hF : WordFrame M0 M 0x140 ws) {yw q : B256} {e t k : 
     exact kB hgt
 
 /-! ## The `y` loop, forward -/
-
-/-- **One peeled pass, liveness, at one counter.**  The pass of a peeled copy `f` (whose back edge
-targets `k`) at the single counter `n0` (`n0 + 1 < cap`), followed by the statement for the
-continuation at `n0 + 1`.  Unlike `RunExactCut_fuelLoop_peel` it asks nothing of the copy at
-other counters, so a copy whose last-pass fall-through is unreachable qualifies. -/
-theorem RunExactCut_fuelLoop_peelAt {fs : List SFunc} {sevm : Sevm} {C : List Nat}
-    {k : Nat} {g f : SFunc} (hk : fs[k]? = some g) (hkC : k ∉ C) {cap : Nat}
-    {body : Nat → Option Nat} {close : Nat → Nat → Bool}
-    {cStep cStop cCap : Nat → Nat → Nat}
-    (At : Nat → Nat → Nat → Devm → Prop) (Exit : Nat → Nat → Seg → Prop) {n0 : Nat}
-    (hn0 : n0 + 1 < cap)
-    (next : ∀ D v G d, fuelLoop body close (cap - (n0 + 1)) D = some v →
-      At (n0 + 1) D (G + fuelCost body close cStep cStop cCap (cap - (n0 + 1)) D) d →
-      ∃ r, SFunc.RunExactCut fs sevm C d g r ∧ Exit v G r)
-    (hstep : ∀ D D' G d, body D = some D' → close D' D = false →
-      At n0 D (G + cStep D D') d →
-      ∃ d', SFunc.RunExactCut fs sevm (k :: C) d f (.at k d') ∧ At (n0 + 1) D' G d')
-    (hstop : ∀ D D' G d, body D = some D' → close D' D = true →
-      At n0 D (G + cStop D D') d →
-      ∃ r, SFunc.RunExactCut fs sevm (k :: C) d f r ∧ (∀ d', r ≠ .at k d') ∧ Exit D' G r) :
-    ∀ D v G d, fuelLoop body close (cap - n0) D = some v →
-      At n0 D (G + fuelCost body close cStep cStop cCap (cap - n0) D) d →
-      ∃ r, SFunc.RunExactCut fs sevm C d f r ∧ Exit v G r := by
-  intro D v G d hv hAt
-  obtain ⟨m, hm⟩ : ∃ m, cap - n0 = m + 2 := ⟨cap - n0 - 2, by omega⟩
-  rw [hm] at hv hAt
-  cases hb : body D with
-  | none => simp only [fuelLoop, hb, reduceCtorEq] at hv
-  | some D' =>
-    by_cases hc : close D' D = true
-    · have hvD : v = D' := by
-        simp only [fuelLoop, hb, hc, ↓reduceIte, Option.some.injEq] at hv
-        exact hv.symm
-      subst hvD
-      have hcost : fuelCost body close cStep cStop cCap (m + 2) D = cStop D v := by
-        simp only [fuelCost, hb, hc, ↓reduceIte]
-      rw [hcost] at hAt
-      obtain ⟨r, hrun, hne, hex⟩ := hstop D v G d hb hc hAt
-      exact ⟨r, SFunc.RunExactCut.uncut hrun hne, hex⟩
-    · have hc' : close D' D = false := by simpa only [Bool.not_eq_true] using hc
-      have hv' : fuelLoop body close (m + 1) D' = some v := by
-        simpa only [fuelLoop, hb, hc', Bool.false_eq_true, ↓reduceIte] using hv
-      have hcost : G + fuelCost body close cStep cStop cCap (m + 2) D =
-          (G + fuelCost body close cStep cStop cCap (m + 1) D') + cStep D D' := by
-        simp only [fuelCost, hb, hc', Bool.false_eq_true, ↓reduceIte]
-        omega
-      rw [hcost] at hAt
-      obtain ⟨d', hseg, hAt'⟩ := hstep D D' _ d hb hc' hAt
-      have hm' : cap - (n0 + 1) = m + 1 := by omega
-      obtain ⟨r, hrun, hex⟩ := next D' v G d' (by rw [hm']; exact hv') (by rw [hm']; exact hAt')
-      exact ⟨r, SFunc.RunExactCut.resume hk hkC hseg hrun, hex⟩
 
 /-- Gas of a Newton pass of the `y` loop that goes on, by the direction of the step. -/
 def ydStepC (y y' : Nat) : Nat := if y < y' then 551 else 541
@@ -533,15 +473,15 @@ theorem rxc_ydTest_skip (hF : WordFrame M0 M 0x140 ws) {j k1 k2 : Nat} {g2 : SFu
     SFunc.RunExactCut progYD sevm C (St b (ydCStk S) M (G + 44)) (ydTest k1 k2) r := by
   unfold ydTest
   refine rxc_dest ?_
-  refine rxc_pushMloadF hF 1 (by decide) hi (by room) ?_
-  refine rxc_pushMloadF hF 11 (by decide) hj (by room) ?_
+  refine rxc_pushMloadF hF 1 (by decide) hi (by vy_room) ?_
+  refine rxc_pushMloadF hF 11 (by decide) hj (by vy_room) ?_
   refine rxc_binary (fn := (· ^^^ ·)) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-    (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+    (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   rw [(B256.xor_eq_zero_iff _ _).mpr rfl]
   refine rxc_branch_succ (by decide) (rxc_dest ?_)
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   exact rxc_jump hk2 hk2C kk
 
 /-- **The coin-loop test, loading `_x = xp[j]`**, forward (95 gas). -/
@@ -554,27 +494,27 @@ theorem rxc_ydTest_load (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {
     SFunc.RunExactCut progYD sevm C (St b (ydCStk S) M (G + 95)) (ydTest k1 k2) r := by
   unfold ydTest
   refine rxc_dest ?_
-  refine rxc_pushMloadF hF 1 (by decide) hi (by room) ?_
-  refine rxc_pushMloadF hF 11 (by decide) hj (by room) ?_
+  refine rxc_pushMloadF hF 1 (by decide) hi (by vy_room) ?_
+  refine rxc_pushMloadF hF 11 (by decide) hj (by vy_room) ?_
   refine rxc_binary (fn := (· ^^^ ·)) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-    (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+    (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   rw [xor_toB256_ne hj3 hne]
   refine rxc_branch_zero ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_pushMloadF hF 11 (by decide) hj (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 j) rfl (by room) ?_
-  refine rxc_lt rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_pushMloadF hF 11 (by decide) hj (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 j) rfl (by vy_room) ?_
+  refine rxc_lt rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   refine rxc_branch_succ (lt3_check hj3) (rxc_dest ?_)
-  refine rxc_push rfl (by room) ?_
-  refine rxc_binary (fn := (· * ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) rfl (by room) ?_
-  refine rxc_add (by room) ?_
-  refine rxc_mloadF hF (2 + j) (ydXpAddr hj3) hx (by room) ?_
-  refine rxc_pushMstoreF hF 10 (by decide) (by rw [hlen]; decide) (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_binary (fn := (· * ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) rfl (by vy_room) ?_
+  refine rxc_add (by vy_room) ?_
+  refine rxc_mloadF hF (2 + j) (ydXpAddr hj3) hx (by vy_room) ?_
+  refine rxc_pushMstoreF hF 10 (by decide) (by rw [hlen]; decide) (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   exact rxc_jump hk1 hk1C kk
 
 theorem iszero_eq3_neX {m : Nat} (hm : m < 3) :
@@ -596,17 +536,17 @@ theorem rxc_ydCoinTail_next (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 1
       (ydCoinTail (.branchTo .undefined k)) r := by
   unfold ydCoinTail
   refine rxc_dest ?_
-  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by room) ?_
-  refine rxc_mloadF hF 11 (by decide) hj (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by room) ?_
-  refine rxc_dup (w := Nat.toB256 (j + 1)) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by vy_room) ?_
+  refine rxc_mloadF hF 11 (by decide) hj (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 (j + 1)) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by vy_room) ?_
   refine rxc_mstoreF hF 11 (by decide) (by rw [hlen]; decide) ?_
-  refine rxc_dup (w := Nat.toB256 3) rfl (by room) ?_
-  refine rxc_eq rfl (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 3) rfl (by vy_room) ?_
+  refine rxc_eq rfl (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   exact rxc_branchTo_succ (iszero_eq3_neX hj3) hkC hk kk
 
 /-- **The last coin-loop counter tail, on to the set-up `g`**, forward (44 gas). -/
@@ -619,17 +559,17 @@ theorem rxc_ydCoinTail_last (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 1
       (ydCoinTail (.branch g .undefined)) r := by
   unfold ydCoinTail
   refine rxc_dest ?_
-  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by room) ?_
-  refine rxc_mloadF hF 11 (by decide) hj (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by room) ?_
-  refine rxc_dup (w := Nat.toB256 (j + 1)) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by vy_room) ?_
+  refine rxc_mloadF hF 11 (by decide) hj (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 (j + 1)) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by vy_room) ?_
   refine rxc_mstoreF hF 11 (by decide) (by rw [hlen]; decide) ?_
-  refine rxc_dup (w := Nat.toB256 3) rfl (by room) ?_
-  refine rxc_eq rfl (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+  refine rxc_dup (w := Nat.toB256 3) rfl (by vy_room) ?_
+  refine rxc_eq rfl (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   have hw : B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (j + 1))) 0 = 0 := by
     rw [hj3]; decide
   rw [hw]
@@ -670,22 +610,22 @@ theorem rxc_ydAcc (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {c s x 
     rw [List.getElem?_set_ne (by decide)]; exact hx
   unfold ydAcc
   refine rxc_dest ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_dup (w := Bytes.toB256 [0x02, 0x40]) rfl (by room) ?_
-  refine rxc_mloadF hF 8 (by decide) hs (by room) ?_
-  refine rxc_pushMloadF hF 10 (by decide) hx (by room) ?_
-  refine rxc_vyAddT ha (by room) ?_
-  refine rxc_dup (w := Bytes.toB256 [0x02, 0x40]) rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_dup (w := Bytes.toB256 [0x02, 0x40]) rfl (by vy_room) ?_
+  refine rxc_mloadF hF 8 (by decide) hs (by vy_room) ?_
+  refine rxc_pushMloadF hF 10 (by decide) hx (by vy_room) ?_
+  refine rxc_vyAddT ha (by vy_room) ?_
+  refine rxc_dup (w := Bytes.toB256 [0x02, 0x40]) rfl (by vy_room) ?_
   refine rxc_mstoreF hF 8 (by decide) (by rw [hlen]; decide) ?_
   refine rxc_pop ?_
-  refine rxc_pushMloadF hF8 7 (by decide) hc1 (by room) ?_
-  refine rxc_pushMloadF hF8 5 (by decide) hD1 (by room) ?_
-  refine rxc_vyMulT hm1 (by room) ?_
-  refine rxc_pushMloadF hF8 10 (by decide) hx1 (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_vyMulT hm2 (by room) ?_
-  refine rxc_vyDivT hd (by room) ?_
-  exact rxc_pushMstoreF hF8 7 (by decide) (by rw [List.length_set, hlen]; decide) (by room) kk
+  refine rxc_pushMloadF hF8 7 (by decide) hc1 (by vy_room) ?_
+  refine rxc_pushMloadF hF8 5 (by decide) hD1 (by vy_room) ?_
+  refine rxc_vyMulT hm1 (by vy_room) ?_
+  refine rxc_pushMloadF hF8 10 (by decide) hx1 (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_vyMulT hm2 (by vy_room) ?_
+  refine rxc_vyDivT hd (by vy_room) ?_
+  exact rxc_pushMstoreF hF8 7 (by decide) (by rw [List.length_set, hlen]; decide) (by vy_room) kk
 
 theorem ydPostRes_inv {c s D ann : B256} {y : Nat}
     (h : ydPostRes c.toNat s.toNat D.toNat ann.toNat = some y) :
@@ -738,32 +678,32 @@ theorem rxc_ydPost {A i x0 x1 x2 D ρ c s ann xv cc w12 w13 w14 w15 : B256} {y :
     omega]
   unfold ydPost0 ydPost
   refine rxc_dest (rxc_pop (rxc_pop ?_))
-  refine rxc_pushMloadF hF 7 (by decide) rfl (by room) ?_
-  refine rxc_pushMloadF hF 5 (by decide) rfl (by room) ?_
-  refine rxc_vyMulT hm1 (by room) ?_
-  refine rxc_pushMloadF hF 9 (by decide) rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_vyMulT hm2 (by room) ?_
-  refine rxc_vyDivT hd1 (by room) ?_
-  refine rxc_pushMstoreF hF 7 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMloadF hF1 8 (by decide) rfl (by room) ?_
-  refine rxc_pushMloadF hF1 5 (by decide) rfl (by room) ?_
-  refine rxc_pushMloadF hF1 9 (by decide) rfl (by room) ?_
-  refine rxc_vyDivT hd2 (by room) ?_
-  refine rxc_vyAddT ha (by room) ?_
-  refine rxc_pushMstoreF hF1 12 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push toB256_zero (by room) ?_
-  refine rxc_pushMstoreF hF2 13 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMloadF hF3 5 (by decide) rfl (by room) ?_
-  refine rxc_pushMstoreF hF3 14 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push toB256_0x320 (by room) ?_
-  refine rxc_push toB256_zero (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x320) rfl (by room) ?_
+  refine rxc_pushMloadF hF 7 (by decide) rfl (by vy_room) ?_
+  refine rxc_pushMloadF hF 5 (by decide) rfl (by vy_room) ?_
+  refine rxc_vyMulT hm1 (by vy_room) ?_
+  refine rxc_pushMloadF hF 9 (by decide) rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_vyMulT hm2 (by vy_room) ?_
+  refine rxc_vyDivT hd1 (by vy_room) ?_
+  refine rxc_pushMstoreF hF 7 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMloadF hF1 8 (by decide) rfl (by vy_room) ?_
+  refine rxc_pushMloadF hF1 5 (by decide) rfl (by vy_room) ?_
+  refine rxc_pushMloadF hF1 9 (by decide) rfl (by vy_room) ?_
+  refine rxc_vyDivT hd2 (by vy_room) ?_
+  refine rxc_vyAddT ha (by vy_room) ?_
+  refine rxc_pushMstoreF hF1 12 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push toB256_zero (by vy_room) ?_
+  refine rxc_pushMstoreF hF2 13 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMloadF hF3 5 (by decide) rfl (by vy_room) ?_
+  refine rxc_pushMstoreF hF3 14 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push toB256_0x320 (by vy_room) ?_
+  refine rxc_push toB256_zero (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x320) rfl (by vy_room) ?_
   refine rxc_mstoreF hF4 15 (by decide) (lt16 (by decide)) ?_
   refine rxc_add' (show Bytes.toB256 [0xff] + Nat.toB256 0 = Nat.toB256 255 by decide)
-    (by room) ?_
+    (by vy_room) ?_
   exact hrun
 
 /-! ## Costs on naturals -/
@@ -1001,45 +941,45 @@ theorem rxc_ydPro {ρ A i x0 x1 x2 D : B256} (hsz : M.size % 32 = 0) (hcov : 0x3
   obtain ⟨hs0, hs3⟩ := slt_small hi
   unfold ydEntry
   refine rxc_dest ?_
-  refine rxc_pushMstoreF hF 6 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h6 0 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h0 1 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h1 2 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h2 3 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h3 4 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMstoreF h4 5 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_pushMloadF h5 1 (by decide) rfl (by room) ?_
+  refine rxc_pushMstoreF hF 6 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h6 0 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h0 1 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h1 2 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h2 3 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h3 4 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMstoreF h4 5 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_pushMloadF h5 1 (by decide) rfl (by vy_room) ?_
   refine rxc_binary (fn := B256.sltCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-    (by room) ?_
-  refine rxc_iszero rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
+    (by vy_room) ?_
+  refine rxc_iszero rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   rw [hs0]
   refine rxc_branch_succ (by decide) (rxc_dest ?_)
-  refine rxc_push rfl (by room) ?_
-  refine rxc_pushMloadF h5 1 (by decide) rfl (by room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_pushMloadF h5 1 (by decide) rfl (by vy_room) ?_
   refine rxc_binary (fn := B256.sltCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) rfl
-    (by room) ?_
-  refine rxc_push rfl (by room) ?_
+    (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
   rw [hs3]
   refine rxc_branch_succ (by decide) (rxc_dest ?_)
-  refine rxc_pushMloadF h5 5 (by decide) rfl (by room) ?_
-  refine rxc_pushMstoreF h5 7 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push toB256_zero (by room) ?_
-  refine rxc_pushMstoreF h7 8 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_pushMloadF h8 0 (by decide) rfl (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_vyMulT hm (by room) ?_
-  refine rxc_pushMstoreF h8 9 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push toB256_zero (by room) ?_
-  refine rxc_pushMstoreF h9 10 (by decide) (lt16 (by decide)) (by room) ?_
-  refine rxc_push toB256_0x2a0 (by room) ?_
-  refine rxc_push toB256_zero (by room) ?_
-  refine rxc_push rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0) rfl (by room) ?_
-  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by room) ?_
+  refine rxc_pushMloadF h5 5 (by decide) rfl (by vy_room) ?_
+  refine rxc_pushMstoreF h5 7 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push toB256_zero (by vy_room) ?_
+  refine rxc_pushMstoreF h7 8 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_pushMloadF h8 0 (by decide) rfl (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_vyMulT hm (by vy_room) ?_
+  refine rxc_pushMstoreF h8 9 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push toB256_zero (by vy_room) ?_
+  refine rxc_pushMstoreF h9 10 (by decide) (lt16 (by decide)) (by vy_room) ?_
+  refine rxc_push toB256_0x2a0 (by vy_room) ?_
+  refine rxc_push toB256_zero (by vy_room) ?_
+  refine rxc_push rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0) rfl (by vy_room) ?_
+  refine rxc_dup (w := Nat.toB256 0x2a0) rfl (by vy_room) ?_
   refine rxc_mstoreF h10 11 (by decide) (lt16 (by decide)) ?_
-  refine rxc_add' (show Bytes.toB256 [0x03] + Nat.toB256 0 = Nat.toB256 3 by decide) (by room) ?_
+  refine rxc_add' (show Bytes.toB256 [0x03] + Nat.toB256 0 = Nat.toB256 3 by decide) (by vy_room) ?_
   exact kk'
 
 theorem ydPro_frame {ρ A i x0 x1 x2 D : B256} (hsz : M.size % 32 = 0) (hcov : 0x340 ≤ M.size) :

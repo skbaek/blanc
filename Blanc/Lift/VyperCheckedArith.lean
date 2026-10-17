@@ -740,4 +740,23 @@ theorem rxc_branchTo_succ {d w : B256} (hw : w ≠ 0) (hjC : j ∉ C) (hj : fs[j
 
 end FwdBranchTo
 
+/-! ## Small word facts for the walks -/
+
+/-- Stack room, whatever the shape of the stack's known prefix. -/
+macro "vy_room" : tactic => `(tactic| first | omega | (simp only [List.length_cons]; omega))
+
+theorem toB256_eq_toB256_iff {a c : Nat} (ha : a < 2 ^ 256) (hc : c < 2 ^ 256) :
+    Nat.toB256 a = Nat.toB256 c ↔ a = c := by
+  constructor
+  · intro h
+    have := congrArg B256.toNat h
+    rwa [B256.toNat_toB256_of_lt ha, B256.toNat_toB256_of_lt hc] at this
+  · intro h; rw [h]
+
+theorem gtCheck_toNat (x y : B256) : B256.gtCheck x y = if y.toNat < x.toNat then 1 else 0 := by
+  unfold B256.gtCheck
+  by_cases h : y.toNat < x.toNat
+  · rw [ite_eq_left h, ite_eq_left (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
+  · rw [ite_eq_right h, ite_eq_right (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
+
 end Blanc.Lift

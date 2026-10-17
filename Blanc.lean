@@ -831,6 +831,7 @@ import Blanc.Lift.MemGlue
 -- Contract-neutral internal-call idiom and Vyper frame save/restore chains.
 import Blanc.Lift.InvWalkCallNext
 import Blanc.Lift.VyperFrameLoop
+import Blanc.Lift.VyperCheckedArith
 
 -- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model
@@ -856,6 +857,15 @@ import Blanc.Lift.Curve3Pool.Walk.AdminBalances
 import Blanc.Lift.Curve3Pool.Walk.Donate
 import Blanc.Lift.Curve3Pool.Walk.Getters
 import Blanc.Lift.Curve3Pool.KitCheck
+import Blanc.Lift.Curve3Pool.Callee.GetYDTrees
+import Blanc.Lift.Curve3Pool.Callee.GetYDLoop
+import Blanc.Lift.Curve3Pool.Callee.GetYDCoins
+import Blanc.Lift.Curve3Pool.Callee.GetYD
+import Blanc.Lift.Curve3Pool.Callee.GetYDExact
+import Blanc.Lift.Curve3Pool.Callee.GetDTrees
+import Blanc.Lift.Curve3Pool.Callee.GetDLoop
+import Blanc.Lift.Curve3Pool.Callee.GetD
+import Blanc.Lift.Curve3Pool.Callee.GetDExact
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

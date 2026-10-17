@@ -402,4 +402,55 @@ theorem RunExactCut_fuelLoop_peel {fs : List SFunc} {sevm : Sevm} {C : List Nat}
   exact RunExactCut_fuelLoop_pass hk hkC At Exit hstep hstop hcap hn
     (fun h1 D' v' G' d' => next (n + 1) D' v' G' d' h1) D v G d
 
+/-- **One peeled pass, liveness, at one counter.**  The pass of a peeled copy `f` (whose back edge
+targets `k`) at the single counter `n0` (`n0 + 1 < cap`), followed by the statement for the
+continuation at `n0 + 1`.  Unlike `RunExactCut_fuelLoop_peel` it asks nothing of the copy at
+other counters, so a copy whose last-pass fall-through is unreachable qualifies. -/
+theorem RunExactCut_fuelLoop_peelAt {fs : List SFunc} {sevm : Sevm} {C : List Nat}
+    {k : Nat} {g f : SFunc} (hk : fs[k]? = some g) (hkC : k ∉ C) {cap : Nat}
+    {body : Nat → Option Nat} {close : Nat → Nat → Bool}
+    {cStep cStop cCap : Nat → Nat → Nat}
+    (At : Nat → Nat → Nat → Devm → Prop) (Exit : Nat → Nat → Seg → Prop) {n0 : Nat}
+    (hn0 : n0 + 1 < cap)
+    (next : ∀ D v G d, fuelLoop body close (cap - (n0 + 1)) D = some v →
+      At (n0 + 1) D (G + fuelCost body close cStep cStop cCap (cap - (n0 + 1)) D) d →
+      ∃ r, SFunc.RunExactCut fs sevm C d g r ∧ Exit v G r)
+    (hstep : ∀ D D' G d, body D = some D' → close D' D = false →
+      At n0 D (G + cStep D D') d →
+      ∃ d', SFunc.RunExactCut fs sevm (k :: C) d f (.at k d') ∧ At (n0 + 1) D' G d')
+    (hstop : ∀ D D' G d, body D = some D' → close D' D = true →
+      At n0 D (G + cStop D D') d →
+      ∃ r, SFunc.RunExactCut fs sevm (k :: C) d f r ∧ (∀ d', r ≠ .at k d') ∧ Exit D' G r) :
+    ∀ D v G d, fuelLoop body close (cap - n0) D = some v →
+      At n0 D (G + fuelCost body close cStep cStop cCap (cap - n0) D) d →
+      ∃ r, SFunc.RunExactCut fs sevm C d f r ∧ Exit v G r := by
+  intro D v G d hv hAt
+  obtain ⟨m, hm⟩ : ∃ m, cap - n0 = m + 2 := ⟨cap - n0 - 2, by omega⟩
+  rw [hm] at hv hAt
+  cases hb : body D with
+  | none => simp only [fuelLoop, hb, reduceCtorEq] at hv
+  | some D' =>
+    by_cases hc : close D' D = true
+    · have hvD : v = D' := by
+        simp only [fuelLoop, hb, hc, ↓reduceIte, Option.some.injEq] at hv
+        exact hv.symm
+      subst hvD
+      have hcost : fuelCost body close cStep cStop cCap (m + 2) D = cStop D v := by
+        simp only [fuelCost, hb, hc, ↓reduceIte]
+      rw [hcost] at hAt
+      obtain ⟨r, hrun, hne, hex⟩ := hstop D v G d hb hc hAt
+      exact ⟨r, SFunc.RunExactCut.uncut hrun hne, hex⟩
+    · have hc' : close D' D = false := by simpa only [Bool.not_eq_true] using hc
+      have hv' : fuelLoop body close (m + 1) D' = some v := by
+        simpa only [fuelLoop, hb, hc', Bool.false_eq_true, ↓reduceIte] using hv
+      have hcost : G + fuelCost body close cStep cStop cCap (m + 2) D =
+          (G + fuelCost body close cStep cStop cCap (m + 1) D') + cStep D D' := by
+        simp only [fuelCost, hb, hc', Bool.false_eq_true, ↓reduceIte]
+        omega
+      rw [hcost] at hAt
+      obtain ⟨d', hseg, hAt'⟩ := hstep D D' _ d hb hc' hAt
+      have hm' : cap - (n0 + 1) = m + 1 := by omega
+      obtain ⟨r, hrun, hex⟩ := next D' v G d' (by rw [hm']; exact hv') (by rw [hm']; exact hAt')
+      exact ⟨r, SFunc.RunExactCut.resume hk hkC hseg hrun, hex⟩
+
 end Blanc.Lift

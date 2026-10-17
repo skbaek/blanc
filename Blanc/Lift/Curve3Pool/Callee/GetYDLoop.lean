@@ -105,20 +105,6 @@ theorem ric_ydExit (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {yw ρ
   have h0 : Bytes.toB256 ((M.write 0 yw.toBytes).read 0 32).1 = yw := hout.word0
   rw [hr, h0]
 
-theorem toB256_eq_toB256_iff {a c : Nat} (ha : a < 2 ^ 256) (hc : c < 2 ^ 256) :
-    Nat.toB256 a = Nat.toB256 c ↔ a = c := by
-  constructor
-  · intro h
-    have := congrArg B256.toNat h
-    rwa [B256.toNat_toB256_of_lt ha, B256.toNat_toB256_of_lt hc] at this
-  · intro h; rw [h]
-
-/-- `PUSH1 1 ADD` on a counter word. -/
-theorem one_add_toB256 {n : Nat} (hn : n + 1 < 2 ^ 256) :
-    Bytes.toB256 [0x01] + Nat.toB256 n = Nat.toB256 (n + 1) := by
-  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
-    Nat.add_comm]
-
 -- SEGMENT: ydTail
 /-- **The counter tail**, inverted: the counter advances; below `255` the run re-enters the cut
 head `k`, at `255` it falls through. -/
