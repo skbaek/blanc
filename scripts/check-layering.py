@@ -764,7 +764,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.LiveKit",
                     "Lift.Curve3Pool.LivePremises",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
-                    "Lift.Curve3Pool.RemoveLiquidityLiveness"],
+                    "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.AdminRaw"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
