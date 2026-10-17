@@ -229,6 +229,23 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 
+# The positional frame ladder, root-frame caller facts, the generic token core over a settled
+# history, finite checkpoints, retained-target completeness and the EIP-7702 designator length
+# fact (uniswap-weth9-composition-v1): contract-neutral.
+SHARED += [
+    "ExecutionAccountingPositional",
+    "ExecutionAccountingPositionalHistory",
+    "ExecutionTraceRootCallers",
+    "Lift.FiniteCheckpoint",
+    "Lift.RetainedTargetCompleteness",
+    "Lift.Token.Abi",
+    "Lift.Token.Along",
+    "Lift.Token.Core",
+    "Lift.Token.Holder",
+    "Lift.Token.SelfCaller",
+    "CodeDelegation",
+]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
@@ -313,10 +330,6 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairHistoryLive",
         "Lift.UniswapV2Pair.PairHistoryLiveAdmin",
         "Lift.UniswapV2Pair.PairHistoryMinLiquidity",
-        "Lift.UniswapV2Pair.PairCallShape",
-        "Lift.UniswapV2Pair.PairCallSiteShape",
-        "Lift.UniswapV2Pair.PairCallSites",
-        "Lift.UniswapV2Pair.PairCallSitesCheck",
         "Lift.UniswapV2Pair.SwapForwardBack",
         "Lift.UniswapV2Pair.SwapForwardBalance",
         "Lift.UniswapV2Pair.SwapForwardCallback",
@@ -932,15 +945,40 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal",
 ])
 
+# Pair-side facts of uniswap-weth9-composition-v1 stay within the Pair family. The deployed
+# UniswapV2Factory joins the same family: its runtime embeds the registered Pair creation code
+# (`Lift.UniswapV2Factory.Input` imports `Lift.UniswapV2Pair.Creation.Cert`), so the factory is
+# part of the Uniswap V2 deployment system rather than a sibling of the Pair.
+CONTRACTS["uniswap-v2-pair"].extend([
+    "Lift.UniswapV2Pair.FiniteCheckpoint",
+    "Lift.UniswapV2Pair.ModelControlsSides",
+    "Lift.UniswapV2Pair.PairHistoryShape",
+    "Lift.UniswapV2Pair.PairModelFix",
+    "Lift.UniswapV2Pair.PairPositionalCalls",
+    "Lift.UniswapV2Pair.PairPositionalState",
+    "Lift.UniswapV2Pair.PairStepShape",
+    "Lift.UniswapV2Pair.PropertiesSides",
+    "Lift.UniswapV2Factory.Cert",
+    "Lift.UniswapV2Factory.Check",
+    "Lift.UniswapV2Factory.Code",
+    "Lift.UniswapV2Factory.Input",
+    "Lift.UniswapV2Factory.Jumps",
+])
+
+# The WETH9 finite footprint and the Token20 run splits stay within their contract families.
+CONTRACTS["weth9"].extend([
+    "Lift.Weth9.FiniteFootprint",
+])
+CONTRACTS["vyper-nonreentrant-deployed"].extend([
+    "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+])
+
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
 # `import Blanc.Composition.X` writes them. This is the only category permitted
 # to name more than one contract family, and adding a module here is the moment
 # check 4 starts binding it. Nothing may import back into this list.
 COMPOSITION = [
-    "Composition.UniswapV2PairWeth9Calls",
-    "Composition.Weth9SettledCallers",
-    "Composition.UniswapV2PairWeth9",
-    "Composition.UniswapV2PairWeth9Frame",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
@@ -985,6 +1023,37 @@ COMPOSITION = [
     "Composition.ProrataWethVaultWithdrawLocator",
     "Composition.ProrataWethVaultLedgerFaithful",
     "Composition.Weth9WethGas",
+    # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
+    "Composition.PairTokenCallers",
+    "Composition.PairTokenJointAt",
+    "Composition.PairTokenStepFrames",
+    "Composition.PairTokenStepOracle",
+    "Composition.UniswapV2PairWeth9Block",
+    "Composition.UniswapV2PairWeth9BlockBody",
+    "Composition.UniswapV2PairWeth9BlockData",
+    "Composition.UniswapV2PairWeth9CheckJoint",
+    "Composition.UniswapV2PairWeth9Checkpoint",
+    "Composition.UniswapV2PairWeth9CheckpointCore",
+    "Composition.UniswapV2PairWeth9Deploy",
+    "Composition.UniswapV2PairWeth9SigningData",
+    "Composition.UniswapV2PairWeth9SigningTx1Encoding",
+    "Composition.UniswapV2PairWeth9SigningTx1Hash",
+    "Composition.UniswapV2PairWeth9SigningTx1Recover",
+    "Composition.UniswapV2PairWeth9SigningTx2Encoding",
+    "Composition.UniswapV2PairWeth9SigningTx2Hash",
+    "Composition.UniswapV2PairWeth9SigningTx2Recover",
+    "Composition.UniswapV2PairWeth9Tx1",
+    "Composition.UniswapV2PairWeth9Tx1Effects",
+    "Composition.UniswapV2PairWeth9Tx1Frame",
+    "Composition.UniswapV2PairWeth9Tx2Data",
+    "Composition.UniswapV2PairWeth9W0",
+    "Composition.Weth9Token",
+    "Composition.Weth9TokenCore",
+    "Composition.Weth9TokenFrames",
+    "Composition.Weth9TokenFramesExec",
+    "Composition.Weth9TokenFramesNode",
+    "Composition.Weth9TokenOutputsTransfer",
+    "Composition.Weth9TokenOutputsWalk",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

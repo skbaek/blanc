@@ -632,8 +632,8 @@ states the desired property of frames at `ca` called by `p`. `settledRoots`
 is defined at every trace layer, with `settledFrames_eq : settledFrames =
 rootFrames settledRoots`. For the parent-to-child fold consuming this
 vocabulary, use `ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`
-in `Blanc/Lift/CallChildren.lean`, described below. The first consumer is
-`Blanc/Composition/UniswapV2PairWeth9Calls.lean`.
+in `Blanc/Lift/CallChildren.lean`, described below. Worked use:
+`Blanc/Composition/PairTokenCallers.lean`.
 
 To show that every direct child of a frame is called by the frame's own current
 target, use
@@ -645,8 +645,18 @@ CALL/STATICCALL-only restriction along its chain (a checked certificate's
 frame has only static children. For the caller fold of
 `Blanc/Lift/CallerProvenance.lean` with the weaker obligation that every direct
 child of a frame at `p` or `ca` satisfies the target property (`CallerChildren`),
-use `ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`. The first
-consumer is `Blanc/Composition/Weth9SettledCallers.lean`.
+use `ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`. Worked use:
+`Blanc/Composition/PairTokenCallers.lean`.
+The fold's root case needs that `ca` enters no settled message root itself.
+[`Blanc/ExecutionTraceRootCallers.lean`](../Blanc/ExecutionTraceRootCallers.lean)
+gives it: `ConfiguredHistoryTrace.settledRoots_caller_ne` says every settled
+root of a configured history has a caller other than `ca`, for an address whose
+contract invariant holds at the checkpoint and is preserved by its admitted
+frames (EIP-3607 makes it no sender, `TransactionTrace.sender_ne_sem`) and that
+is not `systemAddress`. The per-wrapper forms (`ProcessMessageTrace`,
+`MessageCallTrace`, `SystemMessageTrace`, `RequestsTrace`, `TransactionTrace`,
+`ApplyTransactionsTrace`, `AppliedBodyTrace` `.settledRoots_caller[_ne]`) are
+the same fact at each layer.
 
 To show that every direct child of a certified frame comes from one of a few
 call sites, use [`Blanc/Lift/CallSiteChildren.lean`](../Blanc/Lift/CallSiteChildren.lean)
@@ -661,8 +671,9 @@ node that decodes an external instruction. Name a site inside a generated
 tree's straight prefix with `SFunc.lineDrop n t` (`SFunc.lineSuffix_lineDrop`).
 `Xinst.step_call_spawn_selector` equates a CALL child's selector with
 `CallInputSelector`'s reading of the parent's input window;
-`ChainMemoryBelow R bound` is the memory bound such content facts take. The
-first consumer is `Blanc/Lift/UniswapV2Pair/PairCallShape.lean`.
+`ChainMemoryBelow R bound` is the memory bound such content facts take.
+`Xinst.step_call_spawn_stack` is used by
+`Blanc/Composition/Weth9TokenFramesNode.lean`.
 
 ### E4. I need a common terminal walk
 
@@ -1216,6 +1227,20 @@ To take apart an arbitrary run whose first step is a spawn,
 resume, and returns the continuation `next` together with the equation
 `run = .runOk spawn entered child resumed next`. Rewriting by that equation lets
 raw-frame membership facts about `next` and the child transfer to `run`.
+
+For the direct children of a frame and the selection of target frames, use
+[`Blanc/Lift/RetainedTargetCompleteness.lean`](../Blanc/Lift/RetainedTargetCompleteness.lean):
+`Exec.childFrames_eq_nil_of_free` and `Exec.Deriv.ExecFreeUntil.childFrames_eq`
+say a span of the chain that decodes no `Xinst` has no direct child;
+`Exec.Deriv.ParentStep.childFrames_spawn` (and `descendantFrames_spawn_done`,
+`descendantFrames_runOk`) split the retained frames at a spawning node into the
+entered child's and the continuation's; `Exec.mem_descendantFrames_of_mem_childFrames`
+embeds a direct child; `Exec.descendantFrames_isStatic` makes every retained
+frame below a static run static; and `Exec.retainedTargetFramesFromAt_complete`
+says every retained frame at `ca` lies inside one frame that
+`retainedTargetFramesFromAt ca` selects (the outermost target frames).
+`Xinst.step_callKind_spawn_target`/`_codeAddress` read a CALL-kind child's
+target and code address. Worked use: `Blanc/Lift/UniswapV2Pair/PairPositionalCalls.lean`.
 
 ### E8. I need an exact ordered replay of world-state changes
 
@@ -2183,6 +2208,30 @@ slots against those same explicit observations. These require neither a
 `Support` premise nor zero values for keys outside the observation list.
 WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer (with `tracked`/`trackedSum` over
 `sum`); Curve's `Layout.lean` keeps its own copy of the same notions.
+
+To establish such a footprint at a concrete checkpoint world, decide it with
+[`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
+`rows : List (κ × B256)` (each key with its precomputed slot word; the tracked set is `rowKeys rows`),
+`checkRows slot fixed rows s` checks that every word is its key's slot, the words ascend strictly
+(`ascending`, so distinct), no word is a fixed slot, and every nonzero entry of the storage tree is a
+fixed slot or a listed word (`covered`, a merge walk); `checkRows_sound` turns `true` into
+`RowsSound` (`Support`, `Inj`, `Apart`). `checkSumNof w` decides `SumNof w.bal` by summing the
+world's actual accounts (`sum_bal_eq_worldBalSum`, `checkSumNof_sound`). Worked uses:
+`Blanc/Lift/Weth9/FiniteFootprint.lean` and `Blanc/Lift/UniswapV2Pair/FiniteCheckpoint.lean`.
+
+For what a token's **address** answers along a configured history, with no storage layout, use the
+token interface core in [`Blanc/Lift/Token/Core.lean`](../Blanc/Lift/Token/Core.lean): a pure `Book`
+(ledger, step per entered frame, decoded `Op`, balances, allowances, well-formedness), the `BookLaws`
+a composition consumes, and `Core T B`, which ties a book to the settled frames of a history
+(`IsEntry`, `replayAt`, `replayEnd`, the `balanceOf`/`transfer` answers), with the facet
+`TransferLive`. [`Blanc/Lift/Token/Holder.lean`](../Blanc/Lift/Token/Holder.lean) gives
+`Book.run_append`, `entryAsks_append`, the holder argument `BookLaws.run_holder` and the positional
+segment `Core.segment`; [`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Along.lean) gives
+`Core.good_along` (every ledger met along a settled prefix is good) and
+`Core.run_holder_segment`. Further facets are separate structures in their own files:
+`Erc20Abi` ([`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean)) and `SelfCaller`
+([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)). Worked instance:
+WETH9 (`Blanc/Composition/Weth9TokenCore.lean`, `weth9Core`).
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 
@@ -3399,6 +3448,25 @@ Its calling entries consume re-entered ERC-20 frames as nested
 transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
 equality is not a function of the words), with representations transported by `WriterRep.congr`.
 
+To read a contract's ledger at the **entry** of an arbitrary committed or settled frame (a static
+read of a token by a foreign contract, a foreign frame between two target steps), use the positional
+ladder in [`Blanc/ExecutionAccountingPositional.lean`](../Blanc/ExecutionAccountingPositional.lean):
+`PositionalLadder` is an `AccountingLadderAdmitted` with an `Opaque` frame predicate and the
+frame-level root law `rootAt` (a replay from the root's entry boundary to the entry of any committed
+frame `f` whose prefix holds no opaque frame enclosing `f`, `Exec.Frame.Encloses`). The descent
+invariant `Exec.PositionalAccounting` is proved for every admitted derivation by
+`Exec.positionalAccounting`; the producers are `modelPositionalLadder` (`Opaque := False`) and
+`wholeFramePositionalLadder` (`Opaque` = non-static target frames). Two generic helpers live there:
+`Blanc.List.split_append_cons` and `Exec.descendantFrames_getStor_of_static`.
+[`Blanc/ExecutionAccountingPositionalHistory.lean`](../Blanc/ExecutionAccountingPositionalHistory.lean)
+lifts the root law along `settledFrames`' own structure: `PositionalLadder.At` with `At.nil`,
+`At.append`, `At.prefix`, `At.ite`, the per-wrapper rungs (`processMessage_at`, `messageCall_at`,
+`transaction_at`, `systemMessage_at`, `requests_at`, `body_at`, `configuredBlock_at`) and the
+headline `PositionalLadder.configuredHistory_at` (with `modelPositionalLadder_configuredHistory_at`):
+every split `before ++ f :: after` of a configured history's settled frames gives a replay from the
+checkpoint to `f`'s entry that observes exactly `before`. Worked use: the Uniswap V2 pair
+(`Blanc/Lift/UniswapV2Pair/PairPositionalState.lean`, `PairHistoryShape.lean`).
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -3534,6 +3602,11 @@ Use
   `_nonce_ne_zero` keeps every nonzero nonce nonzero (unconditionally: the
   only nonce write is a guarded authority increment), with the same law at
   `setDelegationStep`, `setDelegationLoop`, and `setDelegation`.
+- `Blanc.getDelegatedCodeAddress_eq_none_of_size_ne` in
+  [`Blanc/CodeDelegation.lean`](../Blanc/CodeDelegation.lean) discharges a
+  wrapper's `getDelegatedCodeAddress code = none` obligation from the code's
+  length alone (a designator is exactly `eoaDelegatedCodeLength` bytes); a
+  concrete runtime closes the length side with one `decide +kernel`.
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
   `_getStor_eq`, `_bal_eq`, `_benv_stat`) do the same across delegated-code
@@ -4130,8 +4203,9 @@ contract-neutral.
   the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
   in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean) (it accepts `XOR`,
   Vyper's `!=`, and the `SLT`, `EXTCODESIZE`, `TLOAD`, and `TSTORE` steps needed
-  by deployed Lido bytecode; these success-only lifted transfers do not extend
-  native `regularTransfer_safe`). Decide
+  by deployed Lido bytecode, and `CREATE2` through `create2Transfer`, which pops
+  endowment, offset, size and salt and pushes the new address or zero; these
+  success-only lifted transfers do not extend native `regularTransfer_safe`). Decide
   `Cert.check` per entry with `decide +kernel`; one decision over the whole
   certificate does not fit in memory for a real contract, and read bytes with
   `code.data.toList` (`ByteArray.toList` is quadratic in the kernel). For a
@@ -4190,8 +4264,10 @@ contract-neutral.
   (checked node, pc, stack segments matched per pending function), the
   synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
   including a `CALL` over a child of any outcome, is one `SStep`) and
-  `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
-  node spawns only by `CALL`/`STATICCALL`), in
+  `cursor_of_parentPrefix`, with `CursorOK.exec_spawn` (a reached node spawns
+  only by `CALL`, `STATICCALL` or `CREATE2`) and, for a certificate with
+  `Cert.noCreate2`, `Cursor.noCreate2_of_reach` and
+  `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
