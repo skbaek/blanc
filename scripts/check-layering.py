@@ -200,6 +200,8 @@ SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
            "Lift.VyperRawCall"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
+# Walking a successful frame's own derivation with its direct children: contract-neutral.
+SHARED += ["Lift.FrameWalk"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -736,7 +738,9 @@ CONTRACTS = {
                     "Lift.Curve3Pool.CheckPart22",
                     "Lift.Curve3Pool.CheckPart23",
                     "Lift.Curve3Pool.Creation.Input",
-                    "Lift.Curve3Pool.Creation.Window"],
+                    "Lift.Curve3Pool.Creation.Window",
+                    "Lift.Curve3Pool.Walk.Kit",
+                    "Lift.Curve3Pool.Walk.Dispatch"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

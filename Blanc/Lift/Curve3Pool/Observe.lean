@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Decode
 import Blanc.Lift.CallerProvenance
+import Blanc.Lift.VyperRawCall
 
 /-!
 # What a 3pool frame observes, and what it calls
@@ -35,7 +36,7 @@ they never change after the constructor).
 Each clause constrains a *positive* answer only (`some w`, `true`): the step function reverts
 on `none`/`false` wherever it uses them, so a refinement statement `∃ e, EnvOf D e ∧ step s e c
 = some o` pins exactly the answers the step reads. A clause is also met when the target runs no
-code frame (`framed D t = false`: a precompile, or an account delegating to one); such a call is
+code frame (`framed D t = false`: an undelegated precompile); such a call is
 answered by Jaune's precompile semantics and leaves no child, so no coin code stands behind the
 answer and none is claimed.
 
@@ -82,12 +83,6 @@ def totalSupplyData : Bytes := totalSupplySel
 /-- The first word of returned data, as a number. -/
 def answerWord (out : Bytes) : Nat := (Bytes.toB256 (out.take 32)).toNat
 
-/-- **Vyper's `raw_call(…, max_outsize=32)` success test** (lines 307–309 and every transfer
-site): no data, or the first `min(len, 32)` bytes read as a nonzero number. (U0 review item 4:
-any nonzero value passes, and data longer than 32 bytes is accepted.) -/
-def RawCallOk (rd : Bytes) : Prop :=
-  rd.length = 0 ∨ Bytes.toNat (rd.take (min rd.length 32)) ≠ 0
-
 /-! ## The frame's parties -/
 
 /-- The pool's storage at the frame's entry. -/
@@ -99,13 +94,14 @@ def coinAdr (D : Exec.Deriv) (k : Fin 3) : Adr := ((entryStor D).get (coinSlot k
 /-- `token` (3Crv) at the frame's entry. -/
 def tokenAdr (D : Exec.Deriv) : Adr := ((entryStor D).get tokenSlot).toAdr
 
-/-- A call from the frame to `t` enters a code frame: `t` is not a precompile, and does not
-delegate to one (by its code at the frame's entry). -/
+/-- A call from the frame to `t` enters a code frame: `t` is not a precompile, or it carries an
+EIP-7702 delegation (by its code at the frame's entry). A delegated call disables precompiles
+(Jaune's `callMsg … disablePrecompiles`), so it always runs a code frame, the delegate's code,
+even when the delegate is a precompile address; a call to an undelegated precompile is
+answered by the precompile and leaves no child. -/
 def framed (D : Exec.Deriv) (t : Adr) : Bool :=
-  !decide (D.sevm.benvStat.rules.isPrecomp t) &&
-    match getDelegatedCodeAddress (D.devm.getCode t) with
-    | some d => !decide (D.sevm.benvStat.rules.isPrecomp d)
-    | none => true
+  !decide (D.sevm.benvStat.rules.isPrecomp t) ||
+    (getDelegatedCodeAddress (D.devm.getCode t)).isSome
 
 /-- The frame's direct, settlement-committed children, in order. -/
 def children (D : Exec.Deriv) : List Exec.Frame := Exec.childFrames D.exc

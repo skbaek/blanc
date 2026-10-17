@@ -821,6 +821,9 @@ import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
 import Blanc.Lift.VyperRawCall
 
+-- Walking a successful frame's own derivation, with its direct children (contract-neutral).
+import Blanc.Lift.FrameWalk
+
 -- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
@@ -838,6 +841,8 @@ import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
 import Blanc.Lift.Curve3Pool.SpawnKinds
+import Blanc.Lift.Curve3Pool.Walk.Kit
+import Blanc.Lift.Curve3Pool.Walk.Dispatch
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
