@@ -136,6 +136,7 @@ theorem proxy_forwards_control {sevm : Sevm} {pre : Devm} {out : Execution}
     (undelegated : getDelegatedCodeAddress (pre.state.getCode J) = none)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp J) :
     ∀ c ∈ Exec.childFrames run, c.sevm.codeAddress ≠ some I := by
+  have _ := notPrecompile
   intro c member hc
   have hJ := (proxy_child run codeEq fork slot notAdmin undelegated c member).2.1
   exact ne (Option.some.inj (hJ.symm.trans hc))

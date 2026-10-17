@@ -153,19 +153,22 @@ theorem implSlot_word : Bytes.toB256 [0x01] * Bytes.toB256 [0x70, 0x50, 0xc9, 0x
 
 theorem iszero_ne {x : B256} (h : B256.eqCheck x 0 ≠ 0) : x = 0 := by
   unfold B256.eqCheck at h
-  by_contra hx
-  exact h (if_neg hx)
+  split at h
+  · assumption
+  · exact (h rfl).elim
 
 theorem eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
   intro hxy
   unfold B256.eqCheck at h
-  rw [if_pos hxy] at h
-  exact absurd h (by decide)
+  split at h
+  · exact absurd h (by decide)
+  · contradiction
 
 theorem eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
   unfold B256.eqCheck at h
-  by_contra hxy
-  exact h (if_neg hxy)
+  split at h
+  · assumption
+  · exact (h rfl).elim
 
 theorem iszero_eq_zero {x : B256} (h : B256.eqCheck x 0 = 0) : x ≠ 0 := eqCheck_eq_zero h
 

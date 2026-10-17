@@ -126,6 +126,7 @@ theorem Xinst.step_delegatecall_spawn_meta {sevm : Sevm} {devm : Devm} {f : Fram
     (hfork : CoveredFork sevm.benvStat.fork)
     (spawn : Xinst.step sevm devm .delegatecall = .spawn f rsm) :
     sevm.depth ≠ 0 ∧ f.inner.depth = sevm.depth - 1 ∧ f.isCreate = false ∧
+      f.inner.shouldTransferValue = false ∧ f.inner.benv.stat = sevm.benvStat ∧
       ∃ (parent : Devm) (oi os : Nat), rsm = .call parent oi os := by
   have hx := spawn
   simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
@@ -147,7 +148,7 @@ theorem Xinst.step_delegatecall_spawn_meta {sevm : Sevm} {devm : Devm} {f : Fram
             subst hs
             split at hm <;> simp only [reduceCtorEq, Except.ok.injEq] at hm
        obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact hx
-       exact ⟨hd, rfl, rfl, _, _, _, rfl⟩)
+       exact ⟨hd, rfl, rfl, rfl, rfl, _, _, _, rfl⟩)
 
 /-- A `DELEGATECALL` that completes without a child frame pushes the failure flag `0`. -/
 theorem Xinst.step_delegatecall_done_flag {sevm : Sevm} {devm d : Devm}
@@ -159,7 +160,7 @@ theorem Xinst.step_delegatecall_done_flag {sevm : Sevm} {devm d : Devm}
   rw [hfork.rules_stateGas_none] at hx
   dsimp only at hx
   repeat' split at hx
-  all_goals simp only [XStep.ofExcept, reduceCtorEq, Pure.pure, Except.pure] at hx
+  all_goals simp only [XStep.ofExcept, Pure.pure, Except.pure] at hx
   all_goals first
     | cases hx
     | (simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at hx

@@ -685,7 +685,7 @@ theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : D
 
 /-- After `_delegate`'s `DELEGATECALL`, a halting run had a nonzero success flag and returns the
 returndata, at the resumed world. -/
-theorem dl_tail_halted (hfork : CoveredFork sevm.benvStat.fork) {d1 post : Devm}
+theorem dl_tail_halted {d1 post : Devm}
     (run : SFunc.RunP P prog sevm d1 dlTail (.halted post)) :
     (∃ w s, d1.stack = w :: s ∧ w ≠ 0) ∧
       post.output = d1.returnData.sliceD 0 d1.returnData.length.toB256.toNat 0 ∧
