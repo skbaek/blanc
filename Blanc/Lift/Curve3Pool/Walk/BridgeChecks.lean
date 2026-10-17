@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Walk.ViewsA
+import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 
 /-!
 # The views and ramp entries' raw effects, with the certificate checked
@@ -26,5 +27,20 @@ theorem a_raw {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
   a_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+
+/-- **Safety of `get_virtual_price()`**: as `a_raw`, the environment's supply the
+`totalSupply()` reply (the token not a precompile). -/
+theorem gvp_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetVirtualPrice)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  gvp_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
 
 end Blanc.Lift.Curve3Pool
