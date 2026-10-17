@@ -1985,6 +1985,17 @@ cancels a positive scale from an accepted adjusted product bounded above by
 the scaled observed balances. These are unbounded Nat facts; callers supply
 word-overflow, source-local/observation and callee-acceptance connections.
 
+For the integer Newton loops of a three-coin StableSwap pool (Curve Vyper
+0.2.4 `get_D`, `get_y`, `get_y_D`), use
+[`Blanc/Lift/StableSwapNewton/Defs.lean`](../Blanc/Lift/StableSwapNewton/Defs.lean),
+namespace `Blanc.StableSwapNewton`. `dP`, `bodyD`, `loopD`, `getD`, `bodyY`,
+`loopY`, `cOf`, `bOf`, `getY` and `getYD` are the unbounded `Nat` arithmetic
+in the source's order of operations, with fuel and stopping tolerance as
+parameters; the `Chk` variants return `Option Nat` and revert (`none`) exactly
+where the source's checked `uint256` arithmetic does (`chkAdd`, `chkSub`,
+`chkMul`, `chkDiv`). `aboveRoot`, `floorRoot` and `rootQ` name the exact roots
+the loops approximate, for statements only.
+
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
 destructing a `B256`: `B256.mul_comm` covers word multiplication, including
