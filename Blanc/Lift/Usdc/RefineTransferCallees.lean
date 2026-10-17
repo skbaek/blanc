@@ -2,6 +2,18 @@ import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.InvWalkStep
 import Blanc.Lift.Usdc.FootprintLedger
 
+/-!
+# Certificate walks of the transfer and allowance callees of FiatTokenV2_2
+
+Inversion walks (`istep`, `ibranch`, `icall`) over the implementation certificate's entries: the
+modifiers and helpers (`_isBlacklisted` 83, `_balanceOf` 96, SafeMath 98/100/115,
+`_setBalance` 99), the internal writers `_transfer` (93) and `_approve` (81),
+`_increaseAllowance` (102), `_decreaseAllowance` (92), and the public bodies of `transfer` (37),
+`transferFrom` (68), `approve` (71), `increaseAllowance` (58) and `decreaseAllowance` (36).  Each
+lemma holds for any stack below the callee's frame and any base, and states the guards a returned
+run passed and the storage it leaves at the frame's owner.
+-/
+
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Impl

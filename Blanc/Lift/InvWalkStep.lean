@@ -116,13 +116,6 @@ theorem keccak_scratch (μ : Mem) (key base : B256) :
   have e := Mem.read_two_word_writes_at_raw μ 0 key base
   exact congrArg Bytes.keccak e
 
-theorem keccak_scratch' (μ : Mem) (key base : B256) :
-    (((μ.write (Bytes.toB256 [32]).toNat base.toBytes).write (Bytes.toB256 [0]).toNat
-      key.toBytes).read (Bytes.toB256 [0]).toNat (Bytes.toB256 [64]).toNat).1.keccak =
-      Blanc.Lift.mapSlot key base := by
-  have e := Mem.read_two_word_writes_at_raw_right_first μ 0 key base
-  exact congrArg Bytes.keccak e
-
 
 /-- An internal call to a callee that cannot halt the frame returns into its continuation. -/
 theorem ric_callR {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256}
@@ -262,11 +255,6 @@ theorem toNat_lt_of_shr_ne_one {w : B256} (h : w >>> 255 ≠ 1) : w.toNat < 2 ^ 
   rfl
 
 
-
-theorem ne_zero_of_iszero_eq {c : B256} (h : B256.eqCheck c 0 = 0) : c ≠ 0 := by
-  intro e
-  rw [e] at h
-  exact absurd h (by decide)
 
 /-- SafeMath `add`'s guard `!(x + y < y)`: no wrap, the word sum is the natural sum. -/
 theorem add_nof_of_ltCheck {x y : B256} (h : B256.ltCheck (x + y) y = 0) :
