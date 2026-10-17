@@ -50,6 +50,108 @@ theorem initialize_run_frame {sevm : Sevm} {b post : Devm} {G : Nat}
       fun _ _ => rfl, afterSstore_getStor_ne _ _ _ _ _ ha, afterSload_getStor,
       afterSstore_getStor_ne _ _ _ _ _ ha, afterSload_getStor, afterSload_getStor]
 
+/-- **C5, for either side of the Pair.**  The statement of `pair_weth9_create2_jointCheckpoint` with
+the side WETH9 occupies left open: `initialize` names WETH9 as the `side` token, and two distinct
+tokens. -/
+theorem pair_weth9_create2_jointCheckpoint_side (side : TokenSide) {weth : Adr} {K₀ : Key → Prop}
+    {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = UniswapV2Pair.Creation.code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024)
+    (wethApart : weth ≠ create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)
+    (pairNonzero : create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ 0)
+    (notSystem :
+      create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ systemAddress)
+    (tracked : K₀ (.bal (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)))
+    (noAllowance : ∀ g, K₀ (.allow (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) →
+      (b.state.getStor weth).get
+        (allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
+    (wethNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp weth) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
+      ∀ {isevm : Sevm} {ib : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) →
+        ib.state.getCode isevm.currentTarget = post.state.getCode isevm.currentTarget →
+        isevm.caller = sevm.currentTarget → isevm.value = 0 → isevm.isStatic = false →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        (4 : B256) ≤ isevm.data.length.toB256 → (64 : B256) ≤ isevm.data.length.toB256 - 4 →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        gCallStipend < iG + initializeStore0Charge isevm ib +
+          initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39 →
+        gCallStipend < iG + initializeStore1Charge isevm ib + 9 →
+        (initializedState sevm.currentTarget
+            (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
+            (initializeToken0 isevm) (initializeToken1 isevm)).tokenOn side = weth →
+        initializeToken0 isevm ≠ initializeToken1 isevm →
+        some (ib.state.getCode weth).toList = weth9Sem.image →
+        FootInv K₀ (ib.state.getStor weth) (ib.state.bal weth) →
+        ib.state.getStor weth = b.state.getStor weth →
+        SumNof ib.state.bal →
+        ∃ ipost, Nonempty (Exec 0 isevm
+            (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+          JointCheckpoint isevm.currentTarget weth K₀ (fun _ => False)
+            (initializedState sevm.currentTarget
+              (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
+              (initializeToken0 isevm) (initializeToken1 isevm)) side ipost.state := by
+  obtain ⟨post, hrun, hstack, hcode, live⟩ :=
+    Creation.pair_create2_initialize_live hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+  refine ⟨post, hrun, hstack, ?_⟩
+  intro isevm ib iG htarget hstor hcodeAt caller value nonstatic codeEq fork selector size guard
+    representable freshOutput sentry0 sentry1 tokenSide distinct wethImage wethFoot wethStor sumNof
+  obtain ⟨ipost, ⟨run⟩, initialized⟩ := live htarget hstor caller value nonstatic codeEq fork
+    selector size guard representable freshOutput sentry0 sentry1
+  refine ⟨ipost, ⟨run⟩, ?_⟩
+  obtain ⟨codes, bals, stors⟩ := initialize_run_frame codeEq fork selector run
+  have wethNe : isevm.currentTarget ≠ weth := by
+    rw [htarget]
+    exact fun h => wethApart h.symm
+  have wethStor' : ipost.state.getStor weth = b.state.getStor weth :=
+    (stors weth wethNe).trans wethStor
+  have balEq : ipost.state.bal = ib.state.bal := funext bals
+  rw [← htarget] at initialized tracked noAllowance pairNonzero notSystem
+  exact
+    { pairCode := by
+        change some (ipost.getCode isevm.currentTarget).toList = some UniswapV2Pair.code.toList
+        rw [codes]
+        change some (ib.state.getCode isevm.currentTarget).toList = _
+        rw [hcodeAt, htarget]
+        change some (post.getCode _).toList = _
+        rw [hcode]
+      pairRep := initialized
+      token := tokenSide
+      unlocked := rfl
+      wethCode := by
+        change some (ipost.getCode weth).toList = _
+        rw [codes]
+        exact wethImage
+      wethFoot := by
+        rw [balEq]
+        change FootInv K₀ (Devm.getStor ipost weth) _
+        rw [stors weth wethNe]
+        exact wethFoot
+      sumNof := by
+        rw [balEq]
+        exact sumNof
+      tracked := tracked
+      noAllowance := fun g row => by
+        rw [wethStor']
+        exact noAllowance g row
+      reserve := by cases side <;> exact Nat.zero_le _
+      apart := wethNe
+      distinct := distinct
+      notSystem := notSystem
+      pairNonzero := pairNonzero
+      wethNotPrecompile := wethNotPrecompile }
+
 /-- **C5: the joint checkpoint by deployment** (every covered fork).  From a world whose WETH9
 satisfies its footprint invariant with the new address's balance row tracked and its allowance rows
 zero (the trace-local condition that the new address has not acted as a WETH9 sender), the Pair's
@@ -105,55 +207,75 @@ theorem pair_weth9_create2_jointCheckpoint {weth : Adr} {K₀ : Key → Prop}
             (initializedState sevm.currentTarget
               (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
               (initializeToken0 isevm) weth) .one ipost.state := by
-  obtain ⟨post, hrun, hstack, hcode, live⟩ :=
-    Creation.pair_create2_initialize_live hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+  obtain ⟨post, hrun, hstack, h⟩ := pair_weth9_create2_jointCheckpoint_side .one hfork hstatic hinit hnonce hdepth hfresh hgas hroom wethApart pairNonzero notSystem tracked
+    noAllowance wethNotPrecompile
   refine ⟨post, hrun, hstack, ?_⟩
   intro isevm ib iG htarget hstor hcodeAt caller value nonstatic codeEq fork selector size guard
     representable freshOutput sentry0 sentry1 token1 token0 wethImage wethFoot wethStor sumNof
-  obtain ⟨ipost, ⟨run⟩, initialized⟩ := live htarget hstor caller value nonstatic codeEq fork
-    selector size guard representable freshOutput sentry0 sentry1
-  refine ⟨ipost, ⟨run⟩, ?_⟩
-  obtain ⟨codes, bals, stors⟩ := initialize_run_frame codeEq fork selector run
-  have wethNe : isevm.currentTarget ≠ weth := by
-    rw [htarget]
-    exact fun h => wethApart h.symm
-  have wethStor' : ipost.state.getStor weth = b.state.getStor weth :=
-    (stors weth wethNe).trans wethStor
-  have balEq : ipost.state.bal = ib.state.bal := funext bals
-  rw [← htarget] at initialized tracked noAllowance pairNonzero notSystem
-  rw [token1] at initialized
-  exact
-    { pairCode := by
-        change some (ipost.getCode isevm.currentTarget).toList = some UniswapV2Pair.code.toList
-        rw [codes]
-        change some (ib.state.getCode isevm.currentTarget).toList = _
-        rw [hcodeAt, htarget]
-        change some (post.getCode _).toList = _
-        rw [hcode]
-      pairRep := initialized
-      token := rfl
-      unlocked := rfl
-      wethCode := by
-        change some (ipost.getCode weth).toList = _
-        rw [codes]
-        exact wethImage
-      wethFoot := by
-        rw [balEq]
-        change FootInv K₀ (Devm.getStor ipost weth) _
-        rw [stors weth wethNe]
-        exact wethFoot
-      sumNof := by
-        rw [balEq]
-        exact sumNof
-      tracked := tracked
-      noAllowance := fun g row => by
-        rw [wethStor']
-        exact noAllowance g row
-      reserve := Nat.zero_le _
-      apart := wethNe
-      distinct := token0
-      notSystem := notSystem
-      pairNonzero := pairNonzero
-      wethNotPrecompile := wethNotPrecompile }
+  have joint :=
+    h htarget hstor hcodeAt caller value nonstatic codeEq fork selector size guard representable
+      freshOutput sentry0 sentry1 token1 (by rw [token1]; exact token0) wethImage wethFoot wethStor sumNof
+  rw [token1] at joint
+  exact joint
+
+/-- **C5 with WETH9 as `token0`**: as `pair_weth9_create2_jointCheckpoint`, for an `initialize`
+naming WETH9 as `token0` and a `token1` other than WETH9; the joint checkpoint is on side `.zero`. -/
+theorem pair_weth9_create2_jointCheckpoint_zero {weth : Adr} {K₀ : Key → Prop}
+    {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = UniswapV2Pair.Creation.code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024)
+    (wethApart : weth ≠ create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)
+    (pairNonzero : create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ 0)
+    (notSystem :
+      create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ systemAddress)
+    (tracked : K₀ (.bal (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)))
+    (noAllowance : ∀ g, K₀ (.allow (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) →
+      (b.state.getStor weth).get
+        (allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
+    (wethNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp weth) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
+      ∀ {isevm : Sevm} {ib : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) →
+        ib.state.getCode isevm.currentTarget = post.state.getCode isevm.currentTarget →
+        isevm.caller = sevm.currentTarget → isevm.value = 0 → isevm.isStatic = false →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        (4 : B256) ≤ isevm.data.length.toB256 → (64 : B256) ≤ isevm.data.length.toB256 - 4 →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        gCallStipend < iG + initializeStore0Charge isevm ib +
+          initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39 →
+        gCallStipend < iG + initializeStore1Charge isevm ib + 9 →
+        initializeToken0 isevm = weth →
+        initializeToken1 isevm ≠ weth →
+        some (ib.state.getCode weth).toList = weth9Sem.image →
+        FootInv K₀ (ib.state.getStor weth) (ib.state.bal weth) →
+        ib.state.getStor weth = b.state.getStor weth →
+        SumNof ib.state.bal →
+        ∃ ipost, Nonempty (Exec 0 isevm
+            (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+          JointCheckpoint isevm.currentTarget weth K₀ (fun _ => False)
+            (initializedState sevm.currentTarget
+              (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
+              weth (initializeToken1 isevm)) .zero ipost.state := by
+  obtain ⟨post, hrun, hstack, h⟩ := pair_weth9_create2_jointCheckpoint_side .zero hfork hstatic hinit hnonce hdepth hfresh hgas hroom wethApart pairNonzero notSystem tracked
+    noAllowance wethNotPrecompile
+  refine ⟨post, hrun, hstack, ?_⟩
+  intro isevm ib iG htarget hstor hcodeAt caller value nonstatic codeEq fork selector size guard
+    representable freshOutput sentry0 sentry1 token0 token1 wethImage wethFoot wethStor sumNof
+  have joint :=
+    h htarget hstor hcodeAt caller value nonstatic codeEq fork selector size guard representable
+      freshOutput sentry0 sentry1 token0 (by rw [token0]; exact fun h => token1 h.symm) wethImage wethFoot wethStor sumNof
+  rw [token0] at joint
+  exact joint
 
 end Blanc.Composition.UniswapV2PairWeth9Joint
