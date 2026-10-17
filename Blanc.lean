@@ -870,6 +870,10 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
+import Blanc.Lift.Curve3Pool.Walk.ViewsDispatch
+import Blanc.Lift.Curve3Pool.Walk.ViewsKit
+import Blanc.Lift.Curve3Pool.Walk.ViewsA
+import Blanc.Lift.Curve3Pool.Walk.BridgeChecks
 import Blanc.Lift.Curve3Pool.Callee.GetYDTrees
 import Blanc.Lift.Curve3Pool.Callee.GetYDLoop
 import Blanc.Lift.Curve3Pool.Callee.GetYDCoins
