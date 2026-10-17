@@ -79,7 +79,9 @@ def ClosedSwapOutcome (st : Jaune.State) : Prop :=
       -- C4(a) over the history, its `X`-side antecedent discharged; strict increase at equal supply
         ∃ steps : List PairStep,
           steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+          (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
           ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+            PairObservedReplayWith PairAdmittedConsumes w0PairState steps finish ∧
             runSourceInvocations w0PairState (steps.map PairStep.source) = some finish ∧
             WriterRep K' ((swapWorld st).getStor pair) finish ∧
             (∀ before after,
@@ -132,7 +134,7 @@ theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonic
   have joint := jointCheckpoint_of_agrees ag bound
   have fac := factory_of_agrees ag
   have c3 := pair_weth9_joint .one trace joint pairFresh wethFresh fac.1 fac.2
-  obtain ⟨steps, observed, auth, finish, K', -, runs, rep, product⟩ :=
+  obtain ⟨steps, observed, auth, finish, K', replay, runs, rep, product⟩ :=
     pair_weth9_history_feeOff_product .one trace joint pairFresh wethFresh fac.1 fac.2
   have answers : sourceReplayAnswersSide TokenSide.zero w0PairState (steps.map PairStep.source) :=
     answersSide_of_swaps (history_steps_swap h cases observed auth)
@@ -186,7 +188,7 @@ theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonic
     exact w0PairStor_0
   unfold ClosedSwapOutcome
   refine ⟨_, transition, trace, balances.1, balances.2, traderAfter, pairAfter, ?_, ?_, res0, res1,
-    c3, steps, observed, finish, K', runs, rep, product answers, r0, r1, ts, ?_⟩
+    c3, steps, observed, auth, finish, K', replay, runs, rep, product answers, r0, r1, ts, ?_⟩
   · rw [res0, xAfter]
   · rw [res1, pairAfter]
   · rw [r0, r1, ts]
