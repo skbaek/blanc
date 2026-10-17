@@ -142,4 +142,16 @@ theorem xa_al_pc {sevm : Sevm} {post b : Devm} {S : List B256} {M : Mem} {G pc :
     obtain ⟨x, hx, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
     cases hx
 
+/-- `ADDRESS`, inverted: the frame's own address pushed. -/
+theorem ri_al_address {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (h : Ninst.Run sevm (St b S M G) (.reg .address) d) :
+    ∃ G', d = St b (sevm.currentTarget.toB256 :: S) M G' := by
+  have hp := of_run_address h
+  have hs : d.stack = sevm.currentTarget.toB256 :: S := by
+    have := hp.stack
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
+  have e := St.of_stackRel hp
+  rw [hs] at e
+  exact ⟨_, e⟩
+
 end Blanc.Lift.Curve3Pool
