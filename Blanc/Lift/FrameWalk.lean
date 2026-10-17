@@ -196,6 +196,8 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       ∀ flag rest, d'.stack = flag :: rest → flag ≠ 0 →
         (sevm.benvStat.rules.isPrecomp t.toAdr ∧ L = L') ∨
         (∃ c, L = c :: L' ∧ 0 < sevm.depth ∧
+          (¬ sevm.benvStat.rules.isPrecomp t.toAdr ∨
+            (getDelegatedCodeAddress (d.getCode t.toAdr)).isSome) ∧
           ChildOf d d' t.toAdr (d.memory.read ii.toNat is.toNat).1 v sevm.isStatic c) := by
   have hstep : Evm.step ⟨pc, sevm, d⟩ = Ninst.step ⟨pc, sevm, d⟩ (.exec .call) :=
     Evm.step_next hat
@@ -249,8 +251,8 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       Xinst.call_run_flag_commits fork (.inl rfl) xrun ⟨flag, rest, hflag, nz⟩
     rcases of_step_call_val_with_depth_frame (xl := .some ⟨cevm, raw⟩) operands
         (show Xlot.Filled (.some ⟨cevm, raw⟩) from ⟨child⟩) stepRun fork with
-      ⟨failed, -⟩ | ⟨parent, -, dp, na, code, avail, hdepth, -, -, -, -, hpout, -, -, -, -, -, -, -,
-        -, -, hstep'⟩
+      ⟨failed, -⟩ | ⟨parent, -, dp, na, code, avail, hdepth, -, -, -, -, hpout, hdel, -, -, -, -, -,
+        -, -, -, hstep'⟩
     · rw [hflag] at failed
       exact absurd (pref_head_unique failed (pref_append [flag] rest)).symm nz
     rw [hs] at hstep'
@@ -267,7 +269,26 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       have hsc : Frame.settlementCommits f (.ok body) = true := by
         simp only [Frame.settlementCommits, hsettle, clean, Option.isNone_none]
       right
-      refine ⟨Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hsc), ?_, hdepth, ?_⟩
+      have hframed : ¬ sevm.benvStat.rules.isPrecomp t.toAdr ∨
+          (getDelegatedCodeAddress (d.getCode t.toAdr)).isSome := by
+        rcases hdel with ⟨-, rfl, -, rfl⟩ | ⟨dd, hsome, -, -, -⟩
+        · by_cases hp : sevm.benvStat.rules.isPrecomp t.toAdr
+          · exfalso
+            obtain ⟨benv, hbt, -⟩ := Frame.enter_run_inv henter
+            have hstat : benv.stat = sevm.benvStat := by
+              rw [benvAfterTransfer_stat hbt, hf]; rfl
+            have e := Frame.enter_eq_done_executePrecomp (adr := t.toAdr) hbt (by rw [hf]; rfl)
+              (by
+                rw [hf]
+                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and,
+                  decide_eq_true_eq]
+                exact decide_eq_true (by rw [hstat]; exact hp))
+            rw [henter] at e
+            cases e
+          · exact .inl hp
+        · exact .inr (by rw [hsome]; rfl)
+      refine ⟨Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hsc), ?_, hdepth,
+        hframed, ?_⟩
       · simp only [Exec.childFrames, hsc, dite_true, List.singleton_append]
       · obtain ⟨benv, -, hcevm⟩ := Frame.enter_run_inv henter
         have hr' := hr
@@ -315,6 +336,8 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       ∀ flag rest, d'.stack = flag :: rest → flag ≠ 0 →
         (sevm.benvStat.rules.isPrecomp t.toAdr ∧ L = L') ∨
         (∃ c, L = c :: L' ∧ 0 < sevm.depth ∧
+          (¬ sevm.benvStat.rules.isPrecomp t.toAdr ∨
+            (getDelegatedCodeAddress (d.getCode t.toAdr)).isSome) ∧
           ChildOf d d' t.toAdr (d.memory.read ii.toNat is.toNat).1 0 true c) := by
   have hstep : Evm.step ⟨pc, sevm, d⟩ = Ninst.step ⟨pc, sevm, d⟩ (.exec .staticcall) :=
     Evm.step_next hat
@@ -369,8 +392,8 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       Xinst.call_run_flag_commits fork (.inr rfl) xrun ⟨flag, rest, hflag, nz⟩
     rcases of_step_staticcall_val_with_depth_frame_cause (xl := .some ⟨cevm, raw⟩) operands
         (show Xlot.Filled (.some ⟨cevm, raw⟩) from ⟨child⟩) stepRun fork with
-      ⟨failed, -⟩ | ⟨parent, -, dp, na, code, avail, hdepth, -, -, -, -, hpout, -, -, -, -, -, -, -,
-        -, -, hstep'⟩
+      ⟨failed, -⟩ | ⟨parent, -, dp, na, code, avail, hdepth, -, -, -, -, hpout, hdel, -, -, -, -, -,
+        -, -, -, hstep'⟩
     · rw [hflag] at failed
       exact absurd (pref_head_unique failed (pref_append [flag] rest)).symm nz
     rw [hs] at hstep'
@@ -387,7 +410,26 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       have hsc : Frame.settlementCommits f (.ok body) = true := by
         simp only [Frame.settlementCommits, hsettle, clean, Option.isNone_none]
       right
-      refine ⟨Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hsc), ?_, hdepth, ?_⟩
+      have hframed : ¬ sevm.benvStat.rules.isPrecomp t.toAdr ∨
+          (getDelegatedCodeAddress (d.getCode t.toAdr)).isSome := by
+        rcases hdel with ⟨-, rfl, -, rfl⟩ | ⟨dd, hsome, -, -, -⟩
+        · by_cases hp : sevm.benvStat.rules.isPrecomp t.toAdr
+          · exfalso
+            obtain ⟨benv, hbt, -⟩ := Frame.enter_run_inv henter
+            have hstat : benv.stat = sevm.benvStat := by
+              rw [benvAfterTransfer_stat hbt, hf]; rfl
+            have e := Frame.enter_eq_done_executePrecomp (adr := t.toAdr) hbt (by rw [hf]; rfl)
+              (by
+                rw [hf]
+                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and,
+                  decide_eq_true_eq]
+                exact decide_eq_true (by rw [hstat]; exact hp))
+            rw [henter] at e
+            cases e
+          · exact .inl hp
+        · exact .inr (by rw [hsome]; rfl)
+      refine ⟨Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hsc), ?_, hdepth,
+        hframed, ?_⟩
       · simp only [Exec.childFrames, hsc, dite_true, List.singleton_append]
       · obtain ⟨benv, -, hcevm⟩ := Frame.enter_run_inv henter
         have hr' := hr
