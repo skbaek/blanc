@@ -50,14 +50,15 @@ def ImplStepLaw (fam : Call → Prop) : Prop :=
             (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot
 
 /-- **The model law of `rescueERC20`** (U6f): the frame's storage at the proxy is unchanged up to and
-after its single `CALL`, and the book's step on its message is the identity. -/
+after its single `CALL`, and, for a caller other than the admin word, the book's step on its message
+is the identity. -/
 def RescueLaw : Prop :=
   ∀ {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
     sevm.code = Impl.code → sevm.currentTarget = P → sevm.codeAddress = some usdcImpl →
     CoveredFork sevm.benvStat.fork → sevm.isStatic = false → (∀ k ∈ frameKeys sevm, U k) →
-    sevm.caller ≠ adminOf pre.state P → Blanc.Sevm.selector sevm = rescueSelector →
-      (usdcBookS P).step (ledger U (pre.state.getStor P)) sevm =
-          some (ledger U (pre.state.getStor P)) ∧
+    Blanc.Sevm.selector sevm = rescueSelector →
+      (sevm.caller ≠ adminOf pre.state P → (usdcBookS P).step (ledger U (pre.state.getStor P)) sevm =
+          some (ledger U (pre.state.getStor P))) ∧
         ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
           ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
             x = .call ∧ N.devm.state.getStor P = pre.state.getStor P ∧
