@@ -62,16 +62,6 @@ theorem t_07b7_c29_prog : prog[29]? = some t_07b7_c29 := by decide +kernel
 /-- `get_D_mem`'s windows: scratch word `0` and `[0x140, 0x520)`. -/
 abbrev gdmWin : List (Nat × Nat) := [(0, 0x20), (0x140, 0x520)]
 
-/-- A word of a restored frame, read back. -/
-theorem Words.of_frameSlots {M W : Mem} {lo n : Nat} (h : Words M (frameSlots W lo n)) {j : Nat}
-    (hj : j < n) {v : B256} (hv : memWord W (lo + 32 * j) = v) : Words M [(lo + 32 * j, v)] := by
-  refine Words.cons.mpr ⟨?_, Words.nil M⟩
-  have hm : (lo + 32 * j, memWord W (lo + 32 * j)) ∈ frameSlots W lo n := by
-    simp only [frameSlots, List.mem_map, List.mem_range]
-    exact ⟨j, hj, rfl⟩
-  rw [← hv]
-  exact h _ _ hm
-
 section Chains
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg}
@@ -299,5 +289,21 @@ theorem getDMem_spec {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S : List
   unfold getDMem
   rw [hxp, Option.bind_eq_bind, Option.bind_some]
   exact hgd
+
+/-! ## Kernel facts for the frame-walk bridge (`xa_callee`) -/
+
+/-- `get_D_mem`'s entry closure, with `_xp_mem`'s and `get_D`'s. -/
+def gdmEntries : List Nat :=
+  [29, 34, 54, 59, 81, 86, 103, 108, 124, 129, 146, 151, 168, 173, 190, 208, 222, 236, 250, 265,
+    280, 295, 310, 325, 340, 355, 370, 385, 400, 415, 417, 429, 431, 443, 445, 457, 459, 471,
+    473, 485, 487, 488, 489, 501, 503, 515, 517, 529, 531, 532, 533, 545, 558, 571, 582, 593,
+    603, 613, 623, 633, 643, 653, 663, 673, 682, 691, 700, 709, 718, 727, 736, 745, 755, 765,
+    774, 783, 792, 801, 810, 819, 828, 837, 846, 855, 864, 873, 882, 891, 900, 909, 918]
+
+theorem gdm_execFreeSet : ExecFreeSet cert.prog gdmEntries = true := by decide +kernel
+
+theorem gdm_free : t_07b7_c29.execFreeIn gdmEntries = true := by decide +kernel
+
+theorem gdm_neverHalts : calleeNeverHalts prog 29 128 = true := by decide +kernel
 
 end Blanc.Lift.Curve3Pool

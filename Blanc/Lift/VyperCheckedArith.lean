@@ -824,6 +824,16 @@ theorem Words.restoreMem' {M : Mem} {L : List (Nat × B256)} {c p : Nat} {ws : L
   have h := List.all_eq_true.mp hout o (List.mem_map.mpr ⟨(o, v), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 
+/-- A word of a restored frame, read back. -/
+theorem Words.of_frameSlots {M W : Mem} {lo n : Nat} (h : Words M (frameSlots W lo n)) {j : Nat}
+    (hj : j < n) {v : B256} (hv : _root_.Blanc.Lift.memWord W (lo + 32 * j) = v) : Words M [(lo + 32 * j, v)] := by
+  refine Words.cons.mpr ⟨?_, Words.nil M⟩
+  have hm : (lo + 32 * j, _root_.Blanc.Lift.memWord W (lo + 32 * j)) ∈ frameSlots W lo n := by
+    simp only [frameSlots, List.mem_map, List.mem_range]
+    exact ⟨j, hj, rfl⟩
+  rw [← hv]
+  exact h _ _ hm
+
 /-! ## From a word frame to a tracked memory -/
 
 /-- A word frame keeps every byte off its window. -/
@@ -858,6 +868,37 @@ theorem WordFrame.words1 {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFram
   have : j + 1 ≤ ws.length := hj
   rw [hF.size]; omega
 
+
+/-- `MLOAD` of an untracked word, inverted over a tracked memory: some word, the memory grown
+to cover it. -/
+theorem ric_mloadU {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256}
+    {M M₀ : Mem} {G : Nat} {f : SFunc} {r : Seg} {P : List (Nat × Nat)} {L : List (Nat × B256)}
+    {i : B256} {o : Nat} (hT : MemTrack M₀ M P L)
+    (run : SFunc.RunCut fs sevm C (St b (i :: S) M G) (.next (.reg .mload) f) r)
+    (hi : i.toNat = o) :
+    ∃ v M' G', MemTrack M₀ M' P L ∧ SFunc.RunCut fs sevm C (St b (v :: S) M' G') f r := by
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G1, rfl⟩ := ri_mload s1
+  rw [hi] at run
+  have hk := Mem.KeepsOff.extend M o 32 P
+  refine ⟨_, _, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _,
+    fun h => Mem.size_extend_mod _ _ (hT.aligned h)⟩, run⟩
+  intro o' v' hm'
+  obtain ⟨hs, hv⟩ := hT.words o' v' hm'
+  exact ⟨le_trans hs hk.1, hv⟩
+
+set_option hygiene false in
+/-- `PUSH o; MLOAD` of an untracked word. -/
+macro "imloadU " o:term : tactic => `(tactic|
+  (istep
+   have hstep := ric_mloadU (o := $o) hT run (by decide)
+   clear hT run; obtain ⟨_, _, _, hT, run⟩ := hstep))
+
+set_option hygiene false in
+/-- `SLT`, inverted to its value. -/
+macro "isltV" : tactic => `(tactic|
+  (have hnext := ric_next run; clear run; obtain ⟨_, s1, run⟩ := hnext
+   obtain ⟨_, rfl⟩ := ri_sltV s1; clear s1))
 
 set_option hygiene false in
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
