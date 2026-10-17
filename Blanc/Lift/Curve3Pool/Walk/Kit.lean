@@ -131,7 +131,7 @@ theorem xa_staticcall_img {pc' : Nat} {g t ii is oi os : B256} {i n o z : Nat}
       d.logs = b.logs ∧
       (flag ≠ 0 →
         (sevm.benvStat.rules.isPrecomp t.toAdr ∧ L = L') ∨
-        (∃ c, L = c :: L' ∧ d.output = b.output ∧ Devm.AccGrow b d ∧
+        (∃ c, L = c :: L' ∧ 0 < sevm.depth ∧ d.output = b.output ∧ Devm.AccGrow b d ∧
           (∀ a, b.getCode a ≠ .empty → d.getCode a = b.getCode a) ∧
           c.sevm.currentTarget = t.toAdr ∧ c.sevm.data = img.sliceD i n 0 ∧
           c.sevm.isStatic = true ∧ c.post.output = out ∧ c.post.logs = [] ∧
@@ -142,9 +142,9 @@ theorem xa_staticcall_img {pc' : Nat} {g t ii is oi os : B256} {i n o z : Nat}
   refine ⟨d, flag, out, _, L', hpost.eq_St ▸ h, Mem.Reads.write (Mem.Wf.extends _ hW)
     (Mem.Reads.extends _ hR) _ _, Mem.Wf.write (Mem.Wf.extends _ hW) _ _, hpost.returnData,
     hbound, hpost.stor, hpost.logs, fun nz => ?_⟩
-  rcases hk flag S hpost.stack nz with hp | ⟨c, hL, -, -, hc⟩
+  rcases hk flag S hpost.stack nz with hp | ⟨c, hL, hdep, -, hc⟩
   · exact .inl hp
-  · refine .inr ⟨c, hL, hc.outputKeep, hc.warm, hc.code, hc.target, ?_, hc.isStatic,
+  · refine .inr ⟨c, hL, hdep, hc.outputKeep, hc.warm, hc.code, hc.target, ?_, hc.isStatic,
       hc.output.trans hpost.returnData, ?_, hc.codePre, hc.codePost⟩
     · rw [hc.data]
       exact Mem.Reads.read hR _ _

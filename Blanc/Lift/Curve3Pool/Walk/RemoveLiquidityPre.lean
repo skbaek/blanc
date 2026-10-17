@@ -27,7 +27,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (h : XAt sevm post 0x2c68 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
-      L = c :: L' ∧
+      L = c :: L' ∧ 0 < sevm.depth ∧
       c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get tokenSlot).toAdr ∧
       c.sevm.data = totalSupplyData ∧ c.sevm.isStatic = true ∧ 32 ≤ c.post.output.length ∧
       c.post.logs = [] ∧ (∀ a, c.pre.getCode a = b.getCode a) ∧
@@ -88,7 +88,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     rw [lockSlot_lit, tokenSlot_lit, getStorVal_afterSstore_ne lock_ne_token, getStorVal_afterSload]
     rfl
   rw [htok'] at hk
-  rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs, hcpre,
+  rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs, hcpre,
     hcpost⟩
   · exact absurd hpre htok
   clear hk
@@ -126,11 +126,11 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x2cd9 (.reg (.dup 3)) (ri_dup (by rfl))
   xmo 0x2cda (.reg .mstore) (ri_mstore_imgAt (o := 0x2a0) rfl)
   xs 0x2cdb (.reg .add) ri_add
-  clear * - h hR hW hL htgt hdata hstat hcout hlen hclogs hcpre hcpost hstor hlogs hout hacc hcodeK hob
+  clear * - h hR hW hL hdepth htgt hdata hstat hcout hlen hclogs hcpre hcpost hstor hlogs hout hacc hcodeK hob
     hrd hcd
   rw [show [Bytes.toB256 [3] + Bytes.toB256 [0], Bytes.toB256 [2, 160]] = ([3, 0x2a0] : List B256)
     by decide] at h
-  refine ⟨c, L1, d1, M, _, _, hL, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs, ?_, hcpost,
+  refine ⟨c, L1, d1, M, _, _, hL, hdepth, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs, ?_, hcpost,
     ?_, ?_, ?_, ?_, ?_, ?_, hR, hW, ?_, ?_, ?_, h⟩
   · rw [hdata, Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide)
       (by rw [B256.length_toBytes])]

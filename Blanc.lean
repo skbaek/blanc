@@ -846,6 +846,8 @@ import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPre
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
