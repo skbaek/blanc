@@ -1146,7 +1146,7 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 : FrameMatches ρ a' S' := by
           rw [hfold]
           exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hframe hstack hmem run hinter hframe0
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run hinter hframe0
         have hrun := ih
           ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m _ f ρ S' base _
@@ -1218,7 +1218,7 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hframe hstack hmem run
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run
           (by rw [hstack']; rfl) hframe0
         have hrun := ih ⟨pc + (Ninst.push bs fits).size, sevm, inter,
             .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m

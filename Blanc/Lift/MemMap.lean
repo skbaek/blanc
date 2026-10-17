@@ -79,6 +79,18 @@ theorem MemMatches.agree {ρ : B256} {mem : MemMap} {μ μ' : Mem} {lo hi : Nat}
 theorem Mem.AgreeOutside.refl (μ : Mem) (lo hi : Nat) : Mem.AgreeOutside μ μ lo hi :=
   ⟨Nat.le_refl _, fun _ _ _ => rfl⟩
 
+theorem Mem.AgreeOutside.trans {μ μ' μ'' : Mem} {lo hi : Nat}
+    (h1 : Mem.AgreeOutside μ μ' lo hi) (h2 : Mem.AgreeOutside μ' μ'' lo hi) :
+    Mem.AgreeOutside μ μ'' lo hi :=
+  ⟨le_trans h1.1 h2.1, fun i hi' hout => by
+    rw [h2.2 i (lt_of_lt_of_le hi' h1.1) hout, h1.2 i hi' hout]⟩
+
+/-- Agreement outside a window gives agreement outside any larger window. -/
+theorem Mem.AgreeOutside.mono {μ μ' : Mem} {lo hi lo' hi' : Nat}
+    (h : Mem.AgreeOutside μ μ' lo hi) (hlo : lo' ≤ lo) (hhi : hi ≤ hi') :
+    Mem.AgreeOutside μ μ' lo' hi' :=
+  ⟨h.1, fun i hi'' hout => h.2 i hi'' (by omega)⟩
+
 /-- A memory whose bytes are unchanged and whose size did not shrink keeps
 every recorded word. -/
 theorem MemMatches.of_data_eq {ρ : B256} {mem : MemMap} {μ μ' : Mem}
@@ -97,6 +109,11 @@ theorem memExtSize_ge (s i n : Nat) : s ≤ memExtSize s i n := by
 theorem memExtsSize_ge : ∀ (s : Nat) (ps : List (Nat × Nat)), s ≤ memExtsSize s ps
   | _, [] => Nat.le_refl _
   | s, ⟨i, n⟩ :: ps => le_trans (memExtSize_ge s i n) (memExtsSize_ge _ ps)
+
+/-- Expansion keeps every byte and never shrinks the logical size. -/
+theorem Mem.extends_agree (μ : Mem) (ps : List (Nat × Nat)) (lo hi : Nat) :
+    Mem.AgreeOutside μ (μ.extends ps) lo hi :=
+  ⟨memExtsSize_ge _ _, fun _ _ _ => rfl⟩
 
 /-- `Mem.write`'s backing array, before the payload is laid over it: it holds
 the payload's window and agrees with the old bytes below the old logical size.
@@ -295,6 +312,9 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
   case tload =>
     obtain ⟨⟨x, d1⟩, h1, h2⟩ := Except.bind_eq_ok h
     exact (memKeep_pop h1).trans (memKeep_pushItem h2)
+  case gas =>
+    obtain ⟨d1, h1, h2⟩ := Except.bind_eq_ok h
+    exact (memKeep_chargeGas h1).trans (memKeep_push h2)
   case log n =>
     obtain ⟨⟨mi, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
     obtain ⟨⟨sz, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
@@ -443,6 +463,32 @@ theorem calldatacopy_run_memory {sevm : Sevm} {pre post : Devm} {d src z : B256}
   simp only [Devm.memWrite_memory]
   rw [← hb.memory, ← hp3.memory, ← hp2.memory, ← hp1.memory]
 
+/-- `STATICCALL` changes memory only inside its output window: it expands
+memory over both windows and writes at most `os` bytes of the reply at `oi`
+(on a covered fork, whether the child ran or not). -/
+theorem staticcall_run_memory {sevm : Sevm} {pre post : Devm} {g t ii is oi os : B256}
+    {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Ninst.Run sevm pre (.exec .staticcall) post)
+    (hs : pre.stack = g :: t :: ii :: is :: oi :: os :: rest) :
+    Mem.AgreeOutside pre.memory post.memory oi.toNat (oi.toNat + os.toNat) := by
+  have hp : (g :: t :: ii :: is :: oi :: os :: rest) <<+ pre.stack :=
+    ⟨[], by simp only [Split, hs, List.append_nil]⟩
+  have hwrite : ∀ out : Bytes,
+      Mem.AgreeOutside pre.memory
+        ((pre.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+          oi.toNat (out.take os.toNat)) oi.toNat (oi.toNat + os.toNat) := by
+    intro out
+    refine (Mem.extends_agree _ _ _ _).trans ((Mem.write_agree _ _ _).mono (Nat.le_refl _) ?_)
+    simp only [List.length_take]
+    omega
+  rcases of_run_staticcall_val_with_depth hp run hfork with
+    ⟨_, _, out, _, hmem⟩ | ⟨parent, child, _, _, _, _, _, _, _, _, hpm, _, _, _, _, _, _, _,
+      hmem, _⟩
+  · rw [hmem]
+    exact hwrite out
+  · rw [hmem, hpm]
+    exact hwrite child.output
+
 /-- `MLOAD` pushes the word at its operand. -/
 theorem mload_run_stack {sevm : Sevm} {pre post : Devm} {o : B256} {rest : List B256}
     (run : Ninst.Run sevm pre (.reg .mload) post) (hs : pre.stack = o :: rest) :
@@ -484,7 +530,7 @@ theorem mem_of_lookup_eq_some {mem : MemMap} {o : Nat} {v : AVal}
       exact List.mem_cons_of_mem _ (ih h')
 
 theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
-    {mem : MemMap} {ρ : B256} {S base : List B256}
+    {mem : MemMap} {ρ : B256} {S base : List B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ mem pre.memory) (run : Ninst.Run sevm pre n post) :
     MemMatches ρ (absMem n a mem) post.memory := by
@@ -502,6 +548,11 @@ theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
       hstack)
     rw [hmem, ← hlen]
     exact MemMatches.write _ _ hm
+  · rcases hframe with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | ⟨h4, _ | ⟨h5, _⟩⟩⟩⟩⟩⟩
+    simp only [AVal.Matches] at h4 h5
+    subst h4 h5
+    exact MemMatches.agree
+      (staticcall_run_memory hfork run (by simpa only [List.cons_append] using hstack)) hm
   · split
     · rename_i hk
       obtain ⟨hd, hsz⟩ := ninstMemKeeps_run hk run
@@ -528,7 +579,7 @@ recorded `MLOAD` result still describes the stack, and the transferred map
 still describes memory. -/
 theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
     {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
-    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hfork : CoveredFork sevm.benvStat.fork) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
     (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
     FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
@@ -536,7 +587,7 @@ theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
   cases b with
   | false => exact ⟨h', memMatches_nil _ _⟩
   | true =>
-    refine ⟨?_, absMem_sound hframe hstack hm run⟩
+    refine ⟨?_, absMem_sound hfork hframe hstack hm run⟩
     simp only [ite_true]
     cases ht : memTop n a μ with
     | none => cases a' <;> exact h'
@@ -588,6 +639,7 @@ theorem mem_snd_absMem {n : Ninst} {a : List AVal} {mem : MemMap} {v : AVal}
     rcases List.mem_cons.mp h with h | h
     · left; subst h; simp only [List.mem_cons, true_or, or_true]
     · right; exact mem_snd_memKill h
+  · right; exact mem_snd_memKill h
   · right; exact mem_snd_memKill h
   · split at h
     · exact .inr h
