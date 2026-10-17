@@ -238,12 +238,6 @@ theorem frozenBit_of_le {x : B256} (h : B256.gtCheck x lo255 = 0) : frozenBit x 
 
 /-! ## The guards the admin calls read -/
 
-theorem ne_of_eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
-  intro hxy
-  unfold B256.eqCheck at h
-  rw [ite_eq_left hxy] at h
-  exact absurd h (by decide)
-
 theorem flag20_of_notPaused {y : B256} (h : (Bytes.toB256 [255] &&& y / bit160) =? 0 ≠ 0) :
     flag20 y = false := by
   have e := congrArg B256.toNat (eq_of_eqCheck_ne_zero h)

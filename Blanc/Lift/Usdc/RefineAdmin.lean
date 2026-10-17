@@ -3,6 +3,7 @@ import Blanc.Lift.Usdc.RefineAdminReach
 import Blanc.Lift.Usdc.RefineAdminLedger
 import Blanc.Lift.Usdc.RefineShape
 import Blanc.Lift.Usdc.Families
+import Blanc.Lift.Usdc.RefineTransferDecode
 import Blanc.Lift.Sound
 
 /-!
@@ -22,105 +23,93 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc.Impl
 
 /-! ## Reading the decoded admin calls -/
 
-/-- A decoded message read a row of the dispatcher table whose selector is the message's. -/
-theorem decodeCall_row {e : Sevm} {c : Call} (h : decodeCall e = some c) :
-    ∃ r ∈ rows, r.sel = Blanc.Sevm.selector e ∧ r.read e = c := by
-  unfold decodeCall at h
-  split_ifs at h with h0
-  split at h
-  · cases h
-  · rename_i r hr
-    split_ifs at h with hlen
-    have hp := List.find?_some hr
-    exact ⟨r, List.mem_of_find?_eq_some hr, of_decide_eq_true hp, Option.some.inj h⟩
-
 theorem decode_pause {e : Sevm} (h : decodeCall e = some .pause) :
     Blanc.Sevm.selector e = 0x8456cb59 := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact hsel.symm
 
 theorem decode_unpause {e : Sevm} (h : decodeCall e = some .unpause) :
     Blanc.Sevm.selector e = 0x3f4ba83a := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact hsel.symm
 
 theorem decode_updatePauser {e : Sevm} {a : _} (h : decodeCall e = some (.updatePauser a)) :
     Blanc.Sevm.selector e = 0x554bab3c ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.updatePauser.inj hread).symm⟩
 
 theorem decode_updateMasterMinter {e : Sevm} {a : _} (h : decodeCall e = some (.updateMasterMinter a)) :
     Blanc.Sevm.selector e = 0xaa20e1e4 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.updateMasterMinter.inj hread).symm⟩
 
 theorem decode_updateBlacklister {e : Sevm} {a : _} (h : decodeCall e = some (.updateBlacklister a)) :
     Blanc.Sevm.selector e = 0xad38bf22 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.updateBlacklister.inj hread).symm⟩
 
 theorem decode_updateRescuer {e : Sevm} {a : _} (h : decodeCall e = some (.updateRescuer a)) :
     Blanc.Sevm.selector e = 0x2ab60045 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.updateRescuer.inj hread).symm⟩
 
 theorem decode_transferOwnership {e : Sevm} {a : _} (h : decodeCall e = some (.transferOwnership a)) :
     Blanc.Sevm.selector e = 0xf2fde38b ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.transferOwnership.inj hread).symm⟩
 
 theorem decode_removeMinter {e : Sevm} {a : _} (h : decodeCall e = some (.removeMinter a)) :
     Blanc.Sevm.selector e = 0x3092afd5 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.removeMinter.inj hread).symm⟩
 
 theorem decode_configureMinter {e : Sevm} {a v : _} (h : decodeCall e = some (.configureMinter a v)) :
     Blanc.Sevm.selector e = 0x4e44d956 ∧ a = (Sevm.dataWord e 4).toAdr ∧ v = (Sevm.dataWord e 36).toNat := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.configureMinter.inj hread).1.symm, (Call.configureMinter.inj hread).2.symm⟩
 
 theorem decode_unBlacklist {e : Sevm} {a : _} (h : decodeCall e = some (.unBlacklist a)) :
     Blanc.Sevm.selector e = 0x1a895266 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.unBlacklist.inj hread).symm⟩
 
 theorem decode_blacklist {e : Sevm} {a : _} (h : decodeCall e = some (.blacklist a)) :
     Blanc.Sevm.selector e = 0xf9f92be4 ∧ a = (Sevm.dataWord e 4).toAdr := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.blacklist.inj hread).symm⟩
 
 theorem decode_mint {e : Sevm} {a v : _} (h : decodeCall e = some (.mint a v)) :
     Blanc.Sevm.selector e = 0x40c10f19 ∧ a = (Sevm.dataWord e 4).toAdr ∧ v = (Sevm.dataWord e 36).toNat := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.mint.inj hread).1.symm, (Call.mint.inj hread).2.symm⟩
 
 theorem decode_burn {e : Sevm} {v : _} (h : decodeCall e = some (.burn v)) :
     Blanc.Sevm.selector e = 0x42966c68 ∧ v = (Sevm.dataWord e 4).toNat := by
-  obtain ⟨r, hr, hsel, hread⟩ := decodeCall_row h
+  obtain ⟨-, r, hr, hsel, hread⟩ := decodeCall_row h
   simp only [rows, List.mem_cons, List.not_mem_nil, or_false] at hr
   rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   all_goals first | exact Call.noConfusion hread | exact ⟨hsel.symm, (Call.burn.inj hread).symm⟩

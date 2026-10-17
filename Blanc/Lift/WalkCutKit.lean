@@ -6,6 +6,7 @@ import Blanc.Lift.ReachDispatch
 import Blanc.Lift.ExactWalkSolc
 import Blanc.AddressSlotProofs
 import Blanc.Lift.Deploy
+import Blanc.Lift.InvWalkStep
 
 /-!
 # Cut-run walk kit for certificate-driven inversions
@@ -18,8 +19,8 @@ Contract-neutral steps for inverting a lifted run (`SFunc.RunCut … []`, i.e. `
 * a solc dispatcher's comparison rows with the branch decided by a closed comparison
   (`ric_gt_le`/`ric_gt_gt`/`ric_eq_miss`/`ric_eq_hit`, and the `rr_*` reach forms);
 * storage projections of the walk bases (`afterSload`, `afterSstore`, `addLog`, `St`);
-* solc's mapping hash over the scratch words (`keccak_scratch`), including the reuse of the key
-  word left by the previous hash (`keccak_scratch2`, from `Mem.read_after_right_write`).
+* the reuse by solc's mapping hash of the key word left by the previous hash (`keccak_scratch2`;
+  from `Mem.read_after_right_write`; the fresh hash is `InvWalkStep.lean`'s `keccak_scratch`).
 -/
 
 namespace Blanc.Lift
@@ -187,14 +188,6 @@ abbrev hi96 : B256 := Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x
 abbrev lo255 : B256 := Bytes.toB256 [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
   0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
   0xff, 0xff, 0xff, 0xff]
-
-/-- solc's mapping hash over the scratch words. -/
-theorem keccak_scratch (M : Mem) (x c : B256) :
-    (((M.write (Bytes.toB256 [0]).toNat x.toBytes).write (Bytes.toB256 [32]).toNat c.toBytes).read
-      (Bytes.toB256 [0]).toNat (Bytes.toB256 [64]).toNat).1.keccak = mapSlot x c := by
-  rw [show (Bytes.toB256 [0]).toNat = 0 from by decide, show (Bytes.toB256 [32]).toNat = 32 from by decide,
-    show (Bytes.toB256 [64]).toNat = 64 from by decide, scratch_read]
-  rfl
 
 /-- A 64-byte read at `0` after a word write at `32`, over a memory whose first word reads
 `left`. -/
