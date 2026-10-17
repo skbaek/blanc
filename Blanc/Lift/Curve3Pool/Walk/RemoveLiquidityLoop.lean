@@ -276,8 +276,8 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0x2e11 (.reg .add) ri_add
   xmo 0x2e12 (.reg .mstore) (ri_mstore_imgAt (o := 0x1e0 + 32 * i) (off_amt hi))
   have hmul' := or_ne_zero hmul
-  refine ⟨hmul'.imp eqCheck_ne_zero eqCheck_ne_zero, hT0,
-    ltCheck_eq_zero (eqCheck_ne_zero hmin), ltCheck_eq_zero (eqCheck_ne_zero hle),
+  refine ⟨hmul'.imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq, hT0,
+    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hmin), ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hle),
     _, _, _, hR, hW, ⟨?_, ?_, ?_⟩, ?_, h⟩
   · wchainT; exact hctr
   · wchainT; exact hT
@@ -544,7 +544,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
       xs 0x2ef2 (.reg (.dup 1)) (ri_dup (by rfl))
       xjd 0x2ef3
       refine ⟨_, _, ?_, h⟩
-      have hge := gtCheck_eq_zero (eqCheck_ne_zero hw)
+      have hge := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hge
       rw [List.length_take, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
@@ -679,7 +679,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
       xjd 0x2f6a
       xjd 0x2f6b
       refine ⟨.inr ?_, _, _, hR, hW, h⟩
-      have hq0 := eqCheck_eq_zero (eqCheck_ne_zero hq)
+      have hq0 := eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
       have hxs : (img6.sliceD 0x3c0 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot
@@ -687,7 +687,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
         rw [Nat.min_comm, ← List.take_take, List.take_length]]
       rw [← hquot]
       exact fun e => hq0 (B256.toNat_inj _ _ (by rw [e]; rfl))
-    · have hz := gtCheck_eq_zero (eqCheck_ne_zero hw)
+    · have hz := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x00]).toNat = 0 by decide] at hz
       xjd 0x2f6b
       refine ⟨.inl ?_, _, _, hR, hW, h⟩
@@ -727,7 +727,7 @@ theorem xa_rl_s5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0x2f7a (.push [0x2c, 0xdb] (by decide)) ri_push
   xji 0x2f7b 0x2cdb hw
   · have e : i + 1 = 3 := by
-      have := eqCheck_ne_zero (eqCheck_eq_zero hw)
+      have := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
       rcases (show i = 0 ∨ i = 1 ∨ i = 2 by omega) with rfl | rfl | rfl
       · exact absurd this (by decide)
       · exact absurd this (by decide)
@@ -736,7 +736,7 @@ theorem xa_rl_s5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     next => exact ⟨_, _, hR, hW, h⟩
     next he => exact absurd e he
   · have e : i + 1 ≠ 3 := by
-      have := eqCheck_eq_zero (eqCheck_ne_zero hw)
+      have := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
       intro e; apply this; rw [show i = 2 by omega]; decide
     split
     next he => exact absurd he e

@@ -22,7 +22,7 @@ Companions to `Blanc/Lift/FrameWalk.lean` (`XAt`) that no walk needs to restate:
   `write_self`/`write_other`, `Region.append`/`left`/`right`/`head`/`copy`/`slice`, the
   `Mem.Reads.forget` cut (forget an image's construction after drawing the facts a walk still
   needs) and the `wchain` tactic (peel disjoint writes off a `WordAt`/`Region` goal);
-* branch conditions (`eqCheck_ne_zero`, `isNe_fall`, `gtCheck_ne_zero`, `ltCheck_eq_zero`,
+* branch conditions (`eqCheck_ne_zero_eq`, `isNe_fall`, `gtCheck_ne_zero`, `ltCheck_eq_zero_not_lt`,
   `or_ne_zero`, …), Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`.
 
 Nothing here mentions a contract.
@@ -371,7 +371,7 @@ theorem getStorVal_afterSstore_ne {sevm : Sevm} {b : Devm} {k v x : B256} (h : k
 
 /-! ## Branch conditions -/
 
-theorem eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
+theorem eqCheck_ne_zero_eq {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
   unfold B256.eqCheck at h
   split_ifs at h with e
   · exact e
@@ -385,11 +385,11 @@ theorem eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
 
 /-- `ISZERO (EQ x y)` fell through: `x = y`. -/
 theorem isNe_fall {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 = 0) : x = y :=
-  eqCheck_ne_zero (eqCheck_eq_zero h)
+  eqCheck_ne_zero_eq (eqCheck_eq_zero h)
 
 /-- `ISZERO (EQ x y)` jumped: `x ≠ y`. -/
 theorem isNe_jump {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 ≠ 0) : x ≠ y :=
-  eqCheck_eq_zero (eqCheck_ne_zero h)
+  eqCheck_eq_zero (eqCheck_ne_zero_eq h)
 
 theorem gtCheck_ne_zero {x y : B256} (h : B256.gtCheck x y ≠ 0) : y < x := by
   unfold B256.gtCheck at h
@@ -463,7 +463,7 @@ theorem or_ne_zero {x y : B256} (h : (x ||| y) ≠ 0) : x ≠ 0 ∨ y ≠ 0 := b
   · right; intro hy; apply h; rw [hx, hy]; decide
   · exact .inl hx
 
-theorem ltCheck_eq_zero {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
+theorem ltCheck_eq_zero_not_lt {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
   intro e
   unfold B256.ltCheck at h
   simp only [e, ↓reduceIte] at h

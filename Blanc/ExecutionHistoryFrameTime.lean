@@ -53,7 +53,7 @@ theorem AppliedBodyTrace.mem_rawFrames_of_mem_settledFrames
 
 /-- A settled frame of a configured block came from an actually entered raw
 frame root of that block. -/
-theorem ConfiguredBlockTrace.mem_rawFrames_of_mem_settledFrames
+theorem ConfiguredBlockTrace.mem_rawFrames_of_settled
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) (frame : Exec.Frame)
     (member : frame ∈ trace.settledFrames) :
@@ -70,7 +70,7 @@ theorem ConfiguredBlockTrace.settledFrames_time
   intro frame member
   exact (trace.frameAdmitted_iff_rawFrames frame.sevm.currentTarget _).1
     (trace.frameAdmitted_time frame.sevm.currentTarget) _
-    (trace.mem_rawFrames_of_mem_settledFrames frame member) rfl
+    (trace.mem_rawFrames_of_settled frame member) rfl
 
 /-- **Control.**  A settled frame of a configured block never reads its
 parent's timestamp: the block is strictly newer than the pre-chain tip, and a

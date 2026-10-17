@@ -171,7 +171,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x2fff (.push [0x30, 0x04] (by decide)) ri_push
   xji 0x3000 0x3004 hw
   · xdead
-  have hTa := ltCheck_eq_zero (eqCheck_ne_zero hw)
+  have hTa := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
   clear hw
   xjd 0x3005
   xs 0x3006 (.reg (.dup 0)) (ri_dup (by rfl))
