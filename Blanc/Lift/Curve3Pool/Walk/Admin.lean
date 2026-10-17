@@ -135,7 +135,7 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
       384 (Sevm.argWord sevm 1).toBytes).read 320 32).2.read 352 64).1 =
       (Sevm.argWord sevm 0).toBytes ++ (Sevm.argWord sevm 1).toBytes := by
     rw [memRead_snd_fst]
-    exact Mem.read_two_word_writes hwf2 352 _ _
+    exact Mem.read_two_word_writes_wf hwf2 352 _ _
   rw [Mem.read_write_word_of_wf hwf0, hr2, hr3, B256.toB256_toBytes]
   have hvN : (quietEnv sevm).value = 0 := by
     show sevm.value.toNat = 0

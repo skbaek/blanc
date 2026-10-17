@@ -4755,6 +4755,26 @@ contract-neutral.
   saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
   `memWord`/`Mem.AgreeOutside`; all in
   [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Walking a successful frame along its own derivation (`XAt sevm post pc d L`: the actual state
+  at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
+  `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps
+  that peel one child, in [`Blanc/Lift/FrameWalk.lean`](../Blanc/Lift/FrameWalk.lean).
+- Crossing a certified tree (callee) from a walked state: `xa_node` (any checked node; the walk
+  resumes at the return address in the actual returned state) and `xa_node_span` (an exec-free
+  tree, `ExecFreeSet`/`SFunc.execFreeIn`: the remaining children `L` are kept, a halt leaves
+  `L = []`), with gas monotonicity `Exec.Deriv.Prec.gasMeasure_lt`/`lt.gasMeasure_lt`/
+  `ParentPrefix.gasMeasure_le`, in
+  [`Blanc/Lift/FrameWalkNode.lean`](../Blanc/Lift/FrameWalkNode.lean); the span-strengthened
+  lifting recursion `node_spanM` (returned node reached by an `Exec.Deriv.ExecFreeUntil` span;
+  halting chain `ChainFree`), `node_span_childFrames`, `prec_parentStep_of_free`,
+  `SpanOut.back` and `SilentSet.execFreeSet` in
+  [`Blanc/Lift/SoundSpan.lean`](../Blanc/Lift/SoundSpan.lean).
+- Memory across a crossed callee: `Mem.KeepsOff M M' W` (no shrink; every byte off the windows
+  `W` kept) with `refl`/`trans`/`mono`/`of_agreeOutside`, the image transport
+  `Mem.Reads.keepsOff`, `Words.keepsOff`, `MemMatches.keepsOff`, `memWord_keepsOff`, and the
+  read algebra `Mem.read_split`, `Mem.read_split64`, `Mem.read_two_word_writes_wf`,
+  `Mem.read_write_word_disjoint`, `Mem.read_write_word_inside`, in
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean).
 - Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
   cut runs):
   fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,
