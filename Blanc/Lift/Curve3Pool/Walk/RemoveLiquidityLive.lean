@@ -310,6 +310,10 @@ theorem rx_rl_pre {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W 
         List.sliceD_replicate_zero]
       decide
 
+/-- `remove_liquidity`'s loop body gas up to `0x2e0c` (variant A). -/
+def rlS1CostA (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) : Nat :=
+  10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 7 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1
+
 /-- `remove_liquidity`'s loop body up to `0x2e0c`, forward (variant A: loop head t_2cdb_c0,
 memory size 0x2c0). -/
 theorem rx_rl_s1A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
@@ -326,7 +330,8 @@ theorem rx_rl_s1A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
       SFunc.RunEx cert.prog sevm (St (afterSstore sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i))
         (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T))
         [Nat.toB256 i, Bytes.toB256 [0x01, 0xe0], B * rlAmt sevm / T, 3, 0x2a0] M' Gc) t_2e0c_c0 Q) :
-    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 7 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1)) t_2cdb_c0 Q := by
+    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gc + rlS1CostA sevm b i B T)) t_2cdb_c0 Q := by
+  rw [show Gc + rlS1CostA sevm b i B T = Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 7 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 by unfold rlS1CostA; omega]
   have hctr := hL.ctr
   have hT := hL.supply
   xr (rx_dest ·)
@@ -485,6 +490,10 @@ theorem rx_rl_s1A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
   · intro j hj; wchainT; exact hL.amt j hj
   · wchainT
 
+/-- `remove_liquidity`'s loop body gas up to `0x2e0c` (variant B). -/
+def rlS1CostB (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) : Nat :=
+  10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1
+
 /-- `remove_liquidity`'s loop body up to `0x2e0c`, forward (variant B: loop head t_2cdb_c46,
 memory size 0x5e0). -/
 theorem rx_rl_s1B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
@@ -501,7 +510,8 @@ theorem rx_rl_s1B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
       SFunc.RunEx cert.prog sevm (St (afterSstore sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i))
         (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T))
         [Nat.toB256 i, Bytes.toB256 [0x01, 0xe0], B * rlAmt sevm / T, 3, 0x2a0] M' Gc) t_2e0c_c0 Q) :
-    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1)) t_2cdb_c46 Q := by
+    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gc + rlS1CostB sevm b i B T)) t_2cdb_c46 Q := by
+  rw [show Gc + rlS1CostB sevm b i B T = Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 by unfold rlS1CostB; omega]
   have hctr := hL.ctr
   have hT := hL.supply
   xr (rx_dest ·)
@@ -1315,6 +1325,148 @@ theorem rx_rl_post {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M
   rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
     show (Bytes.toB256 [0x06, 0xc0]).toNat + 0xc0 = 0x780 by decide]
   exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
+
+/-- `rlS1CostA` is at most `30000`. -/
+theorem rlS1CostA_le (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) :
+    rlS1CostA sevm b i B T ≤ 30000 := by
+  unfold rlS1CostA
+  have h1 := sloadCost_le sevm b (balancesBase + Nat.toB256 i)
+  have h2 := sloadCost_le sevm (afterSload sevm b (balancesBase + Nat.toB256 i))
+    (balancesBase + Nat.toB256 i)
+  have h3 := sstoreCost_le_22100 sevm (afterSload sevm (afterSload sevm b
+    (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)
+    (B - B * rlAmt sevm / T)
+  have e : gasColdSload = 2100 := rfl
+  omega
+
+/-- **One loop iteration, forward** (variant A: head `t_2cdb_c0`, memory `0x2c0`): `balances[i]` debited
+by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOk`, `i += 1`. At most
+`U + 35000` gas is used. -/
+theorem rx_rl_iterA {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
+    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
+    (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
+    (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
+    (hT0 : T ≠ 0)
+    (hminw : B256.eqCheck (B256.ltCheck (B * rlAmt sevm / T) (rlMin sevm i)) 0 ≠ 0)
+    (hlew : B256.eqCheck (B256.ltCheck B (B * rlAmt sevm / T)) 0 ≠ 0)
+    (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
+    (hpush : CoinPushOk sevm W C (B * rlAmt sevm / T) U)
+    (hG : U + 35000 ≤ G) (hGb : G < 2 ^ 256)
+    (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
+      (∀ x, (b'.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
+        (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
+      LoopImg img' (i + 1) T (Function.update a i (B * rlAmt sevm / T)) →
+      G ≤ G' + U + 35000 → G' ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G') (rlNext i) Q) :
+    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M G) t_2cdb_c0 Q := by
+  have hS1 := rlS1CostA_le sevm b i B T
+  have hS1' : 500 ≤ rlS1CostA sevm b i B T := by unfold rlS1CostA; omega
+  obtain ⟨G2, rfl⟩ : ∃ G2, G = G2 + 532 + rlS1CostA sevm b i B T :=
+    ⟨G - (532 + rlS1CostA sevm b i B T), by omega⟩
+  refine rx_rl_s1A hfork hstatic hi hR hW hsz hL hB hmulw hT0 hminw hlew (by omega) ?_
+  intro M1 img1 hR1 hW1 hsz1 hL1 hv1
+  have hWb1 := hWc.sstore _ (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)
+    (hWc.sload _ (balancesBase + Nat.toB256 i) (hWc.sload _ (balancesBase + Nat.toB256 i) hWb))
+  have hid1 := ((hid.afterSload (balancesBase + Nat.toB256 i)).afterSload
+    (balancesBase + Nat.toB256 i)).afterSstore (balancesBase + Nat.toB256 i)
+    (B - B * rlAmt sevm / T)
+  refine rx_rl_s2A hi hid1 hdepth hR1 hW1 hsz1 hL1 hv1 (by omega) (by omega) hWc hWb1 ?_
+  intro b2 M2 img2 hrel hWb2 hid2 hR2 hW2 hsz2 hL2 hdata x y
+  have hst2 : ∀ x, (b2.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
+      (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x := by
+    intro x
+    rw [hrel.stor, afterSstore_getStor_self, afterSload_getStor, afterSload_getStor]
+  have hC2 : (b2.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C := by
+    rw [hst2, Stor.get_set_ne _ (by rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2) with rfl | rfl | rfl <;>
+      decide), hC]
+  have hS3 : rlS3Cost sevm b2 i ≤ 2208 := by
+    unfold rlS3Cost
+    have := sloadCost_le sevm b2 (coinsBase + Nat.toB256 i)
+    have e : gasColdSload = 2100 := rfl
+    omega
+  have hS3' : 108 ≤ rlS3Cost sevm b2 i := by unfold rlS3Cost; omega
+  obtain ⟨Gx, hGx⟩ : ∃ Gx, G2 = Gx + rlS3Cost sevm b2 i := ⟨G2 - rlS3Cost sevm b2 i, by omega⟩
+  rw [hGx]
+  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hR2 hW2 hsz2 (Or.inl rfl) hL2 hdata hC2 hpush
+    (by omega) (by omega) ?_ x y
+  intro b' M' img' G' hWb' hid' hst' hR' hW' hsz' hL' hg1 hg2
+  exact k b' M' img' G' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL'
+    (by omega) (by omega)
+
+/-- `rlS1CostB` is at most `30000`. -/
+theorem rlS1CostB_le (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) :
+    rlS1CostB sevm b i B T ≤ 30000 := by
+  unfold rlS1CostB
+  have h1 := sloadCost_le sevm b (balancesBase + Nat.toB256 i)
+  have h2 := sloadCost_le sevm (afterSload sevm b (balancesBase + Nat.toB256 i))
+    (balancesBase + Nat.toB256 i)
+  have h3 := sstoreCost_le_22100 sevm (afterSload sevm (afterSload sevm b
+    (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)
+    (B - B * rlAmt sevm / T)
+  have e : gasColdSload = 2100 := rfl
+  omega
+
+/-- **One loop iteration, forward** (variant B: head `t_2cdb_c46`, memory `0x5e0`): `balances[i]` debited
+by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOk`, `i += 1`. At most
+`U + 35000` gas is used. -/
+theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
+    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
+    (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
+    (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
+    (hT0 : T ≠ 0)
+    (hminw : B256.eqCheck (B256.ltCheck (B * rlAmt sevm / T) (rlMin sevm i)) 0 ≠ 0)
+    (hlew : B256.eqCheck (B256.ltCheck B (B * rlAmt sevm / T)) 0 ≠ 0)
+    (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
+    (hpush : CoinPushOk sevm W C (B * rlAmt sevm / T) U)
+    (hG : U + 35000 ≤ G) (hGb : G < 2 ^ 256)
+    (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
+      (∀ x, (b'.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
+        (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
+      LoopImg img' (i + 1) T (Function.update a i (B * rlAmt sevm / T)) →
+      G ≤ G' + U + 35000 → G' ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G') (rlNext i) Q) :
+    SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M G) t_2cdb_c46 Q := by
+  have hS1 := rlS1CostB_le sevm b i B T
+  have hS1' : 500 ≤ rlS1CostB sevm b i B T := by unfold rlS1CostB; omega
+  obtain ⟨G2, rfl⟩ : ∃ G2, G = G2 + 482 + rlS1CostB sevm b i B T :=
+    ⟨G - (482 + rlS1CostB sevm b i B T), by omega⟩
+  refine rx_rl_s1B hfork hstatic hi hR hW hsz hL hB hmulw hT0 hminw hlew (by omega) ?_
+  intro M1 img1 hR1 hW1 hsz1 hL1 hv1
+  have hWb1 := hWc.sstore _ (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)
+    (hWc.sload _ (balancesBase + Nat.toB256 i) (hWc.sload _ (balancesBase + Nat.toB256 i) hWb))
+  have hid1 := ((hid.afterSload (balancesBase + Nat.toB256 i)).afterSload
+    (balancesBase + Nat.toB256 i)).afterSstore (balancesBase + Nat.toB256 i)
+    (B - B * rlAmt sevm / T)
+  refine rx_rl_s2B hi hid1 hdepth hR1 hW1 hsz1 hL1 hv1 (by omega) (by omega) hWc hWb1 ?_
+  intro b2 M2 img2 hrel hWb2 hid2 hR2 hW2 hsz2 hL2 hdata x y
+  have hst2 : ∀ x, (b2.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
+      (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x := by
+    intro x
+    rw [hrel.stor, afterSstore_getStor_self, afterSload_getStor, afterSload_getStor]
+  have hC2 : (b2.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C := by
+    rw [hst2, Stor.get_set_ne _ (by rcases (by omega : i = 0 ∨ i = 1 ∨ i = 2) with rfl | rfl | rfl <;>
+      decide), hC]
+  have hS3 : rlS3Cost sevm b2 i ≤ 2208 := by
+    unfold rlS3Cost
+    have := sloadCost_le sevm b2 (coinsBase + Nat.toB256 i)
+    have e : gasColdSload = 2100 := rfl
+    omega
+  have hS3' : 108 ≤ rlS3Cost sevm b2 i := by unfold rlS3Cost; omega
+  obtain ⟨Gx, hGx⟩ : ∃ Gx, G2 = Gx + rlS3Cost sevm b2 i := ⟨G2 - rlS3Cost sevm b2 i, by omega⟩
+  rw [hGx]
+  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hR2 hW2 hsz2 (Or.inr rfl) hL2 hdata hC2 hpush
+    (by omega) (by omega) ?_ x y
+  intro b' M' img' G' hWb' hid' hst' hR' hW' hsz' hL' hg1 hg2
+  exact k b' M' img' G' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL'
+    (by omega) (by omega)
 
 end Blanc.Lift.Curve3Pool
 

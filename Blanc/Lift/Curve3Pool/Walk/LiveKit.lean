@@ -192,6 +192,15 @@ theorem rxe_sstore_le {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork 
   rw [e]
   exact rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic hr
 
+/-- `SSTORE` charges at most `gasColdSload + gasStorageSet`. -/
+theorem sstoreCost_le_22100 (sevm : Sevm) (d : Devm) (k v : B256) : sstoreCost sevm d k v ≤ 22100 := by
+  have h1 := sstoreCost_le_value sevm d k v
+  have h2 := sstoreValueCost_le (d.getOrigStorVal sevm sevm.currentTarget k)
+    (d.getStorVal sevm.currentTarget k) v
+  have e1 : gasColdSload = 2100 := rfl
+  have e2 : gasStorageSet = 20000 := rfl
+  omega
+
 end Fwd
 
 end Blanc.Lift.Curve3Pool
