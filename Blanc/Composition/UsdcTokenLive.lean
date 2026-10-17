@@ -53,7 +53,8 @@ theorem usdc_transfer_live {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre : Dev
       post.gasLeft + proxyXferCost sevm pre = G ∧ post.output = (Nat.toB256 1).toBytes ∧
       (UsdcInstalled P post.state ∧ FootInv U (post.state.getStor P)) ∧
       (dst ≠ sevm.caller → (ledger U (post.state.getStor P)).bal sevm.caller + v =
-        (ledger U (pre.state.getStor P)).bal sevm.caller) := by
+        (ledger U (pre.state.getStor P)).bal sevm.caller) ∧
+      post = proxyXferPost sevm pre (G - proxyXferCost sevm pre) := by
   have ok := hok dst v hop
   obtain ⟨len, sel, rfl, rfl⟩ := usdcOp_transfer_words hop
   subst htarget
@@ -88,8 +89,12 @@ theorem usdc_transfer_live {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre : Dev
     unfold frameY
     unfold proxyXferCost at hbud ⊢
     omega
-  obtain ⟨post, run, hgas, hout, hstate⟩ :=
-    proxy_xfer_run fork hstatic depth hlen pf xf hcodeI hprec hfwd hY
+  have run := proxy_xfer_run fork hstatic depth hlen pf xf hcodeI hprec hfwd hY
+  generalize hpost : proxyXferPost sevm pre (G - proxyXferCost sevm pre) = post at run
+  have hgas : post.gasLeft = G - proxyXferCost sevm pre := by rw [← hpost, proxyPost_gasLeft]
+  have hout : post.output = (Nat.toB256 1).toBytes := by rw [← hpost, proxyPost_output]; rfl
+  have hstate : post.state = (frameChild sevm pre (G - proxyXferCost sevm pre)).state := by
+    rw [← hpost, proxyPost_state]
   have hstor := frameChild_stor (X := G - proxyXferCost sevm pre) fork hstatic hlen sel xf hcodeI hfwd
   have hcodeP : sevm.code = Proxy.code := hcode.trans (code_of_at (d := pre) inst.proxy)
   have hle : proxyXferCost sevm pre ≤ G := by unfold usdcXferBudget at hbud; omega
@@ -111,7 +116,7 @@ theorem usdc_transfer_live {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre : Dev
     keep _ (by change (pre.state.getCode _).toList ≠ []; rw [hI]; exact implSem.ne_nil rfl)
   have kL : post.state.getCode usdcLib = pre.state.getCode usdcLib :=
     keep _ (by change (pre.state.getCode _).toList ≠ []; rw [hL]; exact lib_toList_ne_nil)
-  refine ⟨post, ⟨exec⟩, by omega, hout, ⟨⟨?_, ?_, ?_, ?_, inst.implApart, inst.libApart⟩, ?_⟩, ?_⟩
+  refine ⟨post, ⟨exec⟩, by omega, hout, ⟨⟨?_, ?_, ?_, ?_, inst.implApart, inst.libApart⟩, ?_⟩, ?_, rfl⟩
   · rw [kP]; exact inst.proxy
   · rw [kI]; exact inst.impl
   · rw [kL]; exact inst.lib
@@ -149,7 +154,7 @@ noncomputable def usdcTransferLive (P : Adr) (U : Key → Prop) :
   live := by
     intro sevm pre G dst v htarget _ hcode ⟨hkeys, hlen, hadm, hok⟩ fork hvalue hstatic _
       ⟨inst, finv⟩ hop hbal hbud hG depth
-    obtain ⟨post, run, hgas, hout, world, hbal'⟩ := usdc_transfer_live htarget hcode hkeys hlen hadm
+    obtain ⟨post, run, hgas, hout, world, hbal', -⟩ := usdc_transfer_live htarget hcode hkeys hlen hadm
       hok fork hvalue hstatic inst finv hop hbal hbud hG depth
     exact ⟨post, run, hgas, hout, world, hbal'⟩
 

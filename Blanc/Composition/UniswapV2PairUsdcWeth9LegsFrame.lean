@@ -177,7 +177,91 @@ noncomputable abbrev frameChild (X : Nat) : Devm :=
   implXferPost (initSevm (dMsg sevm pre (frameY sevm pre X))) (initDevm (dMsg sevm pre 0))
     (dFwd sevm pre (frameY sevm pre X) - childXferCost sevm pre)
 
+/-- The delegate tail's charge for a returned word `w`. -/
+noncomputable abbrev tailW (w : B256) : Nat :=
+  (dTailW sevm (dParent sevm pre 0) (pRest sevm pre) (dParent sevm pre 0).memory w).1
+
+/-- The proxy frame's halting state: the child `C` resumed at `DELEGATECALL` gas `Y`, its word `w`
+returned, `X` left. -/
+noncomputable def proxyPost (Y X : Nat) (C : Devm) (w : B256) : Devm :=
+  ((St (callChildPost (dParent sevm pre Y) C (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat)
+      (1 :: 1 :: pRest sevm pre) (dRetMem (dParent sevm pre Y).memory w) X).memRead
+    (Bytes.toB256 [0]).toNat (Nat.toB256 w.toBytes.length).toNat).2.withOutput w.toBytes
+
+/-- The proxy frame of `transfer`'s halting state with `X` left. -/
+noncomputable abbrev proxyXferPost (X : Nat) : Devm :=
+  proxyPost sevm pre (frameY sevm pre X) X (frameChild sevm pre X) xferWord
+
 end Frame
+
+theorem proxyPost_gasLeft (sevm : Sevm) (pre : Devm) (Y X : Nat) (C : Devm) (w : B256) :
+    (proxyPost sevm pre Y X C w).gasLeft = X := by
+  unfold proxyPost; rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft]; rfl
+
+theorem proxyPost_output (sevm : Sevm) (pre : Devm) (Y X : Nat) (C : Devm) (w : B256) :
+    (proxyPost sevm pre Y X C w).output = w.toBytes := by
+  unfold proxyPost; rw [Devm.withOutput_output]
+
+theorem proxyPost_state (sevm : Sevm) (pre : Devm) (Y X : Nat) (C : Devm) (w : B256) :
+    (proxyPost sevm pre Y X C w).state = C.state := by
+  unfold proxyPost
+  rw [Devm.withOutput_state, Devm.memRead_state]
+  exact (callChildPost_facts_zero (dParent sevm pre Y) C (Bytes.toB256 [0]).toNat
+    (Bytes.toB256 [0]).toNat rfl).2.2.2.1
+
+/-- **The USDC proxy frame, gas-exact, for any implementation child**: under the proxy's branch
+facts for selector `s`, the implementation's code behind the slot, gas below `2 ^ 256` at the
+`DELEGATECALL`, and a clean child run `C` that charges `cc` of what it is forwarded and returns the
+word `w`, the proxy's code runs to `RETURN` with exactly `X` left and returns `w`. -/
+theorem proxy_frame_run {sevm : Sevm} {pre C : Devm} {X cc : Nat} {s w : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
+    (pf : ProxyFacts sevm pre s)
+    (hcode : (pBase sevm pre).state.getCode (dI sevm pre) = Impl.code)
+    (hprec : sevm.benvStat.rules.isPrecomp (dI sevm pre) = false)
+    (hY : X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc < 2 ^ 256)
+    (hcc : cc ≤ dFwd sevm pre (X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc))
+    (hexec : exec (initEvm (dMsg sevm pre (X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc))) =
+      .ok C)
+    (herr : C.error = none) (hout : C.output = w.toBytes)
+    (hgasC : C.gasLeft = dFwd sevm pre (X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc) - cc) :
+    SFunc.RunExact Proxy.cert.prog sevm
+      (St pre [] Mem.empty (X + ((proxyPreW sevm pre s).1 +
+        (tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc))))
+      Proxy.t_0000_c0
+      (.halted (proxyPost sevm pre (X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc) X C w)) := by
+  generalize hYd : X + tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc = Y at hY hcc hexec hgasC ⊢
+  have step := dlg_step fork depth hY (by omega)
+    (by rw [hcode]; exact Blanc.Lift.Usdc.impl_undelegated) hprec hexec herr
+  obtain ⟨hstk, hmem, hgas, -, -⟩ := callChildPost_facts_zero (dParent sevm pre Y)
+    C (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat rfl
+  have hle : dFwd sevm pre Y ≤ Y - dExt sevm pre - dAcc sevm pre := by
+    simp only [dFwd, except64th]; omega
+  have hgas' : (callChildPost (dParent sevm pre Y) C
+      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat).gasLeft = X + tailW sevm pre w := by
+    rw [hgas, UniswapV2PairWeth9Joint.callSpawnParent_gasLeft, hgasC]
+    show Y - _ + _ = _
+    omega
+  have hD := St.self hstk hmem
+  rw [hgas', UniswapV2PairWeth9Joint.callSpawnParent_stack] at hD
+  have tail := (dTailW sevm (callChildPost (dParent sevm pre Y) C
+      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat) (pRest sevm pre)
+      (dParent sevm pre Y).memory w).2
+    (by rw [UniswapV2PairWeth9Joint.callChildPost_returnData, hout])
+    (dParent_size sevm pre _).1 (dParent_size sevm pre _).2
+    (by simp only [pRest, List.length_cons, List.length_nil]; omega) X
+  rw [dTailW_base sevm _ (dParent sevm pre 0)] at tail
+  have hD' : callChildPost (dParent sevm pre Y) C
+      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat =
+      St (callChildPost (dParent sevm pre Y) C
+        (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat) (1 :: pRest sevm pre)
+        (dParent sevm pre Y).memory
+        (X + (dTailW sevm (dParent sevm pre 0) (pRest sevm pre)
+          (dParent sevm pre Y).memory w).1) := hD
+  rw [← hD'] at tail
+  have h := (proxyPreW sevm pre s).2 fork pf Y _ (SFunc.RunExact.next step tail)
+  rw [show Y + (proxyPreW sevm pre s).1 = X + ((proxyPreW sevm pre s).1 +
+    (tailW sevm pre w + dAcc sevm pre + dExt sevm pre + cc)) by omega] at h
+  exact h
 
 /-- **The USDC proxy frame of `transfer`, gas-exact**: under the proxy's and the implementation's
 branch facts, the implementation's code behind the slot, gas enough for the child under the 63/64
@@ -190,49 +274,15 @@ theorem proxy_xfer_run {sevm : Sevm} {pre : Devm} {X : Nat} (fork : CoveredFork 
     (hprec : sevm.benvStat.rules.isPrecomp (dI sevm pre) = false)
     (hfwd : childXferCost sevm pre + 415 ≤ dFwd sevm pre (frameY sevm pre X))
     (hY : frameY sevm pre X < 2 ^ 256) :
-    ∃ post, SFunc.RunExact Proxy.cert.prog sevm (St pre [] Mem.empty (X + proxyXferCost sevm pre))
-        Proxy.t_0000_c0 (.halted post) ∧ post.gasLeft = X ∧ post.output = (Nat.toB256 1).toBytes ∧
-      post.state = (frameChild sevm pre X).state := by
+    SFunc.RunExact Proxy.cert.prog sevm (St pre [] Mem.empty (X + proxyXferCost sevm pre))
+      Proxy.t_0000_c0 (.halted (proxyXferPost sevm pre X)) := by
   have hexec := child_xfer_exec (sevm := sevm) (b := pre) (Y := frameY sevm pre X) fork static hcode
     (xf.transport rfl (dMsg_data sevm pre _ hlen) rfl rfl (fun a => by
       show Devm.getStor (pBase sevm pre) a = _
       rw [Blanc.afterSload_getStor, Blanc.afterSload_getStor])) hfwd
   have herr : (frameChild sevm pre X).error = none := by
     rw [implXferPost_error]; rfl
-  have step := dlg_step fork depth hY (by unfold frameY; omega)
-    (by rw [hcode]; exact Blanc.Lift.Usdc.impl_undelegated) hprec hexec herr
-  obtain ⟨hstk, hmem, hgas, hstate, -⟩ := callChildPost_facts_zero (dParent sevm pre (frameY sevm pre X))
-    (frameChild sevm pre X) (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat rfl
-  have hle : dFwd sevm pre (frameY sevm pre X) ≤ frameY sevm pre X - dExt sevm pre - dAcc sevm pre := by
-    simp only [dFwd, except64th]; omega
-  have hgas' : (callChildPost (dParent sevm pre (frameY sevm pre X)) (frameChild sevm pre X)
-      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat).gasLeft = X + frameTail sevm pre := by
-    rw [hgas, UniswapV2PairWeth9Joint.callSpawnParent_gasLeft, implXferPost_gasLeft]
-    show frameY sevm pre X - _ + _ = _
-    unfold frameY at hle hfwd ⊢; omega
-  have hD := St.self hstk hmem
-  rw [hgas', UniswapV2PairWeth9Joint.callSpawnParent_stack] at hD
-  have tail := (dTailW sevm (callChildPost (dParent sevm pre (frameY sevm pre X)) (frameChild sevm pre X)
-      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat) (pRest sevm pre)
-      (dParent sevm pre (frameY sevm pre X)).memory xferWord).2
-    (by rw [UniswapV2PairWeth9Joint.callChildPost_returnData, implXferPost_output]; rfl)
-    (dParent_size sevm pre _).1 (dParent_size sevm pre _).2 (by simp only [pRest, List.length_cons, List.length_nil]; omega) X
-  rw [dTailW_base sevm _ (dParent sevm pre 0)] at tail
-  have hD' : callChildPost (dParent sevm pre (frameY sevm pre X)) (frameChild sevm pre X)
-      (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat =
-      St (callChildPost (dParent sevm pre (frameY sevm pre X)) (frameChild sevm pre X)
-        (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat) (1 :: pRest sevm pre)
-        (dParent sevm pre (frameY sevm pre X)).memory
-        (X + (dTailW sevm (dParent sevm pre 0) (pRest sevm pre)
-          (dParent sevm pre (frameY sevm pre X)).memory xferWord).1) := hD
-  rw [← hD'] at tail
-  have h := (proxyPreW sevm pre 0xa9059cbb).2 fork pf (frameY sevm pre X) _
-    (SFunc.RunExact.next step tail)
-  rw [show frameY sevm pre X + (proxyPreW sevm pre 0xa9059cbb).1 = X + proxyXferCost sevm pre by
-    unfold proxyXferCost frameY; omega] at h
-  refine ⟨_, h, ?_, ?_, ?_⟩
-  · rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft]; rfl
-  · rw [Devm.withOutput_output]; rfl
-  · rw [Devm.withOutput_state, Devm.memRead_state, ← hstate]; rfl
+  exact proxy_frame_run fork depth pf hcode hprec hY (Nat.le_trans (Nat.le_add_right _ _) hfwd) hexec herr
+    (by rw [implXferPost_output]; rfl) (implXferPost_gasLeft _ _ _)
 
 end Blanc.Composition.UsdcLive
