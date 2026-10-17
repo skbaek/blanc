@@ -936,6 +936,10 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFeeLoop
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD2
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityMint
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityTail
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidity
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityBack
+import Blanc.Lift.Curve3Pool.Walk.AddLiquiditySafe
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityChecks
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
