@@ -58,11 +58,6 @@ theorem proxy_node {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 se
       exact hf'.1
     exact .inr ⟨hx, hs, hw⟩
 
-theorem getStorVal_eq_state (w : Devm) (a : Adr) (k : B256) :
-    w.getStorVal a k = (w.state.getStor a).get k := rfl
-
-theorem getCode_eq_state (w : Devm) (a : Adr) : w.getCode a = w.state.getCode a := rfl
-
 theorem getCode_St (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
     (St b S M G).getCode a = b.getCode a := rfl
 

@@ -149,10 +149,6 @@ theorem Cert.refine_getElem?_ne {c : Cert} {k i j : Nat} {v : AVal} (h : j ≠ k
   simp only [Ne.symm h, ite_false]
   cases c[j]? <;> rfl
 
-theorem Cert.refine_entries_ne {c : Cert} {k i j : Nat} {v : AVal} (h : j ≠ k) :
-    (c.refine k i v).entries[j]? = c.entries[j]? := by
-  simp only [Cert.entries, List.getElem?_map, Cert.refine_getElem?_ne h]
-
 theorem Cert.refine_prog {c : Cert} {k i : Nat} {v : AVal} :
     (c.refine k i v).prog = c.prog := by
   unfold Cert.refine Cert.prog

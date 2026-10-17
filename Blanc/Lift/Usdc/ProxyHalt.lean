@@ -125,7 +125,6 @@ theorem linst_return_state {sevm : Sevm} {pre post : Devm}
   exact hframe.state.symm
 
 theorem getters_noHalt : NoHaltSet prog getterEntries = true := by decide
-theorem ent3_admin_noHalt : NoHaltSet prog [14, 15] = true := by decide
 theorem ent3_admin_quiet : QuietSet prog [14, 15] = true := by decide
 theorem ent5_admin_quiet : QuietSet prog [8, 20] = true := by decide
 theorem empty_quiet : QuietSet prog [] = true := by decide

@@ -299,22 +299,6 @@ def fbTree (d : Nat) : SFunc :=
       (.next (.push [0x06, 0x51] (by decide)) (.callNext 14 (.dest (.next (.push [0x06, 0x82] (by decide))
         (.jump d)))))))))))
 
-theorem fb_6 : t_01f9_c6 = fbTree 23 := rfl
-theorem fb_7 : t_01f9_c7 = fbTree 24 := rfl
-theorem fb_11 : t_01f9_c11 = fbTree 26 := rfl
-theorem fb_13 : t_01f9_c13 = fbTree 27 := rfl
-theorem fb_16 : t_01f9_c16 = fbTree 28 := rfl
-theorem fb_19 : t_01f9_c19 = fbTree 29 := rfl
-theorem fb_21 : t_01f9_c21 = fbTree 30 := rfl
-
-/-- Every delegate copy is the same tree. -/
-theorem dl_24 : t_0682_c24 = t_0682_c23 := rfl
-theorem dl_26 : t_0682_c26 = t_0682_c23 := rfl
-theorem dl_27 : t_0682_c27 = t_0682_c23 := rfl
-theorem dl_28 : t_0682_c28 = t_0682_c23 := rfl
-theorem dl_29 : t_0682_c29 = t_0682_c23 := rfl
-theorem dl_30 : t_0682_c30 = t_0682_c23 := rfl
-
 /-- The getters and `_willFallback()` make no external call. -/
 def getterEntries : List Nat := [8, 14, 22, 31]
 
