@@ -55,16 +55,16 @@ theorem tx2D_returnData : (tx2D sevm b).returnData = (1 : B256).toBytes := by
 
 theorem tx2_cutWorld : swapFrontCutWorld sevm b b (tx2D sevm b) b = tx2D sevm b := by
   unfold swapFrontCutWorld swapFrontTransferWorld swapOptWorld
-  rw [if_pos (tx2_dataLength h.data), tx2_amount1 h.data, tx2_amount0 h.data, if_neg (by decide)]
+  rw [ite_eq_left (tx2_dataLength h.data), tx2_amount1 h.data, tx2_amount0 h.data, ite_eq_right (by decide)]
 
 theorem tx2_cutMem : swapFrontCutMem sevm b (tx2D sevm b) b = tx2M := by
   unfold swapFrontCutMem swapFrontTransferMem swapOptMem swapOptPtr
-  rw [if_pos (tx2_dataLength h.data), tx2_amount1 h.data, tx2_amount0 h.data, if_neg (by decide),
-    if_pos rfl, if_pos rfl, tx2_recipientWord h.data, tx2D_returnData h]
+  rw [ite_eq_left (tx2_dataLength h.data), tx2_amount1 h.data, tx2_amount0 h.data, ite_eq_right (by decide),
+    ite_eq_left rfl, ite_eq_left rfl, tx2_recipientWord h.data, tx2D_returnData h]
 
 theorem tx2_cutPtr : swapFrontPtr sevm b (tx2D sevm b) = tx2P := by
   unfold swapFrontPtr swapOptPtr
-  rw [tx2_amount1 h.data, tx2_amount0 h.data, if_neg (by decide), if_pos rfl, tx2D_returnData h]
+  rw [tx2_amount1 h.data, tx2_amount0 h.data, ite_eq_right (by decide), ite_eq_left rfl, tx2D_returnData h]
 
 end Raw
 

@@ -87,7 +87,7 @@ theorem tx2_oracleWorld_eq :
         (updatePriceWord (Nat.toB256 1000000) (Nat.toB256 1000000)) tx2Elapsed := by
   unfold updateOracleWorld
   dsimp only
-  rw [if_pos (tx2_oracleActive h v1), tx2_d1_slot8 h v1, h.time]
+  rw [ite_eq_left (tx2_oracleActive h v1), tx2_d1_slot8 h v1, h.time]
   rfl
 
 /-- The world after `_update`'s oracle stage. -/
@@ -199,7 +199,7 @@ theorem tx2_updateCharge (n : Nat) (p : B256) :
       tx2Packed1 := tx2_finalPacked h v1
   unfold swapUpdateCharge swapUpdLoad8 swapUpdStore8 swapUpdLoad9 swapUpdStore9 swapUpdLoad10
     swapUpdStore10 swapUpdAcc0
-  rw [if_pos (tx2_oracleActive h v1), hfin, hel, hv9, hv10, tx2_d1_slot8 h v1, h.time,
+  rw [ite_eq_left (tx2_oracleActive h v1), hfin, hel, hv9, hv10, tx2_d1_slot8 h v1, h.time,
     o.sloadCost h.target, (o.afterSload h.target 8).sstoreCost h.target h.createdPair,
     e0.sloadCost h.target, e1.sstoreCost h.target h.createdPair, v1.sloadCost h.target]
   unfold updateAccumulatorPost

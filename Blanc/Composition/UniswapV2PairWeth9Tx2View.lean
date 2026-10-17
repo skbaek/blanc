@@ -86,6 +86,7 @@ structure Tx2Frame (sevm : Sevm) (b : Devm) : Prop where
   origWethTrader : (sevm.benvStat.origState.getStor weth).get (Weth9.balSlot trader) = 0
   stack : b.stack = []
   memory : b.memory = Mem.empty
+  gas : b.gasLeft = 278020
   output : b.output = []
   error : b.error = none
   refund : b.refundCounter = 0

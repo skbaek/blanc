@@ -59,7 +59,7 @@ theorem processTransaction_of_stages_receipts_frame
   apply Exists.intro
   simp only [settleSelfdestructs, hsg, hbal, settleTransactionGas]
   refine ⟨rfl, rfl, rfl, rfl, Std.TreeMap.getElem?_insert_self, fun key hne => ?_⟩
-  exact Std.TreeMap.getElem?_insert.trans (if_neg (fun e => hne (Std.LawfulEqCmp.eq_of_compare e).symm))
+  exact Std.TreeMap.getElem?_insert.trans (ite_eq_right (fun e => hne (Std.LawfulEqCmp.eq_of_compare e).symm))
 
 theorem processTransaction_call_value_of_exec_receipts_frame
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}

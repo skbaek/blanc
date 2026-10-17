@@ -75,7 +75,7 @@ theorem tx2D1_returnData : (tx2D1 sevm b).returnData = (1 : B256).toBytes := rfl
 
 theorem tx2_leg1Need : leg1Need sevm b tx2St b 0 tx2Gc = 232652 := by
   unfold leg1Need swapFrontCallbackGas
-  rw [tx2_leg1Skel h, if_pos (tx2_dataLength h.data), tx2_leg1Mem h, tx2_leg1Ptr h, tx2D1_returnData h]
+  rw [tx2_leg1Skel h, ite_eq_left (tx2_dataLength h.data), tx2_leg1Mem h, tx2_leg1Ptr h, tx2D1_returnData h]
   decide +kernel
 
 theorem tx2_cg1 : (swapWethLeg1 sevm b tx2St b 0 tx2Gc).2 = 265214 := by
@@ -89,7 +89,7 @@ theorem tx2_cg1 : (swapWethLeg1 sevm b tx2St b 0 tx2Gc).2 = 265214 := by
 theorem tx2_frontGas :
     swapFrontTransferGas sevm b b (tx2D sevm b) 0 265214 0 tx2Gc = 265906 := by
   unfold swapFrontTransferGas swapOptGas swapOptMem swapOptPtr
-  rw [tx2_amount0 h.data, if_pos rfl, if_pos rfl, if_pos rfl, tx2_amount1 h.data, if_neg (by decide),
+  rw [tx2_amount0 h.data, ite_eq_left rfl, ite_eq_left rfl, ite_eq_left rfl, tx2_amount1 h.data, ite_eq_right (by decide),
     show safeTransferPreCharge getterInitMemory.size 128 = 629 by decide +kernel]
 
 theorem tx2_front : SwapFrontForwardEnv sevm b tx2St b (tx2D sevm b) b 0 265214 0 tx2Gc := by
