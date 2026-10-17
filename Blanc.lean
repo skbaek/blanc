@@ -891,6 +891,12 @@ import Blanc.Lift.Curve3Pool.Walk.ViewsA
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvp
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 import Blanc.Lift.Curve3Pool.Walk.BridgeChecks
+import Blanc.Lift.Curve3Pool.Walk.OneCoinPre
+import Blanc.Lift.Curve3Pool.Walk.OneCoinBurn
+import Blanc.Lift.Curve3Pool.Walk.OneCoinCalls
+import Blanc.Lift.Curve3Pool.Walk.OneCoin
+import Blanc.Lift.Curve3Pool.Walk.OneCoinRaw
+import Blanc.Lift.Curve3Pool.Walk.OneCoinChecks
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceModel
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceChecks
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceDispatch

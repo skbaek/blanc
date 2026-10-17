@@ -83,7 +83,7 @@ theorem xa_cwo (hc : Cert.CheckedM code cert mems true)
   xs 0x43e2 (.reg .add) ri_add  -- 43e1 ADD
   xs 0x43e5 (.push [0x3c, 0xca] (by decide)) ri_push  -- 43e2 PUSH2 0x3cca
   xjmp 0x3cca  -- 43e5 JUMP
-  obtain ⟨c, L', hi, dy, fee, b', M1, G1, hL, hsw, hmod, -, hst, hlg, h, hV1⟩ :=
+  obtain ⟨c, L', hi, dy, fee, b', M1, G1, hL, hsw, hmod, -, hst, hlg, h, hV1, -⟩ :=
     xa_cw hc hcode hfork ha (hV.sub (List.nil_subset _)) htok h
   clear hV
   have hV := hV1
