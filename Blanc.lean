@@ -871,6 +871,7 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.DonateX
+import Blanc.Lift.Curve3Pool.Walk.WithdrawAdminFeesX
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
