@@ -160,7 +160,7 @@ theorem rx_rl_pre {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W 
         ((b.getStor sevm.currentTarget).set lockSlot 1).get x) →
       b1.logs = b.logs → b1.output = b.output →
       Mem.Reads M1 img1 → Mem.Wf M1 → M1.size = 0x2c0 → LoopImg img1 0 T (fun _ => 0) →
-      Gs ≤ G1 + U + 135 →
+      Gs ≤ G1 + U + 135 → G1 ≤ Gs →
       SFunc.RunEx cert.prog sevm (St b1 [3, 0x2a0] M1 G1) t_2cdb_c0 Q) :
     SFunc.RunEx cert.prog sevm
       (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) (Gs + rlPreCost sevm b)) t_2c68_c0 Q := by
@@ -286,7 +286,7 @@ theorem rx_rl_pre {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W 
       List.replicate 96 0 := by
     rw [B256.toNat_toB256_of_lt hcd]; exact List.sliceD_length_eq
   refine k _ _ _ _ hWd (fun hid => hidd (((hid.afterSload _).afterSstore _ _).afterSload _))
-    (fun x => ?_) ?_ ?_ hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ (by omega)
+    (fun x => ?_) ?_ ?_ hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ (by omega) (by omega)
   · rw [hpost.stor, afterSload_getStor, afterSstore_getStor_self, afterSload_getStor, lockSlot_lit]
     rfl
   · rw [hpost.logs, afterSload_logs, afterSstore_logs, afterSload_logs]
@@ -1467,6 +1467,96 @@ theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M
   intro b' M' img' G' hWb' hid' hst' hR' hW' hsz' hL' hg1 hg2
   exact k b' M' img' G' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL'
     (by omega) (by omega)
+
+/-! ## The whole frame -/
+
+theorem rlPreCost_le (sevm : Sevm) (b : Devm) : rlPreCost sevm b ≤ 26389 := by
+  unfold rlPreCost
+  have h1 := sloadCost_le sevm b (Bytes.toB256 [0xff, 0xff, 0xff])
+  have h2 := sstoreCost_le_22100 sevm (afterSload sevm b (Bytes.toB256 [0xff, 0xff, 0xff]))
+    (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])
+  have h3 := sloadCost_le sevm (afterSstore sevm (afterSload sevm b (Bytes.toB256 [0xff, 0xff, 0xff]))
+    (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])) (Bytes.toB256 [5])
+  have e : gasColdSload = 2100 := rfl
+  omega
+
+/-- **`remove_liquidity`, the whole frame forward.** From the frame's entry (empty stack and
+memory) with the `remove_liquidity` selector, the lock clear, no value, every check of the
+model passing on the entry storage `σ` and the supply `T`, and the callees answering
+(`SupplyOk`, `CoinPushOk` for each coin with its amount, `BurnOk`), every gas
+`G ≥ 167000 + 5 U` runs the frame to `STOP`, whose last log carries `T - _amount`. -/
+theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome → Prop}
+    {W : Devm → Prop} {U : Nat} {T : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidity) (hid : IdReady sevm b)
+    (hσ : b.getStor sevm.currentTarget = σ) (hlock : σ.get lockSlot = 0) (hval : sevm.value = 0)
+    (hWc : WClosed sevm W) (hWb : W b)
+    (hsup : SupplyOk sevm W (σ.get tokenSlot) T U)
+    (hpush : ∀ i, i < 3 → CoinPushOk sevm W (coinAt σ i) (balAt σ i * rlAmt sevm / T) U)
+    (hburn : BurnOk sevm W (σ.get tokenSlot) (rlAmt sevm) U)
+    (hmulw : ∀ i, i < 3 →
+      (B256.eqCheck (balAt σ i * rlAmt sevm / balAt σ i) (rlAmt sevm) ||| B256.eqCheck (balAt σ i) 0)
+        ≠ 0)
+    (hT0 : T ≠ 0)
+    (hminw : ∀ i, i < 3 →
+      B256.eqCheck (B256.ltCheck (balAt σ i * rlAmt sevm / T) (rlMin sevm i)) 0 ≠ 0)
+    (hlew : ∀ i, i < 3 → B256.eqCheck (B256.ltCheck (balAt σ i) (balAt σ i * rlAmt sevm / T)) 0 ≠ 0)
+    (hTa : (rlAmt sevm).toNat ≤ T.toNat)
+    (hG : 167000 + 5 * U ≤ G) (hGb : G < 2 ^ 256)
+    (hQ : ∀ D, (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) → Q (.halted D)) :
+    SFunc.RunEx cert.prog sevm (St b [] Mem.empty G) t_0000_c0 Q := by
+  subst hσ
+  obtain ⟨G0, rfl⟩ : ∃ G0, G = G0 + 451 := ⟨G - 451, by omega⟩
+  refine rx_dispatch_rl hlen hcd hsel ?_
+  have hpc := rlPreCost_le sevm b
+  obtain ⟨Gs, rfl⟩ : ∃ Gs, G0 = Gs + rlPreCost sevm b := ⟨G0 - rlPreCost sevm b, by omega⟩
+  refine rx_rl_pre (T := T) hfork hstatic hcd hlock hval hWc hWb hsup (by omega) (by omega)
+    (by omega) ?_
+  intro b1 M1 img1 G1 hWb1 hid1 hst1 _ _ hR1 hW1 hsz1 hL1 hg1 hg1'
+  have hs1 : ∀ x, lockSlot ≠ x →
+      (b1.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
+    fun x hx => by rw [hst1, Stor.get_set_ne _ hx]
+  -- iteration 0
+  refine rx_rl_iterA (i := 0) (B := balAt (b.getStor sevm.currentTarget) 0)
+    (C := coinAt (b.getStor sevm.currentTarget) 0) hfork hstatic (by decide) hdepth (hid1 hid) hWc
+    hWb1 hR1 hW1 hsz1 hL1 (hs1 _ (by decide)) (hmulw 0 (by decide)) hT0 (hminw 0 (by decide))
+    (hlew 0 (by decide)) (hs1 _ (by decide)) (hpush 0 (by decide)) (by omega) (by omega) ?_
+  intro b2 M2 img2 G2 hWb2 hid2 hst2 hR2 hW2 hsz2 hL2 hg2 hg2'
+  rw [show rlNext 0 = t_2cdb_c46 by unfold rlNext; rfl]
+  have hs2 : ∀ x, lockSlot ≠ x → balancesBase + Nat.toB256 0 ≠ x →
+      (b2.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
+    fun x hx hx0 => by rw [hst2, Stor.get_set_ne _ hx0, hs1 _ hx]
+  -- iteration 1
+  refine rx_rl_iterB (i := 1) (B := balAt (b.getStor sevm.currentTarget) 1)
+    (C := coinAt (b.getStor sevm.currentTarget) 1) hfork hstatic (by decide) hdepth hid2 hWc
+    hWb2 hR2 hW2 hsz2 hL2 (hs2 _ (by decide) (by decide)) (hmulw 1 (by decide)) hT0
+    (hminw 1 (by decide)) (hlew 1 (by decide)) (hs2 _ (by decide) (by decide))
+    (hpush 1 (by decide)) (by omega) (by omega) ?_
+  intro b3 M3 img3 G3 hWb3 hid3 hst3 hR3 hW3 hsz3 hL3 hg3 hg3'
+  rw [show rlNext 1 = t_2cdb_c46 by unfold rlNext; rfl]
+  have hs3 : ∀ x, lockSlot ≠ x → balancesBase + Nat.toB256 0 ≠ x → balancesBase + Nat.toB256 1 ≠ x →
+      (b3.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
+    fun x hx hx0 hx1 => by rw [hst3, Stor.get_set_ne _ hx1, hs2 _ hx hx0]
+  -- iteration 2
+  refine rx_rl_iterB (i := 2) (B := balAt (b.getStor sevm.currentTarget) 2)
+    (C := coinAt (b.getStor sevm.currentTarget) 2) hfork hstatic (by decide) hdepth hid3 hWc
+    hWb3 hR3 hW3 hsz3 hL3 (hs3 _ (by decide) (by decide) (by decide)) (hmulw 2 (by decide)) hT0
+    (hminw 2 (by decide)) (hlew 2 (by decide)) (hs3 _ (by decide) (by decide) (by decide))
+    (hpush 2 (by decide)) (by omega) (by omega) ?_
+  intro b4 M4 img4 G4 hWb4 hid4 hst4 hR4 hW4 hsz4 hL4 hg4 hg4'
+  rw [show rlNext 2 = t_2f7b_c15 by unfold rlNext; rfl]
+  have htok : (b4.getStor sevm.currentTarget).get tokenSlot = (b.getStor sevm.currentTarget).get tokenSlot := by
+    rw [hst4, Stor.get_set_ne _ (by decide), hs3 _ (by decide) (by decide) (by decide)]
+  have hpo : rlPostCost sevm b4 ≤ 2167 := by
+    unfold rlPostCost
+    have := sloadCost_le sevm b4 tokenSlot
+    have e : gasColdSload = 2100 := rfl
+    omega
+  obtain ⟨Gx, rfl⟩ : ∃ Gx, G4 = Gx + rlPostCost sevm b4 := ⟨G4 - rlPostCost sevm b4, by omega⟩
+  exact rx_rl_post hfork hstatic hWc hWb4 hR4 hW4 hsz4 hL4 hTa (by rw [htok]; exact hburn)
+    (by omega) (by omega) hQ
 
 end Blanc.Lift.Curve3Pool
 
