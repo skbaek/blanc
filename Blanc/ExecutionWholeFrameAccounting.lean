@@ -96,26 +96,11 @@ theorem wholeFrameTarget
       (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)) :
     Exec.CoreAccounting ca sem entry C V 0 sevm pre (.ok post) := by
   intro run committed fork installed admitted
+  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
+    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
   by_cases hs : sevm.isStatic = true
-  · have self : (Exec.committedFrames run).flatMap V.frameObs =
-        V.frameObs (Exec.Frame.ofRun run committed) ++
-          (Exec.descendantFrames run).flatMap V.frameObs := by
-      rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
-    have hdf := staticObservedNil kinds run hrun target fork installed admitted deeper run
-      (.refl _) hs
-    have hself : V.frameObs (Exec.Frame.ofRun run committed) = [] := obsStatic _ hs
-    have hobs : (Exec.committedFrames run).flatMap V.frameObs = [] := by
-      rw [self, hdf, hself]
-      rfl
-    refine ⟨fun _ => hobs, fun _ => ⟨[], ?_, ?_⟩⟩
-    · have hview := Exec.getStor_committedPost_eq_of_static_protected run hs committed fork ca
-        (State.Protected.of_image installed.1)
-      have heq : C.ofState (Execution.committedPost (.ok post) committed).state =
-          C.ofState pre.state := ofStateGet fun k => congrArg (fun stor => stor.get k) hview
-      rw [heq, entryOfState]
-      exact C.nil _
-    · rw [hobs]
-      exact V.obs_nil
+  · exact staticFrame entryOfState ofStateGet obsStatic run committed fork rootNonempty hs
+      (staticObservedNil kinds run hrun target fork installed admitted deeper run (.refl _) hs)
   · have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
     exact ⟨fun h => absurd h hs, fun bound =>
       whole run committed hrun target fork installed admitted bound hs'⟩
