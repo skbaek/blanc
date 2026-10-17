@@ -35,7 +35,7 @@ def At (L : PositionalLadder c ca entry) (start : L.carrier.Snap)
     (frames : List Exec.Frame) : Prop :=
   ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
     frames = before ++ f :: after →
-    (∀ A ∈ before, A.Encloses f → ¬ L.Opaque A) →
+    Exec.NoOpaqueAbove L.Opaque before f →
     ∃ steps, L.carrier.Replay start steps (L.carrier.frameEntry f.sevm f.pre.state) ∧
       L.view.obs steps = before.flatMap L.view.frameObs
 
@@ -52,8 +52,9 @@ theorem At.append (L : PositionalLadder c ca entry) {start mid : L.carrier.Snap}
   intro before f after split noOpaque
   rcases List.split_append_cons split with ⟨m, hX, _⟩ | ⟨n, hb, hY⟩
   · exact left before f m hX noOpaque
-  · obtain ⟨rest, restReplay, restObserved⟩ := right n f after hY (fun A hA =>
-      noOpaque A (by rw [hb]; exact List.mem_append_right xs hA))
+  · rw [hb] at noOpaque
+    obtain ⟨rest, restReplay, restObserved⟩ := right n f after hY
+      (Exec.NoOpaqueAbove.drop noOpaque)
     refine ⟨steps ++ rest, L.append replay restReplay, ?_⟩
     rw [L.view.obs_append, observed, restObserved, hb, List.flatMap_append]
 
@@ -476,6 +477,32 @@ theorem configuredBlock_at (L : PositionalLadder c ca entry)
   exact h
 
 open _root_.Blanc.ExecutionTrace in
+/-- **Positional history, by position.**  In a configured history admitted at `ca` from a
+state-invariant checkpoint, the boundary at the entry of every settled position that no opaque
+earlier frame's block covers is the replay, from the checkpoint, of the observations of exactly the
+settled frames before it. -/
+theorem configuredHistory_atPos {c : ContractSpecSem} {ca : Adr}
+    {entry : Sevm → Devm → Prop} (L : PositionalLadder c ca entry) {cfg : ChainConfig}
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : history.FrameAdmitted ca entry)
+    (inv : c.StateInv ca checkpoint.state) :
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      history.settledFrames = before ++ f :: after →
+      Exec.NoOpaqueAbove L.Opaque before f →
+      ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
+          (L.carrier.frameEntry f.sevm f.pre.state) ∧
+        L.view.obs steps = before.flatMap L.view.frameObs := by
+  induction history with
+  | refl hcfg hctx hid => exact At.nil L _
+  | step prior block ih =>
+      obtain ⟨priorSteps, priorReplay, priorObserved⟩ :=
+        L.toAccountingLadderAdmitted.configuredHistory prior admitted.1 inv
+      exact At.append L (ih admitted.1) priorReplay priorObserved
+        (L.configuredBlock_at block admitted.2
+          (prior.stateInv_admitted_sem L.preserves admitted.1 inv) block.block.header.number)
+
+open _root_.Blanc.ExecutionTrace in
 /-- **Positional history.**  In a configured history admitted at `ca` from a state-invariant
 checkpoint, the boundary at the entry of every settled frame not enclosed by an opaque earlier
 frame is the replay, from the checkpoint, of the observations of exactly the settled frames
@@ -491,15 +518,10 @@ theorem configuredHistory_at {c : ContractSpecSem} {ca : Adr}
       (∀ A ∈ before, A.Encloses f → ¬ L.Opaque A) →
       ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
           (L.carrier.frameEntry f.sevm f.pre.state) ∧
-        L.view.obs steps = before.flatMap L.view.frameObs := by
-  induction history with
-  | refl hcfg hctx hid => exact At.nil L _
-  | step prior block ih =>
-      obtain ⟨priorSteps, priorReplay, priorObserved⟩ :=
-        L.toAccountingLadderAdmitted.configuredHistory prior admitted.1 inv
-      exact At.append L (ih admitted.1) priorReplay priorObserved
-        (L.configuredBlock_at block admitted.2
-          (prior.stateInv_admitted_sem L.preserves admitted.1 inv) block.block.header.number)
+        L.view.obs steps = before.flatMap L.view.frameObs :=
+  fun before f after split noOpaque =>
+    L.configuredHistory_atPos history admitted inv before f after split
+      (Exec.NoOpaqueAbove.of_encloses noOpaque)
 
 end PositionalLadder
 

@@ -40,7 +40,7 @@ theorem pair_token_joint_signed {pair T : Adr} {S : BookS} (C : CoreW T S.toBook
     (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       trace.settledFrames = before ++ f :: after →
       (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
-      ¬ C.Shadowed trace f →
+      ¬ C.Shadowed trace before f →
       ∃ (st : UniswapV2Pair.State) (K : WriterKey → Prop),
         WriterRep K (f.pre.state.getStor pair) st ∧ st.unlocked = 1 ∧ st.tokenOn side = T ∧
           JointAtW C trace pair side st f.pre.state) ∧
