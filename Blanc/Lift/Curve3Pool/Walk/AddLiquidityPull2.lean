@@ -205,4 +205,134 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
   exact ⟨hok, b6, M7, img6, G7, hb46, hR, hW, hA, k_keep, h⟩
 
 
+theorem al_balanceOf_input2 (img : Bytes) (self : Adr) :
+    (Bytes.writeAt (Bytes.writeAt img 0x860 (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x880
+      self.toB256.toBytes).sliceD 0x87c 0x24 0 = balanceOfData self := by
+  have hsel : Region (Bytes.writeAt img 0x860 (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes)
+      0x87c balanceOfSel := by
+    have := Region.write_self img 0x860 (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes
+    rw [show (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes = List.replicate 28 0 ++ balanceOfSel
+      by decide] at this
+    exact this.right
+  have hl : 0x24 = (balanceOfData self).length := by
+    simp only [balanceOfData, balanceOfSel, List.length_append, B256.length_toBytes,
+      List.length_cons, List.length_nil]
+  refine Region.slice (Region.append' (o' := 0x880) (Region.write_other hsel ?_)
+    (Region.write_self _ _ _) (by rfl)) hl
+  simp only [balanceOfSel, B256.length_toBytes, List.length_cons, List.length_nil]; omega
+
+/-- **Pull, part 5** (`0x1272` → `0x12d6`): for coin `2`, `in_amount = coin.balanceOf(self) -
+in_amount` (a second `STATICCALL`, the difference checked). -/
+theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {i : Nat} {v C : B256} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
+    (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
+    (hSK : StaticKeeps sevm C)
+    (h : XAt sevm post 0x1272 (St b [3, 0x4c0] M G) L) :
+    (i ≠ 2 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
+    (i = 2 ∧ ∃ (c : Exec.Frame) (L' : List Exec.Frame) (d : Devm) (M' : Mem) (img' : Bytes)
+      (G' : Nat), L = c :: L' ∧ AlStatic sevm b d C.toAdr (balanceOfData sevm.currentTarget) c ∧
+      ¬ Bytes.toB256 (c.post.output.take 32) < v ∧
+      Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      (∀ o w, WordAt img o w → (o + 32 ≤ 0x4e0 ∨ 0x500 ≤ o) → (o + 32 ≤ 0x860 ∨ 0x900 ≤ o) →
+        WordAt img' o w) ∧
+      WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32) - v) ∧
+      XAt sevm post 0x12d6 (St d [3, 0x4c0] M' G') L') := by
+  xs 0x1274 (.push [0x02] (by decide)) ri_push
+  xs 0x1277 (.push [0x04, 0xc0] (by decide)) ri_push
+  xml 0x1278 0x4c0 hctr
+  xs 0x1279 (.reg .eq) ri_eq
+  xs 0x127a (.reg .iszero) ri_iszero
+  xs 0x127d (.push [0x12, 0xd5] (by decide)) ri_push
+  xji 0x127e 0x12d5 hw
+  · have hi2 : i = 2 := by
+      have e := isNe_fall hw
+      have e2 := congrArg B256.toNat e
+      rw [B256.toNat_toB256_of_lt (by omega), show (Bytes.toB256 [2]).toNat = 2 by decide] at e2
+      exact e2
+    clear hw
+    refine .inr ⟨hi2, ?_⟩
+    xs 0x1280 (.push [0x20] (by decide)) ri_push
+    xs 0x1283 (.push [0x08, 0xe0] (by decide)) ri_push
+    xs 0x1285 (.push [0x24] (by decide)) ri_push
+    xs 0x128a (.push [0x70, 0xa0, 0x82, 0x31] (by decide)) ri_push
+    xs 0x128d (.push [0x08, 0x60] (by decide)) ri_push
+    xma 0x128e (.reg .mstore) (ri_mstore_imgAtA (o := 0x860) rfl)
+    xs 0x128f (.reg .address) ri_al_address
+    xs 0x1292 (.push [0x08, 0x80] (by decide)) ri_push
+    xma 0x1293 (.reg .mstore) (ri_mstore_imgAtA (o := 0x880) rfl)
+    xs 0x1296 (.push [0x08, 0x7c] (by decide)) ri_push
+    xs 0x1299 (.push [0x05, 0x00] (by decide)) ri_push
+    xml 0x129a 0x500 hC
+    xs 0x129b (.reg .gas) ri_gas_remaining
+    replace h := xa_staticcall_imgA (pc' := 0x129c) (i := 0x87c) (n := 0x24) (o := 0x8e0)
+      (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW hA h
+    clear hR hW hA
+    obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hA, hrd, hob, hstor, hlogs, hk⟩ := h
+    xs 0x129f (.push [0x12, 0xa4] (by decide)) ri_push
+    xji 0x12a0 0x12a4 hw
+    · xdead
+    have h4 : d1.getCode 4 = b.getCode 4 := by
+      rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
+      rfl
+    rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout,
+      hclogs, hcpre, hcpost⟩
+    · exact absurd hpre hcoin
+    clear hk
+    xjd 0x12a5
+    xs 0x12a7 (.push [0x1f] (by decide)) ri_push
+    xs 0x12a8 (.reg .returndatasize) ri_returndatasize
+    xs 0x12a9 (.reg .gt) ri_gt
+    xs 0x12ac (.push [0x12, 0xb1] (by decide)) ri_push
+    xji 0x12ad 0x12b1 hw2
+    · xdead
+    have hlen : 32 ≤ out.length := by
+      have e := gtCheck_ne_zero hw2
+      rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
+      exact e
+    clear hw2
+    xjd 0x12b2
+    xs 0x12b4 (.push [0x00] (by decide)) ri_push
+    xs 0x12b5 (.reg .pop) ri_pop
+    xs 0x12b8 (.push [0x08, 0xe0] (by decide)) ri_push
+    xma 0x12b9 (.reg .mload) (ri_mload_imgAtA (o := 0x8e0) rfl)
+    rw [Bytes.sliceD_writeAt_inside _ _ _ _ _ (le_refl _) (by rw [List.length_take]; omega),
+      Nat.sub_self, List.sliceD_zero_of_length (by rw [List.length_take]; omega)] at h
+    xs 0x12bc (.push [0x04, 0xe0] (by decide)) ri_push
+    have kv : WordAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img 0x860
+        (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x880 sevm.currentTarget.toB256.toBytes)
+        0x8e0 (out.take 0x20)) 0x4e0 v := by wchain; exact hv
+    xma 0x12bd (.reg .mload) (ri_mload_imgAtA (o := 0x4e0) rfl)
+    rw [kv.read] at h
+    xs 0x12be (.reg (.dup 0)) (ri_dup (by rfl))
+    xs 0x12bf (.reg (.dup 2)) (ri_dup (by rfl))
+    xs 0x12c0 (.reg .lt) ri_lt
+    xs 0x12c1 (.reg .iszero) ri_iszero
+    xs 0x12c4 (.push [0x12, 0xc9] (by decide)) ri_push
+    xji 0x12c5 0x12c9 hw3
+    · xdead
+    have hge := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw3)
+    clear hw3
+    xjd 0x12ca
+    xs 0x12cb (.reg (.dup 0)) (ri_dup (by rfl))
+    xs 0x12cc (.reg (.dup 2)) (ri_dup (by rfl))
+    xs 0x12cd (.reg .sub) ri_sub
+    xs 0x12ce (.reg (.swap 0)) (ri_swap (by rfl))
+    xs 0x12cf (.reg .pop) ri_pop
+    xs 0x12d0 (.reg (.swap 0)) (ri_swap (by rfl))
+    xs 0x12d1 (.reg .pop) ri_pop
+    xs 0x12d4 (.push [0x04, 0xe0] (by decide)) ri_push
+    xma 0x12d5 (.reg .mstore) (ri_mstore_imgAtA (o := 0x4e0) rfl)
+    xjd 0x12d6
+    refine ⟨c, L1, d1, M, _, _, hL, ⟨hdepth, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs,
+      hcpre, hcpost, hstor, hlogs, hout, hacc, h4, hcodeK⟩, by rw [hcout]; exact hge, hR, hW, hA,
+      fun o w hw h1 h2 => by wchain; exact hw, by rw [hcout]; exact WordAt.write_self _ _ _, h⟩
+    rw [hdata, al_balanceOf_input2]
+  · have hi2 : i ≠ 2 := by
+      intro e; subst e; exact absurd (isNe_jump hw) (by decide)
+    xjd 0x12d6
+    exact .inl ⟨hi2, _, _, hR, hW, hA, h⟩
+
 end Blanc.Lift.Curve3Pool
