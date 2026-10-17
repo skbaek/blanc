@@ -129,6 +129,20 @@ theorem rxe_pcCall {Q : Outcome → Prop} {p k : Nat} {t0 t1 : UInt8} {D : Devm}
 
 end Fwd
 
+/-! ## Vyper's checked-arithmetic guards, forward -/
+
+/-- The overflow guard of a checked `x * y` passes. -/
+theorem ex_mulGuard {x y : B256} (h : x * y / x = y ∨ x = 0) :
+    (B256.eqCheck (x * y / x) y ||| B256.eqCheck x 0) ≠ 0 := by
+  unfold B256.eqCheck
+  rcases h with h1 | h1 <;> simp only [h1, ↓reduceIte] <;> split_ifs <;> decide
+
+/-- An `ISZERO (LT x y)` guard passes when `¬ x < y`. -/
+theorem ex_geGuard {x y : B256} (h : ¬ x < y) : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
+  unfold B256.ltCheck B256.eqCheck
+  simp only [h, ↓reduceIte]
+  decide
+
 /-! ## The base a forward walk carries -/
 
 /-- **The forward walk's base**: the pool's storage is `σ` slot by slot, the identity precompile
