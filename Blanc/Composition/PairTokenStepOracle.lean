@@ -132,6 +132,62 @@ theorem sourceCallAt_reply_facts {root : Exec.Deriv} {frame : UniswapV2Pair.Fram
   | bytes _ success returndata => exact ⟨success, returndata⟩
   | recovery _ success returndata _ => exact ⟨success, returndata⟩
 
+/-- **An observed call to an undelegated non-precompile target enters a code frame**: an empty
+child slot means the call ran an enabled precompile at its code address (the `entered` input of
+`StepOracle`). -/
+theorem sourceCallAt_entered {root : Exec.Deriv} {frame : UniswapV2Pair.Frame}
+    {request : Request} {reply : ExternalResult} {index : Nat}
+    (observed : SourceCallAt root frame request reply index)
+    (undelegated :
+      getDelegatedCodeAddress (observed.call.occurrence.node.devm.getCode request.target) = none)
+    (notPrecomp : ¬ observed.call.occurrence.node.sevm.benvStat.rules.isPrecomp request.target) :
+    observed.call.occurrence.slot.isSome = true := by
+  obtain ⟨x, kind, step⟩ := observed.xstep
+  have targetEq : observed.message.currentTarget = request.target :=
+    Option.some.inj ((Xinst.step_callKind_spawn_target kind step :
+      observed.message.target = _).symm.trans observed.target)
+  have codeAddress : observed.message.codeAddress = some request.target := by
+    have spawned := Xinst.step_callKind_spawn_codeAddress kind step (by
+      change getDelegatedCodeAddress
+        (observed.call.occurrence.node.devm.getCode observed.message.currentTarget) = none
+      rw [targetEq]
+      exact undelegated)
+    rw [← targetEq]
+    exact spawned
+  have stat : observed.message.benv.stat = observed.call.occurrence.node.sevm.benvStat :=
+    Xinst.step_spawn_benvStat step
+  cases slot : observed.call.occurrence.slot with
+  | some _ => rfl
+  | none =>
+    exfalso
+    have response := observed.response
+    rw [slot] at response
+    unfold ProcessMessage RunFrame at response
+    cases entered : (Jaune.Frame.ofCall observed.message).enter with
+    | run evm =>
+      rw [entered] at response
+      obtain ⟨_, impossible, _⟩ := response
+      cases impossible
+    | done result =>
+      rw [entered] at response
+      obtain ⟨_, resultEq⟩ := response
+      unfold Jaune.Frame.enter at entered
+      split at entered
+      · cases entered
+        simp only [Jaune.Frame.settleMsg, Jaune.Frame.ofCall, processMessage.settle, bind,
+          Except.bind, Bool.false_eq_true, ite_false, reduceCtorEq] at resultEq
+      · rename_i benv transfer
+        split at entered
+        · cases entered
+        · rename_i raw entry
+          obtain ⟨adr, routed, -, precomp⟩ := Blanc.executeCode.enter_inr_routing entry
+          have benvStat : benv.stat = observed.message.benv.stat := benvAfterTransfer_stat transfer
+          simp only [Msg.withBenv, Jaune.Frame.ofCall] at routed precomp
+          rw [codeAddress] at routed
+          cases routed
+          rw [benvStat, stat] at precomp
+          exact notPrecomp precomp
+
 /-! ## The oracle -/
 
 /-- **The per-continuation token oracle.** -/
