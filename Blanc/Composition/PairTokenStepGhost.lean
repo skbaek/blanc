@@ -196,8 +196,10 @@ theorem decode_read {site : CallSite} {t owner : Adr} {reply : ExternalResult}
   simp only [decodeExternal, requestFor] at h
   cases hc : reply.codeExists <;> cases hs : reply.success <;>
     simp only [hc, hs, Bool.not_true, Bool.not_false, Bool.and_false, Bool.and_true,
-      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h <;>
-    (split_ifs at h <;> cases h) <;> exact ⟨rfl, rfl⟩
+      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h
+  split_ifs at h
+  cases h
+  exact ⟨rfl, rfl⟩
 
 theorem decode_feeTo {site : CallSite} {t : Adr} {reply : ExternalResult} {d : DecodedResult}
     (h : decodeExternal (requestFor site t .feeTo) reply = .ok d) :
@@ -205,8 +207,10 @@ theorem decode_feeTo {site : CallSite} {t : Adr} {reply : ExternalResult} {d : D
   simp only [decodeExternal, requestFor] at h
   cases hc : reply.codeExists <;> cases hs : reply.success <;>
     simp only [hc, hs, Bool.not_true, Bool.not_false, Bool.and_false, Bool.and_true,
-      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h <;>
-    (split_ifs at h <;> cases h) <;> rfl
+      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h
+  split_ifs at h
+  cases h
+  rfl
 
 theorem decode_transfer {site : CallSite} {t recipient : Adr} {value : B256}
     {reply : ExternalResult} {d : DecodedResult}
@@ -300,7 +304,7 @@ theorem CallBal.readAt {T pair : Adr} {fr : UniswapV2Pair.Frame} {site : CallSit
   bal.read target (by rw [owner_eq]; rfl) success
 
 theorem resume_syncBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {reserves : CachedReserves}
     (ghost : ContGhost side t0 t1 b fr request (.syncBalance0 reserves))
@@ -332,7 +336,7 @@ theorem resume_syncBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
       · exact obligation
 
 theorem resume_syncBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {reserves : CachedReserves} {balance0 : B256}
     (ghost : ContGhost side t0 t1 b fr request (.syncBalance1 reserves balance0))
@@ -363,7 +367,7 @@ theorem resume_syncBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
         exact held
 
 theorem resume_mintBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {recipient : Adr} {reserves : CachedReserves}
     (ghost : ContGhost side t0 t1 b fr request (.mintBalance0 recipient reserves))
@@ -390,7 +394,7 @@ theorem resume_mintBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
     · trivial
 
 theorem resume_mintBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {recipient : Adr} {reserves : CachedReserves} {balance0 : B256}
     (ghost : ContGhost side t0 t1 b fr request (.mintBalance1 recipient reserves balance0))
@@ -419,11 +423,11 @@ theorem resume_mintBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
     · exact ⟨trivial, fun notFailed => notFailed.elim⟩
 
 theorem resume_mintFee {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (_hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {observed : MintObserved}
     (ghost : ContGhost side t0 t1 b fr request (.mintFee observed))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.mintFee observed) reply turns tail
       (resumeSegment prior request (.mintFee observed) reply) := by
@@ -466,7 +470,7 @@ theorem burnAfterFee_cases (frame : UniswapV2Pair.Frame) (observed : BurnObserve
     · exact Or.inl ⟨_, _, rfl⟩
 
 theorem resume_burnInitialBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {locals : BurnLocals}
     (ghost : ContGhost side t0 t1 b fr request (.burnInitialBalance0 locals))
@@ -494,7 +498,7 @@ theorem resume_burnInitialBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
     · exact held
 
 theorem resume_burnInitialBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {locals : BurnLocals} {balance0 : B256}
     (ghost : ContGhost side t0 t1 b fr request (.burnInitialBalance1 locals balance0))
@@ -522,11 +526,11 @@ theorem resume_burnInitialBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
       exact ⟨held, Nat.le_refl _⟩
 
 theorem resume_burnFee {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {observed : BurnObserved}
     (ghost : ContGhost side t0 t1 b fr request (.burnFee observed))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.burnFee observed) reply turns tail
       (resumeSegment prior request (.burnFee observed) reply) := by
@@ -579,7 +583,7 @@ theorem resume_burnTransfer0 {side : TokenSide} {t0 t1 T pair : Adr}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {p : BurnPriced}
     (ghost : ContGhost side t0 t1 b fr request (.burnTransfer0 p))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.burnTransfer0 p) reply turns tail
       (resumeSegment prior request (.burnTransfer0 p) reply) := by
@@ -604,7 +608,7 @@ theorem resume_burnTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {p : BurnPriced}
     (ghost : ContGhost side t0 t1 b fr request (.burnTransfer1 p))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.burnTransfer1 p) reply turns tail
       (resumeSegment prior request (.burnTransfer1 p) reply) := by
@@ -626,7 +630,7 @@ theorem resume_burnTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
     · exact Nat.le_trans held (moved.1 (hT : T = t1).symm)
 
 theorem resume_burnFinalBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {p : BurnPriced}
     (ghost : ContGhost side t0 t1 b fr request (.burnFinalBalance0 p))
@@ -659,7 +663,7 @@ theorem resume_burnFinalBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
       · exact obligation
 
 theorem resume_burnFinalBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {p : BurnPriced} {balance0 : B256}
     (ghost : ContGhost side t0 t1 b fr request (.burnFinalBalance1 p balance0))
@@ -697,8 +701,9 @@ theorem decode_callback {site : CallSite} {t sender : Adr} {amount0 amount1 : B2
   simp only [decodeExternal, requestFor] at h
   cases hc : reply.codeExists <;> cases hs : reply.success <;>
     simp only [hc, hs, Bool.not_true, Bool.not_false, Bool.and_false, Bool.and_true,
-      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h <;>
-    cases h <;> rfl
+      Bool.false_eq_true, ite_false, ite_true, reduceCtorEq] at h
+  cases h
+  rfl
 
 theorem economicCore_reserves {st st' : UniswapV2Pair.State} (h : st'.economicCore = st.economicCore) :
     st'.reserve0 = st.reserve0 ∧ st'.reserve1 = st.reserve1 ∧ st'.unlocked = st.unlocked := by
@@ -706,11 +711,11 @@ theorem economicCore_reserves {st st' : UniswapV2Pair.State} (h : st'.economicCo
   exact ⟨h.2.1.1, h.2.1.2, h.2.2.2.2.2⟩
 
 theorem resume_swapTransfer0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (_hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SwapLocals}
     (ghost : ContGhost side t0 t1 b fr request (.swapTransfer0 l))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.swapTransfer0 l) reply turns tail
       (resumeSegment prior request (.swapTransfer0 l) reply) := by
@@ -730,11 +735,11 @@ theorem resume_swapTransfer0 {side : TokenSide} {t0 t1 T pair : Adr}
     · exact ⟨⟨by rw [token0], token1⟩, fun _ _ => trivial⟩
 
 theorem resume_swapTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (_hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SwapLocals}
     (ghost : ContGhost side t0 t1 b fr request (.swapTransfer1 l))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.swapTransfer1 l) reply turns tail
       (resumeSegment prior request (.swapTransfer1 l) reply) := by
@@ -753,11 +758,11 @@ theorem resume_swapTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
     · exact ⟨⟨by rw [token0], token1⟩, fun _ _ => trivial⟩
 
 theorem resume_swapCallback {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (_hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SwapLocals}
     (ghost : ContGhost side t0 t1 b fr request (.swapCallback l))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.swapCallback l) reply turns tail
       (resumeSegment prior request (.swapCallback l) reply) := by
@@ -773,7 +778,7 @@ theorem resume_swapCallback {side : TokenSide} {t0 t1 T pair : Adr}
     exact ⟨⟨by rw [token0], token1⟩, fun _ _ => trivial⟩
 
 theorem resume_swapBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SwapLocals}
     (ghost : ContGhost side t0 t1 b fr request (.swapBalance0 l))
@@ -799,7 +804,7 @@ theorem resume_swapBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
     · trivial
 
 theorem resume_swapBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SwapLocals} {balance0 : B256}
     (ghost : ContGhost side t0 t1 b fr request (.swapBalance1 l balance0))
@@ -827,7 +832,7 @@ theorem resume_swapBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
       · exact Nat.le_of_eq (bal.readAt hT.symm pairEq success)
 
 theorem resume_skimBalance0 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SkimLocals}
     (ghost : ContGhost side t0 t1 b fr request (.skimBalance0 l))
@@ -862,7 +867,7 @@ theorem resume_skimTransfer0 {side : TokenSide} {t0 t1 T pair : Adr}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SkimLocals}
     (ghost : ContGhost side t0 t1 b fr request (.skimTransfer0 l))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.skimTransfer0 l) reply turns tail
       (resumeSegment prior request (.skimTransfer0 l) reply) := by
@@ -891,7 +896,7 @@ theorem resume_skimTransfer0 {side : TokenSide} {t0 t1 T pair : Adr}
       omega
 
 theorem resume_skimBalance1 {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SkimLocals}
     (ghost : ContGhost side t0 t1 b fr request (.skimBalance1 l))
@@ -926,7 +931,7 @@ theorem resume_skimTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {l : SkimLocals}
     (ghost : ContGhost side t0 t1 b fr request (.skimTransfer1 l))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.skimTransfer1 l) reply turns tail
       (resumeSegment prior request (.skimTransfer1 l) reply) := by
@@ -955,11 +960,11 @@ theorem resume_skimTransfer1 {side : TokenSide} {t0 t1 T pair : Adr}
       omega
 
 theorem resume_permitRecovery {side : TokenSide} {t0 t1 T pair : Adr}
-    (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
+    (hT : OnSide side (T = t0) (T = t1)) (_distinct : t0 ≠ t1) {fr prior : UniswapV2Pair.Frame}
     {request : Request} {reply : ExternalResult} {b b' : Nat} {turns tail : Transcript}
     {owner spender : Adr} {value : B256}
     (ghost : ContGhost side t0 t1 b fr request (.permitRecovery owner spender value))
-    (pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
+    (_pairEq : fr.context.pair = pair) (bal : CallBal T pair fr request reply b b')
     (priorOk : PriorOk fr prior request) :
     Resumed side t0 t1 b' fr (.permitRecovery owner spender value) reply turns tail
       (resumeSegment prior request (.permitRecovery owner spender value) reply) := by
@@ -987,12 +992,12 @@ theorem resume_permitRecovery {side : TokenSide} {t0 t1 T pair : Adr}
       split_ifs
       · cases approved : fr.current.state.approveLP prior.context owner spender value with
         | error failure =>
-          simp only [Frame.finishLP, approved, Frame.fail]
+          simp only [Frame.finishLP, Frame.fail]
           exact ⟨trivial, fun notFailed => notFailed.elim⟩
         | ok result =>
           obtain ⟨post, events⟩ := result
           obtain ⟨r0, r1, -⟩ := economicCore_reserves (State.approveLP_core approved)
-          simp only [Frame.finishLP, approved, Frame.withEvents, Frame.finish]
+          simp only [Frame.finishLP, Frame.withEvents, Frame.finish]
           refine ⟨?_, fun _ _ => trivial⟩
           cases side
           · change post.reserve0.val ≤ b'
