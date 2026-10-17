@@ -28,8 +28,10 @@ theorem ex_stor_bal {σ : Stor} {s : State} (ha : Abstracts σ s) (i j k : Fin 3
     · rw [Stor.get_set_ne _ (fun h => hi ((hinj i k).mp h)),ite_eq_right hi]
       exact ha.balances k
 
-/-- A successful exchange on the deployed runtime computes the model step and raw effect. -/
-theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
+/-- A successful exchange on the deployed runtime computes the model step and raw effect, and
+its `get_y` call: the decoded coins `i`, `j`, and the words the bytecode passed (`x`, the stored `xp`
+at the model's `amp` for the frame's time) and received (`y`). -/
+theorem exchange_raw_getY {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -41,7 +43,11 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o := by
+    ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o ∧
+      ∃ (i j : Fin 3) (dx md : Nat), decodeCall sevm = .exchange i.val j.val dx md ∧
+      ∃ (amp : Nat) (x0 x1 x2 x y : B256), aChk s e.time = some amp ∧
+        xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp i j x.toNat (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   have hcoinI : (exI sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp
@@ -78,7 +84,7 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
     change decodeCall sevm = .exchange (exI sevm).toNat (exJ sevm).toNat
       (exDx sevm).toNat (exMinDy sevm).toNat
     convert hd using 1; congr 1
-  refine ⟨exEnv sevm i j bp bq,?o,?step,?raw⟩
+  refine ⟨exEnv sevm i j bp bq,?o,?step,?raw,i,j,_,_,hdec,amp,x0,x1,x2,_,y,hamp,hxp,hy⟩
   case step =>
     rw [hdec]
     show (if (exEnv sevm i j bp bq).value = 0 then _ else none) = _
@@ -119,4 +125,23 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
       exact hout
     case calls =>
       exact hcalls
+
+/-- A successful exchange on the deployed runtime computes the model step and raw effect. -/
+theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selExchange)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o := by
+  obtain ⟨e, o, hstep, hraw, -⟩ :=
+    exchange_raw_getY exc hcode hfork hlen hcd hsel hstack hmem hgas hck hcoin hpc hid hkeep hidk
+  exact ⟨e, o, hstep, hraw⟩
+
 end Blanc.Lift.Curve3Pool

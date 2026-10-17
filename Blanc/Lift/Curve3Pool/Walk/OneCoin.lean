@@ -93,11 +93,13 @@ theorem xa_oneCoin (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : Sta
       post.logs = b.logs ++ [cs, cb, cp].flatMap (fun c => c.post.logs) ++
         [⟨sevm.currentTarget, [ocTopic, sevm.caller.toB256],
           (ocAmt sevm).toBytes ++ dy.toBytes⟩] ∧
-      post.output = b.output := by
+      post.output = b.output ∧
+      CwFirstGetYD s sevm.benvStat.time.toNat (ocAmt sevm).toNat ⟨(exJ sevm).toNat, hi⟩
+        (vSupply cs).toNat := by
   subst hσ
   obtain ⟨_, h⟩ := xa_vd_removeLiquidityOneCoin hcode hlen hcd hsel h
   obtain ⟨hlock, hval, hkill, cs, L1, hi, dy, fee, b1, M1, G1, rfl, hsw, hmod, hs1, hl1, ho1,
-    hc1, hid1, h, hV⟩ := xa_oc_a hc hcode hfork ha htok h
+    hc1, hid1, h, hV, hfirst⟩ := xa_oc_a hc hcode hfork ha htok h
   refine ⟨hlock, hval, hkill, ?_⟩
   have hB1 : ExBase sevm b b1 ((b.getStor sevm.currentTarget).set lockSlot 1) :=
     ⟨hs1, hc1 _ hpc, ho1, hid1 hid (hidk cs List.mem_cons_self)⟩
@@ -144,7 +146,7 @@ theorem xa_oneCoin (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : Sta
     (hk10 _ _ hv9 (by omega) (by omega)) h
   refine ⟨cs, cb, cp, hi, dy, fee, rfl, hsw, hmod, hmin, hmf, hadd, hsub, hcb.target, hcb.data,
     hcb.value, hcb.isStatic, hlen3, hcp.target, hcp.data, hcp.value, hcp.isStatic,
-    hcp.output ▸ hok2, fun x => ?_, ?_, ?_⟩
+    hcp.output ▸ hok2, fun x => ?_, ?_, ?_, hfirst⟩
   · rw [hsP, Stor.get_set_ite, hb10.stor, hBq.stor]
     by_cases hx : lockSlot = x
     · subst hx

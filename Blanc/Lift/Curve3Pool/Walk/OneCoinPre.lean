@@ -1,4 +1,4 @@
-import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXSpec
+import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXFirst
 import Blanc.Lift.Curve3Pool.Walk.Exchange
 
 /-!
@@ -39,7 +39,9 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
       (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
       (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') ∧
       XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
-      VW M' [] := by
+      VW M' [] ∧
+      CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
+        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
   xs 0x4410 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 440c PUSH3 0xffffff
@@ -141,14 +143,16 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
   have ha2 := ha.of_lock fun x hx => by rw [hs2, Stor.get_set_ne _ (Ne.symm hx)]
   have htok2 := htok
   rw [← Stor.get_set_ne _ lock_ne_token (v := 1), ← hs2] at htok2
-  obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, -, hst, hlg, h, hV', hout, hcd, hid⟩ :=
+  obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, hst, hlg, h, hV', hout, hcd, hid⟩ :=
     xa_cw hc hcode hfork ha2 (hV.sub (List.nil_subset _)) htok2 h
+  obtain ⟨A, x0, x1, x2, D0, D1, y, -, -, -, -, -, hA, hxp, hD0, hD1, -, hy⟩ := hfirst
   rw [hs2, Stor.get_set_ne _ lock_ne_token] at hsw
   rw [show (Nat.toB256 17547 + Bytes.toB256 [6]).toNat = 0x4491 from by decide] at h
   refine ⟨hlock, hval, hkill, c, L', hi, dy, fee, b', M', G', hL, hsw, hmod,
     fun x => by rw [hst, hs2], by rw [hlg, afterSload_logs, afterSstore_logs, afterSload_logs],
     by rw [hout, afterSload_output, afterSstore_output, afterSload_output], fun x hx => ?_,
-    fun hb h4 => hid (((hb.afterSload _).afterSstore _ _).afterSload _) h4, h, hV'⟩
+    fun hb h4 => hid (((hb.afterSload _).afterSstore _ _).afterSload _) h4, h, hV',
+    A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩
   rw [hcd x (by rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]; exact hx),
     afterSload_getCode, afterSstore_getCode, afterSload_getCode]
 

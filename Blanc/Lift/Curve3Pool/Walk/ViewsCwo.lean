@@ -1,11 +1,12 @@
-import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXSpec
+import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXFirst
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 
 /-!
 # `calc_withdraw_one_coin(_token_amount, i)`: the frame and its raw effect
 
 The body (`0x4398`): the non-payable guard, the `int128` clamp of `i`, the arguments stored, the
-child-aware `_calc_withdraw_one_coin` walk (`xa_cw`), and `dy` returned.
+child-aware `_calc_withdraw_one_coin` walk (`xa_cw`), and `dy` returned.  The walk's first
+`get_y_D` call (`CwFirstGetYD`) is carried to the frame (`cwo_raw_getYD_of`).
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -29,7 +30,9 @@ theorem xa_cwo (hc : Cert.CheckedM code cert mems true)
       (∀ e : Env, e.time = sevm.benvStat.time.toNat → e.supply = some (vSupply c).toNat →
         calcWithdrawOne s e (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
           ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ = some (dy.toNat, fee.toNat)) ∧
-      (∀ a, post.getStor a = b.getStor a) ∧ post.logs = b.logs ∧ post.output = dy.toBytes := by
+      (∀ a, post.getStor a = b.getStor a) ∧ post.logs = b.logs ∧ post.output = dy.toBytes ∧
+      CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
+        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
   xs 0x4399 (.reg .callvalue) ri_callvalue  -- 4398 CALLVALUE
@@ -83,8 +86,9 @@ theorem xa_cwo (hc : Cert.CheckedM code cert mems true)
   xs 0x43e2 (.reg .add) ri_add  -- 43e1 ADD
   xs 0x43e5 (.push [0x3c, 0xca] (by decide)) ri_push  -- 43e2 PUSH2 0x3cca
   xjmp 0x3cca  -- 43e5 JUMP
-  obtain ⟨c, L', hi, dy, fee, b', M1, G1, hL, hsw, hmod, -, hst, hlg, h, hV1, -⟩ :=
+  obtain ⟨c, L', hi, dy, fee, b', M1, G1, hL, hsw, hmod, hfirst, hst, hlg, h, hV1, -⟩ :=
     xa_cw hc hcode hfork ha (hV.sub (List.nil_subset _)) htok h
+  obtain ⟨A, x0, x1, x2, D0, D1, y, -, -, -, -, -, hA, hxp, hD0, hD1, -, hy⟩ := hfirst
   clear hV
   have hV := hV1
   clear hV1
@@ -103,12 +107,14 @@ theorem xa_cwo (hc : Cert.CheckedM code cert mems true)
   obtain ⟨hrun, rfl⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   obtain ⟨hout, hstor, hlogs⟩ := ri_return hrun
   refine ⟨hval, c, hi, dy, fee, by rw [hL], hsw, hmod, fun a => by rw [hstor, hst],
-    by rw [hlogs, hlg], ?_⟩
+    by rw [hlogs, hlg], ?_, A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩
   rw [hout, show (Bytes.toB256 [0]).toNat = 0 from rfl,
     show (Bytes.toB256 [32]).toNat = 32 from rfl, Mem.read_write_word_of_wf hfinalwf]
 
-/-- **`calc_withdraw_one_coin`'s raw effect**, given the certificate's checkedness. -/
-theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
+/-- **`calc_withdraw_one_coin`'s raw effect with the first `get_y_D` call**, given the
+certificate's checkedness: the frame's observed environment `e` (its time, the supply `T` the frame
+read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
+theorem cwo_raw_getYD_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -118,12 +124,14 @@ theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (htok : ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwFirstGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
   have h : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   obtain ⟨_, h⟩ := xa_vd_calcWithdrawOneCoin hcode hlen hcd hsel h
   obtain ⟨hval, c, hi, dy, fee, hL, ⟨htgt, hdata, hstat, hlen', hclogs⟩, hmod, hstor, hlogs,
-    hout⟩ := xa_cwo hc hcode hfork hck.abs htok h
+    hout, hfirst⟩ := xa_cwo hc hcode hfork hck.abs htok h
   have ha0 : arg sevm 0 = (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat := by
     unfold arg Sevm.argWord
     rw [show (32 * 0 + 4 : B256) = Bytes.toB256 [4] by decide]
@@ -134,7 +142,8 @@ theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     decodeCall_at (k := 9) rfl hsel hlen
   have hi1 : arg sevm 1 < 3 := by rw [ha1]; exact hi
   have hg := hmod (vEnv sevm (some (vSupply c).toNat)) rfl rfl
-  refine ⟨vEnv sevm (some (vSupply c).toNat), viewOut s dy.toNat, ?_, ?_⟩
+  refine ⟨vEnv sevm (some (vSupply c).toNat), viewOut s dy.toNat, ?_, ?_,
+    hi1, (vSupply c).toNat, rfl, ?_⟩
   · rw [hdec]
     show (if (vEnv sevm _).value = 0 then body s _ (.calcWithdrawOneCoin _ _) else none) = _
     rw [show (vEnv sevm (some (vSupply c).toNat)).value = 0 by rw [vEnv, hval]; rfl,
@@ -153,6 +162,25 @@ theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
       rw [hch, List.mem_singleton] at hc'
       rw [hc']
       exact hstat
+  · rw [ha0, show (⟨arg sevm 1, hi1⟩ : Fin 3) =
+      ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ from Fin.ext ha1]
+    exact hfirst
+
+/-- **`calc_withdraw_one_coin`'s raw effect**, given the certificate's checkedness. -/
+theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+  obtain ⟨e, o, hstep, hraw, -⟩ :=
+    cwo_raw_getYD_of hc exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+  exact ⟨e, o, hstep, hraw⟩
 
 end
 
