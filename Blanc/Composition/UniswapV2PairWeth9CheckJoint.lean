@@ -11,7 +11,8 @@ the keys of `prows` (each with its slot word and value), and the Pair's model st
 `rowsState base prows`.  It checks both codes byte for byte, the Pair's storage representation
 (`checkPair`), the token and lock fields, WETH9's footprint invariant (`checkFoot`), the world's
 balance sum over its actual accounts (`checkSumNof`), the Pair's WETH9 balance row against the
-reserve and its allowance rows (`checkHolder`), and `pair ≠ weth`.  `checkJoint_sound` is the
+reserve and its allowance rows (`checkHolder`), `pair ≠ weth`, the Pair's two tokens distinct, and
+the Pair address neither the system address nor zero.  `checkJoint_sound` is the
 soundness theorem.
 
 Cost: linear in the rows and storage entries of the two contracts and in the world's accounts (plus
@@ -36,7 +37,8 @@ def checkJoint (pair weth : Adr) (wrows : List (Key × B256)) (prows : List Pair
     decide (base.tokenOn side = weth) && decide (base.unlocked = 1) &&
     decide ((w.getCode weth).data.toList = Weth9.code.data.toList) &&
     checkFoot wrows (w.getStor weth) (w.bal weth) && checkSumNof w &&
-    checkHolder wrows (w.getStor weth) pair (base.reserveOn side) && decide (pair ≠ weth)
+    checkHolder wrows (w.getStor weth) pair (base.reserveOn side) && decide (pair ≠ weth) &&
+    decide (base.token0 ≠ base.token1) && decide (pair ≠ systemAddress) && decide (pair ≠ 0)
 
 /-- **Soundness of the joint checkpoint checker.** -/
 theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows : List PairRow}
@@ -44,8 +46,8 @@ theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows :
     (h : checkJoint pair weth wrows prows base side w = true) :
     JointCheckpoint pair weth (rowKeys wrows) (pairKeys prows) (rowsState base prows) side w := by
   simp only [checkJoint, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨hpairCode, hpair⟩, htoken⟩, hunlocked⟩, hwethCode⟩, hfoot⟩, hsum⟩, hholder⟩,
-    hapart⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hpairCode, hpair⟩, htoken⟩, hunlocked⟩, hwethCode⟩, hfoot⟩, hsum⟩, hholder⟩,
+    hapart⟩, hdistinct⟩, hsystem⟩, hnonzero⟩ := h
   obtain ⟨foot, sound⟩ := checkFoot_sound hfoot
   obtain ⟨tracked, reserve, noAllowance⟩ := checkHolder_sound sound hholder
   exact
@@ -59,6 +61,9 @@ theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows :
       tracked := tracked
       noAllowance := noAllowance
       reserve := reserve
-      apart := hapart }
+      apart := hapart
+      distinct := hdistinct
+      notSystem := hsystem
+      pairNonzero := hnonzero }
 
 end Blanc.Composition.UniswapV2PairWeth9Joint

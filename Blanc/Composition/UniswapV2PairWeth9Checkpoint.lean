@@ -9,7 +9,8 @@ import Blanc.Lift.Weth9.Footprint
 `JointCheckpoint` is a predicate on one world state, however it was produced: both codes installed,
 the Pair's storage representing an unlocked model state whose `side` token is WETH9, WETH9's
 footprint invariant with the Pair's balance row tracked and its allowance rows zero, and the side's
-reserve at most WETH9's booked balance of the Pair.  `JointCheckpoint.allowance_control` is the C5
+reserve at most WETH9's booked balance of the Pair, with distinct Pair tokens and a Pair address that
+is neither the system address nor zero.  `JointCheckpoint.allowance_control` is the C5
 statement control.  The finite checker deciding it is `UniswapV2PairWeth9CheckJoint.lean`.
 -/
 
@@ -21,7 +22,8 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Weth9
 /-- **The joint checkpoint** (a predicate on one world state, however it was produced): both codes
 installed, the Pair's storage represents an unlocked model state whose `side` token is WETH9,
 WETH9's footprint invariant with the Pair's balance row tracked and its allowance rows zero, and the
-side's reserve at most WETH9's booked balance of the Pair. -/
+side's reserve at most WETH9's booked balance of the Pair; the Pair's two tokens are distinct and its
+address is neither the system address nor zero. -/
 structure JointCheckpoint (pair weth : Adr) (K₀ : Key → Prop) (KP : WriterKey → Prop)
     (st₀ : UniswapV2Pair.State) (side : TokenSide) (w : Jaune.State) : Prop where
   pairCode : some (w.getCode pair).toList = pairSem.image
@@ -35,6 +37,9 @@ structure JointCheckpoint (pair weth : Adr) (K₀ : Key → Prop) (KP : WriterKe
   noAllowance : ∀ g, K₀ (.allow pair g) → (w.getStor weth).get (allowSlot pair g) = 0
   reserve : st₀.reserveOn side ≤ ((w.getStor weth).get (balSlot pair)).toNat
   apart : pair ≠ weth
+  distinct : st₀.token0 ≠ st₀.token1
+  notSystem : pair ≠ systemAddress
+  pairNonzero : pair ≠ 0
 
 /-- **C5 control.**  A world where the Pair already holds a nonzero tracked WETH9 allowance row
 fails the predicate. -/
