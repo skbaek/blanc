@@ -93,7 +93,7 @@ theorem run_weth_holder (inj : KeyInj U) {h : Adr} {pc : Nat} {sevm : Sevm} {pre
     intro n p hn prefixRun
     obtain ⟨b1, g, b2, eq, asks⟩ := entryAsks_take ca (Exec.committedFrames run) n hn
     obtain ⟨steps', replay', observed'⟩ := weth9_positional ca inj pc sevm pre out run installed
-      run committed fork installed admitted bound b1 g b2 eq (fun _ _ _ op => op)
+      run committed fork installed admitted bound b1 g b2 eq (fun _ _ _ _ _ _ op => op)
     change LedgerReplay (ledger U (pre.state.getStor ca)) steps'
       (ledger U (g.pre.state.getStor ca)) at replay'
     change steps' = b1.flatMap (committedFrameInvocations ca) at observed'

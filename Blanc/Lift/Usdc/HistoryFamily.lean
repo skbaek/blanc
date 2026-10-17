@@ -491,6 +491,28 @@ noncomputable def usdcPositionalLadder (P : Adr) {U : Key → Prop} (A₀ : Adr)
     (guardedBookCarrier_unguarded P (usdcObs P)) (usdcEntry_installed P U)
     (usdc_spawnKinds P U A₀) (usdc_spawnReplay P A₀ inj apart) (usdcSpec_preserves P U)
 
+/-- **The positional law over a configured history, by position**
+(`CodeFamily.configuredHistory_atPos` at USDC's instance): at the entry of every settled position
+that no earlier non-static whole frame at the proxy covers. -/
+theorem usdc_configuredHistory_atPos (P : Adr) {U : Key → Prop} (A₀ : Adr)
+    (inj : SlotFootprint.Inj Key.slot U) (apart : SlotFootprint.Apart Key.slot fixedSlots U)
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : history.FrameAdmitted P (usdcEntry P U))
+    (installed : some (checkpoint.state.getCode P).toList = proxySem.image) :
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      history.settledFrames = before ++ f :: after →
+      Exec.NoOpaqueAbove (CodeFamily.Opaque P usdcWhole) before f →
+      ∃ steps, (usdcCarrier P U A₀).Replay ((usdcCarrier P U A₀).ofState checkpoint.state) steps
+          ((usdcCarrier P U A₀).ofState f.pre.state) ∧
+        (usdcView P U A₀).obs steps = before.flatMap (usdcView P U A₀).frameObs :=
+  (usdcFamily P).configuredHistory_atPos (c := usdcSpec) (usdcGuard U A₀) usdcWhole
+    (usdcCarrier P U A₀) (usdcView P U A₀) usdcCarrier_append (fun _ _ => ()) (fun _ _ => ()) (fun _ _ => rfl)
+    usdcCarrier_ofStateGet usdcView_static usdcView_foreign
+    (guardedBookCarrier_unguarded P (usdcObs P)) (usdcEntry_installed P U)
+    (usdc_spawnKinds P U A₀) (usdc_spawnReplay P A₀ inj apart) (usdcSpec_preserves P U) history
+    admitted ⟨installed, trivial, trivial⟩
+
 /-- **The positional law over a configured history** (`CodeFamily.configuredHistory_at` at USDC's
 instance): at the entry of every settled frame not enclosed by an earlier non-static whole frame at
 the proxy, the boundary is the replay, from the checkpoint, of the earlier settled frames'
@@ -507,12 +529,9 @@ theorem usdc_configuredHistory_at (P : Adr) {U : Key → Prop} (A₀ : Adr)
       ∃ steps, (usdcCarrier P U A₀).Replay ((usdcCarrier P U A₀).ofState checkpoint.state) steps
           ((usdcCarrier P U A₀).ofState f.pre.state) ∧
         (usdcView P U A₀).obs steps = before.flatMap (usdcView P U A₀).frameObs :=
-  (usdcFamily P).configuredHistory_at (c := usdcSpec) (usdcGuard U A₀) usdcWhole (usdcCarrier P U A₀)
-    (usdcView P U A₀) usdcCarrier_append (fun _ _ => ()) (fun _ _ => ()) (fun _ _ => rfl)
-    usdcCarrier_ofStateGet usdcView_static usdcView_foreign
-    (guardedBookCarrier_unguarded P (usdcObs P)) (usdcEntry_installed P U)
-    (usdc_spawnKinds P U A₀) (usdc_spawnReplay P A₀ inj apart) (usdcSpec_preserves P U) history
-    admitted ⟨installed, trivial, trivial⟩
+  fun before f after split noOpaque =>
+    usdc_configuredHistory_atPos P A₀ inj apart history admitted installed before f after split
+      (Exec.NoOpaqueAbove.of_encloses noOpaque)
 
 /-- **The admission over a history's key universe**: every raw frame's keys are among the
 history's touched keys, and the implementation and the library stay installed at every raw frame

@@ -12,7 +12,9 @@ import Blanc.Lift.Token.FamilyReplay
   code address is not `ca` (so no message root, since a root at `ca` runs at code address `ca`) has
   a positional parent: an earlier settled frame that spawned it and whose block of descendants
   covers its position.  A one-rung ladder (`parentLadder`) carries the order-local property.
-* `Exec.Frame.not_mem_own_descendantFrames`: no frame is among its own descendants.
+* `Exec.Frame.not_mem_own_descendantFrames`: no frame is among its own descendants;
+  `Exec.descendantFrames_eq_flatMap`: a run's descendants are its committed children's blocks, and
+  `List.flatMap_committed_split`: a position among blocks lies in one block.
 * `Exec.single_child_of_silentAfter`: a run that decodes no external instruction after its first
   one has at most one child, which heads its descendants.
 * `ObserverChain.of_local`: an observer chain from its two local conditions.
@@ -131,6 +133,58 @@ theorem _root_.Blanc.ExecutionTrace.ConfiguredHistoryTrace.settledFrames_parent_
   exact replay
 
 /-! ## Descendants -/
+
+/-- **A run's descendants are its committed children's blocks**, in order. -/
+theorem Exec.descendantFrames_eq_flatMap :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
+      Exec.descendantFrames run =
+        (Exec.childFrames run).flatMap fun c => Exec.committedFrames c.run := by
+  intro pc sevm pre out run
+  induction run with
+  | halt _ => simp only [Exec.descendantFrames, Exec.childFrames, List.flatMap_nil]
+  | cont _ next ih =>
+      simp only [Exec.descendantFrames, Exec.childFrames]
+      exact ih
+  | doneErr _ _ _ => simp only [Exec.descendantFrames, Exec.childFrames, List.flatMap_nil]
+  | doneOk _ _ _ next ih =>
+      simp only [Exec.descendantFrames, Exec.childFrames]
+      exact ih
+  | runErr _ _ _ _ => simp only [Exec.descendantFrames, Exec.childFrames, List.flatMap_nil]
+  | runOk hstep henter child hresume next childIh nextIh =>
+      rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
+      by_cases hs : Frame.settlementCommits frame raw = true
+      · have hchildren : Exec.childFrames (Exec.runOk hstep henter child hresume next) =
+            Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hs) ::
+              Exec.childFrames next := by
+          simp only [Exec.childFrames, dite_eq_left hs, List.singleton_append]
+        rw [hchildren, Exec.descendantFrames_runOk_of_settlementCommits hstep henter child hresume
+          next hs, List.flatMap_cons, ← nextIh, Exec.Frame.committedFrames_self]
+        rfl
+      · have hchildren : Exec.childFrames (Exec.runOk hstep henter child hresume next) =
+            Exec.childFrames next := by
+          simp only [Exec.childFrames, dite_eq_right hs, List.nil_append]
+        rw [hchildren, Exec.descendantFrames_runOk_of_not_settlementCommits hstep henter child
+          hresume next hs]
+        exact nextIh
+
+/-- A position in a list of committed blocks lies in one block. -/
+theorem List.flatMap_committed_split {f : Exec.Frame} :
+    ∀ {cs m n : List Exec.Frame},
+      cs.flatMap (fun c => Exec.committedFrames c.run) = m ++ f :: n →
+      ∃ (cs₁ : List Exec.Frame) (c : Exec.Frame) (cs₂ m' n' : List Exec.Frame),
+        cs = cs₁ ++ c :: cs₂ ∧ m = cs₁.flatMap (fun c => Exec.committedFrames c.run) ++ m' ∧
+          Exec.committedFrames c.run = m' ++ f :: n'
+  | [], m, n, h => by
+      rw [List.flatMap_nil] at h
+      exact absurd h.symm (List.append_ne_nil_of_right_ne_nil m (List.cons_ne_nil f n))
+  | c :: rest, m, n, h => by
+      rw [List.flatMap_cons] at h
+      rcases List.split_append_cons h with ⟨k, hc, -⟩ | ⟨k, hm, hrest⟩
+      · exact ⟨[], c, rest, m, k, rfl, by rw [List.flatMap_nil, List.nil_append], hc⟩
+      · obtain ⟨cs₁, c', cs₂, m', n', hcs, hk, hc'⟩ := List.flatMap_committed_split hrest
+        exact ⟨c :: cs₁, c', cs₂, m', n', by rw [hcs, List.cons_append],
+          by rw [hm, hk, List.flatMap_cons, List.append_assoc], hc'⟩
+
 
 /-- No frame is among its own descendants. -/
 theorem Exec.Frame.not_mem_own_descendantFrames (F : Exec.Frame) :

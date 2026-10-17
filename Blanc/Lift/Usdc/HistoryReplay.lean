@@ -6,13 +6,13 @@ import Blanc.Lift.Token.CoreW
 
 The facts behind `usdcCore`'s replay, good and shadow fields (design U6c §2 item 7):
 
-* `usdc_opaque_shadowed`: a non-static whole frame at the proxy before an unshadowed frame does not
-  enclose it (a library frame's descendants are shadowed by it; an implementation frame other than
-  `rescueERC20` decodes only `DELEGATECALL`s to the library, whose frames are shadowed);
+* `usdc_opaque_shadowed`: no non-static whole frame at the proxy covers an unshadowed position (a
+  library frame's block is shadowed by it; an implementation frame other than `rescueERC20` decodes
+  only `DELEGATECALL`s to the library, whose blocks are shadowed);
 * `usdc_history_chain`: the settled frames form an observer chain (`ObserverChain.of_local` with
   `usdc_entry_observer` and `usdc_observer_parent`);
 * `usdc_history_replayAt`, `usdc_history_replayEnd`: the family ladder's positional law
-  (`usdc_configuredHistory_at`) and its history law (`usdcLadder`), read through `guardedBook_run`
+  (`usdc_configuredHistory_atPos`) and its history law (`usdcLadder`), read through `guardedBook_run`
   (the guard at the checkpoint, `usdc_allowed` from F2) and `ObserverChain.run_eq`;
 * `usdc_history_goodStart`, `usdc_history_goodAt`: the footprint invariant at the checkpoint and
   the slot invariant at every settled frame (`usdc_history_frames_of`);
@@ -22,9 +22,9 @@ The facts behind `usdcCore`'s replay, good and shadow fields (design U6c §2 ite
   unshadowed position (an entry if at the proxy, `usdc_foreign_child_entry`; a library block covering
   it would cover its parent, `enclosure_of_wholeBlocks`).
 
-`UsdcShadowed` is positional (decision `usdc-corew-positional-shadow`).  The replay facts carry an
-interim value-level premise, `¬ UsdcLibEnclosed`, inherited from the family ladder's value-level
-enclosure premise.
+`UsdcShadowed` is positional (decision `usdc-corew-positional-shadow`), and so is the family
+ladder's exclusion (`Exec.NoOpaqueAbove`, decision `usdc-ladder-positional-enclosure`).
+* `usdc_decodes`: a non-entry frame at the proxy has its parents at the proxy.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -43,15 +43,6 @@ def UsdcShadowed (P : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
     ∃ (b : List Exec.Frame) (A : Exec.Frame) (m n : List Exec.Frame), before = b ++ A :: m ∧
       A.sevm.currentTarget = P ∧ A.sevm.codeAddress = some usdcLib ∧
       Exec.descendantFrames A.run = m ++ f :: n
-
-/-- Value-level enclosure by a settled library frame at the proxy.  Interim: the family ladder's
-positional law (`usdc_configuredHistory_at`) excludes value-level enclosure by an opaque frame, so
-the replay is proved where no library frame encloses the frame's value; this premise drops once the
-ladder's enclosure premise is positional. -/
-def UsdcLibEnclosed (P : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (tr : ConfiguredHistoryTrace cfg checkpoint future) (f : Exec.Frame) : Prop :=
-  ∃ A ∈ tr.settledFrames, A.sevm.currentTarget = P ∧ A.sevm.codeAddress = some usdcLib ∧
-    A.Encloses f
 
 /-! ## Related messages step the book alike -/
 
@@ -233,37 +224,33 @@ theorem usdc_child_unshadowed {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig
     · exact apart target
     · exact lit (.inr ⟨b, A, x, m ++ c :: n, hb, target, ca, descQ⟩)
 
-/-- **The descendants of a whole implementation frame are shadowed**: it decodes only
-`DELEGATECALL`s to the library, whose frames at the proxy are no entries, and whose descendants
-they enclose. -/
-theorem usdc_impl_descendants_shadowed {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
+/-- **The children of a whole implementation frame are library frames at the proxy**: it decodes
+only `DELEGATECALL`s to the library. -/
+theorem usdc_impl_children_lib {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHist P K₀ tr) {A : Exec.Frame}
     (facts : SettledFacts P (historyKeyUniverse P tr K₀) (adminOf checkpoint.state P) A)
     (code : A.sevm.code = Impl.code) (target : A.sevm.currentTarget = P)
-    (ca : A.sevm.codeAddress = some usdcImpl) (nonstatic : A.sevm.isStatic = false)
+    (nonstatic : A.sevm.isStatic = false)
     (notRescue : Blanc.Sevm.selector A.sevm ≠ rescueSelector)
-    (notAdmin : A.sevm.caller ≠ adminOf A.pre.state P)
-    (settled : ∀ g ∈ Exec.descendantFrames A.run, g ∈ tr.settledFrames) :
-    ∀ g ∈ Exec.descendantFrames A.run,
-      (g.sevm.currentTarget = P ∧ ¬ IsEntry P g) ∨ UsdcLibEnclosed P tr g := by
+    (notAdmin : A.sevm.caller ≠ adminOf A.pre.state P) :
+    ∀ c ∈ Exec.childFrames A.run,
+      c.sevm.currentTarget = P ∧ c.sevm.codeAddress = some usdcLib := by
   have ext := hist.2.2.1.extend hist.2.2.2
-  revert code target ca nonstatic notRescue notAdmin settled
+  revert code target nonstatic notRescue notAdmin
   refine frame_cases_ok (Q := fun A => SettledFacts P (historyKeyUniverse P tr K₀)
       (adminOf checkpoint.state P) A → A.sevm.code = Impl.code → A.sevm.currentTarget = P →
-    A.sevm.codeAddress = some usdcImpl → A.sevm.isStatic = false →
-    Blanc.Sevm.selector A.sevm ≠ rescueSelector → A.sevm.caller ≠ adminOf A.pre.state P →
-    (∀ g ∈ Exec.descendantFrames A.run, g ∈ tr.settledFrames) →
-    ∀ g ∈ Exec.descendantFrames A.run,
-      (g.sevm.currentTarget = P ∧ ¬ IsEntry P g) ∨ UsdcLibEnclosed P tr g) A facts.pc ?_ facts
-  intro sevm pre post run committed facts code target ca nonstatic notRescue notAdmin settled
-  obtain ⟨-, -, -, nodes⟩ := impl_whole_law ext.inj ext.apart run code target ca facts.fork nonstatic
-    (facts.keys target)
+    A.sevm.isStatic = false → Blanc.Sevm.selector A.sevm ≠ rescueSelector →
+    A.sevm.caller ≠ adminOf A.pre.state P →
+    ∀ c ∈ Exec.childFrames A.run,
+      c.sevm.currentTarget = P ∧ c.sevm.codeAddress = some usdcLib) A facts.pc ?_ facts
+  intro sevm pre post run committed facts code target nonstatic notRescue notAdmin c member
+  obtain ⟨-, -, -, nodes⟩ := impl_whole_law ext.inj ext.apart run code target
+    ((facts.kind target).impl_codeAddress code) facts.fork nonstatic (facts.keys target)
     (by rw [show pre.state.getCode usdcLib = Lib.code from facts.codes.2.2]; rfl) notAdmin
     facts.slots.2.2 notRescue
-  refine Exec.descendantFrames_of_spawns (root := ⟨0, sevm, pre, .ok post, run⟩) ?_ run (.refl _)
-    (fun _ h => h) (fun _ h => h)
-  intro N f rsm pc' cevm raw child h chain step enter _ inDesc
+  obtain ⟨N, f, rsm, pc', cevm, chain, step, enter, childEq⟩ :=
+    Exec.childFrames_spawnedAt run (.refl _) c member
   obtain ⟨sevmEq, nfork, -, -, -, ncodes, -, -⟩ := node_child chain facts.fork facts.codes step enter
   obtain ⟨x, hat, spawn, -⟩ := Evm.step_spawn_inv step
   have hx := nodes N chain x hat
@@ -274,56 +261,58 @@ theorem usdc_impl_descendants_shadowed {P : Adr} {K₀ : Key → Prop} {cfg : Ch
   obtain ⟨ht, hca, -⟩ := Xinst.step_delegatecall_spawn_exact nfork spawn stack
     (by rw [adr, ncodes.2.2]; exact lib_undelegated)
   rw [adr] at hca
-  have ctarget : (Exec.Frame.ofRun child h).sevm.currentTarget = P := by
-    show cevm.sta.currentTarget = P
-    rw [Frame.enter_run_currentTarget enter, ht, sevmEq]
+  refine ⟨?_, ?_⟩
+  · rw [childEq, Frame.enter_run_currentTarget enter, ht, sevmEq]
     exact target
-  have cca : (Exec.Frame.ofRun child h).sevm.codeAddress = some usdcLib := by
-    show cevm.sta.codeAddress = some usdcLib
-    rw [Frame.enter_run_codeAddress enter, hca]
-  refine ⟨.inl ⟨ctarget, fun entry => hist.1.libApart (Option.some.inj (entry.2.symm.trans cca))⟩,
-    fun g hg => .inr ⟨_, settled _ (inDesc _ List.mem_cons_self), ctarget, cca, hg⟩⟩
+  · rw [childEq, Frame.enter_run_codeAddress enter, hca]
 
-/-- `UsdcShadowed` and `UsdcLibEnclosed` cover the family's positional exemption (U6h; interim
-`UsdcLibEnclosed` premise, see its docstring). -/
+/-- **No opaque frame covers an unshadowed position** (U6h, positional): a whole implementation
+frame's block consists of library children's blocks, and a library frame's block is shadowed. -/
 theorem usdc_opaque_shadowed {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHist P K₀ tr) :
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       tr.settledFrames = before ++ f :: after → ¬ UsdcShadowed P tr before f →
-      ¬ UsdcLibEnclosed P tr f →
-      ∀ A ∈ before, A.Encloses f → ¬ CodeFamily.Opaque P usdcWhole A := by
-  intro before f after split notShadowed notEnclosed A hA encl ⟨target, nonstatic, whole⟩
-  have hAs : A ∈ tr.settledFrames := by rw [split]; exact List.mem_append_left _ hA
+      Exec.NoOpaqueAbove (CodeFamily.Opaque P usdcWhole) before f := by
+  intro before f after split notShadowed b A m n hb desc ⟨target, nonstatic, whole⟩
+  have hAs : A ∈ tr.settledFrames := by
+    rw [split, hb]
+    exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
   have facts := usdc_settled_facts tr hist A hAs
   rcases whole with ⟨code, notRescue⟩ | code
   · have ca := (facts.kind target).impl_codeAddress code
     have notEntry : ¬ IsEntry P A := fun h =>
       hist.1.implApart (Option.some.inj (h.2.symm.trans ca))
-    obtain ⟨b, a, splitA⟩ := List.append_of_mem hAs
-    obtain ⟨b', e, hb, -, -, -, eAdmin, caller⟩ :=
-      usdc_observer_parent tr hist b A a splitA target nonstatic (.inl code) notEntry
+    obtain ⟨b0, a0, splitA⟩ := List.append_of_mem hAs
+    obtain ⟨b', e, hb', -, -, -, eAdmin, caller⟩ :=
+      usdc_observer_parent tr hist b0 A a0 splitA target nonstatic (.inl code) notEntry
     have he : e ∈ tr.settledFrames := by
-      rw [splitA, hb]; exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
+      rw [splitA, hb']; exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
     have notAdmin : A.sevm.caller ≠ adminOf A.pre.state P := by
       have same : adminOf A.pre.state P = adminOf e.pre.state P :=
         facts.slots.2.1.trans (usdc_settled_facts tr hist e he).slots.2.1.symm
       rw [caller, same]
       exact eAdmin
-    obtain ⟨r, hr⟩ := tr.settledFrames_contig splitA
-    have settled : ∀ g ∈ Exec.descendantFrames A.run, g ∈ tr.settledFrames := fun g hg => by
-      rw [splitA, hr]
-      exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _ hg))
-    rcases usdc_impl_descendants_shadowed tr hist facts code target ca nonstatic notRescue notAdmin
-      settled f encl with h | h
-    · exact notShadowed (.inl h)
-    · exact notEnclosed h
+    have kids := usdc_impl_children_lib tr hist facts code target nonstatic notRescue notAdmin
+    rw [Exec.descendantFrames_eq_flatMap] at desc
+    obtain ⟨cs₁, c, cs₂, m', n', hcs, hm, hc⟩ := List.flatMap_committed_split desc
+    obtain ⟨ct, cca⟩ := kids c (by rw [hcs]; exact List.mem_append_right _ List.mem_cons_self)
+    rw [Exec.Frame.committedFrames_self] at hc
+    cases m' with
+    | nil =>
+        obtain ⟨rfl, -⟩ := List.cons.inj hc
+        exact notShadowed (.inl ⟨ct, fun entry =>
+          hist.1.libApart (Option.some.inj (entry.2.symm.trans cca))⟩)
+    | cons y m'' =>
+        obtain ⟨rfl, hd⟩ := List.cons.inj hc
+        exact notShadowed (.inr ⟨b ++ A :: cs₁.flatMap (fun c => Exec.committedFrames c.run), c,
+          m'', n', by rw [hb, hm]; simp only [List.append_assoc, List.cons_append], ct, cca, hd⟩)
   · have ca : A.sevm.codeAddress = some usdcLib := by
       rcases facts.kind target with ⟨-, h⟩ | ⟨-, h⟩ | ⟨h, -⟩
       · exact (lib_ne_proxy (code.symm.trans h)).elim
       · exact (lib_ne_impl (code.symm.trans h)).elim
       · exact h
-    exact notEnclosed ⟨A, hAs, target, ca, encl⟩
+    exact notShadowed (.inr ⟨b, A, m, n, hb, target, ca, desc⟩)
 
 /-! ## The replay, good and shadow fields -/
 
@@ -333,15 +322,14 @@ theorem usdc_history_replayAt {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig
     (hist : UsdcHist P K₀ tr) :
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       tr.settledFrames = before ++ f :: after → ¬ UsdcShadowed P tr before f →
-      ¬ UsdcLibEnclosed P tr f →
       (usdcBookS P).toBook.run (ledger (historyKeyUniverse P tr K₀) (checkpoint.state.getStor P))
           (entryAsks P before) =
         some (ledger (historyKeyUniverse P tr K₀) (f.pre.state.getStor P)) := by
-  intro before f after split notShadowed notEnclosed
+  intro before f after split notShadowed
   have ext := hist.2.2.1.extend hist.2.2.2
-  obtain ⟨steps, replay, observed⟩ := usdc_configuredHistory_at P (adminOf checkpoint.state P)
+  obtain ⟨steps, replay, observed⟩ := usdc_configuredHistory_atPos P (adminOf checkpoint.state P)
     ext.inj ext.apart tr (usdc_history_admitted tr hist.1) hist.1.proxy before f after split
-    (usdc_opaque_shadowed tr hist before f after split notShadowed notEnclosed)
+    (usdc_opaque_shadowed tr hist before f after split notShadowed)
   have chain := usdc_history_chain tr hist
   rw [split] at chain
   have entryAt : f.sevm.currentTarget = P → IsEntry P f := fun target => by
@@ -378,5 +366,47 @@ theorem usdc_history_goodAt {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     ∀ f ∈ tr.settledFrames,
       (usdcBookS P).toBook.Good (ledger (historyKeyUniverse P tr K₀) (f.pre.state.getStor P)) :=
   fun f hf => (usdc_settled_facts tr hist f hf).slots.2.2
+
+/-- **`decodes`**: a non-entry frame at the proxy has its parents at the proxy
+(`usdc_foreign_child_entry`). -/
+theorem usdc_decodes {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
+    (hist : UsdcHist P K₀ tr) :
+    ∀ g ∈ tr.settledFrames, g.sevm.currentTarget = P → ¬ IsEntry P g →
+      ∀ Q ∈ tr.settledFrames, g ∈ Exec.childFrames Q.run → Q.sevm.currentTarget = P := by
+  intro g _ target notEntry Q hQ child
+  by_contra apart
+  exact notEntry (usdc_foreign_child_entry (usdc_settled_facts tr hist Q hQ) child target apart)
+
+/-- Fit check (a `Nonempty`, so it needs no compilation): the U6h facts fill `usdcCore`'s replay,
+good, shadow and `decodes` fields.  The two answer fields (the proxy-forwarded `balanceOf` and
+`transfer` outputs) are U7b's and enter as hypotheses. -/
+example (P : Adr) (K₀ : Key → Prop)
+    (balanceAnswer : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
+      (tr : ConfiguredHistoryTrace cfg checkpoint future), UsdcHist P K₀ tr →
+        ∀ g ∈ tr.settledFrames, IsEntry P g → ∀ {h : Adr},
+          (usdcBookS P).toBook.op g.sevm = .balanceOf h → historyKeyUniverse P tr K₀ (.bal h) →
+          g.post.output = (Nat.toB256 ((usdcBookS P).toBook.bal
+            (ledger (historyKeyUniverse P tr K₀) (g.pre.state.getStor P)) h)).toBytes)
+    (transferAnswer : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
+      (tr : ConfiguredHistoryTrace cfg checkpoint future), UsdcHist P K₀ tr →
+        ∀ g ∈ tr.settledFrames, IsEntry P g → ∀ {dst : Adr} {v : Nat},
+          (usdcBookS P).toBook.op g.sevm = .transfer dst v →
+          g.post.output = [] ∨ (32 ≤ g.post.output.length ∧
+            Bytes.toB256 (g.post.output.sliceD 0 32 0) ≠ 0)) :
+    Nonempty (CoreW P (usdcBookS P).toBook) :=
+  ⟨{ Hist := fun tr => UsdcHist P K₀ tr
+     ledgerOf := fun tr w => ledger (historyKeyUniverse P tr K₀) (w.getStor P)
+     Answerable := fun tr h => historyKeyUniverse P tr K₀ (.bal h)
+     Shadowed := fun tr before f => UsdcShadowed P tr before f
+     shadow_kind := fun tr hist => usdc_shadow_kind tr hist
+     child_unshadowed := fun tr hist => usdc_child_unshadowed tr hist
+     replayAt := fun tr hist => usdc_history_replayAt tr hist
+     replayEnd := fun tr hist => usdc_history_replayEnd tr hist
+     goodStart := fun tr hist => usdc_history_goodStart tr hist
+     goodAt := fun tr hist => usdc_history_goodAt tr hist
+     balanceAnswer := fun tr hist => balanceAnswer tr hist
+     transferAnswer := fun tr hist => transferAnswer tr hist
+     decodes := fun tr hist => usdc_decodes tr hist }⟩
 
 end Blanc.Lift.Usdc

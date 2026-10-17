@@ -36,7 +36,7 @@ def MemberPositional (entry : Sevm → Devm → Prop) (C : ReplayCarrier ca)
     sum pre.state.bal < 2 ^ 256 →
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       Exec.committedFrames run = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      Exec.NoOpaqueAbove Opaque before f →
       ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
         V.obs steps = before.flatMap V.frameObs
 
@@ -216,7 +216,7 @@ theorem framePositional
       (MemberPositional entry C V (Opaque ca Whole))) :
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       Exec.committedFrames run = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ Opaque ca Whole A) →
+      Exec.NoOpaqueAbove (Opaque ca Whole) before f →
       ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
         V.obs steps = before.flatMap V.frameObs := by
   intro before f after split noOpaque
@@ -248,10 +248,7 @@ theorem framePositional
           rw [List.cons_append] at split
           obtain ⟨hP, hdesc⟩ := List.cons.inj split
           subst hP
-          refine (noOpaque _ (List.mem_cons_self ..) ?_ ⟨runs.1, hs', hw⟩).elim
-          change f ∈ Exec.descendantFrames run
-          rw [hdesc]
-          exact List.mem_append_right _ (List.mem_cons_self ..)
+          exact (noOpaque [] _ rest after rfl hdesc ⟨runs.1, hs', hw⟩).elim
     · obtain ⟨own, hown, -, c12⟩ := model hw
       refine Exec.PositionalAccounting.modelFrameAt ofStateGet append run committed fork codeNe
         bound ?_ own hown c12 before f after split noOpaque
@@ -329,6 +326,40 @@ noncomputable def positionalLadder {c : ContractSpecSem} {entry : Sevm → Devm 
       rw [entryOfState, entryOfState]
       exact replay }
 
+/-- **The family positional law over a configured history, by position**: at the entry of every
+settled position that no earlier non-static whole frame at the owner covers. -/
+theorem configuredHistory_atPos {c : ContractSpecSem} {entry : Sevm → Devm → Prop}
+    (F : CodeFamily ca c.sem) (Guard : Stor → Prop) (Whole : Sevm → Prop)
+    (C : ReplayCarrier ca) (V : ReplayObservation C)
+    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
+    (tag : Nat → Option Nat → C.Tag) (frameTag : Sevm → Devm → C.Tag)
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (obsStatic : ∀ f : Exec.Frame, f.sevm.isStatic = true → V.frameObs f = [])
+    (obsForeign : ∀ f : Exec.Frame, f.sevm.currentTarget ≠ ca → V.frameObs f = [])
+    (unguarded : Unguarded C V Guard)
+    (installed : ∀ (sevm : Sevm) (devm : Devm), sevm.currentTarget = ca → entry sevm devm →
+      F.DelegatesInstalled devm.state)
+    (kinds : F.SpawnKinds Guard) (spawn : F.SpawnReplay Guard Whole entry C V)
+    (preserves : c.PreservesAdmitted ca entry) {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : history.FrameAdmitted ca entry) (inv : c.StateInv ca checkpoint.state) :
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      history.settledFrames = before ++ f :: after →
+      Exec.NoOpaqueAbove (Opaque ca Whole) before f →
+      ∃ steps, C.Replay (C.ofState checkpoint.state) steps (C.ofState f.pre.state) ∧
+        V.obs steps = before.flatMap V.frameObs := by
+  intro before f after split noOpaque
+  obtain ⟨steps, replay, observed⟩ :=
+    (F.positionalLadder Guard Whole C V append tag frameTag entryOfState ofStateGet obsStatic
+      obsForeign unguarded installed kinds spawn preserves).configuredHistory_atPos history admitted
+      inv before f after split noOpaque
+  refine ⟨steps, ?_, observed⟩
+  change C.Replay (C.ofState checkpoint.state) steps (C.frameEntry f.sevm f.pre.state) at replay
+  rw [entryOfState] at replay
+  exact replay
+
 /-- **The family positional law over a configured history.**  At the entry of every settled frame
 not enclosed by an earlier non-static whole frame at the owner, the boundary is the replay, from the
 checkpoint, of exactly the earlier settled frames' observations.  (The end law is
@@ -354,15 +385,10 @@ theorem configuredHistory_at {c : ContractSpecSem} {entry : Sevm → Devm → Pr
       history.settledFrames = before ++ f :: after →
       (∀ A ∈ before, A.Encloses f → ¬ Opaque ca Whole A) →
       ∃ steps, C.Replay (C.ofState checkpoint.state) steps (C.ofState f.pre.state) ∧
-        V.obs steps = before.flatMap V.frameObs := by
-  intro before f after split noOpaque
-  obtain ⟨steps, replay, observed⟩ :=
-    (F.positionalLadder Guard Whole C V append tag frameTag entryOfState ofStateGet obsStatic
-      obsForeign unguarded installed kinds spawn preserves).configuredHistory_at history admitted
-      inv before f after split noOpaque
-  refine ⟨steps, ?_, observed⟩
-  change C.Replay (C.ofState checkpoint.state) steps (C.frameEntry f.sevm f.pre.state) at replay
-  rw [entryOfState] at replay
-  exact replay
+        V.obs steps = before.flatMap V.frameObs :=
+  fun before f after split noOpaque =>
+    F.configuredHistory_atPos Guard Whole C V append tag frameTag entryOfState ofStateGet obsStatic
+      obsForeign unguarded installed kinds spawn preserves history admitted inv before f after split
+      (Exec.NoOpaqueAbove.of_encloses noOpaque)
 
 end Blanc.CodeFamily
