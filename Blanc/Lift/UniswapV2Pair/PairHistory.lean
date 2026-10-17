@@ -69,9 +69,9 @@ theorem pairSem_image : pairSem.image = some code.toList := rfl
 /-- Pair frames spawn only by `CALL`/`STATICCALL` (the certificate cursor). -/
 theorem pair_spawnKinds (pair : Adr) : SpawnKinds pair pairSem := by
   intro sevm pre post run hrun _ fork _ node chain x hat
-  obtain ⟨κ, -, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check
+  obtain ⟨κ, reach, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun fork chain
-  exact ok.exec_call_or_staticcall hat
+  exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat
 
 /-! ## The frame contract and its entry condition -/
 

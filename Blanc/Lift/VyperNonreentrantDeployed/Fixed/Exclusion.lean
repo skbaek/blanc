@@ -82,10 +82,10 @@ theorem noDelegateFrom {sevm : Sevm} {pre : Devm} {out : Execution}
     Exec.NoDelegateFrom R code := by
   intro F hF hcode n hp
   obtain ⟨hpc, hfF⟩ := rawFrameRoots_entry R hfork hF
-  obtain ⟨κ, -, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check hpc hcode hfF hp
+  obtain ⟨κ, reach, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check hpc hcode hfF hp
   have hs := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hp
   have key : ∀ x, Xinst.At code n.pc x → x = .call ∨ x = .staticcall := fun x hat =>
-    ok.exec_call_or_staticcall (by rw [hs, hcode]; exact hat)
+    ok.exec_call_or_staticcall (Blanc.Lift.Cursor.noCreate2_of_reach (by decide +kernel) reach) (by rw [hs, hcode]; exact hat)
   constructor
   · intro hat
     rcases key _ hat with h | h <;> cases h

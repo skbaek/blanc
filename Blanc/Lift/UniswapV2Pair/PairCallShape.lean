@@ -45,8 +45,8 @@ theorem pair_callsTransferOrCallback (transfer : TransferSiteShape) (callback : 
   obtain ⟨x, hat, hx, -⟩ := Evm.step_spawn_inv step
   have sevmEq : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
   have nodeFork : CoveredFork N.sevm.benvStat.fork := by rw [sevmEq]; exact fork
-  obtain ⟨κ₀, -, ok₀⟩ := reach_of_parentPrefix cert_check rfl codeEq fork chain
-  rcases ok₀.exec_call_or_staticcall hat with rfl | rfl
+  obtain ⟨κ₀, reach, ok₀⟩ := cursor_of_parentPrefix cert_check rfl codeEq fork chain
+  rcases ok₀.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat with rfl | rfl
   · obtain ⟨κ, g, reach, ok, tree, site⟩ := pair_call_site rfl codeEq fork chain hat
     have stackNil : (St b [] Mem.empty G).stack = [] := rfl
     have memEmpty : (St b [] Mem.empty G).memory = Mem.empty := rfl
