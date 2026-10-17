@@ -43,7 +43,8 @@ theorem entryAsks_eq_nil {T : Adr} {frames : List Exec.Frame}
     none F member (of_decide_eq_true picked).1 (of_decide_eq_true picked).2]
   rfl
 
-/-- The entry messages of a list with no non-static entry called by `h` contain no message of `h`. -/
+/-- The entry messages of a list with no non-static entry called by `h` contain no message of
+`h`. -/
 theorem entryAsks_filter_caller_nil {T h : Adr} {frames : List Exec.Frame}
     (none : ∀ F ∈ frames, IsEntry T F → F.sevm.isStatic = false → F.sevm.caller = h → False) :
     (entryAsks T frames).filter (fun a => decide (a.caller = h)) = [] :=
