@@ -63,7 +63,7 @@ theorem pair_two_token_joint {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : CoreW T0 B0
     (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       trace.settledFrames = before ++ f :: after →
       (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
-      ¬ C0.Shadowed trace f → ¬ C1.Shadowed trace f →
+      ¬ C0.Shadowed trace before f → ¬ C1.Shadowed trace before f →
       ∃ (st : UniswapV2Pair.State) (K : WriterKey → Prop),
         WriterRep K (f.pre.state.getStor pair) st ∧ st.unlocked = 1 ∧ st.token0 = T0 ∧
           st.token1 = T1 ∧ JointAtW C0 trace pair .zero st f.pre.state ∧

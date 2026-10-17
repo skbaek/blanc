@@ -5,8 +5,8 @@ import Blanc.ExecutionTraceSettledForest
 # The token ledger across one child of a Pair frame (C3 per-child frame layer)
 
 Against the writer-shadowed token core only (no token storage layout).  Take a settled frame `P`
-at the Pair that is not shadowed and one of its committed direct children `c` (unshadowed by
-`child_unshadowed`), whose committed subtree is a contiguous run of the history's settled frames,
+at the Pair at an unshadowed position and one of its committed direct children `c` (at an
+unshadowed position by `child_unshadowed`: the frames between `P` and `c` are whole blocks), whose committed subtree is a contiguous run of the history's settled frames,
 with booked ledger `l` before it and the Pair holding no allowance.
 Then (`pair_token_child_frames`), with `l'` the ledger after the subtree:
 
@@ -54,6 +54,34 @@ theorem Book.run_some_of_append {B : Book} {l : B.Ledger} {xs ys : List Sevm} {m
   cases prefixRun : B.run l xs with
   | none => rw [prefixRun, Option.bind_none] at whole; cases whole
   | some l' => exact ⟨l', rfl⟩
+
+/-! ## Runs of whole blocks -/
+
+theorem WholeBlocks.nil : WholeBlocks [] := fun m₁ G m₂ split =>
+  absurd split.symm (List.append_ne_nil_of_right_ne_nil m₁ (List.cons_ne_nil G m₂))
+
+theorem WholeBlocks.append {xs ys : List Exec.Frame} (hx : WholeBlocks xs) (hy : WholeBlocks ys) :
+    WholeBlocks (xs ++ ys) := by
+  intro m₁ G m₂ split
+  rcases List.split_append_cons split with ⟨m, inX, rfl⟩ | ⟨n, -, inY⟩
+  · have short := hx m₁ G m inX
+    rw [List.length_append]
+    omega
+  · exact hy n G m₂ inY
+
+/-- A frame's committed frames are one whole block. -/
+theorem WholeBlocks.committed (F : Exec.Frame) : WholeBlocks (Exec.committedFrames F.run) := by
+  intro m₁ G m₂ split
+  rw [Exec.Frame.committedFrames_self] at split
+  cases m₁ with
+  | nil =>
+    obtain ⟨rfl, rfl⟩ := List.cons.inj split
+    exact Nat.le_refl _
+  | cons x m₁ =>
+    obtain ⟨-, inDesc⟩ := List.cons.inj split
+    obtain ⟨r, rest⟩ := Exec.descendantFrames_contig F.run inDesc
+    rw [rest, List.length_append]
+    omega
 
 /-! ## Calldata of the Pair's token requests -/
 
@@ -152,14 +180,14 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : CoreW T B)
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
     (hist : C.Hist trace) (apart : pair ≠ T) (answerable : C.Answerable trace pair)
     {P c : Exec.Frame} (settledP : P ∈ trace.settledFrames) (atPair : P.sevm.currentTarget = pair)
-    (lit : ¬ C.Shadowed trace P)
+    {preP mid : List Exec.Frame} (lit : ¬ C.Shadowed trace preP P)
     (child : c ∈ Exec.childFrames P.run) (callerPair : c.sevm.caller = pair)
     (locked : LockedBelow pair (Exec.committedFrames c.run))
     (toT : c.sevm.currentTarget = T → c.sevm.isStatic = false →
       ∃ recipient value, c.sevm.data = (ExternalOperation.transfer recipient value).encode)
     {pre post : List Exec.Frame}
     (split : trace.settledFrames = pre ++ Exec.committedFrames c.run ++ post)
-    {l : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
+    (pos : pre = preP ++ P :: mid) (whole : WholeBlocks mid) {l : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
     (zero : ∀ g, B.allow l pair g = 0) :
     ∃ l', B.run l (entryAsks T (Exec.committedFrames c.run)) = some l' ∧
       (∀ g, B.allow l' pair g = 0) ∧
@@ -219,8 +247,10 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : CoreW T B)
       C.balanceAnswer trace hist c settledC entry (abi_op_balanceOf abi data) answerable
     have atC := C.replayAt trace hist pre c (Exec.descendantFrames c.run ++ post) (by
       rw [split, Exec.Frame.committedFrames_self, List.append_assoc, List.cons_append])
-      (C.child_unshadowed trace hist P settledP (fun atT => apart (atPair.symm.trans atT)) lit c
-        child)
+      (pos ▸ C.child_unshadowed trace hist preP P mid c (Exec.descendantFrames c.run ++ post) (by
+        rw [split, pos, Exec.Frame.committedFrames_self]
+        simp only [List.append_assoc, List.cons_append])
+        (fun atT => apart (atPair.symm.trans atT)) lit whole child)
     rw [atPre] at atC
     have ledgerEq : C.ledgerOf trace c.pre.state = l := (Option.some.inj atC).symm
     rw [ledgerEq] at answer

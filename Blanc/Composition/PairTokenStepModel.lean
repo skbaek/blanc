@@ -99,7 +99,8 @@ obligation discharged. -/
 theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
     (self : SelfCallerW C) (hist : C.Hist trace) (apart : pair ≠ T)
     (answerable : C.Answerable trace pair) {P : Exec.Frame} (settledP : P ∈ trace.settledFrames)
-    (atPair : P.sevm.currentTarget = pair) (lit : ¬ C.Shadowed trace P) {side : TokenSide} {t0 t1 : Adr}
+    (atPair : P.sevm.currentTarget = pair) {preP : List Exec.Frame}
+    (lit : ¬ C.Shadowed trace preP P) {side : TokenSide} {t0 t1 : Adr}
     (hT : OnSide side (T = t0) (T = t1)) (distinct : t0 ≠ t1)
     (tokenEntered : ∀ {frame : UniswapV2Pair.Frame} {request : Request} {reply : ExternalResult}
       {index : Nat} (observed : SourceCallAt (Blanc.Exec.Frame.rootDeriv P) frame request reply index),
@@ -111,6 +112,7 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
     root = Blanc.Exec.Frame.rootDeriv P →
     ∀ (pre post : List Exec.Frame) (l : B.Ledger),
       trace.settledFrames = pre ++ Exec.descendantFrames start.exc ++ post →
+      (∃ mid, pre = preP ++ P :: mid ∧ WholeBlocks mid) →
       B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l →
       (∀ g, B.allow l pair g = 0) →
       LockedBelow pair (Exec.descendantFrames start.exc) →
@@ -134,6 +136,7 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
           request continuation reply) tail out)
       (ih : ∀ (pre post : List Exec.Frame) (l : B.Ledger),
         trace.settledFrames = pre ++ Exec.descendantFrames observed.call.returned.exc ++ post →
+        (∃ mid, pre = preP ++ P :: mid ∧ WholeBlocks mid) →
         B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l →
         (∀ g, B.allow l pair g = 0) →
         LockedBelow pair (Exec.descendantFrames observed.call.returned.exc) →
@@ -150,6 +153,7 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
                 request continuation reply))
       (pre post : List Exec.Frame) (l : B.Ledger),
       trace.settledFrames = pre ++ Exec.descendantFrames start.exc ++ post →
+      (∃ mid, pre = preP ++ P :: mid ∧ WholeBlocks mid) →
       B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l →
       (∀ g, B.allow l pair g = 0) →
       LockedBelow pair (Exec.descendantFrames start.exc) →
@@ -160,11 +164,11 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
           out'.frame.current.state.reserveOn side ≤ B.bal l' pair ∧
             SegObl side (.next reply turns tail) (.suspended frame request continuation) := by
     intro start index frame request continuation reply turns tail executed out out' same observed gap
-      during rest ih pre post l split atPre zero locked ghost
+      during rest ih pre post l split pos atPre zero locked ghost
     have pairEq : frame.context.pair = pair := observed.pair_eq.trans atPair
-    obtain ⟨mid, l1, eqMid, run1, oracle⟩ :=
+    obtain ⟨mid, l1, eqMid, wholeMid, run1, oracle⟩ :=
       pair_token_stepOracle C abi self trace laws hist apart answerable settledP atPair lit observed
-        gap locked (ContGhost.toT hT ghost) split atPre zero
+        gap locked (ContGhost.toT hT ghost) split pos atPre zero
     have bal := oracle.callBal fun target =>
       sourceCallAt_entered observed (by rw [target]; exact (tokenEntered observed target).1)
         (by rw [target]; exact (tokenEntered observed target).2)
@@ -179,7 +183,11 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
       exact run1
     have locked' : LockedBelow pair (Exec.descendantFrames observed.call.returned.exc) :=
       fun D member => locked D (by rw [eqMid]; exact List.mem_append_right _ member)
-    obtain ⟨l2, run2, zero2, final⟩ := ih (pre ++ mid) post l1 split' atPre' oracle.zero locked' ghost'
+    have pos' : ∃ mid', pre ++ mid = preP ++ P :: mid' ∧ WholeBlocks mid' := by
+      obtain ⟨m0, rfl, whole0⟩ := pos
+      exact ⟨m0 ++ mid, by simp only [List.append_assoc, List.cons_append], WholeBlocks.append whole0 wholeMid⟩
+    obtain ⟨l2, run2, zero2, final⟩ :=
+      ih (pre ++ mid) post l1 split' pos' atPre' oracle.zero locked' ghost'
     refine ⟨l2, ?_, zero2, fun bytes status => ?_⟩
     · rw [eqMid, entryAsks_append, Book.run_append, run1, Option.bind_some]
       exact run2
@@ -192,6 +200,7 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
       root = Blanc.Exec.Frame.rootDeriv P →
       ∀ (pre post : List Exec.Frame) (l : B.Ledger),
         trace.settledFrames = pre ++ Exec.descendantFrames start.exc ++ post →
+        (∃ mid, pre = preP ++ P :: mid ∧ WholeBlocks mid) →
         B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l →
         (∀ g, B.allow l pair g = 0) →
         LockedBelow pair (Exec.descendantFrames start.exc) →
@@ -203,11 +212,11 @@ theorem positional_ghost (laws : HolderLaws T B trace pair) (abi : Erc20Abi B)
               SegObl side transcript segment)
     (motive_2 := fun _ _ _ _ _ _ _ => True) ?_ ?_ ?_ ?_ ?_ ?_ ?_ consumed
   · -- finished
-    intro root start index frame bytes free _ pre post l _ _ zero _ ghost
+    intro root start index frame bytes free _ pre post l _ _ _ zero _ ghost
     have none := Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt start.exc free
     refine ⟨l, by rw [none]; rfl, zero, fun _ _ => ⟨ghost, trivial⟩⟩
   · -- failed
-    intro root start index frame failure genuine free _ pre post l _ _ zero _ _
+    intro root start index frame failure genuine free _ pre post l _ _ _ zero _ _
     have none := Exec.descendantFrames_eq_nil_of_no_sameFrame_xinstAt start.exc free
     refine ⟨l, by rw [none]; rfl, zero, fun _ status => ?_⟩
     cases status
@@ -246,7 +255,7 @@ theorem pair_token_step_model {pair T : Adr} {B : Book} (C : CoreW T B)
     (hist : C.Hist trace) (apart : pair ≠ T) (answerable : C.Answerable trace pair)
     {P : Exec.Frame} {pre post : List Exec.Frame}
     (split : trace.settledFrames = pre ++ Exec.committedFrames P.run ++ post)
-    (atPair : P.sevm.currentTarget = pair) (lit : ¬ C.Shadowed trace P)
+    (atPair : P.sevm.currentTarget = pair) (lit : ¬ C.Shadowed trace pre P)
     {current : Checkpoint} {entry : UniswapV2Pair.Entry} {transcript : Transcript} {out : RunResult}
     (consumed : PairAdmittedConsumes (Blanc.Exec.Frame.rootDeriv P)
       (startTyped current (writerContext P.sevm []) entry) transcript out)
@@ -302,7 +311,8 @@ theorem pair_token_step_model {pair T : Adr} {B : Book} (C : CoreW T B)
   have ghost := startTyped_ghost (side := side) (ctx := writerContext P.sevm []) (entry := entry)
     (rfl : current.state.token0 = _) (rfl : current.state.token1 = _) joint.1
   obtain ⟨l', run', zero', final⟩ := positional_ghost C trace laws abi self hist apart answerable
-    settledP atPair lit hT distinct tokenEntered consumed.positional rfl (pre ++ [P]) post _ split0 atPre
+    settledP atPair lit hT distinct tokenEntered consumed.positional rfl (pre ++ [P]) post _ split0
+    ⟨[], rfl, WholeBlocks.nil⟩ atPre
     joint.2 (by rw [← atPair]; exact locked) ghost
   obtain ⟨reserve, obligation⟩ := final bytes successful
   refine ⟨entryNoShrinkSide_of_obl (notFailed_of_consumes consumed.positional successful)

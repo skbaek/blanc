@@ -5,8 +5,12 @@ import Blanc.Lift.Token.SelfCaller
 /-!
 # Token interface core: the writer-shadowed core (Route R)
 
-`CoreW` is `Core` with the positional replay law required only at settled frames that are not
-`Shadowed`, plus the two shadow laws the generic walk needs.  `Core.weak` (nothing shadowed) and
+`CoreW` is `Core` with the positional replay law required only at settled positions that are not
+`Shadowed`, plus the two shadow laws the generic walk needs.  `Shadowed` judges a position (the
+settled frames before it, and its frame), not a frame value: settled frame values need not be
+unique, so a value-level shadow cannot tell a frame inside a writer from an equal frame elsewhere.
+A direct child of a frame at position `before ++ P :: m` sits at `m`'s end when `m` is a run of
+whole committed blocks (`WholeBlocks`).  `Core.weak` (nothing shadowed) and
 `SelfCaller.weak` keep every `Core` instance a `CoreW` one.  Over a `CoreW` and the holder-indexed
 laws: every ledger along a settled prefix's replay is good (`CoreW.good_along`), and the holder
 segment (`CoreW.run_holder_segment`).  Contract-neutral.
@@ -16,13 +20,20 @@ namespace Blanc.Lift.Token
 
 open Jaune Blanc Blanc.ExecutionTrace
 
+/-- `m` is a run of whole committed blocks: every frame of `m` has its descendants inside `m`, after
+it.  The frames between a frame and one of its direct children are such a run. -/
+def WholeBlocks (m : List Exec.Frame) : Prop :=
+  ∀ (m₁ : List Exec.Frame) (G : Exec.Frame) (m₂ : List Exec.Frame), m = m₁ ++ G :: m₂ →
+    (Exec.descendantFrames G.run).length ≤ m₂.length
+
 /-- **The writer-shadowed token core.**  As `Core`, except that the positional replay law is
-required only at settled frames that are not `Shadowed`: frames inside a writer entry before its
-effect lands (a proxy's delegatecalled implementation frame, and what that frame runs before its
+required only at settled positions that are not `Shadowed`: positions inside a writer entry before
+its effect lands (a proxy's delegatecalled implementation frame, and what that frame runs before its
 storage writes).  `Core.replayAt` is unsatisfiable for any proxy token with a nontrivial writer: the
 implementation frame starts in its entry frame's state but after its entry ask in pre-order.  The
-shadow laws are what the generic walk needs: a shadowed frame is static or a non-entry frame at `T`
-(`shadow_kind`), and an unshadowed frame elsewhere has unshadowed children (`child_unshadowed`). -/
+shadow laws are what the generic walk needs: a shadowed position holds a static frame or a non-entry
+frame at `T` (`shadow_kind`), and an unshadowed position elsewhere has unshadowed direct-child
+positions (`child_unshadowed`). -/
 structure CoreW (T : Adr) (B : Book) where
   Hist : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain},
     ConfiguredHistoryTrace cfg checkpoint future → Prop
@@ -31,19 +42,23 @@ structure CoreW (T : Adr) (B : Book) where
   Answerable : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain},
     ConfiguredHistoryTrace cfg checkpoint future → Adr → Prop
   Shadowed : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain},
-    ConfiguredHistoryTrace cfg checkpoint future → Exec.Frame → Prop
+    ConfiguredHistoryTrace cfg checkpoint future → List Exec.Frame → Exec.Frame → Prop
   shadow_kind : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future), Hist tr →
-      ∀ f ∈ tr.settledFrames, Shadowed tr f →
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      tr.settledFrames = before ++ f :: after → Shadowed tr before f →
         f.sevm.isStatic = true ∨ (f.sevm.currentTarget = T ∧ ¬ IsEntry T f)
   child_unshadowed : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future), Hist tr →
-      ∀ P ∈ tr.settledFrames, P.sevm.currentTarget ≠ T → ¬ Shadowed tr P →
-        ∀ c ∈ Exec.childFrames P.run, ¬ Shadowed tr c
+    ∀ (before : List Exec.Frame) (P : Exec.Frame) (m : List Exec.Frame) (c : Exec.Frame)
+      (after : List Exec.Frame),
+      tr.settledFrames = before ++ P :: (m ++ c :: after) → P.sevm.currentTarget ≠ T →
+        ¬ Shadowed tr before P → WholeBlocks m → c ∈ Exec.childFrames P.run →
+          ¬ Shadowed tr (before ++ P :: m) c
   replayAt : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future), Hist tr →
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
-      tr.settledFrames = before ++ f :: after → ¬ Shadowed tr f →
+      tr.settledFrames = before ++ f :: after → ¬ Shadowed tr before f →
       B.run (ledgerOf tr checkpoint.state) (entryAsks T before) = some (ledgerOf tr f.pre.state)
   replayEnd : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future), Hist tr →
@@ -76,9 +91,9 @@ def Core.weak {T : Adr} {B : Book} (C : Core T B) : CoreW T B where
   Hist := C.Hist
   ledgerOf := C.ledgerOf
   Answerable := C.Answerable
-  Shadowed _ _ := False
-  shadow_kind _ _ _ _ h := h.elim
-  child_unshadowed _ _ _ _ _ _ _ _ h := h
+  Shadowed _ _ _ := False
+  shadow_kind _ _ _ _ _ _ h := h.elim
+  child_unshadowed _ _ _ _ _ _ _ _ _ _ _ _ h := h
   replayAt tr hist before f after split _ := C.replayAt tr hist before f after split
   replayEnd := C.replayEnd
   goodStart := C.goodStart
@@ -140,8 +155,8 @@ theorem CoreW.good_along {T : Adr} {B : Book} (C : CoreW T B) {cfg : ChainConfig
   have mem : g ∈ tr.settledFrames := by
     rw [settled]
     exact List.mem_append_right _ List.mem_cons_self
-  have lit : ¬ C.Shadowed tr g := fun shadowed => by
-    rcases C.shadow_kind tr hist g mem shadowed with st | ⟨_, notEntry⟩
+  have lit : ¬ C.Shadowed tr b1 g := fun shadowed => by
+    rcases C.shadow_kind tr hist b1 g (b2 ++ rest) settled shadowed with st | ⟨_, notEntry⟩
     · rw [static] at st
       cases st
     · exact notEntry entry

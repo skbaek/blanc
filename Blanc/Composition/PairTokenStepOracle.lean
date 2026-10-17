@@ -196,7 +196,7 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
     (hist : C.Hist trace) (apart : pair ≠ T) (answerable : C.Answerable trace pair)
     {P : Exec.Frame} (settledP : P ∈ trace.settledFrames) (atPair : P.sevm.currentTarget = pair)
-    (lit : ¬ C.Shadowed trace P)
+    {preP : List Exec.Frame} (lit : ¬ C.Shadowed trace preP P)
     {start : Exec.Deriv} {frame : UniswapV2Pair.Frame} {request : Request} {reply : ExternalResult}
     {index : Nat}
     (observed : SourceCallAt (Blanc.Exec.Frame.rootDeriv P) frame request reply index)
@@ -206,14 +206,15 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
       ∃ recipient value, request.calldata = (ExternalOperation.transfer recipient value).encode)
     {pre post : List Exec.Frame}
     (split : trace.settledFrames = pre ++ Exec.descendantFrames start.exc ++ post)
-    {l : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
+    (pos : ∃ mid, pre = preP ++ P :: mid ∧ WholeBlocks mid) {l : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
     (zero : ∀ g, B.allow l pair g = 0) :
     ∃ (mid : List Exec.Frame) (l' : B.Ledger),
       Exec.descendantFrames start.exc = mid ++ Exec.descendantFrames observed.call.returned.exc ∧
-      B.run l (entryAsks T mid) = some l' ∧
+      WholeBlocks mid ∧ B.run l (entryAsks T mid) = some l' ∧
       StepOracle B T pair frame request reply (observed.call.occurrence.slot.isSome = true) l l' :=
     by
   rw [gap.descendantFrames_eq] at split locked ⊢
+  obtain ⟨mid, preEq, whole⟩ := pos
   have replyFacts := sourceCallAt_reply_facts observed
   rcases observed.queue with ⟨slotNone, -⟩ |
     ⟨childEvm, raw, callee, resume, pc', childRun, next, spawn, enter, resumed, slotSome, nodeExc,
@@ -227,7 +228,7 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
       rw [run] at response
       obtain ⟨_, impossible, _⟩ := response
       cases impossible
-    refine ⟨[], l, ?_, rfl, StepOracle.unchanged zero ?_⟩
+    refine ⟨[], l, ?_, WholeBlocks.nil, rfl, StepOracle.unchanged zero ?_⟩
     · rw [Blanc.Exec.Deriv.ParentStep.descendantFrames_spawn_done observed.call.edge
         observed.spawned notRun, List.nil_append]
     · intro _ _ _ entered
@@ -268,8 +269,10 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
           child (caller.trans atPair)
           lockedC (fun atT mutable => by
             rw [data]
-            exact toT (target.symm.trans atT) (static.symm.trans mutable)) splitC atPre zero
-      refine ⟨Exec.committedFrames c.run, l', by rw [eq, cFrames], step, zero',
+            exact toT (target.symm.trans atT) (static.symm.trans mutable)) splitC preEq whole
+          atPre zero
+      refine ⟨Exec.committedFrames c.run, l', by rw [eq, cFrames], WholeBlocks.committed c, step,
+        zero',
         fun h => staticFact (static.trans h), ?_, ?_, ?_⟩
       · intro atT readData _ _
         obtain ⟨output, lt⟩ := readFact (target.trans atT) (data.trans readData)
@@ -287,7 +290,8 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
       · intro elsewhere _
         exact otherFact (fun h => elsewhere (target.symm.trans h))
     · rw [dite_eq_right_of_eq_false (eq_false settles), List.nil_append] at eq
-      refine ⟨[], l, by rw [eq, List.nil_append], rfl, StepOracle.unchanged zero ?_⟩
+      refine ⟨[], l, by rw [eq, List.nil_append], WholeBlocks.nil, rfl,
+        StepOracle.unchanged zero ?_⟩
       intro _ _ success _
       have clean : observed.child.error.isSome = false := by
         rw [replyFacts.1] at success

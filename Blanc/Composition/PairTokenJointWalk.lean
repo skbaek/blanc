@@ -295,8 +295,9 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : CoreW T B)
       have settledS : s.frame ∈ trace.settledFrames := by
         rw [globalSplit]
         exact List.mem_append_right _ List.mem_cons_self
-      have litS : ¬ C.Shadowed trace s.frame := fun shadowed => by
-        rcases C.shadow_kind trace hist s.frame settledS shadowed with static | ⟨atT, -⟩
+      have litS : ¬ C.Shadowed trace (pre ++ gap) s.frame := fun shadowed => by
+        rcases C.shadow_kind trace hist (pre ++ gap) s.frame _ globalSplit shadowed with
+          static | ⟨atT, -⟩
         · rw [mutable] at static
           cases static
         · exact apart (atPair.symm.trans atT)
