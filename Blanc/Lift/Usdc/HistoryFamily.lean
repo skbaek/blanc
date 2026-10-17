@@ -3,6 +3,7 @@ import Blanc.Lift.Token.FamilyReplay
 import Blanc.Lift.Token.Holder
 import Blanc.Lift.Usdc.RefineSigned
 import Blanc.ExecutionOwnerFamilyPositional
+import Blanc.Lift.Usdc.HistoryFamilyCodes
 
 /-!
 # USDC's code family ladder (U6h1)
@@ -513,17 +514,20 @@ theorem usdc_configuredHistory_at (P : Adr) {U : Key → Prop} (A₀ : Adr)
     (usdc_spawnKinds P U A₀) (usdc_spawnReplay P A₀ inj apart) (usdcSpec_preserves P U) history
     admitted ⟨installed, trivial, trivial⟩
 
-/-- **The admission over a history's key universe**, given the delegates installed at every raw
-frame at the proxy: every raw frame's keys are among the history's touched keys. -/
+/-- **The admission over a history's key universe**: every raw frame's keys are among the
+history's touched keys, and the implementation and the library stay installed at every raw frame
+(`ConfiguredHistoryTrace.rawFrames_codeImage_of_installed`). -/
 theorem usdc_history_admitted {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : ∀ root ∈ tr.rawFrames, root.sevm.currentTarget = P →
-      (usdcFamily P).DelegatesInstalled root.devm.state) :
+    (installed : UsdcInstalled P checkpoint.state) :
     tr.FrameAdmitted P (usdcEntry P (historyKeyUniverse P tr K₀)) := by
   apply (tr.frameAdmitted_iff_rawFrames P _).2
   intro root member target
-  refine ⟨fun k hk => Or.inr (List.mem_flatMap.mpr ⟨root, member, ?_⟩),
-    installed root member target⟩
-  simpa only [target, ite_true] using hk
+  refine ⟨fun k hk => Or.inr (List.mem_flatMap.mpr ⟨root, member, ?_⟩), fun m hm => ?_⟩
+  · simpa only [target, ite_true] using hk
+  · simp only [usdcFamily, List.mem_cons, List.not_mem_nil, or_false] at hm
+    rcases hm with rfl | rfl
+    · exact tr.rawFrames_codeImage_of_installed implSem usdcImpl installed.impl root member
+    · exact tr.rawFrames_codeImage_of_installed libSem usdcLib installed.lib root member
 
 end Blanc.Lift.Usdc
