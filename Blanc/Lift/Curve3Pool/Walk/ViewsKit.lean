@@ -377,6 +377,15 @@ macro "xl " pc:term:max o:term:max : tactic => `(tactic| (
   clear s))
 
 set_option hygiene false in
+/-- `SHA3` of a carried word at a literal offset (length `32`). -/
+macro "xk " pc:term:max o:term:max : tactic => `(tactic| (
+  replace h := xa_nextAt (n := .reg .keccak256) (pc' := $pc) (atN hcode (by kernel_rfl))
+    (by nofun) (by rfl) h
+  obtain ⟨_, s, h⟩ := h
+  obtain ⟨_, rfl⟩ := ri_keccakV (o := $o) hV (by rfl) (by rfl) (by rfl) s
+  clear s))
+
+set_option hygiene false in
 /-- `MLOAD` of an uncarried word. -/
 macro "xlu " pc:term:max : tactic => `(tactic| (
   replace h := xa_nextAt (n := .reg .mload) (pc' := $pc) (atN hcode (by kernel_rfl)) (by nofun)
@@ -456,6 +465,86 @@ theorem xa_restoreV (hat : RestoreAt sevm.code H t) {lo : Nat} {ts : List B256} 
   have hV' := hV.restoreMem (ws := ts) hcs (p := lo + 32 * (ts.length - 1)) (by omega)
   rw [show lo + 32 * (ts.length - 1) + 32 - 32 * ts.length = lo by omega] at hV'
   exact ⟨_, G', h, rfl, hV'⟩
+
+end
+
+/-! ## More carrier steps and callees -/
+
+section
+
+variable {sevm : Sevm} {post b d : Devm} {ρ : B256} {S : List B256} {M : Mem} {G : Nat}
+  {L : List Exec.Frame} {LW : List (Nat × B256)}
+
+/-- `SHA3` of one carried word. -/
+theorem ri_keccakV {i n w : B256} {o : Nat} (hV : VW M LW) (hl : wlook LW o = some w)
+    (ho : i.toNat = o) (hn : n.toNat = 32)
+    (h : Ninst.Run sevm (St b (i :: n :: S) M G) (.reg .keccak256) d) :
+    ∃ G', d = St b (Bytes.keccak w.toBytes :: S) M G' := by
+  obtain ⟨G', rfl⟩ := ri_keccak h
+  obtain ⟨hv, hM⟩ := hV.words.read hV.al (wlook_mem hl)
+  have hlen : (M.read o 32).1.length = 32 := by
+    simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range]
+  rw [ho, hn, hM, ← Bytes.toBytes_toB256_of_length hlen, hv]
+  exact ⟨G', rfl⟩
+
+theorem vk_gdm_entry : cert.entries[29]? = some ⟨0x7b7, [.ret, .unk, .unk, .unk, .unk], 1⟩ := by
+  rfl
+theorem vk_gdm_mems : mems.getD 29 [] = [] := by decide +kernel
+
+/-- **`get_D_mem` crossed and read** over the carrier: `getDMem b amp` on `S`, the base
+unchanged, the words off `gdmWin` kept and the result at the scratch word `0`. -/
+theorem xa_vGetDMem (hc : Cert.CheckedM code cert mems true)
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {b0 b1 b2 amp : B256}
+    (hV : VW M LW)
+    (h : XAt sevm post 0x7b7 (St b (ρ :: b0 :: b1 :: b2 :: amp :: S) M G) L) :
+    ∃ v M' G', XAt sevm post ρ.toNat (St b (v :: S) M' G') L ∧
+      getDMem ⟨b0.toNat, b1.toNat, b2.toNat⟩ amp.toNat = some v.toNat ∧
+      VW M' ((0, v) :: wordsOffW gdmWin LW) := by
+  rcases xa_calleeC hc vk_gdm_entry t_07b7_c29_prog vk_gdm_mems gdm_execFreeSet gdm_free hcode
+      hfork (S := [ρ, b0, b1, b2, amp]) (base := S) rfl
+      (.cons rfl (.cons trivial (.cons trivial (.cons trivial (.cons trivial .nil))))) h with
+    ⟨run, -⟩ | ⟨d', S', run, hx, -, -⟩
+  · obtain ⟨d, he, -⟩ := getDMem_spec hV.wf hV.al run
+    cases he
+  · obtain ⟨d, he, v, M', G', rfl, hv, hk, hw0, hwf, hal⟩ := getDMem_spec hV.wf hV.al run
+    cases he
+    have hV' := hV.keepsOff hk hwf hal
+    exact ⟨v, M', G', hx, hv, ⟨Words.cons.mpr ⟨hw0 0 v List.mem_cons_self, hV'.words⟩, hwf,
+      hal⟩⟩
+
+end
+
+section
+
+variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {S : List B256} {M : Mem}
+  {G H : Nat} {t : FrameLoopTpl} {LW : List (Nat × B256)}
+
+/-- **A restore loop giving back a saved frame**: the stack words were pushed by a save of the
+frame `[lo, lo + 32 n)` of `W`, whose carried words `LF` (aligned in the frame) come back. -/
+theorem xa_restoreFrameV (hat : RestoreAt sevm.code H t) {lo n : Nat} {W : Mem}
+    {LF : List (Nat × B256)} (hn : 0 < n) (hlo : 32 ≤ lo) (he : t.e = lo) (hV : VW M LW)
+    {w : B256} (hl : wlook LW t.c = some w) (hw : w = Nat.toB256 (lo + 32 * (n - 1)))
+    (hreg : lo + 32 * n ≤ t.c) (hF : Words W LF)
+    (hal : ∀ o v, (o, v) ∈ LF → ∃ i, i < n ∧ o = lo + 32 * i)
+    (h : XAt sevm post H (St b ((frameWords W lo n).reverse ++ S) M G) L) :
+    ∃ M' G', XAt sevm post (t.x + 1) (St b S M' G') L ∧
+      VW M' (LF ++ wordsOffR lo (t.c + 32) LW) := by
+  have hlen : ((frameWords W lo n).reverse).length = n := by
+    rw [List.length_reverse, length_frameWords]
+  have hne : (frameWords W lo n).reverse ≠ [] := by
+    intro e; rw [e] at hlen; simp only [List.length_nil] at hlen; omega
+  obtain ⟨hctr, hcs⟩ := hV.ctr hl (by rw [hw])
+  obtain ⟨M', G', h', rfl, hV'⟩ := xa_restoreV hat hne hlo he hV hl (by rw [hlen, hw])
+    (by rw [hlen]; exact hreg) h
+  refine ⟨_, G', h', Words.append.mpr ⟨fun o v hm => ?_, hV'.words⟩, hV'.wf, hV'.al⟩
+  have hfr := restoreMem_frameWords (c := t.c) (M := M) (W := W) (lo := lo) (n := n) hcs hreg
+  obtain ⟨i, hi, rfl⟩ := hal o v hm
+  have hmem : (lo + 32 * i, memWord W (lo + 32 * i)) ∈ frameSlots W lo n := by
+    simp only [frameSlots, List.mem_map, List.mem_range, Prod.mk.injEq]
+    exact ⟨i, hi, rfl, rfl⟩
+  rw [hlen] at *
+  obtain ⟨hs, hv⟩ := hfr _ _ hmem
+  exact ⟨hs, hv.trans (hF.memWord hm)⟩
 
 end
 
