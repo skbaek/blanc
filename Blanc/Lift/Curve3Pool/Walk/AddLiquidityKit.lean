@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.FrameWalkNode
 import Blanc.Lift.MemGlue
+import Blanc.Lift.FrameWalkAligned
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.GetDMem
 
@@ -17,6 +18,17 @@ top-level file discharges it with `cert_checkM`.
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
+
+
+set_option hygiene false in
+/-- As `xmo`, keeping the memory's size aligned (`hA`). -/
+macro "xma " pc:term:max n:term:max ri:term:max : tactic => `(tactic| (
+  replace h := xa_nextAt (n := $n) (pc' := $pc) (atN hcode (by kernel_rfl)) (by nofun)
+    (by rfl) h
+  obtain ⟨_, s, h⟩ := h
+  have e := $ri hR hW hA s
+  clear s hR hW hA
+  obtain ⟨M, _, rfl, hR, hW, hA⟩ := e))
 
 /-- **Crossing a certified exec-free callee** (`xa_callee` with the checked certificate as a
 hypothesis). -/
