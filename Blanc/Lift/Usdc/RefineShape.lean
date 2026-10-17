@@ -45,7 +45,9 @@ def ImplStepLaw (fam : Call → Prop) : Prop :=
         ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
           ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
             x = .delegatecall ∧ ((ledger U (pre.state.getStor P)).Good →
-              (ledger U (N.devm.state.getStor P)).Good)
+              (ledger U (N.devm.state.getStor P)).Good) ∧
+            (N.devm.state.getStor P).get implSlot = (pre.state.getStor P).get implSlot ∧
+            (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot
 
 /-- **The model law of `rescueERC20`** (U6f): the frame's storage at the proxy is unchanged up to and
 after its single `CALL`, and the book's step on its message is the identity. -/
