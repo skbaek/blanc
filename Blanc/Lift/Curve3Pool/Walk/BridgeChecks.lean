@@ -2,6 +2,7 @@ import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Walk.ViewsA
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 import Blanc.Lift.Curve3Pool.Walk.RampStop
+import Blanc.Lift.Curve3Pool.Walk.ViewsDyRaw
 
 /-!
 # The views and ramp entries' raw effects, with the certificate checked
@@ -56,5 +57,18 @@ theorem stopRampA_raw {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
   stopRampA_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+
+/-- **Safety of `get_dy()`.** The successful pc-zero frame computes the exact model
+quote, including every checked arithmetic operation, preserving storage and logs. -/
+theorem dy_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetDy)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  dy_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
 
 end Blanc.Lift.Curve3Pool
