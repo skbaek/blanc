@@ -189,7 +189,7 @@ LEAN_REG: Dict[int, str] = {
     0x5c: ".reg .tload", 0x5d: ".reg .tstore",
     0xa0: ".reg (.log 0)", 0xa1: ".reg (.log 1)", 0xa2: ".reg (.log 2)",
     0xa3: ".reg (.log 3)", 0xa4: ".reg (.log 4)",
-    0xf1: ".exec .call", 0xfa: ".exec .staticcall",
+    0xf1: ".exec .call", 0xfa: ".exec .staticcall", 0xf5: ".exec .create2",
 }
 
 # Opcodes the certificate grammar expresses directly: halts (`.last`), jumps
@@ -230,7 +230,7 @@ def _arm_shape(rhs: str, source: str) -> Optional[Tuple[int, int]]:
     m = re.fullmatch(r"dropTransfer (\d+) words", rhs)
     if m:
         return (int(m.group(1)), 0)
-    m = re.fullmatch(r"(callTransfer|staticcallTransfer) words", rhs)
+    m = re.fullmatch(r"(callTransfer|staticcallTransfer|create2Transfer) words", rhs)
     if m:
         dm = re.search(rf"def {m.group(1)} : Pattern → Option Pattern\n\s*\| ((?:_ :: )+)words => some \(none :: words\)", source)
         if dm:
@@ -1460,8 +1460,11 @@ def _patch(t: Any) -> Any:
         return (kind, _patch(t[1]), t[2])
     return t
 
-if 0 in trees:
-    trees[0] = _patch(trees[0])
+# Every tree may hold a placeholder: a wrapper can sit inside a callee's or another
+# wrapper's tree, not only entry 0's.
+for _k in list(trees):
+    if trees[_k] is not None:
+        trees[_k] = _patch(trees[_k])
 
 probe_extra: Dict[str, Any] = {}
 

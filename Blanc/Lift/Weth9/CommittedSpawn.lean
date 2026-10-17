@@ -109,9 +109,9 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
 /-- WETH9 frames spawn only by `CALL`/`STATICCALL` (the certificate cursor). -/
 theorem weth9_spawnKinds (ca : Adr) : SpawnKinds ca weth9Sem := by
   intro sevm pre post run hrun _ fork _ node chain x hat
-  obtain ⟨κ, -, ok⟩ := cursor_of_parentPrefix cert_check
+  obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun.1 fork chain
-  exact ok.exec_call_or_staticcall hat
+  exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat
 
 /-- One decoded call's storage effect is the replay of its invocation, at the tracked keys. -/
 theorem replay_one {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {pre post : Devm} {c : Call}

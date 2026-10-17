@@ -68,6 +68,12 @@ def staticcallTransfer : Pattern → Option Pattern
   | _ :: _ :: _ :: _ :: _ :: _ :: words => some (none :: words)
   | _ => none
 
+/-- `CREATE2` pops endowment, memory offset, size and salt, and pushes the new address (or
+zero). -/
+def create2Transfer : Pattern → Option Pattern
+  | _ :: _ :: _ :: _ :: words => some (none :: words)
+  | _ => none
+
 /-- Stack transfer of a non-push, non-jump instruction.  `PUSH` is handled by
 the checker itself because it is the one instruction whose output word is a
 literal rather than a copy of an input. -/
@@ -75,6 +81,7 @@ def ninstTransfer : Ninst → Pattern → Option Pattern
   | .reg r, words => liftRegularTransfer r words
   | .exec .call, words => callTransfer words
   | .exec .staticcall, words => staticcallTransfer words
+  | .exec .create2, words => create2Transfer words
   | _, _ => none
 
 private theorem dropTransfer_map (φ : Option B256 → Option B256)
@@ -453,6 +460,25 @@ private theorem staticcallTransfer_append {words output below : Pattern}
                           simp only [staticcallTransfer, Option.some.injEq] at checked ⊢
                           cases checked
                           rfl
+
+private theorem create2Transfer_map (φ : Option B256 → Option B256)
+    (hφ : φ none = none) {words output : Pattern}
+    (checked : create2Transfer words = some output) :
+    create2Transfer (words.map φ) = some (output.map φ) := by
+  match words, checked with
+  | _ :: _ :: _ :: _ :: words, checked =>
+      simp only [create2Transfer, Option.some.injEq] at checked ⊢
+      cases checked
+      simp only [List.map_cons, hφ]
+
+private theorem create2Transfer_append {words output below : Pattern}
+    (checked : create2Transfer words = some output) :
+    create2Transfer (words ++ below) = some (output ++ below) := by
+  match words, checked with
+  | _ :: _ :: _ :: _ :: words, checked =>
+      simp only [create2Transfer, Option.some.injEq] at checked ⊢
+      cases checked
+      rfl
 
 private theorem matches_pop {input : Pattern} {xs : Stack}
     {s rest : Stack} (matched : Matches input s)
@@ -1003,6 +1029,118 @@ private theorem ninstTransfer_run_staticcall {sevm : Sevm} {devm devm' : Devm}
                               (headMatch := Or.inl rfl) hrest
                               (by simp only [Stack.Push, Split, List.cons_append, List.nil_append])
 
+/-- A `CREATE` resume leaves exactly one word on the parent's stack. -/
+private theorem create_resume_stack {parent : Devm} {na : Adr}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm} {sf : Devm}
+    (h : (Resume.create parent na).run r = .ok sf) : ∃ w, sf.stack = w :: parent.stack := by
+  have key : ∀ d : Devm, d.stack = parent.stack → ∀ v : B256,
+      Devm.push v d = .ok sf → ∃ w, sf.stack = w :: parent.stack := by
+    intro d hd v hh
+    refine ⟨v, ?_⟩
+    rw [(Devm.push_of_push hh).stack, hd]
+    rfl
+  cases r with
+  | error e => exact (Resume.create_run_error h).elim
+  | ok child =>
+    unfold Resume.run liftToExecution at h
+    dsimp only [bind, Except.bind] at h
+    split at h
+    · exact key (incorporateChildOnError parent child child.output) rfl 0 h
+    · exact key (incorporateChildOnSuccess parent child []) rfl _ h
+
+/-- A successful `genericCreate` step leaves exactly one word on its input stack. -/
+private theorem genericCreate_stack {sevm : Sevm} {d : Devm} {v : B256} {na : Adr}
+    {mi ms : Nat} {xl : Xlot} {sf : Devm}
+    (h : XStep.Run (genericCreate.step sevm d v na mi ms) xl (.ok sf)) :
+    ∃ w, sf.stack = w :: d.stack := by
+  have done : ∀ {e e' : Devm}, e.stack = d.stack → Devm.push 0 e = .ok e' →
+      XStep.Run (XStep.ofExcept (.ok (XStep.done (.ok e')))) xl (.ok sf) →
+      ∃ w, sf.stack = w :: d.stack := by
+    intro e e' he hpush hrun
+    have hs := Except.ok.inj hrun.2
+    subst hs
+    exact ⟨0, by rw [(Devm.push_of_push hpush).stack, he]; rfl⟩
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert, assertDynamic,
+    Pure.pure, Except.pure] at h
+  split at h
+  · cases XStep.run_ofExcept_error h
+  split at h
+  · cases XStep.run_ofExcept_error h
+  split at h
+  · split at h
+    · cases XStep.run_ofExcept_error h
+    · rename_i hpush
+      exact (done · hpush h) rfl
+  split at h
+  · split at h
+    · cases XStep.run_ofExcept_error h
+    · rename_i hpush
+      exact (done · hpush h) rfl
+  · obtain ⟨r, -, hres⟩ := h
+    obtain ⟨w, hw⟩ := create_resume_stack hres.symm
+    exact ⟨w, hw⟩
+
+private theorem matches_four {a b c d : Option B256} {tail : Pattern}
+    {s : Stack} (matched : Matches (a :: b :: c :: d :: tail) s) :
+    ∃ (x1 x2 x3 x4 : B256) (xs : Stack), s = x1 :: x2 :: x3 :: x4 :: xs ∧ Matches tail xs := by
+  match s, matched with
+  | x1 :: x2 :: x3 :: x4 :: xs, matched =>
+    simp only [Matches] at matched
+    exact ⟨x1, x2, x3, x4, xs, rfl, matched.2.2.2.2⟩
+
+private theorem create2_run_stack {sevm : Sevm} {s sf : Devm} {v i sz salt : B256}
+    {xs : Stack} (hs : s.stack = v :: i :: sz :: salt :: xs)
+    (h_run : Ninst.Run sevm s Ninst.create2 sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    ∃ w, sf.stack = w :: xs := by
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
+  rcases eq1 : Devm.pop s with _ | ⟨v1, s1⟩ <;> simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have e1 := (Devm.pop_of_pop eq1).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rcases eq2 : Devm.popToNat s1 with _ | ⟨n2, s2⟩ <;> simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq2 with ⟨x2, f2, -⟩
+  have e2 := f2.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rcases eq3 : Devm.popToNat s2 with _ | ⟨n3, s3⟩ <;> simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, -⟩
+  have e3 := f3.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rcases eq4 : Devm.pop s3 with _ | ⟨v4, s4⟩ <;> simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have e4 := (Devm.pop_of_pop eq4).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  have hs4 : s4.stack = xs := by
+    have estack : s.stack = v1 :: x2 :: x3 :: v4 :: s4.stack := by rw [e1, e2, e3, e4]
+    have hparts := hs.symm.trans estack
+    simp only [List.cons.injEq] at hparts
+    exact hparts.2.2.2.2.symm
+  split at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rename_i s5 eq5
+  have hs5 : s5.stack = xs := (Devm.burn_of_chargeGas eq5).stack.symm.trans hs4
+  obtain ⟨w, hw⟩ := genericCreate_stack h_run
+  exact ⟨w, hw.trans (congrArg (w :: ·) hs5)⟩
+
+private theorem ninstTransfer_run_create2 {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : create2Transfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .create2) devm') :
+    Matches output devm'.stack := by
+  match input, checked with
+  | a :: b :: c :: d :: rest, checked =>
+      simp only [create2Transfer, Option.some.injEq] at checked
+      cases checked
+      obtain ⟨x1, x2, x3, x4, xs, hstack, hrest⟩ := matches_four matched
+      obtain ⟨w, hw⟩ := create2_run_stack hstack (by simpa only [Ninst.create2] using run) hfork
+      rw [hw]
+      exact ⟨Or.inl rfl, hrest⟩
+
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
@@ -1289,6 +1427,9 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | staticcall =>
           simp only [ninstTransfer] at checked
           exact ninstTransfer_run_staticcall hfork matched checked run
+      | create2 =>
+          simp only [ninstTransfer] at checked
+          exact ninstTransfer_run_create2 hfork matched checked run
       | _ => cases checked
   | _ => cases checked
 
@@ -1304,7 +1445,8 @@ theorem ninstTransfer_map {n : Ninst} {input output : Pattern}
       cases x with
       | call => exact callTransfer_map φ hφ checked
       | staticcall => exact staticcallTransfer_map φ hφ checked
-      | create | callcode | delegatecall | create2 => cases checked
+      | create2 => exact create2Transfer_map φ hφ checked
+      | create | callcode | delegatecall => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked
@@ -1320,7 +1462,8 @@ theorem ninstTransfer_append {n : Ninst} {input output : Pattern}
       cases x with
       | call => exact callTransfer_append checked
       | staticcall => exact staticcallTransfer_append checked
-      | create | callcode | delegatecall | create2 => cases checked
+      | create2 => exact create2Transfer_append checked
+      | create | callcode | delegatecall => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked
