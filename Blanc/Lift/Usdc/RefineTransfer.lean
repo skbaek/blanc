@@ -126,7 +126,11 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
         ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
           x = .delegatecall ∧ ((ledger U (pre.state.getStor sevm.currentTarget)).Good →
-            (ledger U (N.devm.state.getStor sevm.currentTarget)).Good) :=
+            (ledger U (N.devm.state.getStor sevm.currentTarget)).Good) ∧
+          (N.devm.state.getStor sevm.currentTarget).get implSlot =
+            (pre.state.getStor sevm.currentTarget).get implSlot ∧
+          (N.devm.state.getStor sevm.currentTarget).get adminSlot =
+            (pre.state.getStor sevm.currentTarget).get adminSlot :=
     fun sel N hN x hx => absurd hx (family_noExec run codeEq fork sel N hN x)
   rw [stepEq]
   cases c <;> simp only [famTransfer] at fam
