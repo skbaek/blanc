@@ -25,6 +25,8 @@ theorem xa_cw_c (hc : Cert.CheckedM code cert mems true)
       (0x180, ρ), (0x160, i), (0x140, a)])
     (h : XAt sevm post 0x3f1a (St b S M G) L) :
     ∃ (y : B256) (hi : i.toNat < 3) (M' : Mem) (G' : Nat),
+      (∃ (ρ' : B256) (R : List B256) (M0 : Mem) (G0 : Nat),
+        XAt sevm post 0x3999 (St b (ρ' :: A :: i :: x0 :: x1 :: x2 :: D1 :: R) M0 G0) L) ∧
       getYDChk A.toNat ⟨i.toNat, hi⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D1.toNat =
         some y.toNat ∧
       y.toNat ≤ (pickWord3 i.toNat x0 x1 x2).toNat ∧ pickWord3 i.toNat cwP1 cwPm cwPm ≠ 0 ∧
@@ -32,8 +34,8 @@ theorem xa_cw_c (hc : Cert.CheckedM code cert mems true)
         (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' G') L ∧
       VW M' [(0x720, Bytes.toB256 [0]),
         (0x700, (pickWord3 i.toNat x0 x1 x2 - y) / pickWord3 i.toNat cwP1 cwPm cwPm),
-        (0x5a0, y), (0x520, D1), (0x400, D0), (0x360, x2), (0x340, x1), (0x320, x0),
-        (0x280, T), (0x260, cwPm), (0x240, cwPm), (0x220, cwP1), (0x200, F), (0x1a0, A),
+        (0x5a0, y), (0x580, x2), (0x560, x1), (0x540, x0), (0x520, D1), (0x400, D0),
+        (0x360, x2), (0x340, x1), (0x320, x0), (0x280, T), (0x260, cwPm), (0x240, cwPm), (0x220, cwP1), (0x200, F), (0x1a0, A),
         (0x180, ρ), (0x160, i), (0x140, a)] := by
   xs 0x3f1d (.push [0x05, 0x40] (by decide)) ri_push  -- 3f1a PUSH2 0x0540
   xs 0x3f20 (.push [0x03, 0x20] (by decide)) ri_push  -- 3f1d PUSH2 0x0320
@@ -127,6 +129,7 @@ theorem xa_cw_c (hc : Cert.CheckedM code cert mems true)
   xs 0x3fb8 (.reg .add) ri_add  -- 3fb7 ADD
   xs 0x3fbb (.push [0x39, 0x99] (by decide)) ri_push  -- 3fb8 PUSH2 0x3999
   xjmp 0x3999  -- 3fbb JUMP
+  have hcall := h
   have hcov := (hV.words 0x680 _ List.mem_cons_self).1
   obtain ⟨y, M2, _, h, hi, hy, hV1⟩ := xa_vGetYD hc hcode hfork hV (by omega) h
   clear hV
@@ -256,7 +259,7 @@ theorem xa_cw_c (hc : Cert.CheckedM code cert mems true)
   xs 0x405c (.reg (.dup 3)) (ri_dup (by rfl))  -- 405b DUP4
   xsw 0x405d 0x720  -- 405c MSTORE
   xs 0x405e (.reg .add) ri_add  -- 405d ADD
-  refine ⟨y, hi, _, _, hy, hs1, hp, h, hV.sub ?_⟩
+  refine ⟨y, hi, _, _, ⟨_, _, _, _, hcall⟩, hy, hs1, hp, h, hV.sub ?_⟩
   simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 end
