@@ -1,5 +1,6 @@
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.Lift.ExactWalk
+import Blanc.Lift.CallerProvenance
 
 /-!
 # Token interface core (contract-neutral)
@@ -127,10 +128,13 @@ structure Core (T : Adr) (B : Book) where
         B.op g.sevm = .transfer dst v →
         g.post.output = [] ∨ (32 ≤ g.post.output.length ∧
           Bytes.toB256 (g.post.output.sliceD 0 32 0) ≠ 0)
-  /-- Every committed entry frame's message is the message the book decodes. -/
+  /-- A settled frame at `T` that is not an entry is entered only from frames at `T` (a proxy's
+  delegatecalled implementation frame); in particular every frame a foreign contract calls at `T`
+  is an entry. -/
   decodes : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future), Hist tr →
-      ∀ g ∈ tr.settledFrames, g.sevm.currentTarget = T → IsEntry T g
+      ∀ g ∈ tr.settledFrames, g.sevm.currentTarget = T → ¬ IsEntry T g →
+        ∀ P ∈ tr.settledFrames, g ∈ Exec.childFrames P.run → P.sevm.currentTarget = T
 
 /-- **Facet: frame-level transfer liveness** (input to C4(b)).  At any world the instance accepts,
 a fresh entry frame of `T` decoding an affordable `transfer` runs to success at an exact,
