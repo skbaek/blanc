@@ -477,7 +477,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   replace h := xa_staticcall_img (pc' := 0x4cd4) (i := 0x15c) (n := 0x24) (o := 0x1c0)
     (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
-  obtain ⟨d1, flag, out, M', L1, h, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
+  obtain ⟨d1, flag, out, M', L1, h, _, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   xs 0x4cd7 (.push [0x4c, 0xdc] (by decide)) ri_push
   xji 0x4cd8 0x4cdc hw
   · xdead

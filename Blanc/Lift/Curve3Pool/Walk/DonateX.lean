@@ -619,7 +619,7 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   replace h := xa_staticcall_img (pc' := 0x4fbc) (i := 0x17c) (n := 0x24) (o := 0x1e0)
     (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
-  obtain ⟨d1, flag, out, M', L1, h, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
+  obtain ⟨d1, flag, out, M', L1, h, _, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   have hctrR_D : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img
       0x160 (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x180
       sevm.currentTarget.toB256.toBytes) 0xc0 (Bytes.toB256 [0]).toBytes) 0x1e0
