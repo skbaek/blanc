@@ -25,17 +25,17 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- What the authorization internals guarantee and write, over the words `from`, `to`, `value`,
 `validAfter`, `validBefore`, `nonce`. -/
-def AuthPost (sevm : Sevm) (σ : Stor) (fr dst val va vb n : B256) (σ' : Stor) : Prop :=
+def AuthPost (sevm : Sevm) (σ : Stor) (fr dst : Adr) (val va vb n : B256) (σ' : Stor) : Prop :=
   va < sevm.benvStat.time ∧ sevm.benvStat.time < vb ∧
-    boolBit (σ.get (authSlot fr.toAdr n)) = false ∧
-    fr.toAdr ≠ 0 ∧ dst.toAdr ≠ 0 ∧
-    val.toNat ≤ balanceBits ((markStor σ fr.toAdr n).get (balSlot fr.toAdr)) ∧
-    frozenBit ((markStor σ fr.toAdr n).get (balSlot fr.toAdr)) = false ∧
-    frozenBit ((debitStor (markStor σ fr.toAdr n) fr.toAdr val.toNat).get
-      (balSlot dst.toAdr)) = false ∧
-    balanceBits ((debitStor (markStor σ fr.toAdr n) fr.toAdr val.toNat).get
-      (balSlot dst.toAdr)) + val.toNat ≤ 2 ^ 255 - 1 ∧
-    σ' = creditStor (debitStor (markStor σ fr.toAdr n) fr.toAdr val.toNat) dst.toAdr val.toNat
+    boolBit (σ.get (authSlot fr n)) = false ∧
+    fr ≠ 0 ∧ dst ≠ 0 ∧
+    val.toNat ≤ balanceBits ((markStor σ fr n).get (balSlot fr)) ∧
+    frozenBit ((markStor σ fr n).get (balSlot fr)) = false ∧
+    frozenBit ((debitStor (markStor σ fr n) fr val.toNat).get
+      (balSlot dst)) = false ∧
+    balanceBits ((debitStor (markStor σ fr n) fr val.toNat).get
+      (balSlot dst)) + val.toNat ≤ 2 ^ 255 - 1 ∧
+    σ' = creditStor (debitStor (markStor σ fr n) fr val.toNat) dst val.toNat
 
 /-- **Entry 90, `_transferWithAuthorization(from, to, value, validAfter, validBefore, nonce,
 signature)`.** -/
@@ -44,7 +44,7 @@ theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G)
       t_4b49_c90 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
-      AuthPost sevm (Devm.getStor b sevm.currentTarget) x6 x5 x4 x3 x2 x1
+      AuthPost sevm (Devm.getStor b sevm.currentTarget) x6.toAdr x5.toAdr x4 x3 x2 x1
         (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
@@ -89,7 +89,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G)
       t_4571_c95 o) :
     sevm.caller = x5.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
-      AuthPost sevm (Devm.getStor b sevm.currentTarget) x6 x5 x4 x3 x2 x1
+      AuthPost sevm (Devm.getStor b sevm.currentTarget) x6.toAdr x5.toAdr x4 x3 x2 x1
         (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
@@ -138,7 +138,7 @@ theorem e87_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_4c3f_c87 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
-      AuthPost sevm (Devm.getStor b sevm.currentTarget) x8 x7 x6 x5 x4 x3
+      AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
         (Devm.getStor b' sevm.currentTarget) := by
   obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e87 fork run.cut
   icallA h hc 90 t_4b49_c90
@@ -160,7 +160,7 @@ theorem e84_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_4c83_c84 o) :
     sevm.caller = x7.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
-      AuthPost sevm (Devm.getStor b sevm.currentTarget) x8 x7 x6 x5 x4 x3
+      AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
         (Devm.getStor b' sevm.currentTarget) := by
   obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e84 fork run.cut
   icallA h hc 95 t_4571_c95
@@ -185,7 +185,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x8.toAdr)) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x7.toAdr)) = false ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧
-        AuthPost sevm (Devm.getStor b sevm.currentTarget) x8 x7 x6 x5 x4 x3
+        AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
           (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
@@ -238,7 +238,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x8.toAdr)) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x7.toAdr)) = false ∧
       sevm.caller = x7.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
-        AuthPost sevm (Devm.getStor b sevm.currentTarget) x8 x7 x6 x5 x4 x3
+        AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
           (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
@@ -291,7 +291,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x6.toAdr)) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x5.toAdr)) = false ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧
-        AuthPost sevm (Devm.getStor b sevm.currentTarget) x6 x5 x4 x3 x2 x1
+        AuthPost sevm (Devm.getStor b sevm.currentTarget) x6.toAdr x5.toAdr x4 x3 x2 x1
           (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
@@ -344,7 +344,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x6.toAdr)) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot x5.toAdr)) = false ∧
       sevm.caller = x5.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
-        AuthPost sevm (Devm.getStor b sevm.currentTarget) x6 x5 x4 x3 x2 x1
+        AuthPost sevm (Devm.getStor b sevm.currentTarget) x6.toAdr x5.toAdr x4 x3 x2 x1
           (Devm.getStor b' sevm.currentTarget) := by
   have h := run.cut
   clear run
