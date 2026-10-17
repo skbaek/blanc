@@ -75,6 +75,45 @@ theorem ydRes_getYDChk {A i x0 x1 x2 D ann y : Nat} (hi : i < 3) (hann : chkMul 
     cases he
     exact ydRes_core h1 h2 hp
 
+theorem ydRes_of_core {u v D ann y : Nat}
+    (h : ∃ c, cOfChk u v D ann = some c ∧ ∃ b, bOfChk u v D ann = some b ∧
+      loopYChk c b D 1 255 D = some y) :
+    ((ydAccN D 0 u D).bind fun cs => (ydAccN cs.1 cs.2 v D).bind fun cs =>
+      ydPostRes cs.1 cs.2 D ann) = some y := by
+  obtain ⟨c, hc, bb, hb, hl⟩ := h
+  unfold cOfChk at hc
+  unfold bOfChk at hb
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hc hb
+  obtain ⟨⟨m1, hm1, m2, hm2, c0, hc0, m3, hm3, m4, hm4, c1, hc1, m5, hm5, m6, hm6, hc2⟩, ⟨s1, hs1, s2, hs2, q, hq, hb2⟩⟩ := And.intro hc hb
+  unfold ydAccN ydPostRes
+  simp only [Option.bind_eq_bind, hm1, hm2, hc0, hm3, hm4, hc1, hm5, hm6, hc2, hs1, hs2, hq, hb2,
+    Option.bind_some, hl]
+
+theorem getYDChk_ydRes {A i x0 x1 x2 D v : Nat} (hi : i < 3)
+    (h : getYDChk A ⟨i, hi⟩ (V3.mk x0 x1 x2).get D = some v) :
+    ∃ ann, chkMul A 3 = some ann ∧ ydRes i x0 x1 x2 D ann = some v := by
+  unfold getYDChk at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨ann, hann, h⟩ := h
+  refine ⟨ann, hann, ?_⟩
+  unfold ydRes
+  obtain rfl | rfl | rfl : i = 0 ∨ i = 1 ∨ i = 2 := by omega
+  · simp only [ydCoinStep_eq, Option.bind_some, ydCoinStep_ne (i := 0) (j := 1) (by decide),
+      ydCoinStep_ne (i := 0) (j := 2) (by decide)]
+    exact ydRes_of_core (u := x1) (v := x2) h
+  · simp only [ydCoinStep_ne (i := 1) (j := 0) (by decide), ydCoinStep_eq,
+      ydCoinStep_ne (i := 1) (j := 2) (by decide)]
+    have h' := ydRes_of_core (u := x0) (v := x2) h
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h' ⊢
+    obtain ⟨cs, h1, h2⟩ := h'
+    exact ⟨cs, h1, cs, rfl, h2⟩
+  · simp only [ydCoinStep_ne (i := 2) (j := 0) (by decide),
+      ydCoinStep_ne (i := 2) (j := 1) (by decide), ydCoinStep_eq]
+    have h' := ydRes_of_core (u := x0) (v := x1) h
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h' ⊢
+    obtain ⟨cs, h1, cs', h2, h3⟩ := h'
+    exact ⟨cs, h1, cs', h2, cs', rfl, h3⟩
+
 section Walk
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M0 : Mem}
