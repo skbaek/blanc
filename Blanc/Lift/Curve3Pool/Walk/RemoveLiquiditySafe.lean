@@ -84,7 +84,7 @@ precompile is ready; every call to a coin or 3Crv keeps the pool's storage and a
 code, `CallKeeps`/`StaticKeeps`), computed the
 model's step on the decoded call in the environment `rlEnv` it observed, with the raw effect
 Spec states. -/
-theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
+theorem removeLiquidity_rawT {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -99,8 +99,8 @@ theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
     (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
     (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot)) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+    ∃ T o, step s (rlEnv sevm T) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rlEnv sevm T) o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   obtain ⟨hlock, hval, c0, c1, c2, c3, c4, hL, h0t, h0d, h0s, h0l, h0g, hp0, hp1, hp2, hTa, h4t,
@@ -153,7 +153,7 @@ theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
       | 1 => exact l1
       | 2 => exact l2)
     (fun _ => rfl) rfl (by rw [hA]; exact hTa')
-  refine ⟨rlEnv sevm (rlSupply c0), ?o, ?step, ?raw⟩
+  refine ⟨rlSupply c0, ?o, ?step, ?raw⟩
   case step =>
     rw [hdec]
     show (if (rlEnv sevm (rlSupply c0)).value = 0 then _ else none) = _
@@ -281,5 +281,28 @@ theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
         h4t, hp0.data, hp1.data, hp2.data, h4d, hp0.value, hp1.value, hp2.value, h4v, hw0, hw1,
         hw2, hwA, hwC]
       rfl
+
+
+/-- **Safety of `remove_liquidity`**, with the observed environment left abstract. -/
+theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidity)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
+    (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+    (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot)) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+  obtain ⟨T, o, h1, h2⟩ := removeLiquidity_rawT exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+    hcoin hpc hid hckeep hsk htk
+  exact ⟨_, o, h1, h2⟩
 
 end Blanc.Lift.Curve3Pool
