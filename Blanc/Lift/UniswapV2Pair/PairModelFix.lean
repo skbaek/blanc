@@ -12,8 +12,8 @@ invariant (C3):
   every mutable request is a `transfer` to one of the two tokens or a callback to a non-token
   address, and the step ends unlocked.  In the *nested* mode (an entry at a locked state) every
   request is static and the lock stays closed;
-* `startTyped_segInv_outer` / `startTyped_segInv_nested` establish it, `resumeSegment_segInv`
-  preserves it, and a static entry never changes the carried state (`startTyped_static`).
+* `startTyped_segInv_outer` / `startTyped_segInv_nested` establish it and `resumeSegment_segInv`
+  preserves it.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -161,96 +161,6 @@ def SegInv (nested : Bool) (t0 t1 f : Adr) : SegmentResult → Prop
       (cont.IsPermit → externalStatic fr request = true ∧
         (nested = false → fr.current.state.unlocked = 1)) ∧
       (¬ cont.IsPermit → nested = false ∧ fr.current.state.unlocked ≠ 1)
-
-theorem State.approveLP_static {st : State} {ctx : Context} {owner spender : Adr} {value : B256}
-    (static : ctx.isStatic = true) : ∃ e, st.approveLP ctx owner spender value = .error e := by
-  simp only [State.approveLP, static, ↓reduceIte]
-  exact ⟨_, rfl⟩
-
-theorem State.transferLP_static {st : State} {ctx : Context} {source recipient : Adr}
-    {value : B256} (static : ctx.isStatic = true) :
-    ∃ e, st.transferLP ctx source recipient value = .error e := by
-  simp only [State.transferLP, static, ↓reduceIte]
-  split_ifs
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-
-theorem State.transferFromLP_static {st : State} {ctx : Context} {source recipient : Adr}
-    {value : B256} (static : ctx.isStatic = true) :
-    ∃ e, st.transferFromLP ctx source recipient value = .error e := by
-  rw [State.transferFromLP]
-  split_ifs
-  · exact State.transferLP_static static
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-
-theorem Frame.finishLP_error {fr : Frame} {result : Except Failure (State × List Event)}
-    {bytes : Bytes} (h : ∃ e, result = .error e) :
-    ∃ e, fr.finishLP result bytes = .failed { fr with current := fr.checkpoint } e := by
-  obtain ⟨e, rfl⟩ := h
-  exact ⟨e, rfl⟩
-
-theorem Frame.lock_static {fr : Frame} (static : fr.context.isStatic = true) :
-    ∃ e, fr.lock = .error e := by
-  unfold Frame.lock
-  split_ifs
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-
-theorem startImmediate_static {current : Checkpoint} {ctx : Context} {entry : Entry}
-    {result : SegmentResult} (static : ctx.isStatic = true)
-    (h : startImmediate current ctx entry = some result) :
-    ∃ fr : Frame, fr.current = current ∧
-      ((∃ bytes, result = .finished fr bytes) ∨ ∃ failure, result = .failed fr failure) := by
-  unfold startImmediate at h
-  split_ifs at h
-  · cases Option.some.inj h
-    exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
-  split at h
-  · cases Option.some.inj h
-    exact ⟨_, rfl, Or.inl ⟨_, rfl⟩⟩
-  split at h
-  · cases Option.some.inj h
-    obtain ⟨e, he⟩ := Frame.finishLP_error (fr := Frame.enter current ctx _) (bytes := encodeWords [1])
-      (State.approveLP_static (st := current.state) (owner := ctx.sender) (spender := _)
-        (value := _) static)
-    exact ⟨_, rfl, Or.inr ⟨e, he⟩⟩
-  · cases Option.some.inj h
-    obtain ⟨e, he⟩ := Frame.finishLP_error (fr := Frame.enter current ctx _) (bytes := encodeWords [1])
-      (State.transferLP_static (st := current.state) (source := ctx.sender) (recipient := _)
-        (value := _) static)
-    exact ⟨_, rfl, Or.inr ⟨e, he⟩⟩
-  · cases Option.some.inj h
-    obtain ⟨e, he⟩ := Frame.finishLP_error (fr := Frame.enter current ctx _) (bytes := encodeWords [1])
-      (State.transferFromLP_static (st := current.state) (source := _) (recipient := _)
-        (value := _) static)
-    exact ⟨_, rfl, Or.inr ⟨e, he⟩⟩
-  · dsimp only at h
-    split_ifs at h
-    · cases Option.some.inj h
-      exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
-    · cases Option.some.inj h
-      exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
-  · cases h
-
-/-- A static entry is terminal and leaves the carried checkpoint unchanged. -/
-theorem startTyped_static {current : Checkpoint} {ctx : Context} {entry : Entry}
-    (static : ctx.isStatic = true) :
-    ∃ fr : Frame, fr.current = current ∧
-      ((∃ bytes, startTyped current ctx entry = .finished fr bytes) ∨
-        ∃ failure, startTyped current ctx entry = .failed fr failure) := by
-  unfold startTyped
-  cases himm : startImmediate current ctx entry with
-  | some r => exact startImmediate_static static himm
-  | none =>
-    dsimp only
-    split
-    · split_ifs
-      · exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
-      · exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
-    · obtain ⟨e, he⟩ := Frame.lock_static (fr := Frame.enter current ctx entry) static
-      rw [he]
-      exact ⟨_, rfl, Or.inr ⟨_, rfl⟩⟩
 
 theorem Frame.lock_ok {fr locked : Frame} (h : fr.lock = .ok locked) :
     fr.current.state.unlocked = 1 ∧ fr.context.isStatic = false ∧
