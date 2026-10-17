@@ -27,6 +27,10 @@ theorem w0WethStor_pair : w0WethStor.get (Weth9.balSlot pair) = 1000000 := by
 theorem w0WethStor_trader : w0WethStor.get (Weth9.balSlot trader) = 0 := by
   decide +kernel
 
+/-- `W0` is canonical: no empty account, no stored zero word. -/
+theorem w0_canonical : W0.Canonical := by
+  decide +kernel
+
 theorem w0PairStor_0 : w0PairStor.get 0 = 1000000 := by
   decide +kernel
 

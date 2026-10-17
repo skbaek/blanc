@@ -38,57 +38,64 @@ abbrev swapWorld (st : Jaune.State) : Jaune.State := tx2SettledState (tx1World s
 /-- `W0`'s Pair model state. -/
 abbrev w0PairState : UniswapV2Pair.State := UniswapV2Pair.rowsState w0Base w0PairRows
 
-/-- **C6(b), universal form.** -/
-theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonical)
-    (bound : SumNof st.bal) (ag : AgreesW0 st) :
-    ∃ bout : BlockOutput,
-      stateTransitionUsing config (checkpoint st) (swapBlock st (swapWorld st) bout) =
-        .ok (swapChain st (swapWorld st) bout) ∧
-      ∃ trace : ConfiguredHistoryTrace config (checkpoint st) (swapChain st (swapWorld st) bout),
-        -- WETH9's ledger: the trader gains `996`, the Pair loses `996`
-        ((swapWorld st).getStor weth).get (Weth9.balSlot trader) =
-            (st.getStor weth).get (Weth9.balSlot trader) + swapOut ∧
-          ((swapWorld st).getStor weth).get (Weth9.balSlot pair) =
-            (st.getStor weth).get (Weth9.balSlot pair) - swapOut ∧
-          ((swapWorld st).getStor weth).get (Weth9.balSlot trader) = 996 ∧
-          ((swapWorld st).getStor weth).get (Weth9.balSlot pair) = 999004 ∧
-        -- the reserves are the new balances
-          reserve0Read (((swapWorld st).getStor pair).get 8) =
-            ((swapWorld st).getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) ∧
-          reserve1Read (((swapWorld st).getStor pair).get 8) =
-            ((swapWorld st).getStor weth).get (Weth9.balSlot pair) ∧
-          reserve0Read (((swapWorld st).getStor pair).get 8) = 1001000 ∧
-          reserve1Read (((swapWorld st).getStor pair).get 8) = 999004 ∧
-        -- C3 over the history, every hypothesis discharged
-          ((∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
-            trace.settledFrames = before ++ f :: after →
-            (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
-            ∃ (s : UniswapV2Pair.State) (K : WriterKey → Prop),
-              WriterRep K (f.pre.state.getStor pair) s ∧ s.unlocked = 1 ∧ s.tokenOn .one = weth ∧
-                s.reserveOn .one ≤ ((Weth9.ledger (Weth9.historyKeyUniverse weth trace
-                  (FiniteCheckpoint.rowKeys w0WethRows)) (f.pre.state.getStor weth)).bal pair).toNat ∧
-                ∀ g, (Weth9.ledger (Weth9.historyKeyUniverse weth trace
-                  (FiniteCheckpoint.rowKeys w0WethRows)) (f.pre.state.getStor weth)).allow pair g = 0) ∧
+/-- **What the closed block does on `st`**: it is a valid configured state transition from the
+checkpoint at `st`, and on a configured history of it WETH9's ledger moved `996` from the Pair to
+the trader, the Pair's reserves are its new balances, C3 holds, and C4(a) holds with its `X`-side
+antecedent discharged, share value rising strictly from `W0`'s Pair state at equal supply. -/
+def ClosedSwapOutcome (st : Jaune.State) : Prop :=
+  ∃ bout : BlockOutput,
+    stateTransitionUsing config (checkpoint st) (swapBlock st (swapWorld st) bout) =
+      .ok (swapChain st (swapWorld st) bout) ∧
+    ∃ trace : ConfiguredHistoryTrace config (checkpoint st) (swapChain st (swapWorld st) bout),
+      -- WETH9's ledger: the trader gains `996`, the Pair loses `996`
+      ((swapWorld st).getStor weth).get (Weth9.balSlot trader) =
+          (st.getStor weth).get (Weth9.balSlot trader) + swapOut ∧
+        ((swapWorld st).getStor weth).get (Weth9.balSlot pair) =
+          (st.getStor weth).get (Weth9.balSlot pair) - swapOut ∧
+        ((swapWorld st).getStor weth).get (Weth9.balSlot trader) = 996 ∧
+        ((swapWorld st).getStor weth).get (Weth9.balSlot pair) = 999004 ∧
+      -- the reserves are the new balances
+        reserve0Read (((swapWorld st).getStor pair).get 8) =
+          ((swapWorld st).getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) ∧
+        reserve1Read (((swapWorld st).getStor pair).get 8) =
+          ((swapWorld st).getStor weth).get (Weth9.balSlot pair) ∧
+        reserve0Read (((swapWorld st).getStor pair).get 8) = 1001000 ∧
+        reserve1Read (((swapWorld st).getStor pair).get 8) = 999004 ∧
+      -- C3 over the history, every hypothesis discharged
+        ((∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+          trace.settledFrames = before ++ f :: after →
+          (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
+          ∃ (s : UniswapV2Pair.State) (K : WriterKey → Prop),
+            WriterRep K (f.pre.state.getStor pair) s ∧ s.unlocked = 1 ∧ s.tokenOn .one = weth ∧
+              s.reserveOn .one ≤ ((Weth9.ledger (Weth9.historyKeyUniverse weth trace
+                (FiniteCheckpoint.rowKeys w0WethRows)) (f.pre.state.getStor weth)).bal pair).toNat ∧
+              ∀ g, (Weth9.ledger (Weth9.historyKeyUniverse weth trace
+                (FiniteCheckpoint.rowKeys w0WethRows)) (f.pre.state.getStor weth)).allow pair g = 0) ∧
+        ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+          PairHistoryReplayed pair trace (UniswapV2Pair.pairKeys w0PairRows) w0PairState finish K' ∧
+            finish.reserveOn .one ≤ (((swapWorld st).getStor weth).get (Weth9.balSlot pair)).toNat ∧
+            ∀ g, Weth9.historyKeyUniverse weth trace (FiniteCheckpoint.rowKeys w0WethRows)
+                (.allow pair g) → ((swapWorld st).getStor weth).get (Weth9.allowSlot pair g) = 0) ∧
+      -- C4(a) over the history, its `X`-side antecedent discharged; strict increase at equal supply
+        ∃ steps : List PairStep,
+          steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
           ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
-            PairHistoryReplayed pair trace (UniswapV2Pair.pairKeys w0PairRows) w0PairState finish K' ∧
-              finish.reserveOn .one ≤ (((swapWorld st).getStor weth).get (Weth9.balSlot pair)).toNat ∧
-              ∀ g, Weth9.historyKeyUniverse weth trace (FiniteCheckpoint.rowKeys w0WethRows)
-                  (.allow pair g) → ((swapWorld st).getStor weth).get (Weth9.allowSlot pair g) = 0) ∧
-        -- C4(a) over the history, its `X`-side antecedent discharged; strict increase at equal supply
-          ∃ steps : List PairStep,
-            steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-            ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
-              runSourceInvocations w0PairState (steps.map PairStep.source) = some finish ∧
-              WriterRep K' ((swapWorld st).getStor pair) finish ∧
-              (∀ before after,
-                (before, after) ∈ sourceReplayEdges w0PairState (steps.map PairStep.source) →
-                0 < before.totalSupply.toNat →
-                before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-                  after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) ∧
-              finish.reserve0.val = 1001000 ∧ finish.reserve1.val = 999004 ∧
-              finish.totalSupply = w0PairState.totalSupply ∧
-              w0PairState.reserve0.val * w0PairState.reserve1.val * finish.totalSupply.toNat ^ 2 <
-                finish.reserve0.val * finish.reserve1.val * w0PairState.totalSupply.toNat ^ 2 := by
+            runSourceInvocations w0PairState (steps.map PairStep.source) = some finish ∧
+            WriterRep K' ((swapWorld st).getStor pair) finish ∧
+            (∀ before after,
+              (before, after) ∈ sourceReplayEdges w0PairState (steps.map PairStep.source) →
+              0 < before.totalSupply.toNat →
+              before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+                after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) ∧
+            finish.reserve0.val = 1001000 ∧ finish.reserve1.val = 999004 ∧
+            finish.totalSupply = w0PairState.totalSupply ∧
+            w0PairState.reserve0.val * w0PairState.reserve1.val * finish.totalSupply.toNat ^ 2 <
+              finish.reserve0.val * finish.reserve1.val * w0PairState.totalSupply.toNat ^ 2
+
+/-- **C6(b), universal form**: every canonical world with representable total ether agreeing with
+`W0` on the touched accounts. -/
+theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonical)
+    (bound : SumNof st.bal) (ag : AgreesW0 st) : ClosedSwapOutcome st := by
   -- the two transactions
   have ctx1 := tx1Context_of_agrees ag
   obtain ⟨bout1, run1, used1, -, keys1, receipt1, -⟩ := tx1_transaction ctx1 tx1_recoveredSender
@@ -177,6 +184,7 @@ theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonic
         W0_pair]
     rw [s1pair]
     exact w0PairStor_0
+  unfold ClosedSwapOutcome
   refine ⟨_, transition, trace, balances.1, balances.2, traderAfter, pairAfter, ?_, ?_, res0, res1,
     c3, steps, observed, finish, K', runs, rep, product answers, r0, r1, ts, ?_⟩
   · rw [res0, xAfter]
