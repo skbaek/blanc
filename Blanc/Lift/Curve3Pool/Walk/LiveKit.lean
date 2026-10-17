@@ -4,6 +4,7 @@ import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.CreationOps
 import Blanc.Lift.RunEx
+import Blanc.StorageAccessGas
 
 /-!
 # Forward walks over a memory image, with exact gas
@@ -173,6 +174,23 @@ theorem rxe_identity {Q : Outcome → Prop} {g ii is oi os : B256} {i n o z s ex
   · rw [Mem.size_write_of_le (by show _ + _ ≤ memExtsSize M.size _; rw [hsz]; omega)]
     show memExtsSize M.size _ = _
     rw [hsz]
+
+/-- `SSTORE` at whatever it charges (at most `gasColdSload + gasStorageSet`), to some outcome:
+the continuation receives the gas left. -/
+theorem rxe_sstore_le {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
+    (k : ∀ G', SFunc.RunEx fs sevm (St (afterSstore sevm b k' v) S M G') f Q) :
+    SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q := by
+  have h1 := sstoreCost_le_value sevm b k' v
+  have h2 := sstoreValueCost_le (b.getOrigStorVal sevm sevm.currentTarget k')
+    (b.getStorVal sevm.currentTarget k') v
+  have e1 : gasColdSload = 2100 := rfl
+  have e2 : gasStorageSet = 20000 := rfl
+  obtain ⟨r, hr, hq⟩ := k (G - sstoreCost sevm b k' v)
+  refine ⟨r, ?_, hq⟩
+  have e : G = (G - sstoreCost sevm b k' v) + sstoreCost sevm b k' v := by omega
+  rw [e]
+  exact rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic hr
 
 end Fwd
 
