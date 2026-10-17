@@ -4755,6 +4755,15 @@ contract-neutral.
   saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
   `memWord`/`Mem.AgreeOutside`; all in
   [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Vyper 0.2.x internal-callee walks (a callee's value contract without concrete memory
+  terms): the written-window relation `Mem.KeepsOff μ μ' P` (`.trans`, `.mono`,
+  `.agreeOutside`, `Words.keepsOff`); the tracked walk memory `MemTrack M₀ M P L` with the
+  steps `ric_mloadT`/`ric_mstoreT` (tactics `imload`/`imstore`, `wmem`, `iassert`) and the
+  node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
+  `.getStor`, `.logs`, `.output`); the checked-arithmetic guards read back as
+  `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the
+  `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; all in
+  [`Blanc/Lift/VyperCallee.lean`](../Blanc/Lift/VyperCallee.lean).
 - Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
   cut runs):
   fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,
