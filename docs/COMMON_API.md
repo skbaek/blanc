@@ -4758,7 +4758,8 @@ contract-neutral.
 - Vyper 0.2.x internal-callee walks (a callee's value contract without concrete memory
   terms): the written-window relation `Mem.KeepsOff μ μ' P` (`.trans`, `.mono`,
   `.agreeOutside`, `Words.keepsOff`); the tracked walk memory `MemTrack M₀ M P L` with the
-  steps `ric_mloadT`/`ric_mstoreT` (tactics `imload`/`imstore`, `wmem`, `iassert`) and the
+  steps `ric_mloadT`/`ric_mstoreT`/`ric_mstoreO` (overwrite, `wordsOff`)/`ric_keccakT` (tactics
+  `imload`/`imstore`/`imstoreO`/`ikeccak`, `wmem`, `iassert`) and the
   node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
   `.getStor`, `.logs`, `.output`); the checked-arithmetic guards read back as
   `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the

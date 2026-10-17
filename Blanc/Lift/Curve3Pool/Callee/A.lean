@@ -67,10 +67,6 @@ theorem aChk_eq (s : State) (t : Nat) :
 
 /-! ## Walk tactics -/
 
-theorem afterSload_getStorVal (sevm : Sevm) (b : Devm) (k : B256) (a : Adr) (x : B256) :
-    (afterSload sevm b k).getStorVal a x = b.getStorVal a x := by
-  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
-
 /-! ## The two ramp arms -/
 
 section Arms

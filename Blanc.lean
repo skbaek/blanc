@@ -850,6 +850,7 @@ import Blanc.Lift.Curve3Pool.Walk.Donate
 import Blanc.Lift.Curve3Pool.Walk.Getters
 import Blanc.Lift.Curve3Pool.KitCheck
 import Blanc.Lift.Curve3Pool.Callee.A
+import Blanc.Lift.Curve3Pool.Callee.Xp
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

@@ -145,6 +145,44 @@ theorem ric_mstoreT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
   have h := List.all_eq_true.mp hout o' (List.mem_map.mpr ⟨(o', w), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 
+/-- The carried words a store at `o` misses. -/
+def wordsOff (o : Nat) (L : List (Nat × B256)) : List (Nat × B256) :=
+  L.filter fun p => decide (p.1 + 32 ≤ o) || decide (o + 32 ≤ p.1)
+
+/-- `MSTORE` of a word into a window, inverted over a tracked memory, overwriting: the word is
+carried, and so is every carried word it misses (`wordsOff`). -/
+theorem ric_mstoreO {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
+    (run : SFunc.RunCut fs sevm C (St b (i :: v :: S) M G) (.next (.reg .mstore) f) r)
+    (hi : i.toNat = o) (hP : ∀ j, o ≤ j → j < o + 32 → P j) :
+    ∃ M' G', MemTrack M₀ M' P ((o, v) :: wordsOff o L) ∧
+      SFunc.RunCut fs sevm C (St b S M' G') f r := by
+  have hT' := hT.sub (L' := wordsOff o L) (List.filter_subset' _)
+  refine ric_mstoreT hT' run hi hP ?_
+  rw [List.all_eq_true]
+  intro p hp
+  obtain ⟨q, hq, rfl⟩ := List.mem_map.mp hp
+  exact (List.mem_filter.mp hq).2
+
+/-- `KECCAK256` of a carried word, inverted over a tracked memory: the digest of its bytes. -/
+theorem ric_keccakT {i n : B256} {o : Nat} {w : B256} (hT : MemTrack M₀ M P L)
+    (run : SFunc.RunCut fs sevm C (St b (i :: n :: S) M G) (.next (.reg .keccak256) f) r)
+    (hm : (o, w) ∈ L) (hi : i.toNat = o) (hn : n.toNat = 32) :
+    ∃ M' G', MemTrack M₀ M' P L ∧
+      SFunc.RunCut fs sevm C (St b (Bytes.keccak w.toBytes :: S) M' G') f r := by
+  obtain ⟨d1, s1, run⟩ := ric_next run
+  obtain ⟨G1, rfl⟩ := ri_keccak s1
+  rw [hi, hn] at run
+  have hk := Mem.KeepsOff.extend M o 32 P
+  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, fun h => (hT.wf h).extend _ _⟩, ?_⟩
+  · intro o' v' hm'
+    obtain ⟨hs, hv⟩ := hT.words o' v' hm'
+    exact ⟨le_trans hs hk.1, hv⟩
+  · have hv : Bytes.toB256 (M.read o 32).1 = w := hT.words.memWord hm
+    have hlen : (M.read o 32).1.length = 32 := by
+      simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range]
+    rw [← Bytes.toBytes_toB256_of_length hlen, hv] at run
+    exact run
+
 end Steps
 
 /-! ## Bases reached by storage loads only -/
@@ -153,6 +191,10 @@ end Steps
 inductive SloadsOnly (sevm : Sevm) (b : Devm) : Devm → Prop
   | refl : SloadsOnly sevm b b
   | sload {B : Devm} (h : SloadsOnly sevm b B) (k : B256) : SloadsOnly sevm b (afterSload sevm B k)
+
+theorem afterSload_getStorVal (sevm : Sevm) (b : Devm) (k : B256) (a : Adr) (x : B256) :
+    (afterSload sevm b k).getStorVal a x = b.getStorVal a x := by
+  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
 
 namespace SloadsOnly
 
@@ -301,7 +343,7 @@ no unification against a mismatched lemma is attempted. -/
 elab "istep" : tactic => do
   let run : Ident := mkIdent `run
   let s1 : Ident := mkIdent `s1
-  evalTactic (← `(tactic| obtain ⟨_, $s1, $run⟩ := ric_next $run))
+  evalTactic (← `(tactic| (have hnext := ric_next $run; clear $run; obtain ⟨_, $s1, $run⟩ := hnext)))
   withMainContext do
     let ldecl ← getLocalDeclFromUserName `s1
     let ty ← instantiateMVars ldecl.type
@@ -323,6 +365,7 @@ elab "istep" : tactic => do
           `(tactic| obtain ⟨_, rfl⟩ := $id $s1)
       else throwError "istep: unsupported node {n}"
     evalTactic tac
+    evalTactic (← `(tactic| clear $s1))
 
 /-- Membership of a carried word in a literal list. -/
 macro "wmem" : tactic =>
@@ -331,7 +374,8 @@ macro "wmem" : tactic =>
 set_option hygiene false in
 /-- `MLOAD` of the carried word at `o`, over the tracked memory `hT`. -/
 macro "imload' " o:term : tactic => `(tactic|
-  obtain ⟨_, _, hT, run⟩ := ric_mloadT (o := $o) hT run (by wmem) (by decide))
+  (have hstep := ric_mloadT (o := $o) hT run (by wmem) (by decide)
+   clear hT run; obtain ⟨_, _, hT, run⟩ := hstep))
 
 set_option hygiene false in
 /-- `PUSH o; MLOAD` of the carried word at `o`. -/
@@ -340,18 +384,40 @@ macro "imload " o:term : tactic => `(tactic| (istep; imload' $o))
 set_option hygiene false in
 /-- `MSTORE` into the tracked window (a literal predicate) at `o`, over the tracked memory `hT`. -/
 macro "imstore' " o:term : tactic => `(tactic|
-  obtain ⟨_, _, hT, run⟩ := ric_mstoreT (o := $o) hT run (by decide)
-    (fun j h1 h2 => by beta_reduce; omega) rfl)
+  (have hstep := ric_mstoreT (o := $o) hT run (by decide)
+     (fun j h1 h2 => by beta_reduce; omega) rfl
+   clear hT run; obtain ⟨_, _, hT, run⟩ := hstep))
 
 set_option hygiene false in
 /-- `PUSH o; MSTORE` into the callee window at `o`. -/
 macro "imstore " o:term : tactic => `(tactic| (istep; imstore' $o))
 
 set_option hygiene false in
+/-- `MSTORE` overwriting at `o` (carried words it hits are dropped; the list is normalized). -/
+macro "imstoreO' " o:term : tactic => `(tactic|
+  (have hstep := ric_mstoreO (o := $o) hT run (by decide)
+     (fun j h1 h2 => by beta_reduce; omega)
+   clear hT run; obtain ⟨_, _, hT, run⟩ := hstep
+   simp only [wordsOff, List.filter_cons, List.filter_nil, Nat.reduceAdd, Nat.reduceLeDiff,
+     decide_true, decide_false, Bool.true_or, Bool.or_true, Bool.false_or, Bool.or_false,
+     ite_true, ite_false, Bool.false_eq_true, ↓reduceIte] at hT))
+
+set_option hygiene false in
+/-- `PUSH o; MSTORE` overwriting at `o`. -/
+macro "imstoreO " o:term : tactic => `(tactic| (istep; imstoreO' $o))
+
+set_option hygiene false in
+/-- `KECCAK256` of the carried word at `o`. -/
+macro "ikeccak " o:term : tactic => `(tactic|
+  (have hstep := ric_keccakT (o := $o) hT run (by wmem) (by decide) (by decide)
+   clear hT run; obtain ⟨_, _, hT, run⟩ := hstep))
+
+set_option hygiene false in
 /-- A `JUMPI` whose fall-through reverts: keep the taken arm and its condition. -/
 macro "iassert " h:ident : tactic => `(tactic|
-  (rcases ric_branch run with ⟨-, _, run⟩ | ⟨$h, _, run⟩
+  (have hbr := ric_branch run; clear run
+   rcases hbr with ⟨-, _, run⟩ | ⟨$h, _, run⟩
    · exact (run.false_of_noOk rfl).elim
-   obtain ⟨_, run⟩ := ric_dest run))
+   have hd := ric_dest run; clear run; obtain ⟨_, run⟩ := hd))
 
 end Blanc.Lift

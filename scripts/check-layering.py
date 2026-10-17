@@ -720,6 +720,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Cert",
                     "Lift.Curve3Pool.KitCheck",
                     "Lift.Curve3Pool.Callee.A",
+                    "Lift.Curve3Pool.Callee.Xp",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
                     "Lift.Curve3Pool.CheckPart0",
