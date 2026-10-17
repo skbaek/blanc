@@ -87,4 +87,38 @@ theorem xa_al_getDMem {sevm : Sevm} {post b : Devm} {ρ b0 b1 b2 amp : B256} {S 
     cases hd
     exact ⟨v, M', G', hv, hk, hw, hs, hx⟩
 
+/-- **`PC`**, on the actual derivation: it pushes its own offset. -/
+theorem xa_al_pc {sevm : Sevm} {post b : Devm} {S : List B256} {M : Mem} {G pc : Nat}
+    {L : List Exec.Frame} (hat : Ninst.At sevm.code pc (.reg .pc))
+    (h : XAt sevm post pc (St b S M G) L) :
+    ∃ G', XAt sevm post (pc + 1) (St b (Nat.toB256 pc :: S) M G') L := by
+  have hstep : Evm.step ⟨pc, sevm, St b S M G⟩ = Ninst.step ⟨pc, sevm, St b S M G⟩ (.reg .pc) :=
+    Evm.step_next hat
+  obtain ⟨exc, rfl, hg⟩ := h
+  cases exc with
+  | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
+  | cont h next =>
+    rename_i d'
+    have hs := hstep.symm.trans h
+    cases Ninst.step_cont_pc hs
+    have hrun : Ninst.StepRun pc sevm (St b S M G) (.reg .pc) .none (.ok d') := by
+      simp only [Ninst.StepRun, hs, Step.Run]
+      exact ⟨trivial, trivial⟩
+    have hst := pc_stepRun_stack hrun
+    simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
+    have hr := hrun.2.symm
+    simp only [Rinst.run, Rinst.runCore] at hr
+    rw [pushItem_def] at hr
+    have e := St.of_stackRel (Devm.pushBurn_of_run hr)
+    rw [hst, St.stack] at e
+    refine ⟨d'.gasLeft, ?_⟩
+    rw [← e]
+    exact ⟨next, rfl, lt_trans (gas_cont h) hg⟩
+  | doneOk h _ _ _ =>
+    obtain ⟨x, hx, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
+    cases hx
+  | runOk h _ _ _ _ =>
+    obtain ⟨x, hx, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
+    cases hx
+
 end Blanc.Lift.Curve3Pool
