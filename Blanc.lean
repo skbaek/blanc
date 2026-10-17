@@ -951,6 +951,7 @@ import Blanc.Lift.Curve3Pool.Ladder
 import Blanc.Lift.Curve3Pool.Safe
 import Blanc.Lift.Curve3Pool.History
 import Blanc.Lift.Curve3Pool.AmpHistory
+import Blanc.Lift.Curve3Pool.U3History
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityKit
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames

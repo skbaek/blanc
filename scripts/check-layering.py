@@ -865,6 +865,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Safe",
                     "Lift.Curve3Pool.History",
                     "Lift.Curve3Pool.AmpHistory",
+                    "Lift.Curve3Pool.U3History",
                     "Lift.Curve3Pool.Walk.AddLiquidityKit",
                     "Lift.Curve3Pool.Walk.AddLiquidityFrames",
                     "Lift.Curve3Pool.Walk.AddLiquidityPre",
