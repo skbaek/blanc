@@ -766,6 +766,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",
                     "Lift.Curve3Pool.Walk.RemoveImbalancePre",
                     "Lift.Curve3Pool.Walk.RemoveImbalanceFee",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceCalls",
                     "Lift.Curve3Pool.Walk.LiveKit",
                     "Lift.Curve3Pool.LivePremises",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
