@@ -137,10 +137,12 @@ a fresh entry frame of `T` decoding an affordable `transfer` runs to success at 
 world-determined cost, answering success. -/
 structure TransferLive (T : Adr) (B : Book) where
   WorldOk : State → Prop
+  FrameOk : Sevm → State → Prop
   ledgerAt : State → B.Ledger
   cost : Sevm → Devm → Nat
   live : ∀ {sevm : Sevm} {pre : Devm} {G : Nat} {dst : Adr} {v : Nat},
-    sevm.currentTarget = T → sevm.codeAddress = some T → CoveredFork sevm.benvStat.fork →
+    sevm.currentTarget = T → sevm.codeAddress = some T → sevm.code = pre.state.getCode T →
+    FrameOk sevm pre.state → CoveredFork sevm.benvStat.fork →
     sevm.value = 0 → sevm.isStatic = false → pre.output = [] →
     WorldOk pre.state → B.op sevm = .transfer dst v → v ≤ B.bal (ledgerAt pre.state) sevm.caller →
     cost sevm pre ≤ G → cost sevm pre + gCallStipend ≤ G →

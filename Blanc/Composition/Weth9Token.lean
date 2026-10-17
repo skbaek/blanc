@@ -1,5 +1,6 @@
 import Blanc.Lift.Token.Holder
 import Blanc.Lift.Weth9.CommittedHistory
+import Blanc.Lift.Weth9.LiveWriters
 import Blanc.BalanceAlgebra
 
 /-!
@@ -401,6 +402,143 @@ theorem weth9Book_laws : BookLaws weth9Book where
     · rw [weth9Book_step_some hd] at hs
       obtain rfl := Option.some.inj (hs.symm.trans (step_deposit_zero l a.caller))
       exact Nat.le_refl _
+
+
+/-! ## The transfer liveness facet -/
+
+/-- A decoded `transfer` is the `transfer` selector past the short-call test, reading its two
+argument words. -/
+theorem decodeCall_transfer_inv {e : Sevm} {w dst : Adr} {wad : B256}
+    (hd : decodeCall e = some (.transfer w dst wad)) :
+    ¬ shortCall e ∧ Sevm.selector e = 0xa9059cbb ∧ w = e.caller ∧
+      dst = (Sevm.dataWord e 4).toAdr ∧ wad = Sevm.dataWord e 36 := by
+  unfold decodeCall at hd
+  split_ifs at hd with h1 h2 h3 <;> (try cases hd)
+  exact ⟨h1, h3, rfl, rfl, rfl⟩
+
+/-- A successful run of the lifted program on a `transfer` frame leaves every balance alone. -/
+theorem transfer_run_bal {sevm : Sevm} {pre post : Devm} (hrun : SProg.RunExact prog sevm pre post)
+    (hd : decodeCall sevm =
+      some (.transfer sevm.caller (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36))) :
+    post.getBal = pre.getBal := by
+  obtain ⟨f, hf, run⟩ := hrun
+  rcases weth9_route (P := Ninst.Run) (fun h => h) ⟨f, hf, run.toRun⟩ with
+    ⟨hmiss, -⟩ | ⟨l, hl, hshort, hsel, g, d', hg, hs, run'⟩
+  · rw [decode_miss hmiss] at hd
+    cases hd
+  · rcases decode_hit hshort hl hsel with ⟨-, hd'⟩ | ⟨-, hd'⟩ | ⟨hk, -⟩ | ⟨-, hd'⟩ | ⟨-, hd'⟩ |
+        ⟨-, hd'⟩ <;> (try (rw [hd'] at hd; cases hd))
+    rw [hk] at hg
+    have hok := Weth9.transfer_wrapper_okX hg (run'.mono (fun h => h))
+    exact hok.1.1.trans hs.bal.symm
+
+/-- The deployed bytes as a code word. -/
+theorem code_eq_of_image {c : ByteArray} (h : some c.toList = weth9Sem.image) : c = code := by
+  have h' : c.toList = code.toList := Option.some.inj h
+  cases hs : c with
+  | mk d =>
+    cases hk : code with
+    | mk d' =>
+      rw [hs, hk] at h'
+      rw [ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at h'
+      exact congrArg ByteArray.mk (Array.toList_inj.mp h')
+
+/-- The `transfer` charge does not read the machine registers. -/
+theorem transferGas_St (sevm : Sevm) (pre : Devm) (G : Nat) :
+    transferGas sevm (St pre [] Mem.empty G) = transferGas sevm pre := by
+  have hs : ∀ (b : Devm) (m : Mach) (k : B256), sloadCost sevm (b.setMach m) k = sloadCost sevm b k :=
+    fun _ _ _ => rfl
+  unfold transferGas xferGasSelf xfTailGas St tT3 tV2 tT2 tT1 tV1 pB1
+  simp only [afterSload_setMach, afterSstore_setMach, Devm.getStorVal_setMach, sstoreCost_setMach, hs]
+
+/-- WETH9's frame-level transfer liveness facet, from `weth9_transfer_runExact`. -/
+noncomputable def weth9TransferLive (ca : Adr) (U : Key → Prop) : TransferLive ca weth9Book where
+  WorldOk w := some (w.getCode ca).toList = weth9Sem.image ∧ FootInv U (w.getStor ca) (w.bal ca)
+  FrameOk sevm _ := (∀ k ∈ frameKeys sevm, U k) ∧ sevm.data.length < 2 ^ 256
+  ledgerAt w := ledger U (w.getStor ca)
+  cost sevm pre := transferGas sevm pre
+  live := by
+    intro sevm pre G dst v htarget _ hcode ⟨hkeys, hlen'⟩ hfork hvalue hstatic _ ⟨hinst, hinv⟩ hop
+      hbal hcost hmargin
+    obtain ⟨wad, hd, rfl⟩ := weth9Op_transfer hop
+    obtain ⟨hshort, hsel, -, hdst, hwad⟩ := decodeCall_transfer_inv hd
+    subst hdst hwad
+    have hlen : 4 ≤ sevm.data.length := by
+      have hn := B256.toNat_le_toNat (B256.not_lt.mp hshort)
+      rw [B256.toNat_toB256_of_lt hlen'] at hn
+      exact hn
+    have hcodeEq : sevm.code = code := hcode.trans (code_eq_of_image hinst)
+    have hcaller : U (.bal sevm.caller) := hkeys _ List.mem_cons_self
+    have hdstU : U (.bal (Sevm.dataWord sevm 4).toAdr) :=
+      hkeys _ (List.mem_cons_of_mem _ List.mem_cons_self)
+    have hle : Sevm.dataWord sevm 36 ≤
+        (St pre [] Mem.empty G).getStorVal sevm.currentTarget (balSlot sevm.caller) := by
+      change (Sevm.dataWord sevm 36).toNat ≤ (tracked U (pre.state.getStor ca) sevm.caller).toNat
+        at hbal
+      rw [tracked_self hcaller] at hbal
+      rw [htarget]
+      refine B256.not_lt.mp (fun hlt => ?_)
+      have := B256.toNat_lt_toNat hlt
+      change ((pre.state.getStor ca).get (balSlot sevm.caller)).toNat <
+        (Sevm.dataWord sevm 36).toNat at this
+      omega
+    obtain ⟨post, hrun, hg, ho⟩ := weth9_transfer_runExact hfork hstatic hvalue
+      (hsel.trans trSel_eq.symm) hlen hlen' St.stack St.memory hle
+      (G := G - transferGas sevm pre)
+      (by rw [transferGas_St, St.gasLeft]; omega)
+      (Nat.lt_add_right _ (by unfold gCallStipend at hmargin ⊢; omega))
+    have hexec := exec_of_runExact hcodeEq hfork hrun
+    have heff := writer_effect hfork hrun hd (by intro who w h; cases h)
+    have hbalEq := transfer_run_bal hrun hd
+    rw [htarget] at heff hle
+    have hcodePost : post.state.getCode ca = pre.state.getCode ca := by
+      obtain ⟨run⟩ := hexec
+      have hrel := Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+        Ninst.codePreserve_effectRec Jinst.codePreserve_effect Linst.codePreserve_effect run
+      exact hrel ca (fun hnil => weth9Sem.ne_nil hinst.symm hnil)
+    have hpostStor : post.getStor ca =
+        xferStor (pre.state.getStor ca) sevm.caller (Sevm.dataWord sevm 4).toAdr
+          (Sevm.dataWord sevm 36) := by
+      have h := heff
+      change xferStorStep (pre.state.getStor ca) sevm.caller sevm.caller
+        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36) = some (post.getStor ca) at h
+      have hleS := (xferStorStep_ok h).1
+      unfold xferStorStep at h
+      rw [ite_eq_right (B256.not_lt.mpr hleS), ite_eq_right (fun hc => hc.1 rfl)] at h
+      exact (Option.some.inj h).symm
+    have hstep := Call.stor_ledger hinv.inj (K := U)
+      (by
+        intro k hk
+        simp only [Call.keys, List.mem_cons, List.not_mem_nil, or_false] at hk
+        rcases hk with rfl | rfl
+        · exact hcaller
+        · exact hdstU) heff
+    have hmodel : (ledger U (pre.state.getStor ca)).transferFrom sevm.caller sevm.caller
+        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36) = some (ledger U (post.getStor ca)) :=
+      hstep
+    obtain ⟨hleL, (⟨hL, -⟩ | ⟨hne, -⟩)⟩ := transferFrom_cases hmodel
+    swap
+    · exact absurd rfl hne
+    refine ⟨post, hexec, by rw [hg]; omega, by rw [ho]; rfl, ⟨?_, ?_⟩, ?_⟩
+    · rw [hcodePost]
+      exact hinst
+    · refine ⟨?_, hinv.inj, hinv.apart, ?_⟩
+      · change Support U (post.getStor ca)
+        rw [hpostStor]
+        exact (hinv.support.set hcaller _).set hdstU _
+      · have htot := Ledger.sum_xfer_le (ledger U (pre.state.getStor ca)) sevm.caller
+          (Sevm.dataWord sevm 4).toAdr hleL
+        rw [← hL] at htot
+        have hb := hinv.backed
+        have hbca : post.state.bal ca = pre.state.bal ca := congrFun hbalEq ca
+        change trackedSum U (post.getStor ca) ≤ trackedSum U (pre.state.getStor ca) at htot
+        rw [hbca]
+        exact Nat.le_trans htot hb
+    · intro hne
+      change ((ledger U (post.getStor ca)).bal sevm.caller).toNat + (Sevm.dataWord sevm 36).toNat =
+        ((ledger U (pre.state.getStor ca)).bal sevm.caller).toNat
+      rw [hL]
+      exact xfer_src _ hleL hne
 
 /-- The C2 control's mutant: `transferFrom` that skips the allowance check. -/
 def mutantTransferFrom (l : Weth9.Ledger) (_who src dst : Adr) (wad : B256) : Option Weth9.Ledger :=
