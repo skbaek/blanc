@@ -27,6 +27,9 @@ theorem w0WethStor_pair : w0WethStor.get (Weth9.balSlot pair) = 1000000 := by
 theorem w0WethStor_trader : w0WethStor.get (Weth9.balSlot trader) = 0 := by
   decide +kernel
 
+theorem w0PairStor_0 : w0PairStor.get 0 = 1000000 := by
+  decide +kernel
+
 theorem systemWorld_code (a : Adr) (ha : a ∈ Weth9.ClosedInstance.systemAddresses) :
     (Weth9.ClosedInstance.systemWorld.get a).code = Weth9.ClosedInstance.systemCode := by
   revert a
