@@ -105,6 +105,18 @@ theorem occChild_of_spawn {root : Exec.Deriv} {x : Xinst} {step : CallOccurrence
   obtain ⟨benv, after, rfl⟩ := Jaune.Frame.enter_run_inv enter
   exact ⟨benv, after, child, mem⟩
 
+/-- What an entered call child is: a successful run of a message whose header the parent staged. -/
+def CallChild (node : Exec.Deriv) (target : Adr) (data : Bytes) (value : B256)
+    (returnData : Bytes) (d : Exec.Deriv) : Prop :=
+  ∃ (m : Msg) (cd : Devm) (benv : Benv),
+    m.currentTarget = target ∧ m.caller = node.sevm.currentTarget ∧ m.data = data ∧
+    m.value = value ∧ m.benv.stat = node.sevm.benvStat ∧
+    (getDelegatedCodeAddress (node.devm.getCode target) = none →
+      m.code = node.devm.getCode target) ∧
+    cd.output = returnData ∧ m.benvAfterTransfer = .ok benv ∧
+    ∃ child : Exec 0 (initSevm (m.withBenv benv)) (initDevm (m.withBenv benv)) (.ok cd),
+      d ∈ Exec.rawFrameRoots child
+
 /-- **The child of an actual successful `STATICCALL` occurrence.** -/
 theorem staticcall_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root .staticcall)
     {g t ii is oi os : B256} {xs rest : List B256}
@@ -112,25 +124,9 @@ theorem staticcall_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root 
     (flag : step.returned.devm.stack = 1 :: rest)
     (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork) {d : Exec.Deriv}
     (occ : OccChild step d) :
-    ∃ (parent cd : Devm) (dp : Bool) (na : Adr) (code : ByteArray) (avail : Nat) (benv : Benv),
-      ((getDelegatedCodeAddress (step.occurrence.node.devm.getCode t.toAdr) = none ∧
-          na = t.toAdr ∧ code = step.occurrence.node.devm.getCode t.toAdr ∧ dp = false) ∨
-        (∃ e, getDelegatedCodeAddress (step.occurrence.node.devm.getCode t.toAdr) = some e ∧
-          na = e ∧ code = step.occurrence.node.devm.getCode e ∧ dp = true)) ∧
-      cd.output = step.returned.devm.returnData ∧
-      (callMsg step.occurrence.node.sevm parent (min g.toNat (except64th avail)) 0
-          step.occurrence.node.sevm.currentTarget t.toAdr na true true
-          ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).benvAfterTransfer =
-        .ok benv ∧
-      ∃ child : Exec 0
-          (initSevm ((callMsg step.occurrence.node.sevm parent (min g.toNat (except64th avail)) 0
-            step.occurrence.node.sevm.currentTarget t.toAdr na true true
-            ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).withBenv benv))
-          (initDevm ((callMsg step.occurrence.node.sevm parent (min g.toNat (except64th avail)) 0
-            step.occurrence.node.sevm.currentTarget t.toAdr na true true
-            ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).withBenv benv))
-          (.ok cd),
-        d ∈ Exec.rawFrameRoots child := by
+    CallChild step.occurrence.node t.toAdr
+      ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) 0
+      step.returned.devm.returnData d := by
   have stepRun := step.occurrence.stepRun
   rw [step.instruction, step.result] at stepRun
   rcases of_step_staticcall_val_with_depth_frame_cause hp step.occurrence.filled stepRun fork with
@@ -143,7 +139,11 @@ theorem staticcall_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root 
     have spawn' := (Evm.step_next decoded).trans spawn
     obtain ⟨benv, after, child, mem⟩ :=
       occChild_of_spawn spawn' step.occurrence.filled process clean occ
-    exact ⟨parent, cd, dp, na, code, avail, benv, resolved, returnData.symm, after, child, mem⟩
+    refine ⟨_, cd, benv, rfl, rfl, rfl, rfl, rfl, fun undelegated => ?_, returnData.symm,
+      after, child, mem⟩
+    rcases resolved with ⟨-, -, hc, -⟩ | ⟨e, hd, -⟩
+    · exact hc
+    · rw [undelegated] at hd; cases hd
 
 /-- **The child of an actual successful `CALL` occurrence.** -/
 theorem call_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root .call)
@@ -152,28 +152,9 @@ theorem call_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root .call)
     (flag : step.returned.devm.stack = 1 :: rest)
     (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork) {d : Exec.Deriv}
     (occ : OccChild step d) :
-    ∃ (parent cd : Devm) (dp : Bool) (na : Adr) (code : ByteArray) (avail : Nat) (benv : Benv),
-      ((getDelegatedCodeAddress (step.occurrence.node.devm.getCode c.toAdr) = none ∧
-          na = c.toAdr ∧ code = step.occurrence.node.devm.getCode c.toAdr ∧ dp = false) ∨
-        (∃ e, getDelegatedCodeAddress (step.occurrence.node.devm.getCode c.toAdr) = some e ∧
-          na = e ∧ code = step.occurrence.node.devm.getCode e ∧ dp = true)) ∧
-      cd.output = step.returned.devm.returnData ∧
-      (callMsg step.occurrence.node.sevm parent
-          (min g.toNat (except64th avail) + (if v.toNat = 0 then 0 else gCallStipend)) v
-          step.occurrence.node.sevm.currentTarget c.toAdr na true false
-          ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).benvAfterTransfer =
-        .ok benv ∧
-      ∃ child : Exec 0
-          (initSevm ((callMsg step.occurrence.node.sevm parent
-            (min g.toNat (except64th avail) + (if v.toNat = 0 then 0 else gCallStipend)) v
-            step.occurrence.node.sevm.currentTarget c.toAdr na true false
-            ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).withBenv benv))
-          (initDevm ((callMsg step.occurrence.node.sevm parent
-            (min g.toNat (except64th avail) + (if v.toNat = 0 then 0 else gCallStipend)) v
-            step.occurrence.node.sevm.currentTarget c.toAdr na true false
-            ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) code dp).withBenv benv))
-          (.ok cd),
-        d ∈ Exec.rawFrameRoots child := by
+    CallChild step.occurrence.node c.toAdr
+      ((step.occurrence.node.devm.memory.read ii.toNat is.toNat).1) v
+      step.returned.devm.returnData d := by
   have stepRun := step.occurrence.stepRun
   rw [step.instruction, step.result] at stepRun
   rcases of_step_call_val_with_depth_frame hp step.occurrence.filled stepRun fork with
@@ -186,6 +167,10 @@ theorem call_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root .call)
     have spawn' := (Evm.step_next decoded).trans spawn
     obtain ⟨benv, after, child, mem⟩ :=
       occChild_of_spawn spawn' step.occurrence.filled process clean occ
-    exact ⟨parent, cd, dp, na, code, avail, benv, resolved, returnData.symm, after, child, mem⟩
+    refine ⟨_, cd, benv, rfl, rfl, rfl, rfl, rfl, fun undelegated => ?_, returnData.symm,
+      after, child, mem⟩
+    rcases resolved with ⟨-, -, hc, -⟩ | ⟨e, hd, -⟩
+    · exact hc
+    · rw [undelegated] at hd; cases hd
 
 end Blanc.Composition.UniswapV2PairWeth9Capstone
