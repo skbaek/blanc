@@ -8,25 +8,25 @@ namespace Blanc.Lift.Curve3Pool.Creation
 open Jaune
 
 theorem jumps_0 :
-    jumpsOkNode code (Cert.entries cert) t_0000_c0 [] = true := by
-  rw [← jumpsOkNodeT_eq codeTries]
+    jumpsOkNode Blanc.Lift.Curve3Pool.Creation.code (Cert.entries Blanc.Lift.Curve3Pool.Creation.cert) t_0000_c0 [] = true := by
+  rw [← jumpsOkNodeT_eq Blanc.Lift.Curve3Pool.Creation.codeTries]
   decide +kernel
 
 theorem jumps_1 :
-    jumpsOkNode code (Cert.entries cert) t_013c_c1 [.unk, .unk] = true := by
-  rw [← jumpsOkNodeT_eq codeTries]
+    jumpsOkNode Blanc.Lift.Curve3Pool.Creation.code (Cert.entries Blanc.Lift.Curve3Pool.Creation.cert) t_013c_c1 [.unk, .unk] = true := by
+  rw [← jumpsOkNodeT_eq Blanc.Lift.Curve3Pool.Creation.codeTries]
   decide +kernel
 
 theorem jumps_2 :
-    jumpsOkNode code (Cert.entries cert) t_54b7_c2 [] = true := by
-  rw [← jumpsOkNodeT_eq codeTries]
+    jumpsOkNode Blanc.Lift.Curve3Pool.Creation.code (Cert.entries Blanc.Lift.Curve3Pool.Creation.cert) t_54b7_c2 [] = true := by
+  rw [← jumpsOkNodeT_eq Blanc.Lift.Curve3Pool.Creation.codeTries]
   decide +kernel
 
-theorem jumps_ok : Cert.jumpsOk code cert = true := by
+theorem jumps_ok : Cert.jumpsOk Blanc.Lift.Curve3Pool.Creation.code Blanc.Lift.Curve3Pool.Creation.cert = true := by
   unfold Cert.jumpsOk
   rw [List.all_eq_true]
   intro p hp
-  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp
+  simp only [Blanc.Lift.Curve3Pool.Creation.cert, List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl
   · exact jumps_0
   · exact jumps_1
