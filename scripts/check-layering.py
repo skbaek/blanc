@@ -246,6 +246,16 @@ SHARED += [
     "CodeDelegation",
 ]
 
+# The settled-forest positional facts, own-code persistence at settled frames, certificate windows
+# and the exact-word prefix stack transfer (uniswap-weth9-composition-v1, final integration):
+# contract-neutral.
+SHARED += [
+    "ExecutionSettledOwnCode",
+    "ExecutionTraceSettledForest",
+    "Lift.CursorWindow",
+    "Lift.PrefixTransfer",
+]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
@@ -965,6 +975,12 @@ CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Factory.Jumps",
 ])
 
+# The factory's call shape (what its runtime spawns) and its CREATE2 -> CALL window: Uniswap V2 family.
+CONTRACTS["uniswap-v2-pair"].extend([
+    "Lift.UniswapV2Factory.CallShape",
+    "Lift.UniswapV2Factory.Window",
+])
+
 # The WETH9 finite footprint and the Token20 run splits stay within their contract families.
 CONTRACTS["weth9"].extend([
     "Lift.Weth9.FiniteFootprint",
@@ -1054,6 +1070,77 @@ COMPOSITION = [
     "Composition.Weth9TokenFramesNode",
     "Composition.Weth9TokenOutputsTransfer",
     "Composition.Weth9TokenOutputsWalk",
+    # uniswap-weth9-composition-v1, final integration: C3 joint, C4 share-value and liveness rows,
+    # the factory-quiet bridge, the closed block's transactions and the C6 capstone.
+    "Composition.PairTokenJoint",
+    "Composition.PairTokenJointControl",
+    "Composition.PairTokenJointWalk",
+    "Composition.PairTokenShareValue",
+    "Composition.PairTokenStepGhost",
+    "Composition.PairTokenStepGhostStart",
+    "Composition.PairTokenStepModel",
+    "Composition.UniswapV2FactoryQuiet",
+    "Composition.UniswapV2PairWeth9BurnEnv",
+    "Composition.UniswapV2PairWeth9BurnEnvOne",
+    "Composition.UniswapV2PairWeth9BurnLive",
+    "Composition.UniswapV2PairWeth9BurnLiveOne",
+    "Composition.UniswapV2PairWeth9BurnWorld",
+    "Composition.UniswapV2PairWeth9BurnWorldOne",
+    "Composition.UniswapV2PairWeth9Capstone",
+    "Composition.UniswapV2PairWeth9CapstoneFeeTo",
+    "Composition.UniswapV2PairWeth9CapstoneFeeToHash",
+    "Composition.UniswapV2PairWeth9CapstoneKeySlots",
+    "Composition.UniswapV2PairWeth9CapstoneKeys",
+    "Composition.UniswapV2PairWeth9CapstoneRaw",
+    "Composition.UniswapV2PairWeth9CapstoneShare",
+    "Composition.UniswapV2PairWeth9CapstoneSwapRaw",
+    "Composition.UniswapV2PairWeth9CapstoneTrace",
+    "Composition.UniswapV2PairWeth9CapstoneTx2Raw",
+    "Composition.UniswapV2PairWeth9CapstoneUniversal",
+    "Composition.UniswapV2PairWeth9CapstoneW0Slots",
+    "Composition.UniswapV2PairWeth9CapstoneWorld",
+    "Composition.UniswapV2PairWeth9Joint",
+    "Composition.UniswapV2PairWeth9LegsBurn",
+    "Composition.UniswapV2PairWeth9LegsBurn1",
+    "Composition.UniswapV2PairWeth9LegsBurnFinal",
+    "Composition.UniswapV2PairWeth9LegsBurnRead",
+    "Composition.UniswapV2PairWeth9LegsMint",
+    "Composition.UniswapV2PairWeth9LegsSkim",
+    "Composition.UniswapV2PairWeth9LegsSkim1",
+    "Composition.UniswapV2PairWeth9LegsSkimRead1",
+    "Composition.UniswapV2PairWeth9LegsSwap0",
+    "Composition.UniswapV2PairWeth9LegsSwap0Read",
+    "Composition.UniswapV2PairWeth9LegsSync",
+    "Composition.UniswapV2PairWeth9LiveHistory",
+    "Composition.UniswapV2PairWeth9LiveWorld",
+    "Composition.UniswapV2PairWeth9MintLive",
+    "Composition.UniswapV2PairWeth9ShareValue",
+    "Composition.UniswapV2PairWeth9SkimEnvOne",
+    "Composition.UniswapV2PairWeth9SkimLive",
+    "Composition.UniswapV2PairWeth9SkimLiveOne",
+    "Composition.UniswapV2PairWeth9SwapLegs",
+    "Composition.UniswapV2PairWeth9SwapLegsBoth",
+    "Composition.UniswapV2PairWeth9SwapLegsCall",
+    "Composition.UniswapV2PairWeth9SwapLegsRead",
+    "Composition.UniswapV2PairWeth9SwapLegsRun",
+    "Composition.UniswapV2PairWeth9SwapLive",
+    "Composition.UniswapV2PairWeth9SwapLiveBothFacts",
+    "Composition.UniswapV2PairWeth9SwapLiveFacts",
+    "Composition.UniswapV2PairWeth9SwapLiveZero",
+    "Composition.UniswapV2PairWeth9SyncLive",
+    "Composition.UniswapV2PairWeth9Tx2",
+    "Composition.UniswapV2PairWeth9Tx2Back",
+    "Composition.UniswapV2PairWeth9Tx2Frame",
+    "Composition.UniswapV2PairWeth9Tx2Leg",
+    "Composition.UniswapV2PairWeth9Tx2Post",
+    "Composition.UniswapV2PairWeth9Tx2Run",
+    "Composition.UniswapV2PairWeth9Tx2View",
+    "Composition.UniswapV2PairWeth9Tx2XRead",
+    "Composition.UniswapV2PairWeth9XLegCall",
+    "Composition.UniswapV2PairWeth9XLegFactory",
+    "Composition.UniswapV2PairWeth9XLegLocked",
+    "Composition.UniswapV2PairWeth9XLegStatic",
+    "Composition.UniswapV2PairWeth9XLegWeth",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

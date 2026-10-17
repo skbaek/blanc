@@ -657,6 +657,21 @@ is not `systemAddress`. The per-wrapper forms (`ProcessMessageTrace`,
 `MessageCallTrace`, `SystemMessageTrace`, `RequestsTrace`, `TransactionTrace`,
 `ApplyTransactionsTrace`, `AppliedBodyTrace` `.settledRoots_caller[_ne]`) are
 the same fact at each layer.
+For an address whose checkpoint code `C` is nonempty and not an EIP-7702
+designator, with no contract invariant to carry, use
+[`Blanc/ExecutionSettledOwnCode.lean`](../Blanc/ExecutionSettledOwnCode.lean):
+`ConfiguredHistoryTrace.settled_ownCode` says every settled frame finds `C`
+installed at `ca` when it starts and every settled frame at `ca` runs `C` from
+pc `0` (`OwnCodeAt`), provided frames running `C` at `ca` spawn only by `CALL`,
+`STATICCALL` or `CREATE2` (`OwnSpawns`; for a certified runtime,
+`CursorOK.exec_spawn`); `Exec.descendantFrames_ownCode` is the per-derivation
+form and `Xinst.step_create2_spawn_unprotected` says a `CREATE2` child targets
+an address with no code. `ConfiguredHistoryTrace.settledRoots_caller_ne_of_code`
+is the root-caller fact above for such an address. A code image equal to
+`some C.toList` pins the bytes by `ExecutionTrace.bytes_eq_of_image`
+([`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean)).
+Worked uses: `Blanc/Lift/UniswapV2Factory/CallShape.lean`,
+`Blanc/Composition/UniswapV2FactoryQuiet.lean`.
 
 To show that every direct child of a certified frame comes from one of a few
 call sites, use [`Blanc/Lift/CallSiteChildren.lean`](../Blanc/Lift/CallSiteChildren.lean)
@@ -2232,6 +2247,11 @@ segment `Core.segment`; [`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Alon
 `Erc20Abi` ([`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean)) and `SelfCaller`
 ([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)). Worked instance:
 WETH9 (`Blanc/Composition/Weth9TokenCore.lean`, `weth9Core`).
+The Uniswap V2 pair's composition with any token given by such a core is generic:
+`pair_token_joint` and `pair_token_noShrinkSide` (`Blanc/Composition/PairTokenJoint.lean`) and the
+share-value rows `pair_token_feeOff_product`/`pair_token_feeOn_product`
+(`Blanc/Composition/PairTokenShareValue.lean`) take `Core T B` and `BookLaws B` as arguments;
+`Blanc/Composition/UniswapV2PairWeth9Joint.lean` instantiates them at WETH9.
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 
@@ -3467,6 +3487,16 @@ every split `before ++ f :: after` of a configured history's settled frames give
 checkpoint to `f`'s entry that observes exactly `before`. Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairPositionalState.lean`, `PairHistoryShape.lean`).
 
+For a list induction over settled positions, use
+[`Blanc/ExecutionTraceSettledForest.lean`](../Blanc/ExecutionTraceSettledForest.lean): the settled
+frames are a pre-order forest, with no uniqueness of frames assumed.
+`ConfiguredHistoryTrace.settledFrames_contig` (from `Exec.descendantFrames_contig` and
+`rootFrames_forest`) says that at every split `before ++ F :: after` the list `after` begins with
+`F`'s descendants; `ConfiguredHistoryTrace.settledFrames_parent` says a settled frame is a message
+root or an earlier frame `G` spawned it as a direct child (`Exec.SpawnedBy`) at a position inside
+`G`'s block of descendants; `Exec.Frame.committedFrames_self` places a committed frame in its own
+expansion. Worked use: `Blanc/Composition/PairTokenStepFrames.lean`.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -3533,8 +3563,9 @@ interpreter run `hexec` (a success with no frame error and a non-negative refund
 state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
 block's gas counters (`txGasUsed`); `processTransaction_call_value_of_exec_receipts` is the same
 envelope that also returns the appended receipt key and the receipt at it (`makeReceipt tx none`, the
-cumulative gas, the frame's logs), and `processTransaction_of_stages_receipts` is the stage form behind
-it. Its funds premise covers `tx.gas * maxFee + tx.value`;
+cumulative gas, the frame's logs) and that every other receipt key reads back as before (a later
+transaction of the block carries the earlier receipts), and `processTransaction_of_stages_receipts` is the
+stage form behind it. Its funds premise covers `tx.gas * maxFee + tx.value`;
 it derives affordability after the gas debit and splits zero from nonzero value.
 `Msg.benvAfterTransfer_of_value_zero` supplies the zero-value entry;
 `Msg.benvAfterTransfer_of_affordable` constructs the nonzero transfer.
@@ -4269,6 +4300,20 @@ contract-neutral.
   `Cert.noCreate2`, `Cursor.noCreate2_of_reach` and
   `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+- To carry an exact fact forward from one certificate node to a later one along a frame's chain
+  (for example, that a `CALL`'s target operand is the result of an earlier `CREATE2`), use a
+  *window* in [`Blanc/Lift/CursorWindow.lean`](../Blanc/Lift/CursorWindow.lean): a finite list of
+  trees, each with its one predecessor and an index (`WindowEntry`); `Cert.windowOk E sites` checks
+  over the whole certificate that a window tree occurs only as a child of its predecessor and that
+  every `CALL` node is one of `sites`; along a checked chain (`Cursor.Checked`, `.step`,
+  `.entrance`, `.callSite`) `window_track` carries a property `Track j` one window edge at a time,
+  with no backward walk. Decide `Cert.windowOk` in its own module. The exact stack words the window
+  edges carry come from [`Blanc/Lift/PrefixTransfer.lean`](../Blanc/Lift/PrefixTransfer.lean):
+  `prefixTransfer` runs `ninstTransfer` on a prefix pattern of the stack, keeping `PUSH` literals
+  and `AND`s of known words (`padPattern` extends a short prefix for `DUP`/`SWAP`), with
+  success-only soundness `prefixTransfer_run`; `create2_run_result` and `genericCreate_result` give
+  the word a successful `CREATE2` leaves (the new address or zero). Worked use:
+  `Blanc/Lift/UniswapV2Factory/Window.lean` and `CallShape.lean` (`factory_call_target`).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness

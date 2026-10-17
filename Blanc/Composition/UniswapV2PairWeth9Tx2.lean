@@ -1,5 +1,5 @@
 import Blanc.Composition.UniswapV2PairWeth9Tx2Run
-import Blanc.Composition.UniswapV2PairWeth9Tx2Receipts
+import Blanc.TransactionForward
 import Blanc.BlockForward
 
 /-!
@@ -211,8 +211,8 @@ theorem tx2_transaction {benv : Benv} (ctx : Tx2Context benv) {bout : BlockOutpu
   let Q : Jaune.State → Devm → Prop := fun _ post =>
     post.state = tx2FrameWrites (tx2DebitState benv.state) ∧ post.gasLeft = 172795 ∧
       post.refundCounter = 2800 ∧ (∀ a, a ∉ post.accountsToDelete) ∧ post.logs = tx2Logs
-  obtain ⟨debit, post, bout', facts, process, cumulative, gas, keys, receipt, other⟩ :=
-    processTransaction_call_value_of_exec_receipts_frame (Q := Q) (bout := bout)
+  obtain ⟨debit, post, bout', facts, process, cumulative, gas, keys, receipt⟩ :=
+    processTransaction_call_value_of_exec_receipts (Q := Q) (bout := bout)
       (tx := tx2 v r s) (E := trader) (t := pair) (chainId := 1)
       (maxPriorityFee := 1) (maxFee := 8) (intrinsicGas := 21980)
       (calldataFloorGas := 23450) (index := 1)
@@ -264,7 +264,10 @@ theorem tx2_transaction {benv : Benv} (ctx : Tx2Context benv) {bout : BlockOutpu
     exact receipt
   have other' : ∀ key : Bytes, key ≠ [0x01] → bout'.receiptsTrie[key]? = bout.receiptsTrie[key]? := by
     intro key hk
-    exact other key (by rw [receiptKey_one]; exact hk)
+    obtain ⟨r, hr⟩ := processTransaction_receiptsTrie process'
+    change bout'.receiptsTrie = _ at hr
+    rw [hr, receiptKey_one]
+    exact Std.TreeMap.getElem?_insert.trans (ite_eq_right (fun e => hk (Std.LawfulEqCmp.eq_of_compare e).symm))
   refine ⟨bout', process', gas', cumulative', keys', receipt', other', ?_, by rw [gas']; decide⟩
   apply BlockForward.parseDepositRequests_of_no_deposit_logs
   intro key member

@@ -28,12 +28,6 @@ namespace Blanc.Composition.UniswapV2FactoryQuiet
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift
 
-private theorem bytes_eq_of_image {actual code : ByteArray}
-    (image : some actual.toList = some code.toList) : actual = code := by
-  apply ByteArray.ext
-  apply Array.toList_inj.mp
-  simpa only [ByteArray.toList_eq_toList_data] using Option.some.inj image
-
 private theorem own_spawns {ca : Adr} {code : ByteArray} {c : Cert} (checked : Cert.check code c = true) :
     OwnSpawns ca code := fun hpc hcode _ fork chain hat =>
   let ⟨_, _, ok⟩ := cursor_of_parentPrefix checked hpc hcode fork chain
