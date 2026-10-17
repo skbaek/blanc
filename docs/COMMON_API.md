@@ -2008,7 +2008,12 @@ bridges `get_y` / `get_y_D` (`getYChk_some`, `getYDChk_some`) and proves the
 tolerance-1 `y` loop returns exactly `rootQ` (`loopY_eq_rootQ`,
 `loopY_eq_rootQ_of_le` with its `k + 1`-body bound, `loopY_eq_rootQ_of_lt` for a
 start below the root, `getY_eq_rootQ`, `getYD_eq_rootQ`) under the
-non-degeneracy `rootGap`. All are unbounded `Nat` facts.
+non-degeneracy `rootGap`. Without it the loop returns `rootOrSucc`: the floor
+root, or one above it only when `rootGap` fails (`loopY_rootOrSucc_of_le`,
+`loopY_rootOrSucc_of_lt`, `loopY_rootOrSucc`). For every non-reverting checked
+call, with no start premise, use `getYChk_rootOrSucc` and
+`getYDChk_rootOrSucc`; `getY_start_below_root` and `getYD_start_below_root`
+show reachable calls start below the root.
 
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
