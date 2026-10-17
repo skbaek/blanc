@@ -30,16 +30,27 @@ operands does not matter. Revert data (an `assert … , "reason"`) is not modell
   check together accept exactly the words `0, 1, 2` (`idx`). A `uint256` index (`coins`,
   `balances`, `admin_balances`) is bound-checked to `< 3` the same way.
 * **Coin and 3Crv answers are inputs** (`Env`), one per frame and per coin (`CoinObs`):
-  - `balPre`: the answer to the frame's first `ERC20(coin).balanceOf(self)` (lines 295, 443,
-    805, 814, 834); `none` means the call reverted or returned too little, so the frame reverts;
-  - `balPost`: the second one, for the fee-on-transfer index `FEE_INDEX = 2` only (312, 460);
+  - `balPre`: the first word of the answer to the frame's first `ERC20(coin).balanceOf(self)`
+    (lines 295, 443, 805, 814, 834); the runtime requires the `STATICCALL` to succeed and
+    `RETURNDATASIZE > 31`, so `none` means the call failed or returned fewer than 32 bytes, and the
+    frame reverts;
+  - `balPost`: the second one, for the fee-on-transfer index `FEE_INDEX = 2` only (312, 460),
+    under the same conditions;
   - `pullOk`: the `raw_call` to `transferFrom(msg.sender, self, amount)` (298–309, 446–457)
-    succeeded and, if it returned data, the data converted to `True`;
+    succeeded (nonzero `CALL` flag) and its returned data `rd` passes Vyper 0.2.4's
+    `convert(_response, bool)` test, `RawCallOk rd`: `rd` is empty, or its first
+    `min(len rd, 32)` bytes read as a nonzero number. Any nonzero value passes (not only `1`), and
+    data longer than 32 bytes is accepted (only its first 32 bytes are copied and tested);
   - `pushOk`: the same for `transfer(msg.sender, amount)` (481–491 and the withdrawals).
   Each coin is called at most once by `transferFrom`, once by `transfer` and twice by
   `balanceOf` in one frame, so one record per coin covers every frame.
-  `supply` is 3Crv's `totalSupply()` answer (237, 259, 278, 499, 532, 637), each frame reads it
-  at most once; `mintOk`/`burnOk` are the `mint`/`burnFrom` calls (349, 522, 562, 682).
+  `supply` is the first word of 3Crv's `totalSupply()` answer (237, 259, 278, 499, 532, 637),
+  under the same success and `RETURNDATASIZE > 31` conditions as `balanceOf`; each frame reads it
+  at most once. `mintOk`/`burnOk` are the `mint`/`burnFrom` calls (349, 522, 562, 682): the
+  `CALL` succeeded and returned at least 32 bytes (`RETURNDATASIZE > 31` is asserted); the
+  returned `bool` itself is discarded by the runtime (it is never tested), so a token that
+  returns `False` with a successful call is accepted.
+  `Observe.lean`'s `EnvOf` ties each answer to the frame's committed child calls.
 * The emitted external calls (`ExtCall`) are an output so that later layers (the 3Crv
   composition, the honest-coin world below) can apply them.
 
@@ -52,8 +63,11 @@ to 1 on entry and back to 0 before `STOP`, and a revert rolls it back. A coin th
 a guarded function during one of the guarded frames' `raw_call`s therefore reverts; a callback into
 an unguarded function (every view, `withdraw_admin_fees`, `donate_admin_fees`, the admin
 functions) sees the pool's intermediate storage. The model abstracts every coin's behaviour,
-including any such callback, by the frame's answers in `Env`; the refinement owns the premise that
-the coins make no state-changing callback into the pool.
+including any such callback, by the frame's answers in `Env`; the refinement carries the
+per-frame environmental premise `PoolCallsKeep` (`Observe.lean`): each direct child call of the
+frame leaves the pool's storage, slot by slot, as it found it. It is stated per child so that the
+3Crv children can be discharged from 3Crv's own theorems. Exact replay is stated over outermost
+committed pool frames; a nested pool frame is part of its parent's child calls.
 
 ## Correspondence table
 
