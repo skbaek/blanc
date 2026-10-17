@@ -867,6 +867,8 @@ import Blanc.Lift.Curve3Pool.Walk.Donate
 import Blanc.Lift.Curve3Pool.Walk.Getters
 import Blanc.Lift.Curve3Pool.KitCheck
 import Blanc.Composition.Curve3Pool3CrvCheckpoint
+import Blanc.Composition.Curve3CrvTokenCore
+import Blanc.Composition.Curve3CrvPositional
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
@@ -1263,6 +1265,7 @@ import Blanc.Lift.Token.Along
 import Blanc.Lift.Token.Core
 import Blanc.Lift.Token.Holder
 import Blanc.Lift.Token.SelfCaller
+import Blanc.Lift.Token.Supply
 import Blanc.Lift.UniswapV2Factory.Cert
 import Blanc.Lift.UniswapV2Factory.Check
 import Blanc.Lift.UniswapV2Factory.Code

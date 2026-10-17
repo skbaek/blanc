@@ -2305,6 +2305,12 @@ segment `Core.segment`; [`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Alon
 `Erc20Abi` ([`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean)) and `SelfCaller`
 ([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)). Worked instance:
 WETH9 (`Blanc/Composition/Weth9TokenCore.lean`, `weth9Core`).
+For a token with a privileged minter, the minter/supply facet `SupplyFacet B`
+([`Blanc/Lift/Token/Supply.lean`](../Blanc/Lift/Token/Supply.lean)) reads a book's supply and minter
+and classifies mint and burn messages (zero amounts included); `SupplyFacet.run_supply` says that
+along an accepted run whose minter-sent messages keep the minter (`KeepsMinter`), the minter persists
+and the final supply plus `burned` equals the initial supply plus `minted`. Worked instance: 3Crv
+(`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`).
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 

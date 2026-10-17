@@ -271,6 +271,8 @@ SHARED += [
     "Lift.Token.SelfCaller",
     "CodeDelegation",
 ]
+# The minter/supply facet of the token core (curve-3pool-stableswap-v1 U8a): contract-neutral.
+SHARED += ["Lift.Token.Supply"]
 
 CONTRACTS = {
     "uniswap-v2-pair": [
@@ -1221,6 +1223,8 @@ COMPOSITION = [
     "Composition.ProrataWethVaultLedgerFaithful",
     "Composition.Weth9WethGas",
     "Composition.Curve3Pool3CrvCheckpoint",
+    "Composition.Curve3CrvTokenCore",
+    "Composition.Curve3CrvPositional",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",
