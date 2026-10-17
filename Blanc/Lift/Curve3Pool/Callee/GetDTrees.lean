@@ -48,6 +48,19 @@ def gdInner (jmp : SFunc) : SFunc :=
     (.reg .eq) (.next (.reg .iszero) (.next (.push [0x05, 0xa0] (by decide))
     jmp))))))))))))))))))))))))))))))))))
 
+/-- The stopping test of a Newton pass of the `D` loop (`0x74b`…), with exit `e`, tail `t`,
+head `k`. -/
+def gdRestBr (e t k : Nat) (fall : SFunc) : SFunc :=
+  (.branch (.next (.push [0x01] (by decide)) (.next (.push [0x02, 0x80] (by decide)) (.next (.reg
+    .mload) (.next (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (vySubT 0x07 0x47
+    vyRevertT (.next (.reg .gt) (.next (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x07,
+    0x5a] (by decide)) (.branch (.next (.push [0x07, 0x9b] (by decide)) (.jump e)) (.dest (.next
+    (.push [0x07, 0x8a] (by decide)) (.jump t)))))))))))))) (.dest (.next (.push [0x01] (by
+    decide)) (.next (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (.next (.push [0x02,
+    0x80] (by decide)) (.next (.reg .mload) (vySubT 0x07 0x76 vyRevertT (.next (.reg .gt) (.next
+    (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x07, 0x89] (by decide)) (.branch (.next
+    (.push [0x07, 0x9b] (by decide)) (.jump e)) (.dest (gdTail k fall)))))))))))))))
+
 /-- The rest of a Newton pass after the inner loop (`0x5bb`…): the body of line 210, the stopping
 test, exit `e`, tail `t`, head `k`. -/
 def gdRest (e t k : Nat) (fall : SFunc) : SFunc :=
@@ -64,16 +77,7 @@ def gdRest (e t k : Nat) (fall : SFunc) : SFunc :=
     vyRevertT (vyDivT 0x07 0x18 vyRevertT (.next (.push [0x02, 0x80] (by decide)) (.next (.reg
     .mstore) (.next (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (.next (.push [0x02,
     0x80] (by decide)) (.next (.reg .mload) (.next (.reg .gt) (.next (.reg .iszero) (.next (.push
-    [0x07, 0x5f] (by decide)) (.branch (.next (.push [0x01] (by decide)) (.next (.push [0x02,
-    0x80] (by decide)) (.next (.reg .mload) (.next (.push [0x02, 0x60] (by decide)) (.next (.reg
-    .mload) (vySubT 0x07 0x47 vyRevertT (.next (.reg .gt) (.next (.reg .iszero) (.next (.reg
-    .iszero) (.next (.push [0x07, 0x5a] (by decide)) (.branch (.next (.push [0x07, 0x9b] (by
-    decide)) (.jump e)) (.dest (.next (.push [0x07, 0x8a] (by decide)) (.jump t))))))))))))))
-    (.dest (.next (.push [0x01] (by decide)) (.next (.push [0x02, 0x60] (by decide)) (.next (.reg
-    .mload) (.next (.push [0x02, 0x80] (by decide)) (.next (.reg .mload) (vySubT 0x07 0x76
-    vyRevertT (.next (.reg .gt) (.next (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x07,
-    0x89] (by decide)) (.branch (.next (.push [0x07, 0x9b] (by decide)) (.jump e)) (.dest (gdTail
-    k fall)))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+    [0x07, 0x5f] (by decide)) (gdRestBr e t k fall)))))))))))))))))))))))))))))))))))))))))))
 
 /-- The outer head at `0x58c`: `D_P = D`, the inner counter, then the first inner iteration. -/
 def gdHead (jmp : SFunc) : SFunc :=
