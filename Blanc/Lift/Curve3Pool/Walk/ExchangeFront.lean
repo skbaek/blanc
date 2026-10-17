@@ -63,12 +63,7 @@ theorem ExBase.sload {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0
     by rw [afterSload_output]; exact h.output, h.id.afterSload k⟩
 
 /-- A `balanceOf(self)` child at the coin word `C`, as `EnvOf` reads it. -/
-structure ExBalChild (sevm : Sevm) (C : B256) (c : Exec.Frame) : Prop where
-  target : c.sevm.currentTarget = C.toAdr
-  data : c.sevm.data = balanceOfData sevm.currentTarget
-  static : c.sevm.isStatic = true
-  len : 32 ≤ c.post.output.length
-  logs : c.post.logs = []
+abbrev ExBalChild := PoolBalanceChild
 
 theorem ExBal.child {sevm : Sevm} {b d : Devm} {C : B256} {c : Exec.Frame}
     (h : ExBal sevm b d C c) : ExBalChild sevm C c :=

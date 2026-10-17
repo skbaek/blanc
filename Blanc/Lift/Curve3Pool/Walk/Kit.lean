@@ -32,6 +32,14 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift Blanc.Lift.NodeWalk
 
+/-- A pool coin's static `balanceOf(self)` child, with the complete word and log contract. -/
+structure PoolBalanceChild (sevm : Sevm) (C : B256) (c : Exec.Frame) : Prop where
+  target : c.sevm.currentTarget = C.toAdr
+  data : c.sevm.data = balanceOfData sevm.currentTarget
+  static : c.sevm.isStatic = true
+  len : 32 ≤ c.post.output.length
+  logs : c.post.logs = []
+
 variable {sevm : Sevm} {pc : Nat}
 
 theorem atN {n : Ninst} (hcode : sevm.code = code)

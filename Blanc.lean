@@ -929,6 +929,9 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityIter
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD1
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFee
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFeeLoop
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD2
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityMint
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityTail
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

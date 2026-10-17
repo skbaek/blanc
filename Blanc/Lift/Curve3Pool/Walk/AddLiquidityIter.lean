@@ -25,12 +25,7 @@ theorem AlPullImg.mono {img img' : Bytes} {i : Nat} {F AF A T D0 : B256} {old nv
   n2 := P _ _ h.n2 (by decide)
 
 /-- A `balanceOf(self)` reply child of coin `C`. -/
-structure AlBal (sevm : Sevm) (C : B256) (c : Exec.Frame) : Prop where
-  target : c.sevm.currentTarget = C.toAdr
-  data : c.sevm.data = balanceOfData sevm.currentTarget
-  static : c.sevm.isStatic = true
-  len : 32 ≤ c.post.output.length
-  logs : c.post.logs = []
+abbrev AlBal := PoolBalanceChild
 
 /-- The `transferFrom` child of coin `C` for `amounts[i]`. -/
 structure AlPull (sevm : Sevm) (C : B256) (i : Nat) (c : Exec.Frame) : Prop where
