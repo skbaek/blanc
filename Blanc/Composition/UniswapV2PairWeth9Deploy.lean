@@ -57,7 +57,7 @@ zero (the trace-local condition that the new address has not acted as a WETH9 se
 `token1`, at a world that agrees with the deployment's WETH9 account, give a world satisfying the
 joint checkpoint with the initialized model state and no tracked Pair row.  Amended (A3/A10): the
 new address is neither zero nor the system address, and `initialize` names a `token0` other than
-WETH9. -/
+WETH9.  Amended (A11): WETH9's address is no precompile under any covered fork. -/
 theorem pair_weth9_create2_jointCheckpoint {weth : Adr} {K₀ : Key → Prop}
     {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {i sz salt : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -75,7 +75,8 @@ theorem pair_weth9_create2_jointCheckpoint {weth : Adr} {K₀ : Key → Prop}
     (tracked : K₀ (.bal (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)))
     (noAllowance : ∀ g, K₀ (.allow (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) →
       (b.state.getStor weth).get
-        (allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0) :
+        (allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
+    (wethNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp weth) :
     ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
         (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
       post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
@@ -152,6 +153,7 @@ theorem pair_weth9_create2_jointCheckpoint {weth : Adr} {K₀ : Key → Prop}
       apart := wethNe
       distinct := token0
       notSystem := notSystem
-      pairNonzero := pairNonzero }
+      pairNonzero := pairNonzero
+      wethNotPrecompile := wethNotPrecompile }
 
 end Blanc.Composition.UniswapV2PairWeth9Joint

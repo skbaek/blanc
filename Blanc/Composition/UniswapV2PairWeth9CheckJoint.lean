@@ -1,6 +1,7 @@
 import Blanc.Composition.UniswapV2PairWeth9Checkpoint
 import Blanc.Lift.Weth9.FiniteFootprint
 import Blanc.Lift.UniswapV2Pair.FiniteCheckpoint
+import Blanc.Lift.UniswapV2Factory.Input
 
 /-!
 # A computable checker for the joint checkpoint
@@ -12,8 +13,13 @@ the keys of `prows` (each with its slot word and value), and the Pair's model st
 (`checkPair`), the token and lock fields, WETH9's footprint invariant (`checkFoot`), the world's
 balance sum over its actual accounts (`checkSumNof`), the Pair's WETH9 balance row against the
 reserve and its allowance rows (`checkHolder`), `pair ≠ weth`, the Pair's two tokens distinct, and
-the Pair address neither the system address nor zero.  `checkJoint_sound` is the
-soundness theorem.
+the Pair address neither the system address nor zero, and WETH9's address no precompile of any
+covered fork.  `checkJoint_sound` is the soundness theorem.
+
+`checkFactory f w` is the separate check of the factory CODE premise (amendment A4): the world's
+code at `f` is the certified factory runtime `UniswapV2Factory.factoryCode`, compared byte for byte
+(one linear comparison of the 13,859 bytes; the embedded Pair creation code is read once, as bytes).
+`checkFactory_sound` is its soundness theorem.
 
 Cost: linear in the rows and storage entries of the two contracts and in the world's accounts (plus
 one storage lookup per row and one keccak per row for its slot word), and linear in the two code
@@ -38,7 +44,8 @@ def checkJoint (pair weth : Adr) (wrows : List (Key × B256)) (prows : List Pair
     decide ((w.getCode weth).data.toList = Weth9.code.data.toList) &&
     checkFoot wrows (w.getStor weth) (w.bal weth) && checkSumNof w &&
     checkHolder wrows (w.getStor weth) pair (base.reserveOn side) && decide (pair ≠ weth) &&
-    decide (base.token0 ≠ base.token1) && decide (pair ≠ systemAddress) && decide (pair ≠ 0)
+    decide (base.token0 ≠ base.token1) && decide (pair ≠ systemAddress) && decide (pair ≠ 0) &&
+    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp weth)
 
 /-- **Soundness of the joint checkpoint checker.** -/
 theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows : List PairRow}
@@ -46,8 +53,8 @@ theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows :
     (h : checkJoint pair weth wrows prows base side w = true) :
     JointCheckpoint pair weth (rowKeys wrows) (pairKeys prows) (rowsState base prows) side w := by
   simp only [checkJoint, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hpairCode, hpair⟩, htoken⟩, hunlocked⟩, hwethCode⟩, hfoot⟩, hsum⟩, hholder⟩,
-    hapart⟩, hdistinct⟩, hsystem⟩, hnonzero⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hpairCode, hpair⟩, htoken⟩, hunlocked⟩, hwethCode⟩, hfoot⟩, hsum⟩, hholder⟩,
+    hapart⟩, hdistinct⟩, hsystem⟩, hnonzero⟩, hprecomp⟩ := h
   obtain ⟨foot, sound⟩ := checkFoot_sound hfoot
   obtain ⟨tracked, reserve, noAllowance⟩ := checkHolder_sound sound hholder
   exact
@@ -64,6 +71,17 @@ theorem checkJoint_sound {pair weth : Adr} {wrows : List (Key × B256)} {prows :
       apart := hapart
       distinct := hdistinct
       notSystem := hsystem
-      pairNonzero := hnonzero }
+      pairNonzero := hnonzero
+      wethNotPrecompile := fun s hfork => hprecomp s.fork hfork }
+
+/-- **The factory CODE check** (amendment A4): the world's code at `f` is the certified
+`UniswapV2Factory` runtime, compared byte for byte. -/
+def checkFactory (f : Adr) (w : Jaune.State) : Bool :=
+  decide ((w.getCode f).data.toList = UniswapV2Factory.factoryCode.data.toList)
+
+/-- **Soundness of the factory CODE check.** -/
+theorem checkFactory_sound {f : Adr} {w : Jaune.State} (h : checkFactory f w = true) :
+    some (w.getCode f).toList = some UniswapV2Factory.factoryCode.toList :=
+  image_of_data (of_decide_eq_true h)
 
 end Blanc.Composition.UniswapV2PairWeth9Joint

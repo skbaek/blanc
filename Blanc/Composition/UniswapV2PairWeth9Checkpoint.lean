@@ -10,7 +10,8 @@ import Blanc.Lift.Weth9.Footprint
 the Pair's storage representing an unlocked model state whose `side` token is WETH9, WETH9's
 footprint invariant with the Pair's balance row tracked and its allowance rows zero, and the side's
 reserve at most WETH9's booked balance of the Pair, with distinct Pair tokens and a Pair address that
-is neither the system address nor zero.  `JointCheckpoint.allowance_control` is the C5
+is neither the system address nor zero, and WETH9's address no precompile under any covered fork.
+`JointCheckpoint.allowance_control` is the C5
 statement control.  The finite checker deciding it is `UniswapV2PairWeth9CheckJoint.lean`.
 -/
 
@@ -22,8 +23,9 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Weth9
 /-- **The joint checkpoint** (a predicate on one world state, however it was produced): both codes
 installed, the Pair's storage represents an unlocked model state whose `side` token is WETH9,
 WETH9's footprint invariant with the Pair's balance row tracked and its allowance rows zero, and the
-side's reserve at most WETH9's booked balance of the Pair; the Pair's two tokens are distinct and its
-address is neither the system address nor zero. -/
+side's reserve at most WETH9's booked balance of the Pair; the Pair's two tokens are distinct, its
+address is neither the system address nor zero, and WETH9's address is no precompile under any
+covered fork (so a call to WETH9 enters its code). -/
 structure JointCheckpoint (pair weth : Adr) (K₀ : Key → Prop) (KP : WriterKey → Prop)
     (st₀ : UniswapV2Pair.State) (side : TokenSide) (w : Jaune.State) : Prop where
   pairCode : some (w.getCode pair).toList = pairSem.image
@@ -40,6 +42,7 @@ structure JointCheckpoint (pair weth : Adr) (K₀ : Key → Prop) (KP : WriterKe
   distinct : st₀.token0 ≠ st₀.token1
   notSystem : pair ≠ systemAddress
   pairNonzero : pair ≠ 0
+  wethNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp weth
 
 /-- **C5 control.**  A world where the Pair already holds a nonzero tracked WETH9 allowance row
 fails the predicate. -/
