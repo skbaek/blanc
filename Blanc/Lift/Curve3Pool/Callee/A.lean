@@ -32,7 +32,7 @@ open Blanc.StableSwapNewton
 /-! ## The value contract -/
 
 /-- The bytes `_A` writes: the scratch word `0` and its frame `[0x140, 0x200)`. -/
-local notation "aWin" => fun i : Nat => i < 0x20 ∨ (0x140 ≤ i ∧ i < 0x200)
+abbrev aWin : List (Nat × Nat) := [(0, 0x20), (0x140, 0x200)]
 
 /-- The base `_A` leaves: `future_A_time` and `future_A` loaded, and while the ramp runs
 `initial_A` and `initial_A_time` too. -/
@@ -47,7 +47,7 @@ caller's stack, over `aBase`, with the entry memory kept off `aWin`. -/
 def ALands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ v M' G', d = St (aBase sevm b) (v :: S) M' G' ∧
     aChk s sevm.benvStat.time.toNat = some v.toNat ∧ Mem.KeepsOff M M' aWin ∧
-    (Mem.Wf M → Mem.Wf M')
+    Mem.Wf M'
 
 /-- The rising arm of `aChk` (lines 160–161). -/
 def aUp (a0 a1 t0 t1 t : Nat) : Option Nat := do
@@ -84,7 +84,7 @@ theorem a_up (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
     (run : SFunc.RunCut prog sevm [] (St B S M G) t_00e3_c27 r) :
     ∃ v M' G', r = .done (.returned (St B (v :: S) M' G')) ∧
       aUp ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v.toNat ∧
-      Mem.KeepsOff M₀ M' aWin ∧ (Mem.Wf M₀ → Mem.Wf M') := by
+      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' := by
   unfold t_00e3_c27 at run
   imload 0x1c0; imload 0x180; imload 0x1c0; istep; istep; istep; istep; istep
   iassert h1
@@ -114,7 +114,7 @@ theorem a_down (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
     (run : SFunc.RunCut prog sevm [] (St B S M G) t_018a_c27 r) :
     ∃ v M' G', r = .done (.returned (St B (v :: S) M' G')) ∧
       aDown ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v.toNat ∧
-      Mem.KeepsOff M₀ M' aWin ∧ (Mem.Wf M₀ → Mem.Wf M') := by
+      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' := by
   obtain ⟨_, run⟩ := ric_dest run
   imload 0x1c0; imload 0x1c0; imload 0x180; istep; istep; istep; istep; istep
   iassert h1
@@ -153,11 +153,11 @@ returns (it never halts the frame), and lands as `ALands`: `aChk s t` on top of 
 loads of `aBase`, the memory kept off `aWin`. -/
 theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret : B256}
     {s : State} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
-    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (run : SFunc.Run prog sevm (St b (ret :: S) M G) t_00a9_c27 o) :
     ∃ d, o = .returned d ∧ ALands sevm s b S M d := by
   have run := run.cut
-  have hT := MemTrack.init M aWin
+  have hT := MemTrack.init hwf aWin
   obtain ⟨_, run⟩ := ric_dest run
   imstore 0x140; istep; istep; imstore 0x160; istep; istep; imstore 0x180
   imload 0x160; istep; istep; istep; istep
@@ -218,9 +218,6 @@ theorem prog_27 : prog[27]? = some t_00a9_c27 := by decide +kernel
 
 /-- Entry 27 references no other entry; it is state-silent. -/
 theorem a_silentSet : SilentSet prog [27] = true := by decide +kernel
-
-/-- It makes no external call. -/
-theorem a_execFreeSet : ExecFreeSet prog [27] = true := by decide +kernel
 
 /-- It never halts the frame (for `ric_pcCall` at its call sites). -/
 theorem a_neverHalts : calleeNeverHalts prog 27 8 = true := by decide +kernel

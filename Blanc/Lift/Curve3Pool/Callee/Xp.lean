@@ -31,7 +31,7 @@ open Blanc.StableSwapNewton
 /-! ## The value contract -/
 
 /-- The bytes `_xp` writes: the hashing scratch word `0xc0` and its frame `[0x140, 0x200)`. -/
-local notation "xpWin" => fun i : Nat => (0xc0 ≤ i ∧ i < 0xe0) ∨ (0x140 ≤ i ∧ i < 0x200)
+abbrev xpWin : List (Nat × Nat) := [(0xc0, 0xe0), (0x140, 0x200)]
 
 /-- The base `_xp` leaves: the three `balances` words loaded. -/
 def xpBase (sevm : Sevm) (b : Devm) : Devm :=
@@ -43,7 +43,7 @@ stack, over `xpBase`, with the entry memory kept off `xpWin`. -/
 def XpLands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ x0 x1 x2 M' G', d = St (xpBase sevm b) (x0 :: x1 :: x2 :: S) M' G' ∧
     xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧ Mem.KeepsOff M M' xpWin ∧
-    (Mem.Wf M → Mem.Wf M')
+    Mem.Wf M'
 
 theorem xpBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (xpBase sevm b) :=
   (((SloadsOnly.refl).sload _).sload _).sload _
@@ -127,11 +127,11 @@ returns, and lands as `XpLands`: the three words of `xpChk s.balances` on top of
 loads of `xpBase`, the memory kept off `xpWin`. -/
 theorem xp_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret : B256}
     {s : State} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
-    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (run : SFunc.Run prog sevm (St b (ret :: S) M G) t_0281_c31 o) :
     ∃ d, o = .returned d ∧ XpLands sevm s b S M d := by
   have run := run.cut
-  have hT := MemTrack.init M xpWin
+  have hT := MemTrack.init hwf xpWin
   obtain ⟨_, run⟩ := ric_dest run
   imstoreO 0x140; istep; istep; istep; imstoreO' 0x160
   istep; istep; istep; istep; imstoreO' 0x180
@@ -175,14 +175,14 @@ theorem xp_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {re
 /-! ## `_xp_mem` (pc `0x3a1`, entry 34) -/
 
 /-- The bytes `_xp_mem` writes: its frame `[0x140, 0x260)`. -/
-local notation "xpMemWin" => fun i : Nat => 0x140 ≤ i ∧ i < 0x260
+abbrev xpMemWin : List (Nat × Nat) := [(0x140, 0x260)]
 
 /-- **What `_xp_mem` leaves**: the words of `xpChk ⟨a₀, a₁, a₂⟩` (coin 0 on top) over the
 caller's stack, the base untouched, the entry memory kept off `[0x140, 0x260)`. -/
 def XpMemLands (b : Devm) (a0 a1 a2 : B256) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ x0 x1 x2 M' G', d = St b (x0 :: x1 :: x2 :: S) M' G' ∧
     xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
-    Mem.KeepsOff M M' xpMemWin ∧ (Mem.Wf M → Mem.Wf M')
+    Mem.KeepsOff M M' xpMemWin ∧ Mem.Wf M'
 
 theorem prog_59 : prog[59]? = some t_03f2_c59 := by decide +kernel
 theorem prog_86 : prog[86]? = some t_03f2_c86 := by decide +kernel
@@ -225,11 +225,11 @@ macro "xpmempush " o:term:max hk:term:max : tactic => `(tactic| (
 /-- **`_xp_mem`'s contract**: every run of entry 34 from its return address over the three
 balances `a₀ a₁ a₂` returns, and lands as `XpMemLands`. -/
 theorem xpMem_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {ret a0 a1 a2 : B256} {o : Outcome}
+    {ret a0 a1 a2 : B256} {o : Outcome} (hwf : Mem.Wf M)
     (run : SFunc.Run prog sevm (St b (ret :: a0 :: a1 :: a2 :: S) M G) t_03a1_c34 o) :
     ∃ d, o = .returned d ∧ XpMemLands b a0 a1 a2 S M d := by
   have run := run.cut
-  have hT := MemTrack.init M xpMemWin
+  have hT := MemTrack.init hwf xpMemWin
   obtain ⟨_, run⟩ := ric_dest run
   imstoreO 0x1a0; imstoreO 0x140; imstoreO 0x160; imstoreO 0x180
   istep; istep; istep; imstoreO' 0x1c0

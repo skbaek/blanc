@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperFrameLoop
+import Blanc.Lift.MemGlue
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.StableSwapNewton.Defs
 import Blanc.ForwardStorageAccess
@@ -11,12 +12,11 @@ at `0` and `0xc0`), and checks its `uint256` arithmetic with fixed instruction p
 module gives a callee walk the vocabulary to state and prove its value contract without tracking
 concrete memory terms:
 
-* `Mem.KeepsOff μ μ' P`: `μ'` is at least as large as `μ` and keeps every byte below `μ`'s size
-  at which `P` fails (`P` describes the windows the callee writes).  It refines
-  `Mem.AgreeOutside` (`Mem.KeepsOff.agreeOutside`) and preserves every carried word outside the
-  windows (`Words.keepsOff`).
-* `MemTrack M₀ M P L`: the walk's memory `M` keeps `M₀` off `P` and carries the words `L`.
-  `ric_mloadT` / `ric_mstoreT` step it through `MLOAD`/`MSTORE` of carried or fresh words.
+* windows are `Mem.KeepsOff M M' W` of `Blanc/Lift/MemGlue.lean`; `Mem.KeepsOff.extend`,
+  `.write_word` (a store inside a window, `coversWord`) and `.agreeOutside` add to it;
+* `MemTrack M₀ M W L`: the walk's memory `M` is well formed, keeps `M₀` off `W` and carries the
+  words `L`.  `ric_mloadT` / `ric_mstoreT` / `ric_mstoreO` / `ric_keccakT` step it through
+  `MLOAD`, `MSTORE` (fresh or overwriting) and `KECCAK256` of carried words.
 * `SloadsOnly sevm b B`: the base `B` is `b` after selected storage loads (`afterSload`), so
   state, storage, logs and output are `b`'s (`SloadsOnly.state`, `.getStor`, `.logs`,
   `.output`).
@@ -34,83 +34,67 @@ namespace Blanc.Lift
 open Jaune
 open Blanc.StableSwapNewton
 
-/-! ## Memory windows -/
+/-! ## Memory windows
 
-/-- `μ'` is at least as large as `μ` and keeps every byte of `μ` (below its size) off `P`. -/
-def Mem.KeepsOff (μ μ' : Mem) (P : Nat → Prop) : Prop :=
-  μ.size ≤ μ'.size ∧ ∀ i, i < μ.size → ¬ P i → μ'.data.getD i 0 = μ.data.getD i 0
+`Mem.KeepsOff M M' W` (`Blanc/Lift/MemGlue.lean`): `M'` is no smaller and reads as `M` off the
+half-open windows `W`. -/
+
+/-- A window list given as a literal covers the word at `o`. -/
+def coversWord (W : List (Nat × Nat)) (o : Nat) : Bool :=
+  W.any fun w => decide (w.1 ≤ o) && decide (o + 32 ≤ w.2)
+
+theorem not_offWindows_of_covers {W : List (Nat × Nat)} {o j : Nat} (hW : coversWord W o = true)
+    (h1 : o ≤ j) (h2 : j < o + 32) : ¬ Mem.OffWindows W j := by
+  intro hoff
+  obtain ⟨w, hw, hc⟩ := List.any_eq_true.mp hW
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+  have := hoff w hw
+  omega
 
 namespace Mem.KeepsOff
 
-variable {μ μ' μ'' : Mem} {P Q : Nat → Prop}
+theorem extend (M : Mem) (i n : Nat) (W : List (Nat × Nat)) : Mem.KeepsOff M (M.extend i n) W :=
+  ⟨memExtSize_ge _ _ _, fun _ _ => rfl⟩
 
-theorem refl (μ : Mem) (P : Nat → Prop) : Mem.KeepsOff μ μ P :=
-  ⟨Nat.le_refl _, fun _ _ _ => rfl⟩
+/-- A word store inside a window, on a well-formed memory, keeps it off the windows. -/
+theorem write_word {M : Mem} (hwf : Mem.Wf M) (o : Nat) (v : B256) {W : List (Nat × Nat)}
+    (hW : coversWord W o = true) : Mem.KeepsOff M (M.write o v.toBytes) W := by
+  have hsz := (Mem.write_agree M o v.toBytes).1
+  refine ⟨hsz, fun i hi => ?_⟩
+  have hr := (Mem.reads_data M).write hwf o v.toBytes
+  rw [hr i, Bytes.getD_writeAt, ite_eq_right, ← Mem.reads_data M i]
+  rw [B256.length_toBytes]
+  exact fun h => not_offWindows_of_covers hW h.1 h.2 hi
 
-theorem trans (h1 : Mem.KeepsOff μ μ' P) (h2 : Mem.KeepsOff μ' μ'' P) : Mem.KeepsOff μ μ'' P :=
-  ⟨le_trans h1.1 h2.1, fun i hi hp => by rw [h2.2 i (lt_of_lt_of_le hi h1.1) hp, h1.2 i hi hp]⟩
-
-theorem mono (h : Mem.KeepsOff μ μ' P) (hPQ : ∀ i, P i → Q i) : Mem.KeepsOff μ μ' Q :=
-  ⟨h.1, fun i hi hq => h.2 i hi (fun hp => hq (hPQ i hp))⟩
-
-theorem of_agreeOutside {lo hi : Nat} (h : Mem.AgreeOutside μ μ' lo hi) :
-    Mem.KeepsOff μ μ' (fun i => lo ≤ i ∧ i < hi) :=
-  ⟨h.1, fun i hi' hp => h.2 i hi' (by omega)⟩
-
-/-- A window containing every written byte gives `Mem.AgreeOutside`. -/
-theorem agreeOutside {lo hi : Nat} (h : Mem.KeepsOff μ μ' P)
-    (hP : ∀ i, P i → lo ≤ i ∧ i < hi) : Mem.AgreeOutside μ μ' lo hi :=
-  ⟨h.1, fun i hi' hout => h.2 i hi' (fun hp => by have := hP i hp; omega)⟩
-
-/-- Every byte of `[lo, hi)` below `μ`'s size is kept when no byte there is written. -/
-theorem getD {lo hi : Nat} (h : Mem.KeepsOff μ μ' P) (hP : ∀ i, P i → i < lo ∨ hi ≤ i)
-    {i : Nat} (h1 : lo ≤ i) (h2 : i < hi) (hs : i < μ.size) :
-    μ'.data.getD i 0 = μ.data.getD i 0 :=
-  h.2 i hs (fun hp => by have := hP i hp; omega)
-
-theorem extend (μ : Mem) (i n : Nat) (P : Nat → Prop) : Mem.KeepsOff μ (μ.extend i n) P :=
-  ⟨memExtSize_ge _ _ _, fun _ _ _ => rfl⟩
-
-theorem write_word (μ : Mem) (o : Nat) (v : B256) {P : Nat → Prop}
-    (hP : ∀ j, o ≤ j → j < o + 32 → P j) : Mem.KeepsOff μ (μ.write o v.toBytes) P := by
-  have h := Mem.write_agree μ o v.toBytes
-  rw [B256.length_toBytes] at h
-  exact (of_agreeOutside h).mono fun i hi => hP i hi.1 hi.2
+/-- Windows inside `[lo, hi)` give `Mem.AgreeOutside`. -/
+theorem agreeOutside {M M' : Mem} {W : List (Nat × Nat)} {lo hi : Nat} (h : Mem.KeepsOff M M' W)
+    (hW : ∀ w ∈ W, lo ≤ w.1 ∧ w.2 ≤ hi) : Mem.AgreeOutside M M' lo hi :=
+  ⟨h.1, fun i _ hout => h.2 i fun w hw => by have := hW w hw; omega⟩
 
 end Mem.KeepsOff
 
-/-- Carried words outside the written windows survive. -/
-theorem Words.keepsOff {M M' : Mem} {L : List (Nat × B256)} {P : Nat → Prop} (h : Words M L)
-    (hk : Mem.KeepsOff M M' P)
-    (hout : ∀ o v, (o, v) ∈ L → ∀ j, o ≤ j → j < o + 32 → ¬ P j) : Words M' L := by
-  intro o v hm
-  obtain ⟨hs, hv⟩ := h o v hm
-  refine ⟨le_trans hs hk.1, ?_⟩
-  rw [memWord_congr (μ := M) (fun j hj => hk.2 _ (by omega) (hout o v hm _ (by omega) (by omega)))]
-  exact hv
-
-/-- **The callee walk's memory**: it keeps the entry memory `M₀` off the windows `P`, carries
-the words `L`, and is well formed when `M₀` is. -/
-structure MemTrack (M₀ M : Mem) (P : Nat → Prop) (L : List (Nat × B256)) : Prop where
-  keeps : Mem.KeepsOff M₀ M P
+/-- **The callee walk's memory**: well formed, kept off the windows `W` from the entry memory
+`M₀`, carrying the words `L`. -/
+structure MemTrack (M₀ M : Mem) (W : List (Nat × Nat)) (L : List (Nat × B256)) : Prop where
+  keeps : Mem.KeepsOff M₀ M W
   words : Words M L
-  wf : Mem.Wf M₀ → Mem.Wf M
+  wf : Mem.Wf M
 
-theorem MemTrack.init (M₀ : Mem) (P : Nat → Prop) : MemTrack M₀ M₀ P [] :=
-  ⟨Mem.KeepsOff.refl M₀ P, Words.nil M₀, id⟩
+theorem MemTrack.init {M₀ : Mem} (hwf : Mem.Wf M₀) (W : List (Nat × Nat)) : MemTrack M₀ M₀ W [] :=
+  ⟨Mem.KeepsOff.refl M₀ W, Words.nil M₀, hwf⟩
 
-theorem MemTrack.sub {M₀ M : Mem} {P : Nat → Prop} {L L' : List (Nat × B256)}
-    (h : MemTrack M₀ M P L) (hs : L' ⊆ L) : MemTrack M₀ M P L' :=
+theorem MemTrack.sub {M₀ M : Mem} {W : List (Nat × Nat)} {L L' : List (Nat × B256)}
+    (h : MemTrack M₀ M W L) (hs : L' ⊆ L) : MemTrack M₀ M W L' :=
   ⟨h.keeps, h.words.sub hs, h.wf⟩
 
-theorem MemTrack.mem_size {M₀ M : Mem} {P : Nat → Prop} {L : List (Nat × B256)}
-    (h : MemTrack M₀ M P L) {o : Nat} {v : B256} (hm : (o, v) ∈ L) : o + 32 ≤ M.size :=
+theorem MemTrack.mem_size {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)}
+    (h : MemTrack M₀ M W L) {o : Nat} {v : B256} (hm : (o, v) ∈ L) : o + 32 ≤ M.size :=
   (h.words o v hm).1
 
 section Steps
 
 variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M M₀ : Mem}
-  {G : Nat} {f : SFunc} {r : Seg} {P : Nat → Prop} {L : List (Nat × B256)}
+  {G : Nat} {f : SFunc} {r : Seg} {P : List (Nat × Nat)} {L : List (Nat × B256)}
 
 /-- `MLOAD` of a carried word, inverted over a tracked memory. -/
 theorem ric_mloadT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
@@ -121,7 +105,7 @@ theorem ric_mloadT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
   obtain ⟨G1, rfl⟩ := ri_mload s1
   rw [hi] at run
   have hk := Mem.KeepsOff.extend M o 32 P
-  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, fun h => (hT.wf h).extend _ _⟩, ?_⟩
+  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _⟩, ?_⟩
   · intro o' v' hm'
     obtain ⟨hs, hv⟩ := hT.words o' v' hm'
     exact ⟨le_trans hs hk.1, hv⟩
@@ -133,14 +117,14 @@ theorem ric_mloadT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
 so is every carried word it misses. -/
 theorem ric_mstoreT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
     (run : SFunc.RunCut fs sevm C (St b (i :: v :: S) M G) (.next (.reg .mstore) f) r)
-    (hi : i.toNat = o) (hP : ∀ j, o ≤ j → j < o + 32 → P j)
+    (hi : i.toNat = o) (hP : coversWord P o = true)
     (hout : (L.map Prod.fst).all (fun p => decide (p + 32 ≤ o) || decide (o + 32 ≤ p)) = true) :
     ∃ M' G', MemTrack M₀ M' P ((o, v) :: L) ∧ SFunc.RunCut fs sevm C (St b S M' G') f r := by
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G1, rfl⟩ := ri_mstore s1
   rw [hi] at run
-  refine ⟨_, G1, ⟨hT.keeps.trans (Mem.KeepsOff.write_word M o v hP), ?_,
-    fun h => (hT.wf h).write _ _⟩, run⟩
+  refine ⟨_, G1, ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hP), ?_,
+    hT.wf.write _ _⟩, run⟩
   refine hT.words.write fun o' w hm => ?_
   have h := List.all_eq_true.mp hout o' (List.mem_map.mpr ⟨(o', w), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
@@ -153,7 +137,7 @@ def wordsOff (o : Nat) (L : List (Nat × B256)) : List (Nat × B256) :=
 carried, and so is every carried word it misses (`wordsOff`). -/
 theorem ric_mstoreO {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
     (run : SFunc.RunCut fs sevm C (St b (i :: v :: S) M G) (.next (.reg .mstore) f) r)
-    (hi : i.toNat = o) (hP : ∀ j, o ≤ j → j < o + 32 → P j) :
+    (hi : i.toNat = o) (hP : coversWord P o = true) :
     ∃ M' G', MemTrack M₀ M' P ((o, v) :: wordsOff o L) ∧
       SFunc.RunCut fs sevm C (St b S M' G') f r := by
   have hT' := hT.sub (L' := wordsOff o L) (List.filter_subset' _)
@@ -173,7 +157,7 @@ theorem ric_keccakT {i n : B256} {o : Nat} {w : B256} (hT : MemTrack M₀ M P L)
   obtain ⟨G1, rfl⟩ := ri_keccak s1
   rw [hi, hn] at run
   have hk := Mem.KeepsOff.extend M o 32 P
-  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, fun h => (hT.wf h).extend _ _⟩, ?_⟩
+  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _⟩, ?_⟩
   · intro o' v' hm'
     obtain ⟨hs, hv⟩ := hT.words o' v' hm'
     exact ⟨le_trans hs hk.1, hv⟩
@@ -385,7 +369,7 @@ set_option hygiene false in
 /-- `MSTORE` into the tracked window (a literal predicate) at `o`, over the tracked memory `hT`. -/
 macro "imstore' " o:term : tactic => `(tactic|
   (have hstep := ric_mstoreT (o := $o) hT run (by decide)
-     (fun j h1 h2 => by beta_reduce; omega) rfl
+     rfl rfl
    clear hT run; obtain ⟨_, _, hT, run⟩ := hstep))
 
 set_option hygiene false in
@@ -396,7 +380,7 @@ set_option hygiene false in
 /-- `MSTORE` overwriting at `o` (carried words it hits are dropped; the list is normalized). -/
 macro "imstoreO' " o:term : tactic => `(tactic|
   (have hstep := ric_mstoreO (o := $o) hT run (by decide)
-     (fun j h1 h2 => by beta_reduce; omega)
+     rfl
    clear hT run; obtain ⟨_, _, hT, run⟩ := hstep
    simp only [wordsOff, List.filter_cons, List.filter_nil, Nat.reduceAdd, Nat.reduceLeDiff,
      decide_true, decide_false, Bool.true_or, Bool.or_true, Bool.false_or, Bool.or_false,

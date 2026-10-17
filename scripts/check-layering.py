@@ -204,6 +204,10 @@ SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 SHARED += ["Lift.VyperCallee"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
+# Walking a successful frame's own derivation with its direct children: contract-neutral.
+SHARED += ["Lift.FrameWalk"]
+# Crossing certified exec-free callees from walked states, and memory glue: contract-neutral.
+SHARED += ["Lift.SoundSpan", "Lift.FrameWalkNode", "Lift.MemGlue"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -701,6 +705,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Creation.Jumps",
                     "Lift.Curve3Pool.Model",
                     "Lift.Curve3Pool.SpawnKinds",
+                    "Lift.Curve3Pool.Bridge",
                     "Lift.Curve3Pool.U5",
                     "Lift.Curve3Pool.U3Refute",
                     "Lift.Curve3Pool.U3Observable",
