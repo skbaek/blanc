@@ -808,6 +808,9 @@ import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.StableSwapNewton.Defs
+import Blanc.Lift.StableSwapNewton.Root
+import Blanc.Lift.StableSwapNewton.D
+import Blanc.Lift.StableSwapNewton.Y
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
