@@ -402,6 +402,9 @@ theorem weth9Book_laws : BookLaws weth9Book where
     · rw [weth9Book_step_some hd] at hs
       obtain rfl := Option.some.inj (hs.symm.trans (step_deposit_zero l a.caller))
       exact Nat.le_refl _
+  bal_lt := by
+    intro l h good
+    exact Nat.lt_of_le_of_lt le_sum good
 
 
 /-! ## The transfer liveness facet -/
