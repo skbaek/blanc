@@ -6,7 +6,10 @@ import Blanc.Composition.UniswapV2PairWeth9SwapLiveFacts
 `pair_weth9_history_swap_live_zero` restates `pair_history_swap_live` from the joint checkpoint with
 the WETH9 `transfer` callee record (`SwapFrontForwardEnv.transfer0`) and the WETH9 post-callback
 `balanceOf` record (`SwapBackCalleeEnv.first`) removed: both are pinned (`_leg`, `callee.read`) to
-`swapWethLeg0`/`swapWethRead0` and discharged by `swapWethLeg0_spec`/`swapWethRead0_spec`.  WETH9 pays
+`swapWethLeg0`/`swapWethRead0` and discharged by `swapWethLeg0_spec`/`swapWethRead0_spec`.  The
+pins are one-directional (A17): the callee is bound over the join world on the WETH9 transfer's
+gas-free skeleton `leg0Skel` and carried to the real one (`SwapBackCalleeEnvW0.transport`);
+`swapW0_pins_nonvacuous` shows the pins never constrain the free values.  WETH9 pays
 first, so both outputs may be nonzero: WETH9's leg runs at the swap's prefix world, where the Pair's
 WETH9 balance is the history end's, and `pair_weth9_joint` bounds the reserve by it.
 
@@ -111,6 +114,40 @@ theorem SwapBackCalleeEnvW0.transport {sevm : Sevm} {d d' : Devm} {M M' : Mem} {
   exact ⟨{ d0 := env.d0, d1 := env.d1, callGas0 := env.callGas0, callGas1 := env.callGas1,
             read := by rw [swapWethRead0_withGasLeft]; exact env.read, second := env.second,
             sentries := env.sentries, unlock := env.unlock }, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- **Non-vacuity of the WETH9 = token0 swap row's pins** (`pair_weth9_history_swap_live_zero`;
+instantiate the callee's indices with the row's join world over `leg0Skel`).  The pins are
+definitions in order: the WETH9 query's result and call gas `r` are fixed by the second query's call
+gas `callGas1` (`callee.read`), and the WETH9 transfer's result and call gas by the callee's gas
+(`_leg`).  So any second query `q1`, `callGas1` and the callee's non-pin records at the pinned values
+extend to a callee environment and a transfer leg meeting every pin. -/
+theorem swapW0_pins_nonvacuous {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
+    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (pre : Devm) (finish : UniswapV2Pair.State) (d1 : Devm) (cg1 cgC : Nat) (q1 : Devm)
+    (callGas1 : Nat) (r : Devm × Nat) (hr : r = swapWethRead0 sevm d M n p w ρ R callGas1)
+    (second : SwapBalanceEnv sevm r.1 (swapBalanceReply M p sevm.currentTarget r.1.returnData) p
+      w.token1 (w.token1 :: w.token0 :: 0 :: swapBalanceWord r.1.returnData :: swapCutTail w ρ R) q1
+      callGas1 (swapBackPostGas sevm q1 (swapRequestSize (swapRequestSize n p) p) p w
+        (swapBalanceWord r.1.returnData) (swapBalanceWord q1.returnData) G))
+    (sentries : SwapUpdateSentries sevm q1 (swapRequestSize (swapRequestSize n p) p) p w.reserve0
+      w.reserve1 (swapBalanceWord r.1.returnData) (swapBalanceWord q1.returnData)
+      (swapEventRunGas G (swapSyncSize (swapRequestSize (swapRequestSize n p) p) p) p
+        (swapUnlockCost sevm q1 w.reserve0 w.reserve1 (swapBalanceWord r.1.returnData)
+          (swapBalanceWord q1.returnData)
+          (swapInWord (swapBalanceWord r.1.returnData) w.reserve0 w.amount0Out)
+          (swapInWord (swapBalanceWord q1.returnData) w.reserve1 w.amount1Out)
+          w.amount0Out w.amount1Out w.recipient)))
+    (unlock : gCallStipend < G + 26 + swapUnlockCost sevm q1 w.reserve0 w.reserve1
+      (swapBalanceWord r.1.returnData) (swapBalanceWord q1.returnData)
+      (swapInWord (swapBalanceWord r.1.returnData) w.reserve0 w.amount0Out)
+      (swapInWord (swapBalanceWord q1.returnData) w.reserve1 w.amount1Out)
+      w.amount0Out w.amount1Out w.recipient) :
+    ∃ (callee : SwapBackCalleeEnvW0 sevm d M n p w ρ R G) (d0 : Devm) (cg0 : Nat),
+      callee.d1 = q1 ∧ callee.callGas1 = callGas1 ∧
+      (d0, cg0) = swapWethLeg0 sevm pre finish d1 cg1 cgC callee.gas := by
+  subst hr
+  exact ⟨{ d0 := _, d1 := q1, callGas0 := _, callGas1 := callGas1, read := rfl, second := second,
+            sentries := sentries, unlock := unlock }, _, _, rfl, rfl, rfl⟩
 
 /-- **C4(b), the swap liveness row with WETH9 as token0** (both outputs allowed; WETH9 pays first).
 As `pair_history_swap_live`, from the joint checkpoint, with the WETH9 `transfer` callee record and the

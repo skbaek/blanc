@@ -9,6 +9,11 @@ the WETH9 `transfer` callee record (`SwapFrontForwardEnv.transfer1`) and the WET
 `swapWethLeg1`/`swapWethRead1`, the runs WETH9's deployed code determines, and discharged by
 `swapWethLeg1_spec`/`swapWethRead1_spec`.
 
+The pins are one-directional (amendment A17): the callee environment is bound over the join world
+built on the WETH9 transfer's gas-free skeleton `leg1Skel`, so `_leg` reads only free values and
+`callee.gas`; the callee is carried to the real join world by `SwapBackCalleeEnvW1.transport`.
+`swapW1_pins_nonvacuous` shows every choice of the free values extends to values meeting the pins.
+
 Why WETH9 can pay: `pair_weth9_joint`'s end conjunct gives `reserve1 ≤` the Pair's stored WETH9
 balance at the history's end, the model's swap guard gives `amount1Out < reserve1`, and the prefix
 world differs from the history's end only in the Pair's own storage.  WETH9's code at every later
@@ -119,6 +124,39 @@ theorem SwapBackCalleeEnvW1.transport {sevm : Sevm} {d d' : Devm} {M M' : Mem} {
   exact ⟨{ d0 := env.d0, d1 := env.d1, callGas0 := env.callGas0, callGas1 := env.callGas1,
             read := env.read, first := swapBalanceEnv_withGasLeft y env.first, sentries := env.sentries,
             unlock := env.unlock }, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- **Non-vacuity of the WETH9 = token1 swap rows' pins** (`pair_weth9_history_swap_live_one_both`,
+and `pair_weth9_history_swap_live_one` at `d0 := pre`; instantiate the callee's indices with the
+row's join world over `leg1Skel`).  The pins are definitions in order: the WETH9 query's result and
+call gas `r` are fixed by the first query's result `q0` (`callee.read`), and the WETH9 transfer's
+result and call gas by the callee's gas (`_leg`).  So any first query `q0`, `callGas0` and the
+callee's non-pin records at the pinned values extend to a callee environment and a transfer leg
+meeting every pin. -/
+theorem swapW1_pins_nonvacuous {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
+    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (pre : Devm) (finish : UniswapV2Pair.State) (d0 : Devm) (cgC : Nat) (q0 : Devm) (callGas0 : Nat)
+    (r : Devm × Nat) (hr : r = swapWethRead1 sevm d M n p w ρ R G q0)
+    (first : SwapBalanceEnv sevm d M p w.token0 (w.token1 :: w.token0 :: 0 :: 0 :: swapCutTail w ρ R)
+      q0 callGas0 (r.2 + 5 + swapRequestCharge q0 (swapRequestSize n p) p w.token1 83 + 21))
+    (sentries : SwapUpdateSentries sevm r.1 (swapRequestSize (swapRequestSize n p) p) p w.reserve0
+      w.reserve1 (swapBalanceWord q0.returnData) (swapBalanceWord r.1.returnData)
+      (swapEventRunGas G (swapSyncSize (swapRequestSize (swapRequestSize n p) p) p) p
+        (swapUnlockCost sevm r.1 w.reserve0 w.reserve1 (swapBalanceWord q0.returnData)
+          (swapBalanceWord r.1.returnData)
+          (swapInWord (swapBalanceWord q0.returnData) w.reserve0 w.amount0Out)
+          (swapInWord (swapBalanceWord r.1.returnData) w.reserve1 w.amount1Out)
+          w.amount0Out w.amount1Out w.recipient)))
+    (unlock : gCallStipend < G + 26 + swapUnlockCost sevm r.1 w.reserve0 w.reserve1
+      (swapBalanceWord q0.returnData) (swapBalanceWord r.1.returnData)
+      (swapInWord (swapBalanceWord q0.returnData) w.reserve0 w.amount0Out)
+      (swapInWord (swapBalanceWord r.1.returnData) w.reserve1 w.amount1Out)
+      w.amount0Out w.amount1Out w.recipient) :
+    ∃ (callee : SwapBackCalleeEnvW1 sevm d M n p w ρ R G) (d1 : Devm) (cg1 : Nat),
+      callee.d0 = q0 ∧ callee.callGas0 = callGas0 ∧
+      (d1, cg1) = swapWethLeg1 sevm pre finish d0 cgC callee.gas := by
+  subst hr
+  exact ⟨{ d0 := q0, d1 := _, callGas0 := callGas0, callGas1 := _, read := rfl, first := first,
+            sentries := sentries, unlock := unlock }, _, _, rfl, rfl, rfl⟩
 
 open Blanc.Composition.UniswapV2PairWeth9XLeg (CallChildFresh wethRunKeys pairRunKeys)
 
