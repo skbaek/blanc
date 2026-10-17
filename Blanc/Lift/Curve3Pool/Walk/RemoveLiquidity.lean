@@ -65,9 +65,7 @@ theorem xa_rl_step {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
     (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
-      (c.pre.getStor sevm.currentTarget).get x)
-    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (hK : CallKeeps sevm C)
     (h : XAt sevm post 0x2cdb (St b [3, 0x2a0] M G) L) :
     ∃ c L' b' M' img' G', L = c :: L' ∧ RLPush sevm B C T i c ∧
       (∀ x, (b'.getStor sevm.currentTarget).get x =
@@ -82,7 +80,7 @@ theorem xa_rl_step {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   obtain ⟨hmul, hT0, hmin, hle, c, L', b', M', img', G', rfl, htgt, hdata, hval, hst, hok, hs, hl,
     ho, hcd, hidb, hR', hW', hL', h'⟩ :=
     xa_rl_iter (σ := b.getStor sevm.currentTarget) hcode hfork hi hR hW hL (fun _ => rfl) hpc hid
-      hdepth hcoin hkeep hidk h
+      hdepth hcoin hK h
   exact ⟨c, L', b', M', img', G', rfl, ⟨hmul, hT0, hmin, hle, htgt, hdata, hval, hst, hok⟩, hs, hl,
     ho, hcd, hidb, hR', hW', hL', h'⟩
 
@@ -114,9 +112,9 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
     (hcoin : ∀ i, i < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (coinAt (b.getStor sevm.currentTarget) i).toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
-    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
-      (c.pre.getStor sevm.currentTarget).get x)
-    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (hck : ∀ i, i < 3 → CallKeeps sevm (coinAt (b.getStor sevm.currentTarget) i))
+    (hsk : StaticKeeps sevm ((b.getStor sevm.currentTarget).get tokenSlot))
+    (htk : CallKeeps sevm ((b.getStor sevm.currentTarget).get tokenSlot))
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ c0 c1 c2 c3 c4, L = [c0, c1, c2, c3, c4] ∧
@@ -150,28 +148,24 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
           (rlSupply c0 - rlAmt sevm).toBytes⟩] ∧
       post.output = b.output := by
   obtain ⟨G1, h⟩ := xa_dispatch_removeLiquidity hcode hlen hcd hsel h
-  obtain ⟨hlock, hval, c0, L0, b1, M1, G1, img1, rfl, hdepth, h0t, h0d, h0s, h0l, h0g, h0cpre,
-    h0cpost, hs1, -, hl1, ho1, hacc1, hcd1, hR, hW, hT, hz, hctr, h⟩ :=
+  obtain ⟨hlock, hval, c0, L0, b1, M1, G1, img1, rfl, hdepth, h0t, h0d, h0s, h0l, h0g, -,
+    -, hs1, -, hl1, ho1, hacc1, h41, hcd1, hR, hW, hT, hz, hctr, h⟩ :=
     xa_rl_pre hcode hfork hcd (vyMem_reads Mem.wf_empty Mem.reads_empty _)
-      (vyMem_wf Mem.wf_empty _) htok h
+      (vyMem_wf Mem.wf_empty _) htok hsk h
   refine ⟨hlock, hval, ?_⟩
   have hL0 : LoopImg img1 0 (rlSupply c0) (fun _ => 0) := ⟨hctr, hT, hz⟩
   have hpc1 : b1.getCode sevm.currentTarget ≠ .empty := by rw [hcd1 _ hpc]; exact hpc
   have hid1 : IdReady sevm b1 :=
-    ⟨by rw [h0cpost, hidk c0 (List.mem_cons_self ..), h0cpre]; exact hid.nodeleg,
+    ⟨by rw [h41]; exact hid.nodeleg,
       hacc1 _ hid.warm, hid.pre, hid.fork⟩
-  have hk0 : ∀ c ∈ L0, ∀ x, (c.post.getStor sevm.currentTarget).get x =
-      (c.pre.getStor sevm.currentTarget).get x := fun c hc => hkeep c (List.mem_cons_of_mem _ hc)
-  have hi0 : ∀ c ∈ L0, c.post.getCode 4 = c.pre.getCode 4 :=
-    fun c hc => hidk c (List.mem_cons_of_mem _ hc)
-  clear hkeep hidk hT hz hctr
+  clear hT hz hctr
   -- iteration 0
   obtain ⟨c1, L1, b2, M2, img2, G2, rfl, hp1, hs2, hl2, ho2, hcd2, hid2, hR, hW, hL1, h⟩ :=
     xa_rl_step (B := balAt (b.getStor sevm.currentTarget) 0)
       (C := coinAt (b.getStor sevm.currentTarget) 0) hcode hfork (by decide) hR hW hL0
       (by rw [hs1, Stor.get_set_ne _ (bal_ne_lock (by decide))])
       (by rw [hs1, Stor.get_set_ne _ (coin_ne_lock (by decide))])
-      hpc1 hid1 hdepth (hcoin 0 (by decide)) hk0 hi0 h
+      hpc1 hid1 hdepth (hcoin 0 (by decide)) (hck 0 (by decide)) h
   rw [show (if 0 + 1 = 3 then (0x2f7b : Nat) else 0x2cdb) = 0x2cdb from rfl] at h
   -- iteration 1
   obtain ⟨c2, L2, b3, M3, img3, G3, rfl, hp2, hs3, hl3, ho3, hcd3, hid3, hR, hW, hL2, h⟩ :=
@@ -182,8 +176,7 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
       (by rw [hs2, Stor.get_set_ne _ (bal_ne_coin (i := 0) (j := 1) (by decide) (by decide)), hs1,
             Stor.get_set_ne _ (coin_ne_lock (by decide))])
       (by rw [hcd2]; exact hpc1) hid2 hdepth (hcoin 1 (by decide))
-      (fun c hc => hk0 c (List.mem_cons_of_mem _ hc)) (fun c hc => hi0 c (List.mem_cons_of_mem _ hc))
-      h
+      (hck 1 (by decide)) h
   rw [show (if 1 + 1 = 3 then (0x2f7b : Nat) else 0x2cdb) = 0x2cdb from rfl] at h
   -- iteration 2
   obtain ⟨c3, L3, b4, M4, img4, G4, rfl, hp3, hs4, hl4, ho4, hcd4, hid4, hR, hW, hL3, h⟩ :=
@@ -196,8 +189,7 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
             Stor.get_set_ne _ (bal_ne_coin (i := 0) (j := 2) (by decide) (by decide)), hs1,
             Stor.get_set_ne _ (coin_ne_lock (by decide))])
       (by rw [hcd3, hcd2]; exact hpc1) hid3 hdepth (hcoin 2 (by decide))
-      (fun c hc => hk0 c (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc)))
-      (fun c hc => hi0 c (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hc))) h
+      (hck 2 (by decide)) h
   rw [show (if 2 + 1 = 3 then (0x2f7b : Nat) else 0x2cdb) = 0x2f7b from rfl] at h
   -- after the loop
   have htw : (b4.getStor sevm.currentTarget).get tokenSlot =
@@ -205,15 +197,10 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
     rw [hs4, Stor.get_set_ne _ (bal_ne_token (by decide)), hs3,
       Stor.get_set_ne _ (bal_ne_token (by decide)), hs2, Stor.get_set_ne _ (bal_ne_token (by decide)),
       hs1, Stor.get_set_ne _ lock_ne_token]
-  obtain ⟨hTa, c4, d, rfl, hc4, hlen4, hsP, hlP, hoP⟩ :=
-    xa_rl_post hcode hfork hR hW hL3.supply hL3.amt htw htok h
-  have hpc4 : b4.getCode sevm.currentTarget ≠ .empty := by rw [hcd4, hcd3, hcd2]; exact hpc1
+  obtain ⟨hTa, c4, d, rfl, hc4, hlen4, hdk, hsP, hlP, hoP⟩ :=
+    xa_rl_post hcode hfork hR hW hL3.supply hL3.amt htw htok (htw ▸ htk) h
   have hd4 : ∀ y, (d.getStor sevm.currentTarget).get y = (b4.getStor sevm.currentTarget).get y :=
-    fun y => by
-      rw [hc4.storPost _ hpc4 y,
-        hk0 c4 (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
-          (List.mem_singleton_self _)))) y,
-        hc4.storPre _ hpc4]
+    fun y => by rw [hdk]
   refine ⟨c0, c1, c2, c3, c4, rfl, h0t, h0d, h0s, h0l, h0g, hp1, hp2, hp3, hTa, hc4.target,
     hc4.data, hc4.value, hc4.isStatic, hlen4, ?_, ?_, ?_⟩
   · intro x

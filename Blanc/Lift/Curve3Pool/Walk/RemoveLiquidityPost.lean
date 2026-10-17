@@ -45,11 +45,12 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hT : WordAt img 0x140 T)
     (hamt : ∀ j, j < 6 → WordAt img (0x1e0 + 32 * j) (a j))
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr) (hTK : CallKeeps sevm tw)
     (h : XAt sevm post 0x2f7b (St b [3, 0x2a0] M G) L) :
     ¬ T < rlAmt sevm ∧ ∃ c d, L = [c] ∧
       ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++ (rlAmt sevm).toBytes) 0
         sevm.isStatic c ∧ 32 ≤ c.post.output.length ∧
+      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧
       (∀ x, (post.getStor sevm.currentTarget).get x =
         ((d.getStor sevm.currentTarget).set lockSlot 0).get x) ∧
       post.logs = d.logs ++ [⟨sevm.currentTarget,
@@ -84,7 +85,11 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   replace h := xa_call_img (pc' := 0x2fa4) (i := 0x61c) (n := 0x44) (o := 0x6a0) (z := 0x20) hfork
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
-  obtain ⟨d, flag, L1, h, hrd, hk⟩ := h
+  obtain ⟨d, flag, L1, h, hrun, hrd, hk⟩ := h
+  have hdk : d.getStor sevm.currentTarget = b.getStor sevm.currentTarget := by
+    rw [(hTK _ _ _ _ _ _ _ _ _ rfl hrun).1]
+    show (afterSload sevm _ _).getStor _ = _
+    rw [afterSload_getStor]
   rw [burn_input] at hk
   xs 0x2fa7 (.push [0x2f, 0xac] (by decide)) ri_push
   xji 0x2fa8 0x2fac hw
@@ -214,7 +219,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   obtain ⟨hrun, hL⟩ := xa_halt (l := .stop) (atL hcode (by kernel_rfl)) h
   have hp := (Except.ok.inj hrun).symm
   subst hp hL
-  refine ⟨hTa, c, d, rfl, hc', hlen, ?_, ?_, ?_⟩
+  refine ⟨hTa, c, d, rfl, hc', hlen, hdk, ?_, ?_, ?_⟩
   · intro x
     show ((afterSstore sevm _ _ _).getStor _).get x = _
     rw [afterSstore_getStor_self, lockSlot_lit, zero_lit]
