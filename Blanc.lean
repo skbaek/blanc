@@ -820,6 +820,10 @@ import Blanc.Lift.Curve3Pool.U3Observable
 import Blanc.Lift.Curve3Pool.U3Bounds
 import Blanc.Lift.Curve3Pool.Creation.Jumps
 import Blanc.Lift.Curve3Pool.Layout
+import Blanc.Lift.Curve3Pool.Decode
+import Blanc.Lift.Curve3Pool.Observe
+import Blanc.Lift.Curve3Pool.Spec
+import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
 
