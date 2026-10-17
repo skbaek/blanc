@@ -13,9 +13,10 @@ import Mathlib.Tactic.FinCases
   arguments: owner `0x6e8f…3eb7`, coins DAI/USDC/USDT, pool token 3Crv, `A = 100`,
   `fee = 4,000,000`, `admin_fee = 0`; `Creation/Cert.lean`, registered as
   `curve-3pool-creation`) as a zero-value CREATE message under a covered fork, at a block
-  timestamp `t` whose kill deadline `t + KILL_DEADLINE_DT` does not wrap, succeeds, installs the
-  creation input's runtime window `[488, 21687)` (`runtimeWindow`), and leaves the storage
-  `deployedStor t`.
+  timestamp `t` whose kill deadline `t + KILL_DEADLINE_DT` does not wrap, succeeds, installs
+  exactly the certified runtime `Blanc.Lift.Curve3Pool.code` (the copy window `[488, 21687)` of
+  the referenced-runtime creation input, `Window.runtime_window`, by append rewriting), and
+  leaves the storage `deployedStor t`.
 * `deployedStor_checkpoint`: that storage satisfies U2's checkpoint predicate
   (`Layout.lean`'s `Checkpoint`) at the model state `poolInitState t`, which is exactly the
   model constructor's output on the recorded arguments (`init_recorded`); and
@@ -29,12 +30,12 @@ import Mathlib.Tactic.FinCases
 No hash premise (M5): the only digest, `keccak(0)`, is a kernel evaluation (`coinsBase_eq`), and
 the pool's slots are pairwise distinct by a kernel decision (`poolSlots_nodup`).
 
-**Scope.** The runtime window is the creation input's bytes; that they equal the certified deployed
-runtime `Blanc.Lift.Curve3Pool.code` is the one-line kernel fact
-`runtimeWindow = Blanc.Lift.Curve3Pool.code.toList` (U0 §1.2 confirms the bytes), added once the
-runtime certificate lands. Modeled deployment under the covered forks' rules (the historical block
-10,809,473 predates them), not historical inclusion. Gas: any message gas in
-`[4,500,000, 2^64)` suffices (the code deposit alone is 4,239,800).
+**Scope.** The creation input is `constructorPrefix ++ Curve3Pool.code ++ constructorSuffix`
+(`Creation/Input.lean`): the kernel never compares or hashes the 21,199-byte runtime; the walk reads
+only the 280-byte suffix's argument words (`suffix_slice`) and the runtime's first byte.
+Modeled deployment under the covered forks' rules (the historical block
+10,809,473 predates them), not historical inclusion. Gas: any message gas of at least
+4,500,000 suffices (the code deposit alone is 4,239,800).
 -/
 
 namespace Blanc.Lift.Curve3Pool.Creation
@@ -189,7 +190,7 @@ theorem deployedStor_wrong_fee {t fee' : Nat} {s : State} (hfee : fee' ≠ 40000
 
 /-- **Deploying the 3pool.** The recorded creation input, executed as a zero-value CREATE message
 with enough gas under a covered fork, at a timestamp whose kill deadline does not wrap, succeeds;
-the new account's code is the creation input's runtime window and its storage is
+the new account's code is exactly the certified runtime and its storage is
 `deployedStor` of the block timestamp. -/
 theorem pool_create (msg : Msg) (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
@@ -198,7 +199,7 @@ theorem pool_create (msg : Msg) (hvalue : msg.value = 0)
     (hmax : 0x52cf ≤ msg.benv.stat.rules.code.maxCodeSize)
     (ht : msg.benv.stat.time.toNat + killDeadlineDt < 2 ^ 256) :
     ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = runtimeWindow ∧
+      (post.getCode msg.currentTarget).toList = Blanc.Lift.Curve3Pool.code.toList ∧
       Devm.getStor post msg.currentTarget = deployedStor msg.benv.stat.time ∧
       post.error = .none := by
   obtain ⟨benv, htransfer⟩ :=
@@ -221,13 +222,13 @@ theorem pool_create (msg : Msg) (hvalue : msg.value = 0)
   have hpre0 : St b [] Mem.empty (msg.gas - ctorCost sevm b + ctorCost sevm b) = b :=
     pre_eq_St rfl rfl (by show _ = msg.gas; omega)
   rw [hpre0] at hrun
-  have hlen : raw.output.length = 0x52cf := by rw [hout]; exact runtimeWindow_length
+  have hlen : raw.output.length = 0x52cf := by rw [hout]; exact runtime_length
   obtain ⟨post, hpost, hcodePost, hstorPost, herrPost⟩ := liftCreate_ok cert_check jumps_ok msg
     hcodeAddress hcode hfork htransfer hrun (by rw [herr]; rfl)
-    (by rw [hout]; exact runtimeWindow_head)
+    (by rw [hout]; exact runtime_head)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega)
     (by rw [hlen]; exact hmax)
-  refine ⟨post, hpost, hcodePost.trans hout, ?_, herrPost⟩
+  refine ⟨post, hpost, by rw [hcodePost, hout, ByteArray.toList_eq_toList_data], ?_, herrPost⟩
   have hnonempty : ¬ ({ raw.state.get msg.currentTarget with
       code := ⟨⟨raw.output⟩⟩ } : Acct).Empty := by
     intro empty
@@ -286,14 +287,14 @@ def deployMsg : Msg where
 
 /-- **U7: the recorded 3pool deployment under every covered fork.** The pool's address is the
 deployer's CREATE address at nonce 43; the recorded creation message succeeds, installs the
-runtime window, leaves `deployedStor deployTime`, which satisfies U2's checkpoint predicate at the
+certified runtime, leaves `deployedStor deployTime`, which satisfies U2's checkpoint predicate at the
 model constructor's output on the recorded arguments, and is zero off the pool's slots. -/
 theorem pool_deploy_covered (f : Fork) (hf : CoveredFork f) :
     poolAddress = computeContractAddress deployer 43 ∧
     init ownerN coinsN tokenN 100 4000000 0 deployTime.toNat 0 =
       some (poolInitState deployTime.toNat) ∧
     ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
-      (post.getCode poolAddress).toList = runtimeWindow ∧
+      (post.getCode poolAddress).toList = Blanc.Lift.Curve3Pool.code.toList ∧
       Devm.getStor post poolAddress = deployedStor deployTime ∧
       Checkpoint (Devm.getStor post poolAddress) (poolInitState deployTime.toNat) ∧
       (∀ x, x ∉ poolSlots → (Devm.getStor post poolAddress).get x = 0) := by

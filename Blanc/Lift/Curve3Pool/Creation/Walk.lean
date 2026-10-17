@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Creation.Cert
+import Blanc.Lift.Curve3Pool.Creation.Window
 import Blanc.Lift.Curve3Pool.Layout
 import Blanc.Lift.CreationOps
 import Blanc.Lift.ExactWalkOps
@@ -56,32 +57,41 @@ def argBytes : Bytes :=
   ownerW.toBytes ++ coin0W.toBytes ++ coin1W.toBytes ++ coin2W.toBytes ++ tokenW.toBytes ++
     ampW.toBytes ++ feeW.toBytes ++ adminFeeW.toBytes
 
-theorem code_toList : code.toList =
-    codeChunk0 ++ codeChunk1 ++ codeChunk2 ++ codeChunk3 ++ codeChunk4 ++ codeChunk5 := by
-  rw [ByteArray.toList_eq_toList_data]
+/-- A window inside the 280-byte suffix (deploy tail and arguments) reads the suffix: the
+runtime before it is never evaluated. -/
+theorem suffix_slice (k n : Nat) :
+    code.sliceD (21687 + k) n (Linst.toUInt8 .stop) = constructorSuffix.sliceD k n 0 := by
+  have hp : (constructorPrefix ++ runtime).length = 21687 := by
+    rw [List.length_append, runtime_length]; decide +kernel
+  rw [ByteArray.sliceD_eq, code, creationCode, ByteArray.toList_eq_toList_data,
+    List.toList_toArray, ← hp]
+  unfold List.sliceD
+  rw [List.drop_length_add_append]
   rfl
 
 theorem args_eq : code.sliceD 0x54cf 0x100 (Linst.toUInt8 .stop) = argBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x54cf : Nat) = 21687 + 24 from rfl, suffix_slice]; decide +kernel
 theorem arg0_eq : code.sliceD 0x54cf 0x20 (Linst.toUInt8 .stop) = ownerW.toBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x54cf : Nat) = 21687 + 24 from rfl, suffix_slice]; decide +kernel
 theorem arg1_eq : code.sliceD 0x54ef 0x20 (Linst.toUInt8 .stop) = coin0W.toBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x54ef : Nat) = 21687 + 56 from rfl, suffix_slice]; decide +kernel
 theorem arg2_eq : code.sliceD 0x550f 0x20 (Linst.toUInt8 .stop) = coin1W.toBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x550f : Nat) = 21687 + 88 from rfl, suffix_slice]; decide +kernel
 theorem arg3_eq : code.sliceD 0x552f 0x20 (Linst.toUInt8 .stop) = coin2W.toBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x552f : Nat) = 21687 + 120 from rfl, suffix_slice]; decide +kernel
 theorem arg4_eq : code.sliceD 0x554f 0x20 (Linst.toUInt8 .stop) = tokenW.toBytes := by
-  rw [ByteArray.sliceD_eq, code_toList]; decide +kernel
+  rw [show (0x554f : Nat) = 21687 + 152 from rfl, suffix_slice]; decide +kernel
 
-/-- The window the deploy tail returns: the creation input's bytes `[488, 488 + 21199)`. -/
-def runtimeWindow : Bytes := code.sliceD 0x1e8 0x52cf (Linst.toUInt8 .stop)
+/-- The window the deploy tail copies, `[488, 488 + 21199)`, is the certified runtime
+(`Window.runtime_window`, by append rewriting). -/
+theorem window_eq : code.sliceD 0x1e8 0x52cf (Linst.toUInt8 .stop) = runtime :=
+  runtime_window
 
-theorem runtimeWindow_length : runtimeWindow.length = 0x52cf := ByteArray.length_sliceD _ _ _ _
-
-/-- The returned runtime does not start with `0xEF` (the CREATE code-prefix rule). -/
-theorem runtimeWindow_head : runtimeWindow.head? ≠ some 0xEF := by
-  rw [runtimeWindow, ByteArray.sliceD_eq, code_toList]; decide +kernel
+/-- The certified runtime does not start with `0xEF` (the CREATE code-prefix rule): a decision
+on its first byte only. -/
+theorem runtime_head : runtime.head? ≠ some 0xEF := by
+  rw [runtime, Blanc.Lift.Curve3Pool.code, List.toList_toArray]
+  decide +kernel
 
 /-! ## Memory of the walk -/
 
@@ -108,7 +118,7 @@ def m13 : Mem := m12.write 0x240 (1 : B256).toBytes
 def m14 : Mem := m13.write 0x240 (2 : B256).toBytes
 def m15 : Mem := m14.write 0x240 (3 : B256).toBytes
 def m16 : Mem := m15.write 0xc0 (0 : B256).toBytes
-def m17 : Mem := m16.write 0 runtimeWindow
+def m17 : Mem := m16.write 0 runtime
 
 def img5 : Bytes :=
   Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt [] 32 clamp1.toBytes)
@@ -215,13 +225,13 @@ theorem m15_size : m15.size = 608 := by
 theorem m16_size : m16.size = 608 := by
   rw [m16, Mem.size_write_of_size m15_size (by decide) (B256.length_toBytes _)]; decide
 theorem m17_size : m17.size = 21216 := by
-  rw [m17, Mem.size_write_of_size m16_size (by decide) runtimeWindow_length]; decide
+  rw [m17, Mem.size_write_of_size m16_size (by decide) runtime_length]; decide
 
 /-- The returned window. -/
-theorem m17_read : (m17.read 0 0x52cf).1 = runtimeWindow := by
-  rw [m17, (m16_wf.2.write m16_wf.1 0 runtimeWindow).read]
-  have h := Bytes.sliceD_writeAt img16 runtimeWindow 0
-  rwa [runtimeWindow_length] at h
+theorem m17_read : (m17.read 0 0x52cf).1 = runtime := by
+  rw [m17, (m16_wf.2.write m16_wf.1 0 runtime).read]
+  have h := Bytes.sliceD_writeAt img16 runtime 0
+  rwa [runtime_length] at h
 
 /-! ## The prefix: clamp constants, arguments, address clamps, the first loop pass -/
 
@@ -610,8 +620,11 @@ theorem segB {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_sub' (v := 0x52cf) (by decide) room ?_
   refine rx_push (w := 0x1e8) (by decide) room ?_
   refine rx_push (w := 0) (by decide) room ?_
-  refine rx_codecopy (c := 4782) (M' := m17) ?_ (by rw [hcode]; rfl) ?_
+  refine rx_codecopy (c := 4782) (M' := m17) ?_ ?_ ?_
   · rw [St.extCost_eq m16_size]; decide
+  · rw [hcode]
+    show m16.write 0 (code.sliceD 0x1e8 0x52cf (Linst.toUInt8 .stop)) = _
+    rw [window_eq]; rfl
   refine rx_push (w := 0x1e8) (by decide) room ?_
   refine rx_push (w := 0x54b7) (by decide) room ?_
   refine rx_sub' (v := 0x52cf) (by decide) room ?_
@@ -658,7 +671,7 @@ theorem ctor_run_facts {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = 
     (hvalue : sevm.value = 0) (ht : sevm.benvStat.time.toNat + killDeadlineDt < 2 ^ 256)
     {b : Devm} {G : Nat} (hG : gCallStipend < G) :
     ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
-      post.output = runtimeWindow ∧ post.error = b.error ∧
+      post.output = runtime ∧ post.error = b.error ∧
       Devm.getStor post sevm.currentTarget = Devm.getStor (tw10 sevm b) sevm.currentTarget ∧
       post.gasLeft = G := by
   obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (tw10 sevm b) [0, 0x52cf] m17 G) 0 0x52cf []
