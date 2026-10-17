@@ -821,6 +821,7 @@ import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
 import Blanc.Lift.VyperRawCall
 import Blanc.Lift.RunEx
+import Blanc.Lift.FrameWalkAligned
 
 -- Walking a successful frame's own derivation, with its direct children (contract-neutral).
 import Blanc.Lift.FrameWalk
@@ -918,6 +919,14 @@ import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityKit
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPre
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD0
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull2
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityIter
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD1
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

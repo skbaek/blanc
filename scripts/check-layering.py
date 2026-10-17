@@ -197,7 +197,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall", "Lift.RunEx"]
+           "Lift.VyperRawCall", "Lift.RunEx", "Lift.FrameWalkAligned"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 SHARED += ["Lift.ThreeWordFrame"]
@@ -251,6 +251,20 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 # Outermost settled frames at an address (committed-replay histories): contract-neutral.
 SHARED += ["Lift.OutermostFrames"]
+
+# Recover contract-neutral registrations from the local Uniswap/WETH9 checkpoint.
+SHARED += [
+    "ExecutionAccountingPositional",
+    "ExecutionAccountingPositionalHistory",
+    "ExecutionTraceRootCallers",
+    "Lift.FiniteCheckpoint",
+    "Lift.RetainedTargetCompleteness",
+    "Lift.Token.Abi",
+    "Lift.Token.Along",
+    "Lift.Token.Core",
+    "Lift.Token.Holder",
+    "Lift.Token.SelfCaller",
+]
 
 CONTRACTS = {
     "uniswap-v2-pair": [
@@ -800,7 +814,15 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.ViewsDy",
                     "Lift.Curve3Pool.Walk.ViewsDyKit",
                     "Lift.Curve3Pool.Walk.ViewsDyPost",
-                    "Lift.Curve3Pool.Walk.ViewsDyRaw"],
+                    "Lift.Curve3Pool.Walk.ViewsDyRaw",
+                    "Lift.Curve3Pool.Walk.AddLiquidityKit",
+                    "Lift.Curve3Pool.Walk.AddLiquidityFrames",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPre",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD0",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull2",
+                    "Lift.Curve3Pool.Walk.AddLiquidityIter",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD1"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
@@ -1058,6 +1080,25 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal",
 ])
 
+# Recover only the existing checkpoint modules within their established families.
+CONTRACTS["uniswap-v2-pair"].extend([
+    "Lift.UniswapV2Pair.FiniteCheckpoint",
+    "Lift.UniswapV2Pair.ModelControlsSides",
+    "Lift.UniswapV2Pair.PairHistoryShape",
+    "Lift.UniswapV2Pair.PairModelFix",
+    "Lift.UniswapV2Pair.PairPositionalCalls",
+    "Lift.UniswapV2Pair.PairPositionalState",
+    "Lift.UniswapV2Pair.PairStepShape",
+    "Lift.UniswapV2Pair.PropertiesSides",
+])
+CONTRACTS["weth9"].extend([
+    "Lift.Weth9.FiniteFootprint",
+])
+CONTRACTS["vyper-nonreentrant-deployed"].extend([
+    "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+])
+
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
 # `import Blanc.Composition.X` writes them. This is the only category permitted
 # to name more than one contract family, and adding a module here is the moment
@@ -1113,6 +1154,23 @@ COMPOSITION = [
     "Composition.Weth9WethGas",
     "Composition.Curve3Pool3CrvCheckpoint",
     # Every joint owner is explicit; no family or shared module may import back.
+]
+
+# Recover the downstream instance modules without relaxing import direction.
+COMPOSITION += [
+    "Composition.PairTokenCallers",
+    "Composition.UniswapV2PairWeth9CheckJoint",
+    "Composition.UniswapV2PairWeth9Checkpoint",
+    "Composition.UniswapV2PairWeth9Tx1",
+    "Composition.UniswapV2PairWeth9Tx1Effects",
+    "Composition.UniswapV2PairWeth9Tx1Frame",
+    "Composition.Weth9Token",
+    "Composition.Weth9TokenCore",
+    "Composition.Weth9TokenFrames",
+    "Composition.Weth9TokenFramesExec",
+    "Composition.Weth9TokenFramesNode",
+    "Composition.Weth9TokenOutputsTransfer",
+    "Composition.Weth9TokenOutputsWalk",
 ]
 
 ROOTS = ["Blanc", "Main"]

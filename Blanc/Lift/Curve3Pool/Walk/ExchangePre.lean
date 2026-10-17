@@ -28,7 +28,6 @@ theorem keccak_one_add (img : Bytes) (k : B256) :
 theorem ex_bal0 : balancesBase = balancesBase + Nat.toB256 0 := by decide
 theorem ex_bal1 : balancesBase + Bytes.toB256 [1] = balancesBase + Nat.toB256 1 := by decide
 theorem ex_bal2 : balancesBase + Bytes.toB256 [2] = balancesBase + Nat.toB256 2 := by decide
-theorem isKilledSlot_lit : Bytes.toB256 [0x0f] = isKilledSlot := by decide
 
 /-- **`exchange` up to `_xp_mem`** (see the module note). -/
 theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}

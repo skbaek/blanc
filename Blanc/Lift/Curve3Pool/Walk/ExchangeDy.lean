@@ -16,8 +16,6 @@ open Jaune Blanc.Lift
 /-- `FEE_DENOMINATOR` as the runtime pushes it. -/
 abbrev exFeeDen : B256 := Bytes.toB256 [0x02, 0x54, 0x0b, 0xe4, 0x00]
 
-theorem feeSlot_lit : Bytes.toB256 [0x02] = feeSlot := by decide
-theorem adminFeeSlot_lit : Bytes.toB256 [0x03] = adminFeeSlot := by decide
 
 theorem exRate_ne {k : Nat} : exRate k ≠ 0 := by
   unfold exRate; split <;> decide
