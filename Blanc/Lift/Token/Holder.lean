@@ -32,7 +32,7 @@ loses at most its declared debits, and still has no allowance. -/
 theorem BookLaws.run_holder {B : Book} (laws : BookLaws B) {h : Adr} :
     ∀ {as : List Sevm} {l l' : B.Ledger},
       B.run l as = some l' →
-      (∀ pre post, ∀ a ∈ as, B.step pre a = some post → B.Good pre) →
+      (∀ n pre, n < as.length → B.run l (as.take n) = some pre → B.Good pre) →
       (∀ g, B.allow l h g = 0) →
       (∀ a ∈ as, a.caller = h → (B.op a).HolderSafe) →
       B.bal l h ≤ B.bal l' h + ((as.filter fun a => decide (a.caller = h)).map
@@ -52,7 +52,7 @@ theorem BookLaws.run_holder {B : Book} (laws : BookLaws B) {h : Adr} :
     | none => rw [hs, Option.bind_none] at hrun; cases hrun
     | some m =>
       rw [hs, Option.bind_some] at hrun
-      have gl : B.Good l := hgood l m a List.mem_cons_self hs
+      have gl : B.Good l := hgood 0 l (Nat.zero_lt_succ _) rfl
       have hzm : ∀ g, B.allow m h g = 0 := by
         intro g
         by_cases hc : a.caller = h
@@ -63,7 +63,8 @@ theorem BookLaws.run_holder {B : Book} (laws : BookLaws B) {h : Adr} :
             Nat.not_lt.mp fun hlt => hc (laws.allow_owner gl hs hlt)
           rw [hz g] at hle
           exact Nat.le_zero.mp hle
-      obtain ⟨ihb, iha⟩ := ih hrun (fun pre post a' ha' => hgood pre post a' (List.mem_cons_of_mem a ha'))
+      obtain ⟨ihb, iha⟩ := ih hrun (fun n pre hn hpre => hgood (n + 1) pre (Nat.succ_lt_succ hn)
+          (by simp only [List.take_succ_cons, Book.run, hs, Option.bind_some]; exact hpre))
         hzm (fun a' ha' => hsafe a' (List.mem_cons_of_mem a ha'))
       refine ⟨?_, iha⟩
       by_cases hc : a.caller = h
