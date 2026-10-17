@@ -824,6 +824,41 @@ theorem Words.restoreMem' {M : Mem} {L : List (Nat × B256)} {c p : Nat} {ws : L
   have h := List.all_eq_true.mp hout o (List.mem_map.mpr ⟨(o, v), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 
+/-! ## From a word frame to a tracked memory -/
+
+/-- A word frame keeps every byte off its window. -/
+theorem WordFrame.keepsOff {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws)
+    (hwf : Mem.Wf M0) : Mem.KeepsOff M0 M [(lo, lo + 32 * ws.length)] := by
+  refine ⟨by rw [hF.size], fun i hi => ?_⟩
+  have h1 := hi (lo, lo + 32 * ws.length) List.mem_cons_self
+  by_cases hlt : i < M0.size
+  · exact hF.agree.2 i hlt (by simp only at h1; omega)
+  · have hw : Mem.Wf M := hF.wf hwf
+    unfold Mem.Wf at hwf hw
+    have e1 : M.data.getD i 0 = 0 := by
+      simp only [Array.getD, show ¬ i < M.data.size by rw [hF.size] at hw; omega, ↓reduceDIte]
+    have e2 : M0.data.getD i 0 = 0 := by
+      simp only [Array.getD, show ¬ i < M0.data.size by omega, ↓reduceDIte]
+    rw [e1, e2]
+
+/-- A word frame inside the windows `W` is a tracked memory over `W`. -/
+theorem WordFrame.memTrack {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws)
+    (hwf : Mem.Wf M0) {W : List (Nat × Nat)} {n : Nat} (hn : ws.length = n)
+    (hW : ∀ w ∈ [(lo, lo + 32 * n)], ∃ w' ∈ W, w'.1 ≤ w.1 ∧ w.2 ≤ w'.2) :
+    MemTrack M0 M W [] :=
+  ⟨(hn ▸ hF.keepsOff hwf).widen hW, Words.nil _, hF.wf hwf,
+    fun _ => by rw [hF.size]; exact hF.aligned⟩
+
+/-- A frame word, as a carried word. -/
+theorem WordFrame.words1 {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws)
+    {j : Nat} {v : B256} (hv : ws[j]? = some v) : Words M [(lo + 32 * j, v)] := by
+  obtain ⟨hj, hvj⟩ := List.getElem?_eq_some_iff.mp hv
+  refine Words.cons.mpr ⟨⟨?_, (hF.word j hj).trans hvj⟩, Words.nil M⟩
+  have := hF.cover
+  have : j + 1 ≤ ws.length := hj
+  rw [hF.size]; omega
+
+
 set_option hygiene false in
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- **Name the tracked memory** of a forward walk: generalize the memory term of `hT` (a
