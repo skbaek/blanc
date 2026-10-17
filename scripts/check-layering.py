@@ -189,7 +189,8 @@ SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # StableSwap (n = 3) Newton loops for D and y, plain and checked: contract-neutral.
-SHARED += ["Lift.StableSwapNewton.Defs"]
+SHARED += ["Lift.StableSwapNewton.Defs", "Lift.StableSwapNewton.Root",
+           "Lift.StableSwapNewton.D", "Lift.StableSwapNewton.Y"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.

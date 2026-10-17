@@ -808,6 +808,9 @@ import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.StableSwapNewton.Defs
+import Blanc.Lift.StableSwapNewton.Root
+import Blanc.Lift.StableSwapNewton.D
+import Blanc.Lift.StableSwapNewton.Y
 
 -- The Curve 3pool: the functional model, U5 and the U3 refutation (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model

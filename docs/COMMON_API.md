@@ -1995,6 +1995,20 @@ parameters; the `Chk` variants return `Option Nat` and revert (`none`) exactly
 where the source's checked `uint256` arithmetic does (`chkAdd`, `chkSub`,
 `chkMul`, `chkDiv`). `aboveRoot`, `floorRoot` and `rootQ` name the exact roots
 the loops approximate, for statements only.
+[`Blanc/Lift/StableSwapNewton/Root.lean`](../Blanc/Lift/StableSwapNewton/Root.lean)
+proves `floorRoot` monotone in each balance (`floorRoot_mono`) and in `ann`
+(`floorRoot_mono_ann`) and pins it by one point (`floorRoot_eq`).
+[`Blanc/Lift/StableSwapNewton/D.lean`](../Blanc/Lift/StableSwapNewton/D.lean)
+bridges the checked `get_D` to the plain one (`getDChk_some`) and proves
+`getD_lower` / `floorRoot_le_getD`: for positive balances and `A ≥ 1`, `getD` is
+never below `⌊D*⌋`, at every tolerance, stopped or capped; it also holds the cap,
+non-monotonicity and ceil-mutation witnesses.
+[`Blanc/Lift/StableSwapNewton/Y.lean`](../Blanc/Lift/StableSwapNewton/Y.lean)
+bridges `get_y` / `get_y_D` (`getYChk_some`, `getYDChk_some`) and proves the
+tolerance-1 `y` loop returns exactly `rootQ` (`loopY_eq_rootQ`,
+`loopY_eq_rootQ_of_le` with its `k + 1`-body bound, `loopY_eq_rootQ_of_lt` for a
+start below the root, `getY_eq_rootQ`, `getYD_eq_rootQ`) under the
+non-degeneracy `rootGap`. All are unbounded `Nat` facts.
 
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
