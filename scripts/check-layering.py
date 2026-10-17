@@ -723,6 +723,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Bridge",
                     "Lift.Curve3Pool.U5",
                     "Lift.Curve3Pool.U3Refute",
+                    "Lift.Curve3Pool.U4ExactnessRefute",
                     "Lift.Curve3Pool.U3Observable",
                     "Lift.Curve3Pool.U3Bounds",
                     "Lift.Curve3Pool.Layout",
