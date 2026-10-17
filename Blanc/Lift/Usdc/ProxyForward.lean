@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.ProxyReach
+import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.SpawnExact
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.CallChildren
@@ -243,5 +243,36 @@ theorem proxy_admin_children {sevm : Sevm} {pre : Devm} {out : Execution}
     rw [← ht, toAdr_toB256]
   · show N.sevm.currentTarget = _
     rw [sevmEq]
+
+theorem proxy_admin_rule {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out)
+    (codeEq : sevm.code = Proxy.code) (fork : CoveredFork sevm.benvStat.fork)
+    (admin : sevm.caller = adminOf pre.state sevm.currentTarget) :
+    (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .call) ∧
+    (∀ c ∈ Exec.childFrames run, c.sevm.currentTarget = sevm.currentTarget ∧
+      c.sevm.caller = sevm.currentTarget) ∧
+    (Blanc.Sevm.selector sevm ∉ [0x3659cfe6, 0x4f1ef286, 0x8f283970] →
+      Exec.childFrames run = [] ∧
+      ∀ post, out = .ok post →
+        post.state.getStor sevm.currentTarget = pre.state.getStor sevm.currentTarget) := by
+  refine ⟨fun N chain x hat => (proxy_admin_exec run codeEq fork admin N chain x hat).1,
+    proxy_admin_children run codeEq fork admin, fun hsel => ⟨?_, ?_⟩⟩
+  · apply Exec.childFrames_eq_nil_of_free ⟨0, sevm, pre, out, run⟩
+    intro node chain x hat
+    obtain ⟨-, hs, -⟩ := proxy_admin_exec run codeEq fork admin node chain x hat
+    exact hsel (by rw [hs]; decide)
+  · intro post hout
+    subst hout
+    obtain ⟨f, hf0, hrun⟩ := lift_sound cert_check codeEq fork run
+    obtain rfl : f = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
+    rw [St.self' pre] at hrun
+    rcases proxy_halt (P := Ninst.Run) (fun h => h) fork hrun with ⟨notAdmin, -⟩ | ⟨-, hw⟩
+    · exact (notAdmin (by rw [← adminOf_eq]; exact admin)).elim
+    rw [dispatchWord_eq_selector] at hw
+    rcases hw with hw | hw | hw | hstor
+    · exact (hsel (by rw [hw]; decide)).elim
+    · exact (hsel (by rw [hw]; decide)).elim
+    · exact (hsel (by rw [hw]; decide)).elim
+    · exact congrFun hstor sevm.currentTarget
 
 end Blanc.Lift.Usdc

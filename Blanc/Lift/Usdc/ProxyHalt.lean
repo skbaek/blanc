@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.ProxyReach
-import Blanc.Lift.Usdc.LibSpawns
+import Blanc.Lift.Quiet
 
 /-!
 # The successful runs of the proxy certificate (C2b)
@@ -8,7 +8,7 @@ import Blanc.Lift.Usdc.LibSpawns
 `DELEGATECALL` (`DelegateStep`), or its caller is the admin word and either the dispatcher selected
 `upgradeTo`/`upgradeToAndCall`/`changeAdmin` or the frame's storage maps are unchanged (the admin's
 `implementation()`/`admin()` getters).  Big-step inversion of the checked trees (`rpw_*`, `ri_*`);
-the getter bodies are crossed by their specs, and quiet regions by `SFunc.RunP.getStor_of_quiet`.
+the getter bodies are crossed by their specs, and quiet regions by `SFunc.Run.world_of_quiet`.
 -/
 
 namespace Blanc.Lift
@@ -74,9 +74,16 @@ namespace Blanc.Lift.Usdc.Proxy
 
 open Jaune Blanc Blanc.Lift
 
-/-- A run of the certificate passes `_delegate`'s `DELEGATECALL`. -/
-def DelegateStep (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) : Prop :=
-  ∃ d d1, P sevm d (.exec .delegatecall) d1
+/-- A run of the certificate passes `_delegate`'s `DELEGATECALL`, for a caller other than the
+admin word of `b`. -/
+def DelegateStep (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (b : Devm) : Prop :=
+  sevm.caller ≠ (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    ∃ d d1, P sevm d (.exec .delegatecall) d1
+
+theorem DelegateStep.of_state {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b b₁ : Devm}
+    (h : b₁.state = b.state) (step : DelegateStep P sevm b₁) : DelegateStep P sevm b := by
+  rw [DelegateStep, ← getStorVal_of_state h]
+  exact step
 
 theorem getters_noHalt : NoHaltSet prog getterEntries = true := by decide
 theorem ent3_admin_noHalt : NoHaltSet prog [14, 15] = true := by decide
@@ -120,13 +127,13 @@ theorem fb_not_returned (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d :
 /-- A halting `_fallback()` copy runs `_delegate`'s `DELEGATECALL`. -/
 theorem fb_halted (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d : Nat} {D : Devm}
     (hd : prog[d]? = some t_0682_c23)
-    (run : SFunc.RunP P prog sevm (St b S M G) (fbTree d) (.halted D)) : DelegateStep P sevm := by
+    (run : SFunc.RunP P prog sevm (St b S M G) (fbTree d) (.halted D)) : DelegateStep P sevm b := by
   unfold fbTree at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, D1, callee, run⟩ := rpw_callOver getters_noHalt (k := 22) rfl (by decide) run
-  obtain ⟨-, _, rfl⟩ := willFallback_ret hP hfork callee
+  obtain ⟨notAdmin, _, rfl⟩ := willFallback_ret hP hfork callee
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -151,7 +158,7 @@ theorem fb_halted (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d : Nat} 
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, _, rfl⟩ := ri_gas (hP s)
   obtain ⟨d1, s, -⟩ := rpw_next run
-  exact ⟨_, d1, s⟩
+  exact ⟨notAdmin, _, d1, s⟩
 
 theorem ent1_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
     (run : SFunc.RunP P prog sevm (St b S M G) t_0213_c1 o) :
@@ -240,7 +247,7 @@ theorem ent3_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
   · refine .inl ⟨(masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
-    rw [SFunc.RunP.getStor_of_quiet hP ent3_admin_quiet hfork (by decide) (by decide) run, getStor_St]
+    rw [(SFunc.Run.world_of_quiet ent3_admin_quiet hfork (by decide) (by decide) (run.mono hP)).1, getStor_St]
     funext a
     exact afterSload_getStor _ _ _ _
   unfold t_0354_c3 at run
@@ -307,7 +314,7 @@ theorem ent5_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
   · refine .inl ⟨(masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
-    rw [SFunc.RunP.getStor_of_quiet hP ent5_admin_quiet hfork (by decide) (by decide) run, getStor_St]
+    rw [(SFunc.Run.world_of_quiet ent5_admin_quiet hfork (by decide) (by decide) (run.mono hP)).1, getStor_St]
     funext a
     exact afterSload_getStor _ _ _ _
   unfold t_056a_c5 at run
@@ -320,7 +327,7 @@ theorem ent5_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
 
 theorem sel33_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_0077_c33 (.halted post)) :
-    DelegateStep P sevm ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_0077_c33 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_callvalue (hP s)
@@ -364,13 +371,14 @@ theorem sel33_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
+  · rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
-    · exact .inl (fb_halted hP hfork rfl fb)
+    · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
+
 
 theorem sel34_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_00ba_c34 (.halted post)) :
-    DelegateStep P sevm ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_00ba_c34 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -423,13 +431,14 @@ theorem sel34_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
+  · rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
-    · exact .inl (fb_halted hP hfork rfl fb)
+    · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
+
 
 theorem sel35_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_0108_c35 (.halted post)) :
-    DelegateStep P sevm ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    DelegateStep P sevm b ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
       Devm.getStor post = Devm.getStor b) := by
   unfold t_0108_c35 at run
   obtain ⟨_, run⟩ := rpw_dest run
@@ -451,16 +460,17 @@ theorem sel35_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   obtain ⟨_, ⟨D, callee, cont⟩ | ⟨D, callee, hpost⟩⟩ := rpw_call (k := 3) rfl run
   · rcases ent3_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, -, fb⟩
     · refine .inr ⟨h, ?_⟩
-      exact (SFunc.RunP.getStor_of_quiet hP empty_quiet hfork (by decide) (by decide) cont).trans hs
+      exact ((SFunc.Run.world_of_quiet empty_quiet hfork (by decide) (by decide) (cont.mono hP)).1).trans hs
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent3_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, -, fb⟩
+  · rcases ent3_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
     · cases hpost
       exact .inr ⟨h, hs⟩
-    · exact .inl (fb_halted hP hfork rfl fb)
+    · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
+
 
 theorem sel36_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_015f_c36 (.halted post)) :
-    DelegateStep P sevm ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_015f_c36 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_callvalue (hP s)
@@ -504,13 +514,14 @@ theorem sel36_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
+  · rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
-    · exact .inl (fb_halted hP hfork rfl fb)
+    · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
+
 
 theorem sel37_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_01a2_c37 (.halted post)) :
-    DelegateStep P sevm ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    DelegateStep P sevm b ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
       Devm.getStor post = Devm.getStor b) := by
   unfold t_01a2_c37 at run
   obtain ⟨_, run⟩ := rpw_dest run
@@ -532,17 +543,18 @@ theorem sel37_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   obtain ⟨_, ⟨D, callee, cont⟩ | ⟨D, callee, hpost⟩⟩ := rpw_call (k := 5) rfl run
   · rcases ent5_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, -, fb⟩
     · refine .inr ⟨h, ?_⟩
-      exact (SFunc.RunP.getStor_of_quiet hP empty_quiet hfork (by decide) (by decide) cont).trans hs
+      exact ((SFunc.Run.world_of_quiet empty_quiet hfork (by decide) (by decide) (cont.mono hP)).1).trans hs
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent5_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, -, fb⟩
+  · rcases ent5_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
     · cases hpost
       exact .inr ⟨h, hs⟩
-    · exact .inl (fb_halted hP hfork rfl fb)
+    · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
+
 
 /-- **The successful runs of the proxy certificate.** -/
 theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b S M G) t_0000_c0 (.halted post)) :
-    DelegateStep P sevm ∨
+    DelegateStep P sevm b ∨
       (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
         (dispatchWord sevm = Bytes.toB256 [0x36, 0x59, 0xcf, 0xe6] ∨
           dispatchWord sevm = Bytes.toB256 [0x4f, 0x1e, 0xf2, 0x86] ∨
