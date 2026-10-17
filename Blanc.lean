@@ -843,6 +843,7 @@ import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
 import Blanc.Lift.Curve3Pool.U3Refute
 import Blanc.Lift.Curve3Pool.U4ExactnessRefute
+import Blanc.Lift.Curve3Pool.U4GetYRefute
 import Blanc.Lift.Curve3Pool.U3Observable
 import Blanc.Lift.Curve3Pool.U3Bounds
 import Blanc.Lift.Curve3Pool.Check
