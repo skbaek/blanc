@@ -7,9 +7,10 @@ import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
 
 `pair_history_skim_live` takes `SkimForwardEnv`: both `balanceOf(pair)` queries and both
 transfer `CALL`s.  With WETH9 as token0, its query (`code0`, `qenv0`) and its transfer (`tenv0`)
-are WETH9's own runs: their results and call gases are pinned (`read`, `leg`) to `skimWethRead0`
-and `skimWethLeg0` (U8b2), and their premises are discharged from the history: WETH9's code at the
-token the Pair loads, WETH9 not a precompile, and the transfer's amount `answer − reserve0`
+are WETH9's own runs: their results and call gases are pinned in order (`gasT0`, `read`, `leg`) to
+`skimLeg0Gas`, `skimWethRead0` and `skimWethLeg0` (U8b2, U8f), and their premises are discharged
+from the history: WETH9's code at the token the Pair loads, WETH9 not a precompile, and the
+transfer's amount `answer − reserve0`
 covered by the Pair's WETH9 balance (`skimWethLeg0_of_read`), from C3's `reserve0 ≤` the Pair's
 stored WETH9 balance word at the history's end (`pair_weth9_frame`).  The frame's call depth and
 mutability and the legs' gas sentries are premises.  Token1's query and transfer, the lock
@@ -23,18 +24,23 @@ namespace Blanc.Composition.UniswapV2PairWeth9Joint
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Weth9 Blanc.Lift.UniswapV2Pair
 
 /-- **Skim's callee environment with WETH9 as token0**: `SkimForwardEnv` with WETH9's query and
-transfer records replaced by the pins `read`/`leg` to the legs WETH9's code determines. -/
+transfer records replaced by pins to the legs WETH9's code determines.  The pins are definitions in
+order: `gasT0` fixes the transfer's call gas from the second query's call gas `callGasQ1` (on the
+query's gas-free skeleton, `skimLeg0Gas`), `read` fixes the query's result and call gas from it, and
+`leg` fixes the transfer's result from those.  Any choice of the other fields extends to an
+environment satisfying all three. -/
 structure SkimCalleeW0 (sevm : Sevm) (b : Devm) (g : Nat) where
-  qd0 : Devm
-  dt0 : Devm
   qd1 : Devm
   dt1 : Devm
-  callGasQ0 : Nat
-  callGasT0 : Nat
   callGasQ1 : Nat
   callGasT1 : Nat
+  callGasT0 : Nat
+  qd0 : Devm
+  callGasQ0 : Nat
+  dt0 : Devm
+  gasT0 : callGasT0 = skimLeg0Gas sevm b callGasQ1
   read : (qd0, callGasQ0) = skimWethRead0 sevm b callGasT0
-  leg : (dt0, callGasT0) = skimWethLeg0 sevm b qd0 callGasQ1
+  leg : dt0 = (skimWethLeg0 sevm b qd0 callGasQ1).1
   sentry : gCallStipend < ((((callGasQ0 + 5) +
       sloadCost sevm (syncLockedWorld sevm b) 6 +
       sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7 +
@@ -208,9 +214,10 @@ theorem skimReserve0_eq (sevm : Sevm) (pre : Devm) :
   rfl
 
 /-- **C4(b), the skim liveness row with WETH9 as token0.**  As `pair_history_skim_live`, from the
-joint checkpoint, with WETH9's query and transfer records removed (pinned by `callee.read` and
-`callee.leg` to `skimWethRead0` and `skimWethLeg0`).  The transfer's balance condition comes from
-C3.  What stays is token1's records, the lock sentries, the first transfer's trace-local HASH-T,
+joint checkpoint, with WETH9's query and transfer records removed (pinned in order by
+`callee.gasT0`, `callee.read` and `callee.leg` to `skimLeg0Gas`, `skimWethRead0` and
+`skimWethLeg0`).  The transfer's balance condition comes from C3.  What stays is token1's
+records, the lock sentries, the first transfer's trace-local HASH-T,
 the frame's call depth and mutability, and the legs' gas sentries. -/
 theorem pair_weth9_history_skim_live_zero {pair weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop} {KP : WriterKey → Prop}
@@ -264,10 +271,10 @@ theorem pair_weth9_history_skim_live_zero {pair weth : Adr} {cfg : ChainConfig}
     (congrArg Prod.fst callee.read).symm
   have hq' : (skimWethRead0 sevm pre callee.callGasT0).2 = callee.callGasQ0 :=
     (congrArg Prod.snd callee.read).symm
-  have hl : (skimWethLeg0 sevm pre callee.qd0 callee.callGasQ1).1 = callee.dt0 :=
-    (congrArg Prod.fst callee.leg).symm
-  have hl' : (skimWethLeg0 sevm pre callee.qd0 callee.callGasQ1).2 = callee.callGasT0 :=
-    (congrArg Prod.snd callee.leg).symm
+  have hl : (skimWethLeg0 sevm pre callee.qd0 callee.callGasQ1).1 = callee.dt0 := callee.leg.symm
+  have hl' : (skimWethLeg0 sevm pre callee.qd0 callee.callGasQ1).2 = callee.callGasT0 := by
+    rw [← hq, skimWethLeg0_read, callee.gasT0]
+    rfl
   obtain ⟨code, token, -, reserve⟩ := pair_weth9_frame .zero trace joint pairFresh wethFresh
     factoryInstalled factoryNotSystem state
   have ne : sevm.currentTarget ≠ weth := target ▸ joint.apart
