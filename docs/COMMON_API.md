@@ -4784,7 +4784,12 @@ contract-neutral.
   (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
   `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
   (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`, …) and the
-  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_succ`; all in
+  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
+  frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
+  save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
+  `MemTrack.withWords`), the bridges `WordFrame.keepsOff`/`WordFrame.memTrack`/
+  `WordFrame.words1`, the untracked load `ric_mloadU` (`imloadU`), `isltV`, the forward
+  `rxc_slt`/`rxc_xor`, and `xname` (name the tracked memory of a forward walk); all in
   [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
   The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
   whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.

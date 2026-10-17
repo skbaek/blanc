@@ -671,6 +671,19 @@ theorem rxc_pushMstoreF {M0 : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M
       (.next (.push [hh, ll] le) (.next (.reg .mstore) f)) r :=
   rxc_push rfl (by simp only [List.length_cons]; omega) (rxc_mstoreF hF j hi hj kk)
 
+/-- `SLT`, forward. -/
+theorem rxc_slt {f : SFunc} {x y v : B256} (hv : B256.sltCheck x y = v)
+    (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .slt) f) r :=
+  rxc_binary (fn := B256.sltCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
+/-- `XOR`, forward. -/
+theorem rxc_xor {f : SFunc} {x y v : B256} (hv : x ^^^ y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .xor) f) r :=
+  rxc_binary (fn := (· ^^^ ·)) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
 end Fwd
 
 /-! ## Checked operations read back as guards (for the forward walks) -/

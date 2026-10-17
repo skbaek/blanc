@@ -885,6 +885,7 @@ import Blanc.Lift.Curve3Pool.Callee.GetYTrees
 import Blanc.Lift.Curve3Pool.Callee.GetYLoop
 import Blanc.Lift.Curve3Pool.Callee.GetYCoins
 import Blanc.Lift.Curve3Pool.Callee.GetY
+import Blanc.Lift.Curve3Pool.Callee.GetYExact
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

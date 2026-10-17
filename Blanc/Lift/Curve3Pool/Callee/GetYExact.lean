@@ -904,4 +904,294 @@ theorem gyStage0X {i j x x0 x1 x2 ρ amp w8 w9 D w11 w12 w13 w14 w15 w16 w17 w18
 
 end Fwd
 
+/-! ## The model, read back -/
+
+theorem getYChk_gyRes {amp i j x x0 x1 x2 v : Nat} (hi : i < 3) (hj : j < 3)
+    (h : getYChk amp ⟨i, hi⟩ ⟨j, hj⟩ x (V3.mk x0 x1 x2).get = some v) :
+    i ≠ j ∧ ∃ D ann, getDChk (V3.mk x0 x1 x2).get amp 1 = some D ∧ chkMul amp 3 = some ann ∧
+      gyRes i j x x0 x1 x2 D ann = some v := by
+  unfold getYChk at h
+  by_cases hij : (⟨i, hi⟩ : Fin 3) = ⟨j, hj⟩
+  · rw [if_pos hij] at h; cases h
+  rw [if_neg hij] at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨D, hD, ann, hann, h⟩ := h
+  refine ⟨fun he => hij (by subst he; rfl), D, ann, hD, hann, ?_⟩
+  have hc := ydRes_of_core h
+  unfold gyRes
+  obtain rfl | rfl | rfl : i = 0 ∨ i = 1 ∨ i = 2 := by omega
+  all_goals obtain rfl | rfl | rfl : j = 0 ∨ j = 1 ∨ j = 2 := by omega
+  all_goals first
+    | exact absurd rfl hij
+    | (simp only [gyCoinStep, Nat.reduceEqDiff, ↓reduceIte, Option.bind_some]
+       exact hc)
+
+/-! ## The frame chains around `get_D`, forward -/
+
+section FwdChains
+
+variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg}
+
+theorem rxc_save_1971 (hsz : M.size % 32 = 0) (hcs : 0x2c0 ≤ M.size)
+    (hctr : memWord M 0x2a0 = Nat.toB256 0x140) (hroom : S.length + 15 < 1024)
+    (kk : SFunc.RunExactCut prog sevm [] (St b ((frameWords M 0x140 11).reverse ++ S)
+      (saveMem M 0x2a0 0x140 11) G) t_1993_c402 r) :
+    SFunc.RunExactCut prog sevm [] (St b S M (G + 726)) t_1971_c252 r := by
+  rw [t_1971_c252_eq]
+  have h := rxc_frameSave_chain (lo := 0x140) saveChain_1971 (fun _ _ h => by cases h) hsz
+    (by rw [saveTpl_1971_c]; omega) (by rw [saveTpl_1971_c]; exact hctr) (by decide)
+    (by decide) (by have : saveKs_1971.length = 10 := rfl; omega) kk
+  rw [show saveKs_1971.length = 10 from rfl] at h
+  exact h
+
+theorem rxc_restore_19e0 {ts : List B256} (hts : ts.length = 11) (hsz : M.size % 32 = 0)
+    (hcs : 0x2c0 ≤ M.size) (hctr : memWord M 0x2a0 = Nat.toB256 0x280)
+    (hroom : S.length + 15 < 1024)
+    (kk : SFunc.RunExactCut prog sevm [] (St b S (restoreMem 0x2a0 M 0x280 ts) G) t_1a03_c547 r) :
+    SFunc.RunExactCut prog sevm [] (St b (ts ++ S) M (G + 759)) t_19e0_c402 r := by
+  rw [t_19e0_c402_eq]
+  have h := rxc_frameRestore_chain (lo := 0x140) restoreChain_19e0 (fun _ _ h => by cases h)
+    (by rw [hts]; rfl) hsz (by rw [restoreTpl_19e0_c]; omega) (by decide) (by decide)
+    (by rw [restoreTpl_19e0_c]; decide) (by rw [restoreTpl_19e0_c]; exact hctr)
+    (by have : restoreKs_19e0.length = 10 := rfl; omega) kk
+  rw [show restoreKs_19e0.length = 10 from rfl] at h
+  exact h
+
+end FwdChains
+
+/-- Stack-room side goals over frame words. -/
+macro "gylen" : tactic => `(tactic| (first | omega | (simp only [List.length_cons, List.length_append, List.length_reverse, length_frameWords]; omega)))
+
+/-! ## The contract, forward -/
+
+/-- **`get_y`'s gas** at `_A`'s value `amp`: the glue (`2100`), `_A`'s reads (`aGas`),
+`get_D`'s `costGetD` and the coin and `y` loops, on the model's naturals (`0` past a model
+revert). -/
+def costGetY (sevm : Sevm) (b : Devm) (amp i j x x0 x1 x2 : Nat) : Nat :=
+  2100 + aGas sevm b + match getDChk (V3.mk x0 x1 x2).get amp 1, chkMul amp 3 with
+    | some D, some ann => costGetD x0 x1 x2 amp + gyCostFrom0 i j x x0 x1 x2 D ann (D, 0)
+    | _, _ => 0
+
+-- SEGMENT: getY_exact
+/-- **`get_y`'s forward twin.**  When `_A` reads `amp` and the checked model returns `v`, the
+entry tree runs from the call's state with `costGetY` gas over `G` to its return of `v` over the
+caller's stack with `G` left and the world moved by `_A`'s reads (`aBase`), over a memory
+already covering `[0, 0x4c0)`: kept off `get_y`'s windows, well formed, of the same size. -/
+theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
+    {G n v amp : Nat} {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (hA : aChk s sevm.benvStat.time.toNat = some amp) (hi : i.toNat < 3) (hj : j.toNat < 3)
+    (hres : getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat
+      (V3.mk x0.toNat x1.toNat x2.toNat).get = some v)
+    (hwf : Mem.Wf M) (hS : M.size = n) (hn : n % 32 = 0) (htop : 0x4c0 ≤ n)
+    (hroom : S.length + 64 < 1024) :
+    ∃ M', SFunc.RunExact prog sevm (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M
+        (G + costGetY sevm b amp i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat)) t_18a4_c252
+        (.returned (St (aBase sevm b) (Nat.toB256 v :: S) M' G)) ∧
+      (Mem.KeepsOff M M' gyWin ∧ Mem.Wf M' ∧ M'.size = n) := by
+  obtain ⟨hij, D, ann, hD, hann, hgy⟩ := getYChk_gyRes hi hj hres
+  have hT := (MemTrack.init hwf gyWin).withWords (L' := [(0x220, memWord M 0x220)])
+    (Words.cons.mpr ⟨⟨by omega, rfl⟩, Words.nil _⟩)
+  have hcost : costGetY sevm b amp i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat =
+      2100 + aGas sevm b + (costGetD x0.toNat x1.toNat x2.toNat amp +
+        gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0)) := by
+    simp only [costGetY, hD, hann]
+  rw [show G + costGetY sevm b amp i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat =
+    G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) +
+      costGetD x0.toNat x1.toNat x2.toNat amp + aGas sevm b + 2100 from by
+    rw [hcost]; omega]
+  simp only [SFunc.runExact_iff_runExactCut_nil]
+  -- the arguments and the asserts
+  xstep; xmstore 0x200; xmstore 0x140; xmstore 0x160; xmstore 0x180; xmstore 0x1a0
+  xmstore 0x1c0; xmstore 0x1e0
+  have hxor : i ^^^ j ≠ 0 := fun h => hij (by rw [(B256.xor_eq_zero_iff _ _).mp h])
+  obtain ⟨hs0j, hs3j⟩ := slt_small hj
+  obtain ⟨hs0i, hs3i⟩ := slt_small hi
+  xmload 0x160; xmload 0x140; xstep; xstep
+  xassert hxor
+  xstep; xmload 0x160; xstep; xstep; xstep
+  rw [hs0j]
+  xassert (show B256.eqCheck 0 0 ≠ 0 by decide)
+  xstep; xmload 0x160; xstep; xstep
+  rw [hs3j]
+  xassert (show (1 : B256) ≠ 0 by decide)
+  xstep; xmload 0x140; xstep; xstep; xstep
+  rw [hs0i]
+  xassert (show B256.eqCheck 0 0 ≠ 0 by decide)
+  xstep; xmload 0x140; xstep; xstep
+  rw [hs3i]
+  xassert (show (1 : B256) ≠ 0 by decide)
+  -- `_A`, around the eight words `0x140 … 0x220`
+  xmload 0x140; xmload 0x160; xmload 0x180; xmload 0x1a0; xmload 0x1c0; xmload 0x1e0
+  xmload 0x200; xmload 0x220
+  xname M1
+  obtain ⟨w, ⟨MA, hcallA, hkA, hwfA, hSA⟩, hw⟩ := a_exact (sevm := sevm) (b := b)
+    (ret := Nat.toB256 (0x1937 + 6))
+    (G := G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) +
+      costGetD x0.toNat x1.toNat x2.toNat amp + 1851)
+    (S := memWord M 0x220 :: ρ :: x2 :: x1 :: x0 :: x :: j :: i :: S)
+    hfork ha hA hT.wf hS hn (by omega) (by simp only [List.length_cons]; omega)
+  rw [show G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) +
+      costGetD x0.toNat x1.toNat x2.toNat amp + 1851 + aGas sevm b =
+    G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) +
+      costGetD x0.toNat x1.toNat x2.toNat amp + aGas sevm b + 1851 from by omega] at hcallA
+  refine xlift (fun _ k => rxc_pcCall prog_27 (by decide) (by simp only [List.length_cons]; omega)
+    hcallA k) ?_
+  have hTA : MemTrack M MA gyWin [] :=
+    ⟨hT.keeps.trans (hkA.widen (by decide)), Words.nil _, hwfA, fun _ => by rw [hSA]; exact hn⟩
+  clear hT hS
+  have hT := hTA
+  have hS := hSA
+  clear hTA hSA
+  xstep; xmstore 0x260; xmstore 0x220; xmstore 0x200; xmstore 0x1e0; xmstore 0x1c0
+  xmstore 0x1a0; xmstore 0x180; xmstore 0x160; xmstore 0x140
+  xmload 0x260; xmstore 0x220
+  xstep; xmstore 0x2a0
+  xname M2
+  -- the frame save, `[0x140, 0x2a0)`
+  have hc2 := hT.words.memWord (o := 0x2a0) (v := Bytes.toB256 [1, 64]) (by wmem)
+  have hi2 := hT.words.memWord (o := 0x140) (v := i) (by wmem)
+  have hj2 := hT.words.memWord (o := 0x160) (v := j) (by wmem)
+  have hx2 := hT.words.memWord (o := 0x180) (v := x) (by wmem)
+  have hx02 := hT.words.memWord (o := 0x1a0) (v := x0) (by wmem)
+  have hx12 := hT.words.memWord (o := 0x1c0) (v := x1) (by wmem)
+  have hx22 := hT.words.memWord (o := 0x1e0) (v := x2) (by wmem)
+  have hρ2 := hT.words.memWord (o := 0x200) (v := ρ) (by wmem)
+  have hamp2 := hT.words.memWord (o := 0x220) (v := w) (by wmem)
+  have hT2 := (hT.sub (L' := [(0x220, w), (0x1e0, x2), (0x1c0, x1), (0x1a0, x0)])
+    (by intro x hx; simp only [List.mem_cons, List.not_mem_nil, or_false] at hx ⊢
+        rcases hx with rfl | rfl | rfl | rfl <;> simp only [true_or, or_true])).saveMem'
+    (c := 0x2a0) (lo := 0x140) rfl rfl 11
+  have hS2 : (saveMem M2 0x2a0 0x140 11).size = n := by
+    rw [saveMem_size (by omega)]; exact hS
+  refine xlift (fun _ k => rxc_save_1971 (by rw [hS]; exact hn) (by omega)
+    (hc2.trans (by decide)) (by omega) k) ?_
+  clear hT hS
+  have hT := hT2
+  have hS := hS2
+  clear hT2 hS2
+  generalize hF1 : (frameWords M2 0x140 11).reverse ++ S = S1
+  have hS1l : S1.length = S.length + 11 := by
+    rw [← hF1, List.length_append, List.length_reverse, length_frameWords]; omega
+  -- `xp_` and `amp` to `0x2c0 … 0x320`, call `get_D`
+  xstep; xstep; xstep; xstep; xmload' 0x1a0; xstep; xmstore' 0x2c0
+  xstep; xstep; xstep; xmload' 0x1c0; xstep; xstep; xstep; xmstore' 0x2e0
+  xstep; xstep; xstep; xmload' 0x1e0; xstep; xstep; xstep; xmstore' 0x300
+  xstep; xstep; xmload 0x220; xmstore 0x320
+  xmload 0x320; xmload 0x300; xmload 0x2e0; xmload 0x2c0
+  xname M3
+  have hDw : getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get w.toNat 1 = some D := by
+    rw [hw]; exact hD
+  obtain ⟨M4, hso, hgD⟩ := getD_exact (sevm := sevm) (b := aBase sevm b)
+    (ρ := Nat.toB256 (0x19ce + 6))
+    (G := G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) + 923)
+    (S := S1) (by rw [hS]; exact hn) (by omega) (by omega) hDw
+  -- `D` is a word
+  have hDlt : (Nat.toB256 D).toNat = D := by
+    obtain ⟨d, hd, v', M', G', hd', hv', -⟩ := getD_spec (by rw [hS]; exact hn) (by omega)
+      hgD.toRun
+    have hd2 := Outcome.returned.inj hd
+    rw [hd'] at hd2
+    have hst := congrArg Devm.stack hd2
+    rw [St.stack, St.stack] at hst
+    have hv := (List.cons.inj hst).1
+    rw [← hv, hDw] at hv'
+    exact (Option.some.inj hv').symm
+  rw [show G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) + 923 +
+      costGetD x0.toNat x1.toNat x2.toNat w.toNat =
+    G + gyCostFrom0 i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat D ann (D, 0) +
+      costGetD x0.toNat x1.toNat x2.toNat amp + 923 from by rw [hw]; omega] at hgD
+  refine xlift (fun _ k => rxc_pcCall prog_417 (by decide)
+    (by simp only [List.length_cons]; omega) hgD k) ?_
+  have hT4 : MemTrack M M4 gyWin [] :=
+    ⟨hT.keeps.trans ((hso.keepsOff hT.wf).widen (by decide)), Words.nil _, hso.wf hT.wf,
+      fun _ => by rw [hso.size, hS]; exact hn⟩
+  have hS4 : M4.size = n := by rw [hso.size, hS]
+  clear hT hS
+  have hT := hT4
+  have hS := hS4
+  clear hT4 hS4
+  -- park `D`, restore `[0x140, 0x2a0)`
+  xstep; xmstore 0x380; xstep; xmstore 0x2a0
+  xname M5
+  have hc5 := hT.words.memWord (o := 0x2a0) (v := Bytes.toB256 [2, 0x80]) (by wmem)
+  subst hF1
+  refine xlift (fun _ k => rxc_restore_19e0 (by simp only [List.length_reverse, length_frameWords])
+    (by rw [hS]; exact hn) (by omega) (hc5.trans (by decide)) (by omega) k) ?_
+  have hfr := restoreMem_frameWords (c := 0x2a0) (lo := 0x140) (n := 11) (M := M5) (W := M2)
+    (by omega) (by decide)
+  have hw6 := Words.append.mpr ⟨Words.of_frameSlots hfr (j := 0) (by decide) hi2,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 1) (by decide) hj2,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 2) (by decide) hx2,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 3) (by decide) hx02,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 4) (by decide) hx12,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 5) (by decide) hx22,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 6) (by decide) hρ2,
+    Words.append.mpr ⟨Words.of_frameSlots hfr (j := 7) (by decide) hamp2,
+      Words.restoreMem' (c := 0x2a0) (p := 0x280) (ws := (frameWords M2 0x140 11).reverse)
+        (hT.words.sub (L' := [(0x380, Nat.toB256 D)]) (by
+          intro x hx
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+          rw [hx]; wmem)) (by decide)
+        (by simp only [List.length_reverse, length_frameWords]; rfl)⟩⟩⟩⟩⟩⟩⟩⟩
+  have hT6 := (MemTrack.restoreMem (c := 0x2a0) rfl (frameWords M2 0x140 11).reverse hT
+    (p := 0x280) (fun k hk => by
+      simp only [List.length_reverse, length_frameWords] at hk
+      have h11 : ∀ k, k < 11 → coversWord gyWin (0x280 - 32 * k) = true := by decide
+      exact h11 k hk)).withWords hw6
+  have hS6 : (restoreMem 0x2a0 M5 0x280 (frameWords M2 0x140 11).reverse).size = n := by
+    rw [restoreMem_size _ (by omega) (by omega)]; exact hS
+  clear hT hS hw6
+  have hT := hT6
+  have hS := hS6
+  clear hT6 hS6
+  -- `c = D`, `S_ = 0`, `Ann`, `_x = 0`, the coin-loop counter
+  rw [t_1a03_c547_eq]
+  obtain ⟨hm, rfl⟩ := chkMul_inv (x := w) (y := Bytes.toB256 [0x03])
+    (by rw [show (Bytes.toB256 [0x03]).toNat = 3 by decide, hw]; exact hann)
+  xstep; xmload 0x380; xmstore 0x280; xmload 0x280; xmstore 0x3a0; xstep; xmstore 0x3c0
+  xmload 0x220; xstep
+  refine xlift (fun _ k => rxc_vyMulT hm (by vy_room) k) ?_
+  xmstore 0x3e0; xstep; xmstore 0x400
+  xstep; xstep; xstep; xstep; xstep; xmstore' 0x420
+  xstep
+  xname Mc
+  rw [show Bytes.toB256 [0x03] + Bytes.toB256 [0x00] = Nat.toB256 3 by decide, toB256_0x420]
+  have hi12 := hT.words.memWord (o := 0x140) (v := i) (by wmem)
+  have hj12 := hT.words.memWord (o := 0x160) (v := j) (by wmem)
+  have hx12 := hT.words.memWord (o := 0x180) (v := x) (by wmem)
+  have hx012 := hT.words.memWord (o := 0x1a0) (v := x0) (by wmem)
+  have hx112 := hT.words.memWord (o := 0x1c0) (v := x1) (by wmem)
+  have hx212 := hT.words.memWord (o := 0x1e0) (v := x2) (by wmem)
+  have hρ12 := hT.words.memWord (o := 0x200) (v := ρ) (by wmem)
+  have hamp12 := hT.words.memWord (o := 0x220) (v := w) (by wmem)
+  have hD12 := hT.words.memWord (o := 0x280) (v := Nat.toB256 D) (by wmem)
+  have hc12 := hT.words.memWord (o := 0x3a0) (v := Nat.toB256 D) (by wmem)
+  have hs12 := hT.words.memWord (o := 0x3c0) (v := Bytes.toB256 [0x00]) (by wmem)
+  have hann12 := hT.words.memWord (o := 0x3e0) (v := w * Bytes.toB256 [0x03]) (by wmem)
+  have hxv12 := hT.words.memWord (o := 0x400) (v := Bytes.toB256 [0x00]) (by wmem)
+  have hcc12 := hT.words.memWord (o := 0x420) (v := Bytes.toB256 [0x00]) (by wmem)
+  have hF := WordFrame.init (M0 := Mc) (lo := 0x140) (n := 28) (by rw [hS]; exact hn)
+    (by omega)
+  rw [show frameWords Mc 0x140 28 = [memWord Mc 0x140, memWord Mc 0x160, memWord Mc 0x180,
+    memWord Mc 0x1a0, memWord Mc 0x1c0, memWord Mc 0x1e0, memWord Mc 0x200, memWord Mc 0x220,
+    memWord Mc 0x240, memWord Mc 0x260, memWord Mc 0x280, memWord Mc 0x2a0, memWord Mc 0x2c0,
+    memWord Mc 0x2e0, memWord Mc 0x300, memWord Mc 0x320, memWord Mc 0x340, memWord Mc 0x360,
+    memWord Mc 0x380, memWord Mc 0x3a0, memWord Mc 0x3c0, memWord Mc 0x3e0, memWord Mc 0x400,
+    memWord Mc 0x420, memWord Mc 0x440, memWord Mc 0x460, memWord Mc 0x480, memWord Mc 0x4a0]
+    from rfl, hi12, hj12, hx12, hx012, hx112, hx212, hρ12, hamp12, hD12, hc12, hs12, hann12,
+    hxv12, hcc12, toB256_zero] at hF
+  have hres0 : ((gyCoinStep i.toNat j.toNat 0 x.toNat x0.toNat (Nat.toB256 D).toNat
+      ((Nat.toB256 D).toNat, (Nat.toB256 0).toNat)).bind fun cs =>
+      (gyCoinStep i.toNat j.toNat 1 x.toNat x1.toNat (Nat.toB256 D).toNat cs).bind fun cs =>
+        (gyCoinStep i.toNat j.toNat 2 x.toNat x2.toNat (Nat.toB256 D).toNat cs).bind fun cs =>
+          ydPostRes cs.1 cs.2 (Nat.toB256 D).toNat (w * Bytes.toB256 [0x03]).toNat) = some v := by
+    rw [hDlt, show (Nat.toB256 0).toNat = 0 by decide]
+    exact hgy
+  obtain ⟨r, hrun, Mf, hr, hout⟩ := gyStage0X (G := G) (S := S) (by omega) hF hres0
+  subst hr
+  rw [hDlt, show (Nat.toB256 0).toNat = 0 by decide] at hrun
+  refine ⟨Mf, hrun, hT.keeps.trans ((hout.keepsOff hT.wf).widen (by decide)), hout.wf hT.wf,
+    by rw [hout.size, hS]⟩
+
 end Blanc.Lift.Curve3Pool
