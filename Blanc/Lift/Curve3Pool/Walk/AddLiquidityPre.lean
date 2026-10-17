@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 
 /-!
 # `add_liquidity`, part 1: the guards, the fee and `_A`
@@ -350,5 +351,170 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   refine ⟨hlock, hval, hkill, hmulw, A, _, _, _, hA, hR, hW, ?_, ?_, ?_, ?_, ?_, WordAt.write_self _ _ _,
     h⟩ <;> refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega) <;> rw [hI] <;>
     wchain
+
+theorem al_bal0 : balancesBase = balancesBase + Nat.toB256 0 := by decide
+
+/-- **`add_liquidity`, part 2** (`0xf0d` → `0xf83`): `token_supply = token.totalSupply()` (a
+`STATICCALL` returning at least a word), `D0 = 0`, `old_balances = self.balances`. -/
+theorem xa_al_p2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {σ : Stor} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
+    (hSK : StaticKeeps sevm (σ.get tokenSlot))
+    (h : XAt sevm post 0xf0d (St b [] M G) L) :
+    ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
+      L = c :: L' ∧ 0 < sevm.depth ∧
+      c.sevm.currentTarget = (σ.get tokenSlot).toAdr ∧
+      c.sevm.data = totalSupplyData ∧ c.sevm.isStatic = true ∧ 32 ≤ c.post.output.length ∧
+      c.post.logs = [] ∧ (∀ a, c.pre.getCode a = b.getCode a) ∧
+      (∀ a, b1.getCode a = c.post.getCode a) ∧
+      (∀ x, (b1.getStor sevm.currentTarget).get x = σ.get x) ∧
+      (∀ a, b1.getStor a = b.getStor a) ∧
+      b1.logs = b.logs ∧ b1.output = b.output ∧ Devm.AccGrow b b1 ∧ b1.getCode 4 = b.getCode 4 ∧
+      (∀ a, b.getCode a ≠ .empty → b1.getCode a = b.getCode a) ∧
+      Mem.Reads M1 img1 ∧ Mem.Wf M1 ∧
+      (∀ o w, WordAt img o w → (o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o) → (o + 32 ≤ 0x240 ∨ 0x260 ≤ o) →
+        (o + 32 ≤ 0x260 ∨ 0x2a0 ≤ o) → (o + 32 ≤ 0x2c0 ∨ 0x360 ≤ o) → WordAt img1 o w) ∧
+      WordAt img1 0x240 (Bytes.toB256 (c.post.output.take 32)) ∧ WordAt img1 0x2e0 0 ∧
+      (∀ j, j < 3 → WordAt img1 (0x300 + 32 * j) (balAt σ j)) ∧
+      XAt sevm post 0xf83 (St b1 [] M1 G1) L' := by
+  xs 0xf0f (.push [0x20] (by decide)) ri_push
+  xs 0xf12 (.push [0x02, 0xc0] (by decide)) ri_push
+  xs 0xf14 (.push [0x04] (by decide)) ri_push
+  xs 0xf19 (.push [0x18, 0x16, 0x0d, 0xdd] (by decide)) ri_push
+  xs 0xf1c (.push [0x02, 0x60] (by decide)) ri_push
+  xmo 0xf1d (.reg .mstore) (ri_mstore_imgAt (o := 0x260) rfl)
+  xs 0xf20 (.push [0x02, 0x7c] (by decide)) ri_push
+  xs 0xf22 (.push [0x05] (by decide)) ri_push
+  xw 0xf23 (.reg .sload) ri_sload
+  rw [getStorVal_eq, hst, tokenSlot_lit] at h
+  xs 0xf24 (.reg .gas) ri_gas_remaining
+  replace h := xa_staticcall_img (pc' := 0xf25) (i := 0x27c) (n := 4) (o := 0x2c0) (z := 0x20)
+    hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  clear hR hW
+  obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
+  xs 0xf28 (.push [0x0f, 0x2d] (by decide)) ri_push
+  xji 0xf29 0xf2d hw
+  · xdead
+  have h4 : d1.getCode 4 = b.getCode 4 := by
+    rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
+    show (afterSload sevm _ _).getCode 4 = _
+    rw [afterSload_getCode]
+  rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs,
+    hcpre, hcpost⟩
+  · exact absurd hpre htok
+  clear hk
+  xjd 0xf2e
+  xs 0xf30 (.push [0x1f] (by decide)) ri_push
+  xs 0xf31 (.reg .returndatasize) ri_returndatasize
+  xs 0xf32 (.reg .gt) ri_gt
+  xs 0xf35 (.push [0x0f, 0x3a] (by decide)) ri_push
+  xji 0xf36 0xf3a hw2
+  · xdead
+  have hlen : 32 ≤ out.length := by
+    have e := gtCheck_ne_zero hw2
+    rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
+    exact e
+  clear hw2
+  have hst1 : ∀ x, (d1.getStor sevm.currentTarget).get x = σ.get x := by
+    intro x; rw [hstor, afterSload_getStor, hst]
+  xjd 0xf3b
+  xs 0xf3d (.push [0x00] (by decide)) ri_push
+  xs 0xf3e (.reg .pop) ri_pop
+  xs 0xf41 (.push [0x02, 0xc0] (by decide)) ri_push
+  xmo 0xf42 (.reg .mload) (ri_mload_imgAt (o := 0x2c0) rfl)
+  xs 0xf45 (.push [0x02, 0x40] (by decide)) ri_push
+  xmo 0xf46 (.reg .mstore) (ri_mstore_imgAt (o := 0x240) rfl)
+  xs 0xf48 (.push [0x00] (by decide)) ri_push
+  xs 0xf4b (.push [0x02, 0xe0] (by decide)) ri_push
+  xmo 0xf4c (.reg .mstore) (ri_mstore_imgAt (o := 0x2e0) rfl)
+  xs 0xf4f (.push [0x03, 0x00] (by decide)) ri_push
+  xs 0xf51 (.push [0x01] (by decide)) ri_push
+  xs 0xf52 (.reg (.dup 0)) (ri_dup (by rfl))
+  xs 0xf54 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf55 (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
+  xs 0xf57 (.push [0x20] (by decide)) ri_push
+  xs 0xf59 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf5a (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
+  rw [keccak_one, al_bal0] at h
+  xw 0xf5b (.reg .sload) ri_sload
+  rw [getStorVal_eq, hst1] at h
+  xs 0xf5c (.reg (.dup 2)) (ri_dup (by rfl))
+  xmo 0xf5d (.reg .mstore) (ri_mstore_imgAt (o := 0x300) rfl)
+  xs 0xf5f (.push [0x01] (by decide)) ri_push
+  xs 0xf60 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0xf62 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf63 (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
+  xs 0xf65 (.push [0x20] (by decide)) ri_push
+  xs 0xf67 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf68 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
+  rw [keccak_one] at h
+  xs 0xf69 (.reg .add) ri_add
+  rw [show balancesBase + Bytes.toB256 [1] = balancesBase + Nat.toB256 1 by decide] at h
+  xw 0xf6a (.reg .sload) ri_sload
+  rw [getStorVal_afterSload, getStorVal_eq, hst1] at h
+  xs 0xf6b (.reg (.dup 2)) (ri_dup (by rfl))
+  xs 0xf6d (.push [0x20] (by decide)) ri_push
+  xs 0xf6e (.reg .add) ri_add
+  xmo 0xf6f (.reg .mstore) (ri_mstore_imgAt (o := 0x320) rfl)
+  xs 0xf71 (.push [0x02] (by decide)) ri_push
+  xs 0xf72 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0xf74 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf75 (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
+  xs 0xf77 (.push [0x20] (by decide)) ri_push
+  xs 0xf79 (.push [0xc0] (by decide)) ri_push
+  xmo 0xf7a (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
+  rw [keccak_one] at h
+  xs 0xf7b (.reg .add) ri_add
+  rw [show balancesBase + Bytes.toB256 [2] = balancesBase + Nat.toB256 2 by decide] at h
+  xw 0xf7c (.reg .sload) ri_sload
+  rw [getStorVal_afterSload, getStorVal_afterSload, getStorVal_eq, hst1] at h
+  xs 0xf7d (.reg (.dup 2)) (ri_dup (by rfl))
+  xs 0xf7f (.push [0x40] (by decide)) ri_push
+  xs 0xf80 (.reg .add) ri_add
+  xmo 0xf81 (.reg .mstore) (ri_mstore_imgAt (o := 0x340) rfl)
+  xs 0xf82 (.reg .pop) ri_pop
+  xs 0xf83 (.reg .pop) ri_pop
+  obtain ⟨img1, hR1, hI⟩ := Mem.Reads.forget hR
+  have hTw : List.sliceD (Bytes.writeAt (Bytes.writeAt img 0x260
+      (Bytes.toB256 [0x18, 0x16, 0x0d, 0xdd]).toBytes) 0x2c0 (List.take 32 out)) 0x2c0 32 0 =
+      List.take 32 out := by
+    rw [Bytes.sliceD_writeAt_inside _ _ _ _ _ (le_refl _)
+      (by rw [List.length_take]; omega), Nat.sub_self]
+    exact List.sliceD_zero_of_length (by rw [List.length_take]; omega)
+  refine ⟨c, L1, _, M, _, img1, hL, hdepth, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs, ?_,
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hR1, hW, ?_, ?_, ?_, ?_, h⟩
+  · rw [hdata, Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide)
+      (by rw [B256.length_toBytes])]
+    decide
+  · intro a
+    rw [hcpre, afterSload_getCode]
+  · intro a
+    rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, hcpost]
+  · intro x
+    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, hst1]
+  · intro a
+    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, hstor, afterSload_getStor]
+  · rw [afterSload_logs, afterSload_logs, afterSload_logs, hlogs, afterSload_logs]
+  · rw [afterSload_output, afterSload_output, afterSload_output, hout, afterSload_output]
+  · refine Devm.AccGrow.trans (Devm.AccGrow.of_eq ?_) (Devm.AccGrow.trans hacc
+      (Devm.AccGrow.of_eq ?_))
+    · rw [afterSload_accessedAddresses]
+    · rw [afterSload_accessedAddresses, afterSload_accessedAddresses,
+        afterSload_accessedAddresses]
+  · rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, h4]
+  · intro a ha
+    have e := hcodeK a (by rwa [afterSload_getCode])
+    rw [afterSload_getCode] at e
+    rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, e]
+  · intro o w hw h1 h2 h3 h4'
+    rw [hI]; wchain; exact hw
+  · rw [hI]; wchain
+    rw [hTw, hcout]
+    exact WordAt.write_self _ _ _
+  · rw [hI]; wchain
+  · intro j hj
+    rw [hI]
+    rcases three_cases hj with rfl | rfl | rfl <;> wchain
 
 end Blanc.Lift.Curve3Pool
