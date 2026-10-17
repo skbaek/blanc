@@ -74,6 +74,12 @@ def create2Transfer : Pattern → Option Pattern
   | _ :: _ :: _ :: _ :: words => some (none :: words)
   | _ => none
 
+/-- `DELEGATECALL` pops gas, target, input offset and size, output offset and size, and pushes the
+success flag. -/
+def delegatecallTransfer : Pattern → Option Pattern
+  | _ :: _ :: _ :: _ :: _ :: _ :: words => some (none :: words)
+  | _ => none
+
 /-- Stack transfer of a non-push, non-jump instruction.  `PUSH` is handled by
 the checker itself because it is the one instruction whose output word is a
 literal rather than a copy of an input. -/
@@ -82,6 +88,7 @@ def ninstTransfer : Ninst → Pattern → Option Pattern
   | .exec .call, words => callTransfer words
   | .exec .staticcall, words => staticcallTransfer words
   | .exec .create2, words => create2Transfer words
+  | .exec .delegatecall, words => delegatecallTransfer words
   | _, _ => none
 
 private theorem dropTransfer_map (φ : Option B256 → Option B256)
@@ -477,6 +484,25 @@ private theorem create2Transfer_append {words output below : Pattern}
   match words, checked with
   | _ :: _ :: _ :: _ :: words, checked =>
       simp only [create2Transfer, Option.some.injEq] at checked ⊢
+      cases checked
+      rfl
+
+private theorem delegatecallTransfer_map (φ : Option B256 → Option B256)
+    (hφ : φ none = none) {words output : Pattern}
+    (checked : delegatecallTransfer words = some output) :
+    delegatecallTransfer (words.map φ) = some (output.map φ) := by
+  match words, checked with
+  | _ :: _ :: _ :: _ :: _ :: _ :: words, checked =>
+      simp only [delegatecallTransfer, Option.some.injEq] at checked ⊢
+      cases checked
+      simp only [List.map_cons, hφ]
+
+private theorem delegatecallTransfer_append {words output below : Pattern}
+    (checked : delegatecallTransfer words = some output) :
+    delegatecallTransfer (words ++ below) = some (output ++ below) := by
+  match words, checked with
+  | _ :: _ :: _ :: _ :: _ :: _ :: words, checked =>
+      simp only [delegatecallTransfer, Option.some.injEq] at checked ⊢
       cases checked
       rfl
 
@@ -1141,6 +1167,104 @@ private theorem ninstTransfer_run_create2 {sevm : Sevm} {devm devm' : Devm}
       rw [hw]
       exact ⟨Or.inl rfl, hrest⟩
 
+/-- A successful `genericCall` step leaves exactly one word (the success flag) on its input
+stack. -/
+private theorem genericCall_stack {sevm : Sevm} {d : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {transfer static : Bool} {ii is oi os : Nat}
+    {code : ByteArray} {dp : Bool} {xl : Xlot} {sf : Devm}
+    (h : XStep.Run (genericCall.step sevm d gas value caller target codeAddress transfer static
+      ii is oi os code dp) xl (.ok sf)) :
+    ∃ w, sf.stack = w :: d.stack := by
+  simp only [genericCall.step] at h
+  split at h
+  · simp only [Bind.bind, Except.bind] at h
+    split at h
+    · cases XStep.run_ofExcept_error h
+    · rename_i e hpush
+      refine ⟨0, ?_⟩
+      rw [Except.ok.inj h.2, (Devm.push_of_push hpush).stack]
+      rfl
+  · simp only [XStep.Run] at h
+    rcases h with ⟨ex, -, hsplit⟩
+    rcases ex with err | child
+    · cases Resume.call_run_error hsplit.symm
+    · exact ⟨_, Resume.call_stack_flag hsplit.symm⟩
+
+/-- A successful `DELEGATECALL` pops six words and pushes one. -/
+private theorem delegatecall_run_stack {sevm : Sevm} {s sf : Devm}
+    {g t ii is oi os : B256} {xs : Stack}
+    (hs : s.stack = g :: t :: ii :: is :: oi :: os :: xs)
+    (h_run : Ninst.Run sevm s (.exec .delegatecall) sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    ∃ w, sf.stack = w :: xs := by
+  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
+    hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
+  rcases eq1 : Devm.pop s with _ | ⟨x1, s1⟩ <;> simp only [eq1] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  have e1 := (Devm.pop_of_pop eq1).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
+  rcases eq2 : Devm.popToAdr s1 with _ | ⟨a2, s2⟩ <;> simp only [eq2] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, -, hp2⟩
+  have e2 := (Devm.pop_of_pop hp2).stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
+  rcases eq3 : Devm.popToNat s2 with _ | ⟨n3, s3⟩ <;> simp only [eq3] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, -⟩
+  have e3 := f3.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
+  rcases eq4 : Devm.popToNat s3 with _ | ⟨n4, s4⟩ <;> simp only [eq4] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, -⟩
+  have e4 := f4.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
+  rcases eq5 : Devm.popToNat s4 with _ | ⟨n5, s5⟩ <;> simp only [eq5] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, -⟩
+  have e5 := f5.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
+  rcases eq6 : Devm.popToNat s5 with _ | ⟨n6, s6⟩ <;> simp only [eq6] at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, -⟩
+  have e6 := f6.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
+  have hs6 : s6.stack = xs := by
+    have estack : s.stack = x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: s6.stack := by
+      rw [e1, e2, e3, e4, e5, e6]
+    have hparts := hs.symm.trans estack
+    simp only [List.cons.injEq] at hparts
+    exact hparts.2.2.2.2.2.2.symm
+  rcases hp9 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress s6 a2) a2 with
+    ⟨dp, na, code0, dagc, s9⟩
+  simp only [hp9] at h_run
+  have hs9 : s9.stack = s6.stack := by
+    have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp9
+    dsimp only at h
+    rw [← h, GasSchedule.accessDelegation_stack]
+    rfl
+  split at h_run
+  · cases XStep.run_ofExcept_error h_run
+  rename_i s10 eq10
+  have hs10 : s10.stack = xs := (Devm.burn_of_chargeGas eq10).stack.symm.trans (hs9.trans hs6)
+  obtain ⟨w, hw⟩ := genericCall_stack h_run
+  exact ⟨w, hw.trans (congrArg (w :: ·) hs10)⟩
+
+private theorem ninstTransfer_run_delegatecall {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : delegatecallTransfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .delegatecall) devm') :
+    Matches output devm'.stack := by
+  match input, checked with
+  | a :: b :: c :: d :: e :: f :: rest, checked =>
+      simp only [delegatecallTransfer, Option.some.injEq] at checked
+      cases checked
+      obtain ⟨x1, x2, x3, x4, x5, x6, xs, hstack, hrest⟩ := matches_six matched
+      obtain ⟨w, hw⟩ := delegatecall_run_stack hstack run hfork
+      rw [hw]
+      exact ⟨Or.inl rfl, hrest⟩
+
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
@@ -1430,6 +1554,9 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | create2 =>
           simp only [ninstTransfer] at checked
           exact ninstTransfer_run_create2 hfork matched checked run
+      | delegatecall =>
+          simp only [ninstTransfer] at checked
+          exact ninstTransfer_run_delegatecall hfork matched checked run
       | _ => cases checked
   | _ => cases checked
 
@@ -1446,7 +1573,8 @@ theorem ninstTransfer_map {n : Ninst} {input output : Pattern}
       | call => exact callTransfer_map φ hφ checked
       | staticcall => exact staticcallTransfer_map φ hφ checked
       | create2 => exact create2Transfer_map φ hφ checked
-      | create | callcode | delegatecall => cases checked
+      | delegatecall => exact delegatecallTransfer_map φ hφ checked
+      | create | callcode => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked
@@ -1463,7 +1591,8 @@ theorem ninstTransfer_append {n : Ninst} {input output : Pattern}
       | call => exact callTransfer_append checked
       | staticcall => exact staticcallTransfer_append checked
       | create2 => exact create2Transfer_append checked
-      | create | callcode | delegatecall => cases checked
+      | delegatecall => exact delegatecallTransfer_append checked
+      | create | callcode => cases checked
   | push bs fits => cases checked
   | dupn imm => cases checked
   | swapn imm => cases checked

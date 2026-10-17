@@ -21,9 +21,11 @@ namespace Blanc.Composition.UniswapV2PairWeth9XLeg
 open Jaune Blanc Blanc.Lift
 
 private theorem own_spawns {ca : Adr} {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) : OwnSpawns ca code := fun hpc hcode _ fork chain hat =>
-  let ⟨_, _, ok⟩ := cursor_of_parentPrefix checked hpc hcode fork chain
-  ok.exec_spawn hat
+    (checked : Cert.check code c = true)
+    (undelegated : ∀ f ∈ c.prog, f.execsSatisfy Xinst.notDelegatecall = true) :
+    OwnSpawns ca code := fun hpc hcode _ fork chain hat =>
+  let ⟨_, reach, ok⟩ := cursor_of_parentPrefix checked hpc hcode fork chain
+  ok.exec_spawn_undelegated (Cursor.execsSatisfy_of_reachable undelegated reach) hat
 
 /-- The Pair and factory runtimes differ, so their installed addresses do. -/
 theorem pair_ne_factory {d : Devm} {pair factory : Adr}
@@ -66,7 +68,7 @@ theorem callerChildren_of_ownCode {pair factory : Adr} (pairNonzero : pair ≠ 0
         (fun chain hat => by
           obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix UniswapV2Pair.cert_check rfl
             (runsPair atPair) fork chain
-          exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach)
+          exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach)
             hat)
         run (.refl _) c child
       rw [callers, atPair] at caller
@@ -94,10 +96,10 @@ theorem frame_factoryQuiet {pair factory : Adr} (pairNonzero : pair ≠ 0) (G : 
   dsimp only at pcZero fork pairCode factoryCode pairRuns factoryRuns rootQuiet ⊢
   subst pcZero
   have pairOwn := Exec.descendantFrames_ownCode (UniswapV2Pair.pairSem.ne_nil rfl)
-    (UniswapV2Pair.pairSem.not_delegation rfl) (own_spawns UniswapV2Pair.cert_check) run
+    (UniswapV2Pair.pairSem.not_delegation rfl) (own_spawns UniswapV2Pair.cert_check (by decide +kernel)) run
     (R := ⟨0, sevm, pre, out, run⟩) (.refl _) rfl fork pairCode pairRuns
   have factoryOwn := Exec.descendantFrames_ownCode (UniswapV2Factory.factorySem.ne_nil rfl)
-    (UniswapV2Factory.factorySem.not_delegation rfl) (own_spawns UniswapV2Factory.cert_check) run
+    (UniswapV2Factory.factorySem.not_delegation rfl) (own_spawns UniswapV2Factory.cert_check (by decide +kernel)) run
     (R := ⟨0, sevm, pre, out, run⟩) (.refl _) rfl fork factoryCode factoryRuns
   have below := Exec.descendantFrames_callerTarget_of_children run
     (callerChildren_of_ownCode pairNonzero distinct ⟨0, sevm, pre, out, run, committed⟩

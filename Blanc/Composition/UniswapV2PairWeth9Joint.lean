@@ -2,6 +2,7 @@ import Blanc.Composition.PairTokenJoint
 import Blanc.Composition.UniswapV2PairWeth9CheckpointCore
 import Blanc.Composition.UniswapV2FactoryQuiet
 import Blanc.ExecutionSettledOwnCode
+import Blanc.Lift.CallRestriction
 import Blanc.LockExclusion
 import Blanc.Lift.Weth9.Check
 import Blanc.Lift.Weth9.LiveTx
@@ -49,8 +50,8 @@ theorem weth9Book_erc20Abi : Erc20Abi weth9Book where
 
 /-- WETH9's runtime spawns only by `CALL`, `STATICCALL` (and never `CREATE*` but `CREATE2`). -/
 theorem weth9_ownSpawns (ca : Adr) : OwnSpawns ca Weth9.code := fun hpc hcode _ fork chain hat =>
-  let ⟨_, _, ok⟩ := cursor_of_parentPrefix Weth9.cert_check hpc hcode fork chain
-  ok.exec_spawn hat
+  let ⟨_, reach, ok⟩ := cursor_of_parentPrefix Weth9.cert_check hpc hcode fork chain
+  ok.exec_spawn_undelegated (Cursor.execsSatisfy_of_reachable (by decide +kernel) reach) hat
 
 /-- At every node of every settled frame, WETH9's installed code is no delegation designator and
 WETH9 is not a precompile of the frame's rules. -/

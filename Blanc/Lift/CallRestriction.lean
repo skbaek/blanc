@@ -137,4 +137,23 @@ theorem CursorOK.execsSatisfy {code : ByteArray} {c : Cert} {node : Exec.Deriv}
     rw [hat] at hi
     cases hi
 
+/-- The external instruction is not `DELEGATECALL`: the restriction of the `OwnSpawns` producers
+that certify `CREATE2` but no `DELEGATECALL`. -/
+def Xinst.notDelegatecall : Xinst → Bool
+  | .delegatecall => false
+  | _ => true
+
+/-- A cursor-placed node whose cursor carries no `DELEGATECALL` decodes only `CALL`,
+`STATICCALL` or `CREATE2`. -/
+theorem CursorOK.exec_spawn_undelegated {code : ByteArray} {c : Cert} {n : Exec.Deriv}
+    {κ : Cursor} (ok : CursorOK code c n κ) (hnd : κ.ExecsSatisfy Xinst.notDelegatecall)
+    {x : Xinst} (hat : Ninst.At n.sevm.code n.pc (.exec x)) :
+    x = .call ∨ x = .staticcall ∨ x = .create2 := by
+  rcases ok.exec_spawn hat with h | h | h | rfl
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr h)
+  · have h := ok.execsSatisfy hnd hat
+    simp only [Xinst.notDelegatecall, Bool.false_eq_true] at h
+
 end Blanc.Lift

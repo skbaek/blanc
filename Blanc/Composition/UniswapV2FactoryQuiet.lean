@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Factory.CallShape
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.CallChildren
 import Blanc.ExecutionSettledOwnCode
+import Blanc.Lift.CallRestriction
 
 /-!
 # The factory never re-enters an installed Pair (H1)
@@ -28,10 +29,11 @@ namespace Blanc.Composition.UniswapV2FactoryQuiet
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift
 
-private theorem own_spawns {ca : Adr} {code : ByteArray} {c : Cert} (checked : Cert.check code c = true) :
+private theorem own_spawns {ca : Adr} {code : ByteArray} {c : Cert} (checked : Cert.check code c = true)
+    (undelegated : ∀ f ∈ c.prog, f.execsSatisfy Xinst.notDelegatecall = true) :
     OwnSpawns ca code := fun hpc hcode _ fork chain hat =>
-  let ⟨_, _, ok⟩ := cursor_of_parentPrefix checked hpc hcode fork chain
-  ok.exec_spawn hat
+  let ⟨_, reach, ok⟩ := cursor_of_parentPrefix checked hpc hcode fork chain
+  ok.exec_spawn_undelegated (Cursor.execsSatisfy_of_reachable undelegated reach) hat
 
 /-- **H1: the factory never re-enters the Pair.**  Over a configured history whose checkpoint has the
 Pair runtime installed at `pair ≠ 0` and the `UniswapV2Factory` runtime installed at
@@ -61,9 +63,9 @@ theorem pair_history_factoryQuiet {pair : Adr} {cfg : ChainConfig} {checkpoint f
     rw [codes, UniswapV2Factory.code_toList_length] at lengths
     exact absurd lengths (by decide)
   have pairOwn := trace.settled_ownCode pairNonempty pairNondel
-    (own_spawns UniswapV2Pair.cert_check) pairCode
+    (own_spawns UniswapV2Pair.cert_check (by decide +kernel)) pairCode
   have factoryOwn := trace.settled_ownCode factoryNonempty factoryNondel
-    (own_spawns UniswapV2Factory.cert_check) factoryCode
+    (own_spawns UniswapV2Factory.cert_check (by decide +kernel)) factoryCode
   have fold := trace.settledFrames_callerTarget_of_children (p := st₀.factory) (ca := pair)
     (Q := fun s => s.isStatic = true)
     (fun R member _ caller =>
@@ -93,7 +95,7 @@ theorem pair_history_factoryQuiet {pair : Adr} {cfg : ChainConfig} {checkpoint f
             (fun chain hat => by
               obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix UniswapV2Pair.cert_check rfl
                 (runsPair atPair) fork chain
-              exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach)
+              exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach)
                 hat)
             run (.refl _) c child
           rw [callers, atPair] at caller
