@@ -3,6 +3,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkCut
 import Blanc.Lift.VyperFrameLoop
 import Blanc.Lift.MemGlue
+import Blanc.Lift.VyperCallee
 import Blanc.Lift.StableSwapNewton.Defs
 
 /-!
@@ -758,5 +759,69 @@ theorem gtCheck_toNat (x y : B256) : B256.gtCheck x y = if y.toNat < x.toNat the
   by_cases h : y.toNat < x.toNat
   · rw [ite_eq_left h, ite_eq_left (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
   · rw [ite_eq_right h, ite_eq_right (by rw [gt_iff_lt, B256.lt_iff_toNat_lt_toNat]; exact h)]
+
+/-! ## Tracked memory through frame save and restore chains -/
+
+/-- Keeping off windows is kept off any windows that contain them. -/
+theorem Mem.KeepsOff.widen {M M' : Mem} {W W' : List (Nat × Nat)} (h : Mem.KeepsOff M M' W)
+    (hW : ∀ w ∈ W, ∃ w' ∈ W', w'.1 ≤ w.1 ∧ w.2 ≤ w'.2) : Mem.KeepsOff M M' W' :=
+  ⟨h.1, fun i hi => h.2 i fun w hw => by
+    obtain ⟨w', hw', h1, h2⟩ := hW w hw
+    have := hi w' hw'
+    omega⟩
+
+/-- A tracked memory whose carried words are replaced. -/
+theorem MemTrack.withWords {M₀ M : Mem} {W : List (Nat × Nat)} {L L' : List (Nat × B256)}
+    (hT : MemTrack M₀ M W L) (hw : Words M L') : MemTrack M₀ M W L' :=
+  ⟨hT.keeps, hw, hT.wf, hT.aligned⟩
+
+/-- A save chain's counter writes, tracked. -/
+theorem MemTrack.saveMem {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)}
+    {c lo : Nat} (hT : MemTrack M₀ M W L) (hcW : coversWord W c = true)
+    (hout : ∀ o v, (o, v) ∈ L → o + 32 ≤ c ∨ c + 32 ≤ o) :
+    ∀ n, MemTrack M₀ (_root_.Blanc.Lift.saveMem M c lo n) W L
+  | 0 => hT
+  | n + 1 => by
+    have ih := MemTrack.saveMem (lo := lo) hT hcW hout n
+    refine ⟨ih.keeps.trans (Mem.KeepsOff.write_word ih.wf c _ hcW),
+      hT.words.saveMem hout (n + 1), ih.wf.write _ _,
+      fun h => Mem.size_write_word_mod (ih.aligned h)⟩
+
+/-- A restore chain's word and counter writes, tracked (carried words dropped). -/
+theorem MemTrack.restoreMem {M₀ : Mem} {W : List (Nat × Nat)} {c : Nat}
+    (hcW : coversWord W c = true) :
+    ∀ (ws : List B256) {M : Mem} {L : List (Nat × B256)} {p : Nat}, MemTrack M₀ M W L →
+      (∀ k, k < ws.length → coversWord W (p - 32 * k) = true) →
+      MemTrack M₀ (_root_.Blanc.Lift.restoreMem c M p ws) W []
+  | [], _, _, _, hT, _ => hT.withWords (Words.nil _)
+  | w :: ws, M, L, p, hT, hpW => by
+    have hp0 : coversWord W p = true := by
+      have := hpW 0 (by simp only [List.length_cons]; omega)
+      simpa only [Nat.mul_zero, Nat.sub_zero] using this
+    have h1 := hT.writeO w hp0
+    have h2 := h1.writeO (Nat.toB256 (p - 32)) hcW
+    have ih := MemTrack.restoreMem hcW ws h2 (p := p - 32) (fun k hk => by
+      rw [show p - 32 - 32 * k = p - 32 * (k + 1) by omega]
+      exact hpW (k + 1) (by simp only [List.length_cons]; omega))
+    simpa only [_root_.Blanc.Lift.restoreMem] using ih
+
+/-- The off-counter condition of a save chain, as a Boolean check over the carried offsets. -/
+theorem MemTrack.saveMem' {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)}
+    {c lo : Nat} (hT : MemTrack M₀ M W L) (hcW : coversWord W c = true)
+    (hout : (L.map Prod.fst).all (fun p => decide (p + 32 ≤ c) || decide (c + 32 ≤ p)) = true)
+    (n : Nat) : MemTrack M₀ (_root_.Blanc.Lift.saveMem M c lo n) W L := by
+  refine MemTrack.saveMem hT hcW (fun o v hm => ?_) n
+  have h := List.all_eq_true.mp hout o (List.mem_map.mpr ⟨(o, v), hm, rfl⟩)
+  simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
+
+/-- Carried words a restore chain misses, as a Boolean check over their offsets. -/
+theorem Words.restoreMem' {M : Mem} {L : List (Nat × B256)} {c p : Nat} {ws : List B256}
+    (h : Words M L) (hp : p + 32 ≤ c)
+    (hout : (L.map Prod.fst).all (fun o => decide (o + 32 ≤ p + 32 - 32 * ws.length) ||
+      decide (c + 32 ≤ o)) = true) :
+    Words (_root_.Blanc.Lift.restoreMem c M p ws) L := by
+  refine h.restoreMem hp (fun o v hm => ?_)
+  have h := List.all_eq_true.mp hout o (List.mem_map.mpr ⟨(o, v), hm, rfl⟩)
+  simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 
 end Blanc.Lift
