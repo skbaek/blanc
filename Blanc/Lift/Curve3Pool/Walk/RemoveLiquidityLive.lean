@@ -666,7 +666,9 @@ theorem rx_rl_s2A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
     (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x380) (hL : LoopImg img i T a)
     (hv : WordAt img 0x2c0 V) (hG : 2000 ≤ Gc) (hGb : Gc + 532 < 2 ^ 256)
-    (k : ∀ b' M' img', BaseRel b b' → Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x580 →
+    {W : Devm → Prop} (hWc : WClosed sevm W) (hWb : W b)
+    (k : ∀ b' M' img', BaseRel b b' → W b' → IdReady sevm b' → Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x580 →
       LoopImg img' i T (Function.update a i V) →
       Region img' 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
         Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++ V.toBytes)) →
@@ -729,6 +731,7 @@ theorem rx_rl_s2A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
     rw [f_sel.prefix (by decide)]; decide
   rw [hsel4] at hR
   have hb12 : BaseRel b b2 := ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
+  have hWb2 : W b2 := hWc.sha _ _ _ hsha hWb
   clear hsha hsel4
   xr (rx_pop ·)
   xr (rx_pop ·)
@@ -792,6 +795,7 @@ theorem rx_rl_s2A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
   rw [transfer_copy] at hR
   have hb23 : BaseRel b2 b3 :=
     ⟨hsha2.stor, hsha2.code, hsha2.addrs, hsha2.logs, hsha2.output, hsha2.error⟩
+  have hWb3 : W b3 := hWc.sha _ _ _ hsha2 hWb2
   clear hsha2
 
   xr (rx_push rfl (by hr) ·)
@@ -799,7 +803,8 @@ theorem rx_rl_s2A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
   have e3 := Mem.Reads.forget hR
   clear hR
   obtain ⟨img3, hR, hI⟩ := e3
-  refine k b3 M img3 (hb12.trans hb23) hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_ _ _
+  refine k b3 M img3 (hb12.trans hb23) hWb3 (hid.of_rel (hb12.trans hb23)) hR hW
+    (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_ _ _
   · rw [hI]; wchainT; exact f_ctr
   · rw [hI]; wchainT; exact f_T
   · intro j hj; rw [hI]; wchainT; exact f_amt j hj
@@ -811,7 +816,9 @@ theorem rx_rl_s2B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
     (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
     (hv : WordAt img 0x2c0 V) (hG : 2000 ≤ Gc) (hGb : Gc + 482 < 2 ^ 256)
-    (k : ∀ b' M' img', BaseRel b b' → Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
+    {W : Devm → Prop} (hWc : WClosed sevm W) (hWb : W b)
+    (k : ∀ b' M' img', BaseRel b b' → W b' → IdReady sevm b' → Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x5e0 →
       LoopImg img' i T (Function.update a i V) →
       Region img' 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
         Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++ V.toBytes)) →
@@ -874,6 +881,7 @@ theorem rx_rl_s2B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
     rw [f_sel.prefix (by decide)]; decide
   rw [hsel4] at hR
   have hb12 : BaseRel b b2 := ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
+  have hWb2 : W b2 := hWc.sha _ _ _ hsha hWb
   clear hsha hsel4
   xr (rx_pop ·)
   xr (rx_pop ·)
@@ -937,6 +945,7 @@ theorem rx_rl_s2B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
   rw [transfer_copy] at hR
   have hb23 : BaseRel b2 b3 :=
     ⟨hsha2.stor, hsha2.code, hsha2.addrs, hsha2.logs, hsha2.output, hsha2.error⟩
+  have hWb3 : W b3 := hWc.sha _ _ _ hsha2 hWb2
   clear hsha2
 
   xr (rx_push rfl (by hr) ·)
@@ -944,7 +953,8 @@ theorem rx_rl_s2B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M 
   have e3 := Mem.Reads.forget hR
   clear hR
   obtain ⟨img3, hR, hI⟩ := e3
-  refine k b3 M img3 (hb12.trans hb23) hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_ _ _
+  refine k b3 M img3 (hb12.trans hb23) hWb3 (hid.of_rel (hb12.trans hb23)) hR hW
+    (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_ _ _
   · rw [hI]; wchainT; exact f_ctr
   · rw [hI]; wchainT; exact f_T
   · intro j hj; rw [hI]; wchainT; exact f_amt j hj
@@ -986,7 +996,7 @@ theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M :
     (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
       (∀ x, (b'.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 → LoopImg img' (i + 1) T a →
-      Gx ≤ G' + U + 600 →
+      Gx ≤ G' + U + 600 → G' ≤ Gx →
       SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G') (rlNext i) Q) :
     ∀ x y, SFunc.RunEx cert.prog sevm (St b (x :: y :: [3, 0x2a0]) M (Gx + rlS3Cost sevm b i))
       t_2ea7_c0 Q := by
@@ -1137,12 +1147,12 @@ theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M :
     have e0 : B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 = 0 := by rw [h3]; decide
     rw [e0]
     xr (rx_branchTo_zero ·)
-    have := k b' M7 _ G' hWb' hidb' hstb' hR7 hW7 hsz7' hLI hgas'
+    have := k b' M7 _ G' hWb' hidb' hstb' hR7 hW7 hsz7' hLI hgas' (by omega)
     rwa [hn] at this
   · have hn : rlNext i = t_2cdb_c46 := by unfold rlNext; simp only [show i + 1 ≠ 3 by omega, ↓reduceIte]
     xr (rx_branchTo_succ (by rcases (show i = 0 ∨ i = 1 by omega) with rfl | rfl <;> decide)
       rfl ·)
-    have := k b' M7 _ G' hWb' hidb' hstb' hR7 hW7 hsz7' hLI hgas'
+    have := k b' M7 _ G' hWb' hidb' hstb' hR7 hW7 hsz7' hLI hgas' (by omega)
     rwa [hn] at this
 
 /-! ## After the loop -/
@@ -1160,7 +1170,9 @@ theorem rx_rl_post {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img 3 T a)
     (hTa : (rlAmt sevm).toNat ≤ T.toNat)
     (hburn : BurnOk sevm W ((b.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
-    (hGx : U + 30000 ≤ Gx) (hGb : Gx < 2 ^ 256) (hQ : ∀ D, Q (.halted D)) :
+    (hGx : U + 30000 ≤ Gx) (hGb : Gx < 2 ^ 256)
+    (hQ : ∀ D, (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gx + rlPostCost sevm b)) t_2f7b_c15 Q := by
   unfold rlPostCost
   rw [show Gx + (67 + sloadCost sevm b tokenSlot) = Gx + 2 + sloadCost sevm b tokenSlot + 3 + 3 +
@@ -1299,7 +1311,10 @@ theorem rx_rl_post {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M
   xr (rx_push rfl (by hr) ·)
   refine rxe_sstore_le hfork hstatic (by omega) ?_
   intro G'
-  exact ⟨_, .last rfl, hQ _⟩
+  refine ⟨_, .last rfl, hQ _ ⟨_, _, _, (afterSstore_logs _ _ _ _).trans rfl, ?_⟩⟩
+  rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
+    show (Bytes.toB256 [0x06, 0xc0]).toNat + 0xc0 = 0x780 by decide]
+  exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
 
 end Blanc.Lift.Curve3Pool
 
