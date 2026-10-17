@@ -4702,6 +4702,25 @@ contract-neutral.
   `RunCut_fuelLoop_peel` / `RunExactCut_fuelLoop_peel`; the inversion split
   `SFunc.RunCutP.split_at`; all in
   [`Blanc/Lift/FuelLoopWalk.lean`](../Blanc/Lift/FuelLoopWalk.lean).
+- Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
+  cut runs):
+  fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,
+  `vyArraySlot`; pushed word `Bytes.keccak s.toBytes + i`) in
+  [`Blanc/Lift/VyperArraySlot.lean`](../Blanc/Lift/VyperArraySlot.lean);
+  a value-0 `CALL` of the identity precompile (`IdReady`, `processMessage_identity_clean`,
+  `ri_call_identity`, `call_identity_step` / `rxc_call_identity` at cost
+  `100 + memExp + 15 + 3·⌈is/32⌉`, world relation `ShaCallPost`) in
+  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean);
+  a one-word `STATICCALL` reply with its `RETURNDATASIZE > 31` check (`vyReplyWord`,
+  `ric_vyStaticReply` / `rxc_vyStaticReply`) and a checked subtraction from a saved word
+  (`vyChkSubMem`, `ric_vyChkSubMem` / `rxc_vyChkSubMem`, `chkSub_of_le`) — the fee-on-transfer
+  balance difference — in
+  [`Blanc/Lift/BalanceDiffCall.lean`](../Blanc/Lift/BalanceDiffCall.lean);
+  the `raw_call(…, max_outsize=32)` tail (`VyRawSite`, `vyRawCallTail`/`vyRawCallJoin`/
+  `vyRawCallCheck`, `RawCallOk`, `ric_vyRawCall`, `ric_vyRawCallTail`), with the
+  byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
+  no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
+  [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile

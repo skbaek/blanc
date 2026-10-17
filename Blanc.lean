@@ -813,6 +813,12 @@ import Blanc.Lift.StableSwapNewton.D
 import Blanc.Lift.StableSwapNewton.Y
 import Blanc.Lift.StableSwapNewton.Fuel
 
+-- Contract-neutral Vyper 0.2.x walk kit: array slots, identity copies, raw_call, balance differences.
+import Blanc.Lift.VyperArraySlot
+import Blanc.Lift.IdentityCall
+import Blanc.Lift.BalanceDiffCall
+import Blanc.Lift.VyperRawCall
+
 -- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
