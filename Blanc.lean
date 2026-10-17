@@ -816,6 +816,7 @@ import Blanc.Lift.StableSwapNewton.Y
 import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
 import Blanc.Lift.Curve3Pool.U3Refute
+import Blanc.Lift.Curve3Pool.U3Observable
 import Blanc.Lift.Curve3Pool.U3Bounds
 import Blanc.Lift.Curve3Pool.Creation.Jumps
 import Blanc.Lift.Curve3Pool.Layout

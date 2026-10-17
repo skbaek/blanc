@@ -683,8 +683,9 @@ CONTRACTS = {
     # checkpoint predicate, and U7 deployment (curve-3pool-stableswap-v1).
     "curve-3pool": ["Lift.Curve3Pool.Creation.Cert", "Lift.Curve3Pool.Creation.Check",
                     "Lift.Curve3Pool.Creation.Jumps", "Lift.Curve3Pool.Model", "Lift.Curve3Pool.U5",
-                    "Lift.Curve3Pool.U3Refute", "Lift.Curve3Pool.U3Bounds", "Lift.Curve3Pool.Layout",
-                    "Lift.Curve3Pool.Creation.Walk", "Lift.Curve3Pool.Creation.Deploy"],
+                    "Lift.Curve3Pool.U3Refute", "Lift.Curve3Pool.U3Observable", "Lift.Curve3Pool.U3Bounds",
+                    "Lift.Curve3Pool.Layout", "Lift.Curve3Pool.Creation.Walk",
+                    "Lift.Curve3Pool.Creation.Deploy"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
