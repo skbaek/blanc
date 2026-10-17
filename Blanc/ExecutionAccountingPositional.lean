@@ -512,34 +512,60 @@ private theorem spawnChildAt (kinds : SpawnKinds ca sem)
     · exact Or.inl rfl
     · exact Or.inr (Or.inl member)
 
-/-- **The model target handler.**  A non-static target frame's own steps reach its first external
-node, whose settled child holds every later frame; a static target frame replays nothing. -/
-theorem modelTarget
-    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+/-- **The settled children of a frame's spawning nodes are positional** (a child provider): at
+every `runOk` node of the frame's own chain, a committed child entered under the world word bound
+replays, from its entry storage, to the entry of each of its committed frames not enclosed by an
+earlier opaque one.  The single-code handler supplies it from the lower-depth hypothesis; a code
+family supplies it per spawn kind. -/
+def ChildPositional (C : ReplayCarrier ca) (V : ReplayObservation C)
+    (Opaque : Exec.Frame → Prop) {sevm₀ : Sevm} {pre₀ post₀ : Devm}
+    (root : Exec 0 sevm₀ pre₀ (.ok post₀)) : Prop :=
+  ∀ {nodePc : Nat} {nodeSevm : Sevm} {nodePre : Devm} {out : Execution} {frame : Jaune.Frame}
+    {rsm : Resume} {nextPc : Nat} {cevm : Evm} {raw : Execution} {inter : Devm}
+    (step : Evm.step ⟨nodePc, nodeSevm, nodePre⟩ = .spawn frame rsm nextPc)
+    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (resume : rsm.run (frame.settle raw) = .ok inter) (next : Exec nextPc nodeSevm inter out),
+    Exec.Deriv.ParentPrefix ⟨0, sevm₀, pre₀, .ok post₀, root⟩
+      ⟨nodePc, nodeSevm, nodePre, out, .runOk step enter child resume next⟩ →
+    Execution.commits raw = true → sum cevm.dyna.state.bal < 2 ^ 256 →
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      Exec.committedFrames child = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      ∃ steps, C.Replay (C.ofState cevm.dyna.state) steps (C.ofState f.pre.state) ∧
+        V.obs steps = before.flatMap V.frameObs
+
+/-- **The positional replay of a model frame from its own steps and its children's positional
+replays.**  If `own` contributes the frame's own observation and takes the entry boundary to the
+boundary of every node that decodes an external instruction, after which no later node decodes one,
+then every committed frame of the frame lies in its single settled child, and the frame is
+positional. -/
+theorem modelFrameAt
     (ofStateGet : ∀ {s s' : State},
       (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
     (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
-    (kinds : SpawnKinds ca sem) (spawn : Exec.CoreAccounting.SpawnReplay ca sem entry C V)
-    (core : Exec.Fa (Exec.WknSem ca sem
-      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)))
-    {sevm : Sevm} {pre post : Devm} (hrun : sem.Run sevm pre post)
-    (target : sevm.currentTarget = ca)
-    (deeper : ForallDeeperAtSem sevm.depth ca sem
-      (fun pc s d e _ => Exec.PositionalAccounting ca sem entry C V Opaque pc s d e)) :
-    Exec.PositionalAccounting ca sem entry C V Opaque 0 sevm pre (.ok post) := by
-  by_cases hs : sevm.isStatic = true
-  · exact static ofStateGet core hs
-  intro run committed fork installed admitted bound before f after split noOpaque
-  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
+    {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (committed : Execution.commits (.ok post) = true) (fork : CoveredFork sevm.benvStat.fork)
+    (rootNonempty : (pre.getCode ca).toList ≠ []) (bound : sum pre.state.bal < 2 ^ 256)
+    (children : ChildPositional C V Opaque run) (own : List C.Step)
+    (hown : V.obs own = V.frameObs (Exec.Frame.ofRun run committed))
+    (c12 : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
+        C.Replay (C.ofState pre.state) own (C.ofState N.devm.state) ∧
+        ∀ N', Exec.Deriv.ParentStep N' N →
+          C.Replay (C.ofState N'.devm.state) [] (C.ofState post.state) ∧
+          ∀ M, Exec.Deriv.ParentPrefix N' M → ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y)) :
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      Exec.committedFrames run = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
+        V.obs steps = before.flatMap V.frameObs := by
+  intro before f after split noOpaque
   rw [Exec.committedFrames, dite_eq_left committed] at split
   cases before with
   | nil => exact head split
   | cons P rest =>
   rw [List.cons_append] at split
   obtain ⟨hP, hdesc⟩ := List.cons.inj split
-  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
-    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
-  obtain ⟨own, hown, -, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
   rcases Exec.Deriv.exists_firstExec_or_none run with none | ⟨Vn, hV⟩
   · rw [Exec.descendantFrames_eq_nil_of_noExec run none] at hdesc
     exact absurd hdesc.symm (List.append_ne_nil_of_right_ne_nil _ (List.cons_ne_nil _ _))
@@ -572,11 +598,11 @@ theorem modelTarget
       rename_i frame rsm pc' cevm raw inter
       have hdf := Exec.descendantFrames_eq_nil_of_noExec next
         ((c12 _ hpV x hx).2 _ (.runOk step enter child resume next)).2
-      obtain ⟨-, -, nodeFork, nodeCodeNe, balLe, childFork, -, -⟩ :=
-        Exec.CoreAccounting.spawnChild kinds run hrun target fork installed admitted
-          (fun pc s d e ex _ hat => core pc s d e ex hat) step enter child resume next hpV
-      obtain ⟨childDepth, childAt, childAdmitted⟩ :=
-        spawnChildAt kinds run hrun target fork installed admitted step enter child resume next hpV
+      have nodeFork : CoveredFork vsevm.benvStat.fork := by
+        rw [show vsevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq hpV]
+        exact fork
+      have nodeCodeNe : vd.getCode ca ≠ .empty := fun empty =>
+        nodeNonempty (by rw [empty]; simp only [ByteArray.toList_empty])
       by_cases settles : Frame.settlementCommits frame raw = true
       · have hraw := Frame.raw_commits_of_settlementCommits settles
         have cf : Exec.committedFrames child =
@@ -586,21 +612,54 @@ theorem modelTarget
           hdf, List.append_nil, ← cf] at hdesc
         have childBound : sum cevm.dyna.state.bal < 2 ^ 256 :=
           Nat.lt_of_le_of_lt
-            ((Evm.step_spawn_child_world nodeFork step enter nodeCodeNe).2.trans balLe) bound
-        obtain ⟨steps, replay, observed⟩ := deeper _ _ _ _ child childDepth childAt child hraw
-          childFork childAt childAdmitted childBound rest f after hdesc
-          fun A member => noOpaque A (List.mem_cons_of_mem _ member)
+            ((Evm.step_spawn_child_world nodeFork step enter nodeCodeNe).2.trans
+              (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode hpV).1) bound
+        obtain ⟨steps, replay, observed⟩ := children step enter child resume next hpV hraw
+          childBound rest f after hdesc fun A member => noOpaque A (List.mem_cons_of_mem _ member)
         have c1 := (c12 _ hpV x hx).1
         have e1 : C.ofState vd.state = C.ofState cevm.dyna.state :=
           ofStateGet fun k => congrArg (fun t => Stor.get t k)
             (Evm.step_spawn_enter_getStor nodeFork step enter ca
               (State.Protected.of_code_ne_nil nodeNonempty)).symm
-        rw [entryOfState, e1] at c1
+        rw [e1] at c1
         refine ⟨own ++ steps, append c1 replay, ?_⟩
         rw [V.obs_append, hown, observed, ← hP, List.flatMap_cons]
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits step enter child resume next
           settles, hdf] at hdesc
         exact absurd hdesc.symm (List.append_ne_nil_of_right_ne_nil _ (List.cons_ne_nil _ _))
+
+/-- **The model target handler.**  A non-static target frame's own steps reach its first external
+node, whose settled child holds every later frame; a static target frame replays nothing. -/
+theorem modelTarget
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
+    (kinds : SpawnKinds ca sem) (spawn : Exec.CoreAccounting.SpawnReplay ca sem entry C V)
+    (core : Exec.Fa (Exec.WknSem ca sem
+      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)))
+    {sevm : Sevm} {pre post : Devm} (hrun : sem.Run sevm pre post)
+    (target : sevm.currentTarget = ca)
+    (deeper : ForallDeeperAtSem sevm.depth ca sem
+      (fun pc s d e _ => Exec.PositionalAccounting ca sem entry C V Opaque pc s d e)) :
+    Exec.PositionalAccounting ca sem entry C V Opaque 0 sevm pre (.ok post) := by
+  by_cases hs : sevm.isStatic = true
+  · exact static ofStateGet core hs
+  intro run committed fork installed admitted bound
+  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
+  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
+    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
+  obtain ⟨own, hown, -, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
+  rw [entryOfState] at c12
+  refine modelFrameAt ofStateGet append run committed fork rootNonempty bound ?_ own hown c12
+  intro _ nodeSevm _ _ _ _ _ _ _ _ step enter child resume next chain childCommitted childBound
+  have nodeFork : CoveredFork nodeSevm.benvStat.fork := by
+    rw [show nodeSevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
+    exact fork
+  obtain ⟨childDepth, childAt, childAdmitted⟩ :=
+    spawnChildAt kinds run hrun target fork installed admitted step enter child resume next chain
+  exact deeper _ _ _ _ child childDepth childAt child childCommitted
+    (Evm.step_spawn_child_fork step enter nodeFork) childAt childAdmitted childBound
 
 /-- **The whole-frame target handler.**  A non-static target frame is opaque, so only its own
 entry is selected; a static target frame replays nothing. -/
