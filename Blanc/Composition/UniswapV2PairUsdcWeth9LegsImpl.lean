@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsKit
 import Blanc.Lift.Usdc.RefineTransfer
+import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
 
 namespace Blanc.Composition.UsdcLive
 
@@ -272,5 +273,47 @@ to `RETURN`, its charge `c` synthesized by the walk. -/
     · decide
     all_goals ((try unfold gCallStipend); omega)
   ⟩
+
+end Blanc.Composition.UsdcLive
+
+namespace Blanc.Composition.UsdcLive
+
+open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Impl
+
+theorem e83W_gas (s : Sevm) (b : Devm) (a ret : B256) (S : List B256) (M : Mem) (n f : Nat) :
+    (e83W { s with gas := f } b a ret S M n).1 = (e83W s b a ret S M n).1 := by
+  unfold e83W; rfl
+
+theorem e96W_gas (s : Sevm) (b : Devm) (a ret : B256) (S : List B256) (M : Mem) (n f : Nat) :
+    (e96W { s with gas := f } b a ret S M n).1 = (e96W s b a ret S M n).1 := by
+  unfold e96W; rfl
+
+theorem e100W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem) (f : Nat) :
+    (e100W { s with gas := f } b x y ret S M).1 = (e100W s b x y ret S M).1 := by
+  unfold e100W; rfl
+
+theorem e98W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem) (f : Nat) :
+    (e98W { s with gas := f } b x y ret S M).1 = (e98W s b x y ret S M).1 := by
+  unfold e98W; rfl
+
+theorem e99W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem) (n f : Nat) :
+    (e99W { s with gas := f } b x y ret S M n).1 = (e99W s b x y ret S M n).1 := by
+  unfold e99W; simp only [e83W_gas]; rfl
+
+theorem e93W_gas (s : Sevm) (b : Devm) (x y z ret : B256) (S : List B256) (M : Mem) (f : Nat) :
+    (e93W { s with gas := f } b x y z ret S M).1 = (e93W s b x y z ret S M).1 := by
+  unfold e93W
+  simp only [e96W_gas, e100W_gas, e99W_gas, e98W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
+
+theorem e37W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem) (f : Nat) :
+    (e37W { s with gas := f } b x y ret S M).1 = (e37W s b x y ret S M).1 := by
+  unfold e37W
+  simp only [e83W_gas, e93W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
+
+/-- The implementation `transfer` charge does not read the message's gas field. -/
+theorem implXferW_gas (s : Sevm) (b : Devm) (f : Nat) :
+    (implXferW { s with gas := f } b).1 = (implXferW s b).1 := by
+  unfold implXferW
+  simp only [e37W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
 
 end Blanc.Composition.UsdcLive

@@ -130,6 +130,15 @@ theorem rx_mstoreInit {i v : B256} (hM : M = Mem.empty) (hi : i.toNat = 64)
   refine rx_mstore (c := 12) ?_ (by rw [hi]) k
   rw [hi, St.extCost_eq (n := 0) rfl]; decide
 
+/-- `CALLDATACOPY` with its charge read off the image size (no gas in the charge term). -/
+theorem rx_calldatacopyK {di si sz : B256}
+    (k : SFunc.RunExact fs sevm
+      (St b S (M.write di.toNat (sevm.data.sliceD si.toNat sz.toNat 0)) G) f o) :
+    SFunc.RunExact fs sevm (St b (di :: si :: sz :: S) M (G + (gVerylow + gasCopy * ceilDiv sz.toNat 32
+      + (St b (di :: si :: sz :: S) M 0).extCost [⟨di.toNat, sz.toNat⟩])))
+      (.next (.reg .calldatacopy) f) o :=
+  rx_calldatacopy rfl rfl k
+
 /-- `MSTORE` of a word inside the image, off the pointer word. -/
 theorem rx_mstoreP {i v : B256} {i0 : Nat} (hM : FpM fp n M) (hi : i.toNat = i0)
     (hin : i0 + 32 ≤ n) (hd : i0 + 32 ≤ 64 ∨ 96 ≤ i0)
@@ -359,6 +368,9 @@ private def stepTac (f : Expr) : MetaM (Option (TSyntax `tactic)) := do
       | some ``Jaune.Rinst.keccak256 => return some (← `(tactic|
           (apply rk; refine rx_keccakP (by with_reducible rfl) (by xfp) (by decide) (by decide)
             (by xroom) ?_)))
+      | some ``Jaune.Rinst.gas => return some (← `(tactic| (apply rk; refine rx_gas (by xroom) ?_)))
+      | some ``Jaune.Rinst.calldatacopy => return some (← `(tactic|
+          (apply rk; refine rx_calldatacopyK ?_)))
       | some ``Jaune.Rinst.sload => return some (← `(tactic|
           (apply rk; refine rx_sload_sel (by with_reducible assumption) (by xroom) ?_)))
       | some ``Jaune.Rinst.sstore => return some (← `(tactic|
@@ -473,5 +485,67 @@ elab "xcallMT " w:ident k:num " [" as:term:max* "] " hs:(ppSpace colGt term:max)
   let mut t ← `($c $as*)
   t ← `(($t).2 $hs*)
   evalTactic (← `(tactic| (refine' rx_callKT (hj := by rfl) (hc := $t) ?_ ?_; rotate_left)))
+
+end Blanc.Composition.UsdcLive
+
+namespace Blanc.Composition.UsdcLive
+
+open Jaune Blanc Blanc.Lift
+
+/-- A `DELEGATECALL` to a non-precompile code address whose entered child halts cleanly resumes in
+`callChildPost`: the delegate sibling of `Ninst.runCompiled_call_zero_child` (no value moves). -/
+lemma Ninst.runCompiled_delegatecall_child {sevm : Sevm} {devm : Devm}
+    {gw cw iiw isw oiw osw : B256} {s : List B256}
+    {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
+    {ext acc mcc mcs : Nat} {cpost : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
+    (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
+      [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
+    (h_del : accessDelegation
+      (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
+        cw.toAdr) cw.toAdr = ⟨dp, dadr, code, dgc, d1⟩)
+    (h_acc : accessCost cw.toAdr
+      (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses
+        + dgc = acc)
+    (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc = ⟨mcc, mcs⟩)
+    (h_gas : mcc + ext ≤ d1.gasLeft) (h_depth : sevm.depth ≠ 0)
+    (h_nonprecompile : sevm.benvStat.rules.isPrecomp dadr = false)
+    (h_room : s.length < 1024)
+    (h_exec : exec (initEvm (delegatecallSpawnMsg sevm
+      (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+      mcs dadr iiw.toNat isw.toNat code dp)) = .ok cpost)
+    (h_error : cpost.error = none) :
+    Ninst.RunCompiled sevm devm (.exec .delegatecall)
+      (callChildPost (callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat)
+        cpost oiw.toNat osw.toNat) := by
+  let p := callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
+  let msg := delegatecallSpawnMsg sevm p mcs dadr iiw.toNat isw.toNat code dp
+  have hbt : msg.benvAfterTransfer = .ok msg.benv := by
+    unfold Msg.benvAfterTransfer
+    simp only [msg, delegatecallSpawnMsg, callMsg, Bool.false_eq_true, false_and, ↓reduceIte]
+  have henter : (Frame.ofCall msg).enter = .run (initEvm (msg.withBenv msg.benv)) := by
+    apply Frame.enter_run_of_nonprecompile hbt
+    · rfl
+    · change sevm.benvStat.rules.isPrecomp dadr = false
+      exact h_nonprecompile
+  have hexec : exec (initEvm (msg.withBenv msg.benv)) = .ok cpost := by
+    simpa only [msg, p, delegatecallSpawnMsg, callMsg, Msg.withBenv] using h_exec
+  have hsettle : (Frame.ofCall msg).settle (exec (initEvm (msg.withBenv msg.benv))) = .ok cpost := by
+    rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+  have hdi := accessDelegation_inv h_del
+  have hpstack : p.stack.length < 1024 := by
+    change d1.stack.length < 1024
+    rw [hdi.1]
+    exact h_room
+  have hres : Resume.run (.call p oiw.toNat osw.toNat)
+      ((Frame.ofCall msg).settle (exec (initEvm (msg.withBenv msg.benv)))) =
+        .ok (callChildPost p cpost oiw.toNat osw.toNat) := by
+    rw [hsettle, Resume.run_call_ok (by rw [h_error]; rfl) hpstack]
+    rfl
+  exact Ninst.runCompiled_delegatecall hfork h_stk h_ext h_del h_acc h_split h_gas h_depth
+    henter hres
 
 end Blanc.Composition.UsdcLive
