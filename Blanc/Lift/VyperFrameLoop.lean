@@ -52,7 +52,7 @@ theorem memWord_write_of_disjoint {M : Mem} {n o : Nat} {ys : Bytes} (ho : o + 3
   memWord_congr fun j hj => (Mem.write_agree M n ys).2 _ (by omega) (by omega)
 
 /-- A word written inside the logical size keeps the size. -/
-theorem Mem.size_write_word_of_le {M : Mem} {n : Nat} {v : B256} (h : n + 32 ≤ M.size) :
+theorem Mem.size_write_word_of_add_le {M : Mem} {n : Nat} {v : B256} (h : n + 32 ≤ M.size) :
     (M.write n v.toBytes).size = M.size :=
   Mem.write_size_of_prepaid _ _ _ (fun _ => by rw [B256.length_toBytes]; exact h)
 
@@ -243,7 +243,7 @@ theorem ric_frameSaveIter {c0 c1 e0 e1 x0 x1 : UInt8} {fall exit : SFunc} {p c :
   have hR : ∀ o, o + 32 ≤ M.size → (M.read o 32).2 = M := fun o ho => read_covered rfl hsz ho
   have hpn : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
   have hctr' : Bytes.toB256 (M.read (Bytes.toB256 [c0, c1]).toNat 32).1 = Nat.toB256 p := hctr
-  have hM1 := Mem.size_write_word_of_le (v := Nat.toB256 (p + 32)) hcs
+  have hM1 := Mem.size_write_word_of_add_le (v := Nat.toB256 (p + 32)) hcs
   unfold frameSaveIter at run
   obtain ⟨G1, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
@@ -287,12 +287,12 @@ theorem ric_frameRestoreIter {c0 c1 l0 l1 x0 x1 : UInt8} {fall exit : SFunc} {p 
   have hcb : (Bytes.toB256 [c0, c1]).toNat < 2 ^ 256 := B256.toNat_lt _
   have hpn : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
   have hctr' : Bytes.toB256 (M.read (Bytes.toB256 [c0, c1]).toNat 32).1 = Nat.toB256 p := hctr
-  have hM1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_le (by omega)
+  have hM1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_add_le (by omega)
   have hctr1 : Bytes.toB256 ((M.write p w.toBytes).read (Bytes.toB256 [c0, c1]).toNat 32).1 =
       Nat.toB256 p := by
     show memWord _ _ = _
     rw [memWord_write_of_disjoint hcs (by rw [B256.length_toBytes]; omega), hctr]
-  have hM2 := Mem.size_write_word_of_le (M := M.write p w.toBytes) (v := Nat.toB256 (p - 32))
+  have hM2 := Mem.size_write_word_of_add_le (M := M.write p w.toBytes) (v := Nat.toB256 (p - 32))
     (by rw [hM1]; exact hcs)
   unfold frameRestoreIter at run
   obtain ⟨G1, run⟩ := ric_dest run
@@ -352,7 +352,7 @@ theorem saveMem_size {M : Mem} {c lo : Nat} (h : c + 32 ≤ M.size) :
   | 0 => rfl
   | n + 1 => by
     simp only [saveMem]
-    rw [Mem.size_write_word_of_le (by rw [saveMem_size h n]; exact h), saveMem_size h n]
+    rw [Mem.size_write_word_of_add_le (by rw [saveMem_size h n]; exact h), saveMem_size h n]
 
 theorem saveMem_agree (M : Mem) (c lo : Nat) :
     ∀ n, Mem.AgreeOutside M (saveMem M c lo n) c (c + 32)
@@ -383,9 +383,9 @@ theorem restoreMem_size {c : Nat} :
       (restoreMem c M p ws).size = M.size
   | _, _, [], _, _ => rfl
   | M, p, w :: ws, hc, hp => by
-    have h1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_le hp
+    have h1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_add_le hp
     have h2 : ((M.write p w.toBytes).write c (Nat.toB256 (p - 32)).toBytes).size = M.size := by
-      rw [Mem.size_write_word_of_le (by rw [h1]; exact hc), h1]
+      rw [Mem.size_write_word_of_add_le (by rw [h1]; exact hc), h1]
     simp only [restoreMem]
     rw [restoreMem_size ws (by rw [h2]; exact hc) (by rw [h2]; omega), h2]
 
@@ -415,7 +415,7 @@ theorem restoreMem_word {c o : Nat} :
     have h1 : (M.write p w.toBytes).size = M.size := by
       rcases Nat.lt_or_ge M.size (p + 32) with h | h
       · exact absurd (lt_of_lt_of_le h (by omega : p + 32 ≤ o + 32)) (by omega)
-      · exact Mem.size_write_word_of_le h
+      · exact Mem.size_write_word_of_add_le h
     have hw1 : memWord (M.write p w.toBytes) o = memWord M o :=
       memWord_write_of_disjoint ho (by rw [B256.length_toBytes]; omega)
     have hs1 : o + 32 ≤ (M.write p w.toBytes).size := by rw [h1]; exact ho
@@ -435,9 +435,9 @@ theorem restoreMem_getElem {c : Nat} :
   | _, _, [], _, _, _, j, hj => absurd hj (Nat.not_lt_zero _)
   | M, p, w :: ws, hc, hp, hl, j, hj => by
     simp only [List.length_cons] at hl hj
-    have h1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_le (by omega)
+    have h1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_add_le (by omega)
     have h2 : ((M.write p w.toBytes).write c (Nat.toB256 (p - 32)).toBytes).size = M.size := by
-      rw [Mem.size_write_word_of_le (by rw [h1]; exact hc), h1]
+      rw [Mem.size_write_word_of_add_le (by rw [h1]; exact hc), h1]
     cases j with
     | zero =>
       simp only [restoreMem, Nat.mul_zero, Nat.sub_zero, List.getElem_cons_zero]
@@ -599,10 +599,10 @@ private theorem ric_frameRestore_aux {lo : Nat} (hlo : 32 ≤ lo) :
     · obtain ⟨G'', run⟩ := ric_frameLoopNext (hC k List.mem_cons_self) hk run
       rw [hp32] at run
       have h1 : (M.write (lo + 32 * (ks.length + 1)) w.toBytes).size = M.size :=
-        Mem.size_write_word_of_le (by omega)
+        Mem.size_write_word_of_add_le (by omega)
       have h2 : ((M.write (lo + 32 * (ks.length + 1)) w.toBytes).write t.c
           (Nat.toB256 (lo + 32 * ks.length)).toBytes).size = M.size := by
-        rw [Mem.size_write_word_of_le (by rw [h1]; exact hcs), h1]
+        rw [Mem.size_write_word_of_add_le (by rw [h1]; exact hcs), h1]
       obtain ⟨G3, h⟩ := ih _ ts G'' hch (fun k' hk' => hC k' (List.mem_cons_of_mem _ hk'))
         (by omega) (by rw [h2]; exact hsz) (by rw [h2]; exact hcs) (by omega)
         (Mem.memWord_write_word _ _ _).1 run
@@ -656,7 +656,7 @@ private theorem rxc_frameSaveBody {c0 c1 e0 e1 x0 x1 : UInt8} {fall exit : SFunc
       (frameSaveIter c0 c1 e0 e1 x0 x1 fall exit) r := by
   subst hc
   have hpn : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
-  have hM1 := Mem.size_write_word_of_le (v := Nat.toB256 (p + 32)) hcs
+  have hM1 := Mem.size_write_word_of_add_le (v := Nat.toB256 (p + 32)) hcs
   have hsz1 : (M.write (Bytes.toB256 [c0, c1]).toNat (Nat.toB256 (p + 32)).toBytes).size % 32 = 0 := by
     rw [hM1]; exact hsz
   have hcs1 : (Bytes.toB256 [c0, c1]).toNat + 32 ≤
@@ -734,13 +734,13 @@ private theorem rxc_frameRestoreBody {c0 c1 l0 l1 x0 x1 : UInt8} {fall exit : SF
   subst hc
   have hcb : (Bytes.toB256 [c0, c1]).toNat < 2 ^ 256 := B256.toNat_lt _
   have hpn : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
-  have hM1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_le (by omega)
+  have hM1 : (M.write p w.toBytes).size = M.size := Mem.size_write_word_of_add_le (by omega)
   have hsz1 : (M.write p w.toBytes).size % 32 = 0 := by rw [hM1]; exact hsz
   have hcs1 : (Bytes.toB256 [c0, c1]).toNat + 32 ≤ (M.write p w.toBytes).size := by
     rw [hM1]; exact hcs
   have hctr1 : memWord (M.write p w.toBytes) (Bytes.toB256 [c0, c1]).toNat = Nat.toB256 p := by
     rw [memWord_write_of_disjoint hcs (by rw [B256.length_toBytes]; omega), hctr]
-  have hM2 := Mem.size_write_word_of_le (M := M.write p w.toBytes) (v := Nat.toB256 (p - 32))
+  have hM2 := Mem.size_write_word_of_add_le (M := M.write p w.toBytes) (v := Nat.toB256 (p - 32))
     hcs1
   have hsz2 : ((M.write p w.toBytes).write (Bytes.toB256 [c0, c1]).toNat
       (Nat.toB256 (p - 32)).toBytes).size % 32 = 0 := by rw [hM2]; exact hsz1
@@ -913,10 +913,10 @@ private theorem rxc_frameRestore_aux {lo : Nat} (hlo : 32 ≤ lo) (hlt : t.e = l
     simp only [List.length_cons] at hts hreg hctr kk hroom ⊢
     have hp32 : lo + 32 * (ks.length + 1) - 32 = lo + 32 * ks.length := by omega
     have h1 : (M.write (lo + 32 * (ks.length + 1)) w.toBytes).size = M.size :=
-      Mem.size_write_word_of_le (by omega)
+      Mem.size_write_word_of_add_le (by omega)
     have h2 : ((M.write (lo + 32 * (ks.length + 1)) w.toBytes).write t.c
         (Nat.toB256 (lo + 32 * ks.length)).toBytes).size = M.size := by
-      rw [Mem.size_write_word_of_le (by rw [h1]; exact hcs), h1]
+      rw [Mem.size_write_word_of_add_le (by rw [h1]; exact hcs), h1]
     have hnext := ih _ ts G hch (fun k' hk' => hC k' (List.mem_cons_of_mem _ hk')) (by omega)
       (by rw [h2]; exact hsz) (by rw [h2]; exact hcs) (by omega)
       (Mem.memWord_write_word _ _ _).1 (by omega) (by simpa only [restoreMem, hp32] using kk)
