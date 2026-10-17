@@ -228,7 +228,7 @@ theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hSK : StaticKeeps sevm C)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x1272 (St b [3, 0x4c0] M G) L) :
     (i ≠ 2 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -274,13 +274,12 @@ theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     xs 0x129f (.push [0x12, 0xa4] (by decide)) ri_push
     xji 0x12a0 0x12a4 hw
     · xdead
-    have h4 : d1.getCode 4 = b.getCode 4 := by
-      rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
-      rfl
     rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout,
       hclogs, hcpre, hcpost⟩
     · exact absurd hpre hcoin
     clear hk
+    have h4 : d1.getCode 4 = b.getCode 4 := by
+      rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self), hcpre]
     xjd 0x12a5
     xs 0x12a7 (.push [0x1f] (by decide)) ri_push
     xs 0x12a8 (.reg .returndatasize) ri_returndatasize

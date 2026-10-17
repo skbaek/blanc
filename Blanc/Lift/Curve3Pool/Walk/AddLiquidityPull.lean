@@ -230,7 +230,7 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hSK : StaticKeeps sevm C)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x10b6 (St b [3, 0x4c0] M G) L) :
     (v = 0 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -288,13 +288,12 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       xs 0x10ef (.push [0x10, 0xf4] (by decide)) ri_push
       xji 0x10f0 0x10f4 hw
       · xdead
-      have h4 : d1.getCode 4 = b.getCode 4 := by
-        rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
-        rfl
       rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout,
         hclogs, hcpre, hcpost⟩
       · exact absurd hpre hcoin
       clear hk
+      have h4 : d1.getCode 4 = b.getCode 4 := by
+        rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self), hcpre]
       xjd 0x10f5
       xs 0x10f7 (.push [0x1f] (by decide)) ri_push
       xs 0x10f8 (.reg .returndatasize) ri_returndatasize
@@ -362,8 +361,10 @@ theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hid : IdReady sevm b)
     (hdepth : 0 < sevm.depth) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hC : WordAt img 0x500 C)
-    (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr) (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hK : CallKeeps sevm C)
+    (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x110d (St b [3, 0x4c0] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b3 d : Devm) (G' : Nat), L = c :: L' ∧
       BaseRel b b3 ∧
@@ -569,7 +570,6 @@ theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW hA h
   clear hR hW hA
   obtain ⟨d4, flag, L4, h, hrun4, hrd4, hk⟩ := h
-  obtain ⟨hks, hk4⟩ := hK _ _ _ _ _ _ _ _ _ rfl hrun4
   rw [hin] at hk
   xs 0x11e1 (.push [0x11, 0xe6] (by decide)) ri_push
   xji 0x11e2 0x11e6 hw
@@ -578,10 +578,8 @@ theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   clear hk hin hw
   rcases hch with ⟨hp, -⟩ | ⟨c, rfl, -, -, hc⟩
   · exact absurd hp hcoin
-  have hX : (St b3 [] M G).getCode sevm.currentTarget ≠ .empty := by
-    show b3.getCode _ ≠ _
-    rw [hb23.code, hb12.code]; exact hpc
-  refine ⟨c, L4, b3, d4, _, rfl, hb12.trans hb23, ?_, hc.keeps hX hks hk4, ⟨img3, hR, hW, hA, hrd4,
+  refine ⟨c, L4, b3, d4, _, rfl, hb12.trans hb23, ?_,
+    ⟨hkeep c List.mem_cons_self, hidk c List.mem_cons_self⟩, ⟨img3, hR, hW, hA, hrd4,
     k_ctr, fun o w hw ho => P3 o w (P2 o w (P1 o w hw ho) ho) ho⟩, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
