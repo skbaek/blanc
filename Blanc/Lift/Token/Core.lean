@@ -143,7 +143,7 @@ structure TransferLive (T : Adr) (B : Book) where
     sevm.currentTarget = T → sevm.codeAddress = some T → CoveredFork sevm.benvStat.fork →
     sevm.value = 0 → sevm.isStatic = false → pre.output = [] →
     WorldOk pre.state → B.op sevm = .transfer dst v → v ≤ B.bal (ledgerAt pre.state) sevm.caller →
-    cost sevm pre ≤ G →
+    cost sevm pre ≤ G → cost sevm pre + gCallStipend ≤ G →
     ∃ post, Nonempty (Exec 0 sevm (St pre [] Mem.empty G) (.ok post)) ∧ post.gasLeft + cost sevm pre = G ∧
       post.output = (Nat.toB256 1).toBytes ∧ WorldOk post.state ∧
       (dst ≠ sevm.caller → B.bal (ledgerAt post.state) sevm.caller + v =

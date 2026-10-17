@@ -21,7 +21,7 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Weth9 Blanc.Lift.Tok
 def weth9Op (e : Sevm) : Op :=
   if ¬ shortCall e ∧ Sevm.selector e = 0x70a08231 then .balanceOf (Sevm.dataWord e 4).toAdr
   else match decodeCall e with
-    | some (.deposit _ _) => .credit
+    | some (.deposit _ v) => if v = 0 then .credit else .other
     | some (.transfer _ dst wad) => .transfer dst wad.toNat
     | some (.transferFrom _ src dst wad) => .transferFrom src dst wad.toNat
     | some (.approve _ guy wad) => .approve guy wad.toNat
@@ -45,6 +45,362 @@ def Weth9Hist (ca : Adr) (K₀ : Key → Prop) {cfg : ChainConfig} {checkpoint f
   some (checkpoint.state.getCode ca).toList = weth9Sem.image ∧ SumNof checkpoint.state.bal ∧
     FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca) ∧
     KeysFresh K₀ (historyTouchedKeys ca tr)
+
+
+/-! ## The book laws -/
+
+/-- The message sender of a model call. -/
+def callWho : Call → Adr
+  | .deposit who _ => who
+  | .withdraw who _ => who
+  | .transfer who _ _ => who
+  | .transferFrom who _ _ _ => who
+  | .approve who _ _ => who
+
+/-- The decoded call's sender is the frame's caller. -/
+theorem callWho_decodeCall {e : Sevm} {c : Call} (h : decodeCall e = some c) :
+    callWho c = e.caller := by
+  unfold decodeCall at h
+  split_ifs at h <;> cases h <;> rfl
+
+theorem bal_add_bal_le_total (l : Weth9.Ledger) {a b : Adr} (h : a ≠ b) :
+    (l.bal a).toNat + (l.bal b).toNat ≤ l.total :=
+  add_le_sum_of_ne l.bal h
+
+theorem setBal_apply_self (l : Weth9.Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal a = w := by
+  simp only [Ledger.setBal_bal, Function.update_self]
+
+theorem setBal_apply_ne (l : Weth9.Ledger) {a b : Adr} (h : b ≠ a) (w : B256) :
+    (l.setBal a w).bal b = l.bal b := by
+  simp only [Ledger.setBal_bal, Function.update_of_ne h]
+
+theorem setAllow_apply (l : Weth9.Ledger) (o p h g : Adr) (w : B256) :
+    (l.setAllow o p w).allow h g = if h = o ∧ g = p then w else l.allow h g := by
+  unfold Ledger.setAllow
+  by_cases ho : h = o
+  · subst ho
+    by_cases hg : g = p
+    · subst hg
+      simp only [Function.update_self, and_self, ↓reduceIte]
+    · simp only [Function.update_self, Function.update_of_ne hg, hg, and_false, ↓reduceIte]
+  · simp only [Function.update_of_ne ho, ho, false_and, ↓reduceIte]
+
+/-- A balance move lowers `p`'s balance by at most what `p` itself sends to another holder, when the
+booked total fits a word. -/
+theorem xfer_holder (l : Weth9.Ledger) (p src dst : Adr) {wad : B256} (hle : wad ≤ l.bal src)
+    (fit : l.total < 2 ^ 256) :
+    (l.bal p).toNat ≤ ((l.xfer src dst wad).bal p).toNat +
+      (if src = p ∧ dst ≠ p then wad.toNat else 0) := by
+  have hsub : (l.bal src - wad).toNat = (l.bal src).toNat - wad.toNat :=
+    B256.toNat_sub_eq_of_le _ _ hle
+  have hwle : wad.toNat ≤ (l.bal src).toNat := B256.toNat_le_toNat hle
+  unfold Ledger.xfer
+  by_cases hs : src = p
+  · subst hs
+    by_cases hd : dst = src
+    · subst hd
+      have hnof : B256.Nof (l.bal dst - wad) wad := by
+        unfold B256.Nof
+        rw [hsub]
+        have := B256.toNat_lt (l.bal dst)
+        omega
+      simp only [setBal_apply_self, ne_eq, not_true_eq_false, and_false, ↓reduceIte, Nat.add_zero]
+      rw [B256.toNat_add_eq_of_nof _ _ hnof, hsub]
+      omega
+    · simp only [setBal_apply_ne _ (Ne.symm hd), setBal_apply_self, ne_eq, hd, not_false_eq_true,
+        and_self, ↓reduceIte]
+      rw [hsub]
+      omega
+  · have hif : (if src = p ∧ dst ≠ p then wad.toNat else 0) = 0 := by
+      simp only [hs, false_and, ↓reduceIte]
+    rw [hif, Nat.add_zero]
+    by_cases hd : dst = p
+    · subst hd
+      have hnof : B256.Nof (l.bal dst) wad := by
+        unfold B256.Nof
+        have := bal_add_bal_le_total l hs
+        omega
+      simp only [setBal_apply_self, setBal_apply_ne _ (Ne.symm hs)]
+      rw [B256.toNat_add_eq_of_nof _ _ hnof]
+      omega
+    · simp only [setBal_apply_ne _ (Ne.symm hd), setBal_apply_ne _ (Ne.symm hs), Nat.le_refl]
+
+/-- A move to someone else debits the source exactly. -/
+theorem xfer_src (l : Weth9.Ledger) {src dst : Adr} {wad : B256} (hle : wad ≤ l.bal src)
+    (hd : dst ≠ src) : ((l.xfer src dst wad).bal src).toNat + wad.toNat = (l.bal src).toNat := by
+  unfold Ledger.xfer
+  simp only [setBal_apply_ne _ (Ne.symm hd), setBal_apply_self]
+  rw [B256.toNat_sub_eq_of_le _ _ hle]
+  have := B256.toNat_le_toNat hle
+  omega
+
+/-- The shapes of a successful `transferFrom`: a plain move, or a move after an allowance debit
+(only when the source is not the caller and the allowance is not maximal, and covers the amount). -/
+theorem transferFrom_cases {l l' : Weth9.Ledger} {who src dst : Adr} {wad : B256}
+    (h : l.transferFrom who src dst wad = some l') :
+    wad ≤ l.bal src ∧
+      ((l' = l.xfer src dst wad ∧ (src = who ∨ l.allow src who = maxAllowance)) ∨
+        (src ≠ who ∧ wad ≤ l.allow src who ∧
+          l' = (l.setAllow src who (l.allow src who - wad)).xfer src dst wad)) := by
+  unfold Ledger.transferFrom at h
+  by_cases hlt : l.bal src < wad
+  · simp only [hlt, ↓reduceIte, reduceCtorEq] at h
+  · simp only [hlt, ↓reduceIte] at h
+    refine ⟨B256.not_lt.mp hlt, ?_⟩
+    by_cases hc : src ≠ who ∧ l.allow src who ≠ maxAllowance
+    · simp only [hc, ne_eq, not_false_eq_true, and_self, ↓reduceIte] at h
+      by_cases hlt2 : l.allow src who < wad
+      · simp only [hlt2, ↓reduceIte, reduceCtorEq] at h
+      · simp only [hlt2, ↓reduceIte, Option.some.injEq] at h
+        exact Or.inr ⟨hc.1, B256.not_lt.mp hlt2, h.symm⟩
+    · simp only [hc, ↓reduceIte, Option.some.injEq] at h
+      refine Or.inl ⟨h.symm, ?_⟩
+      by_cases hs : src = who
+      · exact Or.inl hs
+      · exact Or.inr (Classical.byContradiction fun hm => hc ⟨hs, hm⟩)
+
+theorem toNat_pos_of_lt {x y : B256} (h : x.toNat < y.toNat) : 0 < y.toNat := by omega
+
+/-- **Holder law of the model.** -/
+theorem step_holder_only {l l' : Weth9.Ledger} {c : Call} {h : Adr} (fit : l.total < 2 ^ 256)
+    (hs : l.step c = some l') (lower : (l'.bal h).toNat < (l.bal h).toNat) :
+    callWho c = h ∨ 0 < (l.allow h (callWho c)).toNat := by
+  have moveCase : ∀ {m : Weth9.Ledger} {src dst : Adr} {wad : B256}, wad ≤ m.bal src →
+      m.total < 2 ^ 256 → m.bal h = l.bal h →
+      ((m.xfer src dst wad).bal h).toNat < (l.bal h).toNat → src = h ∧ 0 < wad.toNat := by
+    intro m src dst wad hle mfit hm hlt
+    have := xfer_holder m h src dst hle mfit
+    rw [hm] at this
+    by_cases hc : src = h ∧ dst ≠ h
+    · obtain ⟨rfl, hd⟩ := hc
+      simp only [ne_eq, hd, not_false_eq_true, and_self, ↓reduceIte] at this
+      exact ⟨rfl, by omega⟩
+    · simp only [hc, ↓reduceIte, Nat.add_zero] at this
+      omega
+  cases c with
+  | deposit who v =>
+    simp only [Ledger.step, Option.some.injEq] at hs
+    subst hs
+    by_cases hw : who = h
+    · exact Or.inl hw
+    · rw [setBal_apply_ne _ (Ne.symm hw)] at lower
+      exact absurd lower (Nat.lt_irrefl _)
+  | withdraw who w =>
+    simp only [Ledger.step] at hs
+    split at hs
+    · cases hs
+    · simp only [Option.some.injEq] at hs
+      subst hs
+      by_cases hw : who = h
+      · exact Or.inl hw
+      · rw [setBal_apply_ne _ (Ne.symm hw)] at lower
+        exact absurd lower (Nat.lt_irrefl _)
+  | transfer who dst w =>
+    simp only [Ledger.step] at hs
+    obtain ⟨hle, (⟨rfl, -⟩ | ⟨hne, -⟩)⟩ := transferFrom_cases hs
+    · exact Or.inl (moveCase hle fit rfl lower).1
+    · exact absurd rfl hne
+  | transferFrom who src dst w =>
+    simp only [Ledger.step] at hs
+    obtain ⟨hle, (⟨rfl, hcase⟩ | ⟨-, hal, rfl⟩)⟩ := transferFrom_cases hs
+    · obtain ⟨rfl, -⟩ := moveCase hle fit rfl lower
+      rcases hcase with hw | hm
+      · exact Or.inl hw.symm
+      · refine Or.inr ?_
+        change 0 < (l.allow src who).toNat
+        rw [hm]
+        decide
+    · obtain ⟨rfl, hpos⟩ := moveCase hle fit rfl lower
+      refine Or.inr ?_
+      change 0 < (l.allow src who).toNat
+      have := B256.toNat_le_toNat hal
+      omega
+  | approve who g w =>
+    simp only [Ledger.step, Option.some.injEq] at hs
+    subst hs
+    exact absurd lower (Nat.lt_irrefl _)
+
+/-- **Owner law of the model**: only the owner raises its allowances. -/
+theorem step_allow_owner {l l' : Weth9.Ledger} {c : Call} {h g : Adr}
+    (hs : l.step c = some l') (raise : (l.allow h g).toNat < (l'.allow h g).toNat) :
+    callWho c = h := by
+  cases c with
+  | deposit who v =>
+    simp only [Ledger.step, Option.some.injEq] at hs
+    subst hs
+    exact absurd raise (Nat.lt_irrefl _)
+  | withdraw who w =>
+    simp only [Ledger.step] at hs
+    split at hs
+    · cases hs
+    · simp only [Option.some.injEq] at hs
+      subst hs
+      exact absurd raise (Nat.lt_irrefl _)
+  | transfer who dst w =>
+    simp only [Ledger.step] at hs
+    obtain ⟨-, (⟨rfl, -⟩ | ⟨hne, -⟩)⟩ := transferFrom_cases hs
+    · exact absurd raise (Nat.lt_irrefl _)
+    · exact absurd rfl hne
+  | transferFrom who src dst w =>
+    simp only [Ledger.step] at hs
+    obtain ⟨-, (⟨rfl, -⟩ | ⟨-, hal, rfl⟩)⟩ := transferFrom_cases hs
+    · exact absurd raise (Nat.lt_irrefl _)
+    · change (l.allow h g).toNat < ((l.setAllow src who (l.allow src who - w)).allow h g).toNat
+        at raise
+      rw [setAllow_apply] at raise
+      by_cases hc : h = src ∧ g = who
+      · obtain ⟨rfl, rfl⟩ := hc
+        simp only [and_self, ↓reduceIte] at raise
+        rw [B256.toNat_sub_eq_of_le _ _ hal] at raise
+        omega
+      · simp only [hc, ↓reduceIte] at raise
+        exact absurd raise (Nat.lt_irrefl _)
+  | approve who g' w =>
+    simp only [Ledger.step, Option.some.injEq] at hs
+    subst hs
+    rw [setAllow_apply] at raise
+    by_cases hc : h = who ∧ g = g'
+    · exact hc.1.symm
+    · simp only [hc, ↓reduceIte] at raise
+      exact absurd raise (Nat.lt_irrefl _)
+
+/-- The calls a holder-safe operation decodes to: none (a view), the caller's own `transfer`, or
+a zero-value deposit. -/
+theorem weth9Op_safe {e : Sevm} (hsafe : (weth9Op e).HolderSafe) :
+    decodeCall e = none ∨
+      (∃ dst wad, decodeCall e = some (.transfer e.caller dst wad) ∧
+        weth9Op e = .transfer dst wad.toNat) ∨
+      decodeCall e = some (.deposit e.caller 0) := by
+  unfold weth9Op at hsafe ⊢
+  by_cases hb : ¬ shortCall e ∧ Sevm.selector e = 0x70a08231
+  · refine Or.inl ?_
+    unfold decodeCall
+    rw [ite_eq_right hb.1, hb.2, ite_eq_right (by decide), ite_eq_right (by decide),
+      ite_eq_right (by decide), ite_eq_right (by decide), ite_eq_right (by decide),
+      ite_eq_left (Or.inr (Or.inr (Or.inr (Or.inl rfl))))]
+  · rw [ite_eq_right hb] at hsafe ⊢
+    cases hd : decodeCall e with
+    | none => exact Or.inl rfl
+    | some c =>
+      have who := callWho_decodeCall hd
+      rw [hd] at hsafe
+      cases c with
+      | deposit w v =>
+        by_cases hv : v = 0
+        · subst hv
+          change w = e.caller at who
+          subst who
+          exact Or.inr (Or.inr rfl)
+        · simp only [hv, ↓reduceIte, Op.HolderSafe] at hsafe
+      | withdraw => simp only [Op.HolderSafe] at hsafe
+      | transfer w dst wad =>
+        change w = e.caller at who
+        subst who
+        exact Or.inr (Or.inl ⟨dst, wad, rfl, rfl⟩)
+      | transferFrom => simp only [Op.HolderSafe] at hsafe
+      | approve => simp only [Op.HolderSafe] at hsafe
+
+/-- A decoded `transfer` operation is the caller's model `transfer`. -/
+theorem weth9Op_transfer {e : Sevm} {dst : Adr} {v : Nat} (h : weth9Op e = .transfer dst v) :
+    ∃ wad, decodeCall e = some (.transfer e.caller dst wad) ∧ v = wad.toNat := by
+  rcases weth9Op_safe (by rw [h]; trivial : (weth9Op e).HolderSafe) with
+    hd | ⟨dst', wad, hd, hop⟩ | hd
+  · unfold weth9Op at h
+    split at h
+    · cases h
+    · rw [hd] at h
+      cases h
+  · rw [h] at hop
+    cases hop
+    exact ⟨wad, hd, rfl⟩
+  · unfold weth9Op at h
+    split at h
+    · cases h
+    · rw [hd] at h
+      cases h
+
+theorem weth9Book_step_some {l : weth9Book.Ledger} {e : Sevm} {c : Call}
+    (hd : decodeCall e = some c) : weth9Book.step l e = Weth9.Ledger.step l c := by
+  change (match decodeCall e with | none => some l | some c => l.step c) = _
+  rw [hd]
+
+theorem weth9Book_step_none {l : weth9Book.Ledger} {e : Sevm} (hd : decodeCall e = none) :
+    weth9Book.step l e = some l := by
+  change (match decodeCall e with | none => some l | some c => l.step c) = _
+  rw [hd]
+
+/-- A zero-value deposit leaves the ledger alone. -/
+theorem step_deposit_zero (l : Weth9.Ledger) (h : Adr) : l.step (.deposit h 0) = some l := by
+  change some (l.setBal h (l.bal h + 0)) = some l
+  rw [B256.add_zero]
+  unfold Ledger.setBal
+  rw [Function.update_eq_self]
+
+theorem weth9Book_laws : BookLaws weth9Book where
+  holder_only := by
+    intro l l' a h good hs lower
+    cases hd : decodeCall a with
+    | none =>
+      rw [weth9Book_step_none hd, Option.some.injEq] at hs
+      subst hs
+      exact absurd lower (Nat.lt_irrefl _)
+    | some c =>
+      rw [weth9Book_step_some hd] at hs
+      have := step_holder_only good hs lower
+      rw [callWho_decodeCall hd] at this
+      rcases this with h1 | h1
+      · exact Or.inl h1
+      · exact Or.inr h1
+  allow_owner := by
+    intro l l' a h g _ hs raise
+    cases hd : decodeCall a with
+    | none =>
+      rw [weth9Book_step_none hd, Option.some.injEq] at hs
+      subst hs
+      exact absurd raise (Nat.lt_irrefl _)
+    | some c =>
+      rw [weth9Book_step_some hd] at hs
+      rw [← callWho_decodeCall hd]
+      exact step_allow_owner hs raise
+  holder_debit := by
+    intro l l' a h good hs hcaller hsafe
+    subst hcaller
+    rcases weth9Op_safe hsafe with hd | ⟨dst, wad, hd, hop⟩ | hd
+    · rw [weth9Book_step_none hd, Option.some.injEq] at hs
+      subst hs
+      exact Nat.le_add_right _ _
+    · rw [weth9Book_step_some hd] at hs
+      obtain ⟨hle, (⟨rfl, -⟩ | ⟨hne, -⟩)⟩ := transferFrom_cases hs
+      · change (l.bal a.caller).toNat ≤ ((l.xfer a.caller dst wad).bal a.caller).toNat +
+          (weth9Op a).debit a.caller
+        rw [hop]
+        change _ ≤ _ + wad.toNat
+        have := xfer_holder l a.caller a.caller dst hle good
+        split at this <;> omega
+      · exact absurd rfl hne
+    · rw [weth9Book_step_some hd] at hs
+      obtain rfl := Option.some.inj (hs.symm.trans (step_deposit_zero l a.caller))
+      exact Nat.le_add_right _ _
+  transfer_exact := by
+    intro l l' a dst v _ hs hop hne
+    obtain ⟨wad, hd, rfl⟩ := weth9Op_transfer hop
+    rw [weth9Book_step_some hd] at hs
+    obtain ⟨hle, (⟨rfl, -⟩ | ⟨hne', -⟩)⟩ := transferFrom_cases hs
+    · exact xfer_src l hle hne
+    · exact absurd rfl hne'
+  allow_safe := by
+    intro l l' a h g _ hs hcaller hsafe
+    rcases weth9Op_safe hsafe with hd | ⟨dst, wad, hd, -⟩ | hd
+    · rw [weth9Book_step_none hd, Option.some.injEq] at hs
+      subst hs
+      exact Nat.le_refl _
+    · rw [weth9Book_step_some hd] at hs
+      obtain ⟨-, (⟨rfl, -⟩ | ⟨hne, -⟩)⟩ := transferFrom_cases hs
+      · exact Nat.le_refl _
+      · exact absurd rfl hne
+    · rw [weth9Book_step_some hd] at hs
+      obtain rfl := Option.some.inj (hs.symm.trans (step_deposit_zero l a.caller))
+      exact Nat.le_refl _
 
 /-- The C2 control's mutant: `transferFrom` that skips the allowance check. -/
 def mutantTransferFrom (l : Weth9.Ledger) (_who src dst : Adr) (wad : B256) : Option Weth9.Ledger :=
