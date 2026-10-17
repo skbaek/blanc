@@ -817,6 +817,7 @@ import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
 import Blanc.Lift.Curve3Pool.U3Refute
 import Blanc.Lift.Curve3Pool.U3Bounds
+import Blanc.Lift.Curve3Pool.Creation.Jumps
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

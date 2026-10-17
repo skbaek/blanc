@@ -28,6 +28,11 @@ every certificate registered without it regenerates byte-identically.  `--pc`
 own pc; off by default.  `--decide-jumpi` (registry option `"decide_jumpi":
 true`) emits a JUMPI with a constant condition with its dead side `.undefined`,
 which `checkNode` does not check (`AVal.jumps?`); off by default.
+`--frame-loops` (registry option `"frame_loops": true`, with the memory-tracking mode below)
+unrolls Vyper 0.2.x frame save/restore loops, whose stack height changes every iteration: a
+back edge is a revisit of the same pc at the same stack height, a constant JUMPI condition is
+decided in the pre-pass too, and callee exploration follows a decided loop to its exit; off by
+default.
 `--memret callnext --const-mem --entry-cap K --widen agree` (registry option
 `"memret": "callnext", "const_mem": true, "entry_cap": K`) is the memory-tracking
 mode ported from Plans evidence/deployed-lido-vyper-v1/memret-probe/lift_memret.py:
@@ -342,6 +347,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 if opts.get("const_mem") is True:
                     argv += ["--const-mem", "--entry-cap", str(opts.get("entry_cap", 2)),
                              "--widen", opts.get("widen", "agree")]
+                if opts.get("frame_loops") is True:
+                    argv.append("--frame-loops")
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
@@ -467,6 +474,7 @@ parser.add_argument("--probe-json", type=Path, default=None, help="PROBE: write 
 parser.add_argument("--const-mem", action="store_true", help="PROBE: keep every constant word in the memory map, fold arithmetic/comparison ops on constants, decide JUMPIs with a constant condition (live side only), and key loop/goto entries by the full constant state up to --entry-cap entries per pc")
 parser.add_argument("--entry-cap", type=int, default=4, help="PROBE (--const-mem): full-constant entries per pc before entries generalize back to control values")
 parser.add_argument("--widen", choices=("agree", "control"), default="agree", help="PROBE (--const-mem): at the per-pc cap keep values all entries at that pc agree on (agree) or only control values (control)")
+parser.add_argument("--frame-loops", action="store_true", help="(--const-mem) unroll a loop whose revisit changes the stack height (Vyper 0.2.x frame save/restore loops) instead of closing it as a loop entry; a back edge is a revisit of the same pc at the same stack height (registry option `\"frame_loops\": true`)")
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
@@ -482,6 +490,15 @@ if CONST_MEM:
     args.fold = True   # exactly foldConst's eight ops (Blanc/Lift/Check.lean)
 ENTRY_CAP = args.entry_cap
 JOIN_EXEMPT = args.memret == "inline" and not args.no_callee_join_exempt
+FRAME_LOOPS = CONST_MEM and args.frame_loops
+# --frame-loops: at most this many visits of one pc on a path before every revisit is a back
+# edge (a frame save/restore loop moves one word per iteration; the Curve 3pool frames hold at most 23 words).
+FRAME_UNROLL_MAX = 64
+# --frame-loops: callee exploration (return arity only) follows a same-height loop this many
+# times, enough for a decided `range(255)` loop to reach its exit.
+CALLEE_LOOP_CAP = 260
+if args.frame_loops and not CONST_MEM:
+    parser.error("--frame-loops needs --memret callnext --const-mem")
 
 check_lean_transfers(args.blanc_root)
 
@@ -781,11 +798,34 @@ callee_memo: Dict[Tuple[int, Tuple[Tuple[Any, ...], ...]], Tuple[bool, Optional[
 
 explore_budget = [400000]
 
-def on_path(pc, path):
+def on_path(pc, path, height=None):
     """Canonical: a back edge is any revisit of a pc on the path.  PROBE (--const-mem): a pc may
-    recur with distinct constant states up to --entry-cap times (bounded unrolling)."""
+    recur with distinct constant states up to --entry-cap times (bounded unrolling).
+    --frame-loops: only revisits at the same stack height `height` count toward the cap; a
+    stack-height-changing revisit unrolls, up to FRAME_UNROLL_MAX visits of the pc."""
+    if FRAME_LOOPS and height is not None:
+        # callee exploration only: constant loop counters run to their decided exit
+        same = sum(1 for (p, st, *_r) in path if p == pc and len(st) == height)
+        return same >= CALLEE_LOOP_CAP or sum(1 for (p, *_r) in path if p == pc) >= CALLEE_LOOP_CAP + FRAME_UNROLL_MAX
     n = sum(1 for (p, *_r) in path if p == pc)
     return n >= (ENTRY_CAP if CONST_MEM else 1)
+
+
+def is_back_tree(tgt, height, path):
+    """build_tree: the jump to `tgt` closes a loop (canonical: `tgt` is on the path).
+    --frame-loops: `tgt` is on the path at the same stack height, or visited FRAME_UNROLL_MAX times."""
+    if FRAME_LOOPS:
+        return (any(p == tgt and len(st) == height for (p, st, *_r) in path)
+                or sum(1 for (p, *_r) in path if p == tgt) >= FRAME_UNROLL_MAX)
+    return any(p == tgt for (p, *_r) in path)
+
+
+def in_pre_path(tgt, height, path):
+    """Pre-pass: the jump to `tgt` closes a loop.  The path holds pcs (canonical) or
+    (pc, stack height) pairs (--frame-loops)."""
+    if FRAME_LOOPS:
+        return (tgt, height) in path or sum(1 for (p, _h) in path if p == tgt) >= FRAME_UNROLL_MAX
+    return tgt in path
 
 def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[bool, Optional[int]]:
     key = (t, callee_frame)
@@ -826,14 +866,14 @@ def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[boo
                     if cond[1] == 0:
                         explore(cur_pc + 1, rem, new_path, cur_mem)
                     elif tgt[0] == 'const':
-                        if not on_path(tgt[1], new_path):
+                        if not on_path(tgt[1], new_path, len(rem)):
                             explore(tgt[1], rem, new_path, cur_mem)
                     else:
                         failed = True
                     return
                 explore(cur_pc + 1, rem, new_path, cur_mem)
                 if tgt[0] == 'const':
-                    if not on_path(tgt[1], new_path):
+                    if not on_path(tgt[1], new_path, len(rem)):
                         explore(tgt[1], rem, new_path, cur_mem)
                 else:
                     failed = True
@@ -848,7 +888,7 @@ def check_callee(t: int, callee_frame: Tuple[Tuple[Any, ...], ...]) -> Tuple[boo
                     returns.add(len(rem))
                     return
                 elif tgt[0] == 'const':
-                    if on_path(tgt[1], new_path):
+                    if on_path(tgt[1], new_path, len(rem)):
                         return # Loop back-edge encountered in callee, cycle terminates
                     sub_call = None
                     for i, v in enumerate(rem):
@@ -1059,7 +1099,7 @@ while func_queue:
         while True:
             if pc not in inst_map:
                 return
-            path = path | {pc}
+            path = path | {(pc, len(st)) if FRAME_LOOPS else pc}
             op, sz, d = inst_map[pc]
             if op in (0x00, 0xf3, 0xfd, 0xff):
                 return
@@ -1096,7 +1136,7 @@ while func_queue:
                         target_pc = tgt[1]
                         if target_pc in jumpdests:
                             pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jump', (list(rem), mem)))
-                            if target_pc in path:
+                            if in_pre_path(target_pc, len(rem), path):
                                 pre_back_edges.add((pc, target_pc))
                             else:
                                 explore_func(target_pc, rem, path, mem)
@@ -1108,14 +1148,22 @@ while func_queue:
                 tgt = st[0]
                 rem = st[2:]
                 fall_pc = pc + 1
-                if fall_pc in jumpdests:
-                    pre_incoming_edges.setdefault(fall_pc, []).append((pc, 'fallthrough', (list(rem), mem)))
-                explore_func(fall_pc, rem, path, mem)
-                if tgt[0] == 'const':
+                cond = st[1]
+                # --frame-loops: a constant condition decides the JUMPI here as build_tree does,
+                # so a frame loop's exit is explored once, at its real stack height; a decided
+                # jump that closes a loop still explores the fall-through (the loop's exit)
+                closes = tgt[0] == 'const' and in_pre_path(tgt[1], len(rem), path)
+                live_fall = not (FRAME_LOOPS and cond[0] == 'const' and cond[1] != 0 and not closes)
+                live_taken = not (FRAME_LOOPS and cond[0] == 'const' and cond[1] == 0)
+                if live_fall:
+                    if fall_pc in jumpdests:
+                        pre_incoming_edges.setdefault(fall_pc, []).append((pc, 'fallthrough', (list(rem), mem)))
+                    explore_func(fall_pc, rem, path, mem)
+                if tgt[0] == 'const' and live_taken:
                     target_pc = tgt[1]
                     if target_pc in jumpdests:
                         pre_incoming_edges.setdefault(target_pc, []).append((pc, 'jumpi_taken', (list(rem), mem)))
-                        if target_pc in path:
+                        if in_pre_path(target_pc, len(rem), path):
                             pre_back_edges.add((pc, target_pc))
                         else:
                             explore_func(target_pc, rem, path, mem)
@@ -1220,7 +1268,7 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                 return ('jumpiF', fall, cur_pc)
             if tgt[0] != 'const':
                 raise RuntimeError(f"Non-const decided JUMPI target {tgt} at 0x{cur_pc:04x}")
-            if any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
+            if is_back_tree(tgt[1], len(rem), new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
                 k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="loop", emem=gm(M))
                 back_edges.append({"kind": "jumpiTo", "pc": cur_pc, "target_entry": k, "target_pc": tgt[1],
                                    "target_frame": entries[k][1], "caller_entry": entry_idx})
@@ -1242,7 +1290,7 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
                 return ('undefined', cur_pc + 1)
             return build_tree(cur_pc + 1, rem, cur_rets, new_path, entry_idx, M)
         if tgt[0] == 'const' and not decided_false:
-            if any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
+            if is_back_tree(tgt[1], len(rem), new_path) or ((cur_pc, tgt[1]) in pre_back_edges):
                 k = get_or_create_entry(tgt[1], gf(rem), cur_rets, role="loop", emem=gm(M))
                 back_edges.append({
                     "kind": "branchTo",
@@ -1291,7 +1339,7 @@ def build_tree(cur_pc: int, cur_st: List[Tuple[Any, ...]], cur_rets: int, path: 
             jsite(cur_pc, "ret")
             return ('ret', cur_pc)
         elif tgt[0] == 'const':
-            is_back = any(p == tgt[1] for (p, *_r) in new_path) or ((cur_pc, tgt[1]) in pre_back_edges)
+            is_back = is_back_tree(tgt[1], len(rem), new_path) or ((cur_pc, tgt[1]) in pre_back_edges)
             call_info = None
             if not is_back:
                 for i, v in enumerate(rem):
