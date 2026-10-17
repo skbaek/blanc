@@ -89,6 +89,24 @@ theorem coins_token : ∀ {s t : State} {invs : List PoolInvocation},
     obtain ⟨hc', ht'⟩ := coins_token rest
     exact ⟨hc'.trans hc, ht'.trans ht⟩
 
+/-- **A replay at one invocation**: inside a replay of `pre ++ i :: post`, the state the prefix
+reaches accepts `i`'s step with its raw effect, and the suffix replays from the result. -/
+theorem split : ∀ {s m t : State} {pre : List PoolInvocation} {i : PoolInvocation}
+    {post : List PoolInvocation},
+    PoolRun s (pre ++ i :: post) t → PoolRun s pre m →
+    ∃ o, step m i.env (decodeCall i.frame.sevm) = some o ∧
+      RawEffect (Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧ PoolRun o.state post t
+  | _, _, _, [], _, _, h, hp => by
+    simp only [PoolRun] at hp
+    subst hp
+    exact h
+  | _, _, _, _ :: _, _, _, h, hp => by
+    rw [List.cons_append] at h
+    obtain ⟨o, hs, -, hr⟩ := h
+    obtain ⟨o', hs', -, hr'⟩ := hp
+    cases Option.some.inj (hs.symm.trans hs')
+    exact split hr hr'
+
 end PoolRun
 
 end Blanc.Lift.Curve3Pool

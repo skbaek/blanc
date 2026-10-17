@@ -188,4 +188,44 @@ theorem pool_history_initialized {pool : Adr} {cfg : ChainConfig}
   exact pool_history_committed_derived trace (by rw [deployedCode]; rfl) initial callbacks parties
     idEmpty idNoAuthority idNoFrame sysInstalled sysNoAuthority sysNoFrame
 
+/-! ## The premises as one bundle
+
+The history-level corollaries (`AmpHistory.lean`, `U3History.lean`) take the premises of
+`pool_history_committed_derived` as one structure. -/
+
+/-- **The ENV premises of `pool_history_committed_derived`**, at the coins `cs` and token `tok`:
+the per-frame callback premise and the trace-local ones. -/
+structure PoolTraceEnv {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (pool : Adr) (cs : V3) (tok : Nat) :
+    Prop where
+  callbacks : trace.FrameAdmitted pool
+    (Exec.derivEntry fun D => PoolCallsKeep D ∧ PoolCoinCallsKeepToken D)
+  parties : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = pool →
+    (∀ k : Fin 3, ¬ root.sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
+      ¬ root.sevm.benvStat.rules.isPrecomp (adrOf tok)
+  idEmpty : checkpoint.state.getCode 4 = ByteArray.empty
+  idNoAuthority : trace.NoAuthorityAt 4
+  idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+    root.sevm.currentTarget ≠ 4
+  sysInstalled : SystemCodeInstalled checkpoint.state
+  sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1
+  sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1
+
+/-- `pool_history_committed_derived` over the bundle. -/
+theorem pool_history_committed_env {pool : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {s₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pool).toList = poolSem.image)
+    (initial : Checkpoint (checkpoint.state.getStor pool) s₀)
+    (env : PoolTraceEnv trace pool s₀.coins s₀.token) :
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token :=
+  pool_history_committed_derived trace installed initial env.callbacks env.parties env.idEmpty
+    env.idNoAuthority env.idNoFrame env.sysInstalled env.sysNoAuthority env.sysNoFrame
+
 end Blanc.Lift.Curve3Pool
