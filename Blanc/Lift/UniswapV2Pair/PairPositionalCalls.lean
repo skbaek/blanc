@@ -146,11 +146,10 @@ theorem PositionalConsumes.childOfRequest {root start : Exec.Deriv} {index : Nat
   · intros; trivial
   · intros; trivial
 
-/-- **The verdict lemma (call-shape route), proposed form.**  As the frozen
-`PairAdmittedConsumes.child_requests`, except that the code-address conjunct holds only when the
-callee holds no EIP-7702 delegation designator (a designator resolves a `CALL`'s code address to
-the delegate, so the frozen unconditional conjunct is false for a delegated callback target). -/
-theorem PairAdmittedConsumes.child_requests_undelegated {root : Exec.Deriv} {current : Checkpoint}
+/-- **The verdict lemma (call-shape route).**  Every committed direct child of a consumed Pair frame
+is the message of one source request.  The code-address conjunct holds when the callee holds no
+EIP-7702 delegation designator (a designator resolves a `CALL`'s code address to the delegate). -/
+theorem PairAdmittedConsumes.child_requests {root : Exec.Deriv} {current : Checkpoint}
     {invocation : List Nat} {entry : Entry} {transcript : Transcript} {out : RunResult}
     (admitted : PairAdmittedConsumes root
       (startTyped current (writerContext root.sevm invocation) entry) transcript out) :
@@ -323,10 +322,11 @@ theorem PairObservedReplayWith.consumed_of_mem
     · exact ⟨_, _, consumed⟩
     · exact ih s later
 
-/-- **Call shape from positional consumption, proposed form.**  As the frozen
-`pair_history_children_shape`, except that the code-address conjunct holds only when the callee
-holds no EIP-7702 delegation designator. -/
-theorem pair_history_children_shape_undelegated {pair : Adr} {cfg : ChainConfig}
+/-- **Call shape from positional consumption (no certificate memory bound).**  Over a configured
+history, every non-static direct child of every committed non-static Pair frame is called by the
+Pair with the `transfer` or the `uniswapV2Call` selector, at the callee's own code address unless
+the callee holds an EIP-7702 delegation designator. -/
+theorem pair_history_children_shape {pair : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
