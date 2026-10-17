@@ -49,7 +49,7 @@ caller's stack, over `aBase`, with the entry memory kept off `aWin`. -/
 def ALands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ v M' G', d = St (aBase sevm b) (v :: S) M' G' ∧
     aChk s sevm.benvStat.time.toNat = some v.toNat ∧ Mem.KeepsOff M M' aWin ∧
-    Mem.Wf M'
+    Mem.Wf M' ∧ (M.size % 32 = 0 → M'.size % 32 = 0)
 
 /-- The rising arm of `aChk` (lines 160–161). -/
 def aUp (a0 a1 t0 t1 t : Nat) : Option Nat := do
@@ -86,7 +86,7 @@ theorem a_up (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
     (run : SFunc.RunCut prog sevm [] (St B S M G) t_00e3_c27 r) :
     ∃ v M' G', r = .done (.returned (St B (v :: S) M' G')) ∧
       aUp ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v.toNat ∧
-      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' := by
+      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ (M₀.size % 32 = 0 → M'.size % 32 = 0) := by
   unfold t_00e3_c27 at run
   imload 0x1c0; imload 0x180; imload 0x1c0; istep; istep; istep; istep; istep
   iassert h1
@@ -106,7 +106,7 @@ theorem a_up (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
   istep; istep; istep; istep; istep; istep; istep
   imstore 0x0; imload 0x0; imload 0x140
   obtain ⟨G', rfl⟩ := ric_ret run
-  refine ⟨_, _, G', rfl, ?_, hT.keeps, hT.wf⟩
+  refine ⟨_, _, G', rfl, ?_, hT.keeps, hT.wf, hT.aligned⟩
   simp only [aUp, vyChkSub h1, vyChkSub h2, vyChkMul h3, vyChkSub h4, vyChkDiv h5, vyChkAdd h6,
     Option.bind_eq_bind, Option.bind_some]
 
@@ -116,7 +116,7 @@ theorem a_down (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
     (run : SFunc.RunCut prog sevm [] (St B S M G) t_018a_c27 r) :
     ∃ v M' G', r = .done (.returned (St B (v :: S) M' G')) ∧
       aDown ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v.toNat ∧
-      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' := by
+      Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ (M₀.size % 32 = 0 → M'.size % 32 = 0) := by
   obtain ⟨_, run⟩ := ric_dest run
   imload 0x1c0; imload 0x1c0; imload 0x180; istep; istep; istep; istep; istep
   iassert h1
@@ -136,7 +136,7 @@ theorem a_down (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
   istep; istep; istep; istep; istep; istep; istep
   imstore 0x0; imload 0x0; imload 0x140
   obtain ⟨G', rfl⟩ := ric_ret run
-  refine ⟨_, _, G', rfl, ?_, hT.keeps, hT.wf⟩
+  refine ⟨_, _, G', rfl, ?_, hT.keeps, hT.wf, hT.aligned⟩
   simp only [aDown, vyChkSub h1, vyChkSub h2, vyChkMul h3, vyChkSub h4, vyChkDiv h5,
     vyChkSub h6, Option.bind_eq_bind, Option.bind_some]
 
@@ -309,15 +309,15 @@ theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret
       rw [← slot_09, ← slot_07, ← slot_06, ← slot_08, getStorVal_eq_getStor, ite_eq_left ht]
     rcases ric_branch run with ⟨hw2, _, run⟩ | ⟨hw2, _, run⟩
     · have hup := gtCheck_iszero_eq hw2
-      obtain ⟨v, M', G', hr, hv, hk, hwf⟩ := a_up hT run
+      obtain ⟨v, M', G', hr, hv, hk, hwf, hal⟩ := a_up hT run
       cases hr
-      refine ⟨_, rfl, v, M', G', by rw [hb], ?_, hk, hwf⟩
+      refine ⟨_, rfl, v, M', G', by rw [hb], ?_, hk, hwf, hal⟩
       rw [aChk_eq, ← e1, ← e2, ← e3, ← e4, ite_eq_left ht, ite_eq_left (gt_iff_lt.mpr hup)]
       exact hv
     · have hdn := gtCheck_iszero_ne hw2
-      obtain ⟨v, M', G', hr, hv, hk, hwf⟩ := a_down hT run
+      obtain ⟨v, M', G', hr, hv, hk, hwf, hal⟩ := a_down hT run
       cases hr
-      refine ⟨_, rfl, v, M', G', by rw [hb], ?_, hk, hwf⟩
+      refine ⟨_, rfl, v, M', G', by rw [hb], ?_, hk, hwf, hal⟩
       rw [aChk_eq, ← e1, ← e2, ← e3, ← e4, ite_eq_left ht, ite_eq_right (fun h => hdn (gt_iff_lt.mp h))]
       exact hv
   · have ht := ltCheck_iszero_ne hw
@@ -331,7 +331,7 @@ theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret
       unfold aBase
       rw [← slot_09, ← slot_07, getStorVal_eq_getStor, ite_eq_right ht]
     exact ⟨_, rfl, _, _, G', by rw [hb], by rw [aChk_eq, ← e1, ← e2, ite_eq_right ht, afterSload_getStor],
-      hT.keeps, hT.wf⟩
+      hT.keeps, hT.wf, hT.aligned⟩
 
 /-! ## The forward contract -/
 

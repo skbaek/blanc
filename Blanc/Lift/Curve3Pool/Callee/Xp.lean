@@ -46,7 +46,7 @@ stack, over `xpBase`, with the entry memory kept off `xpWin`. -/
 def XpLands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ x0 x1 x2 M' G', d = St (xpBase sevm b) (x0 :: x1 :: x2 :: S) M' G' ∧
     xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧ Mem.KeepsOff M M' xpWin ∧
-    Mem.Wf M'
+    Mem.Wf M' ∧ (M.size % 32 = 0 → M'.size % 32 = 0)
 
 theorem xpBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (xpBase sevm b) :=
   (((SloadsOnly.refl).sload _).sload _).sload _
@@ -167,7 +167,7 @@ theorem xp_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {re
   obtain ⟨G', hr⟩ := ric_ret run
   cases hr
   simp only [xp_slot0, xp_slot1, xp_slot2, afterSload_getStorVal] at hm0 hm1 hm2 ⊢
-  refine ⟨_, rfl, _, _, _, _, G', rfl, ?_, hT.keeps, hT.wf⟩
+  refine ⟨_, rfl, _, _, _, _, G', rfl, ?_, hT.keeps, hT.wf, hT.aligned⟩
   have c0 := xp_coin (k := 0) hm0 hd0 (by decide) (by decide)
   have c1 := xp_coin (k := 1) hm1 hd1 (by decide) (by decide)
   have c2 := xp_coin (k := 2) hm2 hd2 (by decide) (by decide)
@@ -185,7 +185,8 @@ caller's stack, the base untouched, the entry memory kept off `[0x140, 0x260)`. 
 def XpMemLands (b : Devm) (a0 a1 a2 : B256) (S : List B256) (M : Mem) (d : Devm) : Prop :=
   ∃ x0 x1 x2 M' G', d = St b (x0 :: x1 :: x2 :: S) M' G' ∧
     xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
-    Mem.KeepsOff M M' xpMemWin ∧ Mem.Wf M'
+    Mem.KeepsOff M M' xpMemWin ∧ Mem.Wf M' ∧
+    (M.size % 32 = 0 → M'.size % 32 = 0)
 
 theorem prog_59 : prog[59]? = some t_03f2_c59 := by decide +kernel
 theorem prog_86 : prog[86]? = some t_03f2_c86 := by decide +kernel
@@ -265,7 +266,7 @@ theorem xpMem_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   imload 0x1a0
   obtain ⟨G', hr⟩ := ric_ret run
   cases hr
-  refine ⟨_, rfl, _, _, _, _, G', rfl, ?_, hT.keeps, hT.wf⟩
+  refine ⟨_, rfl, _, _, _, _, G', rfl, ?_, hT.keeps, hT.wf, hT.aligned⟩
   have c0 := xp_coin (k := 0) hm0 hd0 (by decide) (by decide)
   have c1 := xp_coin (k := 1) hm1 hd1 (by decide) (by decide)
   have c2 := xp_coin (k := 2) hm2 hd2 (by decide) (by decide)

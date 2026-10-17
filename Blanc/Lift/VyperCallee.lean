@@ -79,13 +79,28 @@ structure MemTrack (M₀ M : Mem) (W : List (Nat × Nat)) (L : List (Nat × B256
   keeps : Mem.KeepsOff M₀ M W
   words : Words M L
   wf : Mem.Wf M
+  /-- Word alignment of the logical size is kept. -/
+  aligned : M₀.size % 32 = 0 → M.size % 32 = 0
+
+/-- A word store keeps an aligned logical size aligned. -/
+theorem Mem.size_write_word_mod {N : Mem} {i : Nat} {w : B256} (h : N.size % 32 = 0) :
+    (N.write i w.toBytes).size % 32 = 0 := by
+  rw [Mem.size_write_word_at]
+  split
+  · exact h
+  · unfold ceil32; split <;> omega
+
+/-- An expansion keeps an aligned logical size aligned. -/
+theorem Mem.size_extend_mod {N : Mem} (i n : Nat) (h : N.size % 32 = 0) :
+    (N.extend i n).size % 32 = 0 :=
+  memExtSize_mod_32 h
 
 theorem MemTrack.init {M₀ : Mem} (hwf : Mem.Wf M₀) (W : List (Nat × Nat)) : MemTrack M₀ M₀ W [] :=
-  ⟨Mem.KeepsOff.refl M₀ W, Words.nil M₀, hwf⟩
+  ⟨Mem.KeepsOff.refl M₀ W, Words.nil M₀, hwf, id⟩
 
 theorem MemTrack.sub {M₀ M : Mem} {W : List (Nat × Nat)} {L L' : List (Nat × B256)}
     (h : MemTrack M₀ M W L) (hs : L' ⊆ L) : MemTrack M₀ M W L' :=
-  ⟨h.keeps, h.words.sub hs, h.wf⟩
+  ⟨h.keeps, h.words.sub hs, h.wf, h.aligned⟩
 
 theorem MemTrack.mem_size {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)}
     (h : MemTrack M₀ M W L) {o : Nat} {v : B256} (hm : (o, v) ∈ L) : o + 32 ≤ M.size :=
@@ -105,7 +120,8 @@ theorem ric_mloadT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
   obtain ⟨G1, rfl⟩ := ri_mload s1
   rw [hi] at run
   have hk := Mem.KeepsOff.extend M o 32 P
-  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _⟩, ?_⟩
+  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _,
+    fun h => Mem.size_extend_mod _ _ (hT.aligned h)⟩, ?_⟩
   · intro o' v' hm'
     obtain ⟨hs, hv⟩ := hT.words o' v' hm'
     exact ⟨le_trans hs hk.1, hv⟩
@@ -124,7 +140,7 @@ theorem ric_mstoreT {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
   obtain ⟨G1, rfl⟩ := ri_mstore s1
   rw [hi] at run
   refine ⟨_, G1, ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hP), ?_,
-    hT.wf.write _ _⟩, run⟩
+    hT.wf.write _ _, fun h => Mem.size_write_word_mod (hT.aligned h)⟩, run⟩
   refine hT.words.write fun o' w hm => ?_
   have h := List.all_eq_true.mp hout o' (List.mem_map.mpr ⟨(o', w), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
@@ -157,7 +173,8 @@ theorem ric_keccakT {i n : B256} {o : Nat} {w : B256} (hT : MemTrack M₀ M P L)
   obtain ⟨G1, rfl⟩ := ri_keccak s1
   rw [hi, hn] at run
   have hk := Mem.KeepsOff.extend M o 32 P
-  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _⟩, ?_⟩
+  refine ⟨_, G1, ⟨hT.keeps.trans hk, ?_, hT.wf.extend _ _,
+    fun h => Mem.size_extend_mod _ _ (hT.aligned h)⟩, ?_⟩
   · intro o' v' hm'
     obtain ⟨hs, hv⟩ := hT.words o' v' hm'
     exact ⟨le_trans hs hk.1, hv⟩
@@ -180,7 +197,8 @@ leave the size. -/
 theorem MemTrack.writeO {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)} {o : Nat}
     (hT : MemTrack M₀ M W L) (v : B256) (hW : coversWord W o = true) :
     MemTrack M₀ (M.write o v.toBytes) W ((o, v) :: wordsOff o L) := by
-  refine ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hW), ?_, hT.wf.write _ _⟩
+  refine ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hW), ?_, hT.wf.write _ _,
+    fun h => Mem.size_write_word_mod (hT.aligned h)⟩
   refine (hT.words.sub (L' := wordsOff o L) (List.filter_subset_self _)).write fun o' w hm => ?_
   have h := (List.mem_filter.mp hm).2
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
