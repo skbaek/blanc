@@ -207,7 +207,7 @@ SHARED += ["Lift.LedgerFootprint"]
 # Walking a successful frame's own derivation with its direct children: contract-neutral.
 SHARED += ["Lift.FrameWalk"]
 # Crossing certified exec-free callees from walked states, and memory glue: contract-neutral.
-SHARED += ["Lift.SoundSpan", "Lift.FrameWalkNode", "Lift.MemGlue"]
+SHARED += ["Lift.SoundSpan", "Lift.FrameWalkNode", "Lift.MemGlue", "Lift.FrameWalkKit", "Lift.IdentityCallGas"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -753,7 +753,14 @@ CONTRACTS = {
                     "Lift.Curve3Pool.CheckPart22",
                     "Lift.Curve3Pool.CheckPart23",
                     "Lift.Curve3Pool.Creation.Input",
-                    "Lift.Curve3Pool.Creation.Window"],
+                    "Lift.Curve3Pool.Creation.Window",
+                    "Lift.Curve3Pool.Walk.Kit",
+                    "Lift.Curve3Pool.Walk.Dispatch",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityPre",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityPost",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidity",
+                    "Lift.Curve3Pool.Walk.RemoveLiquiditySafe"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

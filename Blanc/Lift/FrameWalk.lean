@@ -327,8 +327,7 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
             have e := Frame.enter_eq_done_executePrecomp (adr := t.toAdr) hbt (by rw [hf]; rfl)
               (by
                 rw [hf]
-                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and,
-                  decide_eq_true_eq]
+                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and]
                 exact decide_eq_true (by rw [hstat]; exact hp))
             rw [henter] at e
             cases e
@@ -468,8 +467,7 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
             have e := Frame.enter_eq_done_executePrecomp (adr := t.toAdr) hbt (by rw [hf]; rfl)
               (by
                 rw [hf]
-                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and,
-                  decide_eq_true_eq]
+                simp only [Msg.withBenv, Frame.ofCall, callMsg, Bool.not_false, Bool.true_and]
                 exact decide_eq_true (by rw [hstat]; exact hp))
             rw [henter] at e
             cases e
