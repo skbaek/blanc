@@ -4,9 +4,10 @@ import Blanc.ExecutionTraceSettledForest
 /-!
 # The token ledger across one child of a Pair frame (C3 per-child frame layer)
 
-Against the token core only (no token storage layout).  Take a settled frame `P` at the Pair and
-one of its committed direct children `c`, whose committed subtree is a contiguous run of the
-history's settled frames, with booked ledger `l` before it and the Pair holding no allowance.
+Against the writer-shadowed token core only (no token storage layout).  Take a settled frame `P`
+at the Pair that is not shadowed and one of its committed direct children `c` (unshadowed by
+`child_unshadowed`), whose committed subtree is a contiguous run of the history's settled frames,
+with booked ledger `l` before it and the Pair holding no allowance.
 Then (`pair_token_child_frames`), with `l'` the ledger after the subtree:
 
 * the Pair keeps a zero allowance at `l'`;
@@ -18,7 +19,7 @@ Then (`pair_token_child_frames`), with `l'` the ledger after the subtree:
 
 The local caller fold (`child_subtree_entries_caller`): inside the child's subtree, no non-static
 token entry is called by the Pair, because non-static Pair frames there have only static children
-(`LockedBelow`) and the token never forwards a foreign caller into its own entries (`SelfCaller`).
+(`LockedBelow`) and the token never forwards a foreign caller into its own entries (`SelfCallerW`).
 -/
 
 namespace Blanc.Composition.PairTokenJoint
@@ -100,7 +101,8 @@ theorem abi_op_balanceOf {B : Book} (abi : Erc20Abi B) {s : Sevm} {owner : Adr}
 
 /-- **Inside a committed subtree whose Pair frames are locked, no non-static token entry is called
 by the Pair.** -/
-theorem child_subtree_entries_caller {pair T : Adr} {B : Book} (C : Core T B) (self : SelfCaller C)
+theorem child_subtree_entries_caller {pair T : Adr} {B : Book} (C : CoreW T B)
+    (self : SelfCallerW C)
     {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (hist : C.Hist trace) (apart : pair ≠ T)
     {c : Exec.Frame} (settled : ∀ G ∈ Exec.committedFrames c.run, G ∈ trace.settledFrames)
@@ -131,7 +133,7 @@ theorem child_subtree_entries_caller {pair T : Adr} {B : Book} (C : Core T B) (s
 
 /-- A committed child at the token of a settled Pair frame is an entry of the token (A8
 `decodes`: the parent is not at the token). -/
-theorem child_isEntry {pair T : Adr} {B : Book} (C : Core T B) {cfg : ChainConfig}
+theorem child_isEntry {pair T : Adr} {B : Book} (C : CoreW T B) {cfg : ChainConfig}
     {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : C.Hist trace) (apart : pair ≠ T) {P c : Exec.Frame}
     (settledP : P ∈ trace.settledFrames) (atPair : P.sevm.currentTarget = pair)
@@ -145,11 +147,12 @@ theorem child_isEntry {pair T : Adr} {B : Book} (C : Core T B) {cfg : ChainConfi
 /-! ## One child -/
 
 /-- **The token ledger across one child of a Pair frame.** -/
-theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) (hist : C.Hist trace)
-    (apart : pair ≠ T) (answerable : C.Answerable trace pair)
+theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
+    (hist : C.Hist trace) (apart : pair ≠ T) (answerable : C.Answerable trace pair)
     {P c : Exec.Frame} (settledP : P ∈ trace.settledFrames) (atPair : P.sevm.currentTarget = pair)
+    (lit : ¬ C.Shadowed trace P)
     (child : c ∈ Exec.childFrames P.run) (callerPair : c.sevm.caller = pair)
     (locked : LockedBelow pair (Exec.committedFrames c.run))
     (toT : c.sevm.currentTarget = T → c.sevm.isStatic = false →
@@ -195,7 +198,7 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
       rw [abi_op_transfer abi data]
       trivial
     · exact (inner F deeper entry static caller).elim
-  obtain ⟨bound, zero'⟩ := C.run_holder_segment laws trace hist split atPre step zero safe
+  obtain ⟨bound, zero'⟩ := C.run_holder_segment trace hist laws split atPre step zero safe
   rw [callerAsks] at bound
   refine ⟨l', step, zero', ?_, ?_, ?_, ?_⟩
   · -- static child
@@ -216,6 +219,8 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
       C.balanceAnswer trace hist c settledC entry (abi_op_balanceOf abi data) answerable
     have atC := C.replayAt trace hist pre c (Exec.descendantFrames c.run ++ post) (by
       rw [split, Exec.Frame.committedFrames_self, List.append_assoc, List.cons_append])
+      (C.child_unshadowed trace hist P settledP (fun atT => apart (atPair.symm.trans atT)) lit c
+        child)
     rw [atPre] at atC
     have ledgerEq : C.ledgerOf trace c.pre.state = l := (Option.some.inj atC).symm
     rw [ledgerEq] at answer

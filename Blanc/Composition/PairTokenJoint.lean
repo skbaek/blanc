@@ -12,7 +12,11 @@ and the joint relation holds there; it holds at the history's end with the Pair'
 `pair_token_noShrinkSide`: every outer Pair step of the history satisfies the token half of
 `EntryNoShrink` on `side` (`sourceReplayNoShrinkSide`).
 
-Both are the positional walk (`pair_token_walk`) over the Pair's observed replay: at a position, the
+Both are stated first over the writer-shadowed core (`pair_token_joint_w`,
+`pair_token_noShrinkSide_w`: `CoreW`, the holder-indexed laws `HolderLaws`, `SelfCallerW`, and the
+positional conclusion only at unshadowed frames), and the `Core` headlines are those at `C.weak`,
+`laws.holderLaws`, `self.weak` (Route R).  The `_w` forms are the positional walk
+(`pair_token_walk`) over the Pair's observed replay: at a position, the
 replay of the steps before it (`pair_history_stateAt_auth`) over the Pair-closed prefix
 (`before_pairClosed`); at the end, the history's full replay (`pair_history_replayed`).
 
@@ -24,6 +28,100 @@ per-call field of `pair_token_step_model` through each observed call's same-fram
 namespace Blanc.Composition.PairTokenJoint
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
+
+/-- **C3 over the writer-shadowed core** (Route R): `pair_token_joint` with `CoreW`, the
+holder-indexed laws and `SelfCallerW`; the positional conclusion holds at every settled frame
+outside the Pair's non-static frames that is not shadowed. -/
+theorem pair_token_joint_w {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (hist : C.Hist trace) (token : st₀.tokenOn side = T) (unlocked : st₀.unlocked = 1)
+    (apart : pair ≠ T) (answerable : C.Answerable trace pair)
+    (distinct : st₀.token0 ≠ st₀.token1) (notSystem : pair ≠ systemAddress)
+    (factoryQuiet : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → G.sevm.caller ≠ st₀.factory)
+    (tokenEntered : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → ∀ {node : Exec.Deriv},
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv G) node →
+          getDelegatedCodeAddress (node.devm.getCode T) = none ∧
+            ¬ node.sevm.benvStat.rules.isPrecomp T)
+    (start : JointAtW C trace pair side st₀ checkpoint.state) :
+    (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      trace.settledFrames = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
+      ¬ C.Shadowed trace f →
+      ∃ (st : UniswapV2Pair.State) (K : WriterKey → Prop),
+        WriterRep K (f.pre.state.getStor pair) st ∧ st.unlocked = 1 ∧ st.tokenOn side = T ∧
+          JointAtW C trace pair side st f.pre.state) ∧
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+        JointAtW C trace pair side finish future.state := by
+  have walk := pair_token_walk C abi self side trace laws installed initial fresh hist token
+    unlocked apart answerable distinct notSystem factoryQuiet tokenEntered
+  have tokenOf : ∀ {st : UniswapV2Pair.State}, TokensFix st₀.token0 st₀.token1 st₀.factory st →
+      st.tokenOn side = T := by
+    intro st tokens
+    rw [← token]
+    cases side
+    · exact tokens.1
+    · exact tokens.2.1
+  refine ⟨fun before f after split noOpaque lit => ?_, ?_⟩
+  · obtain ⟨steps, st, K, observed, auth, replay, rep⟩ :=
+      pair_history_stateAt_auth trace installed initial fresh before f after split noOpaque
+    obtain ⟨l', run', reserve, zero, tokens, opened, -⟩ := walk steps replay auth observed
+      (pre := []) (post := f :: after) split (PairClosed.nil pair)
+      (before_pairClosed trace split noOpaque) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+    have atF := C.replayAt trace hist before f after split lit
+    rw [List.nil_append, atF] at run'
+    cases run'
+    exact ⟨st, K, rep, opened, tokenOf tokens, reserve, zero⟩
+  · obtain ⟨-, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
+    obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
+    obtain ⟨l', run', reserve, zero, -⟩ := walk steps replay auth observed (pre := [])
+      (post := []) (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
+      (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+    rw [List.nil_append, C.replayEnd trace hist] at run'
+    cases run'
+    exact ⟨finish, K', replayed, reserve, zero⟩
+
+/-- **C3 inside a step over the writer-shadowed core** (Route R). -/
+theorem pair_token_noShrinkSide_w {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (hist : C.Hist trace) (token : st₀.tokenOn side = T) (unlocked : st₀.unlocked = 1)
+    (apart : pair ≠ T) (answerable : C.Answerable trace pair)
+    (distinct : st₀.token0 ≠ st₀.token1) (notSystem : pair ≠ systemAddress)
+    (factoryQuiet : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → G.sevm.caller ≠ st₀.factory)
+    (tokenEntered : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → ∀ {node : Exec.Deriv},
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv G) node →
+          getDelegatedCodeAddress (node.devm.getCode T) = none ∧
+            ¬ node.sevm.benvStat.rules.isPrecomp T)
+    (start : JointAtW C trace pair side st₀ checkpoint.state) :
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop) (steps : List PairStep),
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+      runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+      WriterRep K' (future.state.getStor pair) finish ∧
+      sourceReplayNoShrinkSide side st₀ (steps.map PairStep.source) := by
+  obtain ⟨-, finish, K', steps, observed, auth, replay, realized, -, -, rep⟩ :=
+    pair_history_replayed trace installed initial fresh
+  obtain ⟨-, -, -, -, -, -, noShrink⟩ := pair_token_walk C abi self side trace laws installed
+    initial fresh hist token unlocked apart answerable distinct notSystem factoryQuiet tokenEntered
+    steps replay auth observed (pre := []) (post := [])
+    (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
+    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+  exact ⟨finish, K', steps, observed, auth, replay, realized, rep, noShrink⟩
 
 /-- **C3, the joint invariant (headline).**  Over any configured history from a checkpoint where the
 Pair's code is installed over a model state whose token on `side` is `T`, and where the joint
@@ -58,34 +156,11 @@ theorem pair_token_joint {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLa
           JointAt C trace pair side st f.pre.state) ∧
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
-        JointAt C trace pair side finish future.state := by
-  have walk := pair_token_walk C laws abi self side trace installed initial fresh hist token
-    unlocked apart answerable distinct notSystem factoryQuiet tokenEntered
-  have tokenOf : ∀ {st : UniswapV2Pair.State}, TokensFix st₀.token0 st₀.token1 st₀.factory st →
-      st.tokenOn side = T := by
-    intro st tokens
-    rw [← token]
-    cases side
-    · exact tokens.1
-    · exact tokens.2.1
-  refine ⟨fun before f after split noOpaque => ?_, ?_⟩
-  · obtain ⟨steps, st, K, observed, auth, replay, rep⟩ :=
-      pair_history_stateAt_auth trace installed initial fresh before f after split noOpaque
-    obtain ⟨l', run', reserve, zero, tokens, opened, -⟩ := walk steps replay auth observed
-      (pre := []) (post := f :: after) split (PairClosed.nil pair)
-      (before_pairClosed trace split noOpaque) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
-    have atF := C.replayAt trace hist before f after split
-    rw [List.nil_append, atF] at run'
-    cases run'
-    exact ⟨st, K, rep, opened, tokenOf tokens, reserve, zero⟩
-  · obtain ⟨-, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
-    obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
-    obtain ⟨l', run', reserve, zero, -⟩ := walk steps replay auth observed (pre := [])
-      (post := []) (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-      (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
-    rw [List.nil_append, C.replayEnd trace hist] at run'
-    cases run'
-    exact ⟨finish, K', replayed, reserve, zero⟩
+        JointAt C trace pair side finish future.state :=
+  let ⟨atPositions, atEnd⟩ := pair_token_joint_w C.weak abi self.weak side trace
+    (laws.holderLaws T trace pair) installed initial fresh hist token unlocked apart answerable
+    distinct notSystem factoryQuiet tokenEntered start
+  ⟨fun before f after split noOpaque => atPositions before f after split noOpaque id, atEnd⟩
 
 /-- **C3 inside a step (what C4 consumes).**  At every outer Pair step, each token-side
 `balanceOf(pair)` answer the step's transcript carries is at least the step's incoming reserve on
@@ -115,14 +190,9 @@ theorem pair_token_noShrinkSide {pair T : Adr} {B : Book} (C : Core T B) (laws :
       PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
       runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
       WriterRep K' (future.state.getStor pair) finish ∧
-      sourceReplayNoShrinkSide side st₀ (steps.map PairStep.source) := by
-  obtain ⟨-, finish, K', steps, observed, auth, replay, realized, -, -, rep⟩ :=
-    pair_history_replayed trace installed initial fresh
-  obtain ⟨-, -, -, -, -, -, noShrink⟩ := pair_token_walk C laws abi self side trace installed
-    initial fresh hist token unlocked apart answerable distinct notSystem factoryQuiet tokenEntered
-    steps replay auth observed (pre := []) (post := [])
-    (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
-  exact ⟨finish, K', steps, observed, auth, replay, realized, rep, noShrink⟩
+      sourceReplayNoShrinkSide side st₀ (steps.map PairStep.source) :=
+  pair_token_noShrinkSide_w C.weak abi self.weak side trace (laws.holderLaws T trace pair)
+    installed initial fresh hist token unlocked apart answerable distinct notSystem factoryQuiet
+    tokenEntered start
 
 end Blanc.Composition.PairTokenJoint
