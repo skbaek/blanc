@@ -811,6 +811,7 @@ import Blanc.Lift.StableSwapNewton.Defs
 import Blanc.Lift.StableSwapNewton.Root
 import Blanc.Lift.StableSwapNewton.D
 import Blanc.Lift.StableSwapNewton.Y
+import Blanc.Lift.StableSwapNewton.Fuel
 
 -- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model

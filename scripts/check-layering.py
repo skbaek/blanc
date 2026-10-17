@@ -190,7 +190,10 @@ SHARED += ["LedgerUpdate"]
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # StableSwap (n = 3) Newton loops for D and y, plain and checked: contract-neutral.
 SHARED += ["Lift.StableSwapNewton.Defs", "Lift.StableSwapNewton.Root",
-           "Lift.StableSwapNewton.D", "Lift.StableSwapNewton.Y"]
+           "Lift.StableSwapNewton.D", "Lift.StableSwapNewton.Y",
+           "Lift.StableSwapNewton.Fuel"]
+# Fuel-bounded loop heads (Newton loops) walked to a fuel-loop model: contract-neutral.
+SHARED += ["Lift.FuelLoopWalk"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.

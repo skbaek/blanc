@@ -2003,6 +2003,10 @@ bridges the checked `get_D` to the plain one (`getDChk_some`) and proves
 `getD_lower` / `floorRoot_le_getD`: for positive balances and `A ≥ 1`, `getD` is
 never below `⌊D*⌋`, at every tolerance, stopped or capped; it also holds the cap,
 non-monotonicity and ceil-mutation witnesses.
+[`Blanc/Lift/StableSwapNewton/Fuel.lean`](../Blanc/Lift/StableSwapNewton/Fuel.lean)
+identifies the checked loops with the neutral fuel loop
+(`loopDChk_eq_fuelLoop`, `loopYChk_eq_fuelLoop`), so the `FuelLoopWalk`
+bridges apply to their compiled heads.
 [`Blanc/Lift/StableSwapNewton/Y.lean`](../Blanc/Lift/StableSwapNewton/Y.lean)
 bridges `get_y` / `get_y_D` (`getYChk_some`, `getYDChk_some`) and proves the
 tolerance-1 `y` loop returns exactly `rootQ` (`loopY_eq_rootQ`,
@@ -4688,6 +4692,16 @@ contract-neutral.
   nests because the outer cut list is a parameter; liveness:
   `SFunc.RunExactCut.iterate` builds a whole loop run from per-iteration cut
   runs; both in [`Blanc/Lift/Loop.lean`](../Blanc/Lift/Loop.lean).
+- Fuel-bounded loops (a `range(cap)` loop that stops early on a test and
+  otherwise returns its last iterate, e.g. Newton loops): the model
+  `fuelLoop body close fuel D` and its gas `fuelCost`; safety
+  `RunCut_fuelLoop_sound` from a per-pass inversion `FuelStep` at the head
+  (`At n D` with counter `n < cap`; leaving runs satisfy `Out`), liveness
+  `RunExactCut_fuelLoop_exact` from per-branch exact passes (`cStep`, `cStop`,
+  `cCap`); peeled head copies whose back edge targets the next copy via
+  `RunCut_fuelLoop_peel` / `RunExactCut_fuelLoop_peel`; the inversion split
+  `SFunc.RunCutP.split_at`; all in
+  [`Blanc/Lift/FuelLoopWalk.lean`](../Blanc/Lift/FuelLoopWalk.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
