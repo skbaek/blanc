@@ -272,7 +272,7 @@ theorem proxy_forwards_ok {sevm : Sevm} {pre : Devm} {out : Execution} (run : Ex
 /-- **C2, the proxy frame theorem** (non-admin branch), for calldata shorter than `2 ^ 256` bytes.
 `proxy_forwards` as frozen, with the one added premise `dataBound`: `CALLDATASIZE` pushes the length
 modulo `2 ^ 256`, so without it the child receives only that many bytes of the calldata. -/
-theorem proxy_forwards_bounded {sevm : Sevm} {pre : Devm} {out : Execution}
+theorem proxy_forwards {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out)
     (codeEq : sevm.code = Proxy.code) (fork : CoveredFork sevm.benvStat.fork)
     {I : Adr} (slot : (pre.state.getStor sevm.currentTarget).get implSlot = I.toB256)
