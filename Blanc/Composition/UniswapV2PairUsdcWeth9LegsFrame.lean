@@ -3,6 +3,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9LegsProxy
 import Blanc.Lift.Usdc.Impl.Jumps
 import Blanc.Lift.Usdc.Proxy.Jumps
 import Blanc.Lift.Usdc.Proxy.Check
+import Blanc.Lift.Usdc.HistorySlotsCore
 
 /-!
 # The USDC `transfer` frame through the proxy, gas-exact (U9a)
@@ -199,7 +200,7 @@ theorem proxy_xfer_run {sevm : Sevm} {pre : Devm} {X : Nat} (fork : CoveredFork 
   have herr : (frameChild sevm pre X).error = none := by
     rw [implXferPost_error]; rfl
   have step := dlg_step fork depth hY (by unfold frameY; omega)
-    (by rw [hcode]; exact impl_undelegated) hprec hexec herr
+    (by rw [hcode]; exact Blanc.Lift.Usdc.impl_undelegated) hprec hexec herr
   obtain ⟨hstk, hmem, hgas, hstate, -⟩ := callChildPost_facts_zero (dParent sevm pre (frameY sevm pre X))
     (frameChild sevm pre X) (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat rfl
   have hle : dFwd sevm pre (frameY sevm pre X) ≤ frameY sevm pre X - dExt sevm pre - dAcc sevm pre := by

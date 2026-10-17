@@ -153,9 +153,6 @@ abbrev dMsg (Y : Nat) : Msg :=
 
 end Dlg
 
-theorem impl_undelegated : getDelegatedCodeAddress Blanc.Lift.Usdc.Impl.code = none := by
-  decide +kernel
-
 /-- **`_delegate`'s `DELEGATECALL` step**: with `Y < 2 ^ 256` gas left, the implementation's code at
 `dI` (undelegated, no precompile) and a clean child run, the parent resumes in `callChildPost`. -/
 theorem dlg_step {sevm : Sevm} {b cpost : Devm} {Y : Nat} (hfork : CoveredFork sevm.benvStat.fork)
