@@ -18,6 +18,8 @@ Right after the first deposit the supply is the minted `D` itself, so the price 
 the deployed 3pool's parameters (`A = 2000`, fee `1e6`, admin fee 50 %), one per operation; their
 pools are imbalanced (largest/smallest scaled balance 40 to 27197). At admin fee 100 % the
 returned price falls at moderate imbalance: `exchange` at 36, `remove_liquidity_one_coin` at 1.3.
+The `…_live` witnesses use the live pool's current parameters (`A = 4000`, fee `1.5e6`, admin
+fee 100 %) for four of the six operations.
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -235,5 +237,100 @@ theorem u3_obs_imbalance_deployed :
       worldRun w t0 1 (.removeLiquidityImbalance ⟨611990, 0, 0⟩ (2 ^ 256 - 1)) = some (w', r) ∧
       VpObsFalls w w' t0 :=
   obsCheck_falls u3_obs_imbalance_deployed_check (by decide +kernel)
+
+/-! ## At the live pool's current parameters
+
+`A = 4000` (after a completed ramp; here set by the constructor), fee `1.5e6`, admin fee 100 %.
+A bounded search found no deposit-plus-one-operation witness for `add_liquidity` or
+`remove_liquidity_imbalance` at these parameters. -/
+
+/-- History: `A = 4000`, fee `1.5e6`, admin fee 100 %; the first deposit makes a balanced pool
+(largest/smallest scaled balance 1.12) of about $9.38M. -/
+def obsOneCoinLivePre : List Act :=
+  [.call t0 (.addLiquidity ⟨2974631569767724407062528, 3067641799049, 3335167505283⟩ 0)]
+
+theorem u3_obs_remove_liquidity_one_coin_live_check :
+    obsCheck (reach 4000 1500000 10000000000 obsOneCoinLivePre) t0
+        (.removeLiquidityOneCoin 36651579986742719021056 0 0) =
+      some (9377438110125531686177228, 9377438110125531686177228,
+        9340786530138788967156171, 9340786530138788967156172) := by
+  decide +kernel
+
+/-- **Observable `get_virtual_price` falls for `remove_liquidity_one_coin`**: `A = 4000`, fee
+`1.5e6`, admin fee 100 %; a balanced pool (largest/smallest scaled balance 1.12) of about $9.38M;
+withdraw 36651.58 3Crv in DAI. The returned price goes from `1000000000000000000` to
+`999999999999999999`: kernel-checked replay from the constructor. -/
+theorem u3_obs_remove_liquidity_one_coin_live :
+    ∃ w w' r, reach 4000 1500000 10000000000 obsOneCoinLivePre = some w ∧
+      worldRun w t0 1 (.removeLiquidityOneCoin 36651579986742719021056 0 0) = some (w', r) ∧
+      VpObsFalls w w' t0 :=
+  obsCheck_falls u3_obs_remove_liquidity_one_coin_live_check (by decide +kernel)
+
+/-- History: `A = 4000`, fee `1.5e6`, admin fee 100 %; the first deposit makes a pool of about $142k
+(largest/smallest scaled balance 304). -/
+def obsExchangeLivePre : List Act :=
+  [.call t0 (.addLiquidity ⟨2055108991192043880448, 139791719638, 460381297⟩ 0)]
+
+theorem u3_obs_exchange_live_check :
+    obsCheck (reach 4000 1500000 10000000000 obsExchangeLivePre) t0
+        (.exchange 1 0 1524159651 0) =
+      some (134647987133102189808804, 134647987133102189808804,
+        134647987133102189808803, 134647987133102189808804) := by
+  decide +kernel
+
+/-- **Observable `get_virtual_price` falls for `exchange`**: `A = 4000`, fee `1.5e6`, admin fee 100
+%; a pool of about $142k (largest/smallest scaled balance 304); sell 1524.159651 USDC for DAI. The
+returned price goes from `1000000000000000000` to `999999999999999999`: kernel-checked replay from
+the constructor. -/
+theorem u3_obs_exchange_live :
+    ∃ w w' r, reach 4000 1500000 10000000000 obsExchangeLivePre = some w ∧
+      worldRun w t0 1 (.exchange 1 0 1524159651 0) = some (w', r) ∧
+      VpObsFalls w w' t0 :=
+  obsCheck_falls u3_obs_exchange_live_check (by decide +kernel)
+
+/-- History: `A = 4000`, fee `1.5e6`, admin fee 100 %; the first deposit makes a pool of about
+$4.05M (largest/smallest scaled balance 2854). -/
+def obsRemoveLiquidityLivePre : List Act :=
+  [.call t0 (.addLiquidity ⟨4051742419832531182419968, 1419942278, 1775788842⟩ 0)]
+
+theorem u3_obs_remove_liquidity_live_check :
+    obsCheck (reach 4000 1500000 10000000000 obsRemoveLiquidityLivePre) t0
+        (.removeLiquidity 1 ⟨0, 0, 0⟩) =
+      some (1675312218210541108061495, 1675312218210541108061495,
+        1675312218210541108061493, 1675312218210541108061494) := by
+  decide +kernel
+
+/-- **Observable `get_virtual_price` falls for `remove_liquidity`**: `A = 4000`, fee `1.5e6`, admin
+fee 100 %; a pool of about $4.05M (largest/smallest scaled balance 2854); burn 1 wei of 3Crv. The
+returned price goes from `1000000000000000000` to `999999999999999999`: kernel-checked replay from
+the constructor. -/
+theorem u3_obs_remove_liquidity_live :
+    ∃ w w' r, reach 4000 1500000 10000000000 obsRemoveLiquidityLivePre = some w ∧
+      worldRun w t0 1 (.removeLiquidity 1 ⟨0, 0, 0⟩) = some (w', r) ∧
+      VpObsFalls w w' t0 :=
+  obsCheck_falls u3_obs_remove_liquidity_live_check (by decide +kernel)
+
+/-- History: `A = 4000`, fee `1.5e6`, admin fee 100 %; the first deposit makes a pool of about
+$1.47M (largest/smallest scaled balance 2275). -/
+def obsDonateAdminFeesLivePre : List Act :=
+  [.call t0 (.addLiquidity ⟨1468238121078321441669120, 966802920, 645285056⟩ 0),
+   .gift 0 1]
+
+theorem u3_obs_donate_admin_fees_live_check :
+    obsCheck (reach 4000 1500000 10000000000 obsDonateAdminFeesLivePre) t0
+        (.donateAdminFees) =
+      some (692956845791878889794565, 692956845791878889794565,
+        692956845791878889794564, 692956845791878889794565) := by
+  decide +kernel
+
+/-- **Observable `get_virtual_price` falls for `donate_admin_fees`**: `A = 4000`, fee `1.5e6`, admin
+fee 100 %; a pool of about $1.47M (largest/smallest scaled balance 2275); a 1-wei DAI gift, then
+`donate_admin_fees()`. The returned price goes from `1000000000000000000` to `999999999999999999`:
+kernel-checked replay from the constructor. -/
+theorem u3_obs_donate_admin_fees_live :
+    ∃ w w' r, reach 4000 1500000 10000000000 obsDonateAdminFeesLivePre = some w ∧
+      worldRun w t0 1 (.donateAdminFees) = some (w', r) ∧
+      VpObsFalls w w' t0 :=
+  obsCheck_falls u3_obs_donate_admin_fees_live_check (by decide +kernel)
 
 end Blanc.Lift.Curve3Pool
