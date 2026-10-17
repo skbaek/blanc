@@ -233,28 +233,4 @@ return it. -/
       exact Mem.read_write_zero' M w.toBytes
   ⟩
 
-/-- The proxy's dispatch word (`div` by `2 ^ 224`, masked to four bytes) is the selector. -/
-theorem dispatch_shr (w : B256) :
-    (Bytes.toB256 [255, 255, 255, 255] &&& w /
-      Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) =
-      w >>> 224 := by
-  apply B256.toNat_inj
-  have hp : (Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0]).toNat = 2 ^ 224 := by decide
-  have hp0 : Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0] ≠ 0 := by decide
-  have hf : (Bytes.toB256 [255, 255, 255, 255]).toNat = 2 ^ 32 - 1 := by decide
-  rw [Blanc.B256.toNat_and, B256.toNat_div hp0, hp, hf, Nat.and_comm, Nat.and_two_pow_sub_one_eq_mod]
-  have e : w >>> 224 = (⟨⟨0, 0⟩, ⟨0, w.1.1 >>> 32⟩⟩ : B256) := rfl
-  have hR : B256.toNat (⟨⟨0, 0⟩, ⟨0, w.1.1 >>> 32⟩⟩ : B256) = (w.1.1 >>> 32).toNat := by
-    simp only [B256.toNat, B128.toNat, UInt64.toNat_zero, Nat.zero_shiftLeft, Nat.zero_or]
-  rw [e, hR, B256.toNat_eq w, B128.toNat_eq w.1, B128.toNat_eq w.2]
-  have h32 : (32 : UInt64).toNat % 64 = 32 := rfl
-  simp only [UInt64.toNat_shiftRight, Nat.shiftRight_eq_div_pow, h32]
-  have b1 := UInt64.toNat_lt w.1.1
-  have b2 := UInt64.toNat_lt w.1.2
-  have b3 := UInt64.toNat_lt w.2.1
-  have b4 := UInt64.toNat_lt w.2.2
-  omega
-
 end Blanc.Composition.UsdcLive
