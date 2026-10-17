@@ -675,6 +675,10 @@ CONTRACTS = {
                    "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
                    "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
                    "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness"],
+    # The Curve 3pool StableSwap (StableSwap3Pool.vy, Vyper 0.2.4): the deployed creation input,
+    # lifted (curve-3pool-stableswap-v1).
+    "curve-3pool": ["Lift.Curve3Pool.Creation.Cert", "Lift.Curve3Pool.Creation.Check",
+                    "Lift.Curve3Pool.Creation.Jumps"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
