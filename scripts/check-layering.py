@@ -245,6 +245,9 @@ SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.W
 SHARED += ["Lift.ExactLeaf"]
 # A forall kernel batch (vyper-minus-reachable-reentrancy-v1).
 SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
+# Generic entry-gas bound, child code-at keep and system-size exclusion of a configured history
+# (curve-3pool-stableswap-v1 packet G): contract-neutral.
+SHARED += ["ExecutionTraceFrameEnv"]
 
 SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
 
@@ -840,6 +843,8 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Callee.CalcWithdrawXLoop",
                     "Lift.Curve3Pool.Callee.CalcWithdrawXD",
                     "Lift.Curve3Pool.Callee.CalcWithdrawXSpec",
+                    "Lift.Curve3Pool.CommittedReplay",
+                    "Lift.Curve3Pool.Ladder",
                     "Lift.Curve3Pool.Walk.AddLiquidityKit",
                     "Lift.Curve3Pool.Walk.AddLiquidityFrames",
                     "Lift.Curve3Pool.Walk.AddLiquidityPre",

@@ -3114,6 +3114,23 @@ consumer needs canonical interpreter ingress as one conjunct:
   `callOnlyReach_of_spawnFreeReach`. `Xinst.step_call_spawn` is the per-`CALL` fact: the child
   has a code address and runs the callee's own code when it holds no designator.
   `Lift.WithdrawalRequest.FeeCounterexample.blockOk_of` is the worked consumer.
+- To discharge the frame walks' entry premise `pre.gasMeasure < 2 ^ 256` for every raw frame of
+  a configured history with no premise at all: `ConfiguredHistoryTrace.gas_bound` (`< 2 ^ 64`)
+  and `ConfiguredHistoryTrace.frameAdmitted_gas`
+  ([`Blanc/ExecutionTraceFrameEnv.lean`](../Blanc/ExecutionTraceFrameEnv.lean)).
+  `Exec.rawFrameRoots_gas_le` is the execution-level fact (no entered frame starts with more gas
+  than the execution's root); message roots start with the message grant
+  (`MessageCallTrace.rawFrames_gas_le`, which uses the now-public `messageCallDelegation_gas` and
+  `messageCallExecutionMessage_gas` of `Blanc/ExecutionMessageGas.lean`), transaction grants are
+  below the block gas limit (`TransactionTrace.rawFrames_gas_lt`). The same file holds
+  `Exec.childFrames_codeAt_keep` (every committed direct child keeps the code at an address no
+  entered CREATE frame targets, from `Exec.codeAt_avoid`) and
+  `ExecutionTrace.not_mem_systemTargets_of_size` /
+  `ConfiguredHistoryTrace.system_ne_of_size` (under the canonical system code and the trace-local
+  system exclusions, no system frame targets a contract whose installed code differs in size from
+  every canonical system code; hoisted from the Beacon deposit contract, whose
+  `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
+  (curve-3pool-stableswap-v1).
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and

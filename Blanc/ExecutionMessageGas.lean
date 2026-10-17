@@ -108,7 +108,7 @@ private theorem setDelegation_gas {msg : Msg} {p : Msg × B256}
     cases run
     exact gas
 
-private theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
+theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok (delegated, refund)) :
     delegated.gas = msg.gas := by
   unfold messageCallDelegation at run
@@ -121,7 +121,7 @@ private theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
     cases rest
     exact setDelegation_gas set
 
-private theorem messageCallExecutionMessage_gas (msg : Msg) :
+theorem messageCallExecutionMessage_gas (msg : Msg) :
     (messageCallExecutionMessage msg).gas = msg.gas := by
   unfold messageCallExecutionMessage
   cases getDelegatedCodeAddress msg.code <;> rfl

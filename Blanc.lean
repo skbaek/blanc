@@ -71,6 +71,7 @@ import Blanc.ExecutionTraceCodeKeep
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionTraceCallOnly
 import Blanc.ExecutionTraceCalldata
+import Blanc.ExecutionTraceFrameEnv
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
@@ -928,6 +929,8 @@ import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
 import Blanc.Lift.Curve3Pool.Walk.Fallback
+import Blanc.Lift.Curve3Pool.CommittedReplay
+import Blanc.Lift.Curve3Pool.Ladder
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityKit
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
