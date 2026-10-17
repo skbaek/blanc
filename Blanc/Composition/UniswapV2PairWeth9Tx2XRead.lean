@@ -39,48 +39,16 @@ def xBalanceCall (cg : Nat) : Devm :=
   xBalanceCallAt sevm B S M p t cg ((balSplit sevm B S M p t cg).1 + balExt sevm B S M p t)
     (balSplit sevm B S M p t cg).2 ((balSplit sevm B S M p t cg).2 - xBalUsed sevm B S M p t)
 
-/-- The gas-free skeleton. -/
-def xBalanceSkel : Devm :=
-  callChildPost (balParent sevm B S M p t 0 0)
-    (balanceOfPost (initSevm (balMsg sevm B S M p t 0 0 0)) (initDevm (balMsg sevm B S M p t 0 0 0)) 0)
-    p.toNat (32 : B256).toNat
-
 end Balance
 
 section Reframe
 
 variable (s : Sevm) (f : Nat)
 
-theorem retPost_setMach (b : Devm) (m : Mach) (S : List B256) (M : Mem) (G : Nat) (out : B256)
-    (hsg : m.stateGas = b.stateGas) :
-    retPost (b.setMach m) S M G out = retPost b S M G out := by
-  unfold retPost St
-  rw [Devm.setMach_setMach, Devm.stateGas_setMach, hsg]
-
-theorem balanceOfPost_reframe (d : Devm) (f' r : Nat) :
-    balanceOfPost { s with gas := f } (St d [] Mem.empty f') r = balanceOfPost s d r := by
-  show retPost (afterSload s (St d [] Mem.empty f') (VyperNonreentrantDeployed.Token20.balSlot
-      (boHolder s))) [Sevm.selector s] (Mem.empty.write 0 ((St d [] Mem.empty f').getStorVal
-      s.currentTarget (VyperNonreentrantDeployed.Token20.balSlot (boHolder s))).toBytes) r
-      ((St d [] Mem.empty f').getStorVal s.currentTarget
-        (VyperNonreentrantDeployed.Token20.balSlot (boHolder s))) = _
-  unfold St
-  rw [afterSload_setMach, Devm.getStorVal_setMach]
-  exact retPost_setMach _ _ _ _ _ _ (by rw [afterSload_stateGas])
-
 theorem balanceOfGas_reframe (d : Devm) (f' : Nat) :
     balanceOfGas { s with gas := f } (St d [] Mem.empty f') = balanceOfGas s d := rfl
 
-theorem retPost_gasLeft (b : Devm) (S : List B256) (M : Mem) (G G' : Nat) (out : B256) :
-    retPost b S M G out = (retPost b S M G' out).withGasLeft G := rfl
-
 end Reframe
-
-section Skel
-
-variable (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B256)
-
-end Skel
 
 section Spec
 
