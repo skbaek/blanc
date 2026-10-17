@@ -169,6 +169,128 @@ theorem ric_keccakT {i n : B256} {o : Nat} {w : B256} (hT : MemTrack M₀ M P L)
 
 end Steps
 
+/-! ## Forward steps
+
+A forward callee walk proves a goal `∃ M', SFunc.RunExactCut fs sevm C d f (R M') ∧ Q M'`: the
+final memory is named only at the callee's return (`rxc_retT`), where the tracked memory hands
+over its facts.  `xlift` lifts every memory-free step to that shape; the memory steps are stated
+in it directly.  Memory is covered (`M.size = n`, word aligned), so loads and stores cost `3` and
+leave the size. -/
+
+theorem MemTrack.writeO {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat × B256)} {o : Nat}
+    (hT : MemTrack M₀ M W L) (v : B256) (hW : coversWord W o = true) :
+    MemTrack M₀ (M.write o v.toBytes) W ((o, v) :: wordsOff o L) := by
+  refine ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hW), ?_, hT.wf.write _ _⟩
+  refine (hT.words.sub (L' := wordsOff o L) (List.filter_subset' _)).write fun o' w hm => ?_
+  have h := (List.mem_filter.mp hm).2
+  simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
+
+section Fwd
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M M₀ : Mem}
+  {G n : Nat} {f : SFunc} {W : List (Nat × Nat)} {L : List (Nat × B256)}
+  {R : Mem → Seg} {Q : Mem → Prop}
+
+/-- Lift a step that does not touch the final memory through the `∃ M'` goal. -/
+theorem xlift {P P' : Mem → Prop} (h : ∀ M', P M' → P' M') (k : ∃ M', P M' ∧ Q M') :
+    ∃ M', P' M' ∧ Q M' :=
+  let ⟨M', hp, hq⟩ := k
+  ⟨M', h M' hp, hq⟩
+
+theorem rxc_mul {x y v : B256} {r : Seg} (hv : x * y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 5)) (.next (.reg .mul) f) r :=
+  rxc_binary (fn := (· * ·)) (c := gLow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
+theorem rxc_gt {x y v : B256} {r : Seg} (hv : B256.gtCheck x y = v) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .gt) f) r :=
+  rxc_binary (fn := B256.gtCheck) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv hroom k
+
+theorem rxc_timestamp {r : Seg} (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (sevm.benvStat.time :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b S M (G + 2)) (.next (.reg .timestamp) f) r :=
+  .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (r := .timestamp)
+    (x := sevm.benvStat.time) (G := G) (cost := gBase) (by rintro ⟨⟩) rfl rfl hroom) k
+
+theorem rxc_branch_zeroOf {d w : B256} {g : SFunc} {r : Seg} (hw : w = 0)
+    (k : SFunc.RunExactCut fs sevm C (St b S M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (d :: w :: S) M (G + 10)) (.branch f g) r := by
+  subst hw; exact rxc_branch_zero k
+
+theorem rxc_branchTo_succ {d w : B256} {g : SFunc} {j : Nat} {r : Seg} (hw : w ≠ 0)
+    (hj : fs[j]? = some g) (hjC : j ∉ C)
+    (k : SFunc.RunExactCut fs sevm C (St b S M G) g r) :
+    SFunc.RunExactCut fs sevm C (St b (d :: w :: S) M (G + 10)) (.branchTo f j) r :=
+  .toSucc d w hw hjC hj popBurnBy_St2 k
+
+theorem rxc_swap0 {x y : B256} {r : Seg}
+    (k : SFunc.RunExactCut fs sevm C (St b (y :: x :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg (.swap 0)) f) r :=
+  rxc_swap rfl k
+
+theorem rxc_swap1 {x y z : B256} {r : Seg}
+    (k : SFunc.RunExactCut fs sevm C (St b (z :: y :: x :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: y :: z :: S) M (G + 3)) (.next (.reg (.swap 1)) f) r :=
+  rxc_swap rfl k
+
+/-- `MLOAD` of a carried word, forward, over a covered tracked memory. -/
+theorem rxc_mloadT {i v : B256} {o : Nat} {r : Seg} (hT : MemTrack M₀ M W L)
+    (hS : M.size = n) (hn : n % 32 = 0) (hm : (o, v) ∈ L) (hi : i.toNat = o)
+    (hroom : S.length < 1024) (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (i :: S) M (G + 3)) (.next (.reg .mload) f) r := by
+  have hsz : M.size % 32 = 0 := by rw [hS]; exact hn
+  have ho := hT.mem_size hm
+  subst hi
+  exact rxc_mload (mload_covered_cost' hsz ho) (hT.words.memWord hm) (read_covered rfl hsz ho)
+    hroom k
+
+/-- `MSTORE` into a window, forward, over a covered tracked memory (overwriting). -/
+theorem rxc_mstoreT {i v : B256} {o : Nat} (hT : MemTrack M₀ M W L) (hS : M.size = n)
+    (hn : n % 32 = 0) (hi : i.toNat = o) (hcov : o + 32 ≤ n) (hW : coversWord W o = true)
+    (k : MemTrack M₀ (M.write o v.toBytes) W ((o, v) :: wordsOff o L) →
+      (M.write o v.toBytes).size = n →
+      ∃ M', SFunc.RunExactCut fs sevm C (St b S (M.write o v.toBytes) G) f (R M') ∧ Q M') :
+    ∃ M', SFunc.RunExactCut fs sevm C (St b (i :: v :: S) M (G + 3)) (.next (.reg .mstore) f)
+      (R M') ∧ Q M' := by
+  have hsz : M.size % 32 = 0 := by rw [hS]; exact hn
+  subst hi
+  obtain ⟨M', run, hq⟩ := k (hT.writeO v hW)
+    (by rw [Mem.size_write_word_of_add_le (by rw [hS]; exact hcov), hS])
+  exact ⟨M', rxc_mstore (mstore_covered_cost' hsz (by rw [hS]; exact hcov)) rfl run, hq⟩
+
+/-- `KECCAK256` of a carried word, forward, over a covered tracked memory (`36` gas). -/
+theorem rxc_keccakT {i m w : B256} {o : Nat} {r : Seg} (hT : MemTrack M₀ M W L)
+    (hS : M.size = n) (hn : n % 32 = 0) (hm : (o, w) ∈ L) (hi : i.toNat = o)
+    (hm32 : m.toNat = 32) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (Bytes.keccak w.toBytes :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (i :: m :: S) M (G + 36)) (.next (.reg .keccak256) f) r := by
+  have hsz : M.size % 32 = 0 := by rw [hS]; exact hn
+  have ho := hT.mem_size hm
+  subst hi
+  have hlen : (M.read i.toNat 32).1.length = 32 := by
+    simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range]
+  have hv : (M.read i.toNat 32).1 = w.toBytes := by
+    have h := hT.words.memWord hm
+    unfold memWord at h
+    rw [← Bytes.toBytes_toB256_of_length hlen, h]
+  refine .next (Ninst.runCompiled_keccak256_of (devm := St b (i :: m :: S) M (G + 36)) (G := G)
+    (c := 36) rfl ?_ ?_ ?_ rfl hroom) k
+  · rw [hm32, St, Devm.extCost_zero_of_le hsz ho]
+    decide
+  · rw [hm32, St.memory, hv]
+  · rw [hm32, St.memory]
+    exact read_covered rfl hsz ho
+
+/-- The callee's return, forward: the tracked memory's facts for the final memory. -/
+theorem rxc_retT {d : B256} (hT : MemTrack M₀ M W L) (hS : M.size = n) :
+    ∃ M', SFunc.RunExactCut fs sevm C (St b (d :: S) M (G + 8)) .ret
+      (.done (.returned (St b S M' G))) ∧
+      (Mem.KeepsOff M₀ M' W ∧ Mem.Wf M' ∧ M'.size = n) :=
+  ⟨M, rxc_ret, hT.keeps, hT.wf, hS⟩
+
+end Fwd
+
 /-! ## Bases reached by storage loads only -/
 
 /-- `B` is `b` after a chain of selected `SLOAD`s (`afterSload`): only the warm-key set moved. -/
@@ -258,6 +380,26 @@ theorem gtCheck_iszero_eq {x y : B256} (h : B256.eqCheck (B256.gtCheck x y) 0 = 
   · rename_i hl; rwa [gt_iff_lt, B256.lt_iff_toNat_lt_toNat] at hl
   · exact absurd rfl h'
 
+theorem ltCheck_iszero_of_lt {x y : B256} (h : x.toNat < y.toNat) :
+    B256.eqCheck (B256.ltCheck x y) 0 = 0 := by
+  unfold B256.ltCheck
+  rw [ite_eq_left (B256.lt_iff_toNat_lt_toNat.mpr h)]; decide
+
+theorem ltCheck_iszero_of_not_lt {x y : B256} (h : ¬ x.toNat < y.toNat) :
+    B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
+  unfold B256.ltCheck
+  rw [ite_eq_right (fun h' => h (B256.lt_iff_toNat_lt_toNat.mp h'))]; decide
+
+theorem gtCheck_iszero_of_lt {x y : B256} (h : y.toNat < x.toNat) :
+    B256.eqCheck (B256.gtCheck x y) 0 = 0 := by
+  unfold B256.gtCheck
+  rw [ite_eq_left (show x > y from B256.lt_iff_toNat_lt_toNat.mpr h)]; decide
+
+theorem gtCheck_iszero_of_not_lt {x y : B256} (h : ¬ y.toNat < x.toNat) :
+    B256.eqCheck (B256.gtCheck x y) 0 ≠ 0 := by
+  unfold B256.gtCheck
+  rw [ite_eq_right (fun h' : x > y => h (B256.lt_iff_toNat_lt_toNat.mp h'))]; decide
+
 /-- Vyper's checked subtraction `ISZERO (LT x y)`, read back. -/
 theorem vyChkSub {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0) :
     chkSub x.toNat y.toNat = some (x - y).toNat := by
@@ -314,6 +456,68 @@ theorem vyChkMul {x y : B256} (h : (B256.eqCheck ((x * y) / x) y ||| B256.eqChec
 theorem vyChkDiv {x y : B256} (h : y ≠ 0) : chkDiv x.toNat y.toNat = some (x / y).toNat := by
   unfold chkDiv
   rw [ite_eq_right (fun h0 => h (B256.toNat_inj _ _ (by rw [h0]; rfl))), B256.toNat_div h]
+
+/-! ### The guards, forward: a checked operation that succeeds passes its guard -/
+
+theorem eqCheck_self (a : B256) : B256.eqCheck a a = 1 := by
+  unfold B256.eqCheck; rw [ite_eq_left rfl]
+
+theorem one_ne_zero_b256 : (1 : B256) ≠ 0 := by decide
+
+theorem fwdChkSub {x y : B256} {z : Nat} (h : chkSub x.toNat y.toNat = some z) :
+    B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 ∧ (x - y).toNat = z := by
+  have hle : y.toNat ≤ x.toNat := by
+    unfold chkSub at h; split at h
+    · assumption
+    · cases h
+  have hg : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
+    have : B256.ltCheck x y = 0 := by
+      unfold B256.ltCheck
+      rw [ite_eq_right (by rw [B256.lt_iff_toNat_lt_toNat]; omega)]
+    rw [this, eqCheck_self]; exact one_ne_zero_b256
+  exact ⟨hg, Option.some.inj ((vyChkSub hg).symm.trans h)⟩
+
+theorem fwdChkAdd {x y : B256} {z : Nat} (h : chkAdd x.toNat y.toNat = some z) :
+    B256.eqCheck (B256.ltCheck (x + y) x) 0 ≠ 0 ∧ (x + y).toNat = z := by
+  have hlt : x.toNat + y.toNat < 2 ^ 256 := by
+    unfold chkAdd wordSize at h; split at h
+    · assumption
+    · cases h
+  have hg : B256.eqCheck (B256.ltCheck (x + y) x) 0 ≠ 0 := by
+    have : B256.ltCheck (x + y) x = 0 := by
+      unfold B256.ltCheck
+      rw [ite_eq_right (by rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add_eq_of_nof _ _ hlt]; omega)]
+    rw [this, eqCheck_self]; exact one_ne_zero_b256
+  exact ⟨hg, Option.some.inj ((vyChkAdd hg).symm.trans h)⟩
+
+theorem fwdChkMul {x y : B256} {z : Nat} (h : chkMul x.toNat y.toNat = some z) :
+    (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0 ∧ (x * y).toNat = z := by
+  have hlt : x.toNat * y.toNat < 2 ^ 256 := by
+    unfold chkMul wordSize at h; split at h
+    · assumption
+    · cases h
+  have hg : (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0 := by
+    by_cases hx : x = 0
+    · subst hx
+      rw [eqCheck_self]
+      unfold B256.eqCheck; split <;> decide
+    · have hq : (x * y) / x = y := by
+        apply B256.toNat_inj
+        rw [B256.toNat_div hx, B256.toNat_mul_eq_of_nofm hlt,
+          Nat.mul_div_cancel_left _ (B256.toNat_pos hx)]
+      rw [hq, eqCheck_self]
+      unfold B256.eqCheck; split <;> decide
+  exact ⟨hg, Option.some.inj ((vyChkMul hg).symm.trans h)⟩
+
+theorem fwdChkDiv {x y : B256} {z : Nat} (h : chkDiv x.toNat y.toNat = some z) :
+    y ≠ 0 ∧ (x / y).toNat = z := by
+  have hy : y ≠ 0 := by
+    rintro rfl
+    unfold chkDiv at h
+    split at h
+    · cases h
+    · rename_i h0; exact h0 rfl
+  exact ⟨hy, Option.some.inj ((vyChkDiv hy).symm.trans h)⟩
 
 /-! ## The inversion step tactic -/
 
@@ -403,5 +607,108 @@ macro "iassert " h:ident : tactic => `(tactic|
    rcases hbr with ⟨-, _, run⟩ | ⟨$h, _, run⟩
    · exact (run.false_of_noOk rfl).elim
    have hd := ric_dest run; clear run; obtain ⟨_, run⟩ := hd))
+
+/-! ## The forward step tactics
+
+A forward walk proves `∃ M', SFunc.RunExactCut … (R M') ∧ Q M'` (or a plain exact cut run)
+with, in context, the tracked memory `hT`, its size `hS : M.size = n`, `hn : n % 32 = 0`, the
+cover `htop`, the stack room `hroom` and the covered fork. -/
+
+set_option hygiene false in
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- **One forward step**: read the next node of the goal's tree and apply the matching
+`rxc_*` lemma (lifted through the `∃ M'` goal by `xlift`).  Gas is matched by `Nat` offsets. -/
+elab "xstep" : tactic => withMainContext do
+  let goal ← instantiateMVars (← getMainTarget)
+  let isEx := goal.getAppFn.constName? == some ``Exists
+  let run := if isEx then (goal.appArg!.bindingBody!.getAppArgs[0]!) else goal
+  let args := run.getAppArgs
+  let f ← whnf args[4]!
+  let some c := f.getAppFn.constName? | throwError "xstep: no node in {f}"
+  let cs := c.componentsRev.head!.toString
+  let room ← `(term| (by first | omega | (simp only [List.length_cons]; omega)))
+  let lem ← if cs == "dest" then `(term| Blanc.Lift.rxc_dest)
+    else if cs == "next" then do
+      let n ← whnf f.getAppArgs[0]!
+      let some nc := n.getAppFn.constName? | throwError "xstep: no instruction in {n}"
+      if nc.componentsRev.head!.toString == "push" then `(term| Blanc.Lift.rxc_push rfl $room)
+      else do
+        let r ← whnf n.appArg!
+        let some rc := r.getAppFn.constName? | throwError "xstep: no register op in {r}"
+        match rc.componentsRev.head!.toString with
+        | "dup" => `(term| Blanc.Lift.rxc_dup rfl $room)
+        | "swap" => do
+          let i ← whnf r.appArg!
+          let iv ← whnf (← mkAppM ``Fin.val #[i])
+          match iv.rawNatLit? with
+          | some 0 => `(term| Blanc.Lift.rxc_swap0)
+          | some 1 => `(term| Blanc.Lift.rxc_swap1)
+          | _ => throwError "xstep: unsupported swap {i}"
+        | "pop" => `(term| Blanc.Lift.rxc_pop)
+        | "add" => `(term| Blanc.Lift.rxc_add $room)
+        | "sub" => `(term| Blanc.Lift.rxc_sub' rfl $room)
+        | "sload" => `(term| Blanc.Lift.rxc_sload_sel (by assumption) $room)
+        | "timestamp" => `(term| Blanc.Lift.rxc_timestamp $room)
+        | o => do
+          let id := mkIdent (`Blanc.Lift ++ Name.mkSimple ("rxc_" ++ o))
+          `(term| $id rfl $room)
+    else throwError "xstep: unsupported node {f}"
+  if isEx then
+    evalTactic (← `(tactic| refine Blanc.Lift.xlift (fun _ k => $lem k) ?_))
+  else
+    evalTactic (← `(tactic| refine $lem ?_))
+
+set_option hygiene false in
+/-- Forward `MLOAD` of the carried word at `o`. -/
+macro "xmload' " o:term : tactic => `(tactic|
+  refine Blanc.Lift.xlift (fun _ k => Blanc.Lift.rxc_mloadT (o := $o) hT hS hn (by wmem)
+    (by decide) (by first | omega | (simp only [List.length_cons]; omega)) k) ?_)
+
+set_option hygiene false in
+/-- Forward `PUSH o; MLOAD`. -/
+macro "xmload " o:term : tactic => `(tactic| (xstep; xmload' $o))
+
+set_option hygiene false in
+/-- Forward `MSTORE` at `o` (overwriting), renewing `hT` and `hS`. -/
+macro "xmstore' " o:term : tactic => `(tactic|
+  (refine Blanc.Lift.rxc_mstoreT (o := $o) hT hS hn (by decide) (by omega) rfl ?_
+   intro hT hS
+   simp only [wordsOff, List.filter_cons, List.filter_nil, Nat.reduceAdd, Nat.reduceLeDiff,
+     decide_true, decide_false, Bool.true_or, Bool.or_true, Bool.false_or, Bool.or_false,
+     ite_true, ite_false, Bool.false_eq_true, ↓reduceIte] at hT))
+
+set_option hygiene false in
+/-- Forward `PUSH o; MSTORE`. -/
+macro "xmstore " o:term : tactic => `(tactic| (xstep; xmstore' $o))
+
+set_option hygiene false in
+/-- Forward `KECCAK256` of the carried word at `o`. -/
+macro "xkeccak " o:term : tactic => `(tactic|
+  refine Blanc.Lift.xlift (fun _ k => Blanc.Lift.rxc_keccakT (o := $o) hT hS hn (by wmem)
+    (by decide) (by decide) (by first | omega | (simp only [List.length_cons]; omega)) k) ?_)
+
+set_option hygiene false in
+/-- Forward `JUMPI` taken (`h : w ≠ 0`) into its in-tree target, then its `JUMPDEST`. -/
+macro "xassert " h:term:max : tactic => `(tactic|
+  (refine Blanc.Lift.xlift (fun _ k => Blanc.Lift.rxc_branch_succ $h k) ?_; xstep))
+
+set_option hygiene false in
+/-- Forward `JUMPI` not taken (`h : w = 0`). -/
+macro "xzero " h:term:max : tactic => `(tactic|
+  refine Blanc.Lift.xlift (fun _ k => Blanc.Lift.rxc_branch_zeroOf $h k) ?_)
+
+set_option hygiene false in
+/-- Forward `JUMP` into entry `k` (`hk : fs[k]? = some g`). -/
+macro "xjump " hk:term:max : tactic => `(tactic|
+  refine Blanc.Lift.xlift (fun _ kk => Blanc.Lift.rxc_jump $hk List.not_mem_nil kk) ?_)
+
+set_option hygiene false in
+/-- Forward conditional goto taken (`h : w ≠ 0`) into entry `k`. -/
+macro "xgoto " h:term:max hk:term:max : tactic => `(tactic|
+  refine Blanc.Lift.xlift (fun _ kk => Blanc.Lift.rxc_branchTo_succ $h $hk List.not_mem_nil kk) ?_)
+
+set_option hygiene false in
+/-- The callee's forward return. -/
+macro "xret" : tactic => `(tactic| exact Blanc.Lift.rxc_retT hT hS)
 
 end Blanc.Lift

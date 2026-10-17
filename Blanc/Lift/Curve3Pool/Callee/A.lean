@@ -140,6 +140,132 @@ theorem a_down (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it))
 
 end Arms
 
+/-! ## Forward twins -/
+
+/-- The word the rising arm returns. -/
+def aUpW (a0 a1 t0 t1 t : B256) : B256 := a0 + (a1 - a0) * (t - t0) / (t1 - t0)
+
+/-- The word the falling arm returns. -/
+def aDownW (a0 a1 t0 t1 t : B256) : B256 := a0 - (a0 - a1) * (t - t0) / (t1 - t0)
+
+theorem aUp_some {a0 a1 t0 t1 t v : Nat} (h : aUp a0 a1 t0 t1 t = some v) :
+    ∃ d e p q r, chkSub a1 a0 = some d ∧ chkSub t t0 = some e ∧ chkMul d e = some p ∧
+      chkSub t1 t0 = some q ∧ chkDiv p q = some r ∧ chkAdd a0 r = some v := by
+  simp only [aUp, Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨d, hd, e, he, p, hp, q, hq, r, hr, hv⟩ := h
+  exact ⟨d, e, p, q, r, hd, he, hp, hq, hr, hv⟩
+
+theorem aDown_some {a0 a1 t0 t1 t v : Nat} (h : aDown a0 a1 t0 t1 t = some v) :
+    ∃ d e p q r, chkSub a0 a1 = some d ∧ chkSub t t0 = some e ∧ chkMul d e = some p ∧
+      chkSub t1 t0 = some q ∧ chkDiv p q = some r ∧ chkSub a0 r = some v := by
+  simp only [aDown, Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨d, hd, e, he, p, hp, q, hq, r, hr, hv⟩ := h
+  exact ⟨d, e, p, q, r, hd, he, hp, hq, hr, hv⟩
+
+theorem aUpW_toNat {ia fa it ft t : B256} {v : Nat}
+    (hv : aUp ia.toNat fa.toNat it.toNat ft.toNat t.toNat = some v) :
+    (aUpW ia fa it ft t).toNat = v := by
+  obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aUp_some hv
+  obtain ⟨-, rfl⟩ := fwdChkSub hd
+  obtain ⟨-, rfl⟩ := fwdChkSub he
+  obtain ⟨-, rfl⟩ := fwdChkMul hp
+  obtain ⟨-, rfl⟩ := fwdChkSub hq
+  obtain ⟨-, rfl⟩ := fwdChkDiv hr
+  obtain ⟨-, rfl⟩ := fwdChkAdd hvv
+  rfl
+
+theorem aDownW_toNat {ia fa it ft t : B256} {v : Nat}
+    (hv : aDown ia.toNat fa.toNat it.toNat ft.toNat t.toNat = some v) :
+    (aDownW ia fa it ft t).toNat = v := by
+  obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aDown_some hv
+  obtain ⟨-, rfl⟩ := fwdChkSub hd
+  obtain ⟨-, rfl⟩ := fwdChkSub he
+  obtain ⟨-, rfl⟩ := fwdChkMul hp
+  obtain ⟨-, rfl⟩ := fwdChkSub hq
+  obtain ⟨-, rfl⟩ := fwdChkDiv hr
+  obtain ⟨-, rfl⟩ := fwdChkSub hvv
+  rfl
+
+section ArmsFwd
+
+variable {sevm : Sevm} {B : Devm} {S : List B256} {M₀ M : Mem} {G n v : Nat}
+  {ret ft fa ia it : B256}
+
+-- SEGMENT: aUpExact
+/-- **The rising ramp, forward** (`357` gas over a covered memory). -/
+theorem a_up_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
+    (hv : aUp ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
+    (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 357)) t_00e3_c27
+      (.done (.returned (St B (aUpW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
+      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      (aUpW ia fa it ft sevm.benvStat.time).toNat = v := by
+  obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aUp_some hv
+  obtain ⟨g1, rfl⟩ := fwdChkSub hd
+  obtain ⟨g2, rfl⟩ := fwdChkSub he
+  obtain ⟨g3, rfl⟩ := fwdChkMul hp
+  obtain ⟨g4, rfl⟩ := fwdChkSub hq
+  obtain ⟨g5, rfl⟩ := fwdChkDiv hr
+  obtain ⟨g6, rfl⟩ := fwdChkAdd hvv
+  refine ⟨?_, rfl⟩
+  xmload 0x1c0; xmload 0x180; xmload 0x1c0; xstep; xstep; xstep; xstep; xstep
+  xassert g1
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmload 0x1e0; xstep; xstep; xstep; xstep; xstep
+  xassert g2
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g3
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmload 0x160; xmload 0x1e0; xstep; xstep; xstep; xstep; xstep
+  xassert g4
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g5
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g6
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmstore 0x0; xmload 0x0; xmload 0x140
+  xret
+
+-- SEGMENT: aDownExact
+/-- **The falling ramp, forward** (`352` gas over a covered memory). -/
+theorem a_down_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
+    (hv : aDown ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
+    (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 352)) t_018a_c27
+      (.done (.returned (St B (aDownW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
+      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      (aDownW ia fa it ft sevm.benvStat.time).toNat = v := by
+  obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aDown_some hv
+  obtain ⟨g1, rfl⟩ := fwdChkSub hd
+  obtain ⟨g2, rfl⟩ := fwdChkSub he
+  obtain ⟨g3, rfl⟩ := fwdChkMul hp
+  obtain ⟨g4, rfl⟩ := fwdChkSub hq
+  obtain ⟨g5, rfl⟩ := fwdChkDiv hr
+  obtain ⟨g6, rfl⟩ := fwdChkSub hvv
+  refine ⟨?_, rfl⟩
+  xstep
+  xmload 0x1c0; xmload 0x1c0; xmload 0x180; xstep; xstep; xstep; xstep; xstep
+  xassert g1
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmload 0x1e0; xstep; xstep; xstep; xstep; xstep
+  xassert g2
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g3
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmload 0x160; xmload 0x1e0; xstep; xstep; xstep; xstep; xstep
+  xassert g4
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g5
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert g6
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xmstore 0x0; xmload 0x0; xmload 0x140
+  xret
+
+end ArmsFwd
+
 /-! ## The contract -/
 
 theorem slot_06 : Bytes.toB256 [0x06] = initialASlot := by decide
@@ -204,6 +330,95 @@ theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret
       rw [← slot_09, ← slot_07, getStorVal_eq_getStor, ite_eq_right ht]
     exact ⟨_, rfl, _, _, G', by rw [hb], by rw [aChk_eq, ← e1, ← e2, ite_eq_right ht, afterSload_getStor],
       hT.keeps, hT.wf⟩
+
+/-! ## The forward contract -/
+
+/-- **`_A`'s gas**: the instruction charges of its path (`85` outside a ramp, `458` rising,
+`453` falling) and its storage loads, warm or cold. -/
+def aGas (sevm : Sevm) (b : Devm) : Nat :=
+  if sevm.benvStat.time.toNat < (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then
+    (if (b.getStorVal sevm.currentTarget futureASlot).toNat >
+        (b.getStorVal sevm.currentTarget initialASlot).toNat then 458 else 453) +
+      sloadCost sevm b futureATimeSlot +
+      sloadCost sevm (afterSload sevm b futureATimeSlot) futureASlot +
+      sloadCost sevm (afterSload sevm (afterSload sevm b futureATimeSlot) futureASlot)
+        initialASlot +
+      sloadCost sevm (afterSload sevm (afterSload sevm (afterSload sevm b futureATimeSlot)
+        futureASlot) initialASlot) initialATimeSlot
+  else 85 + sloadCost sevm b futureATimeSlot +
+    sloadCost sevm (afterSload sevm b futureATimeSlot) futureASlot
+
+-- SEGMENT: aExact
+/-- **`_A`, forward**: when `aChk s t = some v`, entry 27 runs from its return address over a
+memory covering its frame (`0x200 ≤ M.size`, word aligned) and returns a word reading `v` over
+`aBase`, at gas `aGas`, the memory kept off `aWin` with its size. -/
+theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
+    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024) :
+    ∃ w, (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + aGas sevm b)) t_00a9_c27
+      (.returned (St (aBase sevm b) (w :: S) M' G)) ∧
+      (Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧ w.toNat = v := by
+  have hT := MemTrack.init hwf aWin
+  have e1 := ha.futureATime
+  have e2 := ha.futureA
+  have e3 := ha.initialA
+  have e4 := ha.initialATime
+  rw [aChk_eq, ← e1, ← e2, ← e3, ← e4] at hA
+  simp only [← getStorVal_eq_getStor] at hA
+  unfold aGas aBase
+  by_cases ht : sevm.benvStat.time.toNat <
+      (b.getStorVal sevm.currentTarget futureATimeSlot).toNat
+  · simp only [ht, ↓reduceIte] at hA ⊢
+    by_cases hup : (b.getStorVal sevm.currentTarget futureASlot).toNat >
+        (b.getStorVal sevm.currentTarget initialASlot).toNat
+    · simp only [hup, ↓reduceIte] at hA ⊢
+      rw [show ∀ x1 x2 x3 x4 : Nat, G + (458 + x1 + x2 + x3 + x4) =
+        G + 394 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
+      simp only [SFunc.runExact_iff_runExactCut_nil]
+      simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
+      refine ⟨?w1, ?run1, ?val1⟩
+      case run1 =>
+        xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
+        xmload 0x160; xstep; xstep; xstep; xstep
+        xzero (ltCheck_iszero_of_lt ht)
+        xstep; xstep; xmstore 0x1c0; xstep; xstep; xmstore 0x1e0
+        xmload 0x1c0; xmload 0x180; xstep; xstep; xstep
+        xzero (by simp only [afterSload_getStorVal]; exact gtCheck_iszero_of_lt hup)
+        exact (a_up_exact hT hS hn htop hroom (by simpa only [afterSload_getStorVal] using hA)).1
+      case val1 => exact aUpW_toNat (by simpa only [afterSload_getStorVal] using hA)
+    · simp only [hup, ↓reduceIte] at hA ⊢
+      rw [show ∀ x1 x2 x3 x4 : Nat, G + (453 + x1 + x2 + x3 + x4) =
+        G + 389 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
+      simp only [SFunc.runExact_iff_runExactCut_nil]
+      simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
+      refine ⟨?w2, ?run2, ?val2⟩
+      case run2 =>
+        xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
+        xmload 0x160; xstep; xstep; xstep; xstep
+        xzero (ltCheck_iszero_of_lt ht)
+        xstep; xstep; xmstore 0x1c0; xstep; xstep; xmstore 0x1e0
+        xmload 0x1c0; xmload 0x180; xstep; xstep; xstep
+        refine Blanc.Lift.xlift (fun _ k => rxc_branch_succ
+          (by simp only [afterSload_getStorVal]; exact gtCheck_iszero_of_not_lt hup) k) ?_
+        exact (a_down_exact hT hS hn htop hroom (by simpa only [afterSload_getStorVal] using hA)).1
+      case val2 => exact aDownW_toNat (by simpa only [afterSload_getStorVal] using hA)
+  · simp only [ht, ↓reduceIte] at hA ⊢
+    rw [show ∀ x1 x2 : Nat, G + (85 + x1 + x2) = G + 66 + x2 + 9 + x1 + 10 from
+      fun _ _ => by omega]
+    simp only [SFunc.runExact_iff_runExactCut_nil]
+    simp only [← slot_09, ← slot_07] at ht hA ⊢
+    refine ⟨?w3, ?run3, ?val3⟩
+    case run3 =>
+      xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
+      xmload 0x160; xstep; xstep; xstep; xstep
+      xassert (ltCheck_iszero_of_not_lt ht)
+      xmload 0x180; xmstore 0x0; xmload 0x0; xmload 0x140
+      xret
+    case val3 =>
+      simp only [afterSload_getStorVal]
+      exact (Option.some.inj hA)
 
 /-- `_A` changes the world only by warming its storage keys. -/
 theorem aBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (aBase sevm b) := by
