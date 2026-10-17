@@ -4,6 +4,8 @@ import Blanc.ExecutionTransactionGas
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionCodeAt
 import Blanc.Lift.CallerProvenance
+import Blanc.ExecutionTraceEntry
+import Blanc.ExecutionTraceCodeAt
 
 /-!
 # Generic environment discharge for per-frame walk premises
@@ -384,6 +386,101 @@ theorem ConfiguredHistoryTrace.system_ne_of_size {cfg : ChainConfig}
   obtain ⟨hframes, -⟩ := trace.systemFrames_of_installed systemInstalled systemNoAuthority
     systemNoFrame
   exact not_mem_systemTargets_of_size installed systemInstalled size (h ▸ hframes root member)
+
+/-! ## The raw frames of a history are closed under descent
+
+Every frame a raw frame enters is itself a raw frame of the history.  So a trace-local premise over
+`trace.rawFrames` (such as "no CREATE frame targets `a`") covers every frame below a given raw
+frame, which is what per-frame consumers like `Exec.childFrames_codeAt_keep` need. -/
+
+/-- A list of raw frames closed under descent: each member's own raw frame roots are members. -/
+def RawFramesClosed (frames : List Exec.Deriv) : Prop :=
+  ∀ d ∈ frames, ∀ e ∈ Exec.rawFrameRoots d.exc, e ∈ frames
+
+theorem RawFramesClosed.nil : RawFramesClosed [] := by
+  intro d member
+  simp only [List.not_mem_nil] at member
+
+theorem RawFramesClosed.append {left right : List Exec.Deriv} (hl : RawFramesClosed left)
+    (hr : RawFramesClosed right) : RawFramesClosed (left ++ right) := by
+  intro d member e he
+  rcases List.mem_append.mp member with h | h
+  · exact List.mem_append_left _ (hl d h e he)
+  · exact List.mem_append_right _ (hr d h e he)
+
+theorem RawFramesClosed.roots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : RawFramesClosed (Exec.rawFrameRoots run) :=
+  fun _ hd _ he => Exec.rawFrameRoots_trans hd he
+
+theorem RetainedXlot.rawFrames_closed {slot : Xlot} (retained : RetainedXlot slot) :
+    RawFramesClosed retained.rawFrames := by
+  cases retained with
+  | none => exact RawFramesClosed.nil
+  | some run => exact RawFramesClosed.roots run
+
+theorem MessageCallTrace.rawFrames_closed {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out) : RawFramesClosed trace.rawFrames := by
+  cases trace with
+  | createCollision => exact RawFramesClosed.nil
+  | createRun _ _ _ _ core _ => exact core.retained.rawFrames_closed
+  | callRun _ _ _ _ _ _ _ _ core _ => exact core.retained.rawFrames_closed
+
+theorem ApplyTransactionsTrace.rawFrames_closed
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    RawFramesClosed trace.rawFrames := by
+  induction trace with
+  | nil => exact RawFramesClosed.nil
+  | cons head tail ih => exact RawFramesClosed.append head.message.rawFrames_closed ih
+
+theorem AppliedBodyTrace.rawFrames_closed {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) : RawFramesClosed trace.rawFrames :=
+  RawFramesClosed.append (RawFramesClosed.append (RawFramesClosed.append
+    trace.beacon.message.rawFrames_closed trace.history.message.rawFrames_closed)
+    trace.transactions.rawFrames_closed)
+    (RawFramesClosed.append trace.requests.withdrawal.message.rawFrames_closed
+      trace.requests.consolidation.message.rawFrames_closed)
+
+/-- **The raw frames of a configured history are closed under descent.** -/
+theorem ConfiguredHistoryTrace.rawFrames_closed {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+    RawFramesClosed trace.rawFrames := by
+  induction trace with
+  | refl => exact RawFramesClosed.nil
+  | step prior block ih => exact RawFramesClosed.append ih block.bodyTrace.rawFrames_closed
+
+/-- **Children keep the code at an address no CREATE frame of the history targets**: every
+committed direct child of every raw frame of the history leaves the code at `a` as it found it. -/
+theorem ConfiguredHistoryTrace.childFrames_codeAt_keep {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    {a : Adr}
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
+    ∀ root ∈ trace.rawFrames, ∀ c ∈ Exec.childFrames root.exc,
+      c.post.getCode a = c.pre.getCode a := by
+  intro root member
+  exact Exec.childFrames_codeAt_keep root.exc (trace.rootEntry root member).2
+    (fun d hd => noFrame d (trace.rawFrames_closed root member d hd))
+
+/-- **A precompile is ready at every transaction frame**: warm (the transaction pre-warm) and
+without an EIP-7702 delegation designator (empty code, from empty code at the checkpoint, no
+authorization recovering to it and no CREATE frame targeting it). -/
+theorem ConfiguredHistoryTrace.precompileReady {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    {a : Adr} (precompile : ∀ f, CoveredFork f → a ∈ (Fork.ruleSet f).precompiles)
+    (checkpointEmpty : checkpoint.state.getCode a = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt a)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
+    ∀ root ∈ trace.txRawFrames, getDelegatedCodeAddress (root.devm.getCode a) = none ∧
+      a ∈ root.devm.accessedAddresses := by
+  intro root member
+  obtain ⟨hcode, -⟩ := trace.codeAt_empty noAuthority noFrame checkpointEmpty
+  refine ⟨?_, trace.txRawFrames_warm precompile root member⟩
+  have hnot : ¬ isValidDelegation ByteArray.empty := fun h => absurd h.1 (by decide)
+  rw [hcode root member]
+  simp only [getDelegatedCodeAddress, hnot, ↓reduceIte]
 
 end ExecutionTrace
 

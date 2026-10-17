@@ -3131,6 +3131,16 @@ consumer needs canonical interpreter ingress as one conjunct:
   every canonical system code; hoisted from the Beacon deposit contract, whose
   `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
   (curve-3pool-stableswap-v1).
+- To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
+  to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
+  a history are closed under descent, `RawFramesClosed`, layer by layer from
+  `Exec.rawFrameRoots_trans`), and its trace-level consumer
+  `ConfiguredHistoryTrace.childFrames_codeAt_keep` (every committed direct child of every raw
+  frame keeps the code at `a`). For a precompile's readiness at every transaction frame (warm and
+  undelegated, under empty code at the checkpoint, `NoAuthorityAt a` and no CREATE frame at `a`):
+  `ConfiguredHistoryTrace.precompileReady`, the generic form of the Beacon `beaconEntry_of_env`
+  route (all in [`Blanc/ExecutionTraceFrameEnv.lean`](../Blanc/ExecutionTraceFrameEnv.lean)).
+  Worked use: `Lift.Curve3Pool.pool_trace_admitted`.
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and

@@ -949,6 +949,7 @@ import Blanc.Lift.Curve3Pool.Walk.Fallback
 import Blanc.Lift.Curve3Pool.CommittedReplay
 import Blanc.Lift.Curve3Pool.Ladder
 import Blanc.Lift.Curve3Pool.Safe
+import Blanc.Lift.Curve3Pool.History
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityKit
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
