@@ -1,4 +1,5 @@
 import Blanc.Lift.IdentityCall
+import Blanc.ForwardStorageAccess
 
 /-!
 # A failed identity copy that forwarded all gas leaves none
@@ -187,5 +188,17 @@ theorem gasLeft_of_run_pop {d d' : Devm} (h : Ninst.Run sevm d (.reg .pop) d') :
     rw [h1, h2]
     show 0 < d'.gasLeft + 2
     omega
+
+/-! ## Identity readiness across storage steps -/
+
+theorem IdReady.afterSload {b : Devm} (h : IdReady sevm b) (k : B256) :
+    IdReady sevm (afterSload sevm b k) :=
+  ⟨by rw [afterSload_getCode]; exact h.nodeleg,
+    by rw [afterSload_accessedAddresses]; exact h.warm, h.pre, h.fork⟩
+
+theorem IdReady.afterSstore {b : Devm} (h : IdReady sevm b) (k v : B256) :
+    IdReady sevm (afterSstore sevm b k v) :=
+  ⟨by rw [afterSstore_getCode]; exact h.nodeleg,
+    by rw [afterSstore_accessedAddresses]; exact h.warm, h.pre, h.fork⟩
 
 end Blanc.Lift

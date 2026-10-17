@@ -202,7 +202,7 @@ theorem xa_call_img {pc' : Nat} {g t v ii is oi os : B256} {i n o z : Nat}
     (hos : os.toNat = z) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post pc (St b (g :: t :: v :: ii :: is :: oi :: os :: S) M G) L) :
     ∃ d flag L', XAt sevm post pc' (St d (flag :: S) d.memory d.gasLeft) L' ∧
-      (flag ≠ 0 →
+      d.returnData.length < 2 ^ 256 ∧ (flag ≠ 0 →
         Mem.Reads d.memory (Bytes.writeAt img o (d.returnData.take z)) ∧ Mem.Wf d.memory ∧
         d.output = b.output ∧
         ((sevm.benvStat.rules.isPrecomp t.toAdr ∧ L = L') ∨
@@ -214,8 +214,9 @@ theorem xa_call_img {pc' : Nat} {g t v ii is oi os : B256} {i n o z : Nat}
   subst hpc hii his hoi hos
   obtain ⟨d, s, L', h, hk⟩ := xa_call hfork hat rfl h
   obtain ⟨flag, hpost⟩ := ri_call_post hfork s
+  have hrd := ReturnDataBound.call_returnData_length_lt s hfork
   rw [St.self hpost.stack rfl] at h
-  refine ⟨d, flag, L', h, fun nz => ?_⟩
+  refine ⟨d, flag, L', h, hrd, fun nz => ?_⟩
   obtain ⟨hmem, hout⟩ := hpost.settled nz
   refine ⟨?_, ?_, hout, ?_⟩
   · rw [hmem]
@@ -367,6 +368,89 @@ theorem write_other (h : WordAt img o w) (hd : o + 32 ≤ n ∨ n + xs.length �
   · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hd, h]
 
 end WordAt
+
+/-- The image's bytes at `o` are `xs`. -/
+def Region (img : Bytes) (o : Nat) (xs : Bytes) : Prop := img.sliceD o xs.length 0 = xs
+
+namespace Region
+
+variable {img : Bytes} {o n : Nat} {xs ys : Bytes} {w : B256}
+
+theorem write_self (img : Bytes) (o : Nat) (xs : Bytes) : Region (Bytes.writeAt img o xs) o xs :=
+  Bytes.sliceD_writeAt _ _ _
+
+theorem write_other (h : Region img o xs) (hd : o + xs.length ≤ n ∨ n + ys.length ≤ o) :
+    Region (Bytes.writeAt img n ys) o xs := by
+  unfold Region at h ⊢
+  rcases hd with hd | hd
+  · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hd, h]
+  · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hd, h]
+
+theorem of_word (h : WordAt img o w) : Region img o w.toBytes := by
+  unfold Region; rw [B256.length_toBytes]; exact h
+
+theorem word (h : Region img o w.toBytes) : WordAt img o w := by
+  unfold Region at h; rw [B256.length_toBytes] at h; exact h
+
+theorem append (h1 : Region img o xs) (h2 : Region img (o + xs.length) ys) :
+    Region img o (xs ++ ys) := by
+  unfold Region at h1 h2 ⊢
+  rw [List.length_append, List.sliceD_split, h1, h2]
+
+theorem left (h : Region img o (xs ++ ys)) : Region img o xs := by
+  unfold Region at h ⊢
+  rw [List.length_append, List.sliceD_split] at h
+  exact (List.append_inj h (by rw [List.length_sliceD])).1
+
+theorem right (h : Region img o (xs ++ ys)) : Region img (o + xs.length) ys := by
+  unfold Region at h ⊢
+  rw [List.length_append, List.sliceD_split] at h
+  exact (List.append_inj h (by rw [List.length_sliceD])).2
+
+/-- An identity copy of exactly the region's bytes copies them. -/
+theorem copy {i z : Nat} (h : Region img i xs) (hn : n = xs.length) (hz : z = xs.length) :
+    (img.sliceD i n 0).take z = xs := by
+  unfold Region at h
+  rw [hn, hz, h, List.take_length]
+
+theorem read (h : Region img o xs) (hl : xs.length = 32) :
+    Bytes.toB256 (img.sliceD o 32 0) = Bytes.toB256 xs := by
+  unfold Region at h; rw [← hl, h]
+
+/-- A region's bytes are the head of any longer read at its start. -/
+theorem head {m : Nat} (h : Region img o xs) (hm : xs.length ≤ m) :
+    (img.sliceD o m 0).take xs.length = xs := by
+  unfold Region at h
+  rw [show m = xs.length + (m - xs.length) by omega, List.sliceD_split, h,
+    List.take_left' rfl]
+
+end Region
+
+/-- The first `n` bytes of a word. -/
+theorem WordAt.prefix {img : Bytes} {o n : Nat} {w : B256} (h : WordAt img o w) (hn : n ≤ 32) :
+    img.sliceD o n 0 = w.toBytes.take n := by
+  unfold WordAt at h
+  rw [← h, show (32 : Nat) = n + (32 - n) by omega, List.sliceD_split,
+    List.take_left' (List.length_sliceD _ _ _ _)]
+
+/-- Forget an image's construction, keeping only the facts drawn from it first. -/
+theorem Mem.Reads.forget {M : Mem} {img : Bytes} (h : Mem.Reads M img) :
+    ∃ img', Mem.Reads M img' ∧ img' = img :=
+  ⟨img, h, rfl⟩
+
+/-- Peel an image's writes off a `WordAt`/`Region` goal: a write at the goal's offset settles
+it, a disjoint one is skipped. -/
+macro "wchain" : tactic => `(tactic| repeat (first
+  | refine WordAt.write_other ?_ (by
+      simp only [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons,
+        List.length_nil, List.length_append, transferSel]
+      omega)
+  | refine Region.write_other ?_ (by
+      simp only [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons,
+        List.length_nil, List.length_append, transferSel]
+      omega)
+  | exact WordAt.write_self _ _ _
+  | exact Region.write_self _ _ _))
 
 /-! ## Storage reads through the walk's bases -/
 
