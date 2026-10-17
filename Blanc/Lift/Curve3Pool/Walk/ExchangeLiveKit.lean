@@ -213,4 +213,7 @@ macro "wstep1" : tactic => `(tactic| first
 /-- A carried word: peel the image's writes, then the context. -/
 macro "wauto" : tactic => `(tactic| (repeat wstep1) <;> try assumption)
 
+/-- A carried word: peel the image's writes, then the named fact (no context search). -/
+macro "wautoH " h:term : tactic => `(tactic| (repeat wstep1) <;> exact $h)
+
 end Blanc.Lift.Curve3Pool
