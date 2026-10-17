@@ -838,6 +838,11 @@ import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
 import Blanc.Lift.Curve3Pool.SpawnKinds
+import Blanc.Lift.Curve3Pool.Walk.Quiet
+import Blanc.Lift.Curve3Pool.Walk.Admin
+import Blanc.Lift.Curve3Pool.Walk.AdminBalances
+import Blanc.Lift.Curve3Pool.Walk.Donate
+import Blanc.Lift.Curve3Pool.Walk.Getters
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
