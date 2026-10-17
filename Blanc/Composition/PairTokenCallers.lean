@@ -104,7 +104,8 @@ theorem pair_token_entry_transfer {pair T : Adr} {B : Book} (C : Core T B) (abi 
     simp only [ExternalOperation.encode, List.cons_append, List.takeD, List.headD_cons,
       List.tail_cons]
     rfl
-  rw [abi.transfer F.sevm (by rw [data, length]) selector, words.1, words.2, toAdr_toB256]
+  rw [abi.transfer F.sevm (by rw [data, length]) (by rw [data, length]; decide)
+    selector, words.1, words.2, toAdr_toB256]
 
 open Classical in
 /-- A message among the entry messages of a list is the message of one of its non-static

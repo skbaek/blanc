@@ -1,4 +1,5 @@
 import Blanc.Composition.PairTokenCallers
+import Blanc.ExecutionTraceSettledForest
 
 /-!
 # The token ledger across one child of a Pair frame (C3 per-child frame layer)
@@ -25,13 +26,6 @@ namespace Blanc.Composition.PairTokenJoint
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
 
 /-! ## List and frame facts -/
-
-/-- A retained frame's committed frames are the frame itself, then its descendants. -/
-theorem committedFrames_frame (F : Exec.Frame) :
-    Exec.committedFrames F.run = F :: Exec.descendantFrames F.run := by
-  obtain ⟨pc, sevm, pre, out, run, committed⟩ := F
-  simp only [Exec.committedFrames, committed, ↓reduceDIte]
-  rfl
 
 open Classical in
 /-- A list with no non-static entry asks nothing of the token. -/
@@ -78,7 +72,7 @@ theorem abi_op_transfer {B : Book} (abi : Erc20Abi B) {s : Sevm} {recipient : Ad
     simp only [ExternalOperation.encode, List.cons_append, List.takeD, List.headD_cons,
       List.tail_cons]
     rfl
-  rw [abi.transfer s (by rw [data, length]) selector, words.1, words.2, toAdr_toB256]
+  rw [abi.transfer s (by rw [data, length]) (by rw [data, length]; decide) selector, words.1, words.2, toAdr_toB256]
 
 /-- A message carrying a `balanceOf(owner)` request is read by an ERC-20 book as that read. -/
 theorem abi_op_balanceOf {B : Book} (abi : Erc20Abi B) {s : Sevm} {owner : Adr}
@@ -100,7 +94,7 @@ theorem abi_op_balanceOf {B : Book} (abi : Erc20Abi B) {s : Sevm} {owner : Adr}
     unfold Sevm.dataWord List.sliceD
     rw [show (4 : B256).toNat = 4 from rfl, dropFour, List.takeD_eq_self 0 oLen.symm,
       B256.toB256_toBytes]
-  rw [abi.balanceOf s (by rw [data, length]) selector, word, toAdr_toB256]
+  rw [abi.balanceOf s (by rw [data, length]) (by rw [data, length]; decide) selector, word, toAdr_toB256]
 
 /-! ## The local caller fold -/
 
@@ -129,7 +123,7 @@ theorem child_subtree_entries_caller {pair T : Adr} {B : Book} (C : Core T B) (s
         exact apart (caller.symm.trans selfCaller)
       · rw [Exec.childFrames_isStatic G.run staticG d child] at static
         cases static
-  rw [committedFrames_frame] at children
+  rw [Exec.Frame.committedFrames_self] at children
   have fold := Exec.descendantFrames_callerTarget_of_children c.run
     (children c List.mem_cons_self) (fun G member => children G (List.mem_cons_of_mem _ member))
   intro F member entry static caller
@@ -177,7 +171,7 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
     rw [split]
     exact List.mem_append_left _ (List.mem_append_right _ member)
   have settledC : c ∈ trace.settledFrames :=
-    settled c (by rw [committedFrames_frame]; exact List.mem_cons_self)
+    settled c (by rw [Exec.Frame.committedFrames_self]; exact List.mem_cons_self)
   have inner := child_subtree_entries_caller C self trace hist apart settled locked
   -- the ledger after the subtree
   obtain ⟨l', step⟩ : ∃ l', B.run l (entryAsks T (Exec.committedFrames c.run)) = some l' := by
@@ -189,13 +183,13 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
   have callerAsks : (entryAsks T (Exec.committedFrames c.run)).filter
       (fun a => decide (a.caller = pair)) =
       (entryAsks T [c]).filter (fun a => decide (a.caller = pair)) := by
-    rw [committedFrames_frame, entryAsks_cons, List.filter_append,
+    rw [Exec.Frame.committedFrames_self, entryAsks_cons, List.filter_append,
       entryAsks_filter_caller_nil inner, List.append_nil]
   have safe : ∀ a ∈ entryAsks T (Exec.committedFrames c.run), a.caller = pair →
       (B.op a).HolderSafe := by
     intro a member caller
     obtain ⟨F, inSub, entry, static, rfl⟩ := mem_entryAsks member
-    rw [committedFrames_frame] at inSub
+    rw [Exec.Frame.committedFrames_self] at inSub
     rcases List.mem_cons.mp inSub with rfl | deeper
     · obtain ⟨recipient, value, data⟩ := toT entry.1 static
       rw [abi_op_transfer abi data]
@@ -209,7 +203,7 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
     have none : entryAsks T (Exec.committedFrames c.run) = [] := by
       apply entryAsks_eq_nil
       intro F member _ mutable
-      rw [committedFrames_frame] at member
+      rw [Exec.Frame.committedFrames_self] at member
       rcases List.mem_cons.mp member with rfl | deeper
       · rw [static] at mutable; cases mutable
       · rw [Exec.descendantFrames_isStatic c.run static F deeper] at mutable; cases mutable
@@ -221,7 +215,7 @@ theorem pair_token_child_frames {pair T : Adr} {B : Book} (C : Core T B) (laws :
     have answer :=
       C.balanceAnswer trace hist c settledC entry (abi_op_balanceOf abi data) answerable
     have atC := C.replayAt trace hist pre c (Exec.descendantFrames c.run ++ post) (by
-      rw [split, committedFrames_frame, List.append_assoc, List.cons_append])
+      rw [split, Exec.Frame.committedFrames_self, List.append_assoc, List.cons_append])
     rw [atPre] at atC
     have ledgerEq : C.ledgerOf trace c.pre.state = l := (Option.some.inj atC).symm
     rw [ledgerEq] at answer

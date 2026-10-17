@@ -244,7 +244,7 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : Core T B) (laws : B
     · rw [dite_eq_left_of_eq_true (eq_true settles)] at eq
       let c := Exec.Frame.ofRun childRun (Jaune.Frame.raw_commits_of_settlementCommits settles)
       have cFrames : Exec.committedFrames c.run = c :: Exec.descendantFrames childRun :=
-        committedFrames_frame c
+        Exec.Frame.committedFrames_self c
       obtain ⟨target, caller, data, static⟩ := observed.child_facts (c := c) enter rfl
       have inNode : c ∈ Exec.childFrames observed.call.occurrence.node.exc := by
         rw [nodeExc]
