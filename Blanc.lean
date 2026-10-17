@@ -483,6 +483,7 @@ import Blanc.Lift.BeaconDeposit.Liveness
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
 import Blanc.Lift.Reach
 import Blanc.Lift.Cursor
+import Blanc.Lift.SpawnKindsM
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ReachChain
 import Blanc.Lift.ReachDispatch
@@ -836,6 +837,7 @@ import Blanc.Lift.Curve3Pool.Spec
 import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
+import Blanc.Lift.Curve3Pool.SpawnKinds
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
