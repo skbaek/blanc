@@ -200,6 +200,7 @@ SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
            "Lift.VyperRawCall", "Lift.RunEx"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
+SHARED += ["Lift.ThreeWordFrame"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
 SHARED += ["Lift.VyperCallee", "Lift.VyperCheckedArith"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
@@ -780,7 +781,20 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.Exchange",
                     "Lift.Curve3Pool.Walk.ExchangeModel",
                     "Lift.Curve3Pool.Walk.ExchangeObserve",
-                    "Lift.Curve3Pool.Walk.ExchangeSafe"],
+                    "Lift.Curve3Pool.Walk.ExchangeSafe",
+                    "Lift.Curve3Pool.Walk.ViewsDispatch",
+                    "Lift.Curve3Pool.Walk.ViewsLoop",
+                    "Lift.Curve3Pool.Walk.ViewsKit",
+                    "Lift.Curve3Pool.Walk.ViewsGvp",
+                    "Lift.Curve3Pool.Walk.ViewsGvpRaw",
+                    "Lift.Curve3Pool.Walk.ViewsA",
+                    "Lift.Curve3Pool.Walk.BridgeChecks",
+                    "Lift.Curve3Pool.Walk.RampKit",
+                    "Lift.Curve3Pool.Walk.RampStop",
+                    "Lift.Curve3Pool.Walk.ViewsDy",
+                    "Lift.Curve3Pool.Walk.ViewsDyKit",
+                    "Lift.Curve3Pool.Walk.ViewsDyPost",
+                    "Lift.Curve3Pool.Walk.ViewsDyRaw"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

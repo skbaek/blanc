@@ -4793,6 +4793,12 @@ contract-neutral.
   [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
   The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
   whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
+- Indexed loads from three consecutive carried words: `pickWord3` selects the word,
+  `word3_indexAddr` converts `32 * i + base` to its natural offset under the explicit
+  index/base bounds, and `ri_mloadWord3` inverts the actual `MLOAD` over `Words` plus
+  aligned allocation. It requires all three membership facts and the exact address
+  equation; it does not prove the index or any contract's array layout. Owner:
+  [`Blanc/Lift/ThreeWordFrame.lean`](../Blanc/Lift/ThreeWordFrame.lean).
 - Walking a successful frame along its own derivation (`XAt sevm post pc d L`: the actual state
   at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
   `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps
