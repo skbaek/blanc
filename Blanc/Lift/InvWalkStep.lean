@@ -210,6 +210,14 @@ theorem SFunc.RunP.false_of_noExit {P : Sevm → Devm → Ninst → Devm → Pro
       simp only [SFunc.refs] at hrefs
       exact ih hf hrefs
 
+/-- A successful `RETURN` halt keeps the base's storage. -/
+theorem ric_return_getStor {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b post : Devm}
+    {i sz : B256} {S : List B256} {M : Mem} {G : Nat}
+    (run : SFunc.RunCut fs sevm C (St b (i :: sz :: S) M G) (.last .return_)
+      (.done (.halted post))) : Devm.getStor post = Devm.getStor b := by
+  cases run with
+  | last hl => exact funext (ri_return hl).2.1
+
 /-- Name a returned state by its storage only. -/
 theorem ret_named {o : Outcome} {B : Devm} {S : List B256} {M : Mem} {G : Nat}
     (e : Seg.done o = Seg.done (.returned (St B S M G))) :
