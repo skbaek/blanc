@@ -42,7 +42,7 @@ def ydAt (b : Devm) (S : List B256) (M0 : Mem) (D ρ c bw : B256) (n y : Nat) (d
 
 /-- How `get_y_D` leaves: returning `y` over the caller's stack, its memory as `YDOut`. -/
 def ydOut (b : Devm) (S : List B256) (M0 : Mem) (v : Option Nat) (r : Seg) : Prop :=
-  ∃ y, v = some y ∧ ∃ M G, r = .done (.returned (St b (Nat.toB256 y :: S) M G)) ∧
+  ∃ y, v = some y ∧ y < 2 ^ 256 ∧ ∃ M G, r = .done (.returned (St b (Nat.toB256 y :: S) M G)) ∧
     YDOut M0 M (Nat.toB256 y)
 
 /-- The `y` body on words: the checked body at the words' values is the word the bytes compute. -/
@@ -206,7 +206,7 @@ theorem ydHead_step {D ρ c bw : B256} {e t k : Nat} {fall fall' : SFunc}
     intro G' run
     obtain ⟨G'', run⟩ := ric_jump heC he run
     obtain ⟨M', G3', hr, hout⟩ := ric_ydExit hF2 rfl rfl rfl run
-    exact ⟨q.toNat, rfl, M', G3', by rw [hqw]; exact hr, by rw [hqw]; exact hout⟩
+    exact ⟨q.toNat, rfl, hqlt, M', G3', by rw [hqw]; exact hr, by rw [hqw]; exact hout⟩
   -- the stopping pass
   have hstop : ∀ G', closeEnough 1 q.toNat y →
       SFunc.RunCut progYD sevm C (St b (Bytes.toB256 [0x3c, 0xae] :: ydStk S) M2 G')
@@ -215,7 +215,7 @@ theorem ydHead_step {D ρ c bw : B256} {e t k : Nat} {fall fall' : SFunc}
         (ydOut b S M0) n y r := by
     intro G' hc run
     have ho := hexit G' run
-    obtain ⟨_, _, M', G'', hr, _⟩ := id ho
+    obtain ⟨_, _, _, M', G'', hr, _⟩ := id ho
     unfold FuelStep
     rw [hbody]
     simp only [decide_eq_true_eq, hc, true_or, ↓reduceIte]
@@ -240,7 +240,7 @@ theorem ydHead_step {D ρ c bw : B256} {e t k : Nat} {fall fall' : SFunc}
       rcases hf with rfl | rfl
       · obtain ⟨M'', G3', hr, hout⟩ := ric_ydExit hF' rfl rfl rfl run
         rw [hr]
-        exact ⟨q.toNat, rfl, M'', G3', by rw [hqw], by rw [hqw]; exact hout⟩
+        exact ⟨q.toNat, rfl, hqlt, M'', G3', by rw [hqw], by rw [hqw]; exact hout⟩
       · exact (ric_undefined run).elim
   rcases ric_branch run with ⟨hw, G23, run⟩ | ⟨hw, G23, run⟩
   · -- `y > y_prev`

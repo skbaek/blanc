@@ -160,6 +160,69 @@ theorem ne_zero_of_iszero2_ne_zero {g : B256} (h : B256.eqCheck (B256.eqCheck g 
   rw [hg]
   decide
 
+/-! ## Signed range checks
+
+Vyper 0.2 checks an `int128` index `0 ≤ i < n` with two `SLT`s. -/
+
+theorem UInt64.and_low63 (h : UInt64) (hb : h.highBit = false) :
+    h &&& 0x7fffffffffffffff = h := by
+  unfold UInt64.highBit at hb
+  simp only [bne_eq_false_iff_eq] at hb
+  apply UInt64.toNat_inj.mp
+  have hb' := congrArg UInt64.toNat hb
+  rw [UInt64.toNat_and] at hb' ⊢
+  have h64 := h.toNat_lt
+  rw [show (0x7fffffffffffffff : UInt64).toNat = 2 ^ 63 - 1 from rfl,
+    Nat.and_two_pow_sub_one_eq_mod]
+  rw [show (0x8000000000000000 : UInt64).toNat = 2 ^ 63 from rfl,
+    show (0 : UInt64).toNat = 0 from rfl] at hb'
+  have : h.toNat < 2 ^ 63 := by
+    by_contra hc
+    have ht : h.toNat.testBit 63 = true := by
+      rw [Nat.testBit_eq_decide_div_mod_eq]
+      simp only [decide_eq_true_eq]
+      have : h.toNat / 2 ^ 63 = 1 := by omega
+      omega
+    have := Nat.testBit_and h.toNat (2 ^ 63) 63
+    rw [hb', ht, Nat.testBit_two_pow_self, Nat.zero_testBit] at this
+    exact absurd this (by decide)
+  exact Nat.mod_eq_of_lt this
+
+theorem UInt64.and_max_self (h : UInt64) : h &&& UInt64.max = h := by
+  apply UInt64.toNat_inj.mp
+  rw [UInt64.toNat_and, show UInt64.max.toNat = 2 ^ 64 - 1 from rfl,
+    Nat.and_two_pow_sub_one_eq_mod]
+  exact Nat.mod_eq_of_lt h.toNat_lt
+
+/-- The low 255 bits, `B256.max >>> 1`. -/
+def B256.low255 : B256 := ((0x7fffffffffffffff, UInt64.max), (UInt64.max, UInt64.max))
+
+/-- `¬ (i <ₛ 0)` and `i <ₛ 3`: `i` is `0`, `1` or `2`. -/
+theorem B256.toNat_lt_three_of_slt {i : B256} (h0 : ¬ B256.Slt i 0)
+    (h3 : B256.Slt i (Bytes.toB256 [0x03])) : i.toNat < 3 := by
+  have em : (B256.max >>> 1 : B256) = B256.low255 := rfl
+  unfold B256.Slt at h0 h3
+  rw [em] at h0 h3
+  cases ha : i.highBit
+  · have hand : i &&& B256.low255 = i := by
+      obtain ⟨⟨a, b⟩, ⟨c, d⟩⟩ := i
+      show ((a &&& 0x7fffffffffffffff, b &&& UInt64.max), (c &&& UInt64.max, d &&& UInt64.max)) = _
+      rw [UInt64.and_low63 a ha, UInt64.and_max_self, UInt64.and_max_self, UInt64.and_max_self]
+      rfl
+    have h3m : Bytes.toB256 [0x03] &&& B256.low255 = Bytes.toB256 [0x03] := rfl
+    have h3h : (Bytes.toB256 [0x03]).highBit = false := rfl
+    rw [hand, h3m, ha, h3h] at h3
+    have : i < Bytes.toB256 [0x03] := by
+      rcases h3 with h | ⟨-, h⟩
+      · exact absurd h (by decide)
+      · exact h
+    rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x03]).toNat = 3 by decide] at this
+    exact this
+  · exfalso
+    apply h0
+    left
+    rw [ha]; decide
+
 /-! ## Inverted -/
 
 section Inv
