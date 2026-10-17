@@ -2,6 +2,7 @@ import Blanc.Lift.Vyper
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkCut
 import Blanc.Lift.VyperFrameLoop
+import Blanc.Lift.MemGlue
 import Blanc.Lift.StableSwapNewton.Defs
 
 /-!
@@ -385,7 +386,7 @@ theorem WordFrame.write {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame
   size := by
     have := hF.cover
     have : j + 1 ≤ ws.length := hj
-    rw [Mem.size_write_word_of_le (by rw [hF.size]; omega), hF.size]
+    rw [Mem.size_write_word_of_add_le (by rw [hF.size]; omega), hF.size]
   aligned := hF.aligned
   cover := by rw [List.length_set]; exact hF.cover
   word j' hj' := by
@@ -429,7 +430,7 @@ theorem WordFrame.scratch {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFra
   have hw := Mem.write_agree M 0 v.toBytes
   rw [B256.length_toBytes] at hw
   have hsz : (M.write 0 v.toBytes).size = M0.size := by
-    rw [Mem.size_write_word_of_le (by rw [hF.size]; have := hF.cover; omega), hF.size]
+    rw [Mem.size_write_word_of_add_le (by rw [hF.size]; have := hF.cover; omega), hF.size]
   refine ⟨⟨hsz, ⟨by rw [hsz], fun i hi hn => ?_⟩, (Mem.memWord_write_word M 0 v).1,
     fun h => (hF.wf h).write _ _⟩, fun j w hv => ?_⟩
   · rw [hw.2 i (by rw [hF.size]; exact hi) (by omega)]
@@ -439,6 +440,28 @@ theorem WordFrame.scratch {M0 M : Mem} {lo : Nat} {ws : List B256} (hF : WordFra
     have : j + 1 ≤ ws.length := hj
     rw [memWord_write_of_disjoint (by rw [hF.size]; omega) (by rw [B256.length_toBytes]; omega),
       hF.word j hj, hvj]
+
+/-- On a well-formed memory, a `ScratchOut` memory keeps `M0` off the scratch word and the frame
+window. -/
+theorem ScratchOut.keepsOff {M0 M : Mem} {lo hi : Nat} {v : B256} (h : ScratchOut M0 M lo hi v)
+    (hwf : Mem.Wf M0) : Mem.KeepsOff M0 M [(0, 32), (lo, hi)] := by
+  refine ⟨h.keeps.1, fun i hi' => ?_⟩
+  have h0 := hi' (0, 32) List.mem_cons_self
+  have h1 := hi' (lo, hi) (List.mem_cons_of_mem _ List.mem_cons_self)
+  by_cases hlt : i < M0.size
+  · exact h.keeps.2 i hlt (by simp only at h0 h1; omega)
+  · have hw : Mem.Wf M := h.wf hwf
+    unfold Mem.Wf at hwf hw
+    have e1 : M.data.getD i 0 = 0 := by
+      simp only [Array.getD, show ¬ i < M.data.size by rw [h.size] at hw; omega, ↓reduceDIte]
+    have e2 : M0.data.getD i 0 = 0 := by
+      simp only [Array.getD, show ¬ i < M0.data.size by omega, ↓reduceDIte]
+    rw [e1, e2]
+
+/-- A `ScratchOut` memory carries its result word. -/
+theorem ScratchOut.words {M0 M : Mem} {lo hi : Nat} {v : B256} (h : ScratchOut M0 M lo hi v)
+    (hs : 32 ≤ M0.size) : Words M [(0, v)] :=
+  Words.cons.mpr ⟨⟨by rw [h.size]; exact hs, h.word0⟩, Words.nil M⟩
 
 section FrameSteps
 

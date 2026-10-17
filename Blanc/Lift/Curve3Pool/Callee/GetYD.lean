@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Callee.GetYDCoins
 import Blanc.Lift.Curve3Pool.Model
+import Blanc.Lift.ReachWalk
 
 /-!
 # `get_y_D` (entry 753, pc `0x3999`): the callee contract
@@ -236,7 +237,8 @@ theorem t_3999_c753_eq : t_3999_c753 = ydEntry (ydTest 763 18) :=
 -- SEGMENT: getYD_spec
 /-- **`get_y_D`'s callee contract.**  Any outcome of the entry tree from the call's state is a
 return: `0 ≤ i < 3`, the result `v` over the caller's stack, `getYDChk A_ i xp D = some v`, the
-world `b` unchanged and memory changed only in `get_y_D`'s windows (`YDOut`). -/
+world `b` unchanged, the memory's size unchanged, `v` at scratch word `0`, and (on a well-formed
+memory) every byte off `get_y_D`'s windows `[0, 0x20)` and `[0x140, 0x340)` kept. -/
 theorem getYD_spec {sevm : Sevm} {b : Devm} {ρ A i x0 x1 x2 D : B256} {S : List B256} {M : Mem}
     {G : Nat} {o : Outcome} (hsz : M.size % 32 = 0) (hcov : 0x340 ≤ M.size)
     (run : SFunc.Run cert.prog sevm (St b (ρ :: A :: i :: x0 :: x1 :: x2 :: D :: S) M G)
@@ -244,14 +246,27 @@ theorem getYD_spec {sevm : Sevm} {b : Devm} {ρ A i x0 x1 x2 D : B256} {S : List
     ∃ d, o = .returned d ∧ ∃ v M' G', d = St b (v :: S) M' G' ∧
       ∃ hi : i.toNat < 3,
         getYDChk A.toNat ⟨i.toNat, hi⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D.toNat =
-          some v.toNat ∧ YDOut M M' v := by
+          some v.toNat ∧ M'.size = M.size ∧ Words M' [(0, v)] ∧
+      (Mem.Wf M → Mem.KeepsOff M M' [(0, 32), (0x140, 0x340)] ∧ Mem.Wf M') := by
   have hcut := SFunc.runP_iff_runCutP_nil.mp run
   rw [t_3999_c753_eq] at hcut
   obtain ⟨hi3, ann, hann, y, hres, hy, M', G', hr, hout⟩ := ric_ydEntry hsz hcov hcut
   have ho : o = .returned (St b (Nat.toB256 y :: S) M' G') := by injection hr
   subst ho
-  refine ⟨_, rfl, Nat.toB256 y, M', G', rfl, hi3, ?_, hout⟩
+  refine ⟨_, rfl, Nat.toB256 y, M', G', rfl, hi3, ?_, hout.size, hout.words (by omega),
+    fun hwf => ⟨hout.keepsOff hwf, hout.wf hwf⟩⟩
   rw [B256.toNat_toB256_of_lt hy]
   exact ydRes_getYDChk hi3 hann hres
+
+/-! ## Kernel facts for the frame-walk bridge (`xa_callee`) -/
+
+/-- `get_y_D`'s entry closure. -/
+def ydEntries : List Nat :=
+  [753, 763, 18, 49, 76, 77, 99, 120, 121, 141, 142, 143, 163, 164, 165, 185, 186, 187, 204, 205]
+
+theorem yd_execFreeSet : ExecFreeSet cert.prog ydEntries = true := by decide +kernel
+
+theorem yd_free : t_3999_c753.execFreeIn ydEntries = true := by decide +kernel
+
 
 end Blanc.Lift.Curve3Pool
