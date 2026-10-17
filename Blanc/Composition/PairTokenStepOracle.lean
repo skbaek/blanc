@@ -191,11 +191,12 @@ theorem sourceCallAt_entered {root : Exec.Deriv} {frame : UniswapV2Pair.Frame}
 /-! ## The oracle -/
 
 /-- **The per-continuation token oracle.** -/
-theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) (hist : C.Hist trace)
-    (apart : pair ≠ T) (answerable : C.Answerable trace pair)
+theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
+    (hist : C.Hist trace) (apart : pair ≠ T) (answerable : C.Answerable trace pair)
     {P : Exec.Frame} (settledP : P ∈ trace.settledFrames) (atPair : P.sevm.currentTarget = pair)
+    (lit : ¬ C.Shadowed trace P)
     {start : Exec.Deriv} {frame : UniswapV2Pair.Frame} {request : Request} {reply : ExternalResult}
     {index : Nat}
     (observed : SourceCallAt (Blanc.Exec.Frame.rootDeriv P) frame request reply index)
@@ -263,8 +264,8 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : Core T B) (laws : B
             post) := by
         rw [split, eq, cFrames, List.append_assoc, List.append_assoc, List.append_assoc]
       obtain ⟨l', step, zero', staticFact, readFact, transferFact, otherFact⟩ :=
-        pair_token_child_frames C laws abi self trace hist apart answerable settledP atPair child
-          (caller.trans atPair)
+        pair_token_child_frames C abi self trace laws hist apart answerable settledP atPair lit
+          child (caller.trans atPair)
           lockedC (fun atT mutable => by
             rw [data]
             exact toT (target.symm.trans atT) (static.symm.trans mutable)) splitC atPre zero

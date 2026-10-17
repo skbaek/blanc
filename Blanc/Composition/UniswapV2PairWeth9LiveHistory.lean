@@ -53,8 +53,9 @@ theorem pair_weth9_end {pair weth : Adr} (side : TokenSide)
   obtain ⟨hist, answerable, start⟩ := JointCheckpoint.toCore trace joint wethFresh
   have factoryQuiet := UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.pairCode
     factoryInstalled joint.pairNonzero factoryNotSystem
-  have walk := pair_token_walk (weth9Core weth K₀) weth9Book_laws weth9Book_erc20Abi
-    (weth9SelfCaller weth K₀) side trace joint.pairCode joint.pairRep pairFresh hist joint.token
+  have walk := pair_token_walk (weth9Core weth K₀).weak weth9Book_erc20Abi
+    (weth9SelfCaller weth K₀).weak side trace (weth9Book_laws.holderLaws weth trace pair)
+    joint.pairCode joint.pairRep pairFresh hist joint.token
     joint.unlocked joint.apart answerable joint.distinct joint.notSystem factoryQuiet
     (weth9_tokenEntered trace joint)
   obtain ⟨-, finish, K', replayed⟩ := pair_history_replayed trace joint.pairCode joint.pairRep
@@ -63,7 +64,7 @@ theorem pair_weth9_end {pair weth : Adr} (side : TokenSide)
   obtain ⟨l', run', reserve, -, tokens, opened, -⟩ := walk steps replay auth observed (pre := [])
     (post := []) (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
     (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ joint.unlocked rfl start.1 start.2
-  rw [List.nil_append, (weth9Core weth K₀).replayEnd trace hist] at run'
+  rw [List.nil_append, (weth9Core weth K₀).weak.replayEnd trace hist] at run'
   cases run'
   refine ⟨finish, K', replayed, ?_, opened, ?_⟩
   · rw [← joint.token]

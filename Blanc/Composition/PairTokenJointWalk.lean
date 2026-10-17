@@ -14,7 +14,11 @@ Along an observed Pair replay whose steps observe exactly a Pair-closed run of s
   non-static Pair frame, `settledFrames_parent`, whose block would end inside the gap), so the
   booked balance of the Pair does not fall (`pair_token_segment`);
 * each outer step is one contiguous subtree (`settledFrames_contig`) consumed by
-  `pair_token_step_model`.
+  `pair_token_step_model`; a step frame is non-static and not at the token, so it is not shadowed
+  (`CoreW.shadow_kind`).
+
+The walk is stated over the writer-shadowed core `CoreW` and the holder-indexed laws
+`HolderLaws` (Route R).
 
 `pair_token_walk` carries the joint relation, the fixed tokens and the open lock through the walk
 and collects the steps' `EntryNoShrinkSide`.
@@ -121,7 +125,7 @@ theorem before_pairClosed {pair : Adr} {cfg : ChainConfig} {checkpoint future : 
 /-! ## Gaps -/
 
 /-- **The Pair calls no token entry inside a gap after a Pair-closed prefix.** -/
-theorem gap_no_pair_entries {pair T : Adr} {B : Book} (C : Core T B) (self : SelfCaller C)
+theorem gap_no_pair_entries {pair T : Adr} {B : Book} (C : CoreW T B) (self : SelfCallerW C)
     {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : WriterKey → Prop}
     {st₀ : UniswapV2Pair.State} (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
@@ -191,10 +195,10 @@ theorem pairSubtreeFrames_self {pair : Adr} {F : Exec.Frame} (atPair : F.sevm.cu
     ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutable⟩), List.singleton_append]
 
 /-- **The booked balance of the Pair does not fall across a gap** after a Pair-closed prefix. -/
-theorem pair_token_gap {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig}
+theorem pair_token_gap {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
@@ -207,7 +211,7 @@ theorem pair_token_gap {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws
     {l l' : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
     (step : B.run l (entryAsks T gap) = some l') (zero : ∀ g, B.allow l pair g = 0) :
     B.bal l pair ≤ B.bal l' pair ∧ ∀ g, B.allow l' pair g = 0 := by
-  obtain ⟨moved, zero'⟩ := pair_token_segment C laws abi self side trace installed initial fresh
+  obtain ⟨moved, zero'⟩ := pair_token_segment C abi self side trace laws installed initial fresh
     hist token unlocked apart notSystem factoryQuiet split atPre step zero
   rw [entryAsks_filter_caller_nil (gap_no_pair_entries C self trace installed initial fresh hist
     apart notSystem split closed quiet), List.map_nil, List.sum_nil, Nat.add_zero] at moved
@@ -219,10 +223,10 @@ theorem pair_token_gap {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws
 run `fs` after a Pair-closed prefix `pre` (with `pre ++ fs` Pair-closed), the joint relation, the
 fixed tokens and the open lock carry from the ledger after `pre` to the ledger after `pre ++ fs`,
 and every step satisfies its side's `EntryNoShrinkSide`. -/
-theorem pair_token_walk {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig}
+theorem pair_token_walk {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
@@ -262,7 +266,7 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaw
       have step : B.run l (entryAsks T fs) = some l' := by
         rw [Book.run_append, atPre, Option.bind_some] at run'
         exact run'
-      obtain ⟨grows, zero'⟩ := pair_token_gap C laws abi self side trace installed initial fresh
+      obtain ⟨grows, zero'⟩ := pair_token_gap C abi self side trace laws installed initial fresh
         hist token unlocked apart notSystem factoryQuiet split closedPre observed.symm atPre step
         zero
       refine ⟨l', ?_, Nat.le_trans reserve grows, zero', tokens, opened, trivial⟩
@@ -288,11 +292,19 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaw
       obtain ⟨rest'', rfl⟩ := descPrefix
       rw [List.flatMap_append, List.append_cancel_left_eq] at restObs
       -- across the gap
-      have entryLedger := C.replayAt trace hist (pre ++ gap) s.frame _ globalSplit
+      have settledS : s.frame ∈ trace.settledFrames := by
+        rw [globalSplit]
+        exact List.mem_append_right _ List.mem_cons_self
+      have litS : ¬ C.Shadowed trace s.frame := fun shadowed => by
+        rcases C.shadow_kind trace hist s.frame settledS shadowed with static | ⟨atT, -⟩
+        · rw [mutable] at static
+          cases static
+        · exact apart (atPair.symm.trans atT)
+      have entryLedger := C.replayAt trace hist (pre ++ gap) s.frame _ globalSplit litS
       have gapStep : B.run l (entryAsks T gap) = some (C.ledgerOf trace s.frame.pre.state) := by
         rw [entryAsks_append, Book.run_append, atPre, Option.bind_some] at entryLedger
         exact entryLedger
-      obtain ⟨grows, zeroGap⟩ := pair_token_gap C laws abi self side trace installed initial fresh
+      obtain ⟨grows, zeroGap⟩ := pair_token_gap C abi self side trace laws installed initial fresh
         hist token unlocked apart notSystem factoryQuiet (pre := pre) (gap := gap)
         (post := s.frame :: (Exec.descendantFrames s.frame.run ++ rest'' ++ post)) globalSplit closedPre
         quiet atPre gapStep zero
@@ -306,11 +318,8 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaw
         cases side
         · exact tokens.1
         · exact tokens.2.1
-      have settledS : s.frame ∈ trace.settledFrames := by
-        rw [globalSplit]
-        exact List.mem_append_right _ List.mem_cons_self
-      obtain ⟨noShrink, l', run', reserve', zero'⟩ := pair_token_step_model C laws abi self side
-        trace hist apart answerable stepSplit atPair 
+      obtain ⟨noShrink, l', run', reserve', zero'⟩ := pair_token_step_model C abi self side
+        trace laws hist apart answerable stepSplit atPair litS
         (current := { state := st, logs := [], updates := [] }) consumed stepToken
         (by rw [tokens.1, tokens.2.1]; exact distinct) opened
         (by rw [tokens.2.2]; exact factoryQuiet)

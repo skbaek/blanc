@@ -9,15 +9,17 @@ import Blanc.ExecutionTraceRootCallers
 /-!
 # The Pair's booked calls on a token, and its allowances, along a configured history
 
-Against the token core only (no token storage layout), under the C3 hypotheses (A8):
+Against the (writer-shadowed) token core only (no token storage layout), under the C3 hypotheses (A8):
 
 * `pair_token_entry_transfer`: every non-static entry frame of the token `T` called by the Pair is
   one of the Pair's own `transfer` requests (caller fold `settledFrames_callerTarget_of_children`:
   Pair frames call `T` only by `transfer`, `T` never forwards a foreign caller into its own entries
-  (`SelfCaller`), and the Pair originates no settled root (EIP-3607, `pair ≠ systemAddress`));
-* `Core.good_along`: every ledger along the replay of a settled prefix is good;
+  (`SelfCallerW`), and the Pair originates no settled root (EIP-3607, `pair ≠ systemAddress`));
 * `pair_token_segment`: along any contiguous run of settled frames, the Pair loses at most the
-  amounts of its own `transfer` entries and keeps a zero allowance (`BookLaws.run_holder`, A5 form).
+  amounts of its own `transfer` entries and keeps a zero allowance (`CoreW.run_holder_segment`
+  over the holder-indexed laws `HolderLaws`, A5 form).
+
+Both are stated over the writer-shadowed core `CoreW` (Route R); a `Core` enters as `C.weak`.
 -/
 
 namespace Blanc.Composition.PairTokenJoint
@@ -51,8 +53,8 @@ def PairTransferAsk (T : Adr) (s : Sevm) : Prop :=
 
 /-- **Every non-static entry of the token called by the Pair is one of the Pair's own `transfer`
 requests**, and the book reads it as that transfer. -/
-theorem pair_token_entry_transfer {pair T : Adr} {B : Book} (C : Core T B) (abi : Erc20Abi B)
-    (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig} {checkpoint future : BlockChain}
+theorem pair_token_entry_transfer {pair T : Adr} {B : Book} (C : CoreW T B) (abi : Erc20Abi B)
+    (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
@@ -106,23 +108,12 @@ theorem pair_token_entry_transfer {pair T : Adr} {B : Book} (C : Core T B) (abi 
   rw [abi.transfer F.sevm (by rw [data, length]) (by rw [data, length]; decide)
     selector, words.1, words.2, toAdr_toB256]
 
-open Classical in
-/-- A message among the entry messages of a list is the message of one of its non-static
-entries. -/
-theorem mem_entryAsks {T : Adr} {frames : List Exec.Frame} {a : Sevm}
-    (member : a ∈ entryAsks T frames) :
-    ∃ F ∈ frames, IsEntry T F ∧ F.sevm.isStatic = false ∧ F.sevm = a := by
-  obtain ⟨F, inFilter, rfl⟩ := List.mem_map.mp member
-  obtain ⟨inFrames, picked⟩ := List.mem_filter.mp inFilter
-  obtain ⟨entry, static⟩ := of_decide_eq_true picked
-  exact ⟨F, inFrames, entry, static, rfl⟩
-
 /-- **Pair segment.**  Along a contiguous run of settled frames, the Pair loses at most the amounts
 of its own `transfer` entries and keeps a zero allowance (under the C3 hypotheses). -/
-theorem pair_token_segment {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
-    (abi : Erc20Abi B) (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig}
+theorem pair_token_segment {pair T : Adr} {B : Book} (C : CoreW T B)
+    (abi : Erc20Abi B) (self : SelfCallerW C) (side : TokenSide) {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (laws : HolderLaws T B trace pair)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
@@ -135,7 +126,7 @@ theorem pair_token_segment {pair T : Adr} {B : Book} (C : Core T B) (laws : Book
     (step : B.run l (entryAsks T mid) = some l') (zero : ∀ g, B.allow l pair g = 0) :
     B.bal l pair ≤ B.bal l' pair + (((entryAsks T mid).filter fun a => decide (a.caller = pair)).map
       fun a => (B.op a).debit pair).sum ∧ ∀ g, B.allow l' pair g = 0 := by
-  refine C.run_holder_segment laws trace hist split atPre step zero ?_
+  refine C.run_holder_segment trace hist laws split atPre step zero ?_
   intro a member caller
   obtain ⟨F, inMid, entry, static, rfl⟩ := mem_entryAsks member
   have settled : F ∈ trace.settledFrames := by
