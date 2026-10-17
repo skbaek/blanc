@@ -812,6 +812,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.BridgeChecks",
                     "Lift.Curve3Pool.Walk.RampKit",
                     "Lift.Curve3Pool.Walk.RampStop",
+                    "Lift.Curve3Pool.Walk.RampA",
                     "Lift.Curve3Pool.Walk.ViewsDy",
                     "Lift.Curve3Pool.Walk.ViewsDyKit",
                     "Lift.Curve3Pool.Walk.ViewsDyPost",
