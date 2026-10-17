@@ -197,7 +197,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall"]
+           "Lift.VyperRawCall", "Lift.RunEx"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
@@ -760,7 +760,11 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPost",
                     "Lift.Curve3Pool.Walk.RemoveLiquidity",
-                    "Lift.Curve3Pool.Walk.RemoveLiquiditySafe"],
+                    "Lift.Curve3Pool.Walk.RemoveLiquiditySafe",
+                    "Lift.Curve3Pool.Walk.LiveKit",
+                    "Lift.Curve3Pool.LivePremises",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
+                    "Lift.Curve3Pool.RemoveLiquidityLiveness"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

@@ -4851,6 +4851,12 @@ contract-neutral.
   byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
   no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
   [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
+- Forward runs to *some* outcome, for walks through a call answered only by an `∃ d` premise
+  (the outcome is learned midway, so it cannot be fixed up front): `SFunc.RunEx` /
+  `SFunc.RunExCut` (`∃ r, RunExact … r ∧ Q r`), the lift `SFunc.RunEx.of` with the tactics
+  `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
+  and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
+  [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile

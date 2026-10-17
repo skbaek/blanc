@@ -820,6 +820,7 @@ import Blanc.Lift.VyperArraySlot
 import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
 import Blanc.Lift.VyperRawCall
+import Blanc.Lift.RunEx
 
 -- Walking a successful frame's own derivation, with its direct children (contract-neutral).
 import Blanc.Lift.FrameWalk
@@ -886,6 +887,10 @@ import Blanc.Lift.Curve3Pool.Callee.GetYLoop
 import Blanc.Lift.Curve3Pool.Callee.GetYCoins
 import Blanc.Lift.Curve3Pool.Callee.GetY
 import Blanc.Lift.Curve3Pool.Callee.GetYExact
+import Blanc.Lift.Curve3Pool.Walk.LiveKit
+import Blanc.Lift.Curve3Pool.LivePremises
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
+import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
