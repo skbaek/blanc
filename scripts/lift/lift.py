@@ -32,7 +32,9 @@ which `checkNode` does not check (`AVal.jumps?`); off by default.
 unrolls Vyper 0.2.x frame save/restore loops, whose stack height changes every iteration: a
 back edge is a revisit of the same pc at the same stack height, a constant JUMPI condition is
 decided in the pre-pass too, and callee exploration follows a decided loop to its exit; off by
-default.
+default.  `--mem-calls` (registry option `"mem_calls": true`, memory-tracking mode) mirrors
+`absMem`'s GAS and constant-output-window STATICCALL arms; without it the producer forgets the
+map there, which the checker accepts as a coarser map; off by default.
 `--memret callnext --const-mem --entry-cap K --widen agree` (registry option
 `"memret": "callnext", "const_mem": true, "entry_cap": K`) is the memory-tracking
 mode ported from Plans evidence/deployed-lido-vyper-v1/memret-probe/lift_memret.py:
@@ -349,6 +351,8 @@ def run_registry(args: argparse.Namespace) -> int:
                              "--widen", opts.get("widen", "agree")]
                 if opts.get("frame_loops") is True:
                     argv.append("--frame-loops")
+                if opts.get("mem_calls") is True:
+                    argv.append("--mem-calls")
             if "header" in row:
                 argv += ["--header", row["header"]]
             check = row.get("check")
@@ -475,6 +479,7 @@ parser.add_argument("--const-mem", action="store_true", help="PROBE: keep every 
 parser.add_argument("--entry-cap", type=int, default=4, help="PROBE (--const-mem): full-constant entries per pc before entries generalize back to control values")
 parser.add_argument("--widen", choices=("agree", "control"), default="agree", help="PROBE (--const-mem): at the per-pc cap keep values all entries at that pc agree on (agree) or only control values (control)")
 parser.add_argument("--frame-loops", action="store_true", help="(--const-mem) unroll a loop whose revisit changes the stack height (Vyper 0.2.x frame save/restore loops) instead of closing it as a loop entry; a back edge is a revisit of the same pc at the same stack height (registry option `\"frame_loops\": true`)")
+parser.add_argument("--mem-calls", action="store_true", help="(--memret) GAS keeps the memory map and STATICCALL with a constant output window forgets only that window, exactly as `absMem` (registry option `\"mem_calls\": true`)")
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
@@ -491,6 +496,11 @@ if CONST_MEM:
 ENTRY_CAP = args.entry_cap
 JOIN_EXEMPT = args.memret == "inline" and not args.no_callee_join_exempt
 FRAME_LOOPS = CONST_MEM and args.frame_loops
+# --mem-calls: mirror absMem's GAS and constant-window STATICCALL arms (off: the producer forgets
+# memory there, a coarser map the checker still accepts).
+MEM_CALLS = MEMRET and args.mem_calls
+if args.mem_calls and not MEMRET:
+    parser.error("--mem-calls needs --memret callnext")
 # --frame-loops: at most this many visits of one pc on a path before every revisit is a back
 # edge (a frame save/restore loop moves one word per iteration; the Curve 3pool frames hold at most 23 words).
 FRAME_UNROLL_MAX = 64
@@ -725,7 +735,9 @@ def _range_write(mem, off, size, cur_pc, why):
 # Memory transfer, exactly `absMem` (Blanc/Lift/CheckMem.lean): MSTORE at a constant
 # offset records its value, CALLDATACOPY over a constant window forgets what it overlaps,
 # the instructions of `rinstMemKeeps` (and every PUSH, and PC as `pcAt`) keep the map, and
-# every other instruction forgets it.
+# every other instruction forgets it.  GAS (in `rinstMemKeeps`) and STATICCALL with a constant
+# output window (which forgets only that window) are mirrored only under --mem-calls; without it
+# the producer forgets the map there, a coarser map that the checker also accepts.
 LEAN_MEM_KEEP: Set[int] = (
     {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x0b, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
      0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x20, 0x30, 0x32, 0x33, 0x34, 0x35,
@@ -758,6 +770,11 @@ def step_full(op, data, stack, mem, cur_pc):
             mem = mem_kill(mem, pre[0][1], pre[0][1] + pre[2][1])
         else:
             mem = _kill_all(mem, cur_pc, "CALLDATACOPY with non-constant window")
+    elif MEM_CALLS and op == 0x5a:  # GAS keeps the map (`rinstMemKeeps`)
+        pass
+    elif MEM_CALLS and op == 0xfa and pre[4][0] == 'const' and pre[5][0] == 'const':
+        # STATICCALL with a constant output window forgets only that window (`absMem`)
+        mem = mem_kill(mem, pre[4][1], pre[4][1] + pre[5][1])
     elif op not in LEAN_MEM_KEEP:
         mem = _kill_all(mem, cur_pc, OPCODE_EFFECTS.get(op, ("?", 0, 0))[0] + " forgets memory")
     return nxt, mem
