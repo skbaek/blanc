@@ -269,6 +269,39 @@ theorem skimWethLeg0_spec {sevm : Sevm} {b qd0 : Devm} {callGasQ1 : Nat}
   unfold skimLeg0Charge skimLeg0Used
   omega
 
+/-! ## One-directional gas: the transfer's call gas from the query's skeleton
+
+The query's call gas depends on the transfer's (`skimRead0Need`), and the transfer runs over the
+query's result.  The query's result differs across call gases only in its gas column
+(`wethBalanceCallAt_eq`), and the transfer leg reads its world only off non-gas fields, so the
+transfer's call gas is fixed on the query's gas-free skeleton (`skimLeg0Gas`) and the query's call
+gas then from it: no fixed point is left. -/
+
+/-- The gas-free skeleton of skim's first query's result. -/
+def skimRead0Skel (sevm : Sevm) (b : Devm) : Devm :=
+  wethBalanceSkel sevm (skimCachedWorld sevm b) (skimRead0Stack sevm b) getterInitMemory 128
+    (skimToken0 sevm b)
+
+theorem skimWethRead0_skel (sevm : Sevm) (b : Devm) (callGasT0 : Nat) :
+    ∃ x, (skimWethRead0 sevm b callGasT0).1 = (skimRead0Skel sevm b).withGasLeft x :=
+  ⟨_, wethBalanceCallAt_eq _ _ _ _ _ _ _ _ _ _⟩
+
+/-- The transfer leg reads the query's result only off its non-gas fields. -/
+theorem skimWethLeg0_withGasLeft (sevm : Sevm) (b d : Devm) (callGasQ1 x : Nat) :
+    skimWethLeg0 sevm b (d.withGasLeft x) callGasQ1 = skimWethLeg0 sevm b d callGasQ1 := rfl
+
+/-- **The first transfer's call gas**, fixed by WETH9's code on the first query's skeleton, given
+the second query's call gas. -/
+noncomputable def skimLeg0Gas (sevm : Sevm) (b : Devm) (callGasQ1 : Nat) : Nat :=
+  (skimWethLeg0 sevm b (skimRead0Skel sevm b) callGasQ1).2
+
+/-- The transfer leg over the query's result is the leg over its skeleton. -/
+theorem skimWethLeg0_read (sevm : Sevm) (b : Devm) (callGasT0 callGasQ1 : Nat) :
+    skimWethLeg0 sevm b (skimWethRead0 sevm b callGasT0).1 callGasQ1 =
+      skimWethLeg0 sevm b (skimRead0Skel sevm b) callGasQ1 := by
+  obtain ⟨x, hx⟩ := skimWethRead0_skel sevm b callGasT0
+  rw [hx, skimWethLeg0_withGasLeft]
+
 /-! ## amount ≤ balance -/
 
 /-- **Skim's transfer amount is covered when the reserve is.**  For the first query's result `qd0`
