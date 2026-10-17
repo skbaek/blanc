@@ -4180,11 +4180,15 @@ contract-neutral.
   maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
   off) in [`Blanc/Lift/CheckMem.lean`](../Blanc/Lift/CheckMem.lean); the invariant
   `MemMatches`, the return address in frame or map (`RetIn`) and the
-  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (and
-  `Mem.write_agree`, which needs no `Mem.Wf`) in
+  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (covered
+  fork), `staticcall_run_memory` (a `STATICCALL` changes memory only inside its
+  output window), `Mem.write_agree` (needs no `Mem.Wf`), `Mem.extends_agree` and
+  `Mem.AgreeOutside.trans`/`.mono` in
   [`Blanc/Lift/MemMap.lean`](../Blanc/Lift/MemMap.lean); `lift_soundM` in Sound,
   `lift_exactM`/`Cert.jumpsOkM` in Exact, trie mirrors `checkNodeMT`/`jumpsOkNodeMT`
-  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`.
+  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
+  (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
+  map across `GAS` and constant-window `STATICCALL`).
 - Every execution prefix to a certificate node (all outcomes, no success
   premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
   (checked node, pc, stack segments matched per pending function), the
