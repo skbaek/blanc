@@ -732,6 +732,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Creation.Deploy",
                     "Lift.Curve3Pool.Decode",
                     "Lift.Curve3Pool.Observe",
+                    "Lift.Curve3Pool.FrameEnv",
                     "Lift.Curve3Pool.Spec",
                     "Lift.Curve3Pool.Refine",
                     "Lift.Curve3Pool.Walk.Quiet",
