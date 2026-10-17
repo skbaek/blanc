@@ -880,6 +880,7 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityRawK
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.DonateX
 import Blanc.Lift.Curve3Pool.Walk.WithdrawAdminFeesX
+import Blanc.Lift.Curve3Pool.Walk.WithdrawAdminFeesRaw
 import Blanc.Lift.Curve3Pool.Walk.ExchangeDispatch
 import Blanc.Lift.Curve3Pool.Walk.ExchangeFrame
 import Blanc.Lift.Curve3Pool.Walk.ExchangePre

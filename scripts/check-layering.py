@@ -784,6 +784,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.AdminBalancesX",
                     "Lift.Curve3Pool.Walk.DonateX",
                     "Lift.Curve3Pool.Walk.WithdrawAdminFeesX",
+                    "Lift.Curve3Pool.Walk.WithdrawAdminFeesRaw",
                     "Lift.Curve3Pool.Walk.RemoveImbalanceModel",
                     "Lift.Curve3Pool.Walk.RemoveImbalanceChecks",
                     "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",

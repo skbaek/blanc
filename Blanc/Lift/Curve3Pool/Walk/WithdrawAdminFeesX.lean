@@ -440,7 +440,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (k : Fin 3) (hid : IdReady sevm d)
     (hpc : d.getCode sevm.currentTarget ≠ .empty)
-    (hsk : StaticKeeps sevm ((d.getStor sevm.currentTarget).get (coinSlot k)))
+    (hkeep : RlKeep sevm L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoinK : ¬ sevm.benvStat.rules.isPrecomp
@@ -553,7 +553,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   replace h := xa_staticcall_img (pc' := 0x4d9e) (i := 0x1bc) (n := 0x24) (o := 0x220)
     (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
-  obtain ⟨d1, flag, out, M', L1, h, hexec, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
+  obtain ⟨d1, flag, out, M', L1, h, -, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   have hctrR_G : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
       (Bytes.writeAt img 0xc0 (Bytes.toB256 [0]).toBytes) 0x160
       ((d.getStor sevm.currentTarget).get (coinSlot k)).toBytes) 0x1a0
@@ -565,13 +565,11 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xji 0x4da2 0x4da6 hw
   · xdead
   rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, houtKeep, hacc, hcodeKeep, htgt, hdata, hstat, hout,
-    hclogs, -, -⟩
+    hclogs, hcpre, hcpost⟩
   · exact absurd hpre hcoinK
   clear hk hw
-  obtain ⟨d0, hrunStatic, hcodeStatic⟩ := hexec
-  have h4 := hsk _ _ _ _ _ _ _ _ rfl hrunStatic
-  change d0.getCode 4 = (afterSload sevm d (coinSlot k)).getCode 4 at h4
-  rw [afterSload_getCode, hcodeStatic] at h4
+  have h4 : d1.getCode 4 = d.getCode 4 := by
+    rw [hcpost, (hkeep c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSload_getCode]
   have hid1 : IdReady sevm d1 :=
     ⟨by rw [h4]; exact hid.nodeleg,
       hacc _ (by rw [afterSload_accessedAddresses]; exact hid.warm), hid.pre, hid.fork⟩
@@ -1133,7 +1131,7 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
       (transferSel ++ sevm.caller.toB256.toBytes ++ fees.toBytes)))
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hK : CallKeeps sevm coin)
+    (hK : RlKeep sevm L)
     (h : XAt sevm post 0x4e94
       (St b [Bytes.toB256 [3], Bytes.toB256 [1, 0x40]] M G) L) :
     ∃ c L' d G', L = c :: L' ∧
@@ -1166,7 +1164,6 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L', h, hrun, hrd, hk⟩ := h
-  obtain ⟨hks, hk4⟩ := hK _ _ _ _ _ _ _ _ _ rfl hrun
   rw [hin] at hk
   xs 0x4eab (.push [0x4e, 0xb0] (by decide)) ri_push
   xji 0x4eac 0x4eb0 hw
@@ -1176,7 +1173,7 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   · exact absurd hp hcoin
   xjd 0x4eb1
   rw [zero_lit] at hc
-  refine ⟨c, L', d, _, rfl, ?_, hc.keeps hpc hks hk4, hR, hW, hrd, h⟩
+  refine ⟨c, L', d, _, rfl, ?_, hK.head, hR, hW, hrd, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
 /-- The transfer reply passes the deployed raw-call check (`0x4eb1 → 0x4f3c`). -/
