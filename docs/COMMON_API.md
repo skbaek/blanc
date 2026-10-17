@@ -4783,7 +4783,11 @@ contract-neutral.
   node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
   `.getStor`, `.logs`, `.output`); the checked-arithmetic guards read back as
   `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the
-  `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; all in
+  `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; forward twins over a covered memory with the
+  final memory named at the return (`∃ M', RunExactCut … ∧ facts`): `xlift`, `rxc_mloadT`,
+  `rxc_mstoreT`, `rxc_keccakT`, `rxc_retT`, the guards forward (`fwdChkSub`/`Add`/`Mul`/`Div`),
+  and the node-directed forward tactic `xstep` (`xmload`, `xmstore`, `xkeccak`, `xassert`,
+  `xzero`, `xjump`, `xgoto`, `xret`); all in
   [`Blanc/Lift/VyperCallee.lean`](../Blanc/Lift/VyperCallee.lean).
 - Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
   cut runs):

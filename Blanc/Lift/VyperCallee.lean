@@ -140,7 +140,7 @@ theorem ric_mstoreO {i v : B256} {o : Nat} (hT : MemTrack M₀ M P L)
     (hi : i.toNat = o) (hP : coversWord P o = true) :
     ∃ M' G', MemTrack M₀ M' P ((o, v) :: wordsOff o L) ∧
       SFunc.RunCut fs sevm C (St b S M' G') f r := by
-  have hT' := hT.sub (L' := wordsOff o L) (List.filter_subset' _)
+  have hT' := hT.sub (L' := wordsOff o L) (List.filter_subset_self _)
   refine ric_mstoreT hT' run hi hP ?_
   rw [List.all_eq_true]
   intro p hp
@@ -181,7 +181,7 @@ theorem MemTrack.writeO {M₀ M : Mem} {W : List (Nat × Nat)} {L : List (Nat ×
     (hT : MemTrack M₀ M W L) (v : B256) (hW : coversWord W o = true) :
     MemTrack M₀ (M.write o v.toBytes) W ((o, v) :: wordsOff o L) := by
   refine ⟨hT.keeps.trans (Mem.KeepsOff.write_word hT.wf o v hW), ?_, hT.wf.write _ _⟩
-  refine (hT.words.sub (L' := wordsOff o L) (List.filter_subset' _)).write fun o' w hm => ?_
+  refine (hT.words.sub (L' := wordsOff o L) (List.filter_subset_self _)).write fun o' w hm => ?_
   have h := (List.mem_filter.mp hm).2
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 

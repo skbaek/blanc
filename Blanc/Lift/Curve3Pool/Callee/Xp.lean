@@ -20,6 +20,9 @@ tactic (`xpiter`, `xppush`, `xpmemiter`, `xpmempush`).
   `xpBase` (three balance loads), the memory kept off `[0xc0, 0xe0) ∪ [0x140, 0x200)`;
 * `XpMemLands b a₀ a₁ a₂ S M d` / `xpMem_spec`: `_xp_mem` returns the words of
   `xpChk ⟨a₀, a₁, a₂⟩` over the untouched base, the memory kept off `[0x140, 0x260)`;
+* forward twins over a memory covering the frame (word aligned): `xp_exact` at `xpGas`
+  (`1383` and the three balance loads) and `xpMem_exact` at `1290` gas, each returning words
+  reading the model's vector, the memory kept off its windows with its size;
 * kernel facts over each entry closure: `SilentSet`, `ExecFreeSet`, `calleeNeverHalts`.
 -/
 
@@ -270,6 +273,196 @@ theorem xpMem_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   have e1 : (⟨a0.toNat, a1.toNat, a2.toNat⟩ : V3).get 1 = a1.toNat := rfl
   have e2 : (⟨a0.toNat, a1.toNat, a2.toNat⟩ : V3).get 2 = a2.toNat := rfl
   simp only [xpChk, V3.ofFnM, e0, e1, e2, c0, c1, c2, Option.bind_eq_bind, Option.bind_some]
+
+/-! ## Forward twins -/
+
+/-- `xpChk`, coin by coin. -/
+theorem xpChk_some {b x : V3} (h : xpChk b = some x) :
+    (∃ p, chkMul (rates.get 0) (b.get 0) = some p ∧ chkDiv p precision = some x.v0) ∧
+    (∃ p, chkMul (rates.get 1) (b.get 1) = some p ∧ chkDiv p precision = some x.v1) ∧
+    (∃ p, chkMul (rates.get 2) (b.get 2) = some p ∧ chkDiv p precision = some x.v2) := by
+  simp only [xpChk, V3.ofFnM, Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨a0, ⟨p0, h0, h0'⟩, a1, ⟨p1, h1, h1'⟩, a2, ⟨p2, h2, h2'⟩, h⟩ := h
+  cases h
+  exact ⟨⟨p0, h0, h0'⟩, ⟨p1, h1, h1'⟩, ⟨p2, h2, h2'⟩⟩
+
+set_option hygiene false in
+/-- One `_xp` iteration forward, at result offset `o`, with the product guard `hm`. -/
+macro "xpiterF " o:term:max hm:term:max : tactic => `(tactic| (
+  xstep; xstep; xmload 0x1c0; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xmload' $o; xmload 0x1c0; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xmstore 0xc0; xstep; xstep; xkeccak 0xc0; xstep; xstep
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert $hm
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xmload 0x1c0; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xmstore' $o
+  xstep; xstep; xmload' 0x1c0; xstep; xstep; xstep; xstep; xmstore' 0x1c0
+  xstep; xstep; xstep; xstep))
+
+set_option hygiene false in
+/-- One step of `_xp`'s tuple push loop forward. -/
+macro "xppushF " o:term:max hk:term:max : tactic => `(tactic| (
+  xstep; xstep; xmload 0x1e0; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xmload 0x1e0; xstep; xstep; xstep; xmload' $o
+  xstep; xmload 0x1e0; xstep; xstep; xmstore' 0x1e0; xstep
+  xjump $hk))
+
+/-- **`_xp`'s gas**: `1383` and its three balance loads. -/
+def xpGas (sevm : Sevm) (b : Devm) : Nat :=
+  1383 + sloadCost sevm b (balanceSlot 0) +
+    sloadCost sevm (afterSload sevm b (balanceSlot 0)) (balanceSlot 1) +
+    sloadCost sevm (afterSload sevm (afterSload sevm b (balanceSlot 0)) (balanceSlot 1))
+      (balanceSlot 2)
+
+-- SEGMENT: xpExact
+/-- **`_xp`, forward**: when `xpChk s.balances = some x`, entry 31 runs from its return address
+over a memory covering `[0, 0x200)` and returns three words reading `x` over `xpBase`, at gas
+`xpGas`, the memory kept off `xpWin` with its size. -/
+theorem xp_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat} {ret : B256}
+    {s : State} {x : V3} (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s) (hX : xpChk s.balances = some x)
+    (hwf : Mem.Wf M) (hS : M.size = n) (hn : n % 32 = 0) (htop : 0x200 ≤ n)
+    (hroom : S.length + 16 < 1024) :
+    ∃ x0 x1 x2, (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + xpGas sevm b)) t_0281_c31
+      (.returned (St (xpBase sevm b) (x0 :: x1 :: x2 :: S) M' G)) ∧
+      (Mem.KeepsOff M M' xpWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      x = ⟨x0.toNat, x1.toNat, x2.toNat⟩ := by
+  have hT := MemTrack.init hwf xpWin
+  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some hX
+  rw [← ha.balances 0, show rates.get 0 = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat
+    from by decide] at hm0
+  rw [← ha.balances 1, show rates.get 1 =
+    (Bytes.toB256 [12, 159, 44, 156, 208, 70, 116, 237, 234, 64, 0, 0, 0]).toNat
+    from by decide] at hm1
+  rw [← ha.balances 2, show rates.get 2 =
+    (Bytes.toB256 [12, 159, 44, 156, 208, 70, 116, 237, 234, 64, 0, 0, 0]).toNat
+    from by decide] at hm2
+  obtain ⟨g0, rfl⟩ := fwdChkMul hm0
+  obtain ⟨g1, rfl⟩ := fwdChkMul hm1
+  obtain ⟨g2, rfl⟩ := fwdChkMul hm2
+  rw [show precision = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat from by decide]
+    at hd0 hd1 hd2
+  obtain ⟨-, e0⟩ := fwdChkDiv hd0
+  obtain ⟨-, e1⟩ := fwdChkDiv hd1
+  obtain ⟨-, e2⟩ := fwdChkDiv hd2
+  unfold xpGas xpBase
+  rw [show ∀ x1 x2 x3 : Nat, G + (1383 + x1 + x2 + x3) =
+    G + 521 + x3 + 330 + x2 + 330 + x1 + 202 from fun _ _ _ => by omega]
+  simp only [SFunc.runExact_iff_runExactCut_nil]
+  simp only [← xp_slot0, ← xp_slot1, ← xp_slot2]
+  refine ⟨?a, ?b, ?c, ?run, ?val⟩
+  case run =>
+    xstep; xmstore 0x140; xstep; xstep; xstep; xmstore' 0x160
+    xstep; xstep; xstep; xstep; xmstore' 0x180
+    xstep; xstep; xstep; xstep; xmstore' 0x1a0
+    xstep; xstep; xstep; xstep; xstep; xstep; xmstore' 0x1c0; xstep
+    xpiterF 0x160 (by simp only [xp_slot0]; exact g0)
+    xgoto (by decide) prog_56
+    xpiterF 0x180 (by simp only [afterSload_getStorVal, xp_slot1]; exact g1)
+    xgoto (by decide) prog_83
+    xpiterF 0x1a0 (by simp only [afterSload_getStorVal, xp_slot2]; exact g2)
+    xzero (by decide)
+    xstep; xstep; xstep; xstep; xmstore 0x1e0
+    xppushF 0x1a0 prog_105
+    xppushF 0x180 prog_126
+    xppushF 0x160 prog_148
+    xstep; xstep; xmload 0x1e0; xstep; xstep; xstep; xstep
+    xzero (by decide)
+    xstep; xjump prog_170
+    xstep; xmload 0x140
+    xret
+  case val =>
+    simp only [xp_slot0, xp_slot1, xp_slot2, getStorVal_eq_getStor, afterSload_getStor]
+    rw [e0, e1, e2]
+
+set_option hygiene false in
+/-- One `_xp_mem` iteration forward. -/
+macro "xpmemiterF " r:term:max a:term:max hm:term:max : tactic => `(tactic| (
+  xstep; xstep; xmload 0x220; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xmload' $r; xstep; xmload 0x220; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xmload' $a
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert $hm
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xstep; xstep; xstep; xstep; xmload 0x220; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xstep; xstep; xmstore' $r
+  xstep; xstep; xmload' 0x220; xstep; xstep; xstep; xstep; xmstore' 0x220
+  xstep; xstep; xstep; xstep))
+
+set_option hygiene false in
+/-- One step of `_xp_mem`'s tuple push loop forward. -/
+macro "xpmempushF " o:term:max hk:term:max : tactic => `(tactic| (
+  xstep; xstep; xmload 0x240; xstep; xstep; xstep; xstep
+  xassert (by decide)
+  xstep; xmload 0x240; xstep; xstep; xstep; xmload' $o
+  xstep; xmload 0x240; xstep; xstep; xmstore' 0x240; xstep
+  xjump $hk))
+
+-- SEGMENT: xpMemExact
+/-- **`_xp_mem`, forward**: when `xpChk ⟨a₀, a₁, a₂⟩ = some x`, entry 34 runs over a memory
+covering `[0, 0x260)` at `1290` gas and returns three words reading `x` over the untouched base,
+the memory kept off `[0x140, 0x260)` with its size. -/
+theorem xpMem_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat}
+    {ret a0 a1 a2 : B256} {x : V3}
+    (hX : xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some x)
+    (hwf : Mem.Wf M) (hS : M.size = n) (hn : n % 32 = 0) (htop : 0x260 ≤ n)
+    (hroom : S.length + 16 < 1024) :
+    ∃ x0 x1 x2, (∃ M', SFunc.RunExact prog sevm (St b (ret :: a0 :: a1 :: a2 :: S) M (G + 1290))
+      t_03a1_c34 (.returned (St b (x0 :: x1 :: x2 :: S) M' G)) ∧
+      (Mem.KeepsOff M M' xpMemWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      x = ⟨x0.toNat, x1.toNat, x2.toNat⟩ := by
+  have hT := MemTrack.init hwf xpMemWin
+  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some hX
+  rw [show rates.get 0 = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat
+    from by decide] at hm0
+  rw [show rates.get 1 =
+    (Bytes.toB256 [12, 159, 44, 156, 208, 70, 116, 237, 234, 64, 0, 0, 0]).toNat
+    from by decide] at hm1
+  rw [show rates.get 2 =
+    (Bytes.toB256 [12, 159, 44, 156, 208, 70, 116, 237, 234, 64, 0, 0, 0]).toNat
+    from by decide] at hm2
+  obtain ⟨g0, rfl⟩ := fwdChkMul hm0
+  obtain ⟨g1, rfl⟩ := fwdChkMul hm1
+  obtain ⟨g2, rfl⟩ := fwdChkMul hm2
+  rw [show precision = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat from by decide]
+    at hd0 hd1 hd2
+  obtain ⟨-, e0⟩ := fwdChkDiv hd0
+  obtain ⟨-, e1⟩ := fwdChkDiv hd1
+  obtain ⟨-, e2⟩ := fwdChkDiv hd2
+  simp only [SFunc.runExact_iff_runExactCut_nil]
+  refine ⟨?a, ?b, ?c, ?run, ?val⟩
+  case run =>
+    xstep; xmstore 0x1a0; xmstore 0x140; xmstore 0x160; xmstore 0x180
+    xstep; xstep; xstep; xmstore' 0x1c0
+    xstep; xstep; xstep; xstep; xmstore' 0x1e0
+    xstep; xstep; xstep; xstep; xmstore' 0x200
+    xstep; xstep; xstep; xstep; xstep; xstep; xmstore' 0x220; xstep
+    xpmemiterF 0x1c0 0x140 g0
+    xgoto (by decide) prog_59
+    xpmemiterF 0x1e0 0x160 g1
+    xgoto (by decide) prog_86
+    xpmemiterF 0x200 0x180 g2
+    xzero (by decide)
+    xstep; xstep; xstep; xstep; xmstore 0x240
+    xpmempushF 0x200 prog_108
+    xpmempushF 0x1e0 prog_129
+    xpmempushF 0x1c0 prog_151
+    xstep; xstep; xmload 0x240; xstep; xstep; xstep; xstep
+    xzero (by decide)
+    xstep; xjump prog_173
+    xstep; xmload 0x1a0
+    xret
+  case val => rw [e0, e1, e2]
 
 /-! ## Kernel facts over the entry closures -/
 

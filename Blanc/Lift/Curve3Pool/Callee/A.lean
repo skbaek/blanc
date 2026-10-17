@@ -21,7 +21,9 @@ the scratch word `0`.
   given the storage abstraction `Abstracts (b.getStor sevm.currentTarget) s`.
 
 The walk is split at the ramp test: `a_up` (rising ramp, `t_00e3_c27`) and `a_down` (falling
-ramp, `t_018a_c27`) hold the two interpolation arms.
+ramp, `t_018a_c27`) hold the two interpolation arms.  The forward twin `a_exact` (arms
+`a_up_exact`, `a_down_exact`) runs entry 27 at gas `aGas` (`85`, `458` or `453` plus the path's
+`sloadCost` terms) over a memory covering `[0, 0x200)`, returning a word reading `aChk s t`.
 -/
 
 namespace Blanc.Lift.Curve3Pool
