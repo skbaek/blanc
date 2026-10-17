@@ -116,7 +116,7 @@ theorem witness_value (c : Adr) (d : List UInt8) : (witness c d).value = 0 := rf
 
 theorem witness_data (c : Adr) (d : List UInt8) : (witness c d).data = d := rfl
 
-theorem decode_transferFrom (c : Adr) :
+theorem ctrl_decode_transferFrom (c : Adr) :
     decodeCall (witness c transferFromData) = some (.transferFrom 1 2 1) := by
   have sel : Sevm.selector (witness c transferFromData) = 0x23b872dd := by
     unfold Sevm.selector Sevm.dataWord
@@ -155,7 +155,7 @@ theorem transfer_words (c : Adr) :
   rw [witness_data]
   exact ⟨by decide +kernel, by decide +kernel⟩
 
-theorem decode_transfer (c : Adr) :
+theorem ctrl_decode_transfer (c : Adr) :
     decodeCall (witness c transferData) = some (.transfer 1 1) := by
   rw [decodeCall_transfer (transfer_sel c) (transfer_len c) (witness_value c _),
     (transfer_words c).1, (transfer_words c).2]
@@ -177,7 +177,7 @@ theorem control_usdc_mutant_not_lawsS (P : Adr) : ¬ BookLawsS (mutantBookS P) :
   have step : (mutantBookS P).step (Ledger.oneAt 1) (witness 3 transferFromData) =
       some { Ledger.oneAt 1 with bal := Ledger.moveBal (Ledger.oneAt 1).bal 1 2 1 } := by
     have ne : (witness 3 transferFromData).caller ≠ (Ledger.oneAt 1).admin := by decide
-    simp only [mutantBookS, ne, ↓reduceIte, decode_transferFrom]
+    simp only [mutantBookS, ne, ↓reduceIte, ctrl_decode_transferFrom]
     exact Ledger.oneAt_move (by decide) (by decide) (by decide)
   have lower : Ledger.moveBal (Ledger.oneAt 1).bal 1 2 1 1 < (Ledger.oneAt 1).bal 1 := by
     unfold Ledger.moveBal
@@ -187,7 +187,7 @@ theorem control_usdc_mutant_not_lawsS (P : Adr) : ¬ BookLawsS (mutantBookS P) :
   · exact absurd caller (by decide)
   · exact absurd allowed (lt_irrefl 0)
   · change usdcSigner (witness 3 transferFromData) = some 1 at signed
-    rw [usdcSigner_eq, decode_transferFrom] at signed
+    rw [usdcSigner_eq, ctrl_decode_transferFrom] at signed
     cases signed
 
 /-- **C5 control** (U5): an implementation whose `transfer` debits a third party breaks the laws. -/
@@ -208,7 +208,7 @@ theorem control_usdc_thirdParty_not_lawsS (P : Adr) {x : Adr} (hx : x ≠ 0) :
   have step : (thirdPartyBookS P x).step (Ledger.oneAt x) (witness c transferData) =
       some { Ledger.oneAt x with bal := Ledger.moveBal (Ledger.oneAt x).bal x 1 1 } := by
     have ne : (witness c transferData).caller ≠ (Ledger.oneAt x).admin := cx
-    simp only [thirdPartyBookS, ne, ↓reduceIte, decode_transfer]
+    simp only [thirdPartyBookS, ne, ↓reduceIte, ctrl_decode_transfer]
     exact Ledger.oneAt_move hx (by decide) one
   have exact := laws.transfer_exact (Ledger.oneAt_good x) step (op_transfer c) c1
   change Ledger.moveBal (Ledger.oneAt x).bal x 1 1 c + 1 = (Ledger.oneAt x).bal c at exact
