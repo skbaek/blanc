@@ -54,7 +54,9 @@ theorem xa_al_pullTx {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
-    (hK : CallKeeps sevm (coinAt σ i)) (hSK : StaticKeeps sevm (coinAt σ i))
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x110d (St b [3, 0x4c0] M G) L) :
     ∃ (c : Exec.Frame) (Lr L' : List Exec.Frame) (b' : Devm) (M' : Mem) (img' : Bytes) (G' : Nat)
       (cr : B256), L = c :: (Lr ++ L') ∧ AlPull sevm (coinAt σ i) i c ∧
@@ -70,7 +72,7 @@ theorem xa_al_pullTx {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + cr)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b' [3, 0x4c0] M' G') L' := by
   obtain ⟨c, L3, b3, d, G3, rfl, hb3, hc, ⟨hkc, hidc⟩, ⟨img3, hR3, hW3, hA3, hrd, hctr3, P3⟩, h3⟩ :=
-    xa_al_pl3 hcode hfork hi hid hdepth hR hW hA hm.ctr hC hcoin hpc hK h
+    xa_al_pl3 hcode hfork hi hid hdepth hR hW hA hm.ctr hC hcoin hkeep hidk h
   have hpc3 : b3.getCode sevm.currentTarget ≠ .empty := by rw [hb3.code]; exact hpc
   have hid3 := hid.of_rel hb3
   have hidd : IdReady sevm d :=
@@ -93,7 +95,8 @@ theorem xa_al_pullTx {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
   have hpull : AlPull sevm (coinAt σ i) i c :=
     ⟨hc.target, hc.data, hc.value, hc.isStatic, hc.output ▸ hok⟩
   rcases xa_al_pl5 hcode hfork hi hR6 hW6 hA6 (P36 _ _ hm.ctr (by decide)) (P36 _ _ hv (by decide))
-      (P36 _ _ hC (by decide)) hcoin hSK h6 with
+      (P36 _ _ hC (by decide)) hcoin
+      (fun c' hc' => hidk c' (List.mem_cons_of_mem _ hc')) h6 with
     ⟨hi2, M7, G7, hR7, hW7, hA7, h7⟩ |
     ⟨hi2, c1, L4, d2, M7, img7, G7, rfl, hs1, hge, hR7, hW7, hA7, P7, hw7, h7⟩
   · obtain ⟨hadd, M8, img8, G8, hR8, hW8, hA8, hP8, h8⟩ := xa_al_pl6 hcode hi hR7 hW7 hA7
@@ -131,7 +134,9 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
-    (hK : CallKeeps sevm (coinAt σ i)) (hSK : StaticKeeps sevm (coinAt σ i))
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x105d (St b [3, 0x4c0] M G) L) :
     (T = 0 → 0 < (alAmt sevm i).toNat) ∧
     ∃ (Lc L' : List Exec.Frame) (b' : Devm) (M' : Mem) (img' : Bytes) (G' : Nat) (cr : B256),
@@ -152,7 +157,7 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
   have hpc1 : (afterSload sevm b (coinsBase + Nat.toB256 i)).getCode sevm.currentTarget ≠ .empty := by
     rw [afterSload_getCode]; exact hpc
   have hid1 := hid.afterSload (coinsBase + Nat.toB256 i)
-  rcases xa_al_pl2 hcode hfork hi hR1 hW1 hA1 hm1.ctr hv1 hC1 hcoin hSK h1 with
+  rcases xa_al_pl2 hcode hfork hi hR1 hW1 hA1 hm1.ctr hv1 hC1 hcoin hidk h1 with
     ⟨hv0, M2, G2, hR2, hW2, hA2, h2⟩ | ⟨hv0, hi2, M2, G2, hR2, hW2, hA2, h2⟩ |
     ⟨hv0, hi2, c0, L2, d0, M2, img2, G2, rfl, hs0, hR2, hW2, hA2, P2, hw2, h2⟩
   · obtain ⟨hadd, M8, img8, G8, hR8, hW8, hA8, hP8, h8⟩ := xa_al_pl6 hcode hi hR2 hW2 hA2 hm1 hv1 h2
@@ -163,7 +168,7 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     · rw [afterSload_getCode]
   · obtain ⟨c, Lr, L', b', M8, img8, G8, cr, rfl, hpull, hcase, hadd, hst8, hl8, ho8, hcd8, hid8,
       hR8, hW8, hA8, hP8, h8⟩ := xa_al_pullTx hcode hfork hi hR2 hW2 hA2 hm1 hv1 hC1 hst1 hpc1 hid1
-      hdepth hcoin hK hSK h2
+      hdepth hcoin hkeep hidk h2
     rcases hcase with ⟨-, rfl, rfl⟩ | ⟨hi2', -⟩
     · refine ⟨[c], L', b', M8, img8, G8, _, rfl, .inr (.inl ⟨hv0, hi2, c, rfl, hpull, rfl⟩), hadd,
         hst8, ?_, ?_, ?_, hid8, hR8, hW8, hA8, hP8, h8⟩
@@ -177,7 +182,9 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     obtain ⟨c, Lr, L', b', M8, img8, G8, cr, rfl, hpull, hcase, hadd, hst8, hl8, ho8, hcd8, hid8,
       hR8, hW8, hA8, hP8, h8⟩ := xa_al_pullTx hcode hfork hi hR2 hW2 hA2
       (hm1.mono fun o w hw ho => P2 o w hw (by omega) (by omega)) hw2
-      (P2 _ _ hC1 (by decide) (by decide)) hst0 hpc0 (hs0.idReady hid1) hdepth hcoin hK hSK h2
+      (P2 _ _ hC1 (by decide) (by decide)) hst0 hpc0 (hs0.idReady hid1) hdepth hcoin
+      (fun c' hc' => hkeep c' (List.mem_cons_of_mem _ hc'))
+      (fun c' hc' => hidk c' (List.mem_cons_of_mem _ hc')) h2
     rcases hcase with ⟨hi2', -⟩ | ⟨-, c1, rfl, hb1, hge, rfl⟩
     · exact absurd hi2 hi2'
     · refine ⟨[c0, c, c1], L', b', M8, img8, G8, _, rfl,
@@ -199,8 +206,9 @@ theorem xa_al_pullLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
-    (hK : ∀ i, i < 3 → CallKeeps sevm (coinAt σ i))
-    (hSK : ∀ i, i < 3 → StaticKeeps sevm (coinAt σ i))
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x105d (St b [3, 0x4c0] M G) L) :
     ∃ (L0 L1 L2 L' : List Exec.Frame) (b' : Devm) (M' : Mem) (img' : Bytes) (G' : Nat)
       (cr0 cr1 cr2 : B256),
@@ -220,17 +228,22 @@ theorem xa_al_pullLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       XAt sevm post 0x1333 (St b' [3, 0x4c0] M' G') L' := by
   obtain ⟨hT0, L0, Lr0, b0, M0, img0, G0, cr0, e0, hp0, ha0, hs0, hl0, ho0, hc0, hid0,
     hR0, hW0, hA0, hm0, h0⟩ := xa_al_pullIter hcode hfork (by decide) hR hW hA hm hst hpc hid
-      hdepth (hcoin 0 (by decide)) (hK 0 (by decide)) (hSK 0 (by decide)) h
+      hdepth (hcoin 0 (by decide)) hkeep hidk h
   rw [show (if 0 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x105d from rfl] at h0
   have hpc0 : b0.getCode sevm.currentTarget ≠ .empty := by rw [hc0]; exact hpc
   obtain ⟨hT1, L1, Lr1, b1, M1, img1, G1, cr1, e1, hp1, ha1, hs1, hl1, ho1, hc1, hid1,
     hR1, hW1, hA1, hm1, h1⟩ := xa_al_pullIter hcode hfork (by decide) hR0 hW0 hA0 hm0 hs0 hpc0
-      hid0 hdepth (hcoin 1 (by decide)) (hK 1 (by decide)) (hSK 1 (by decide)) h0
+      hid0 hdepth (hcoin 1 (by decide))
+      (fun c hc => hkeep c (by rw [e0]; exact List.mem_append_right _ hc))
+      (fun c hc => hidk c (by rw [e0]; exact List.mem_append_right _ hc)) h0
   rw [show (if 1 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x105d from rfl] at h1
   have hpc1 : b1.getCode sevm.currentTarget ≠ .empty := by rw [hc1]; exact hpc0
   obtain ⟨hT2, L2, L', b', M', img', G', cr2, e2, hp2, ha2, hs2, hl2, ho2, hc2, hid2,
     hR2, hW2, hA2, hm2, h2⟩ := xa_al_pullIter hcode hfork (by decide) hR1 hW1 hA1 hm1 hs1 hpc1
-      hid1 hdepth (hcoin 2 (by decide)) (hK 2 (by decide)) (hSK 2 (by decide)) h1
+      hid1 hdepth (hcoin 2 (by decide))
+      (fun c hc => hkeep c (by rw [e0, e1]; exact List.mem_append_right _ (List.mem_append_right _ hc)))
+      (fun c hc => hidk c (by rw [e0, e1]; exact List.mem_append_right _ (List.mem_append_right _ hc)))
+      h1
   rw [show (if 2 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x1333 from rfl] at h2
   refine ⟨L0, L1, L2, L', b', M', img', G', cr0, cr1, cr2, ?_, hp0, hp1, hp2, ?_, ha0,
     ha1, ha2, hs2, ?_, ?_, ?_, hid2, hR2, hW2, hA2, hm2, h2⟩

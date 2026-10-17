@@ -175,11 +175,15 @@ theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hmint : WordAt img 0xba0 mint) (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr) (hTK : CallKeeps sevm tw)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty)
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
     (h : XAt sevm post 0x17cf (St b [] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (d : Devm) (img' : Bytes) (G' : Nat), L = c :: L' ∧
       ChildOf b d tw.toAdr (mintSel ++ sevm.caller.toB256.toBytes ++ mint.toBytes) 0 sevm.isStatic c ∧
-      32 ≤ c.post.output.length ∧ d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧
+      32 ≤ c.post.output.length ∧
+      (∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x) ∧
       Mem.Reads d.memory img' ∧ Mem.Wf d.memory ∧ d.memory.size % 32 = 0 ∧
       (∀ o w, WordAt img o w → o + 32 ≤ 0xc60 → WordAt img' o w) ∧
       XAt sevm post 0x180c (St d [] d.memory G') L' := by
@@ -206,11 +210,7 @@ theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
   replace h := xa_call_imgA (pc' := 0x17f7) (i := 0xc7c) (n := 0x44) (o := 0xd00) (z := 0x20)
     hfork (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW hA h
   clear hR hW hA
-  obtain ⟨d, flag, L1, h, hrun, hrd, hk⟩ := h
-  have hdk : d.getStor sevm.currentTarget = b.getStor sevm.currentTarget := by
-    rw [(hTK _ _ _ _ _ _ _ _ _ rfl hrun).1]
-    show (afterSload sevm _ _).getStor _ = _
-    rw [afterSload_getStor]
+  obtain ⟨d, flag, L1, h, -, hrd, hk⟩ := h
   rw [al_mint_input] at hk
   xs 0x17fa (.push [0x17, 0xff] (by decide)) ri_push
   xji 0x17fb 0x17ff hw
@@ -225,6 +225,8 @@ theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
       (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
   clear hc
+  have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
+    fun x => by rw [hc'.storPost _ hpc x, hkeep c List.mem_cons_self x, hc'.storPre _ hpc]
   xjd 0x1800
   xs 0x1802 (.push [0x1f] (by decide)) ri_push
   xs 0x1803 (.reg .returndatasize) ri_returndatasize

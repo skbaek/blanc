@@ -866,6 +866,7 @@ import Blanc.Lift.Curve3Pool.Walk.Getters
 import Blanc.Lift.Curve3Pool.KitCheck
 import Blanc.Composition.Curve3Pool3CrvCheckpoint
 import Blanc.Lift.Curve3Pool.Callee.A
+import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
@@ -937,6 +938,10 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFeeLoop
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD2
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityMint
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityTail
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidity
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityBack
+import Blanc.Lift.Curve3Pool.Walk.AddLiquiditySafe
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityChecks
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

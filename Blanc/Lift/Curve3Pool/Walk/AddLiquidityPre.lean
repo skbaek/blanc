@@ -360,7 +360,7 @@ theorem xa_al_p2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
-    (hSK : StaticKeeps sevm (σ.get tokenSlot))
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0xf0d (St b [] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
       L = c :: L' ∧ 0 < sevm.depth ∧
@@ -396,14 +396,14 @@ theorem xa_al_p2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0xf28 (.push [0x0f, 0x2d] (by decide)) ri_push
   xji 0xf29 0xf2d hw
   · xdead
-  have h4 : d1.getCode 4 = b.getCode 4 := by
-    rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
-    show (afterSload sevm _ _).getCode 4 = _
-    rw [afterSload_getCode]
   rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs,
     hcpre, hcpost⟩
   · exact absurd hpre htok
   clear hk
+  have h4 : d1.getCode 4 = b.getCode 4 := by
+    rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self), hcpre]
+    show (afterSload sevm _ _).getCode 4 = _
+    rw [afterSload_getCode]
   xjd 0xf2e
   xs 0xf30 (.push [0x1f] (by decide)) ri_push
   xs 0xf31 (.reg .returndatasize) ri_returndatasize

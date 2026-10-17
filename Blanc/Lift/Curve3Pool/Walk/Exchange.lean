@@ -3,6 +3,7 @@ import Blanc.Lift.Curve3Pool.Walk.ExchangeY
 import Blanc.Lift.Curve3Pool.Walk.ExchangeDy
 import Blanc.Lift.Curve3Pool.Walk.ExchangePush
 import Blanc.Lift.Curve3Pool.Refine
+import Blanc.Lift.Curve3Pool.Callee.ABase
 
 /-!
 # `exchange`: the whole frame on the actual derivation
@@ -18,23 +19,6 @@ makes, and the pool's storage, logs and output as the model's step leaves them.
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift Blanc.StableSwapNewton
-
-theorem aBase_getStor (sevm : Sevm) (b : Devm) (a : Adr) : (aBase sevm b).getStor a = b.getStor a := by
-  unfold aBase; split <;> simp only [afterSload_getStor]
-
-theorem aBase_logs (sevm : Sevm) (b : Devm) : (aBase sevm b).logs = b.logs := by
-  unfold aBase; split <;> simp only [afterSload_logs]
-
-theorem aBase_output (sevm : Sevm) (b : Devm) : (aBase sevm b).output = b.output := by
-  unfold aBase; split <;> simp only [afterSload_output]
-
-theorem aBase_getCode (sevm : Sevm) (b : Devm) (a : Adr) : (aBase sevm b).getCode a = b.getCode a := by
-  unfold aBase; split <;> simp only [afterSload_getCode]
-
-theorem IdReady_aBase {sevm : Sevm} {b : Devm} (h : IdReady sevm b) : IdReady sevm (aBase sevm b) := by
-  unfold aBase; split
-  · exact (((h.afterSload _).afterSload _).afterSload _).afterSload _
-  · exact (h.afterSload _).afterSload _
 
 theorem ExBase.aBase {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ) :
     ExBase sevm b0 (aBase sevm b) σ :=
