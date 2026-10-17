@@ -4258,6 +4258,13 @@ contract-neutral.
   `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
   node spawns only by `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+- To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
+  certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
+  `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):
+  `Exec.Deriv.ParentPrefix.noPush` keeps every same-frame chain node at a position no
+  `PUSH` immediate covers, and `callKinds_of_check` refuses every external instruction but
+  `CALL`/`STATICCALL` there; the walk reads `code.data.toList`, so the kernel decision is
+  linear, in [`Blanc/Lift/SpawnKindsM.lean`](../Blanc/Lift/SpawnKindsM.lean).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
