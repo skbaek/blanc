@@ -821,6 +821,13 @@ import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
 import Blanc.Lift.VyperRawCall
 
+-- Walking a successful frame's own derivation, with its direct children (contract-neutral).
+import Blanc.Lift.FrameWalk
+-- Crossing certified callees from walked states: span soundness, memory glue (contract-neutral).
+import Blanc.Lift.SoundSpan
+import Blanc.Lift.FrameWalkNode
+import Blanc.Lift.MemGlue
+
 -- Contract-neutral internal-call idiom and Vyper frame save/restore chains.
 import Blanc.Lift.InvWalkCallNext
 import Blanc.Lift.VyperFrameLoop
@@ -842,6 +849,7 @@ import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
 import Blanc.Lift.Curve3Pool.SpawnKinds
+import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.Curve3Pool.Walk.Admin
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
