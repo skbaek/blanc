@@ -37,7 +37,6 @@ theorem oc_transfer_copy2 (img : Bytes) (E C V : B256) :
 theorem xa_oc_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {v cw : B256}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hj3 : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hv : WordAt img 0x140 v)
     (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcw : (b.getStor sevm.currentTarget).get (coinsBase + exJ sevm) = cw)
@@ -451,7 +450,7 @@ theorem xa_oc_log {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     rw [hI]
     refine Region.append' (o' := 0x640) ?_ ?_ ?_
     all_goals first
-      | simp only [List.length_append, B256.length_toBytes]
+      | simp only [B256.length_toBytes]
       | exact Region.of_word (by wchain)
   clear hI hR
   replace h := xa_nextAt (n := .reg (.log 2)) (pc' := 0x4760) (atN hcode (by kernel_rfl))

@@ -905,6 +905,9 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceD2
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalancePush
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceBurn
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceTransfers
+import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceWalk
+import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceRaw
+import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceRawChecks
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceModel
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceChecks
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceDispatch

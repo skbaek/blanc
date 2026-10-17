@@ -134,7 +134,7 @@ theorem xa_oneCoin (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : Sta
       Stor.get_set_ne _ (by rw [hcJ]; exact coin_ne_lock hi)]
   -- the push and its `raw_call` test
   obtain ⟨bq, cp, L3, dq, img9, G9, hbq, rfl, hcp, hv9, hR9, hW9, hrd9, h⟩ :=
-    xa_oc_push hcode hfork hi hR3 hW3 hv3 hB3.id hdepth hcw (hcoin hi) h
+    xa_oc_push hcode hfork hR3 hW3 hv3 hB3.id hdepth hcw (hcoin hi) h
   have hBq := (hB3.rel hbq).child hcp hpc (hk1 cp (by simp only [List.mem_cons, true_or, or_true]))
     (hi1 cp (by simp only [List.mem_cons, true_or, or_true]))
   obtain ⟨hok2, b10, M10, img10, G10, hb10, hR10, hW10, hk10, h⟩ :=
