@@ -162,8 +162,10 @@ theorem xa_cw (hc : Cert.CheckedM code cert mems true)
         getYDChk A.toNat ⟨i.toNat, hi⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D1.toNat =
           some y.toNat) ∧
       (∀ x, b'.getStor x = b.getStor x) ∧ b'.logs = b.logs ∧
-      XAt sevm post ρ.toNat (St b' (dy :: fee :: S) M' G') L' ∧ VW M' [] := by
-  obtain ⟨A, F, c, d, M1, G1, L1, hL, hsw, hamp, hfee, hdst, hdlg, h, hV⟩ :=
+      XAt sevm post ρ.toNat (St b' (dy :: fee :: S) M' G') L' ∧ VW M' [] ∧
+      b'.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
+      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') := by
+  obtain ⟨A, F, c, d, M1, G1, L1, hL, hsw, hamp, hfee, hdst, hdlg, h, hV, hdo, hdc, hdi⟩ :=
     xa_cw_a hc hcode hfork ha hV htok h
   have had : Abstracts (d.getStor sevm.currentTarget) s := by rw [hdst]; exact ha
   obtain ⟨x0, x1, x2, D0, b1, M2, G2, hb1, hxp, hD0, hm, hT0, hle, h, hV⟩ :=
@@ -176,7 +178,9 @@ theorem xa_cw (hc : Cert.CheckedM code cert mems true)
   obtain ⟨ρ', R, M0, G0, hcall⟩ := hcall
   refine ⟨c, L1, hi, _, _, b1, M7, G7, hL, hsw, fun e ht hT => ?_, ⟨A, x0, x1, x2, D0, _, y, ρ',
     R, b1, M0, G0, hamp, hxp, hD0, ?_, hcall, hy⟩, fun x => by rw [hb1.getStor, hdst],
-    by rw [hb1.logs, hdlg], h, hV⟩
+    by rw [hb1.logs, hdlg], h, hV, by rw [hb1.output, hdo],
+    fun x hx => by rw [cw_sloads_getCode hb1, hdc x hx],
+    fun hid h4 => cw_sloads_idReady hb1 (hdi hid h4)⟩
   · rw [← ht] at hamp
     exact calcWithdrawOne_eq hi hamp hfee hT hxp hD0 hm hT0 hle hy hyl hp h0 h1 h2 hy2 hs0 hs1 hs2
   · rw [chkMul_toNat_of_nofm hm, Option.bind_some, chkDiv_toNat_of_ne hT0, Option.bind_some,
