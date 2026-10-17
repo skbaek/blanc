@@ -72,6 +72,9 @@ structure BookLaws (B : Book) : Prop where
   transfer_exact : ∀ {l l' : B.Ledger} {a : Sevm} {dst : Adr} {v : Nat}, B.Good l →
     B.step l a = some l' → B.op a = .transfer dst v → dst ≠ a.caller →
     B.bal l' a.caller + v = B.bal l a.caller
+  /-- A holder's own holder-safe call does not raise the holder's allowances. -/
+  allow_safe : ∀ {l l' : B.Ledger} {a : Sevm} {h g : Adr}, B.Good l → B.step l a = some l' →
+    a.caller = h → (B.op a).HolderSafe → B.allow l' h g ≤ B.allow l h g
 
 /-- The frame a caller enters at the token's address: storage owner and code address are both the
 token (a proxy's entry frame, never its delegatecalled implementation frame). -/

@@ -26,6 +26,57 @@ theorem entryAsks_append (T : Adr) (xs ys : List Exec.Frame) :
     entryAsks T (xs ++ ys) = entryAsks T xs ++ entryAsks T ys := by
   simp only [entryAsks, List.filter_append, List.map_append]
 
+/-- **Generic composition lemma (segment form of `Ledger.run_holder`).**  Along any run of the book
+whose intermediate ledgers are good, a holder with no allowance whose own calls are holder-safe
+loses at most its declared debits, and still has no allowance. -/
+theorem BookLaws.run_holder {B : Book} (laws : BookLaws B) {h : Adr} :
+    ∀ {as : List Sevm} {l l' : B.Ledger},
+      B.run l as = some l' →
+      (∀ pre post, ∀ a ∈ as, B.step pre a = some post → B.Good pre) →
+      (∀ g, B.allow l h g = 0) →
+      (∀ a ∈ as, a.caller = h → (B.op a).HolderSafe) →
+      B.bal l h ≤ B.bal l' h + ((as.filter fun a => decide (a.caller = h)).map
+        fun a => (B.op a).debit h).sum ∧
+      ∀ g, B.allow l' h g = 0 := by
+  intro as
+  induction as with
+  | nil =>
+    intro l l' hrun _ hz _
+    simp only [Book.run, Option.some.injEq] at hrun
+    subst hrun
+    exact ⟨Nat.le_add_right _ _, hz⟩
+  | cons a as ih =>
+    intro l l' hrun hgood hz hsafe
+    simp only [Book.run] at hrun
+    cases hs : B.step l a with
+    | none => rw [hs, Option.bind_none] at hrun; cases hrun
+    | some m =>
+      rw [hs, Option.bind_some] at hrun
+      have gl : B.Good l := hgood l m a List.mem_cons_self hs
+      have hzm : ∀ g, B.allow m h g = 0 := by
+        intro g
+        by_cases hc : a.caller = h
+        · have := laws.allow_safe (g := g) gl hs hc (hsafe a List.mem_cons_self hc)
+          rw [hz g] at this
+          exact Nat.le_zero.mp this
+        · have hle : B.allow m h g ≤ B.allow l h g :=
+            Nat.not_lt.mp fun hlt => hc (laws.allow_owner gl hs hlt)
+          rw [hz g] at hle
+          exact Nat.le_zero.mp hle
+      obtain ⟨ihb, iha⟩ := ih hrun (fun pre post a' ha' => hgood pre post a' (List.mem_cons_of_mem a ha'))
+        hzm (fun a' ha' => hsafe a' (List.mem_cons_of_mem a ha'))
+      refine ⟨?_, iha⟩
+      by_cases hc : a.caller = h
+      · have hd := laws.holder_debit gl hs hc (hsafe a List.mem_cons_self hc)
+        simp only [List.filter_cons, hc, decide_true, ite_true, List.map_cons, List.sum_cons]
+        omega
+      · have hle : B.bal l h ≤ B.bal m h := Nat.not_lt.mp fun hlt => by
+          rcases laws.holder_only gl hs hlt with h1 | h1
+          · exact hc h1
+          · rw [hz] at h1; exact Nat.lt_irrefl 0 h1
+        simp only [List.filter_cons, hc, decide_false, Bool.false_eq_true, ite_false]
+        omega
+
 /-- **Positional segment.**  Between two settled positions `i < j` of a history, the booked ledger at
 `j` is the book run, from the ledger at `i`, over exactly the entered writer frames between them. -/
 theorem Core.segment {T : Adr} {B : Book} (C : Core T B) {cfg : ChainConfig}
