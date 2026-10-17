@@ -201,7 +201,7 @@ SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
-SHARED += ["Lift.VyperCallee"]
+SHARED += ["Lift.VyperCallee", "Lift.VyperCheckedArith"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Walking a successful frame's own derivation with its direct children: contract-neutral.
@@ -725,7 +725,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Cert",
                     "Lift.Curve3Pool.KitCheck",
                     "Lift.Curve3Pool.Callee.A",
-                    "Lift.Curve3Pool.Callee.Xp",
+                    "Lift.Curve3Pool.Callee.Xp", "Lift.Curve3Pool.Callee.GetD", "Lift.Curve3Pool.Callee.GetDExact", "Lift.Curve3Pool.Callee.GetDLoop", "Lift.Curve3Pool.Callee.GetDTrees", "Lift.Curve3Pool.Callee.GetYD", "Lift.Curve3Pool.Callee.GetYDCoins", "Lift.Curve3Pool.Callee.GetYDExact", "Lift.Curve3Pool.Callee.GetYDLoop", "Lift.Curve3Pool.Callee.GetYDTrees",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
                     "Lift.Curve3Pool.CheckPart0",
