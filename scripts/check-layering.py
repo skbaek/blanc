@@ -794,7 +794,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.LiveKit",
                     "Lift.Curve3Pool.LivePremises",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
-                    "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.AdminRaw",
+                    "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.Fallback", "Lift.Curve3Pool.Walk.AdminRaw",
                     "Lift.Curve3Pool.Walk.ExchangeDispatch",
                     "Lift.Curve3Pool.Walk.ExchangeFrame",
                     "Lift.Curve3Pool.Walk.ExchangePre",

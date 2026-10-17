@@ -927,6 +927,7 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
 import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
+import Blanc.Lift.Curve3Pool.Walk.Fallback
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityKit
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
