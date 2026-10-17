@@ -824,4 +824,16 @@ theorem Words.restoreMem' {M : Mem} {L : List (Nat × B256)} {c p : Nat} {ws : L
   have h := List.all_eq_true.mp hout o (List.mem_map.mpr ⟨(o, v), hm, rfl⟩)
   simpa only [Bool.or_eq_true, decide_eq_true_eq] using h
 
+set_option hygiene false in
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- **Name the tracked memory** of a forward walk: generalize the memory term of `hT` (a
+`MemTrack _ M _ _`) to the fresh name given, in `hT`, `hS` and the goal. -/
+elab "xname " n:ident : tactic => withMainContext do
+  let some ld := (← getLCtx).findFromUserName? `hT | throwError "xname: no hT"
+  let ty ← instantiateMVars ld.type
+  let args := ty.getAppArgs
+  unless args.size == 4 do throwError "xname: hT is not a MemTrack: {ty}"
+  let stx ← Term.exprToSyntax args[1]!
+  evalTactic (← `(tactic| generalize $stx:term = $n:ident at hT hS ⊢))
+
 end Blanc.Lift

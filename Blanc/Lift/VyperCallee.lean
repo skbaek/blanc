@@ -637,9 +637,11 @@ open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- **One forward step**: read the next node of the goal's tree and apply the matching
 `rxc_*` lemma (lifted through the `∃ M'` goal by `xlift`).  Gas is matched by `Nat` offsets. -/
 elab "xstep" : tactic => withMainContext do
-  let goal ← instantiateMVars (← getMainTarget)
+  let goal := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
   let isEx := goal.getAppFn.constName? == some ``Exists
-  let run := if isEx then (goal.appArg!.bindingBody!.getAppArgs[0]!) else goal
+  let run := if isEx then
+      (goal.appArg!.bindingBody!.cleanupAnnotations.getAppArgs[0]!.cleanupAnnotations)
+    else goal
   let args := run.getAppArgs
   let f ← whnf args[4]!
   let some c := f.getAppFn.constName? | throwError "xstep: no node in {f}"
