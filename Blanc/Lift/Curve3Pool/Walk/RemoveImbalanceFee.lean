@@ -90,4 +90,60 @@ theorem xa_rli_feeA {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   · exact WordAt.write_other (WordAt.write_self _ _ _) (Or.inl (by decide))
   · exact WordAt.write_self _ _ _
 
+/-- `PC`, inverted with an opaque pushed word (the step pc is not in the run). -/
+theorem rli_ri_pc {d : Devm}
+    (h : Ninst.Run sevm (St b S M G) (.reg .pc) d) :
+    ∃ G' w, d = St b (w :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  have hp := Devm.pushBurn_of_pushItem run
+  have hs : d.stack = Nat.toB256 pc :: S := by
+    have hst := hp.stack
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using hst
+  have e := St.of_stackRel hp
+  rw [hs] at e
+  exact ⟨_, _, e⟩
+
+/-- **`remove_liquidity_imbalance` `_A` call setup** (`0x3104` → `0xa9`): the eight words
+`0x140 … 0x220` pushed, the resume pc formed (`PC + 6`), and the jump into `_A`
+(entry 27). -/
+theorem xa_rli_feeB {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {w140 w160 w180 w1a0 w1c0 w1e0 w200 w220 : B256}
+    (hcode : sevm.code = code)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (h140 : WordAt img 0x140 w140) (h160 : WordAt img 0x160 w160)
+    (h180 : WordAt img 0x180 w180) (h1a0 : WordAt img 0x1a0 w1a0)
+    (h1c0 : WordAt img 0x1c0 w1c0) (h1e0 : WordAt img 0x1e0 w1e0)
+    (h200 : WordAt img 0x200 w200) (h220 : WordAt img 0x220 w220)
+    (h : XAt sevm post 0x3104 (St b [] M G) L) :
+    ∃ (w : B256) (M1 : Mem) (G1 : Nat),
+      Mem.Reads M1 img ∧ Mem.Wf M1 ∧
+      XAt sevm post 0xa9
+        (St b ((w + Bytes.toB256 [6]) :: w220 :: w200 :: w1e0 :: w1c0 :: w1a0 :: w180 ::
+          w160 :: w140 :: []) M1 G1) L := by
+  xs 0x3107 (.push [0x01, 0x40] (by decide)) ri_push
+  xmo 0x3108 (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
+  xs 0x310b (.push [0x01, 0x60] (by decide)) ri_push
+  xmo 0x310c (.reg .mload) (ri_mload_imgAt (o := 0x160) rfl)
+  xs 0x310f (.push [0x01, 0x80] (by decide)) ri_push
+  xmo 0x3110 (.reg .mload) (ri_mload_imgAt (o := 0x180) rfl)
+  xs 0x3113 (.push [0x01, 0xa0] (by decide)) ri_push
+  xmo 0x3114 (.reg .mload) (ri_mload_imgAt (o := 0x1a0) rfl)
+  xs 0x3117 (.push [0x01, 0xc0] (by decide)) ri_push
+  xmo 0x3118 (.reg .mload) (ri_mload_imgAt (o := 0x1c0) rfl)
+  xs 0x311b (.push [0x01, 0xe0] (by decide)) ri_push
+  xmo 0x311c (.reg .mload) (ri_mload_imgAt (o := 0x1e0) rfl)
+  xs 0x311f (.push [0x02, 0x00] (by decide)) ri_push
+  xmo 0x3120 (.reg .mload) (ri_mload_imgAt (o := 0x200) rfl)
+  xs 0x3123 (.push [0x02, 0x20] (by decide)) ri_push
+  xmo 0x3124 (.reg .mload) (ri_mload_imgAt (o := 0x220) rfl)
+  unfold WordAt at h140 h160 h180 h1a0 h1c0 h1e0 h200 h220
+  simp only [h140, h160, h180, h1a0, h1c0, h1e0, h200, h220, B256.toB256_toBytes] at h
+  xs 0x3126 (.push [0x06] (by decide)) ri_push
+  xs2 0x3127 (.reg .pc) rli_ri_pc
+  xs 0x3128 (.reg .add) ri_add
+  xs 0x312b (.push [0x00, 0xa9] (by decide)) ri_push
+  xjmp 0xa9
+  exact ⟨_, _, _, hR, hW, h⟩
+
 end Blanc.Lift.Curve3Pool
