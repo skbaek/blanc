@@ -4775,6 +4775,20 @@ contract-neutral.
   read algebra `Mem.read_split`, `Mem.read_split64`, `Mem.read_two_word_writes_wf`,
   `Mem.read_write_word_disjoint`, `Mem.read_write_word_inside`, in
   [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean).
+- Vyper 0.2.x internal-callee walks (a callee's value contract without concrete memory
+  terms, windows as `Mem.KeepsOff` of `Blanc/Lift/MemGlue.lean`): the tracked walk memory
+  `MemTrack M₀ M W L` (kept off the windows `W`, carrying the words `L`, well formed) with the
+  steps `ric_mloadT`/`ric_mstoreT`/`ric_mstoreO` (overwrite, `wordsOff`)/`ric_keccakT` (tactics
+  `imload`/`imstore`/`imstoreO`/`ikeccak`, `wmem`, `iassert`) and the
+  node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
+  `.getStor`, `.logs`, `.output`); the checked-arithmetic guards read back as
+  `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the
+  `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; forward twins over a covered memory with the
+  final memory named at the return (`∃ M', RunExactCut … ∧ facts`): `xlift`, `rxc_mloadT`,
+  `rxc_mstoreT`, `rxc_keccakT`, `rxc_retT`, the guards forward (`fwdChkSub`/`Add`/`Mul`/`Div`),
+  and the node-directed forward tactic `xstep` (`xmload`, `xmstore`, `xkeccak`, `xassert`,
+  `xzero`, `xjump`, `xgoto`, `xret`); all in
+  [`Blanc/Lift/VyperCallee.lean`](../Blanc/Lift/VyperCallee.lean).
 - Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
   cut runs):
   fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,

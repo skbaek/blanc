@@ -200,6 +200,8 @@ SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
            "Lift.VyperRawCall"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
+# Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
+SHARED += ["Lift.VyperCallee"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Walking a successful frame's own derivation with its direct children: contract-neutral.
@@ -722,6 +724,8 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.Getters",
                     "Lift.Curve3Pool.Cert",
                     "Lift.Curve3Pool.KitCheck",
+                    "Lift.Curve3Pool.Callee.A",
+                    "Lift.Curve3Pool.Callee.Xp",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
                     "Lift.Curve3Pool.CheckPart0",
