@@ -28,8 +28,9 @@ theorem ex_stor_bal {σ : Stor} {s : State} (ha : Abstracts σ s) (i j k : Fin 3
     · rw [Stor.get_set_ne _ (fun h => hi ((hinj i k).mp h)),ite_eq_right hi]
       exact ha.balances k
 
-/-- A successful exchange on the deployed runtime computes the model step and raw effect. -/
-theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
+/-- **`exchange_raw` with the observed environment exposed**: the step is the model's in
+`exEnv` at the decoded indices and the observed `balanceOf` answers. -/
+theorem exchange_rawE {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -41,7 +42,9 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o := by
+    ∃ (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3) (bp bq : Option Nat) (o : Out),
+      step s (exEnv sevm ⟨_, hi⟩ ⟨_, hj⟩ bp bq) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post (exEnv sevm ⟨_, hi⟩ ⟨_, hj⟩ bp bq) o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   have hcoinI : (exI sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp
@@ -78,7 +81,7 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
     change decodeCall sevm = .exchange (exI sevm).toNat (exJ sevm).toNat
       (exDx sevm).toNat (exMinDy sevm).toNat
     convert hd using 1; congr 1
-  refine ⟨exEnv sevm i j bp bq,?o,?step,?raw⟩
+  refine ⟨hi3, hj3, bp, bq, ?o, ?step, ?raw⟩
   case step =>
     rw [hdec]
     show (if (exEnv sevm i j bp bq).value = 0 then _ else none) = _
@@ -119,4 +122,23 @@ theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
       exact hout
     case calls =>
       exact hcalls
+
+/-- A successful exchange on the deployed runtime computes the model step and raw effect. -/
+theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selExchange)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o := by
+  obtain ⟨hi, hj, bp, bq, o, h1, h2⟩ := exchange_rawE exc hcode hfork hlen hcd hsel hstack hmem hgas
+    hck hcoin hpc hid hkeep hidk
+  exact ⟨_, o, h1, h2⟩
+
 end Blanc.Lift.Curve3Pool

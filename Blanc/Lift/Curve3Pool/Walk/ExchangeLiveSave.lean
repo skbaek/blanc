@@ -39,6 +39,11 @@ theorem exSaved_length (w : Nat → B256) : ∀ (k p : Nat), (exSaved w p k).len
       exSaved_length w k (p + 32)]
     rfl
 
+/-- A stack-room side condition over a literal stack prefix and saved frame words. -/
+macro "hrs" : tactic => `(tactic| first
+  | hr
+  | (simp only [List.length_cons, List.length_append, List.length_nil, exSaved_length]; omega))
+
 theorem ex_save_first : t_2754_c13 = exSaveIt (exSaveBr 0) := rfl
 
 theorem ex_save_chain : ∀ n, n < 52 →

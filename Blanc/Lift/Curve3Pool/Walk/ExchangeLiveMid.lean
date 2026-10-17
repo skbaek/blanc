@@ -32,7 +32,7 @@ theorem rx_ex_mid {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : Outco
       xp = ⟨x0.toNat, x1.toNat, x2.toNat⟩ → ExBase sevm b0 b2 σ → W b2 →
       Mem.Reads M2 img2 → Mem.Wf M2 → M2.size = 0x3c0 →
       ExFrame img2 (exW3 B0 B1 B2) (exW3 x0 x1 x2) (exDx sevm) (σ.get (coinsBase + exI sevm)) →
-      R ≤ g2 → g2 ≤ g →
+      R ≤ g2 → g2 + 1500 ≤ g →
       SFunc.RunEx cert.prog sevm (St b2 [Bytes.toB256 [0x25, 0x17],
         B256.eqCheck (B256.eqCheck (exI sevm) (Bytes.toB256 [2])) 0] M2 g2)
         (.branchTo t_24d8_c0 11) Q) :

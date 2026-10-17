@@ -44,7 +44,7 @@ theorem rx_ex_pre {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : Outco
     (hG : 33261 + R ≤ G)
     (k : ∀ (b1 : Devm) (M1 : Mem) (img1 : Bytes) (g : Nat) (z0 z1 z2 : B256),
       ExBase sevm b0 b1 (σ.set lockSlot 1) → W b1 → Mem.Reads M1 img1 → Mem.Wf M1 →
-      M1.size = 0x2e0 → R ≤ g → g ≤ G →
+      M1.size = 0x2e0 → R ≤ g → g + 600 ≤ G →
       SFunc.RunEx cert.prog sevm (St b1 [balAt σ 0, balAt σ 1, balAt σ 2, z2, z1, z0,
         balAt σ 2, balAt σ 1, balAt σ 0, exR1, exR1, exR0, Bytes.toB256 [2, 0]] M1 g)
         (pcCallTree 0x2452 0x03 0xa1 34 t_2458_c0) Q) :
