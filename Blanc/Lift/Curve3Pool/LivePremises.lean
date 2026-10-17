@@ -14,7 +14,8 @@ Two choices make the premises satisfiable by real callees:
 
 * **Gas is relative.** A `CALL` forwards almost all the caller's gas, so a callee given `G`
   cannot leave a fixed amount above what the caller still needs for the next call. Each
-  premise bounds the gas the call *uses*: from `G ≥ U` it leaves at least `G - U`.
+  premise bounds the gas the call *uses*: from `G ≥ U` it leaves at least `G - U` (and at most
+  `G`).
 * **The world is an invariant `W`, not a fixed state.** Each later call runs over the world the
   earlier calls left, which only their premises describe. A premise holds at every call-site
   world satisfying `W` and re-establishes `W`; `WClosed` asks `W` to survive the pool's own steps
@@ -49,7 +50,7 @@ def SupplyOk (sevm : Sevm) (W : Devm → Prop) (t T : B256) (U : Nat) : Prop :=
     ∃ d out, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: 0x17c :: 4 :: 0x1c0 :: 0x20 :: S) M G) (.exec .staticcall) d ∧
       StaticCallPost b d S M 0x17c 4 0x1c0 0x20 1 out ∧ 32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      Bytes.toB256 (out.take 32) = T ∧ G ≤ d.gasLeft + U ∧ W d ∧
+      Bytes.toB256 (out.take 32) = T ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧ W d ∧
       (IdReady sevm b → IdReady sevm d)
 
 /-- **`coins[i].transfer(msg.sender, amt)` succeeds.** -/
@@ -59,7 +60,7 @@ def CoinPushOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop
     ∃ d, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: 0 :: 0x520 :: 0x44 :: 0x5c0 :: 0x20 :: S) M G) (.exec .call) d ∧
       MutableCallPost b d S M 0x520 0x44 0x5c0 0x20 1 ∧ RawCallOk d.returnData ∧
-      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧
+      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
       d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W d ∧
       (IdReady sevm b → IdReady sevm d)
 
@@ -70,7 +71,7 @@ def BurnOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
     ∃ d, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: 0 :: 0x61c :: 0x44 :: 0x6a0 :: 0x20 :: S) M G) (.exec .call) d ∧
       MutableCallPost b d S M 0x61c 0x44 0x6a0 0x20 1 ∧ 32 ≤ d.returnData.length ∧
-      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧
+      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
       d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W d
 
 end Blanc.Lift.Curve3Pool
