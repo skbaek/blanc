@@ -72,7 +72,7 @@ theorem cta_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     xa_cta_pre hc hcode hfork hck.abs h
   obtain ⟨v0, v1, v2, M, G2, hu0, hu1, hu2, h, hV⟩ := xa_cta_loop hcode hV h
   obtain ⟨D1, M, G3, hD1, h, hV⟩ := xa_cta_d1 hc hcode hfork hV h
-  obtain ⟨c, df, hL, htgt, hdata, hstat, hlen', hclogs, hdf, hm, hD0z, hstor, hlogs, hout⟩ :=
+  obtain ⟨c, df, hL, ⟨htgt, hdata, hstat, hlen', hclogs⟩, hdf, hm, hD0z, hstor, hlogs, hout⟩ :=
     xa_cta_tail hcode hfork (by rw [hb2.getStor]; exact htok) hV h
   -- the decoded arguments
   have ea0 : ctaAmt sevm 0 = Sevm.argWord sevm 0 := by

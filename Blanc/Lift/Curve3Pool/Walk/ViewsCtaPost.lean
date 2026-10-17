@@ -85,9 +85,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
     (hV : VW M [(0x340, D1), (0x200, D0)])
     (h : XAt sevm post 0xd77 (St b [] M G) L) :
     ∃ c df, L = [c] ∧
-      c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get tokenSlot).toAdr ∧
-      c.sevm.data = totalSupplyData ∧ c.sevm.isStatic = true ∧ 32 ≤ c.post.output.length ∧
-      c.post.logs = [] ∧
+      StaticWordChild ((b.getStor sevm.currentTarget).get tokenSlot).toAdr totalSupplyData c ∧
       ((ctaDep sevm ≠ 0 ∧ D0.toNat ≤ D1.toNat ∧ df = D1 - D0) ∨
         (ctaDep sevm = 0 ∧ D1.toNat ≤ D0.toNat ∧ df = D0 - D1)) ∧
       B256.Nofm df (vSupply c) ∧ D0 ≠ 0 ∧ (∀ a, post.getStor a = b.getStor a) ∧
@@ -176,7 +174,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
     obtain ⟨hL1, hm, hD0, hs, hl, ho⟩ := xa_cta_fin (df := D0 - D1) (T := vSupply c) (D0 := D0)
       hcode (hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])) h
-    refine ⟨c, _, by rw [hL, hL1], ?_, ?_, hstat, hlen, hclogs, .inr ⟨hd0, hle, rfl⟩, hm, hD0,
+    refine ⟨c, _, by rw [hL, hL1], ⟨?_, ?_, hstat, hlen, hclogs⟩, .inr ⟨hd0, hle, rfl⟩, hm, hD0,
       fun a => by rw [hs, hstor, afterSload_getStor], by rw [hl, hlogs, afterSload_logs], ho⟩
     · rw [htgt, getStorVal_eq, tokenSlot_lit]
     · rw [hdata, show (Bytes.toB256 [4, 0x9c]).toNat = 1180 from rfl,
@@ -213,7 +211,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
   obtain ⟨hL1, hm, hD0, hs, hl, ho⟩ := xa_cta_fin (df := D1 - D0) (T := vSupply c) (D0 := D0)
     hcode (hV.sub (by
     simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])) h
-  refine ⟨c, _, by rw [hL, hL1], ?_, ?_, hstat, hlen, hclogs, .inl ⟨hd1, hle, rfl⟩, hm, hD0,
+  refine ⟨c, _, by rw [hL, hL1], ⟨?_, ?_, hstat, hlen, hclogs⟩, .inl ⟨hd1, hle, rfl⟩, hm, hD0,
     fun a => by rw [hs, hstor, afterSload_getStor], by rw [hl, hlogs, afterSload_logs], ho⟩
   · rw [htgt, getStorVal_eq, tokenSlot_lit]
   · rw [hdata, show (Bytes.toB256 [4, 0x9c]).toNat = 1180 from rfl,
