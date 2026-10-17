@@ -3,6 +3,7 @@ import Blanc.Lift.CallerProvenance
 import Blanc.CallSpawnExact
 import Blanc.Lift.InvWalk
 import Blanc.ExecutionWarmth
+import Blanc.ExecutionCommittedGas
 
 /-!
 # Walking a successful frame along its own derivation, with its direct children
@@ -31,24 +32,70 @@ open Jaune
 /-- The frame running `sevm` reaches `pc` in state `d` on its way to `post`, and the direct
 committed children it spawns from there on are `L`. -/
 def XAt (sevm : Sevm) (post : Devm) (pc : Nat) (d : Devm) (L : List Exec.Frame) : Prop :=
-  ∃ exc : Exec pc sevm d (.ok post), Exec.childFrames exc = L
+  ∃ exc : Exec pc sevm d (.ok post), Exec.childFrames exc = L ∧ d.gasMeasure < 2 ^ 256
 
 theorem XAt.of_exec {sevm : Sevm} {post : Devm} {pc : Nat} {d : Devm}
-    (exc : Exec pc sevm d (.ok post)) : XAt sevm post pc d (Exec.childFrames exc) :=
-  ⟨exc, rfl⟩
+    (exc : Exec pc sevm d (.ok post)) (hg : d.gasMeasure < 2 ^ 256) :
+    XAt sevm post pc d (Exec.childFrames exc) :=
+  ⟨exc, rfl, hg⟩
+
+/-- A walked state's gas fits a word. -/
+theorem XAt.gasLeft_lt {sevm : Sevm} {post : Devm} {pc : Nat} {d : Devm} {L : List Exec.Frame}
+    (h : XAt sevm post pc d L) : d.gasLeft < 2 ^ 256 := by
+  obtain ⟨-, -, hg⟩ := h
+  rw [Devm.gasMeasure_def] at hg
+  omega
+
+/-! ## Gas only falls along the frame's own chain -/
+
+theorem gas_cont {pc pc' : Nat} {sevm : Sevm} {d d' : Devm}
+    (h : Evm.step ⟨pc, sevm, d⟩ = .cont pc' d') : d'.gasMeasure < d.gasMeasure := by
+  have b := Evm.step_gasBound ⟨pc, sevm, d⟩
+  rw [h] at b
+  exact b
+
+theorem gas_done {pc pc' : Nat} {sevm : Sevm} {d d' : Devm} {f : Frame} {rsm : Resume}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : Evm.step ⟨pc, sevm, d⟩ = .spawn f rsm pc') (he : f.enter = .done r)
+    (hr : rsm.run r = .ok d') : d'.gasMeasure < d.gasMeasure := by
+  have b := Evm.step_gasBound ⟨pc, sevm, d⟩
+  rw [h] at b
+  have rg := Resume.run_gasLe (rsm := rsm) (m := f.inner.gas)
+    (fun d hd => Frame.enter_done_gasLe he hd)
+  rw [hr, Execution.gasMeasure_ok] at rg
+  change f.inner.gas + rsm.parentGas < d.gasMeasure ∧ _ at b
+  omega
+
+theorem gas_run {pc pc' : Nat} {sevm : Sevm} {d d' : Devm} {f : Frame} {rsm : Resume}
+    {cevm : Evm} {raw : Execution}
+    (h : Evm.step ⟨pc, sevm, d⟩ = .spawn f rsm pc') (he : f.enter = .run cevm)
+    (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (hr : rsm.run (f.settle raw) = .ok d') : d'.gasMeasure < d.gasMeasure := by
+  have b := Evm.step_gasBound ⟨pc, sevm, d⟩
+  rw [h] at b
+  change f.inner.gas + rsm.parentGas < d.gasMeasure ∧ _ at b
+  have childGas : raw.SettledGasLe f.inner.gas := by
+    intro sg dd hd
+    have budget := Exec.descendantFrames_settledGas child sg dd hd
+    rw [Frame.enter_run_gasMeasure he] at budget
+    omega
+  have rg := Resume.run_gasLe (rsm := rsm) (r := f.settle raw) (m := f.inner.gas)
+    (fun dd hd => Frame.settle_gasLe childGas hd)
+  rw [hr, Execution.gasMeasure_ok] at rg
+  omega
 
 variable {sevm : Sevm} {post : Devm} {pc : Nat} {d : Devm} {L : List Exec.Frame}
 
 /-- A step that continues in the same frame keeps the remaining children. -/
 theorem XAt.cont {pc' : Nat} {d' : Devm} (hs : Evm.step ⟨pc, sevm, d⟩ = .cont pc' d')
     (h : XAt sevm post pc d L) : XAt sevm post pc' d' L := by
-  obtain ⟨exc, rfl⟩ := h
+  obtain ⟨exc, rfl, hg⟩ := h
   cases exc with
   | halt h => cases hs.symm.trans h
   | cont h next =>
     have e := hs.symm.trans h
     cases e
-    exact ⟨next, rfl⟩
+    exact ⟨next, rfl, lt_of_lt_of_le (gas_cont h) (le_of_lt hg)⟩
   | doneOk h _ _ _ => cases hs.symm.trans h
   | runOk h _ _ _ _ => cases hs.symm.trans h
 
@@ -57,13 +104,13 @@ theorem xa_next {n : Ninst} (hat : Ninst.At sevm.code pc n) (hn : ∀ x, n ≠ .
     (h : XAt sevm post pc d L) :
     ∃ d', Ninst.Run sevm d n d' ∧ XAt sevm post (pc + n.size) d' L := by
   have hstep : Evm.step ⟨pc, sevm, d⟩ = Ninst.step ⟨pc, sevm, d⟩ n := Evm.step_next hat
-  obtain ⟨exc, rfl⟩ := h
+  obtain ⟨exc, rfl, hg⟩ := h
   cases exc with
   | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
   | cont h next =>
     have hs := hstep.symm.trans h
     cases Ninst.step_cont_pc hs
-    refine ⟨_, ⟨.none, trivial, pc, ?_⟩, next, rfl⟩
+    refine ⟨_, ⟨.none, trivial, pc, ?_⟩, next, rfl, lt_trans (gas_cont h) hg⟩
     simp only [Ninst.StepRun, hs, Step.Run]
     exact ⟨trivial, trivial⟩
   | doneOk h _ _ _ =>
@@ -84,9 +131,9 @@ private theorem XAt.ofJump {j : Jinst} (hat : Jinst.At sevm.code pc j)
 /-- **A jump instruction**: its exact run, keeping the remaining children. -/
 theorem xa_jinst {j : Jinst} (hat : Jinst.At sevm.code pc j) (h : XAt sevm post pc d L) :
     ∃ pc' d', Jinst.Run ⟨pc, sevm, d⟩ j (.ok ⟨pc', d'⟩) ∧ XAt sevm post pc' d' L := by
-  obtain ⟨exc, hL⟩ := h
+  obtain ⟨exc, hL, hg⟩ := h
   obtain ⟨pc', d', -, run, -⟩ := Jinst.run_of_at exc hat
-  exact ⟨pc', d', run, XAt.ofJump hat run ⟨exc, hL⟩⟩
+  exact ⟨pc', d', run, XAt.ofJump hat run ⟨exc, hL, hg⟩⟩
 
 theorem xa_jumpdest (hat : Jinst.At sevm.code pc .jumpdest) (h : XAt sevm post pc d L) :
     ∃ d', Devm.Burn d d' ∧ XAt sevm post (pc + 1) d' L := by
@@ -111,7 +158,7 @@ theorem xa_jumpi (hat : Jinst.At sevm.code pc .jumpi) (h : XAt sevm post pc d L)
 /-- **A successful frame halting at a `Linst`** ends there, with no further children. -/
 theorem xa_halt {l : Linst} (hat : Linst.At sevm.code pc l) (h : XAt sevm post pc d L) :
     Linst.Run sevm d l (.ok post) ∧ L = [] := by
-  obtain ⟨exc, rfl⟩ := h
+  obtain ⟨exc, rfl, hg⟩ := h
   refine ⟨Linst.run_of_at exc hat, ?_⟩
   have hs := Evm.step_last (devm := d) hat
   cases exc with
@@ -213,7 +260,7 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
       exact stepRun
     exact Xinst.call_none_precompile fork operands xrun ⟨flag, rest, hflag, nz⟩
-  obtain ⟨exc, rfl⟩ := h
+  obtain ⟨exc, rfl, hg⟩ := h
   cases exc with
   | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
   | @cont _ _ _ _ d'' _ h next =>
@@ -222,7 +269,7 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
     have stepRun : Ninst.StepRun pc sevm d (.exec .call) .none (.ok d'') := by
       simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨trivial, trivial⟩
-    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl⟩,
+    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl, lt_trans (gas_cont h) hg⟩,
       fun flag rest hflag nz => .inl ⟨childless _ stepRun flag rest hflag nz, rfl⟩⟩
   | @doneOk _ _ _ _ _ _ _ d'' _ h henter hr next =>
     have hs := hstep.symm.trans h
@@ -230,7 +277,7 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
     have stepRun : Ninst.StepRun pc sevm d (.exec .call) .none (.ok d'') := by
       simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨_, RunFrame.of_done henter, hr.symm⟩
-    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl⟩,
+    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl, lt_trans (gas_done h henter hr) hg⟩,
       fun flag rest hflag nz => .inl ⟨childless _ stepRun flag rest hflag nz, rfl⟩⟩
   | @runOk _ _ _ f rsm _ cevm raw d'' _ h henter child hr next =>
     have hs := hstep.symm.trans h
@@ -245,7 +292,7 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       rw [Ninst.step_exec] at hs
       exact XStep.toStep_spawn hs
     refine ⟨d'', ⟨.some ⟨cevm, raw⟩, ⟨child⟩, pc, stepRun⟩, Exec.childFrames next,
-      ⟨next, rfl⟩, ?_⟩
+      ⟨next, rfl, lt_trans (gas_run h henter child hr) hg⟩, ?_⟩
     intro flag rest hflag nz
     have hc : Execution.commits raw = true :=
       Xinst.call_run_flag_commits fork (.inl rfl) xrun ⟨flag, rest, hflag, nz⟩
@@ -352,7 +399,7 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
       exact stepRun
     exact Xinst.staticcall_none_precompile fork operands xrun ⟨flag, rest, hflag, nz⟩
-  obtain ⟨exc, rfl⟩ := h
+  obtain ⟨exc, rfl, hg⟩ := h
   cases exc with
   | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
   | @cont _ _ _ _ d'' _ h next =>
@@ -361,7 +408,7 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
     have stepRun : Ninst.StepRun pc sevm d (.exec .staticcall) .none (.ok d'') := by
       simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨trivial, trivial⟩
-    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl⟩,
+    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl, lt_trans (gas_cont h) hg⟩,
       fun flag rest hflag nz => .inl ⟨childless _ stepRun flag rest hflag nz, rfl⟩⟩
   | @doneOk _ _ _ _ _ _ _ d'' _ h henter hr next =>
     have hs := hstep.symm.trans h
@@ -369,7 +416,7 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
     have stepRun : Ninst.StepRun pc sevm d (.exec .staticcall) .none (.ok d'') := by
       simp only [Ninst.StepRun, hs, Step.Run]
       exact ⟨_, RunFrame.of_done henter, hr.symm⟩
-    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl⟩,
+    exact ⟨_, ⟨.none, trivial, pc, stepRun⟩, _, ⟨next, rfl, lt_trans (gas_done h henter hr) hg⟩,
       fun flag rest hflag nz => .inl ⟨childless _ stepRun flag rest hflag nz, rfl⟩⟩
   | @runOk _ _ _ f rsm _ cevm raw d'' _ h henter child hr next =>
     have hs := hstep.symm.trans h
@@ -386,7 +433,7 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       rw [Ninst.step_exec] at hs
       exact XStep.toStep_spawn hs
     refine ⟨d'', ⟨.some ⟨cevm, raw⟩, ⟨child⟩, pc, stepRun⟩, Exec.childFrames next,
-      ⟨next, rfl⟩, ?_⟩
+      ⟨next, rfl, lt_trans (gas_run h henter child hr) hg⟩, ?_⟩
     intro flag rest hflag nz
     have hc : Execution.commits raw = true :=
       Xinst.call_run_flag_commits fork (.inr rfl) xrun ⟨flag, rest, hflag, nz⟩

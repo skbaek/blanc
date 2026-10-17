@@ -162,14 +162,17 @@ theorem xa_identity_img {pc' : Nat} {g ii is oi os : B256} {i n o z : Nat}
     (hos : os.toNat = z) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post pc (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) L) :
     ∃ d L', XAt sevm post pc' d L' ∧
-      (d.stack = 0 :: S ∨
+      ((d.stack = 0 :: S ∧ (g = Nat.toB256 G → 0 < sevm.depth → n ≤ 32 → d.gasLeft = 0)) ∨
         (L = L' ∧ ∃ b' G' M', ShaCallPost b b' (img.sliceD i n 0) ∧ d = St b' (1 :: S) M' G' ∧
           Mem.Reads M' (Bytes.writeAt img o ((img.sliceD i n 0).take z)) ∧ Mem.Wf M')) := by
   subst hpc hii his hoi hos
+  have hG : G < 2 ^ 256 := h.gasLeft_lt
   obtain ⟨d, s, L', h, hk⟩ := xa_call hid.fork hat rfl h
   refine ⟨d, L', h, ?_⟩
   rcases ri_call_identity hid s with h0 | ⟨b', G', hpost, rfl⟩
-  · exact .inl h0
+  · refine .inl ⟨h0, fun hg hdep hn => ?_⟩
+    subst hg
+    exact ri_call_identity_gas_fail hid hdep hG hn s h0
   · refine .inr ⟨?_, b', G', _, ?_, rfl, ?_, ?_⟩
     · rcases hk 1 S rfl (by decide) with ⟨-, hL⟩ | ⟨c, -, -, hfr, -⟩
       · exact hL
