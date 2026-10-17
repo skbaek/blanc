@@ -287,7 +287,7 @@ theorem implFrame (inj : SlotFootprint.Inj Key.slot U)
       obtain ⟨x, hat, -, -⟩ := Evm.step_spawn_inv step
       have ni := nodeInv N chain x hat
       exact ⟨by rw [entryOfNode N chain step enter]; exact ni, ni⟩
-    · obtain ⟨-, nodes⟩ := rescueLaw run codeEq target codeAddr fork hs keys notAdmin hsel
+    · obtain ⟨-, nodes⟩ := rescueLaw run codeEq target codeAddr fork hs keys hsel
       have desc : ∀ f ∈ Exec.descendantFrames run, FrameQ P U a₀ f := by
         refine impl_children_slots deeper run depth codeEq target fork admitted codes avail ?_
         intro N chain f rsm pc' cevm raw child h step enter _

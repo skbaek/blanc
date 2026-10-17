@@ -236,7 +236,7 @@ theorem implStepLaw_famAdmin : ImplStepLaw famAdmin := by
 runs to the halt (`CursorOK.state_post_of_silent`) and no further external instruction is decoded
 (`noExec_after_of_cursor`). -/
 theorem rescueLaw : RescueLaw := by
-  intro P U sevm pre post run codeEq target codeAddr fork nonstatic keys notAdmin hsel
+  intro P U sevm pre post run codeEq target codeAddr fork nonstatic keys hsel
   subst target
   have hrun := impl_lifted run codeEq fork
   obtain ⟨hv, hlen, hc⟩ := rescue_facts fork hsel hrun
@@ -244,7 +244,7 @@ theorem rescueLaw : RescueLaw := by
       (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68).toNat) :=
     decodeCall_of_find (r := ⟨0xb2118a8d, 3, fun e => .rescueERC20 (Sevm.dataWord e 4).toAdr
       (Sevm.dataWord e 36).toAdr (Sevm.dataWord e 68).toNat⟩) hv (by rw [hsel]; rfl) (by omega)
-  refine ⟨?_, ?_⟩
+  refine ⟨fun notAdmin => ?_, ?_⟩
   · rw [book_step_of notAdmin dec]
     show (if sevm.caller ≠ ((pre.state.getStor sevm.currentTarget).get 14).toAdr then none
       else some _) = _
