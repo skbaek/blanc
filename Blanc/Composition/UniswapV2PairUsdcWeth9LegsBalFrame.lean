@@ -94,4 +94,49 @@ theorem proxy_bal_run {sevm : Sevm} {pre : Devm} {X : Nat} (fork : CoveredFork s
   exact proxy_frame_run fork depth pf hcode hprec hY hfwd hexec herr
     (by rw [implBalPost_output]; rfl) (implBalPost_gasLeft _ _ _)
 
+/-! ## The frame's charge and result read no gas field -/
+
+theorem implBalPost_gasField (s : Sevm) (b : Devm) (f G : Nat) :
+    implBalPost { s with gas := f } b G = implBalPost s b G := by
+  simp only [implBalPost, implBalMem, bWord, bKey, bTo, UniswapV2PairWeth9Joint.afterSload_gasField,
+    UniswapV2PairWeth9Joint.dataWord_gasField]
+
+theorem implBalPost_reframe (s : Sevm) (b : Devm) (G : Nat) :
+    implBalPost s b G = (implBalPost s b 0).withGasLeft G := by
+  unfold implBalPost
+  rw [St.memRead_snd, St.memRead_snd, St_reframe _ _ _ G, withOutput_withGasLeft]
+
+theorem balY_gasField (s : Sevm) (pre : Devm) (f X : Nat) :
+    balY { s with gas := f } pre X = balY s pre X := by
+  exact congrArg (fun t => X + t + dAcc s pre + dExt s pre + childBalCost s pre)
+    (dTailW_gas s f (dParent s pre 0) (pRest s pre) (dParent s pre 0).memory (balWord s pre))
+
+theorem childBalCost_gasField (s : Sevm) (pre : Devm) (f : Nat) :
+    childBalCost { s with gas := f } pre = childBalCost s pre := rfl
+
+theorem proxyBalCost_gasField (s : Sevm) (pre : Devm) (f : Nat) :
+    proxyBalCost { s with gas := f } pre = proxyBalCost s pre := by
+  unfold proxyBalCost
+  rw [proxyPreW_gas]
+  exact congrArg _ (congrArg (· + _) (congrArg (· + _) (congrArg (· + _)
+    (dTailW_gas s f _ _ _ _))))
+
+theorem proxyBalPost_gasField (s : Sevm) (pre : Devm) (f X : Nat) :
+    proxyBalPost { s with gas := f } pre X = proxyBalPost s pre X := by
+  unfold proxyBalPost balChild
+  rw [balY_gasField]
+  rfl
+
+theorem proxyBalPost_reframe (s : Sevm) (pre : Devm) (X : Nat) :
+    proxyBalPost s pre X = (proxyBalPost s pre 0).withGasLeft X := by
+  unfold proxyBalPost balChild proxyPost
+  rw [dMsg_sevm s pre (balY s pre X), dMsg_sevm s pre (balY s pre 0), implBalPost_gasField,
+    implBalPost_gasField, implBalPost_reframe _ _ (dFwd s pre (balY s pre X) - _),
+    implBalPost_reframe _ _ (dFwd s pre (balY s pre 0) - _), dParent_reframe s pre (balY s pre X),
+    dParent_reframe s pre (balY s pre 0), UniswapV2PairWeth9Joint.callChildPost_withGasLeft,
+    UniswapV2PairWeth9Joint.callChildPost_withGasLeft, St_withGasLeft, St_withGasLeft,
+    St.memRead_snd, St.memRead_snd, St_reframe _ _ _ X, withOutput_withGasLeft]
+  simp only [implBalPost_gasField]
+  rfl
+
 end Blanc.Composition.UsdcLive
