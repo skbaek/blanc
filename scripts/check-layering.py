@@ -197,7 +197,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall"]
+           "Lift.VyperRawCall", "Lift.RunEx"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.

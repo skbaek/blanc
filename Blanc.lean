@@ -820,6 +820,7 @@ import Blanc.Lift.VyperArraySlot
 import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
 import Blanc.Lift.VyperRawCall
+import Blanc.Lift.RunEx
 
 -- Walking a successful frame's own derivation, with its direct children (contract-neutral).
 import Blanc.Lift.FrameWalk
