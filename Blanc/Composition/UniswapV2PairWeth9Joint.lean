@@ -5,6 +5,7 @@ import Blanc.ExecutionSettledOwnCode
 import Blanc.LockExclusion
 import Blanc.Lift.Weth9.Check
 import Blanc.Lift.Weth9.LiveTx
+import Blanc.Lift.Weth9.LiveWriters
 
 /-!
 # C3 for WETH9 (Appendix A §8 as amended)
@@ -17,18 +18,32 @@ the checkpoint from `JointCheckpoint.toCore`; `distinct`, `notSystem` from `Join
 (`settled_ownCode`) and along each frame's same-frame prefix (`ParentPrefix.codePreserve`), and
 WETH9 not a precompile (`JointCheckpoint.wethNotPrecompile`).
 
-**Open: the ERC-20 ABI facet.**  `Erc20Abi weth9Book` is false as frozen
-(`weth9Book_not_erc20Abi`, `Weth9TokenAbiControl.lean`): a message whose calldata is `2^256`
-bytes long reads as a short call (`CALLDATASIZE` is taken mod `2^256`), so WETH9 books it as a
-deposit whatever its selector.  `pair_weth9_joint_of_abi` therefore takes the facet as a
-hypothesis until the facet is amended (proposed: both fields take `a.data.length < 2 ^ 256`,
-which every use already has).
+The ERC-20 ABI facet (as amended by A15: representable calldata only) holds for WETH9's book
+(`weth9Book_erc20Abi`): WETH9's dispatcher reads both standard selectors exactly so.
 -/
 
 namespace Blanc.Composition.UniswapV2PairWeth9Joint
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Weth9 Blanc.Lift.Token
   Blanc.Lift.UniswapV2Pair Blanc.Composition.Weth9Token Blanc.Composition.PairTokenJoint
+
+/-! ## The ERC-20 ABI facet for WETH9 -/
+
+/-- **WETH9's book reads the standard selectors as the standard operations** (A15 form). -/
+theorem weth9Book_erc20Abi : Erc20Abi weth9Book where
+  transfer a long fits selector := by
+    have short := not_shortCall (Nat.le_trans (by decide) long) fits
+    rw [show weth9Book.op = weth9Op from rfl]
+    unfold weth9Op decodeCall
+    rw [ite_eq_right_of_eq_false _ _ (eq_false fun h => absurd (selector.symm.trans h.2)
+        (by decide)), ite_eq_right_of_eq_false _ _ (eq_false short), selector,
+      ite_eq_right_of_eq_false _ _ (eq_false (by decide)),
+      ite_eq_left_of_eq_true _ _ (eq_true rfl)]
+  balanceOf a long fits selector := by
+    have short := not_shortCall (Nat.le_trans (by decide) long) fits
+    rw [show weth9Book.op = weth9Op from rfl]
+    unfold weth9Op
+    rw [ite_eq_left_of_eq_true _ _ (eq_true ⟨short, selector⟩)]
 
 /-! ## WETH9's code at every node of a settled frame -/
 
@@ -59,9 +74,7 @@ theorem weth9_tokenEntered {pair weth : Adr} {K₀ : Key → Prop} {KP : WriterK
 
 /-! ## C3 for WETH9 -/
 
-/-- **C3 for WETH9, given the ABI facet** (the frozen `pair_weth9_joint` with the facet as a
-hypothesis; see the module note).  From the joint checkpoint, both HASH-T premises and the factory
-premises (A4/A14). -/
+/-- C3 for WETH9 over any ERC-20 ABI facet of its book (the body of `pair_weth9_joint`). -/
 theorem pair_weth9_joint_of_abi (abi : Erc20Abi weth9Book) {pair weth : Adr} (side : TokenSide)
     {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
@@ -106,5 +119,35 @@ theorem pair_weth9_joint_of_abi (abi : Erc20Abi weth9Book) {pair weth : Adr} (si
     change trackedAllow (historyKeyUniverse weth trace K₀) (future.state.getStor weth) pair g = 0
       at zeroG
     rwa [trackedAllow_self row] at zeroG
+/-- **C3 for WETH9** (Appendix A §8 as amended by A4/A10/A11/A14): from the joint checkpoint, both
+HASH-T premises and the factory premises, at every settled frame outside the Pair's own frames the
+Pair is unlocked with WETH9 on `side`, its reserve is at most WETH9's booked balance of the Pair and
+the Pair has granted no booked allowance; at the history's end, over the Pair's full replay, the
+reserve is at most the Pair's stored WETH9 balance word and every tracked allowance row is zero. -/
+theorem pair_weth9_joint {pair weth : Adr} (side : TokenSide)
+    {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint pair weth K₀ KP st₀ side checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (wethFresh : KeysFresh K₀ (historyTouchedKeys weth trace))
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress) :
+    (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      trace.settledFrames = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
+      ∃ (st : UniswapV2Pair.State) (K : WriterKey → Prop),
+        WriterRep K (f.pre.state.getStor pair) st ∧ st.unlocked = 1 ∧ st.tokenOn side = weth ∧
+          st.reserveOn side ≤
+            ((ledger (historyKeyUniverse weth trace K₀) (f.pre.state.getStor weth)).bal pair).toNat ∧
+          ∀ g, (ledger (historyKeyUniverse weth trace K₀) (f.pre.state.getStor weth)).allow pair g = 0) ∧
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+        finish.reserveOn side ≤ ((future.state.getStor weth).get (balSlot pair)).toNat ∧
+        ∀ g, historyKeyUniverse weth trace K₀ (.allow pair g) →
+          (future.state.getStor weth).get (allowSlot pair g) = 0 :=
+  pair_weth9_joint_of_abi weth9Book_erc20Abi side trace joint pairFresh wethFresh factoryInstalled
+    factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairWeth9Joint

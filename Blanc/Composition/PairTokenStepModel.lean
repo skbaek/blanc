@@ -264,7 +264,7 @@ theorem pair_token_step_model {pair T : Adr} {B : Book} (C : Core T B) (laws : B
       ∃ l', B.run (C.ledgerOf trace checkpoint.state)
           (entryAsks T (pre ++ Exec.committedFrames P.run)) = some l' ∧
         out.frame.current.state.reserveOn side ≤ B.bal l' pair ∧ ∀ g, B.allow l' pair g = 0 := by
-  have frames := committedFrames_frame P
+  have frames := Exec.Frame.committedFrames_self P
   have settledP : P ∈ trace.settledFrames := by
     rw [split, frames]
     exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
