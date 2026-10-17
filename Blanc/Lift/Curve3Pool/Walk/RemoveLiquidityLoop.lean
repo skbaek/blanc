@@ -13,10 +13,6 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-theorem Region.append' {img : Bytes} {o o' : Nat} {xs ys : Bytes} (h1 : Region img o xs)
-    (h2 : Region img o' ys) (ho : o' = o + xs.length) : Region img o (xs ++ ys) := by
-  subst ho; exact h1.append h2
-
 /-- The `transfer` payload's identity copy: the length word, then the selector, the receiver and
 the value, as the four writes left them. -/
 theorem transfer_copy (img : Bytes) (E C V : B256) :
@@ -42,9 +38,6 @@ theorem keccak_zero (img : Bytes) :
   rw [show (0x20 : Nat) = (Bytes.toB256 [0]).toBytes.length from (B256.length_toBytes _).symm,
     Bytes.sliceD_writeAt, zero_lit, coinsBase_eq]
 
-theorem Region.slice {img : Bytes} {o n : Nat} {xs : Bytes} (h : Region img o xs)
-    (hn : n = xs.length) : img.sliceD o n 0 = xs := hn ▸ h
-
 theorem coin_ne_bal {i : Nat} (hi : i < 3) :
     balancesBase + Nat.toB256 i ≠ coinsBase + Nat.toB256 i := by
   match i, hi with
@@ -52,20 +45,9 @@ theorem coin_ne_bal {i : Nat} (hi : i < 3) :
   | 1, _ => decide
   | 2, _ => decide
 
-theorem gtCheck_eq_zero {x y : B256} (h : B256.gtCheck x y = 0) : ¬ y < x := by
-  intro e
-  unfold B256.gtCheck at h
-  simp only [e, ↓reduceIte] at h
-  exact absurd h (by decide)
-
 theorem lt_three {i : Nat} (hi : i < 3) : Nat.toB256 i < Bytes.toB256 [3] := by
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)]
   exact hi
-
-theorem ltCheck_ne_zero_of_lt {x y : B256} (h : x < y) : B256.ltCheck x y ≠ 0 := by
-  unfold B256.ltCheck
-  simp only [h, ↓reduceIte]
-  decide
 
 theorem one_lit : Bytes.toB256 [1] = 1 := by decide
 
@@ -104,17 +86,6 @@ abbrev rlMin (sevm : Sevm) (i : Nat) : B256 :=
 /-- The withdrawn `value = balances[i] * _amount / total_supply`. -/
 abbrev rlVal (sevm : Sevm) (σ : Stor) (T : B256) (i : Nat) : B256 := balAt σ i * rlAmt sevm / T
 
-
-theorem or_ne_zero {x y : B256} (h : (x ||| y) ≠ 0) : x ≠ 0 ∨ y ≠ 0 := by
-  by_cases hx : x = 0
-  · right; intro hy; apply h; rw [hx, hy]; decide
-  · exact .inl hx
-
-theorem ltCheck_eq_zero {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
-  intro e
-  unfold B256.ltCheck at h
-  simp only [e, ↓reduceIte] at h
-  exact absurd h (by decide)
 
 /-- **Segment 1** (`0x2cdb` → `0x2e12`): the counter test, `value = balances[i] * _amount /
 total_supply` with its checks, `min_amounts[i] ≤ value`, `balances[i] -= value`, and
@@ -308,13 +279,13 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   refine ⟨hmul'.imp eqCheck_ne_zero eqCheck_ne_zero, hT0,
     ltCheck_eq_zero (eqCheck_ne_zero hmin), ltCheck_eq_zero (eqCheck_ne_zero hle),
     _, _, _, hR, hW, ⟨?_, ?_, ?_⟩, ?_, h⟩
-  · wchain; exact hctr
-  · wchain; exact hT
+  · wchainT; exact hctr
+  · wchainT; exact hT
   · intro j hj
     by_cases e : j = i
-    · subst e; rw [Function.update_self]; wchain
-    · rw [Function.update_of_ne e]; wchain; exact hL.amt j hj
-  · wchain
+    · subst e; rw [Function.update_self]; wchainT
+    · rw [Function.update_of_ne e]; wchainT; exact hL.amt j hj
+  · wchainT
 
 /-- **Segment 2** (`0x2e12` → `0x2eaa`): the `transfer` payload, built with two identity copies
 (the first unchecked, so a failure there leaves no gas). -/
@@ -352,14 +323,14 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   have e1 := Mem.Reads.forget hR
   clear hR
   obtain ⟨img1, hR, hI⟩ := e1
-  have f_ctr : WordAt img1 0x2a0 (Nat.toB256 i) := by rw [hI]; wchain; exact hL.ctr
-  have f_T : WordAt img1 0x140 T := by rw [hI]; wchain; exact hL.supply
-  have f_v : WordAt img1 0x2c0 v := by rw [hI]; wchain; exact hv
-  have f_400 : WordAt img1 0x400 (Bytes.toB256 [4]) := by rw [hI]; wchain
+  have f_ctr : WordAt img1 0x2a0 (Nat.toB256 i) := by rw [hI]; wchainT; exact hL.ctr
+  have f_T : WordAt img1 0x140 T := by rw [hI]; wchainT; exact hL.supply
+  have f_v : WordAt img1 0x2c0 v := by rw [hI]; wchainT; exact hv
+  have f_400 : WordAt img1 0x400 (Bytes.toB256 [4]) := by rw [hI]; wchainT
   have f_sel : WordAt img1 0x420 (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) := by
-    rw [hI]; wchain
+    rw [hI]; wchainT
   have f_amt : ∀ j, j < 6 → WordAt img1 (0x1e0 + 32 * j) (a j) := by
-    intro j hj; rw [hI]; wchain; exact hL.amt j hj
+    intro j hj; rw [hI]; wchainT; exact hL.amt j hj
   clear hI hL hv
   replace h := xa_identity_img (pc' := 0x2e58) (i := 0x420) (n := 4) (o := 0x480) (z := 4) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
@@ -447,10 +418,10 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   clear hR
   obtain ⟨img3, hR, hI⟩ := e3
   have g_ctr : WordAt img3 0x2a0 (Nat.toB256 i) := by
-    rw [hI]; wchain; exact f_ctr
-  have g_T : WordAt img3 0x140 T := by rw [hI]; wchain; exact f_T
+    rw [hI]; wchainT; exact f_ctr
+  have g_T : WordAt img3 0x140 T := by rw [hI]; wchainT; exact f_T
   have g_amt : ∀ j, j < 6 → WordAt img3 (0x1e0 + 32 * j) (a j) := by
-    intro j hj; rw [hI]; wchain; exact f_amt j hj
+    intro j hj; rw [hI]; wchainT; exact f_amt j hj
   have g_data : Region img3 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
       Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++
         v.toBytes)) := by
@@ -465,26 +436,6 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0x2eaa (.reg .pop) ri_pop
   exact ⟨b3, M, img3, _, hb12.trans hb23, hR, hW, ⟨g_ctr, g_T, g_amt⟩, g_data, h⟩
 
-
-/-- A child's relation to its parent's state depends only on the state's code, storage, logs,
-output and warm accounts. -/
-theorem _root_.Blanc.Lift.ChildOf.congr_left {d e d' : Devm} {t : Adr} {input : Bytes} {v : B256} {st : Bool}
-    {c : Exec.Frame} (h : ChildOf d d' t input v st c) (hc : ∀ a, d.getCode a = e.getCode a)
-    (hs : ∀ a, d.getStor a = e.getStor a) (hl : d.logs = e.logs) (ho : d.output = e.output)
-    (hw : d.accessedAddresses = e.accessedAddresses) : ChildOf e d' t input v st c where
-  target := h.target
-  data := h.data
-  value := h.value
-  isStatic := h.isStatic
-  output := h.output
-  logs := by rw [h.logs, hl]
-  storPre ca hca := by rw [h.storPre ca (by rw [hc]; exact hca), hs]
-  storPost ca hca := h.storPost ca (by rw [hc]; exact hca)
-  code ca hca := by rw [h.code ca (by rw [hc]; exact hca), hc]
-  codePre a := by rw [h.codePre, hc]
-  codePost := h.codePost
-  outputKeep := by rw [h.outputKeep, ho]
-  warm a ha := h.warm a (by rw [hw]; exact ha)
 
 /-- **Segment 3** (`0x2eaa` → `0x2edf`): `coins[i]` and the `transfer` `CALL` with value `0`,
 input the payload's last `0x44` bytes, output window `0x5c0`; a zero flag reverts. -/

@@ -558,6 +558,22 @@ entered-frame STATICCALL has no `runCompiled` constructor — assemble those
 crossings per consumer from `Xinst.step_staticcall_spawn` composed with
 `Ninst.runCompiled_exec_run`.
 
+When the walk must name the frame's **exact ordered direct children** (an environment or
+call list read off `Exec.childFrames`), walk the actual derivation instead of a lifted run:
+[`Blanc/Lift/FrameWalk.lean`](../Blanc/Lift/FrameWalk.lean) gives the walk state
+`XAt sevm post pc d L` (a derivation from `d` at `pc` whose remaining children are `L`, gas a
+word), one-step lemmas `xa_next`, `xa_jumpdest`/`xa_jump`/`xa_jumpi` (and `_St` forms),
+`xa_halt`, `xa_revert`, and the spawning steps `xa_call`/`xa_staticcall`, which peel the next
+child as `ChildOf` (target, calldata, value, static flag, output, logs, storage and code at
+entry and exit, warm growth) unless the target is an undelegated precompile.
+[`Blanc/Lift/FrameWalkKit.lean`](../Blanc/Lift/FrameWalkKit.lean) carries memory as a byte
+image (`ri_*_img`, `xa_call_img`, `xa_staticcall_img`, `xa_identity_img`), normalizes the next
+pc (`xa_nextAt`, `xa_jumpiAt`, …), and states image facts as `WordAt`/`Region` with the
+`Mem.Reads.forget` cut and the `wchain` tactic; it also holds the branch-condition lemmas,
+Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`. The 3pool's
+`remove_liquidity` walk (`Blanc/Lift/Curve3Pool/Walk/RemoveLiquidity*.lean`) is the worked
+example.
+
 If the property concerns which child roots were entered rather than only the
 terminal result, continue to E3.
 
@@ -4748,7 +4764,11 @@ contract-neutral.
   a value-0 `CALL` of the identity precompile (`IdReady`, `processMessage_identity_clean`,
   `ri_call_identity`, `call_identity_step` / `rxc_call_identity` at cost
   `100 + memExp + 15 + 3·⌈is/32⌉`, world relation `ShaCallPost`) in
-  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean);
+  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean); an unchecked identity
+  copy that forwarded `gas()` and failed at a nonzero depth leaves no gas
+  (`ri_call_identity_gas_fail`, `gasLeft_of_run_pop`), and `IdReady` survives `SLOAD`/`SSTORE`
+  bases (`IdReady.afterSload`/`afterSstore`), in
+  [`Blanc/Lift/IdentityCallGas.lean`](../Blanc/Lift/IdentityCallGas.lean);
   a one-word `STATICCALL` reply with its `RETURNDATASIZE > 31` check (`vyReplyWord`,
   `ric_vyStaticReply` / `rxc_vyStaticReply`) and a checked subtraction from a saved word
   (`vyChkSubMem`, `ric_vyChkSubMem` / `rxc_vyChkSubMem`, `chkSub_of_le`) — the fee-on-transfer

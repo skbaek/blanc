@@ -201,7 +201,7 @@ SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Walking a successful frame's own derivation with its direct children: contract-neutral.
-SHARED += ["Lift.FrameWalk", "Lift.IdentityCallGas"]
+SHARED += ["Lift.FrameWalk", "Lift.FrameWalkKit", "Lift.IdentityCallGas"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.

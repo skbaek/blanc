@@ -17,25 +17,6 @@ open Jaune Blanc.Lift Blanc.StableSwapNewton
 
 /-! ## Words and numbers -/
 
-/-- Vyper's checked product (`x * y / x == y or x == 0`) did not wrap. -/
-theorem mul_check_toNat {x y : B256} (h : x * y / x = y ∨ x = 0) :
-    x.toNat * y.toNat < 2 ^ 256 := by
-  rcases h with h | h
-  · by_cases hx : x = 0
-    · rw [hx, show (0 : B256).toNat = 0 from rfl, Nat.zero_mul]; exact Nat.two_pow_pos _
-    · have e := congrArg B256.toNat h
-      rw [B256.toNat_div hx, B256.toNat_mul] at e
-      unfold Nat.lo at e
-      have hq := Nat.div_mul_le_self (x.toNat * y.toNat % 2 ^ 256) x.toNat
-      rw [e] at hq
-      have hm := Nat.mod_le (x.toNat * y.toNat) (2 ^ 256)
-      have hl := Nat.mod_lt (x.toNat * y.toNat) (Nat.two_pow_pos 256)
-      have : x.toNat * y.toNat % 2 ^ 256 = x.toNat * y.toNat := by
-        apply Nat.le_antisymm hm
-        rw [Nat.mul_comm] at hq; exact hq
-      omega
-  · rw [h, show (0 : B256).toNat = 0 from rfl, Nat.zero_mul]; exact Nat.two_pow_pos _
-
 /-! ## The model's step -/
 
 /-- **The model's `remove_liquidity`** when every check passes. -/
@@ -76,23 +57,6 @@ theorem removeLiquidity_eq {s : State} {e : Env} {amt T : Nat} {m : V3}
 
 theorem word_toNat (x : B256) : word x.toNat = x.toBytes := by
   unfold word; rw [toB256_toNat]
-
-/-- An unwrapped checked quotient's number. -/
-theorem rlOut_toNat {B A T : B256} (hm : B.toNat * A.toNat < 2 ^ 256) (hT : T ≠ 0) :
-    (B * A / T).toNat = B.toNat * A.toNat / T.toNat := by
-  rw [B256.toNat_div hT, B256.toNat_mul]
-  unfold Nat.lo
-  rw [Nat.mod_eq_of_lt hm]
-
-theorem toNat_ne_zero {T : B256} (hT : T ≠ 0) : T.toNat ≠ 0 := fun h =>
-  hT (B256.toNat_inj _ _ (by rw [h]; rfl))
-
-theorem toNat_le_of_not_lt {x y : B256} (h : ¬ x < y) : y.toNat ≤ x.toNat := by
-  rw [B256.lt_iff_toNat_lt_toNat] at h; omega
-
-/-- `XAt` over equal states. -/
-theorem XAt.of_eq {sevm : Sevm} {post : Devm} {pc : Nat} {d d' : Devm} {L : List Exec.Frame}
-    (e : d = d') (h : XAt sevm post pc d L) : XAt sevm post pc d' L := e ▸ h
 
 /-- The environment a `remove_liquidity` frame observed: the supply word `T`, every coin's
 `transfer` and the `burnFrom` accepted, no balance read, no pull, no mint. -/
