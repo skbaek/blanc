@@ -102,9 +102,34 @@ theorem add_l255_toNat_le {x w : B256} (hx : x.toNat ≤ 2 ^ 255 - 1)
     all_goals ((try unfold gCallStipend); omega)
   ⟩
 
+/-- The packed-balance key of `a` as the walks compute it (`mapping(address => uint256)` at slot 9),
+in its two operand orders. -/
+abbrev ky (a : B256) : B256 := mapSlot (m20 &&& a) (Bytes.toB256 [9])
+abbrev ky' (a : B256) : B256 := mapSlot (a &&& m20) (Bytes.toB256 [9])
+
+/-- The ERC-20 `Transfer` event topic. -/
+abbrev transferTopic : B256 := Bytes.toB256 [221, 242, 82, 173, 27, 226, 200, 155, 105, 194, 176, 104,
+  252, 55, 141, 170, 149, 43, 167, 241, 99, 196, 161, 22, 40, 245, 90, 77, 245, 35, 179, 239]
+
+/-- The base after `_transfer(z, y, x)` debits `z` (its reads and the debit store). -/
+def e93Debited (sevm : Sevm) (b : Devm) (x z : B256) : Devm :=
+  afterSstore sevm (afterSload sevm (afterSload sevm (afterSload sevm b (ky z)) (ky z)) (ky z)) (ky' z)
+    ((l255 &&& (afterSload sevm b (ky z)).getStorVal sevm.currentTarget (ky z)) - x)
+
+/-- The base `_transfer(z, y, x)` returns with: the credit store and the `Transfer` log. -/
+def e93Post (sevm : Sevm) (b : Devm) (x y z : B256) : Devm :=
+  (afterSstore sevm (afterSload sevm (afterSload sevm (e93Debited sevm b x z) (ky y)) (ky y)) (ky' y)
+    (x + (l255 &&& (e93Debited sevm b x z).getStorVal sevm.currentTarget (ky y)))).addLog
+    { address := sevm.currentTarget, topics := [transferTopic, m20 &&& z, m20 &&& y], data := x.toBytes }
+
+/-- The memory `_transfer` returns with. -/
+abbrev e93Mem (M : Mem) (x y z : B256) : Mem :=
+  (sc9 (sc9 (sc9 (sc9 (sc9 (sc9 (sc9 M (m20 &&& z)) (m20 &&& z)) (m20 &&& z)) (z &&& m20)) (m20 &&& y))
+    (m20 &&& y)) (y &&& m20)).write 128 x.toBytes
+
 @[irreducible] noncomputable def e93W (sevm : Sevm) (b : Devm) (x y z ret : B256) (S : List B256) (M : Mem)
     :
-    {p : Nat × Devm × List B256 × Mem // CoveredFork sevm.benvStat.fork → sevm.isStatic = false →
+    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false →
       FpM (Bytes.toB256 [128]) 96 M → S.length < 980 → z.toAdr.toB256 ≠ 0 → y.toAdr.toB256 ≠ 0 →
       B256.eqCheck (Bytes.toB256 [1]) (b.getStorVal sevm.currentTarget
         (mapSlot z.toAdr.toB256 (Bytes.toB256 [9])) >>> (Bytes.toB256 [255]).toNat) = 0 →
@@ -121,11 +146,10 @@ theorem add_l255_toNat_le {x w : B256} (hx : x.toNat ≤ 2 ^ 255 - 1)
         ((l255 &&& b.getStorVal sevm.currentTarget (mapSlot z.toAdr.toB256 (Bytes.toB256 [9]))) - x)).get
           (mapSlot y.toAdr.toB256 (Bytes.toB256 [9])) >>> (Bytes.toB256 [255]).toNat) = 0 →
       ∀ X, 443 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (x :: y :: z :: ret :: S) M (X + p.1)) t_3f98_c93
-        (.returned (St p.2.1 p.2.2.1 p.2.2.2 X))} :=
-  ⟨(_, _, _, _), fun fork static hM room hz hy hfz hle hcr hfy X hX => by
+      SFunc.RunExact cert.prog sevm (St b (x :: y :: z :: ret :: S) M (X + c)) t_3f98_c93
+        (.returned (St (e93Post sevm b x y z) S (e93Mem M x y z) X))} :=
+  ⟨_, fun fork static hM room hz hy hfz hle hcr hfy X hX => by
     have hx255 : x.toNat ≤ 2 ^ 255 - 1 := Nat.le_trans (toNat_le_of_gtCheck_eq_zero hle) (l255_and_le _)
-    dsimp only
     xrun
     xcallM e96W 2 [_] fork (by xfp) (by xroom)
     xrun
@@ -142,6 +166,110 @@ theorem add_l255_toNat_le {x w : B256} (hx : x.toNat ≤ 2 ^ 255 - 1)
     xcallMT e99W 3 [_] fork static (by xfp) (by xroom) (add_l255_toNat_le hx255 (by xnorm; with_reducible assumption))
       (by xnorm; with_reducible assumption)
     xrun
+    all_goals ((try unfold gCallStipend); omega)
+  ⟩
+
+/-- The caller's balance key, the destination's, and the debited storage the credit reads. -/
+abbrev kC (sevm : Sevm) : B256 := mapSlot sevm.caller.toB256 (Bytes.toB256 [9])
+abbrev kT (y : B256) : B256 := mapSlot y.toAdr.toB256 (Bytes.toB256 [9])
+
+/-- The base after `transfer`'s modifiers read `paused` and both blacklist flags. -/
+abbrev e37Pre (sevm : Sevm) (b : Devm) (y : B256) : Devm :=
+  afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [1])) (ky sevm.caller.toB256)) (ky y)
+
+@[irreducible] noncomputable def e37W (sevm : Sevm) (b : Devm) (x y ret : B256) (S : List B256)
+    (M : Mem) :
+    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false →
+      FpM (Bytes.toB256 [128]) 96 M → S.length < 970 →
+      (Bytes.toB256 [255] &&& b.getStorVal sevm.currentTarget (Bytes.toB256 [1]) /
+        Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) = 0 →
+      B256.eqCheck (Bytes.toB256 [1]) (b.getStorVal sevm.currentTarget (kC sevm) >>>
+        (Bytes.toB256 [255]).toNat) = 0 →
+      B256.eqCheck (Bytes.toB256 [1]) (b.getStorVal sevm.currentTarget (kT y) >>>
+        (Bytes.toB256 [255]).toNat) = 0 →
+      sevm.caller.toB256 ≠ 0 → y.toAdr.toB256 ≠ 0 →
+      B256.gtCheck x (l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) = 0 →
+      x.toNat + (l255 &&& ((Devm.getStor b sevm.currentTarget).set (kC sevm)
+        ((l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) - x)).get (kT y)).toNat ≤ 2 ^ 255 - 1 →
+      B256.eqCheck (Bytes.toB256 [1]) (((Devm.getStor b sevm.currentTarget).set (kC sevm)
+        ((l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) - x)).get (kT y) >>>
+          (Bytes.toB256 [255]).toNat) = 0 →
+      ∀ X, 415 ≤ X →
+      SFunc.RunExact cert.prog sevm (St b (x :: y :: ret :: S) M (X + c)) t_2fa6_c37
+        (.returned (St (e93Post sevm (e37Pre sevm b y) x y sevm.caller.toB256) (Bytes.toB256 [1] :: S)
+          (e93Mem (sc9 (sc9 M (m20 &&& sevm.caller.toB256)) (m20 &&& y)) x y sevm.caller.toB256) X))} :=
+  ⟨_, fun fork static hM room hp hfc hft hz hy hle hcr hfy X hX => by
+    xrun
+    xcallM e83W 2 [_] fork (by xfp) (by xroom)
+    xrun
+    xcallM e83W 2 [_] fork (by xfp) (by xroom)
+    xrun
+    xcallMT e93W 4 [] fork static (by xfp) (by xroom) (by xnorm; with_reducible assumption)
+      (by xnorm; with_reducible assumption) (by xnorm; with_reducible assumption)
+      (by xnorm; with_reducible assumption) (by xnorm; with_reducible assumption)
+      (by xnorm; with_reducible assumption)
+    xrun
+    all_goals ((try unfold gCallStipend); omega)
+  ⟩
+
+/-- The `transfer` arguments as the ABI wrapper decodes them. -/
+abbrev xTo (sevm : Sevm) : B256 := Sevm.dataWord sevm (Bytes.toB256 [4]) &&& m20
+abbrev xVal (sevm : Sevm) : B256 := Sevm.dataWord sevm (Bytes.toB256 [32] + Bytes.toB256 [4])
+
+/-- The `transfer` frame's branch facts in the forms its walk meets them. -/
+structure XferFacts (sevm : Sevm) (b : Devm) : Prop where
+  value : sevm.value = 0
+  short : (Nat.toB256 sevm.data.length <? Bytes.toB256 [4]) = 0
+  args : ((Nat.toB256 sevm.data.length - Bytes.toB256 [4]) <? Bytes.toB256 [64]) = 0
+  sel : Sevm.dataWord sevm (Bytes.toB256 [0]) >>> (Bytes.toB256 [224]).toNat = 0xa9059cbb
+  paused : (Bytes.toB256 [255] &&& b.getStorVal sevm.currentTarget (Bytes.toB256 [1]) /
+    Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) = 0
+  fc : B256.eqCheck (Bytes.toB256 [1]) (b.getStorVal sevm.currentTarget (kC sevm) >>>
+    (Bytes.toB256 [255]).toNat) = 0
+  ft : B256.eqCheck (Bytes.toB256 [1]) (b.getStorVal sevm.currentTarget (kT (xTo sevm)) >>>
+    (Bytes.toB256 [255]).toNat) = 0
+  hz : sevm.caller.toB256 ≠ 0
+  hy : (xTo sevm).toAdr.toB256 ≠ 0
+  hle : B256.gtCheck (xVal sevm) (l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) = 0
+  hcr : (xVal sevm).toNat + (l255 &&& ((Devm.getStor b sevm.currentTarget).set (kC sevm)
+    ((l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) - xVal sevm)).get (kT (xTo sevm))).toNat ≤
+      2 ^ 255 - 1
+  hfy : B256.eqCheck (Bytes.toB256 [1]) (((Devm.getStor b sevm.currentTarget).set (kC sevm)
+    ((l255 &&& b.getStorVal sevm.currentTarget (kC sevm)) - xVal sevm)).get (kT (xTo sevm)) >>>
+      (Bytes.toB256 [255]).toNat) = 0
+
+/-- The implementation frame's memory at `transfer`'s `RETURN`. -/
+abbrev implXferMem (sevm : Sevm) : Mem :=
+  (e93Mem (sc9 (sc9 (Mem.empty.write 64 (Bytes.toB256 [128]).toBytes) (m20 &&& sevm.caller.toB256))
+    (m20 &&& xTo sevm)) (xVal sevm) (xTo sevm) sevm.caller.toB256).write 128
+    (B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0).toBytes
+
+/-- The implementation frame's halting state after `transfer`, with `G` gas left. -/
+def implXferPost (sevm : Sevm) (b : Devm) (G : Nat) : Devm :=
+  ((St (e93Post sevm (e37Pre sevm b (xTo sevm)) (xVal sevm) (xTo sevm) sevm.caller.toB256)
+    [Sevm.dataWord sevm (Bytes.toB256 [0]) >>> (Bytes.toB256 [224]).toNat] (implXferMem sevm) G).memRead
+      (Bytes.toB256 [128]).toNat (Bytes.toB256 [32] + (Bytes.toB256 [128] - Bytes.toB256 [128])).toNat).2.withOutput
+    (B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0).toBytes
+
+/-- **The implementation frame of `transfer(to, value)`, forward**: from a fresh frame, the whole run
+to `RETURN`, its charge `c` synthesized by the walk. -/
+@[irreducible] noncomputable def implXferW (sevm : Sevm) (b : Devm) :
+    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → XferFacts sevm b → ∀ G, 415 ≤ G →
+      SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + c)) t_0000_c0
+        (.halted (implXferPost sevm b G))} :=
+  ⟨_, fun fork static facts G hG => by
+    obtain ⟨value, short, args, sel, hp, hfc, hft, hz, hy, hle, hcr, hfy⟩ := facts
+    xrun
+    xcallMT e37W 3 [] fork static (by xfp) (by xroom) hp hfc hft hz hy hle hcr hfy
+    xrun
+    xunfold
+    refine rk0 ?_
+    apply rx_returnP
+    · with_reducible rfl
+    · xfp
+    · xfp
+    · decide
+    · decide
     all_goals ((try unfold gCallStipend); omega)
   ⟩
 

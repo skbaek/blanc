@@ -293,7 +293,7 @@ theorem getStorVal_afterSstore_self (sevm : Sevm) (d : Devm) (key value k : B256
   rw [afterSstore_getStor_self]
 
 /-- The storage-read normal form the walks' facts are stated in. -/
-macro "xnorm" : tactic => `(tactic| simp only [Blanc.Lift.getStorVal_afterSload, Blanc.ff20_and_word,
+macro "xnorm" : tactic => `(tactic| simp (config := { failIfUnchanged := false }) only [Blanc.Lift.getStorVal_afterSload, Blanc.ff20_and_word,
   Blanc.Lift.word_ff20, Jaune.toAdr_toB256, getStorVal_afterSstore_self, Blanc.afterSload_getStor])
 
 /-- A branch flag decided: by evaluation, a hypothesis, or a rewrite with the hypotheses. -/
