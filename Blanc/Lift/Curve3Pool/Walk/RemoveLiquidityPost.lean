@@ -45,12 +45,13 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hT : WordAt img 0x140 T)
     (hamt : ∀ j, j < 6 → WordAt img (0x1e0 + 32 * j) (a j))
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr) (hTK : CallKeeps sevm tw)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hTK : CallKeeps sevm tw ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2f7b (St b [3, 0x2a0] M G) L) :
     ¬ T < rlAmt sevm ∧ ∃ c d, L = [c] ∧
       ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++ (rlAmt sevm).toBytes) 0
         sevm.isStatic c ∧ 32 ≤ c.post.output.length ∧
-      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧
+      (∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x) ∧
       (∀ x, (post.getStor sevm.currentTarget).get x =
         ((d.getStor sevm.currentTarget).set lockSlot 0).get x) ∧
       post.logs = d.logs ++ [⟨sevm.currentTarget,
@@ -86,10 +87,6 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L1, h, hrun, hrd, hk⟩ := h
-  have hdk : d.getStor sevm.currentTarget = b.getStor sevm.currentTarget := by
-    rw [(hTK _ _ _ _ _ _ _ _ _ rfl hrun).1]
-    show (afterSload sevm _ _).getStor _ = _
-    rw [afterSload_getStor]
   rw [burn_input] at hk
   xs 0x2fa7 (.push [0x2f, 0xac] (by decide)) ri_push
   xji 0x2fa8 0x2fac hw
@@ -104,6 +101,13 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
       (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
   clear hc
+  have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x := by
+    intro x
+    rcases hTK with hTK | hTK
+    · rw [(hTK _ _ _ _ _ _ _ _ _ rfl hrun).1]
+      show ((afterSload sevm _ _).getStor _).get x = _
+      rw [afterSload_getStor]
+    · rw [hc'.storPost _ hpc x, hTK.head.1 x, hc'.storPre _ hpc]
   xjd 0x2fad
   xs 0x2faf (.push [0x1f] (by decide)) ri_push
   xs 0x2fb0 (.reg .returndatasize) ri_returndatasize

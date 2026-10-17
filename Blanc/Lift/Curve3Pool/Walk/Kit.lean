@@ -148,6 +148,30 @@ theorem adminFeeSlot_lit : Bytes.toB256 [0x03] = adminFeeSlot := by decide
 theorem isKilledSlot_lit : Bytes.toB256 [0x0f] = isKilledSlot := by decide
 theorem lock_ne_token : lockSlot ≠ tokenSlot := by decide
 
+/-- **Every remaining child keeps the pool**: each frame in `L` leaves the calling pool's storage
+as it found it, slot by slot, and the code at `4`. The per-child form of the keep premises
+(`PoolCallsKeep` and the children-keep-code-at-`4` premise, read on the remaining children). -/
+def RlKeep (sevm : Sevm) (L : List Exec.Frame) : Prop :=
+  ∀ c ∈ L, (∀ x, (c.post.getStor sevm.currentTarget).get x =
+    (c.pre.getStor sevm.currentTarget).get x) ∧ c.post.getCode 4 = c.pre.getCode 4
+
+theorem RlKeep.tail {sevm : Sevm} {c : Exec.Frame} {L : List Exec.Frame}
+    (h : RlKeep sevm (c :: L)) : RlKeep sevm L :=
+  fun c' hc' => h c' (List.mem_cons_of_mem _ hc')
+
+theorem RlKeep.head {sevm : Sevm} {c : Exec.Frame} {L : List Exec.Frame}
+    (h : RlKeep sevm (c :: L)) :
+    (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
+      c.post.getCode 4 = c.pre.getCode 4 :=
+  h c List.mem_cons_self
+
+/-- The per-child premises of a frame give `RlKeep` on its children. -/
+theorem RlKeep.of_pool {sevm : Sevm} {L : List Exec.Frame}
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4) : RlKeep sevm L :=
+  fun c hc => ⟨hkeep c hc, hidk c hc⟩
+
 
 
 end Blanc.Lift.Curve3Pool

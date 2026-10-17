@@ -780,6 +780,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPost",
                     "Lift.Curve3Pool.Walk.RemoveLiquidity",
                     "Lift.Curve3Pool.Walk.RemoveLiquiditySafe",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityRawK",
                     "Lift.Curve3Pool.Walk.AdminBalancesX",
                     "Lift.Curve3Pool.Walk.DonateX",
                     "Lift.Curve3Pool.Walk.WithdrawAdminFeesX",
