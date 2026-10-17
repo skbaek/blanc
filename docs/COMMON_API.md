@@ -648,6 +648,23 @@ child of a frame at `p` or `ca` satisfies the target property (`CallerChildren`)
 use `ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`. The first
 consumer is `Blanc/Composition/Weth9SettledCallers.lean`.
 
+For a committed-replay history that takes one step per *outermost* settled,
+non-static frame at an address (a re-entered frame consumed inside its
+ancestor), use [`Blanc/Lift/OutermostFrames.lean`](../Blanc/Lift/OutermostFrames.lean):
+`Exec.Frame.obsAt` / `Exec.Frame.subtreeAt` (the Pair's `pairFrameObs` /
+`pairSubtreeFrames` shape), `ConfiguredHistoryTrace.committedFramesAt` (all
+settled non-static frames at `ca`, in trace order) and
+`ConfiguredHistoryTrace.outermostFramesAt` (the outermost ones, via
+`Exec.outermostDescAt` / `Exec.Frame.outermostAt`). Facts:
+`mem_outermostFramesAt` (settled, at `ca`, non-static),
+`outermostFramesAt_sublist` (trace order), `outermostFramesAt_partition`
+(non-nesting: the outermost frames' subtrees flatten to exactly
+`committedFramesAt`), `eq_outermostFramesAt_of_partition` (any non-static `ca`
+frame list with that partition, e.g. a ladder's step frames, *is* the outermost
+list), and `outermostFramesAt_step` / `committedFramesAt_step`. The generic
+list facts behind them are `List.sublist_flatMap_of_headed` and
+`List.eq_of_flatMap_headed` (in namespace `Blanc`).
+
 To show that every direct child of a certified frame comes from one of a few
 call sites, use [`Blanc/Lift/CallSiteChildren.lean`](../Blanc/Lift/CallSiteChildren.lean)
 with the vocabulary of [`Blanc/Lift/CallSite.lean`](../Blanc/Lift/CallSite.lean).
@@ -2945,6 +2962,16 @@ consumer needs canonical interpreter ingress as one conjunct:
   the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
   block strictly after its parent from Jaune's header validation
   (`ConfiguredBlockTrace.parent_timestamp_lt`).
+  For the *settled* frames of a block or history, import
+  [`Blanc/ExecutionHistoryFrameTime.lean`](../Blanc/ExecutionHistoryFrameTime.lean):
+  `ConfiguredBlockTrace.settledFrames_time` (every settled frame reads the
+  block's header timestamp), `ConfiguredHistoryTrace.blockFrames` (settled
+  frames in trace order, each paired with its retaining block;
+  `blockFrames_map_snd`), `blockFrames_time` and
+  `ConfiguredHistoryTrace.settledFrames_time` (each settled frame of a history
+  reads its own block's header timestamp), and the control
+  `ConfiguredBlockTrace.settledFrame_time_ne_parent` (under the wire bound, no
+  settled frame reads the parent's timestamp).
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`

@@ -39,6 +39,7 @@ import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionFrameTime
+import Blanc.ExecutionHistoryFrameTime
 import Blanc.ExecutionMessageAdmission
 import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionBodyAdmission
@@ -941,6 +942,7 @@ import Blanc.Lift.CallChildren
 import Blanc.Lift.CallSite
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.CallerProvenance
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairCallShape
 import Blanc.Lift.UniswapV2Pair.PairCallSiteShape
 import Blanc.Lift.UniswapV2Pair.PairCallSites
