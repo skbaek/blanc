@@ -678,8 +678,9 @@ CONTRACTS = {
                    "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
                    "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
                    "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness"],
-    # The Curve 3pool (curve-3pool-stableswap-v1): its functional model, U5 and the U3 refutation.
-    "curve-3pool": ["Lift.Curve3Pool.Model", "Lift.Curve3Pool.U5", "Lift.Curve3Pool.U3Refute"],
+    # The Curve 3pool (curve-3pool-stableswap-v1): its functional model, U5, the U3 refutation and bounds.
+    "curve-3pool": ["Lift.Curve3Pool.Model", "Lift.Curve3Pool.U5", "Lift.Curve3Pool.U3Refute",
+                    "Lift.Curve3Pool.U3Bounds"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 

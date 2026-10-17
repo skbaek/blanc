@@ -812,10 +812,11 @@ import Blanc.Lift.StableSwapNewton.Root
 import Blanc.Lift.StableSwapNewton.D
 import Blanc.Lift.StableSwapNewton.Y
 
--- The Curve 3pool: the functional model, U5 and the U3 refutation (curve-3pool-stableswap-v1).
+-- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.Curve3Pool.U5
 import Blanc.Lift.Curve3Pool.U3Refute
+import Blanc.Lift.Curve3Pool.U3Bounds
 
 -- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical

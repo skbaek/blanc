@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Model
+import Blanc.Lift.StableSwapNewton.D
 
 /-!
 # U5 on the model: the amplification law
@@ -20,8 +21,9 @@ Goal `curve-3pool-stableswap-v1`, row U5, at the model level.
   constructor, one deposit, then `ramp_A(200, t0 + 2 days)` from `A = 2000` at `t0 + 1 day`;
   with no further operation `get_D(_xp(), _A())` falls from `200044801219456106169` to
   `192793226260180884069` while the supply stays put, so `D/T` falls.
-* `DMonoInA`: the direction-of-`D` law, stated. Its proof needs the Newton kit's root
-  monotonicity in `ann` (`floorRoot_mono_ann`, on the Newton worker's branch) and is the next unit.
+* `dMonoInA`: the direction of `D`'s change when only `A` moves (`DMonoInA`): the exact root
+  `⌊D*⌋` is non-decreasing in `A`, and the bytecode's `get_D` follows it only up to its loop
+  error `E` at the smaller `A`.
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -196,16 +198,22 @@ theorem u5_ramp_control_falls :
       200044801219456106169 * 200044801219456106169 := by
   decide +kernel
 
-/-! ## The direction of `D`'s change with `A` (stated; the next unit) -/
+/-! ## The direction of `D`'s change with `A` -/
 
-/-- **The direction law** to prove next: the exact root `⌊D*⌋` is non-decreasing in `A`
+/-- **The direction law**: the exact root `⌊D*⌋` is non-decreasing in `A`
 (`∂f/∂ann = D − S ≤ 0` below the root), and the bytecode's `get_D` follows it up to its loop
-error `E = get_D − ⌊D*⌋` at the smaller `A`. Its proof needs `floorRoot_mono_ann` from the
-Newton kit (`Blanc.Lift.StableSwapNewton`, Newton worker); it is stated here so that the
-ramp control above reads against it: `A` falls 2000 → 200 and `D` falls. -/
+error `E = get_D − ⌊D*⌋` at the smaller `A`. The ramp control above reads against it: `A`
+falls 2000 → 200 and `D` falls. -/
 def DMonoInA : Prop :=
   ∀ (x : Fin 3 → Nat) (amp amp' : Nat), (∀ k, 0 < x k) → 1 ≤ amp → amp ≤ amp' →
     floorRoot x (amp * 3) ≤ floorRoot x (amp' * 3) ∧
       getD x amp 1 ≤ getD x amp' 1 + (getD x amp 1 - floorRoot x (amp * 3))
+
+/-- `DMonoInA` holds: from the kit's `floorRoot_mono_ann` and `floorRoot_le_getD`. -/
+theorem dMonoInA : DMonoInA := by
+  intro x amp amp' hx hamp hle
+  have h1 := floorRoot_mono_ann x (Nat.mul_le_mul_right 3 hle)
+  have h2 := floorRoot_le_getD hx (Nat.le_trans hamp hle) 1
+  exact ⟨h1, by omega⟩
 
 end Blanc.Lift.Curve3Pool
