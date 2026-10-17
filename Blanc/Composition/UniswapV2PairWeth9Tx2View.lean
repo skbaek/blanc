@@ -162,6 +162,7 @@ structure DView (b d : Devm) (K : List (Adr × B256)) (A : List Adr) (S : Jaune.
   refund : d.refundCounter = rc
   logs : d.logs = L
   deleted : ∀ a, a ∉ d.accountsToDelete
+  error : d.error = none
 
 section View
 
@@ -177,13 +178,15 @@ theorem DView.entry {sevm : Sevm} (h : Tx2Frame sevm b) : DView b b [] [] b.stat
   refund := h.refund
   logs := h.logs
   deleted := h.deleted
+  error := h.error
 
 /-- Machines with the same viewed columns share the view. -/
 theorem DView.congr {d' : Devm} (h : DView b d K A S rc L)
     (hk : d'.accessedStorageKeys = d.accessedStorageKeys)
     (ha : d'.accessedAddresses = d.accessedAddresses) (hc : d'.createdAccounts = d.createdAccounts)
     (hs : d'.state = d.state) (hr : d'.refundCounter = d.refundCounter) (hl : d'.logs = d.logs)
-    (hd : d'.accountsToDelete = d.accountsToDelete) : DView b d' K A S rc L where
+    (hd : d'.accountsToDelete = d.accountsToDelete) (he : d'.error = d.error) :
+    DView b d' K A S rc L where
   keys k := hk ▸ h.keys k
   addrs a := ha ▸ h.addrs a
   created := hc.trans h.created
@@ -191,9 +194,10 @@ theorem DView.congr {d' : Devm} (h : DView b d K A S rc L)
   refund := hr.trans h.refund
   logs := hl.trans h.logs
   deleted a := hd ▸ h.deleted a
+  error := he.trans h.error
 
 theorem DView.setMach (h : DView b d K A S rc L) (m : Mach) : DView b (d.setMach m) K A S rc L :=
-  h.congr rfl rfl rfl rfl rfl rfl rfl
+  h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.St (h : DView b d K A S rc L) (R : List B256) (M : Mem) (g : Nat) :
     DView b (Lift.St d R M g) K A S rc L := h.setMach _
@@ -205,16 +209,16 @@ theorem DView.memRead (h : DView b d K A S rc L) (i n : Nat) :
     DView b (d.memRead i n).2 K A S rc L := h.setMach _
 
 theorem DView.memWrite (h : DView b d K A S rc L) (i : Nat) (v : Bytes) :
-    DView b (d.memWrite i v) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl
+    DView b (d.memWrite i v) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.memExtends (h : DView b d K A S rc L) (ps : List (Nat × Nat)) :
-    DView b (d.memExtends ps) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl
+    DView b (d.memExtends ps) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.withOutput (h : DView b d K A S rc L) (o : Bytes) :
-    DView b (d.withOutput o) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl
+    DView b (d.withOutput o) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.withReturnData (h : DView b d K A S rc L) (o : Bytes) :
-    DView b (d.withReturnData o) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl
+    DView b (d.withReturnData o) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.addLog (h : DView b d K A S rc L) (l : Log) :
     DView b (d.addLog l) K A S rc (L ++ [l]) where
@@ -225,6 +229,7 @@ theorem DView.addLog (h : DView b d K A S rc L) (l : Log) :
   refund := h.refund
   logs := by rw [← h.logs]; rfl
   deleted := h.deleted
+  error := h.error
 
 theorem DView.addAccessedAddress (h : DView b d K A S rc L) (x : Adr) :
     DView b (Jaune.addAccessedAddress d x) K (x :: A) S rc L where
@@ -246,13 +251,14 @@ theorem DView.addAccessedAddress (h : DView b d K A S rc L) (x : Adr) :
   refund := h.refund
   logs := h.logs
   deleted := h.deleted
+  error := h.error
 
 theorem DView.temporalAccountAccessBase (h : DView b d K A S rc L) (x : Adr) :
     DView b (Lift.temporalAccountAccessBase d x) K (x :: A) S rc L := by
   unfold Lift.temporalAccountAccessBase
   split
   · rename_i hx
-    refine ⟨h.keys, fun a => ?_, h.created, h.state, h.refund, h.logs, h.deleted⟩
+    refine ⟨h.keys, fun a => ?_, h.created, h.state, h.refund, h.logs, h.deleted, h.error⟩
     rw [h.addrs a, List.mem_cons]
     constructor
     · rintro (e | e)
@@ -271,7 +277,7 @@ theorem DView.afterSload {sevm : Sevm} {t : Adr} (ht : sevm.currentTarget = t)
   unfold Blanc.afterSload
   split
   · rename_i hk
-    refine ⟨fun k' => ?_, h.addrs, h.created, h.state, h.refund, h.logs, h.deleted⟩
+    refine ⟨fun k' => ?_, h.addrs, h.created, h.state, h.refund, h.logs, h.deleted, h.error⟩
     rw [h.keys k', List.mem_cons]
     constructor
     · exact Or.inr
@@ -280,7 +286,7 @@ theorem DView.afterSload {sevm : Sevm} {t : Adr} (ht : sevm.currentTarget = t)
         rw [← ht]
         exact (h.keys _).mp hk
       · exact e
-  · refine ⟨fun k' => ?_, h.addrs, h.created, h.state, h.refund, h.logs, h.deleted⟩
+  · refine ⟨fun k' => ?_, h.addrs, h.created, h.state, h.refund, h.logs, h.deleted, h.error⟩
     change k' ∈ d.accessedStorageKeys.insert (sevm.currentTarget, k) ↔ _
     rw [Std.HashSet.mem_insert, h.keys k', List.mem_cons, beq_iff_eq, ht]
     constructor
@@ -300,7 +306,8 @@ theorem DView.afterSstore {sevm : Sevm} {t : Adr} (ht : sevm.currentTarget = t)
     intro k'
     rw [afterSstore_accessedStorageKeys, mem_sloadAccessedStorageKeys_iff, h.keys k', ht,
       List.mem_cons]
-  refine ⟨keys, fun a => ?_, ?_, ?_, ?_, (afterSstore_logs _ _ _ _).trans h.logs, ?_⟩
+  refine ⟨keys, fun a => ?_, ?_, ?_, ?_, (afterSstore_logs _ _ _ _).trans h.logs, ?_,
+    (afterSstore_error _ _ _ _).trans h.error⟩
   · rw [afterSstore_accessedAddresses]
     exact h.addrs a
   · rw [afterSstore_createdAccounts]
@@ -361,6 +368,7 @@ theorem DView.initDevm_callMsg (h : DView b d K A S rc L) {sevm : Sevm}
     change (match sevm.benvStat.rules.stateGas with | none => [] | some _ => _) = []
     rw [hsg]
   deleted a := Std.HashSet.not_mem_emptyWithCapacity
+  error := rfl
 
 /-- A parent resumed after its child halted cleanly: the union of keys and addresses, the child's
 world, the summed refunds, the appended logs. -/
@@ -402,6 +410,7 @@ theorem DView.callChildPost {P c : Devm} {K' : List (Adr × B256)} {A' : List Ad
     rcases Std.HashSet.mem_union_iff.mp m with e | e
     · exact hp.deleted a (Std.HashSet.contains_iff_mem.mp e)
     · exact hc.deleted a (Std.HashSet.contains_iff_mem.mp e)
+  error := hp.error
 
 end View
 
