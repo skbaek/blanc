@@ -198,6 +198,8 @@ SHARED += ["Lift.FuelLoopWalk"]
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
            "Lift.VyperRawCall"]
+# Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
+SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
@@ -706,6 +708,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Spec",
                     "Lift.Curve3Pool.Refine",
                     "Lift.Curve3Pool.Cert",
+                    "Lift.Curve3Pool.KitCheck",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
                     "Lift.Curve3Pool.CheckPart0",

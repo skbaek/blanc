@@ -4733,6 +4733,21 @@ contract-neutral.
   `RunCut_fuelLoop_peel` / `RunExactCut_fuelLoop_peel`; the inversion split
   `SFunc.RunCutP.split_at`; all in
   [`Blanc/Lift/FuelLoopWalk.lean`](../Blanc/Lift/FuelLoopWalk.lean).
+- Internal calls (`callNext`): `ric_callNext` removes `ric_call`'s halting arm under the
+  kernel scan `calleeNeverHalts fs k fuel` (`decide`: the callee's entry closure
+  `entryReach` is a `NoHaltSet`); the `PC` node `ric_pcAt`/`rxc_pcAt`; the Vyper call idiom
+  `PUSH1 6; PC; ADD; PUSH2 t; JUMP` as `pcCallTree p t0 t1 k f`, inverted by `ric_pcCall` (a
+  callee run from return address `p + 6` and the continuation) and built by `rxc_pcCall`
+  (cost 19); all in [`Blanc/Lift/InvWalkCallNext.lean`](../Blanc/Lift/InvWalkCallNext.lean).
+- Unrolled Vyper frame save/restore chains (a counter word walks a frame `[lo, lo + 32 n)`,
+  pushing or popping one word per copy): templates `frameSaveIter`/`frameRestoreIter`,
+  constants `FrameLoopTpl`, one-`rfl` chain facts `FrameSaveChain`/`FrameRestoreChain`;
+  safety `ric_frameSave_chain`/`ric_frameRestore_chain`, liveness
+  `rxc_frameSave_chain`/`rxc_frameRestore_chain` (cost `67 (n-1) + 56`, `70 (n-1) + 59`);
+  memory `saveMem`, `restoreMem` and `restoreMem_frameWords` (the restored frame reads as the
+  saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
+  `memWord`/`Mem.AgreeOutside`; all in
+  [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
 - Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
   cut runs):
   fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,
