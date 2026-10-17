@@ -11,7 +11,7 @@ at the goto `(c, j)` of the first equal constant, or at the first tree that is n
 fallback).  The walk is a function of `σ`, so for a concrete selector the kernel computes the
 wrapper the dispatcher enters.
 
-* `Reach.selWalk`, `SFunc.RunCut.selWalk`: a reach to an external instruction, or a cut run, from a
+* `Reach.selWalk_inl`, `SFunc.RunCut.selWalk_inl`/`_inr`: a reach to an external instruction, or a cut run, from a
   comparison tree with `σ` on top continues from the walk's end, with `σ` still on top and the base
   machine unchanged; at a goto, `σ` is the constant compared (`SFunc.selWalk_inl`);
 * `SFunc.selWalk_mem_pairs`, `SFunc.selWalk_mem_leaves`: wherever the walk ends, it ends at one of
@@ -116,29 +116,6 @@ theorem rr_cmp_eq_either (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
     exact .inl ⟨zero, _, eq ▸ h⟩
   · obtain ⟨_, word, eq⟩ := St.of_pop2 pop
     exact .inr ⟨word ▸ nonzero, g, _, entry, eq ▸ h⟩
-
-theorem Reach.selWalk_inr (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {σ : B256}
-    {f t : SFunc} (hw : f.selWalk σ = .inr t) {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {K : List SFunc} {T : Conf} (run : Reach P fs sevm ⟨St b (σ :: S) M G, f, K⟩ T)
-    (hT : AtExec T) : ∃ G', Reach P fs sevm ⟨St b (σ :: S) M G', t, K⟩ T := by
-  fun_induction SFunc.selWalk σ f generalizing G with
-  | case1 f ih =>
-      obtain ⟨G', r⟩ := rr_dest run hT
-      exact ih hw r
-  | case2 c0 c1 c2 c3 _ _ _ _ f g h ih =>
-      obtain ⟨G', r⟩ := rr_cmp_gt hP run hT
-      rw [ite_eq_left h] at r
-      exact ih hw r
-  | case3 c0 c1 c2 c3 _ _ _ _ f g h ih =>
-      obtain ⟨G', r⟩ := rr_cmp_gt hP run hT
-      rw [ite_eq_right h] at r
-      exact ih hw r
-  | case4 c0 c1 c2 c3 _ _ _ _ f j h ih =>
-      rcases rr_cmp_eq_either hP run hT with ⟨-, G', r⟩ | ⟨ne, -⟩
-      · exact ih hw r
-      · exact absurd h ne
-  | case5 => cases hw
-  | case6 => cases hw; exact ⟨_, run⟩
 
 theorem eq_of_eqCheck_ne {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
   unfold B256.eqCheck at h
@@ -362,5 +339,32 @@ theorem SFunc.RunCut.headWord {fs : List SFunc} {sevm : Sevm} {C : List Nat} {t 
         exact eq_of_eqCheck_ne nz
     · cases hw
   · cases hw
+
+theorem not_lt_of_ltCheck_zero {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
+  unfold B256.ltCheck at h
+  split at h
+  · exact absurd h (by decide)
+  · assumption
+
+/-- **The head fits.**  Calldata of `L` bytes the machine reads as at least four bytes, and then
+as at least `32 h` bytes after the selector, has `4 + 32 h` bytes. -/
+theorem calldata_head_fits {L h : Nat} (h0 : B256.ltCheck L.toB256 4 = 0)
+    (hh : h = 0 ∨ B256.ltCheck (L.toB256 - 4) (Nat.toB256 (32 * h)) = 0)
+    (small : 4 + 32 * h ≤ 2 ^ 256) : 4 + 32 * h ≤ L := by
+  by_cases big : 2 ^ 256 ≤ L
+  · omega
+  have hL : L.toB256.toNat = L := B256.toNat_toB256_of_lt (by omega)
+  have four : (4 : B256).toNat = 4 := rfl
+  have le4 : 4 ≤ L := by
+    have := not_lt_of_ltCheck_zero h0
+    rw [B256.lt_iff_toNat_lt_toNat, hL, four] at this
+    omega
+  rcases hh with rfl | hh
+  · omega
+  have hle : (4 : B256) ≤ L.toB256 := B256.le_of_toNat_le_toNat (by rw [hL, four]; exact le4)
+  have := not_lt_of_ltCheck_zero hh
+  rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_sub_eq_of_le _ _ hle, hL, four,
+    B256.toNat_toB256_of_lt (by omega)] at this
+  omega
 
 end Blanc.Lift
