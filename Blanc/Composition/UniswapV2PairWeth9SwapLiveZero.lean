@@ -97,6 +97,21 @@ def SwapBackCalleeEnvW0.toEnv (env : SwapBackCalleeEnvW0 sevm d M n p w ρ R G)
 
 end W0
 
+/-- The back environment carried to a gas-shifted join world: the WETH9 query reads the join world
+only off non-gas fields (`swapWethRead0_withGasLeft`), as does the staging charge. -/
+theorem SwapBackCalleeEnvW0.transport {sevm : Sevm} {d d' : Devm} {M M' : Mem} {n n' : Nat}
+    {p p' : B256} {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (hd : ∃ y, d' = d.withGasLeft y) (hM : M' = M) (hn : n' = n) (hp : p' = p)
+    (env : SwapBackCalleeEnvW0 sevm d M n p w ρ R G) :
+    ∃ env' : SwapBackCalleeEnvW0 sevm d' M' n' p' w ρ R G,
+      env'.gas = env.gas ∧ env'.d0 = env.d0 ∧ env'.d1 = env.d1 ∧ env'.callGas0 = env.callGas0 ∧
+      env'.post = env.post ∧ env'.memory = env.memory := by
+  obtain ⟨y, rfl⟩ := hd
+  subst hM hn hp
+  exact ⟨{ d0 := env.d0, d1 := env.d1, callGas0 := env.callGas0, callGas1 := env.callGas1,
+            read := by rw [swapWethRead0_withGasLeft]; exact env.read, second := env.second,
+            sentries := env.sentries, unlock := env.unlock }, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
 /-- **C4(b), the swap liveness row with WETH9 as token0** (both outputs allowed; WETH9 pays first).
 As `pair_history_swap_live`, from the joint checkpoint, with the WETH9 `transfer` callee record and the
 WETH9 post-callback `balanceOf` record removed: both are WETH9's own runs, pinned by
@@ -122,13 +137,14 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace KP st₀ finish K' ∧
-      ∀ {d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
+      ∀ {d1 dC : Devm} {cg1 cgC g : Nat}
         (callee : SwapBackCalleeEnvW0 sevm
-          (swapFrontCutWorld sevm pre d0 d1 dC)
-          (swapFrontCutMem sevm d0 d1 dC)
-          (swapFrontCutMem sevm d0 d1 dC).size
-          (swapFrontPtr sevm d0 d1)
+          (swapFrontCutWorld sevm pre (leg0Skel sevm pre finish) d1 dC)
+          (swapFrontCutMem sevm (leg0Skel sevm pre finish) d1 dC)
+          (swapFrontCutMem sevm (leg0Skel sevm pre finish) d1 dC).size
+          (swapFrontPtr sevm (leg0Skel sevm pre finish) d1)
           (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        {d0 : Devm} {cg0 : Nat}
         (_leg : (d0, cg0) = swapWethLeg0 sevm pre finish d1 cg1 cgC callee.gas)
         (_front : SwapFrontEnvW0 sevm pre finish d0 d1 dC cg0 cg1 cgC callee.gas)
         (_frameGas : swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
@@ -165,8 +181,8 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
   have wethCodePre : pre.state.getCode weth = Weth9.code := by
     rw [state]
     exact Blanc.Composition.Weth9Token.code_eq_of_image wethFuture
-  refine ⟨finish, K', replayed, fun {d0 d1 dC cg0 cg1 cgC g} callee leg front frameGas transferRoom
-    readGas context conditions => ?_⟩
+  refine ⟨finish, K', replayed, fun {d1 dC cg1 cgC g} callee {d0 cg0} leg front frameGas
+    transferRoom readGas context conditions => ?_⟩
   have nonstatic : sevm.isStatic = false := context.2
   obtain ⟨unlocked, positive, liquidity0, liquidity1, to0, to1, -⟩ := id conditions
   have depth : sevm.depth ≠ 0 := depth_of_balanceEnv fork callee.second
@@ -193,29 +209,41 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
     (congrArg Prod.snd leg).symm
   have legFst : (swapWethLeg0 sevm pre finish d1 cg1 cgC callee.gas).1 = d0 :=
     (congrArg Prod.fst leg).symm
+  obtain ⟨x, skel⟩ : ∃ x, d0 = (leg0Skel sevm pre finish).withGasLeft x := by
+    rw [← legFst]
+    exact ⟨_, wethTransferCallAt_eq _ _ _ _ _ _ _ _ _ _ _ _ _⟩
+  -- carry the callee from the skeleton's join world to the real one
+  obtain ⟨callee', hgas, hd0, hd1, hcg0, hpost, hmem⟩ := callee.transport
+    (d' := swapFrontCutWorld sevm pre d0 d1 dC) (M' := swapFrontCutMem sevm d0 d1 dC)
+    (n' := (swapFrontCutMem sevm d0 d1 dC).size) (p' := swapFrontPtr sevm d0 d1)
+    (by rw [skel]; exact swapFrontCutWorld_withGasLeft0 sevm pre _ d1 dC x)
+    (by rw [skel, swapFrontCutMem_withGasLeft0]) (by rw [skel, swapFrontCutMem_withGasLeft0])
+    (by rw [skel, swapFrontPtr_withGasLeft0])
+  rw [← hgas] at leg front frameGas transferRoom legSnd legFst
+  rw [← hd0, ← hd1] at conditions
+  rw [← hcg0] at readGas
+  rw [← hgas, ← hpost, ← hmem]
+  clear hgas hd0 hd1 hcg0 hpost hmem
   have transfer0 : swapAmount0Out sevm ≠ 0 → SwapTransferCallForward sevm (swapPrefixWorld sevm pre)
       (swapLocalsStack sevm finish) getterInitMemory getterInitMemory.size 128 (swapAmount0Out sevm)
       (swapRecipientWord sevm) finish.token0.toB256 0x8d0 cg0
       (swapOptGas (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
         (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
-        (swapFrontCallbackGas sevm pre d0 d1 cgC callee.gas)) d0 := by
+        (swapFrontCallbackGas sevm pre d0 d1 cgC callee'.gas)) d0 := by
     intro amount0
-    have fits : (swapWethLeg0 sevm pre finish d1 cg1 cgC callee.gas).2 < 2 ^ 256 := by
+    have fits : (swapWethLeg0 sevm pre finish d1 cg1 cgC callee'.gas).2 < 2 ^ 256 := by
       rw [legSnd]
       simp only [swapFrontTransferGas, swapOptGas, amount0, ↓reduceIte] at frameGas
       omega
-    obtain ⟨x, skel⟩ : ∃ x, d0 = (leg0Skel sevm pre finish).withGasLeft x := by
-      rw [← legFst]
-      exact ⟨_, wethTransferCallAt_eq _ _ _ _ _ _ _ _ _ _ _ _ _⟩
-    have nextEq := leg0Next_withGasLeft sevm pre d1 cg1 cgC callee.gas (leg0Skel sevm pre finish) x
+    have nextEq := leg0Next_withGasLeft sevm pre d1 cg1 cgC callee'.gas (leg0Skel sevm pre finish) x
     rw [← skel] at nextEq
     have room : leg0Used sevm pre finish + gCallStipend ≤
-        except64th (leg0Need sevm pre finish d1 cg1 cgC callee.gas + leg0Used sevm pre finish) := by
+        except64th (leg0Need sevm pre finish d1 cg1 cgC callee'.gas + leg0Used sevm pre finish) := by
       have used : leg0Used sevm pre finish ≤ 53262 := by
         unfold leg0Used
         exact xferUsed_le _ _ _ _ _ _ _ _ _
       have bound := transferRoom amount0
-      change 3200 ≤ leg0Next sevm pre d1 cg1 cgC callee.gas d0 at bound
+      change 3200 ≤ leg0Next sevm pre d1 cg1 cgC callee'.gas d0 at bound
       unfold leg0Need except64th
       simp only [gCallStipend]
       omega
@@ -223,7 +251,7 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
       (by rw [token0]; exact notPre) balance fits room
     rw [legSnd, legFst] at spec
     exact spec
-  have front' : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC callee.gas :=
+  have front' : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC callee'.gas :=
     ⟨transfer0, front.transfer1, front.callback, front.sentry⟩
   -- the memory at the join
   obtain ⟨rep, -⟩ := replayed.at_frame target state
@@ -260,17 +288,17 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
   have readSnd : (swapWethRead0 sevm (swapFrontCutWorld sevm pre d0 d1 dC)
       (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
       (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f]
-      callee.callGas1).2 = callee.callGas0 := by
-    rw [← callee.read]
+      callee'.callGas1).2 = callee'.callGas0 := by
+    rw [← callee'.read]
   have readFst : (swapWethRead0 sevm (swapFrontCutWorld sevm pre d0 d1 dC)
       (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
       (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f]
-      callee.callGas1).1 = callee.d0 := by
-    rw [← callee.read]
+      callee'.callGas1).1 = callee'.d0 := by
+    rw [← callee'.read]
   have first := (swapWethRead0_spec (d := swapFrontCutWorld sevm pre d0 d1 dC)
     (M := swapFrontCutMem sevm d0 d1 dC) (p := swapFrontPtr sevm d0 d1)
     (w := swapCutWords sevm finish) (ρ := 0x257) (R := [0x022c0d9f])
-    (n := (swapFrontCutMem sevm d0 d1 dC).size) (callGas1 := callee.callGas1) fork depth
+    (n := (swapFrontCutMem sevm d0 d1 dC).size) (callGas1 := callee'.callGas1) fork depth
     (by rw [tokenAdr]; exact joinCode) (by rw [tokenAdr]; exact notPre) ptrMem.wf width
     (by simp only [swapCutTail, List.length_cons, List.length_nil]; omega)
     (by rw [readSnd]; exact readGas)
@@ -282,6 +310,6 @@ theorem pair_weth9_history_swap_live_zero {pair weth : Adr} {cfg : ChainConfig}
       omega)).1
   rw [readSnd, readFst] at first
   exact swap_live_of_replayed joint.pairRep pairFresh futureCode replayed target state codeEq fork
-    output representable value size selector guards (callee.toEnv first) front' context conditions
+    output representable value size selector guards (callee'.toEnv first) front' context conditions
 
 end Blanc.Composition.UniswapV2PairWeth9Joint

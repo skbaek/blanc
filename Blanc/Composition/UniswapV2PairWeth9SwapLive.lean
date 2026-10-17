@@ -104,6 +104,21 @@ def SwapBackCalleeEnvW1.toEnv {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : 
   { d0 := env.d0, d1 := env.d1, callGas0 := env.callGas0, callGas1 := env.callGas1,
     first := env.first, second := second, sentries := env.sentries, unlock := env.unlock }
 
+/-- The back environment carried to a gas-shifted join world: its records read the join world only
+off non-gas fields (`swapBalanceEnv_withGasLeft`, `swapRequestCharge_withGasLeft`), and the WETH9
+query is staged over the first query's result. -/
+theorem SwapBackCalleeEnvW1.transport {sevm : Sevm} {d d' : Devm} {M M' : Mem} {n n' : Nat}
+    {p p' : B256} {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (hd : ∃ y, d' = d.withGasLeft y) (hM : M' = M) (hn : n' = n) (hp : p' = p)
+    (env : SwapBackCalleeEnvW1 sevm d M n p w ρ R G) :
+    ∃ env' : SwapBackCalleeEnvW1 sevm d' M' n' p' w ρ R G,
+      env'.gas = env.gas ∧ env'.d0 = env.d0 ∧ env'.d1 = env.d1 ∧ env'.callGas1 = env.callGas1 ∧
+      env'.post = env.post ∧ env'.memory = env.memory := by
+  obtain ⟨y, rfl⟩ := hd
+  subst hM hn hp
+  exact ⟨{ d0 := env.d0, d1 := env.d1, callGas0 := env.callGas0, callGas1 := env.callGas1,
+            read := env.read, first := swapBalanceEnv_withGasLeft y env.first, sentries := env.sentries,
+            unlock := env.unlock }, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 open Blanc.Composition.UniswapV2PairWeth9XLeg (CallChildFresh wethRunKeys pairRunKeys)
 
@@ -135,13 +150,14 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace KP st₀ finish K' ∧
-      ∀ {d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
+      ∀ {d0 dC : Devm} {cg0 cgC g : Nat}
         (callee : SwapBackCalleeEnvW1 sevm
-          (swapFrontCutWorld sevm pre d0 d1 dC)
-          (swapFrontCutMem sevm d0 d1 dC)
-          (swapFrontCutMem sevm d0 d1 dC).size
-          (swapFrontPtr sevm d0 d1)
+          (swapFrontCutWorld sevm pre d0 (leg1Skel sevm pre finish d0) dC)
+          (swapFrontCutMem sevm d0 (leg1Skel sevm pre finish d0) dC)
+          (swapFrontCutMem sevm d0 (leg1Skel sevm pre finish d0) dC).size
+          (swapFrontPtr sevm d0 (leg1Skel sevm pre finish d0))
           (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        {d1 : Devm} {cg1 : Nat}
         (_leg : (d1, cg1) = swapWethLeg1 sevm pre finish d0 cgC callee.gas)
         (_front : SwapFrontEnvW1 sevm pre finish d0 d1 dC cg0 cg1 cgC callee.gas)
         (_frameGas : swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
@@ -180,8 +196,8 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
   have wethCodePre : pre.state.getCode weth = Weth9.code := by
     rw [state]
     exact Blanc.Composition.Weth9Token.code_eq_of_image wethFuture
-  refine ⟨finish, K', replayed, fun {d0 d1 dC cg0 cg1 cgC g} callee leg front frameGas callbackRoom
-    readGas transferGas xWethFresh xPairFresh context conditions => ?_⟩
+  refine ⟨finish, K', replayed, fun {d0 dC cg0 cgC g} callee {d1 cg1} leg front frameGas
+    callbackRoom readGas transferGas xWethFresh xPairFresh context conditions => ?_⟩
   have nonstatic : sevm.isStatic = false := context.2
   obtain ⟨unlocked, positive, liquidity0, liquidity1, to0, to1, -⟩ := id conditions
   have depth : sevm.depth ≠ 0 := depth_of_balanceEnv fork callee.first
@@ -212,15 +228,27 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
   obtain ⟨x, skel⟩ : ∃ x, d1 = (leg1Skel sevm pre finish d0).withGasLeft x := by
     rw [← legFst]
     exact ⟨_, wethTransferCallAt_eq _ _ _ _ _ _ _ _ _ _ _ _ _⟩
-  have needGe : swapFrontCallbackGas sevm pre d0 d1 cgC callee.gas ≤
-      leg1Need sevm pre finish d0 cgC callee.gas := by
+  -- carry the callee from the skeleton's join world to the real one
+  obtain ⟨callee', hgas, hd0, hd1, hcg1, hpost, hmem⟩ := callee.transport
+    (d' := swapFrontCutWorld sevm pre d0 d1 dC) (M' := swapFrontCutMem sevm d0 d1 dC)
+    (n' := (swapFrontCutMem sevm d0 d1 dC).size) (p' := swapFrontPtr sevm d0 d1)
+    (by rw [skel]; exact swapFrontCutWorld_withGasLeft sevm pre d0 _ dC x)
+    (by rw [skel, swapFrontCutMem_withGasLeft]) (by rw [skel, swapFrontCutMem_withGasLeft])
+    (by rw [skel, swapFrontPtr_withGasLeft])
+  rw [← hgas] at leg front frameGas callbackRoom legSnd legFst
+  rw [← hd0, ← hd1] at conditions
+  rw [← hcg1] at readGas
+  rw [← hgas, ← hpost, ← hmem]
+  clear hgas hd0 hd1 hcg1 hpost hmem
+  have needGe : swapFrontCallbackGas sevm pre d0 d1 cgC callee'.gas ≤
+      leg1Need sevm pre finish d0 cgC callee'.gas := by
     have cb := swapFrontCallbackGas_withGasLeft sevm pre d0 (leg1Skel sevm pre finish d0) cgC
-      callee.gas x
+      callee'.gas x
     rw [← skel] at cb
     unfold leg1Need
     omega
   have room : leg1Used sevm pre finish d0 + gCallStipend ≤
-      except64th (leg1Need sevm pre finish d0 cgC callee.gas + leg1Used sevm pre finish d0) := by
+      except64th (leg1Need sevm pre finish d0 cgC callee'.gas + leg1Used sevm pre finish d0) := by
     have used : leg1Used sevm pre finish d0 ≤ 53262 := by
       unfold leg1Used
       exact xferUsed_le _ _ _ _ _ _ _ _ _
@@ -232,10 +260,10 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
       (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
       (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0).size
       (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) (swapRecipientWord sevm)
-      finish.token1.toB256 0x8e1 cg1 (swapFrontCallbackGas sevm pre d0 d1 cgC callee.gas) d1 := by
+      finish.token1.toB256 0x8e1 cg1 (swapFrontCallbackGas sevm pre d0 d1 cgC callee'.gas) d1 := by
     intro amount1
     by_cases amount0 : swapAmount0Out sevm = 0
-    · have fits : (swapWethLeg1 sevm pre finish d0 cgC callee.gas).2 < 2 ^ 256 := by
+    · have fits : (swapWethLeg1 sevm pre finish d0 cgC callee'.gas).2 < 2 ^ 256 := by
         rw [legSnd]
         simp only [swapFrontTransferGas, swapOptGas, amount0, amount1, ↓reduceIte] at frameGas
         omega
@@ -286,7 +314,7 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
         (by rw [legSnd]; exact transferGas amount0) room
       rw [legSnd, legFst] at spec
       exact spec
-  have front' : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC callee.gas :=
+  have front' : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC callee'.gas :=
     ⟨front.transfer0, transfer1, front.callback, front.sentry⟩
   -- the memory at the join
   obtain ⟨ptrMem, -, width, -, -⟩ := swapBody_front_exact fork rep unlocked nonstatic nonzero
@@ -316,8 +344,8 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
       exact transferCode
     · rw [ite_eq_right empty]
       exact weth9Code_of_runCompiled (front.callback empty).call (weth9Code_temporal transferCode)
-  have d0Code : callee.d0.state.getCode weth = Weth9.code :=
-    weth9Code_of_runCompiled callee.first.call (weth9Code_temporal joinCode)
+  have d0Code : callee'.d0.state.getCode weth = Weth9.code :=
+    weth9Code_of_runCompiled callee'.first.call (weth9Code_temporal joinCode)
   have tokenAdr : (swapTokenWord (swapCutWords sevm finish).token1).toAdr = weth := by
     change (tokenMask finish.token1.toB256).toAdr = weth
     rw [tokenMask_toAdr, token1]
@@ -325,35 +353,35 @@ theorem pair_weth9_history_swap_live_one_both {pair weth : Adr} {cfg : ChainConf
   have readSnd : (swapWethRead1 sevm (swapFrontCutWorld sevm pre d0 d1 dC)
       (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
       (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1)
-      callee.d0).2 = callee.callGas1 := by
-    rw [← callee.read]
+      callee'.d0).2 = callee'.callGas1 := by
+    rw [← callee'.read]
   have readFst : (swapWethRead1 sevm (swapFrontCutWorld sevm pre d0 d1 dC)
       (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
       (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1)
-      callee.d0).1 = callee.d1 := by
-    rw [← callee.read]
+      callee'.d0).1 = callee'.d1 := by
+    rw [← callee'.read]
   have second := swapWethRead1_spec (d := swapFrontCutWorld sevm pre d0 d1 dC)
     (M := swapFrontCutMem sevm d0 d1 dC) (p := swapFrontPtr sevm d0 d1)
     (w := swapCutWords sevm finish) (ρ := 0x257) (R := [0x022c0d9f])
-    (n := (swapFrontCutMem sevm d0 d1 dC).size) (G := g + 1) (d0 := callee.d0) fork depth
+    (n := (swapFrontCutMem sevm d0 d1 dC).size) (G := g + 1) (d0 := callee'.d0) fork depth
     (by rw [tokenAdr]; exact d0Code) (by rw [tokenAdr]; exact notPre) ptrMem.wf width
     (by simp only [swapCutTail, List.length_cons, List.length_nil]; omega)
     (by rw [readSnd]; exact readGas)
     (by
-      have used := balUsed_le sevm callee.d0 (readStack (swapCutWords sevm finish) 0x257
-        [0x022c0d9f] callee.d0) (readMem sevm (swapFrontCutMem sevm d0 d1 dC)
-        (swapFrontPtr sevm d0 d1) callee.d0) (swapFrontPtr sevm d0 d1)
+      have used := balUsed_le sevm callee'.d0 (readStack (swapCutWords sevm finish) 0x257
+        [0x022c0d9f] callee'.d0) (readMem sevm (swapFrontCutMem sevm d0 d1 dC)
+        (swapFrontPtr sevm d0 d1) callee'.d0) (swapFrontPtr sevm d0 d1)
         (swapCutWords sevm finish).token1
       have need : 64 ≤ readNeed sevm (swapFrontCutMem sevm d0 d1 dC)
           (swapFrontCutMem sevm d0 d1 dC).size (swapFrontPtr sevm d0 d1)
-          (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1) callee.d0 := by
+          (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1) callee'.d0 := by
         unfold readNeed
         omega
       unfold readUsed except64th
       omega)
   rw [readSnd, readFst] at second
   exact swap_live_of_replayed joint.pairRep pairFresh futureCode replayed target state codeEq fork
-    output representable value size selector guards (callee.toEnv second) front' context conditions
+    output representable value size selector guards (callee'.toEnv second) front' context conditions
 
 /-- **C4(b), the swap liveness row with WETH9 as token1 and only WETH9 paid out.**  As
 `pair_history_swap_live`, from the joint checkpoint, with the WETH9 `transfer` callee record and the
@@ -381,13 +409,14 @@ theorem pair_weth9_history_swap_live_one {pair weth : Adr} {cfg : ChainConfig}
     (onlyWeth : swapAmount0Out sevm = 0) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace KP st₀ finish K' ∧
-      ∀ {d1 dC : Devm} {cg1 cgC g : Nat}
+      ∀ {dC : Devm} {cgC g : Nat}
         (callee : SwapBackCalleeEnvW1 sevm
-          (swapFrontCutWorld sevm pre pre d1 dC)
-          (swapFrontCutMem sevm pre d1 dC)
-          (swapFrontCutMem sevm pre d1 dC).size
-          (swapFrontPtr sevm pre d1)
+          (swapFrontCutWorld sevm pre pre (leg1Skel sevm pre finish pre) dC)
+          (swapFrontCutMem sevm pre (leg1Skel sevm pre finish pre) dC)
+          (swapFrontCutMem sevm pre (leg1Skel sevm pre finish pre) dC).size
+          (swapFrontPtr sevm pre (leg1Skel sevm pre finish pre))
           (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        {d1 : Devm} {cg1 : Nat}
         (_leg : (d1, cg1) = swapWethLeg1 sevm pre finish pre cgC callee.gas)
         (_front : SwapFrontEnvW1 sevm pre finish pre
           d1 dC 0
@@ -415,7 +444,7 @@ theorem pair_weth9_history_swap_live_one {pair weth : Adr} {cfg : ChainConfig}
   obtain ⟨finish, K', replayed, live⟩ := pair_weth9_history_swap_live_one_both trace joint
     pairFresh wethFresh factoryInstalled factoryNotSystem target state codeEq fork output
     representable value size selector guards
-  exact ⟨finish, K', replayed, fun callee leg front frameGas callbackRoom readGas =>
+  exact ⟨finish, K', replayed, fun {_dC _cgC _g} callee {_d1 _cg1} leg front frameGas callbackRoom readGas =>
     live callee leg front frameGas callbackRoom readGas (fun h => absurd onlyWeth h)
       (fun h => absurd onlyWeth h) (fun h => absurd onlyWeth h)⟩
 
