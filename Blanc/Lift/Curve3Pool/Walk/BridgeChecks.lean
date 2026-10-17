@@ -5,6 +5,7 @@ import Blanc.Lift.Curve3Pool.Walk.RampStop
 import Blanc.Lift.Curve3Pool.Walk.RampA
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyRaw
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyuRaw
+import Blanc.Lift.Curve3Pool.Walk.ViewsCtaRaw
 
 /-!
 # The views and ramp entries' raw effects, with the certificate checked
@@ -101,5 +102,22 @@ theorem dyu_raw {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
   dyu_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+
+/-- **Safety of `calc_token_amount(amounts, deposit)`.** The successful pc-zero frame computes
+the model's checked quote: `D0` and `D1` by bridged `get_D_mem`, each balance checked by the
+deposit flag, the supply the `totalSupply()` reply of the frame's only (static) child, and the
+checked `diff * supply / D0`; storage kept, logs only the child's. -/
+theorem cta_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selCalcTokenAmount)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  cta_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
 
 end Blanc.Lift.Curve3Pool
