@@ -870,6 +870,17 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
+import Blanc.Lift.Curve3Pool.Walk.ExchangeDispatch
+import Blanc.Lift.Curve3Pool.Walk.ExchangeFrame
+import Blanc.Lift.Curve3Pool.Walk.ExchangePre
+import Blanc.Lift.Curve3Pool.Walk.ExchangeChecks
+import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
+import Blanc.Lift.Curve3Pool.Walk.ExchangePull
+import Blanc.Lift.Curve3Pool.Walk.ExchangeTail
+import Blanc.Lift.Curve3Pool.Walk.ExchangeX
+import Blanc.Lift.Curve3Pool.Walk.ExchangeY
+import Blanc.Lift.Curve3Pool.Walk.ExchangeDy
+import Blanc.Lift.Curve3Pool.Walk.ExchangePush
 import Blanc.Lift.Curve3Pool.Callee.GetYDTrees
 import Blanc.Lift.Curve3Pool.Callee.GetYDLoop
 import Blanc.Lift.Curve3Pool.Callee.GetYDCoins
