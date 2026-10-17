@@ -7,6 +7,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.Vyper
 import Blanc.Lift.VyperRawCall
 import Blanc.Lift.InvWalkGas
+import Blanc.Lift.IdentityCallGas
 import Blanc.Lift.Curve3Pool.Observe
 
 /-!

@@ -823,6 +823,7 @@ import Blanc.Lift.VyperRawCall
 
 -- Walking a successful frame's own derivation, with its direct children (contract-neutral).
 import Blanc.Lift.FrameWalk
+import Blanc.Lift.IdentityCallGas
 
 -- The Curve 3pool: the functional model, U5, the U3 refutation and bounds (curve-3pool-stableswap-v1).
 import Blanc.Lift.Curve3Pool.Model
