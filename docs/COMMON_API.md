@@ -4717,7 +4717,8 @@ contract-neutral.
   balance difference — in
   [`Blanc/Lift/BalanceDiffCall.lean`](../Blanc/Lift/BalanceDiffCall.lean);
   the `raw_call(…, max_outsize=32)` tail (`VyRawSite`, `vyRawCallTail`/`vyRawCallJoin`/
-  `vyRawCallCheck`, `RawCallOk`, `ric_vyRawCall`, `ric_vyRawCallTail`), with the
+  `vyRawCallCheck`, `RawCallOk`, `ric_vyRawCall`, `ric_vyRawCallTail`, forward
+  `rxc_vyRawCallTail` at `rawTailCost (min len 32)` with memory `vyRawMem`), with the
   byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
   no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
   [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
