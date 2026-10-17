@@ -416,23 +416,6 @@ elab "xrun" : tactic => do
     if !ok then break
     i := i + 1
 
-open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic in
-/-- At most `n` steps of `xs` (for locating a walk's stopping point). -/
-elab "xrunN " n:num : tactic => do
-  let mut i := 0
-  while i < n.getNat do
-    let ok ← (do evalTactic (← `(tactic| xs)); pure true) <|> pure false
-    if !ok then break
-    i := i + 1
-
-end Blanc.Composition.UsdcLive
-
-namespace Blanc.Composition.UsdcLive
-
-/-- An internal call through a callee walk `w` (a subtype whose value is the callee's charge). -/
-macro "xcall " w:term : tactic =>
-  `(tactic| (refine' rx_callK (hj := by rfl) (hc := $w) ?_; rotate_left))
-
 end Blanc.Composition.UsdcLive
 
 namespace Blanc.Composition.UsdcLive
@@ -441,14 +424,6 @@ namespace Blanc.Composition.UsdcLive
 macro "xle" : tactic => `(tactic| (try xnorm) <;> first
   | with_reducible assumption
   | exact Blanc.Lift.toNat_le_of_gtCheck_eq_zero (by with_reducible assumption))
-
-end Blanc.Composition.UsdcLive
-
-namespace Blanc.Composition.UsdcLive
-
-/-- `xcall` for a callee with a gas threshold: the threshold goal is left last. -/
-macro "xcallT " w:term : tactic =>
-  `(tactic| (refine' rx_callKT (hj := by rfl) (hc := $w) ?_ ?_; rotate_left))
 
 end Blanc.Composition.UsdcLive
 

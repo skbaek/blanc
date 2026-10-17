@@ -12,8 +12,6 @@ local notation "l255" => Bytes.toB256 [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 /-- The scratch image of one mapping-slot hash of `k` at base slot `9`. -/
 abbrev sc9 (M : Mem) (k : B256) : Mem := (M.write 0 k.toBytes).write 32 (Bytes.toB256 [9]).toBytes
 
-theorem prog99 : cert.prog[99]? = some t_4430_c99 := rfl
-
 theorem l255_and_toNat (w : B256) : (l255 &&& w).toNat = balanceBits w := by
   rw [litMask255]; exact low255_and_toNat w
 

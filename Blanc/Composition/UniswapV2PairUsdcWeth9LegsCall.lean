@@ -4,9 +4,6 @@ namespace Blanc.Composition.UsdcLive
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc
 
-theorem dMsg_gasField (s : Sevm) (pre : Devm) (Y f : Nat) :
-    dMsg { s with gas := f } pre Y = dMsg s pre Y := rfl
-
 theorem childXferCost_gasField (s : Sevm) (pre : Devm) (f : Nat) :
     childXferCost { s with gas := f } pre = childXferCost s pre := rfl
 
@@ -37,9 +34,6 @@ theorem proxyPreW_gas (b : Devm) (sel : B256) :
 theorem dTailW_gas (D : Devm) (R : List B256) (M : Mem) (w : B256) :
     (dTailW { s with gas := f } D R M w).1 = (dTailW s D R M w).1 := by
   unfold dTailW; rfl
-
-theorem tailW_gas (pre : Devm) (w : B256) : tailW { s with gas := f } pre w = tailW s pre w :=
-  dTailW_gas s f _ _ _ _
 
 theorem proxyXferCost_gasField (pre : Devm) :
     proxyXferCost { s with gas := f } pre = proxyXferCost s pre := by
