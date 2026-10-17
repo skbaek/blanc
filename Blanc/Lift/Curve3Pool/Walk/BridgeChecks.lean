@@ -4,6 +4,7 @@ import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 import Blanc.Lift.Curve3Pool.Walk.RampStop
 import Blanc.Lift.Curve3Pool.Walk.RampA
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyRaw
+import Blanc.Lift.Curve3Pool.Walk.ViewsDyuRaw
 
 /-!
 # The views and ramp entries' raw effects, with the certificate checked
@@ -86,5 +87,19 @@ theorem rampA_raw {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
   rampA_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+
+/-- **Safety of `get_dy_underlying()`.** The successful pc-zero frame computes the exact
+model quote over `PRECISION_MUL`, with every checked arithmetic operation, preserving storage
+and logs. -/
+theorem dyu_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetDyUnderlying)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  dyu_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
 
 end Blanc.Lift.Curve3Pool
