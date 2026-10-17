@@ -369,4 +369,37 @@ theorem factory_children_fresh {sevm : Sevm} {pre : Devm} {out : Execution}
     rw [target]
     exact freshOf (Xinst.step_create2_spawn_unprotected nodeFork hx)
 
+/-! ## The factory code as a code image -/
+
+theorem code_toList_length : code.toList.length = 13859 := by
+  rw [ByteArray.toList_eq_toList_data, Array.length_toList]
+  decide +kernel
+
+theorem code_eq_of_toList {c : ByteArray} (h : some c.toList = some code.toList) : c = code := by
+  have dataList : c.data.toList = code.data.toList := by
+    simpa only [ByteArray.toList_eq_toList_data] using Option.some.inj h
+  exact congrArg ByteArray.mk (Array.toList_inj.mp dataList)
+
+/-- The certified factory runtime as a code image.  Its run relation records only that the frame runs
+the factory bytes; the factory's behaviour is stated by `factory_children_fresh`. -/
+def factorySem : CodeSem where
+  image := some code.toList
+  Run sevm _ _ := sevm.code = code
+  correct := fun _ hcode => code_eq_of_toList hcode
+  ne_nil := by
+    intro l hl h
+    have hlen := code_toList_length
+    rw [Option.some.inj hl, h] at hlen
+    exact absurd hlen (by decide)
+  not_delegation := by
+    intro c hc hdel
+    have hlen : c.toList.length = 13859 := (Option.some.inj hc) ▸ code_toList_length
+    rw [ByteArray.toList_eq_toList_data, Array.length_toList] at hlen
+    have hsize : c.size = eoaDelegatedCodeLength := hdel.1
+    have hsz : c.size = c.data.size := rfl
+    rw [hsz, hlen] at hsize
+    exact absurd hsize (by decide)
+
+theorem factorySem_image : factorySem.image = some code.toList := rfl
+
 end Blanc.Lift.UniswapV2Factory

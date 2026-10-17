@@ -59,9 +59,11 @@ theorem Xinst.step_create2_spawn_unprotected {sevm : Sevm} {d : Devm} {frame : F
   rw [← state, (genericCreate_step_spawn_exact h).1]
   exact genericCreate_step_spawn_target_unprotected h
 
-/-- A frame finds `C` installed at `ca` when it starts, and runs `C` from pc `0` if it runs at `ca`. -/
+/-- A frame starts at pc `0` on a covered fork, finds `C` installed at `ca`, and runs `C` if it runs at
+`ca`. -/
 def OwnCodeAt (ca : Adr) (C : ByteArray) (f : Exec.Frame) : Prop :=
-  f.pre.getCode ca = C ∧ (f.sevm.currentTarget = ca → f.pc = 0 ∧ f.sevm.code = C)
+  f.pre.getCode ca = C ∧ f.pc = 0 ∧ CoveredFork f.sevm.benvStat.fork ∧
+    (f.sevm.currentTarget = ca → f.sevm.code = C)
 
 /-- **Own code below a frame.**  Along the chain of a frame `R` that starts at pc `0` with `C` installed at
 `ca` (and runs `C` if it runs at `ca`), every committed descendant frame satisfies `OwnCodeAt ca C`. -/
@@ -135,7 +137,7 @@ theorem Exec.descendantFrames_ownCode {ca : Adr} {C : ByteArray} (nonempty : C.t
           settles] at member
         simp only [List.mem_cons, List.mem_append] at member
         rcases member with (rfl | inChild) | inNext
-        · exact ⟨childCode, fun target => ⟨pcZero', childOwn target⟩⟩
+        · exact ⟨childCode, pcZero', childFork, childOwn⟩
         · exact childIh (R := ⟨_, _, _, _, child⟩) (.refl _) pcZero' childFork childCode childOwn
             f inChild
         · exact nextIh (chain.snoc (.runOk hstep henter child hresume next)) pcZero fork code own
@@ -222,7 +224,7 @@ private def ownLadder {ca : Adr} {C : ByteArray} (nonempty : C.toList ≠ [])
     intro f member
     rw [Exec.committedFrames, dite_eq_left committed] at member
     rcases List.mem_cons.mp member with rfl | deeper
-    · exact ⟨code, fun target => ⟨pcZero, own target⟩⟩
+    · exact ⟨code, pcZero, fork, own⟩
     · exact Exec.descendantFrames_ownCode nonempty nondelegating spawns run
         (R := ⟨pc, sevm, pre, out, run⟩) (.refl _) pcZero fork code own f deeper
 
@@ -231,7 +233,7 @@ namespace ExecutionTrace
 /-- **Installed code at every settled frame, own code at every own frame.**  If `C` is installed at `ca`
 at the checkpoint, is nonempty and is no designator, and frames running `C` at `ca` spawn only by `CALL`,
 `STATICCALL` or `CREATE2`, then every settled frame of the history finds `C` at `ca` when it starts, and
-every settled frame at `ca` runs `C` from pc `0`. -/
+every settled frame starts at pc `0` on a covered fork and, if it runs at `ca`, runs `C`. -/
 theorem ConfiguredHistoryTrace.settled_ownCode {ca : Adr} {C : ByteArray}
     (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C) (spawns : OwnSpawns ca C)
     {cfg : ChainConfig} {checkpoint future : BlockChain}
