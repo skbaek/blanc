@@ -193,4 +193,61 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       · rw [ho8, hs0.out, afterSload_output]
       · rw [hcd8, hs0.codeK _ hpc1, afterSload_getCode]
 
+
+/-- **The complete pull loop** (`0x105d` → `0x1333`), retaining the three ordered
+child groups and the actual checked credit for each coin. -/
+theorem xa_al_pullLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {σ : Stor} {F AF A T D0 : B256} {old : Nat → B256}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
+    (hm : AlPullImg img 0 F AF A T D0 old old)
+    (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
+    (hK : ∀ i, i < 3 → CallKeeps sevm (coinAt σ i))
+    (hSK : ∀ i, i < 3 → StaticKeeps sevm (coinAt σ i))
+    (h : XAt sevm post 0x105d (St b [3, 0x4c0] M G) L) :
+    ∃ (L0 L1 L2 L' : List Exec.Frame) (b' : Devm) (M' : Mem) (img' : Bytes) (G' : Nat)
+      (cr0 cr1 cr2 : B256),
+      L = (L0 ++ L1 ++ L2) ++ L' ∧
+      AlPullKids sevm (coinAt σ 0) 0 (alAmt sevm 0) L0 cr0 ∧
+      AlPullKids sevm (coinAt σ 1) 1 (alAmt sevm 1) L1 cr1 ∧
+      AlPullKids sevm (coinAt σ 2) 2 (alAmt sevm 2) L2 cr2 ∧
+      (T = 0 → ∀ i, i < 3 → 0 < (alAmt sevm i).toNat) ∧
+      ¬ old 0 + cr0 < old 0 ∧ ¬ old 1 + cr1 < old 1 ∧ ¬ old 2 + cr2 < old 2 ∧
+      (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
+      b'.logs = b.logs ++ (L0 ++ L1 ++ L2).flatMap (fun c => c.post.logs) ∧
+      b'.output = b.output ∧ b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧
+      IdReady sevm b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      AlPullImg img' 3 F AF A T D0 old
+        (Function.update (Function.update (Function.update old 0 (old 0 + cr0))
+          1 (old 1 + cr1)) 2 (old 2 + cr2)) ∧
+      XAt sevm post 0x1333 (St b' [3, 0x4c0] M' G') L' := by
+  obtain ⟨hT0, L0, Lr0, b0, M0, img0, G0, cr0, e0, hp0, ha0, hs0, hl0, ho0, hc0, hid0,
+    hR0, hW0, hA0, hm0, h0⟩ := xa_al_pullIter hcode hfork (by decide) hR hW hA hm hst hpc hid
+      hdepth (hcoin 0 (by decide)) (hK 0 (by decide)) (hSK 0 (by decide)) h
+  rw [show (if 0 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x105d from rfl] at h0
+  have hpc0 : b0.getCode sevm.currentTarget ≠ .empty := by rw [hc0]; exact hpc
+  obtain ⟨hT1, L1, Lr1, b1, M1, img1, G1, cr1, e1, hp1, ha1, hs1, hl1, ho1, hc1, hid1,
+    hR1, hW1, hA1, hm1, h1⟩ := xa_al_pullIter hcode hfork (by decide) hR0 hW0 hA0 hm0 hs0 hpc0
+      hid0 hdepth (hcoin 1 (by decide)) (hK 1 (by decide)) (hSK 1 (by decide)) h0
+  rw [show (if 1 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x105d from rfl] at h1
+  have hpc1 : b1.getCode sevm.currentTarget ≠ .empty := by rw [hc1]; exact hpc0
+  obtain ⟨hT2, L2, L', b', M', img', G', cr2, e2, hp2, ha2, hs2, hl2, ho2, hc2, hid2,
+    hR2, hW2, hA2, hm2, h2⟩ := xa_al_pullIter hcode hfork (by decide) hR1 hW1 hA1 hm1 hs1 hpc1
+      hid1 hdepth (hcoin 2 (by decide)) (hK 2 (by decide)) (hSK 2 (by decide)) h1
+  rw [show (if 2 + 1 = 3 then (0x1333 : Nat) else 0x105d) = 0x1333 from rfl] at h2
+  refine ⟨L0, L1, L2, L', b', M', img', G', cr0, cr1, cr2, ?_, hp0, hp1, hp2, ?_, ha0,
+    ha1, ha2, hs2, ?_, ?_, ?_, hid2, hR2, hW2, hA2, hm2, h2⟩
+  · rw [e0, e1, e2, List.append_assoc, List.append_assoc]
+  · intro hT i hi
+    rcases three_cases hi with rfl | rfl | rfl
+    · exact hT0 hT
+    · exact hT1 hT
+    · exact hT2 hT
+  · rw [hl2, hl1, hl0, List.flatMap_append, List.flatMap_append]
+    simp only [List.append_assoc]
+  · rw [ho2, ho1, ho0]
+  · rw [hc2, hc1, hc0]
+
 end Blanc.Lift.Curve3Pool
