@@ -825,6 +825,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.ViewsCtaD1",
                     "Lift.Curve3Pool.Walk.ViewsCtaPost",
                     "Lift.Curve3Pool.Walk.ViewsCtaRaw",
+                    "Lift.Curve3Pool.Walk.ViewsCwo",
                     "Lift.Curve3Pool.Callee.CalcWithdrawX",
                     "Lift.Curve3Pool.Callee.CalcWithdrawXB",
                     "Lift.Curve3Pool.Callee.CalcWithdrawXC",

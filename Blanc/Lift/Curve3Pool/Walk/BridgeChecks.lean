@@ -6,6 +6,7 @@ import Blanc.Lift.Curve3Pool.Walk.RampA
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyRaw
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyuRaw
 import Blanc.Lift.Curve3Pool.Walk.ViewsCtaRaw
+import Blanc.Lift.Curve3Pool.Walk.ViewsCwo
 
 /-!
 # The views and ramp entries' raw effects, with the certificate checked
@@ -119,5 +120,23 @@ theorem cta_raw {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
   cta_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+
+/-- **Safety of `calc_withdraw_one_coin(_token_amount, i)`.** The successful pc-zero frame
+returns the model's `calcWithdrawOne` amount: `_calc_withdraw_one_coin` walked child-aware on
+the derivation (bridged `_A`, `_xp`, `get_D`, both `get_y_D` calls), the supply the
+`totalSupply()` reply of the frame's only (static) child; storage kept, logs only the
+child's. -/
+theorem cwo_raw {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  cwo_raw_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
 
 end Blanc.Lift.Curve3Pool
