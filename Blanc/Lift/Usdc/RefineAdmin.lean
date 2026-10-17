@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.RefineAdminRun
 import Blanc.Lift.Usdc.RefineAdminReach
+import Blanc.Lift.Usdc.RefineAdminRescue
 import Blanc.Lift.Usdc.RefineAdminLedger
 import Blanc.Lift.Usdc.RefineShape
 import Blanc.Lift.Usdc.Families
@@ -15,6 +16,9 @@ message decodes to `mint`, `burn`, `configureMinter`, `removeMinter`, `updateMas
 `unBlacklist` commits the book's step, keeps the proxy's two slots and decodes no external
 instruction.  Assembled from the decoded call (`decode_*`), the lifted run (`impl_lifted`), the
 certificate walks (`*_run`, `reach_*`) and the ledger readings (`*_out`).
+
+`rescueLaw : RescueLaw` — `rescueERC20`'s book step is the identity, and its frame keeps the proxy's
+storage up to its single `CALL` and from that call's successor to its halt.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -225,5 +229,59 @@ theorem implStepLaw_famAdmin : ImplStepLaw famAdmin := by
     obtain ⟨hsel, rfl⟩ := decode_burn dec
     exact ⟨burn_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (burn_run fork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_burn hP hsel r hT⟩
+
+/-- **U6f: the model law of `rescueERC20`.**  The book's step is the identity (the frame passed
+`onlyRescuer`, `rescue_facts`); along the frame's own chain the only external instruction is the token
+`CALL`, reached through store-free code (`reach_rescue`, `Reach.firstExec`), after which only silent code
+runs to the halt (`CursorOK.state_post_of_silent`) and no further external instruction is decoded
+(`noExec_after_of_cursor`). -/
+theorem rescueLaw : RescueLaw := by
+  intro P U sevm pre post run codeEq target codeAddr fork nonstatic keys notAdmin hsel
+  subst target
+  have hrun := impl_lifted run codeEq fork
+  obtain ⟨hv, hlen, hc⟩ := rescue_facts fork hsel hrun
+  have dec : decodeCall sevm = some (.rescueERC20 (Sevm.dataWord sevm 4).toAdr
+      (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68).toNat) :=
+    decodeCall_of_find (r := ⟨0xb2118a8d, 3, fun e => .rescueERC20 (Sevm.dataWord e 4).toAdr
+      (Sevm.dataWord e 36).toAdr (Sevm.dataWord e 68).toNat⟩) hv (by rw [hsel]; rfl) (by omega)
+  refine ⟨?_, ?_⟩
+  · rw [book_step_of notAdmin dec]
+    show (if sevm.caller ≠ ((pre.state.getStor sevm.currentTarget).get 14).toAdr then none
+      else some _) = _
+    rw [b14] at hc
+    exact ite_eq_right (not_not.mpr hc)
+  · intro N hN x hx
+    obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix cert_check (R := ⟨0, sevm, pre, .ok post, run⟩) rfl
+      codeEq fork hN
+    obtain ⟨g, hf, -⟩ := ok.tree_of_exec hx
+    have reach' : Reach (StepIn ⟨0, sevm, pre, .ok post, run⟩) cert.prog sevm
+        ⟨St pre pre.stack pre.memory pre.gasLeft, t_0000_c0, []⟩ (κ.conf N.devm) := by
+      rw [← St.self rfl rfl]
+      exact reach
+    obtain ⟨hstate, hpre, hK⟩ := reach_rescue StepIn.toRun hsel reach' ⟨x, g, hf⟩
+    change κ.f.preIn rescueEx rescuePre rescueSilent = true at hpre
+    change ∀ s ∈ κ.K.map Cont.f, s.silentIn rescueSilent = true at hK
+    rw [hf] at hpre
+    simp only [SFunc.preIn, rescueEx, Bool.and_eq_true, beq_iff_eq] at hpre
+    obtain ⟨rfl, hg⟩ := hpre
+    refine ⟨rfl, congrArg (State.getStor · sevm.currentTarget) hstate, ?_⟩
+    intro N' edge
+    have hsevmN : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hN
+    have hforkN : CoveredFork N.sevm.benvStat.fork := by rw [hsevmN]; exact fork
+    obtain ⟨κ₁, hs, -, ok₁⟩ := cursor_stepS cert_check ok edge hforkN
+    obtain ⟨f, pc, a, m, K⟩ := κ
+    dsimp only at hf hK
+    subst hf
+    cases hs with
+    | next habs =>
+      have hchain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N' := hN.snoc edge
+      have hsevmN' : N'.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hchain
+      have hforkN' : CoveredFork N'.sevm.benvStat.fork := by rw [hsevmN']; exact fork
+      have success : N'.exn = .ok post := Exec.Deriv.ParentPrefix.exn_eq hchain
+      refine ⟨?_, fun M hM y => noExec_after_of_cursor cert_check hchain hM fork ok₁
+        (ExecFreeSet.of_silentSet rescueSilent_ok) (SFunc.execFreeIn_of_silentIn hg)
+        (fun s hs => SFunc.execFreeIn_of_silentIn (hK s hs)) y⟩
+      exact congrArg (State.getStor · sevm.currentTarget)
+        (CursorOK.state_post_of_silent cert_check rescueSilent_ok _ rfl ok₁ success hforkN' hg hK)
 
 end Blanc.Lift.Usdc

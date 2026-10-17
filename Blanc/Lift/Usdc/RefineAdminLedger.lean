@@ -1,5 +1,14 @@
 import Blanc.Lift.Usdc.RefineAdminBits
 
+/-!
+# The admin calls' writes, read as the model's step (U6f)
+
+`*_out`: from the guards a call's run passed and the writes it made (`RefineAdminRun.lean`'s `*_run`,
+over any storage `s`), the ledger of the written storage is `Ledger.step` of the decoded call on the
+ledger of `s`, and the proxy's implementation and admin slots are kept (`AdminOut`).  The word reads
+are `RefineAdminBits.lean`'s; the ledger writes are `FootprintLedger.lean`'s.
+-/
+
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift

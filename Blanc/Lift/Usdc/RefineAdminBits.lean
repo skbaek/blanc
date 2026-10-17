@@ -64,11 +64,6 @@ theorem flag20_eq_of {x y : B256} (h : x.toNat / 2 ^ 160 % 2 ^ 8 = y.toNat / 2 ^
   unfold flag20
   rw [show (256 : Nat) = 2 ^ 8 from rfl, h]
 
-theorem boolBit_eq_of {x y : B256} (h : x.toNat / 2 ^ 0 % 2 ^ 8 = y.toNat / 2 ^ 0 % 2 ^ 8) :
-    boolBit x = boolBit y := by
-  unfold boolBit
-  rw [show (256 : Nat) = 2 ^ 8 from rfl, mod_eq_field, h, ← mod_eq_field]
-
 theorem balanceBits_eq_of {x y : B256}
     (h : x.toNat / 2 ^ 0 % 2 ^ 255 = y.toNat / 2 ^ 0 % 2 ^ 255) :
     balanceBits x = balanceBits y := by
@@ -91,10 +86,6 @@ theorem frozenBit_eq_field (x : B256) : frozenBit x = decide (x.toNat / 2 ^ 255 
       have := (Nat.le_div_iff_mul_le (Nat.two_pow_pos 255)).mp (by omega : 1 ≤ x.toNat / 2 ^ 255)
       omega
   exact decide_eq_decide.mpr this
-
-theorem frozenBit_eq_of {x y : B256}
-    (h : x.toNat / 2 ^ 255 % 2 ^ 1 = y.toNat / 2 ^ 255 % 2 ^ 1) : frozenBit x = frozenBit y := by
-  rw [frozenBit_eq_field, frozenBit_eq_field, h]
 
 theorem Adr.toB256_toNat_lt (a : Adr) : a.toB256.toNat < 2 ^ 160 := by
   rw [← ff20_and_adr a, B256.toNat_and, show (ff20 : B256).toNat = 2 ^ 160 - 1 from by decide,

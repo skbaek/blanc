@@ -163,17 +163,6 @@ theorem eq_of_eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y 
   by_contra hxy
   exact h (ite_eq_right hxy)
 
-theorem afterSload_getStorVal (sevm : Sevm) (d : Devm) (k : B256) (a : Adr) (k' : B256) :
-    (afterSload sevm d k).getStorVal a k' = d.getStorVal a k' := by
-  show (Devm.getStor _ a).get k' = (Devm.getStor d a).get k'
-  rw [afterSload_getStor]
-
-theorem afterSstore_getStorVal (sevm : Sevm) (d : Devm) (k v k' : B256) :
-    (afterSstore sevm d k v).getStorVal sevm.currentTarget k' =
-      ((d.getStor sevm.currentTarget).set k v).get k' := by
-  show (Devm.getStor _ _).get k' = _
-  rw [afterSstore_getStor_self]
-
 theorem getStorVal_eq (d : Devm) (a : Adr) (k : B256) : d.getStorVal a k = (d.getStor a).get k := rfl
 
 /-- The 20-byte address mask. -/
