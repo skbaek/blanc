@@ -13,7 +13,8 @@ The implementation's end and its spawning nodes keep the invariant by the family
 frame laws (`ImplStepLaw`, with the signed family's law a hypothesis), the initializers' revert at a
 good ledger, and `rescueERC20`'s model law (`RescueLaw`).  `RescueLaw` says nothing about a successful
 `rescueERC20` frame that decodes no external instruction; `RescueQuietEnd` states that case (such a
-frame keeps the proxy's storage) and is taken as a hypothesis here.
+frame keeps the proxy's storage); it is proved in `HistorySlotsRescue.lean` and taken as a
+hypothesis here.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -27,6 +28,7 @@ def RescueQuietEnd : Prop :=
   ∀ {P : Adr} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
     sevm.code = Impl.code → sevm.currentTarget = P → CoveredFork sevm.benvStat.fork →
     sevm.isStatic = false → Blanc.Sevm.selector sevm = rescueSelector →
+    State.Protected pre.state P →
     (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) →
     post.state.getStor P = pre.state.getStor P
@@ -294,7 +296,7 @@ theorem implFrame (inj : SlotFootprint.Inj Key.slot U)
         exact ⟨by rw [entryOfNode N chain step enter, nstor]; exact inv, by rw [nstor]; exact inv⟩
       refine ⟨?_, desc⟩
       rcases Exec.Deriv.exists_firstExec_or_none run with none | ⟨Vn, hV⟩
-      · rw [rescueEnd run codeEq target fork hs hsel none]; exact inv
+      · rw [rescueEnd run codeEq target fork hs hsel (proxy_protected codes.1) none]; exact inv
       have hpV := hV.parentPrefix
       have dEq := hV.descendantFrames_eq
       obtain ⟨x, hx⟩ := hV.exec_at

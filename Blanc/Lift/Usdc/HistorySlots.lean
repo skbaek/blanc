@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.HistorySlotsFrames
+import Blanc.Lift.Usdc.HistorySlotsRescue
 import Blanc.Lift.Usdc.Hist
 import Blanc.ExecutionSettledCodeImage
 import Blanc.ExecutionAccountingAdmission
@@ -17,7 +17,8 @@ frame, the replay ends in `SlotInv` and every observed frame satisfies `FrameQ`.
 * `usdc_history_frames_of`: `FrameQ` at every settled frame and `SlotInv` at the end;
 * `usdc_history_slots_of`, `usdc_history_settled_owner_of`: the frozen conclusions of
   `usdc_history_slots` and `usdc_history_settled_owner`, with the signed family's law
-  (`ImplStepLaw famSigned`, U6e3/U6e4) and `RescueQuietEnd` as hypotheses.
+  (`ImplStepLaw famSigned`) as the one hypothesis (`rescueQuietEnd`, `HistorySlotsRescue.lean`,
+  covers `rescueERC20`'s no-call case).
 -/
 
 namespace Blanc.Lift.Usdc
@@ -110,7 +111,7 @@ noncomputable def slotLadder (P : Adr) {U : Key → Prop} (a₀ : Adr)
 
 /-- **The slot facts at every settled frame and at the end** of a configured history from a
 `UsdcHist` checkpoint, over the history's key universe, given the signed family's law. -/
-theorem usdc_history_frames_of (signed : ImplStepLaw famSigned) (rescueEnd : RescueQuietEnd)
+theorem usdc_history_frames_of (signed : ImplStepLaw famSigned)
     {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (tr : ConfiguredHistoryTrace cfg checkpoint future) (hist : UsdcHist P K₀ tr) :
     (∀ G ∈ tr.settledFrames,
@@ -126,7 +127,7 @@ theorem usdc_history_frames_of (signed : ImplStepLaw famSigned) (rescueEnd : Res
       tr.calldata_bound root member⟩
     simpa only [target, ite_true] using hk
   obtain ⟨steps, replay, observed⟩ :=
-    (slotLadder P (adminOf checkpoint.state P) ext.inj ext.apart signed rescueEnd).configuredHistory
+    (slotLadder P (adminOf checkpoint.state P) ext.inj ext.apart signed rescueQuietEnd).configuredHistory
       tr admitted ⟨installed.proxy, trivial, trivial⟩
   change steps = tr.settledFrames.flatMap (fun f => [f]) at observed
   rw [List.flatMap_singleton'] at observed
@@ -141,7 +142,7 @@ theorem usdc_history_frames_of (signed : ImplStepLaw famSigned) (rescueEnd : Res
   exact ⟨frames, fin⟩
 
 /-- **`usdc_history_slots`, given the signed family's law.** -/
-theorem usdc_history_slots_of (signed : ImplStepLaw famSigned) (rescueEnd : RescueQuietEnd)
+theorem usdc_history_slots_of (signed : ImplStepLaw famSigned)
     {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHist P K₀ tr) :
@@ -149,18 +150,17 @@ theorem usdc_history_slots_of (signed : ImplStepLaw famSigned) (rescueEnd : Resc
       adminOf G.pre.state P = adminOf checkpoint.state P) ∧
     (future.state.getStor P).get implSlot = usdcImpl.toB256 ∧
       adminOf future.state P = adminOf checkpoint.state P := by
-  obtain ⟨frames, fin⟩ := usdc_history_frames_of signed rescueEnd tr hist
+  obtain ⟨frames, fin⟩ := usdc_history_frames_of signed tr hist
   exact ⟨fun G hG => ⟨(frames G hG).1.1, (frames G hG).1.2.1⟩, fin.1, fin.2.1⟩
 
 /-- **`usdc_history_settled_owner`, given the signed family's law.** -/
-theorem usdc_history_settled_owner_of (signed : ImplStepLaw famSigned)
-    (rescueEnd : RescueQuietEnd) {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
+theorem usdc_history_settled_owner_of (signed : ImplStepLaw famSigned) {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHist P K₀ tr) :
     ∀ G ∈ tr.settledFrames, G.sevm.currentTarget = P →
       (G.sevm.codeAddress = some P ∧ G.sevm.code = Proxy.code) ∨
       (G.sevm.codeAddress = some usdcImpl ∧ G.sevm.code = Impl.code) ∨
       (G.sevm.codeAddress = some usdcLib ∧ G.sevm.code = Lib.code) :=
-  fun G hG => ((usdc_history_frames_of signed rescueEnd tr hist).1 G hG).2.2
+  fun G hG => ((usdc_history_frames_of signed tr hist).1 G hG).2.2
 
 end Blanc.Lift.Usdc
