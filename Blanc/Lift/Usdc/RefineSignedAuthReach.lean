@@ -1,5 +1,6 @@
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ShuffleSkip
+import Blanc.Lift.ReachFirstExec
 
 /-!
 # The world at the first external instruction of a reach (U6e3)
@@ -46,8 +47,6 @@ def PreExecSet (fs : List SFunc) (okx : Xinst → Bool) (W0 W E : List Nat) : Bo
     | some g => g.preExec okx W0 W E
     | none => false
 
-/-- A silent tree with references in `W0`. -/
-def SFunc.silentIn (W0 : List Nat) (f : SFunc) : Bool := f.silent && f.refs.all (· ∈ W0)
 
 section PreExec
 

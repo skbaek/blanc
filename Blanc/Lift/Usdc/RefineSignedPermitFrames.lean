@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.RefineSignedAuthWalk
 import Blanc.Lift.Usdc.RefineSignedPermitCore
 import Blanc.Lift.Usdc.RefineTransferDispatch
 
@@ -41,15 +42,6 @@ theorem seg_w136_check : shuffle cert.prog cert.entries [] (.callNext 28 t_0489_
     (argFrame 8) t_0e03_c136 = some (some [.lit (Nat.toB256 0x3498), .unk, .arg 4, .arg 5, .arg 6,
       .arg 7]) := by
   decide +kernel
-
-/-- A successful `STOP` halt keeps the base's storage. -/
-theorem ric_stop_getStor {fs : List SFunc} {C : List Nat} {post : Devm}
-    (run : SFunc.RunCut fs sevm C (St b S M G) (.last .stop) (.done (.halted post))) :
-    Devm.getStor post = Devm.getStor b := by
-  cases run with
-  | last hl =>
-      cases hl
-      rfl
 
 theorem lit4_32 : Bytes.toB256 [4] + Bytes.toB256 [32] = 36 := by decide
 theorem lit4_64 : Bytes.toB256 [4] + Bytes.toB256 [64] = 68 := by decide

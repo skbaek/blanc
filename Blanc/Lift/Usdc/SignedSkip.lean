@@ -1,6 +1,7 @@
 import Blanc.Lift.QuietDelegateSkip
 import Blanc.Lift.Usdc.ImplFrames
 import Blanc.Lift.Usdc.LibSpawns
+import Blanc.Lift.Usdc.ImplSpawns
 import Blanc.Lift.Usdc.FootprintLedger
 
 /-!
@@ -31,8 +32,6 @@ open Jaune Blanc Blanc.Lift
 storage. -/
 theorem lib_quietCode : QuietCode Lib.code := fun run codeEq fork =>
   (lib_children run codeEq fork).2 _ rfl
-
-theorem lib_undelegated : getDelegatedCodeAddress Lib.code = none := by decide +kernel
 
 theorem lib_nonempty : Lib.code.toList ≠ [] := by decide +kernel
 

@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.SignedSkip
+import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ShuffleSegments
 import Blanc.Lift.Usdc.RefineSignedCallees
 
@@ -56,11 +57,6 @@ theorem skip_e79 {C : List Nat} {f : SFunc} {r : Seg} {dd x y ρ : B256}
   · match Y, hlen, cont with
     | [z], _, cont => exact .inl ⟨b', z, M', G', hs, cont⟩
   · exact .inr ⟨D, hr⟩
-
-theorem getCode_of_state {b' : Devm} (h : b'.state = b.state) (a : Adr) :
-    b'.getCode a = b.getCode a := by
-  unfold Devm.getCode Devm.getAcct
-  rw [h]
 
 theorem getStor_of_state {b' : Devm} (h : b'.state = b.state) : Devm.getStor b' = Devm.getStor b := by
   funext a

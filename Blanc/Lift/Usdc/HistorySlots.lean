@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.HistorySlotsRescue
+import Blanc.Lift.Usdc.RefineSignedPermit
 import Blanc.Lift.Usdc.Hist
 import Blanc.ExecutionSettledCodeImage
 import Blanc.ExecutionAccountingAdmission
@@ -162,5 +163,23 @@ theorem usdc_history_settled_owner_of (signed : ImplStepLaw famSigned) {P : Adr}
       (G.sevm.codeAddress = some usdcImpl ∧ G.sevm.code = Impl.code) ∨
       (G.sevm.codeAddress = some usdcLib ∧ G.sevm.code = Lib.code) :=
   fun G hG => ((usdc_history_frames_of signed tr hist).1 G hG).2.2
+
+theorem usdc_history_slots {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
+    (hist : UsdcHist P K₀ tr) :
+    (∀ G ∈ tr.settledFrames, (G.pre.state.getStor P).get implSlot = usdcImpl.toB256 ∧
+      adminOf G.pre.state P = adminOf checkpoint.state P) ∧
+    (future.state.getStor P).get implSlot = usdcImpl.toB256 ∧
+      adminOf future.state P = adminOf checkpoint.state P :=
+  usdc_history_slots_of impl_signed_law tr hist
+
+theorem usdc_history_settled_owner {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
+    (hist : UsdcHist P K₀ tr) :
+    ∀ G ∈ tr.settledFrames, G.sevm.currentTarget = P →
+      (G.sevm.codeAddress = some P ∧ G.sevm.code = Proxy.code) ∨
+      (G.sevm.codeAddress = some usdcImpl ∧ G.sevm.code = Impl.code) ∨
+      (G.sevm.codeAddress = some usdcLib ∧ G.sevm.code = Lib.code) :=
+  usdc_history_settled_owner_of impl_signed_law tr hist
 
 end Blanc.Lift.Usdc

@@ -23,7 +23,7 @@ open Jaune Blanc
 theorem lib_staticOnly : ∀ f ∈ Lib.cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
   decide +kernel
 
-theorem lib_quiet : QuietSet Lib.cert.prog (List.range Lib.cert.length) = true := by
+theorem lib_quietSet : QuietSet Lib.cert.prog (List.range Lib.cert.length) = true := by
   decide +kernel
 
 /-- The library calls out only by `STATICCALL` and leaves its storage owner's storage unchanged. -/
@@ -49,9 +49,9 @@ theorem lib_children {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 
   · subst hout
     obtain ⟨f, hf0, hrun⟩ := lift_sound Lib.cert_check codeEq fork run
     have hmem : (0 : Nat) ∈ List.range Lib.cert.length := by decide
-    have hq := (List.all_eq_true.mp lib_quiet) 0 hmem
+    have hq := (List.all_eq_true.mp lib_quietSet) 0 hmem
     rw [hf0] at hq
     simp only [Bool.and_eq_true] at hq
-    exact congrFun (SFunc.Run.world_of_quiet lib_quiet fork hq.1 hq.2 hrun).1 sevm.currentTarget
+    exact congrFun (SFunc.Run.world_of_quiet lib_quietSet fork hq.1 hq.2 hrun).1 sevm.currentTarget
 
 end Blanc.Lift.Usdc
