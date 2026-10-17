@@ -509,4 +509,235 @@ theorem ric_pushMstoreF (hF : WordFrame M0 M lo ws) (j : Nat) {h l : UInt8}
 
 end FrameSteps
 
+/-! ## Forward -/
+
+theorem B256.or_ne_zero_of_left {a c : B256} (ha : a = 1) (hc : c = 0 ∨ c = 1) : (a ||| c) ≠ 0 := by
+  subst ha; rcases hc with rfl | rfl <;> decide
+
+theorem B256.or_ne_zero_of_right {a c : B256} (ha : a = 0 ∨ a = 1) (hc : c = 1) :
+    (a ||| c) ≠ 0 := by
+  subst hc; rcases ha with rfl | rfl <;> decide
+
+theorem B256.eqCheck_cases (a c : B256) : B256.eqCheck a c = 0 ∨ B256.eqCheck a c = 1 := by
+  unfold B256.eqCheck; split <;> simp only [true_or, or_true]
+
+/-- The multiplication guard holds for a product that does not wrap. -/
+theorem B256.mulGuard_of_nofm {x y : B256} (h : B256.Nofm x y) :
+    (B256.eqCheck ((x * y) / x) y ||| B256.eqCheck x 0) ≠ 0 := by
+  by_cases hx : x = 0
+  · refine B256.or_ne_zero_of_right (B256.eqCheck_cases _ _) ?_
+    unfold B256.eqCheck; rw [ite_eq_left hx]
+  · refine B256.or_ne_zero_of_left ?_ (B256.eqCheck_cases _ _)
+    unfold B256.eqCheck
+    rw [ite_eq_left]
+    apply B256.toNat_inj
+    rw [B256.toNat_div hx, B256.toNat_mul_eq_of_nofm h]
+    exact Nat.mul_div_cancel_left _ (B256.toNat_pos hx)
+
+section Fwd
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M : Mem}
+  {G : Nat} {r : Seg} {h l : UInt8} {fail k : SFunc}
+
+/-- **Checked multiplication, forward** (69 gas). -/
+theorem rxc_vyMulT {x y : B256} (hn : B256.Nofm x y) (hroom : S.length + 8 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b ((x * y) :: S) M G) k r) :
+    SFunc.RunExactCut fs sevm C (St b (y :: x :: S) M (G + 69)) (vyMulT h l fail k) r := by
+  unfold vyMulT
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_binary (fn := (· * ·)) (c := gLow) (v := x * y) (by rintro ⟨⟩) (fun _ => rfl) rfl
+    (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x * y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_div rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_eq rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_or rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_branch_succ (B256.mulGuard_of_nofm hn) (rxc_dest ?_)
+  refine rxc_dup (w := x * y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_swap (S' := (x * y) :: (x * y) :: y :: x :: S) rfl ?_
+  refine rxc_pop ?_
+  refine rxc_swap (S' := y :: (x * y) :: x :: S) rfl ?_
+  refine rxc_pop ?_
+  refine rxc_swap (S' := x :: (x * y) :: S) rfl ?_
+  exact rxc_pop kk
+
+/-- **Checked addition, forward** (51 gas). -/
+theorem rxc_vyAddT {x y : B256} (hn : x.toNat + y.toNat < 2 ^ 256) (hroom : S.length + 8 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b ((x + y) :: S) M G) k r) :
+    SFunc.RunExactCut fs sevm C (St b (y :: x :: S) M (G + 51)) (vyAddT h l fail k) r := by
+  unfold vyAddT
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_add (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  have hnl : ¬ (x + y < x) := (B256.nof_iff_not_add_lt x y).mp hn
+  refine rxc_branch_succ ?_ (rxc_dest ?_)
+  · simp only [B256.ltCheck, hnl, ↓reduceIte]; decide
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_add (by simp only [List.length_cons]; omega) ?_
+  refine rxc_swap (S' := y :: (x + y) :: x :: S) rfl ?_
+  refine rxc_pop ?_
+  refine rxc_swap (S' := x :: (x + y) :: S) rfl ?_
+  exact rxc_pop kk
+
+/-- **Checked subtraction, forward** (45 gas). -/
+theorem rxc_vySubT {x y : B256} (hn : y.toNat ≤ x.toNat) (hroom : S.length + 8 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b ((x - y) :: S) M G) k r) :
+    SFunc.RunExactCut fs sevm C (St b (y :: x :: S) M (G + 45)) (vySubT h l fail k) r := by
+  unfold vySubT
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  have hnl : ¬ (x < y) := by rw [B256.lt_iff_toNat_lt_toNat]; omega
+  refine rxc_branch_succ ?_ (rxc_dest ?_)
+  · simp only [B256.ltCheck, hnl, ↓reduceIte]; decide
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_sub' rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_swap (S' := y :: (x - y) :: x :: S) rfl ?_
+  refine rxc_pop ?_
+  refine rxc_swap (S' := x :: (x - y) :: S) rfl ?_
+  exact rxc_pop kk
+
+/-- **Checked division, forward** (38 gas). -/
+theorem rxc_vyDivT {x y : B256} (hn : y ≠ 0) (hroom : S.length + 8 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b ((x / y) :: S) M G) k r) :
+    SFunc.RunExactCut fs sevm C (St b (y :: x :: S) M (G + 38)) (vyDivT h l fail k) r := by
+  unfold vyDivT
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (w := y) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_branch_succ hn (rxc_dest ?_)
+  refine rxc_dup (w := x) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_div rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_swap (S' := y :: (x / y) :: x :: S) rfl ?_
+  refine rxc_pop ?_
+  refine rxc_swap (S' := x :: (x / y) :: S) rfl ?_
+  exact rxc_pop kk
+
+/-- `MLOAD` of frame slot `j`, forward (3 gas). -/
+theorem rxc_mloadF {M0 : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws) (j : Nat)
+    {i v : B256} {f : SFunc} (hi : i.toNat = lo + 32 * j) (hv : ws[j]? = some v)
+    (hroom : S.length < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (i :: S) M (G + 3)) (.next (.reg .mload) f) r := by
+  obtain ⟨hj, -⟩ := List.getElem?_eq_some_iff.mp hv
+  have hsz : M.size % 32 = 0 := by rw [hF.size]; exact hF.aligned
+  have hcov : i.toNat + 32 ≤ M.size := by
+    rw [hF.size, hi]; have := hF.cover; have : j + 1 ≤ ws.length := hj; omega
+  obtain ⟨h1, h2⟩ := hF.read hv
+  exact rxc_mload (mload_covered_cost' hsz hcov) (by rw [hi]; exact h1) (by rw [hi]; exact h2)
+    hroom kk
+
+/-- `PUSH2 o; MLOAD` of frame slot `j`, forward (6 gas). -/
+theorem rxc_pushMloadF {M0 : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws)
+    (j : Nat) {hh ll : UInt8} {le : [hh, ll].length ≤ 32} {v : B256} {f : SFunc}
+    (hi : (Bytes.toB256 [hh, ll]).toNat = lo + 32 * j) (hv : ws[j]? = some v)
+    (hroom : S.length + 1 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b S M (G + 6))
+      (.next (.push [hh, ll] le) (.next (.reg .mload) f)) r :=
+  rxc_push rfl (by omega) (rxc_mloadF hF j hi hv (by omega) kk)
+
+/-- `MSTORE` into frame slot `j`, forward (3 gas). -/
+theorem rxc_mstoreF {M0 : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws) (j : Nat)
+    {i v : B256} {f : SFunc} (hi : i.toNat = lo + 32 * j) (hj : j < ws.length)
+    (kk : SFunc.RunExactCut fs sevm C (St b S (M.write (lo + 32 * j) v.toBytes) G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (i :: v :: S) M (G + 3)) (.next (.reg .mstore) f) r := by
+  have hsz : M.size % 32 = 0 := by rw [hF.size]; exact hF.aligned
+  have hcov : i.toNat + 32 ≤ M.size := by
+    rw [hF.size, hi]; have := hF.cover; have : j + 1 ≤ ws.length := hj; omega
+  exact rxc_mstore (mstore_covered_cost' hsz hcov) (by rw [hi]) kk
+
+/-- `PUSH2 o; MSTORE` into frame slot `j`, forward (6 gas). -/
+theorem rxc_pushMstoreF {M0 : Mem} {lo : Nat} {ws : List B256} (hF : WordFrame M0 M lo ws)
+    (j : Nat) {hh ll : UInt8} {le : [hh, ll].length ≤ 32} {v : B256} {f : SFunc}
+    (hi : (Bytes.toB256 [hh, ll]).toNat = lo + 32 * j) (hj : j < ws.length)
+    (hroom : S.length + 1 < 1024)
+    (kk : SFunc.RunExactCut fs sevm C (St b S (M.write (lo + 32 * j) v.toBytes) G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (v :: S) M (G + 6))
+      (.next (.push [hh, ll] le) (.next (.reg .mstore) f)) r :=
+  rxc_push rfl (by simp only [List.length_cons]; omega) (rxc_mstoreF hF j hi hj kk)
+
+end Fwd
+
+/-! ## Checked operations read back as guards (for the forward walks) -/
+
+section CheckedInv
+
+open Blanc.StableSwapNewton
+
+theorem chkMul_inv {x y : B256} {v : Nat} (h : chkMul x.toNat y.toNat = some v) :
+    B256.Nofm x y ∧ v = (x * y).toNat := by
+  unfold chkMul wordSize at h
+  split at h
+  · rename_i hlt
+    have hn : B256.Nofm x y := hlt
+    exact ⟨hn, by rw [B256.toNat_mul_eq_of_nofm hn]; exact (Option.some.inj h).symm⟩
+  · cases h
+
+theorem chkAdd_inv {x y : B256} {v : Nat} (h : chkAdd x.toNat y.toNat = some v) :
+    x.toNat + y.toNat < 2 ^ 256 ∧ v = (x + y).toNat := by
+  unfold chkAdd wordSize at h
+  split at h
+  · rename_i hlt
+    refine ⟨hlt, ?_⟩
+    rw [B256.toNat_add, Nat.lo, Nat.mod_eq_of_lt hlt]; exact (Option.some.inj h).symm
+  · cases h
+
+theorem chkSub_inv {x y : B256} {v : Nat} (h : chkSub x.toNat y.toNat = some v) :
+    y.toNat ≤ x.toNat ∧ v = (x - y).toNat := by
+  unfold chkSub at h
+  split at h
+  · rename_i hle
+    refine ⟨hle, ?_⟩
+    rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr hle)]
+    exact (Option.some.inj h).symm
+  · cases h
+
+theorem chkDiv_inv {x y : B256} {v : Nat} (h : chkDiv x.toNat y.toNat = some v) :
+    y ≠ 0 ∧ v = (x / y).toNat := by
+  unfold chkDiv at h
+  split at h
+  · cases h
+  · rename_i hne
+    have hy : y ≠ 0 := fun h0 => hne (by rw [h0]; rfl)
+    exact ⟨hy, by rw [B256.toNat_div hy]; exact (Option.some.inj h).symm⟩
+
+end CheckedInv
+
+/-! ## `JUMPI` into a goto entry, forward -/
+
+section FwdBranchTo
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M : Mem}
+  {G : Nat} {r : Seg} {f g : SFunc} {j : Nat}
+
+theorem rxc_branchTo_zero {d : B256} (k : SFunc.RunExactCut fs sevm C (St b S M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (d :: 0 :: S) M (G + 10)) (.branchTo f j) r :=
+  .toZero d popBurnBy_St2 k
+
+theorem rxc_branchTo_cut {d w : B256} (hw : w ≠ 0) (hj : j ∈ C) :
+    SFunc.RunExactCut fs sevm C (St b (d :: w :: S) M (G + 10)) (.branchTo f j)
+      (.at j (St b S M G)) :=
+  .toSuccCut d w hw hj popBurnBy_St2
+
+theorem rxc_branchTo_succ {d w : B256} (hw : w ≠ 0) (hjC : j ∉ C) (hj : fs[j]? = some g)
+    (k : SFunc.RunExactCut fs sevm C (St b S M G) g r) :
+    SFunc.RunExactCut fs sevm C (St b (d :: w :: S) M (G + 10)) (.branchTo f j) r :=
+  .toSucc d w hw hjC hj popBurnBy_St2 k
+
+end FwdBranchTo
+
 end Blanc.Lift

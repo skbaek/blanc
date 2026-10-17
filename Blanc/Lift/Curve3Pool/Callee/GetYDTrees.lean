@@ -40,6 +40,19 @@ def ydTail (k : Nat) (fall : SFunc) : SFunc :=
     (.reg (.dup 1)) (.next (.reg .eq) (.next (.reg .iszero) (.next (.push [0x3b, 0x88] (by
     decide)) (.branchTo fall k))))))))))))))
 
+/-- The stopping test of a Newton pass of the `y` loop (`0x3c56`…), with exit `e`, tail `t`,
+head `k`. -/
+def ydHeadBr (e t k : Nat) (fall : SFunc) : SFunc :=
+  (.branch (.next (.push [0x01] (by decide)) (.next (.push [0x03, 0x00] (by decide)) (.next (.reg
+    .mload) (.next (.push [0x02, 0xe0] (by decide)) (.next (.reg .mload) (vySubT 0x3c 0x5a
+    vyRevertT (.next (.reg .gt) (.next (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x3c,
+    0x6d] (by decide)) (.branch (.next (.push [0x3c, 0xae] (by decide)) (.jump e)) (.dest (.next
+    (.push [0x3c, 0x9d] (by decide)) (.jump t)))))))))))))) (.dest (.next (.push [0x01] (by
+    decide)) (.next (.push [0x02, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x03,
+    0x00] (by decide)) (.next (.reg .mload) (vySubT 0x3c 0x89 vyRevertT (.next (.reg .gt) (.next
+    (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x3c, 0x9c] (by decide)) (.branch (.next
+    (.push [0x3c, 0xae] (by decide)) (.jump e)) (.dest (ydTail k fall)))))))))))))))
+
 /-- One Newton pass of the `y` loop at `0x3b88`, with exit `e`, tail `t`, head `k`. -/
 def ydHead (e t k : Nat) (fall : SFunc) : SFunc :=
   (.dest (.next (.push [0x03, 0x00] (by decide)) (.next (.reg .mload) (.next (.push [0x02, 0xe0]
@@ -52,16 +65,8 @@ def ydHead (e t k : Nat) (fall : SFunc) : SFunc :=
     (.reg .mload) (vySubT 0x3c 0x19 vyRevertT (vyDivT 0x3c 0x2b vyRevertT (.next (.push [0x03,
     0x00] (by decide)) (.next (.reg .mstore) (.next (.push [0x02, 0xe0] (by decide)) (.next (.reg
     .mload) (.next (.push [0x03, 0x00] (by decide)) (.next (.reg .mload) (.next (.reg .gt) (.next
-    (.reg .iszero) (.next (.push [0x3c, 0x72] (by decide)) (.branch (.next (.push [0x01] (by
-    decide)) (.next (.push [0x03, 0x00] (by decide)) (.next (.reg .mload) (.next (.push [0x02,
-    0xe0] (by decide)) (.next (.reg .mload) (vySubT 0x3c 0x5a vyRevertT (.next (.reg .gt) (.next
-    (.reg .iszero) (.next (.reg .iszero) (.next (.push [0x3c, 0x6d] (by decide)) (.branch (.next
-    (.push [0x3c, 0xae] (by decide)) (.jump e)) (.dest (.next (.push [0x3c, 0x9d] (by decide))
-    (.jump t)))))))))))))) (.dest (.next (.push [0x01] (by decide)) (.next (.push [0x02, 0xe0]
-    (by decide)) (.next (.reg .mload) (.next (.push [0x03, 0x00] (by decide)) (.next (.reg
-    .mload) (vySubT 0x3c 0x89 vyRevertT (.next (.reg .gt) (.next (.reg .iszero) (.next (.reg
-    .iszero) (.next (.push [0x3c, 0x9c] (by decide)) (.branch (.next (.push [0x3c, 0xae] (by
-    decide)) (.jump e)) (.dest (ydTail k fall))))))))))))))))))))))))))))))))))))))))))))))))
+    (.reg .iszero) (.next (.push [0x3c, 0x72] (by decide)) (ydHeadBr e t k
+    fall))))))))))))))))))))))))))))))))))
 
 /-- The prologue: arguments to the frame, the `i` range asserts, `c`, `S_`, `Ann`, `_x`, the
 coin-loop counter. -/
@@ -72,17 +77,17 @@ def ydEntry (rest : SFunc) : SFunc :=
     0xa0] (by decide)) (.next (.reg .mstore) (.next (.push [0x01, 0xc0] (by decide)) (.next (.reg
     .mstore) (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mstore) (.next (.push [0x00]
     (by decide)) (.next (.push [0x01, 0x60] (by decide)) (.next (.reg .mload) (.next (.reg .slt)
-    (.next (.reg .iszero) (.next (.push [0x39, 0xc6] (by decide)) (.branch vyRevertT (.dest (.next
-    (.push [0x03] (by decide)) (.next (.push [0x01, 0x60] (by decide)) (.next (.reg .mload)
-    (.next (.reg .slt) (.next (.push [0x39, 0xd6] (by decide)) (.branch vyRevertT (.dest (.next
-    (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x02, 0x20] (by decide))
-    (.next (.reg .mstore) (.next (.push [0x00] (by decide)) (.next (.push [0x02, 0x40] (by
-    decide)) (.next (.reg .mstore) (.next (.push [0x01, 0x40] (by decide)) (.next (.reg .mload)
-    (.next (.push [0x03] (by decide)) (vyMulT 0x39 0xfe vyRevertT (.next (.push [0x02, 0x60] (by
-    decide)) (.next (.reg .mstore) (.next (.push [0x00] (by decide)) (.next (.push [0x02, 0x80]
-    (by decide)) (.next (.reg .mstore) (.next (.push [0x02, 0xa0] (by decide)) (.next (.push
-    [0x00] (by decide)) (.next (.push [0x03] (by decide)) (.next (.reg (.dup 1)) (.next (.reg
-    (.dup 3)) (.next (.reg .mstore) (.next (.reg .add)
+    (.next (.reg .iszero) (.next (.push [0x39, 0xc6] (by decide)) (.branch vyRevertT (.dest
+    (.next (.push [0x03] (by decide)) (.next (.push [0x01, 0x60] (by decide)) (.next (.reg
+    .mload) (.next (.reg .slt) (.next (.push [0x39, 0xd6] (by decide)) (.branch vyRevertT (.dest
+    (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x02, 0x20] (by
+    decide)) (.next (.reg .mstore) (.next (.push [0x00] (by decide)) (.next (.push [0x02, 0x40]
+    (by decide)) (.next (.reg .mstore) (.next (.push [0x01, 0x40] (by decide)) (.next (.reg
+    .mload) (.next (.push [0x03] (by decide)) (vyMulT 0x39 0xfe vyRevertT (.next (.push [0x02,
+    0x60] (by decide)) (.next (.reg .mstore) (.next (.push [0x00] (by decide)) (.next (.push
+    [0x02, 0x80] (by decide)) (.next (.reg .mstore) (.next (.push [0x02, 0xa0] (by decide))
+    (.next (.push [0x00] (by decide)) (.next (.push [0x03] (by decide)) (.next (.reg (.dup 1))
+    (.next (.reg (.dup 3)) (.next (.reg .mstore) (.next (.reg .add)
     rest)))))))))))))))))))))))))))))))))))))))))))))))))))))
 
 /-- The coin-loop test at `0x3a1b`: skip coin `i`, else load `_x = xp[_i]`. -/
@@ -119,18 +124,18 @@ def ydAcc (tail : SFunc) : SFunc :=
 `y_prev = 0`, `y = D`, the `y`-loop counter. -/
 def ydPost (head : SFunc) : SFunc :=
   (.dest (.next (.reg .pop) (.next (.reg .pop) (.next (.push [0x02, 0x20] (by decide)) (.next
-    (.reg .mload) (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (vyMulT 0x3a
-    0xfa vyRevertT (.next (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (.next (.push
-    [0x03] (by decide)) (vyMulT 0x3b 0x1b vyRevertT (vyDivT 0x3b 0x2d vyRevertT (.next (.push
-    [0x02, 0x20] (by decide)) (.next (.reg .mstore) (.next (.push [0x02, 0x40] (by decide))
-    (.next (.reg .mload) (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next
-    (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (vyDivT 0x3b 0x4e vyRevertT (vyAddT
-    0x3b 0x63 vyRevertT (.next (.push [0x02, 0xc0] (by decide)) (.next (.reg .mstore) (.next
-    (.push [0x00] (by decide)) (.next (.push [0x02, 0xe0] (by decide)) (.next (.reg .mstore)
-    (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x03, 0x00] (by
-    decide)) (.next (.reg .mstore) (.next (.push [0x03, 0x20] (by decide)) (.next (.push [0x00]
-    (by decide)) (.next (.push [0xff] (by decide)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
-    (.next (.reg .mstore) (.next (.reg .add) head)))))))))))))))))))))))))))))))))))))))
+    (.reg .mload) (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (vyMulT 0x3a 0xfa
+    vyRevertT (.next (.push [0x02, 0x60] (by decide)) (.next (.reg .mload) (.next (.push [0x03]
+    (by decide)) (vyMulT 0x3b 0x1b vyRevertT (vyDivT 0x3b 0x2d vyRevertT (.next (.push [0x02,
+    0x20] (by decide)) (.next (.reg .mstore) (.next (.push [0x02, 0x40] (by decide)) (.next (.reg
+    .mload) (.next (.push [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x02,
+    0x60] (by decide)) (.next (.reg .mload) (vyDivT 0x3b 0x4e vyRevertT (vyAddT 0x3b 0x63
+    vyRevertT (.next (.push [0x02, 0xc0] (by decide)) (.next (.reg .mstore) (.next (.push [0x00]
+    (by decide)) (.next (.push [0x02, 0xe0] (by decide)) (.next (.reg .mstore) (.next (.push
+    [0x01, 0xe0] (by decide)) (.next (.reg .mload) (.next (.push [0x03, 0x00] (by decide)) (.next
+    (.reg .mstore) (.next (.push [0x03, 0x20] (by decide)) (.next (.push [0x00] (by decide))
+    (.next (.push [0xff] (by decide)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3)) (.next (.reg
+    .mstore) (.next (.reg .add) head)))))))))))))))))))))))))))))))))))))))
 
 /-- The post-loop with the first `y` pass inline (entries 120, 121). -/
 abbrev ydPost0 : SFunc := ydPost (ydHead 141 142 143 .undefined)
