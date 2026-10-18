@@ -3782,7 +3782,7 @@ Use
   gas preservations — `setDelegationStep_gas`, `setDelegationLoop_gas`,
   `setDelegation_gas`, `messageCallDelegation_gas` (the delegation prefix
   hands the call its original grant) — live beside those `*_fields` lemmas in
-  [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean) as the one public copy
+  [`Blanc/MessageDelegationGas.lean`](../Blanc/MessageDelegationGas.lean) as the one public copy
   shared by message-call and history gas bounds.
 - `Blanc.getDelegatedCodeAddress_eq_none_of_size_ne` in
   [`Blanc/CodeDelegation.lean`](../Blanc/CodeDelegation.lean) discharges a

@@ -1,4 +1,5 @@
 import Jaune.MemoryAccounting
+import Blanc.MessageDelegationGas
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTransactionGas
 import Blanc.ExecutionTraceCalldata

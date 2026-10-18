@@ -1,4 +1,5 @@
 import Blanc.ExecutionCommittedGas
+import Blanc.MessageDelegationGas
 import Blanc.ExecutionTraceSettledFrames
 
 namespace Blanc
