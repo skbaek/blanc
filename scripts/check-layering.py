@@ -220,6 +220,7 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 SHARED += ["Lift.SpawnKindsM"]
 SHARED += ["Lift.GuardedCalls"]
 SHARED += ["Lift.ChildFrameCode"]
+SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
