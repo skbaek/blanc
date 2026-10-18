@@ -4409,6 +4409,12 @@ contract-neutral.
   code at `4`), in [`Blanc/Lift/GuardedCalls.lean`](../Blanc/Lift/GuardedCalls.lean).  The same
   module proves the linear walk's predecessors unique (`PushReach.succ_inj`) and where a continued
   step lands (`Evm.step_cont_succ`).
+- To know what a direct committed child of a call-only frame runs, use
+  `Exec.childFrames_code` (a child at an address holding nonempty undelegated code at the frame's
+  entry runs that code; `Xinst.step_staticcall_spawn` is the `STATICCALL` sibling of
+  `Xinst.step_call_spawn`), and for a child of spawn-free code `Exec.Frame.keeps_of_spawnFree`
+  (it keeps every other address's code and the storage of every other address with code), in
+  [`Blanc/Lift/ChildFrameCode.lean`](../Blanc/Lift/ChildFrameCode.lean).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness

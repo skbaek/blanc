@@ -486,6 +486,7 @@ import Blanc.Lift.Reach
 import Blanc.Lift.Cursor
 import Blanc.Lift.SpawnKindsM
 import Blanc.Lift.GuardedCalls
+import Blanc.Lift.ChildFrameCode
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ReachChain
 import Blanc.Lift.ReachDispatch
