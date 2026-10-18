@@ -137,7 +137,7 @@ theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
   xji 0x378a 0x38f7 hw
   · -- `amounts[k] != 0`: the transfer
     have hne : rliAmt sevm k ≠ 0 := by
-      have e := eqCheck_eq_zero hw
+      have e := ne_of_eqCheck_eq_zero hw
       rwa [zero_lit, B256.xor_zero] at e
     clear hw
     obtain ⟨bq, c, L1, d, img1, G1, hbq, rfl, hcq, hkp, hR1, hW1, hrd, h⟩ :=
