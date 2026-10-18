@@ -859,6 +859,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.LiveLink",
                     "Lift.Curve3Pool.Walk.RliLiveCut",
                     "Lift.Curve3Pool.RemoveImbalanceLive",
+                    "Lift.Curve3Pool.AddLiquidityLive",
                     "Lift.Curve3Pool.Walk.ViewsDispatch",
                     "Lift.Curve3Pool.Walk.ViewsLoop",
                     "Lift.Curve3Pool.Walk.ViewsKit",

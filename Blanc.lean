@@ -1272,3 +1272,4 @@ import Blanc.Lift.Curve3Pool.Walk.RliLiveWords
 import Blanc.Lift.Curve3Pool.Walk.LiveLink
 import Blanc.Lift.Curve3Pool.Walk.RliLiveCut
 import Blanc.Lift.Curve3Pool.RemoveImbalanceLive
+import Blanc.Lift.Curve3Pool.AddLiquidityLive
