@@ -94,9 +94,10 @@ fact about `pre` alone.
 The coin part is the caller's own chain `V 0 → V 1 → …` (`C3With c3 σ (V k)`): coin `k`'s
 state-changing call moves `V k` to `V (k + 1)`, a skipped call stays (`V k ⊆ V (k + 1)`), and `V`
 must not read 3Crv's storage (`C3Blind`), so 3Crv's own calls keep it.  A positive transfer
-changes a coin's ledger, so no single coin world closed under it is satisfiable by an honest coin
+changes a coin's ledger, so no single coin world closed under it is satisfiable by an honest coin.
 (`removeLiquidity_premises_satisfiable` and its siblings in `Curve3Pool3CrvLiveWitness.lean`
-instantiate these chains with `Token20` coins and the deployed 3Crv). -/
+instantiate the frame theorems' world chains with `Token20` coins and the deployed 3Crv, of the
+`C3At c3 σ ∧ coins-as-at-entry` shape these entry forms take.) -/
 
 /-- **The worlds whose 3Crv is as given**: 3Crv's code at `c3` and 3Crv's storage `σ`. -/
 def C3At (c3 : Adr) (σ : Stor) (b : Devm) : Prop :=

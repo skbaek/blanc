@@ -8,8 +8,8 @@ import Blanc.Composition.Curve3Pool3CrvTxFrame
 
 At the transaction's entry machine (`ExFrame`), `exchange_live` applies with every premise
 discharged: the model step is kernel-evaluated (`ex_step`), the coins' `transferFrom`/`transfer`
-answers come from `Token20`'s code (`token20_coinPullOkAt`, `token20_coinPushOkAt`, over the invariants `WPull`,
-`WPush`, `True`), the children keep what the pool's walk needs (`exFrame_children`), and the gas
+answers come from `Token20`'s code (`wPull_pullOkAt`, `wPush_pushOkAt`: `token20_coinPullOkAt`,
+`token20_coinPushOkAt` over the invariants `WPull`, `WPush`, `WCore`), the children keep what the pool's walk needs (`exFrame_children`), and the gas
 is within the frame's `878400` (`ex_cost`: `costExchange ≤ 218685`, plus four calls at `80000`).
 
 `ex_frame_live` is the end-to-end non-vacuity witness of `exchange_live`: an actual successful
@@ -130,11 +130,12 @@ theorem ex_frame_live :
     (wPull_closed hf.target hf.origPool) (wPush_closed hf.target hf.origPool)
     ⟨hf.coin0Code, hf.coin1Code, hf.coin0Stor, hf.coin1Stor, exFrame_core hf⟩
     (fun h => absurd h (by decide))
-    (token20_coinPullOkAt (exFrame_fork hf) hf.static (by rw [hf.depth]; decide) hf.caller hf.target
-      hf.origCoin0 hpre0 (exFrame_coin hf 0) (exFrame_exDx hf))
+    (by rw [exFrame_exDx hf]
+        exact wPull_pullOkAt (exFrame_fork hf) hf.static (by rw [hf.depth]; decide) hf.caller
+          hf.target hf.origCoin0 hpre0 (exFrame_coin hf 0))
     (wCore_closed hf.target hf.origPool)
-    (token20_coinPushOkAt (exFrame_fork hf) hf.static (by rw [hf.depth]; decide) hf.caller hf.target
-      hf.origCoin1 hpre1 (exFrame_coin hf 1) rfl)
+    (wPush_pushOkAt (exFrame_fork hf) hf.static (by rw [hf.depth]; decide) hf.caller hf.target
+      hf.origCoin1 hpre1 (exFrame_coin hf 1))
     (by rw [hdx]; have := ex_cost (sevm := sevm) (b := b); omega)
     (by rw [hb]; exact exFrame_gas hf)
   rw [hb, hdx] at L

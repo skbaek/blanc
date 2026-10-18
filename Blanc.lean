@@ -900,6 +900,7 @@ import Blanc.Composition.Curve3Pool3CrvCoinAnswers
 import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
 import Blanc.Composition.Curve3Pool3CrvCapstoneTx
 import Blanc.Composition.Curve3Pool3CrvCapstone
+import Blanc.Composition.Curve3Pool3CrvLiveWitness
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp

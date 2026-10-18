@@ -17,7 +17,14 @@ its code (`lift_exact`), so the coins' replies are their code's, not premises.
 
 * `ccExt_le`: the call's two windows inside `[0, 0xc20)` cost at most 309 gas of expansion,
   whatever the memory;
-* `ccMsg_data`: the child's calldata is the input window of the caller's memory.
+* `ccMsg_data`: the child's calldata is the input window of the caller's memory;
+* `pull_child`, `push_child`: `Token20`'s `transferFrom` / `transfer` from a pool call site, for
+  any coin, ledger and amount the call fits (`T20PullFits`, `T20MoveFits`), leaving the coin's
+  ledger as `t20Move (t20Allow …)` / `t20Move`;
+* `token20_coinPullOkAt`, `token20_coinPushOkAt`: the pool's `CoinPullOkAt` / `CoinPushOkAt` at
+  any window inside `[0, 0xc20)` and `U ≥ 80000`, over any world invariants closed under what the
+  clean child leaves (`CoinLeaves`); `wPull_pullOkAt`, `wPush_pushOkAt` are `exchange`'s instances
+  over the capstone's `WPull` / `WPush` / `WCore`.
 -/
 
 namespace Blanc.Composition.Curve3Pool3CrvInstance
@@ -201,18 +208,80 @@ theorem retPost_refund_created (b : Devm) (S : List B256) (M : Mem) (G : Nat) (w
       (VyperNonreentrantDeployed.Token20.retPost b S M G w).createdAccounts = b.createdAccounts :=
   ⟨rfl, rfl⟩
 
-/-! ## Coin 0's `transferFrom(trader, pool, 100)` -/
+/-! ## `Token20`'s ledger after the pool's calls -/
 
-/-- The pull's calldata. -/
-def pullData : Bytes :=
-  Curve3Pool.transferFromSel ++ trader.toB256.toBytes ++ poolAddr.toB256.toBytes ++
-    (Nat.toB256 exchangeDx).toBytes
+theorem getStor_of_state {d c : Devm} (h : d.state = c.state) (a : Adr) :
+    d.getStor a = c.getStor a := by
+  unfold Devm.getStor Devm.getAcct
+  rw [h]
+
+theorem getCode_of_state {d c : Devm} (h : d.state = c.state) (a : Adr) :
+    d.getCode a = c.getCode a := by
+  unfold Devm.getCode Devm.getAcct
+  rw [h]
+
+
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+/-- The ledger `transfer`'s move of `v` from `src` to `dst` leaves (its two writes). -/
+def t20Move (σ : Stor) (src dst : Adr) (v : B256) : Stor :=
+  (σ.set (balSlot src) (σ.get (balSlot src) - v)).set (balSlot dst)
+    (v + (σ.set (balSlot src) (σ.get (balSlot src) - v)).get (balSlot dst))
+
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+/-- **The move fits**: `src`'s balance covers `v`, and `dst`'s credit does not wrap. -/
+def T20MoveFits (σ : Stor) (src dst : Adr) (v : B256) : Prop :=
+  v ≤ σ.get (balSlot src) ∧
+    v ≤ v + (σ.set (balSlot src) (σ.get (balSlot src) - v)).get (balSlot dst)
+
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+/-- The ledger after `transferFrom`'s allowance debit (`src`'s allowance to `sp`). -/
+def t20Allow (σ : Stor) (src sp : Adr) (v : B256) : Stor :=
+  σ.set (allowSlot src sp) (σ.get (allowSlot src sp) - v)
+
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+/-- **`transferFrom(src, dst, v)` by `sp` fits**: the allowance covers `v`, then the move fits on
+the debited ledger. -/
+def T20PullFits (σ : Stor) (src sp dst : Adr) (v : B256) : Prop :=
+  v ≤ σ.get (allowSlot src sp) ∧ T20MoveFits (t20Allow σ src sp v) src dst v
+
+theorem transferSel_abi : Curve3Pool.transferSel = abiSelectorBytes 0xa9059cbb := by decide
+theorem transferFromSel_abi : Curve3Pool.transferFromSel = abiSelectorBytes 0x23b872dd := by
+  decide
+theorem balanceOfSel_abi : Curve3Pool.balanceOfSel = abiSelectorBytes 0x70a08231 := by decide
+
+/-- A three-word call's argument words. -/
+theorem cc_dataWord_threeWords {e : Sevm} {sel w a x : B256}
+    (h : e.data = abiSelectorBytes sel ++ w.toBytes ++ a.toBytes ++ x.toBytes) :
+    Sevm.dataWord e 4 = w ∧ Sevm.dataWord e 36 = a ∧ Sevm.dataWord e 68 = x := by
+  have l4 := UniswapV2PairWeth9Joint.abiSelectorBytes_length sel
+  have hw := B256.length_toBytes w
+  have ha := B256.length_toBytes a
+  have hx := B256.length_toBytes x
+  refine ⟨?_, ?_, ?_⟩
+  · unfold Sevm.dataWord
+    rw [h, show (4 : B256).toNat = 4 from rfl, List.sliceD, List.append_assoc, List.append_assoc,
+      List.drop_append_of_le_length (by omega), List.drop_of_length_le (by omega), List.nil_append,
+      List.takeD_eq_take 0 (by simp only [List.length_append]; omega),
+      List.take_left' hw, B256.toB256_toBytes]
+  · unfold Sevm.dataWord
+    rw [h, show (36 : B256).toNat = 36 from rfl, List.sliceD, List.append_assoc,
+      List.drop_append_of_le_length (by simp only [List.length_append]; omega),
+      List.drop_of_length_le (by simp only [List.length_append]; omega), List.nil_append,
+      List.takeD_eq_take 0 (by simp only [List.length_append]; omega), List.take_left' ha,
+      B256.toB256_toBytes]
+  · unfold Sevm.dataWord
+    rw [h, show (68 : B256).toNat = 68 from rfl, List.sliceD,
+      List.drop_append_of_le_length (by simp only [List.length_append]; omega),
+      List.drop_of_length_le (by simp only [List.length_append]; omega), List.nil_append,
+      List.takeD_eq_take 0 (by omega), List.take_of_length_le (by omega), B256.toB256_toBytes]
+
+/-! ## A coin's `transferFrom(src, pool, v)` from a pool call site -/
 
 section Pull
 
 open VyperNonreentrantDeployed.Token20 (tfFrom tfTo tfVal tfAllow tf1 tf2 mvFrom mvTo mv1 mv2 mv3 mv4
   mvCost transferFromGas transferFromBase transferFromPost transferFrom_runExact cert_check
-  cert_jumpsOk)
+  cert_jumpsOk balSlot allowSlot)
 
 /-- What `transferFrom`'s halting machine keeps of its base. -/
 theorem tfPost_facts (s : Sevm) (p : Devm) (G : Nat) :
@@ -225,155 +294,148 @@ theorem tfPost_facts (s : Sevm) (p : Devm) (G : Nat) :
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {t ii oi : B256}
 
-/-- **Coin 0 runs `transferFrom(trader, pool, 100)` cleanly**: from a pool call site whose input
-window holds the pull's calldata, at a coin holding `Token20` over `coin0Stor`, the child halts
-with `true`, charging at most `72918`, writing only coin 0's storage. -/
+/-- **A coin running `Token20` answers the pool's `transferFrom(src, pool, v)` cleanly**: from a
+pool call site whose input window holds the call's data, when the pull fits the coin's ledger
+(`T20PullFits`), the child halts with `true`, charging at most `72918`, writing only the coin's
+storage (as `t20Move (t20Allow …)`), creating nothing; its refund counter is nonnegative when the
+coin is untouched in the transaction and the three slots it writes are distinct. -/
 theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    (htarget : sevm.currentTarget = poolAddr) (ht : t.toAdr = coin0Addr)
-    (hcode : b.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code)
-    (hstor : b.getStor coin0Addr = coin0Stor)
-    (horig : (getOrigAcct sevm coin0Addr).stor = coin0Stor) (hcr : coin0Addr ∉ b.createdAccounts)
-    (hdata : (M.read ii.toNat (0x64 : B256).toNat).1 = pullData)
+    {c src : Adr} {v : B256} (ht : t.toAdr = c)
+    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
+    (hdata : (M.read ii.toNat (0x64 : B256).toNat).1 = Curve3Pool.transferFromSel ++
+      src.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ v.toBytes)
+    (hfits : T20PullFits (b.getStor c) src sevm.currentTarget sevm.currentTarget v)
     (hfwd : 75300 ≤ ccFwd b S M G t ii 0x64 oi) :
     ∃ cpost used, exec (initEvm (ccMsg sevm b S M G t ii 0x64 oi)) = .ok cpost ∧
       cpost.error = none ∧ cpost.output = (1 : B256).toBytes ∧
       cpost.gasLeft = ccFwd b S M G t ii 0x64 oi - used ∧ used ≤ 72918 ∧
       (∀ a, cpost.getCode a = b.getCode a) ∧
-      (∀ a, a ≠ coin0Addr → cpost.getStor a = b.getStor a) ∧
-      0 ≤ cpost.refundCounter ∧ cpost.createdAccounts = b.createdAccounts := by
+      (∀ a, a ≠ c → cpost.getStor a = b.getStor a) ∧
+      cpost.getStor c = t20Move (t20Allow (b.getStor c) src sevm.currentTarget v) src
+        sevm.currentTarget v ∧
+      cpost.createdAccounts = b.createdAccounts ∧
+      ((getOrigAcct sevm c).stor = b.getStor c → c ∉ b.createdAccounts →
+        allowSlot src sevm.currentTarget ≠ balSlot src →
+        allowSlot src sevm.currentTarget ≠ balSlot sevm.currentTarget →
+        balSlot src ≠ balSlot sevm.currentTarget → 0 ≤ cpost.refundCounter) := by
   generalize hmsg : ccMsg sevm b S M G t ii 0x64 oi = msg
   have hcC : (initSevm msg).code = VyperNonreentrantDeployed.Token20.code := by
     rw [← hmsg, ← hcode, ← ht]; rfl
   have hfC : CoveredFork (initSevm msg).benvStat.fork := by rw [← hmsg]; exact hfork
   have hsC : (initSevm msg).isStatic = false := by
     rw [← hmsg]; show (false || sevm.isStatic) = false; rw [hstatic]; rfl
-  have hct : (initSevm msg).currentTarget = coin0Addr := by rw [← hmsg, ← ht]; rfl
-  have hcl : (initSevm msg).caller = poolAddr := by rw [← hmsg, ← htarget]; rfl
-  have hd : (initSevm msg).data = pullData := by rw [← hmsg, ccMsg_data, hdata]
+  have hct : (initSevm msg).currentTarget = c := by rw [← hmsg, ← ht]; rfl
+  have hcl : (initSevm msg).caller = sevm.currentTarget := by rw [← hmsg]; rfl
+  have hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++
+      sevm.currentTarget.toB256.toBytes ++ v.toBytes := by
+    rw [← hmsg, ccMsg_data, hdata, transferFromSel_abi]
   have hgl : (initDevm msg).gasLeft = ccFwd b S M G t ii 0x64 oi := by rw [← hmsg]; rfl
-  have hget : ∀ k, (initDevm msg).getStorVal coin0Addr k = coin0Stor.get k := by
+  have hgs : (initDevm msg).getStor c = b.getStor c := by rw [← hmsg]; rfl
+  have hget : ∀ k, (initDevm msg).getStorVal c k = (b.getStor c).get k := by
     intro k
-    rw [← hmsg, ← hstor]
+    rw [← hgs]
     rfl
-  have hsel : Sevm.selector (initSevm msg) = 0x23b872dd := by
-    unfold Sevm.selector Sevm.dataWord; rw [hd]; decide +kernel
-  have hfrom : tfFrom (initSevm msg) = trader := by
-    unfold tfFrom Sevm.dataWord; rw [hd]; decide +kernel
-  have hto : tfTo (initSevm msg) = poolAddr := by
-    unfold tfTo Sevm.dataWord; rw [hd]; decide +kernel
-  have hval : tfVal (initSevm msg) = 100 := by
-    unfold tfVal Sevm.dataWord; rw [hd]; decide +kernel
+  have hsel : Sevm.selector (initSevm msg) = 0x23b872dd :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
+      (by rw [hd, List.append_assoc, List.append_assoc])
+  obtain ⟨w4, w36, w68⟩ := cc_dataWord_threeWords hd
+  have hfrom : tfFrom (initSevm msg) = src := by unfold tfFrom; rw [w4, toAdr_toB256]
+  have hto : tfTo (initSevm msg) = sevm.currentTarget := by unfold tfTo; rw [w36, toAdr_toB256]
+  have hval : tfVal (initSevm msg) = v := w68
   -- the reads
-  have hal : tfAllow (initSevm msg) (initDevm msg) = 100 := by
-    unfold tfAllow; rw [hct, hget, hfrom, hcl]; decide +kernel
+  have hal : tfAllow (initSevm msg) (initDevm msg) = (b.getStor c).get (allowSlot src
+      sevm.currentTarget) := by
+    unfold tfAllow; rw [hct, hget, hfrom, hcl]
+  have hs2 : Devm.getStor (tf2 (initSevm msg) (initDevm msg)) c =
+      t20Allow (b.getStor c) src sevm.currentTarget v := by
+    unfold tf2
+    rw [← hct, afterSstore_getStor_self, hct, hal, hval, hfrom, hcl]
+    unfold tf1
+    rw [afterSload_getStor, hgs]
+    rfl
   have hfromBal : mvFrom (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
-      (tfFrom (initSevm msg)) = 1000 := by
-    unfold mvFrom tf2
-    show (Devm.getStor (afterSstore _ _ _ _) (initSevm msg).currentTarget).get _ = _
-    rw [afterSstore_getStor_self, hfrom, hcl, Stor.get_set_ne _ (by decide +kernel)]
-    unfold tf1
-    rw [afterSload_getStor, hct]
-    exact (hget _).trans (by decide +kernel)
+      (tfFrom (initSevm msg)) = (t20Allow (b.getStor c) src sevm.currentTarget v).get
+        (balSlot src) := by
+    unfold mvFrom
+    rw [getStorVal_eq_getStor, hct, hs2, hfrom]
+  have hs3 : Devm.getStor (mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
+      (tfFrom (initSevm msg)) (tfVal (initSevm msg))) c =
+      (t20Allow (b.getStor c) src sevm.currentTarget v).set (balSlot src)
+        ((t20Allow (b.getStor c) src sevm.currentTarget v).get (balSlot src) - v) := by
+    unfold mv2
+    rw [← hct, afterSstore_getStor_self, hct, hfromBal, hval, hfrom]
+    unfold mv1
+    rw [afterSload_getStor, hs2]
   have htoBal : mvTo (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
-      (tfTo (initSevm msg)) (tfVal (initSevm msg)) = 1000 := by
-    unfold mvTo mv2
-    show (Devm.getStor (afterSstore _ _ _ _) (initSevm msg).currentTarget).get _ = _
-    rw [afterSstore_getStor_self, hfrom, hto, Stor.get_set_ne _ (by decide +kernel)]
-    unfold mv1 tf2
-    rw [afterSload_getStor, afterSstore_getStor_self, hcl, hfrom,
-      Stor.get_set_ne _ (by decide +kernel)]
-    unfold tf1
-    rw [afterSload_getStor, hct]
-    exact (hget _).trans (by decide +kernel)
+      (tfTo (initSevm msg)) (tfVal (initSevm msg)) =
+      ((t20Allow (b.getStor c) src sevm.currentTarget v).set (balSlot src)
+        ((t20Allow (b.getStor c) src sevm.currentTarget v).get (balSlot src) - v)).get
+        (balSlot sevm.currentTarget) := by
+    unfold mvTo
+    rw [getStorVal_eq_getStor, hct, hs3, hto]
+  have hs4 : Devm.getStor (transferFromBase (initSevm msg) (initDevm msg)) c =
+      t20Move (t20Allow (b.getStor c) src sevm.currentTarget v) src sevm.currentTarget v := by
+    unfold transferFromBase mv4
+    rw [← hct, afterSstore_getStor_self, hct]
+    unfold mv3
+    rw [afterSload_getStor, hs3, htoBal, hval, hto]
+    rfl
   -- the charge
   have hused : transferFromGas (initSevm msg) (initDevm msg) ≤ 72918 := by
     unfold transferFromGas mvCost
     have := Lift.Curve3Pool.sstoreCost_le_22100 (initSevm msg) (mv3 (initSevm msg)
       (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)) (tfTo (initSevm msg))
-      (tfVal (initSevm msg))) (VyperNonreentrantDeployed.Token20.balSlot (tfTo (initSevm msg)))
+      (tfVal (initSevm msg))) (balSlot (tfTo (initSevm msg)))
       (tfVal (initSevm msg) + mvTo (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
         (tfFrom (initSevm msg)) (tfTo (initSevm msg)) (tfVal (initSevm msg)))
     have := Lift.Curve3Pool.sstoreCost_le_22100 (initSevm msg) (mv1 (initSevm msg)
       (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)))
-      (VyperNonreentrantDeployed.Token20.balSlot (tfFrom (initSevm msg)))
+      (balSlot (tfFrom (initSevm msg)))
       (mvFrom (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)) -
         tfVal (initSevm msg))
     have := Lift.Curve3Pool.sstoreCost_le_22100 (initSevm msg) (tf1 (initSevm msg) (initDevm msg))
-      (VyperNonreentrantDeployed.Token20.allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
+      (allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
       (tfAllow (initSevm msg) (initDevm msg) - tfVal (initSevm msg))
     have := sloadCost_le (initSevm msg) (mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
-      (tfFrom (initSevm msg)) (tfVal (initSevm msg)))
-      (VyperNonreentrantDeployed.Token20.balSlot (tfTo (initSevm msg)))
+      (tfFrom (initSevm msg)) (tfVal (initSevm msg))) (balSlot (tfTo (initSevm msg)))
     have := sloadCost_le (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
-      (VyperNonreentrantDeployed.Token20.balSlot (tfFrom (initSevm msg)))
+      (balSlot (tfFrom (initSevm msg)))
     have := sloadCost_le (initSevm msg) (initDevm msg)
-      (VyperNonreentrantDeployed.Token20.allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
+      (allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
     unfold gasColdSload at *
     omega
+  obtain ⟨fa, fm, fn⟩ := hfits
   have run := transferFrom_runExact (pre := initDevm msg) (G := ccFwd b S M G t ii 0x64 oi -
       transferFromGas (initSevm msg) (initDevm msg)) hfC hsC hsel (by rw [← hmsg]; rfl)
     (by rw [← hmsg]; rfl) (by rw [hgl]; omega) (by unfold gCallStipend; omega)
-    (by rw [hal, hval]) (by rw [hfromBal, hval]; decide)
-    (by rw [htoBal, hval]; decide)
+    (by rw [hal, hval]; exact fa) (by rw [hfromBal, hval]; exact fm)
+    (by rw [htoBal, hval]; exact fn)
   have hexec := (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) (.ok _)).mp
     (lift_exact cert_check cert_jumpsOk hcC hfC run)
   obtain ⟨pe, po, pg, ps⟩ := tfPost_facts (initSevm msg) (initDevm msg)
     (ccFwd b S M G t ii 0x64 oi - transferFromGas (initSevm msg) (initDevm msg))
-  -- the refund counter and the created accounts
-  have hcrC : (initSevm msg).currentTarget ∉ (initDevm msg).createdAccounts := by
-    rw [hct, ← hmsg]; exact hcr
-  have horC : (getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor = coin0Stor := by
-    rw [hct, ← hmsg]; exact horig
   have c1 := afterSload_createdAccounts (initSevm msg) (initDevm msg)
-    (VyperNonreentrantDeployed.Token20.allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
+    (allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
   have c2 := (afterSstore_createdAccounts (initSevm msg) (tf1 (initSevm msg) (initDevm msg))
-    (VyperNonreentrantDeployed.Token20.allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
+    (allowSlot (tfFrom (initSevm msg)) (initSevm msg).caller)
     (tfAllow (initSevm msg) (initDevm msg) - tfVal (initSevm msg))).trans c1
   have c3 := (afterSload_createdAccounts (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
-    (VyperNonreentrantDeployed.Token20.balSlot (tfFrom (initSevm msg)))).trans c2
+    (balSlot (tfFrom (initSevm msg)))).trans c2
   have c4 := (afterSstore_createdAccounts (initSevm msg)
     (mv1 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)))
-    (VyperNonreentrantDeployed.Token20.balSlot (tfFrom (initSevm msg)))
+    (balSlot (tfFrom (initSevm msg)))
     (mvFrom (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)) -
       tfVal (initSevm msg))).trans c3
   have c5 := (afterSload_createdAccounts (initSevm msg)
     (mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
       (tfVal (initSevm msg)))
-    (VyperNonreentrantDeployed.Token20.balSlot (tfTo (initSevm msg)))).trans c4
+    (balSlot (tfTo (initSevm msg)))).trans c4
   have c6 := (afterSstore_createdAccounts (initSevm msg)
     (mv3 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
       (tfTo (initSevm msg)) (tfVal (initSevm msg)))
-    (VyperNonreentrantDeployed.Token20.balSlot (tfTo (initSevm msg)))
+    (balSlot (tfTo (initSevm msg)))
     (tfVal (initSevm msg) + mvTo (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
       (tfFrom (initSevm msg)) (tfTo (initSevm msg)) (tfVal (initSevm msg)))).trans c5
-  have r2 : (tf1 (initSevm msg) (initDevm msg)).refundCounter ≤
-      (tf2 (initSevm msg) (initDevm msg)).refundCounter :=
-    sstore_first_ge (by unfold tf1; rw [c1]; exact hcrC) horC (by
-      unfold tf1; rw [getStorVal_afterSload, hct]; exact hget _)
-  have r4 : (mv1 (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
-        (tfFrom (initSevm msg))).refundCounter ≤
-      (mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
-        (tfVal (initSevm msg))).refundCounter :=
-    sstore_first_ge (by unfold mv1; rw [c3]; exact hcrC) horC (by
-      unfold mv1; rw [getStorVal_afterSload]
-      show mvFrom (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)) = _
-      rw [hfromBal, hfrom]; decide +kernel)
-  have r6 : (mv3 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
-        (tfTo (initSevm msg)) (tfVal (initSevm msg))).refundCounter ≤
-      (transferFromBase (initSevm msg) (initDevm msg)).refundCounter :=
-    sstore_first_ge (by unfold mv3; rw [c5]; exact hcrC) horC (by
-      unfold mv3; rw [getStorVal_afterSload]
-      show mvTo (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
-        (tfTo (initSevm msg)) (tfVal (initSevm msg)) = _
-      rw [htoBal, hto]; decide +kernel)
-  have r1 : (tf1 (initSevm msg) (initDevm msg)).refundCounter = 0 := by
-    unfold tf1; rw [afterSload_refundCounter, ← hmsg]; rfl
-  have r3 := afterSload_refundCounter (sevm := initSevm msg) (b := tf2 (initSevm msg) (initDevm msg))
-    (key := VyperNonreentrantDeployed.Token20.balSlot (tfFrom (initSevm msg)))
-  have r5 := afterSload_refundCounter (sevm := initSevm msg)
-    (b := mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
-      (tfVal (initSevm msg)))
-    (key := VyperNonreentrantDeployed.Token20.balSlot (tfTo (initSevm msg)))
   obtain ⟨pr, pc⟩ := retPost_refund_created (transferFromBase (initSevm msg) (initDevm msg))
     [tfVal (initSevm msg), (tfTo (initSevm msg)).toB256, (tfFrom (initSevm msg)).toB256,
       Sevm.selector (initSevm msg)]
@@ -382,7 +444,7 @@ theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
     (ccFwd b S M G t ii 0x64 oi - transferFromGas (initSevm msg) (initDevm msg)) 1
   refine ⟨transferFromPost (initSevm msg) (initDevm msg)
       (ccFwd b S M G t ii 0x64 oi - transferFromGas (initSevm msg) (initDevm msg)),
-    transferFromGas (initSevm msg) (initDevm msg), hexec, ?_, po, pg, hused, ?_, ?_, ?_, ?_⟩
+    transferFromGas (initSevm msg) (initDevm msg), hexec, ?_, po, pg, hused, ?_, ?_, ?_, ?_, ?_⟩
   · rw [pe]
     unfold transferFromBase mv4 mv3 mv2 mv1 tf2 tf1
     rw [afterSstore_error, afterSload_error, afterSstore_error, afterSload_error, afterSstore_error,
@@ -405,7 +467,51 @@ theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
     rw [afterSstore_getStor_ne _ _ _ _ _ hne, afterSload_getStor, afterSstore_getStor_ne _ _ _ _ _ hne,
       afterSload_getStor, afterSstore_getStor_ne _ _ _ _ _ hne, afterSload_getStor, ← hmsg]
     rfl
-  · change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
+  · rw [getStor_of_state ps]
+    exact hs4
+  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
+    rw [pc]
+    unfold transferFromBase mv4
+    rw [c6, ← hmsg]
+    rfl
+  · intro horig hcr hd1 hd2 hd3
+    have hcrC : (initSevm msg).currentTarget ∉ (initDevm msg).createdAccounts := by
+      rw [hct, ← hmsg]; exact hcr
+    have horC : (getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor = b.getStor c := by
+      rw [hct, ← hmsg]; exact horig
+    have r2 : (tf1 (initSevm msg) (initDevm msg)).refundCounter ≤
+        (tf2 (initSevm msg) (initDevm msg)).refundCounter :=
+      sstore_first_ge (by unfold tf1; rw [c1]; exact hcrC) horC (by
+        unfold tf1; rw [getStorVal_afterSload, hct]; exact hget _)
+    have r4 : (mv1 (initSevm msg) (tf2 (initSevm msg) (initDevm msg))
+          (tfFrom (initSevm msg))).refundCounter ≤
+        (mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
+          (tfVal (initSevm msg))).refundCounter :=
+      sstore_first_ge (by unfold mv1; rw [c3]; exact hcrC) horC (by
+        unfold mv1; rw [getStorVal_afterSload]
+        show mvFrom (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg)) = _
+        rw [hfromBal, hfrom]
+        unfold t20Allow
+        rw [Stor.get_set_ne _ hd1])
+    have r6 : (mv3 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
+          (tfTo (initSevm msg)) (tfVal (initSevm msg))).refundCounter ≤
+        (transferFromBase (initSevm msg) (initDevm msg)).refundCounter :=
+      sstore_first_ge (by unfold mv3; rw [c5]; exact hcrC) horC (by
+        unfold mv3; rw [getStorVal_afterSload]
+        show mvTo (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
+          (tfTo (initSevm msg)) (tfVal (initSevm msg)) = _
+        rw [htoBal, hto, Stor.get_set_ne _ hd3]
+        unfold t20Allow
+        rw [Stor.get_set_ne _ hd2])
+    have r1 : (tf1 (initSevm msg) (initDevm msg)).refundCounter = 0 := by
+      unfold tf1; rw [afterSload_refundCounter, ← hmsg]; rfl
+    have r3 := afterSload_refundCounter (sevm := initSevm msg)
+      (b := tf2 (initSevm msg) (initDevm msg)) (key := balSlot (tfFrom (initSevm msg)))
+    have r5 := afterSload_refundCounter (sevm := initSevm msg)
+      (b := mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
+        (tfVal (initSevm msg)))
+      (key := balSlot (tfTo (initSevm msg)))
+    change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
     rw [pr]
     calc (0 : Int) = (tf1 (initSevm msg) (initDevm msg)).refundCounter := r1.symm
       _ ≤ (tf2 (initSevm msg) (initDevm msg)).refundCounter := r2
@@ -416,24 +522,15 @@ theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
       _ = (mv3 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
             (tfTo (initSevm msg)) (tfVal (initSevm msg))).refundCounter := r5.symm
       _ ≤ _ := r6
-  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
-    rw [pc]
-    unfold transferFromBase mv4
-    rw [c6, ← hmsg]
-    rfl
 
 end Pull
 
-/-! ## Coin 1's `transfer(trader, 132)` -/
-
-/-- The push's calldata. -/
-def pushData : Bytes :=
-  Curve3Pool.transferSel ++ trader.toB256.toBytes ++ (132 : B256).toBytes
+/-! ## A coin's `transfer(dst, v)` from a pool call site -/
 
 section Push
 
 open VyperNonreentrantDeployed.Token20 (trTo trVal mvFrom mvTo mv1 mv2 mv3 mv4 mvCost transferGas
-  transferBase transferPost transfer_runExact cert_check cert_jumpsOk)
+  transferBase transferPost transfer_runExact cert_check cert_jumpsOk balSlot)
 
 /-- What `transfer`'s halting machine keeps of its base. -/
 theorem trPost_facts (s : Sevm) (p : Devm) (G : Nat) :
@@ -446,118 +543,111 @@ theorem trPost_facts (s : Sevm) (p : Devm) (G : Nat) :
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {t ii oi : B256}
 
-/-- **Coin 1 runs `transfer(trader, 132)` from the pool cleanly**: at a coin holding `Token20`
-over `coin1Stor`, the child halts with `true`, charging at most `48573`, writing only coin 1's
-storage. -/
+/-- **A coin running `Token20` answers the pool's `transfer(dst, v)` cleanly**: from a pool call
+site whose input window holds the call's data, when the move from the pool fits the coin's ledger
+(`T20MoveFits`), the child halts with `true`, charging at most `72918`, writing only the coin's
+storage (as `t20Move`), creating nothing; its refund counter is nonnegative when the coin is
+untouched in the transaction and the two balance slots differ. -/
 theorem push_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    (htarget : sevm.currentTarget = poolAddr) (ht : t.toAdr = coin1Addr)
-    (hcode : b.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code)
-    (hstor : b.getStor coin1Addr = coin1Stor)
-    (horig : (getOrigAcct sevm coin1Addr).stor = coin1Stor) (hcr : coin1Addr ∉ b.createdAccounts)
-    (hdata : (M.read ii.toNat (0x44 : B256).toNat).1 = pushData)
+    {c dst : Adr} {v : B256} (ht : t.toAdr = c)
+    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
+    (hdata : (M.read ii.toNat (0x44 : B256).toNat).1 =
+      Curve3Pool.transferSel ++ dst.toB256.toBytes ++ v.toBytes)
+    (hfits : T20MoveFits (b.getStor c) sevm.currentTarget dst v)
     (hfwd : 75300 ≤ ccFwd b S M G t ii 0x44 oi) :
     ∃ cpost used, exec (initEvm (ccMsg sevm b S M G t ii 0x44 oi)) = .ok cpost ∧
       cpost.error = none ∧ cpost.output = (1 : B256).toBytes ∧
       cpost.gasLeft = ccFwd b S M G t ii 0x44 oi - used ∧ used ≤ 72918 ∧
       (∀ a, cpost.getCode a = b.getCode a) ∧
-      (∀ a, a ≠ coin1Addr → cpost.getStor a = b.getStor a) ∧
-      0 ≤ cpost.refundCounter ∧ cpost.createdAccounts = b.createdAccounts := by
+      (∀ a, a ≠ c → cpost.getStor a = b.getStor a) ∧
+      cpost.getStor c = t20Move (b.getStor c) sevm.currentTarget dst v ∧
+      cpost.createdAccounts = b.createdAccounts ∧
+      ((getOrigAcct sevm c).stor = b.getStor c → c ∉ b.createdAccounts →
+        balSlot sevm.currentTarget ≠ balSlot dst → 0 ≤ cpost.refundCounter) := by
   generalize hmsg : ccMsg sevm b S M G t ii 0x44 oi = msg
   have hcC : (initSevm msg).code = VyperNonreentrantDeployed.Token20.code := by
     rw [← hmsg, ← hcode, ← ht]; rfl
   have hfC : CoveredFork (initSevm msg).benvStat.fork := by rw [← hmsg]; exact hfork
   have hsC : (initSevm msg).isStatic = false := by
     rw [← hmsg]; show (false || sevm.isStatic) = false; rw [hstatic]; rfl
-  have hct : (initSevm msg).currentTarget = coin1Addr := by rw [← hmsg, ← ht]; rfl
-  have hcl : (initSevm msg).caller = poolAddr := by rw [← hmsg, ← htarget]; rfl
-  have hd : (initSevm msg).data = pushData := by rw [← hmsg, ccMsg_data, hdata]
+  have hct : (initSevm msg).currentTarget = c := by rw [← hmsg, ← ht]; rfl
+  have hcl : (initSevm msg).caller = sevm.currentTarget := by rw [← hmsg]; rfl
+  have hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++
+      v.toBytes := by
+    rw [← hmsg, ccMsg_data, hdata, transferSel_abi]
   have hgl : (initDevm msg).gasLeft = ccFwd b S M G t ii 0x44 oi := by rw [← hmsg]; rfl
-  have hget : ∀ k, (initDevm msg).getStorVal coin1Addr k = coin1Stor.get k := by
+  have hgs : (initDevm msg).getStor c = b.getStor c := by rw [← hmsg]; rfl
+  have hget : ∀ k, (initDevm msg).getStorVal c k = (b.getStor c).get k := by
     intro k
-    rw [← hmsg, ← hstor]
+    rw [← hgs]
     rfl
-  have hsel : Sevm.selector (initSevm msg) = 0xa9059cbb := by
-    unfold Sevm.selector Sevm.dataWord; rw [hd]; decide +kernel
-  have hto : trTo (initSevm msg) = trader := by
-    unfold trTo Sevm.dataWord; rw [hd]; decide +kernel
-  have hval : trVal (initSevm msg) = 132 := by
-    unfold trVal Sevm.dataWord; rw [hd]; decide +kernel
-  have hfromBal : mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller = 2000 := by
+  have hsel : Sevm.selector (initSevm msg) = 0xa9059cbb :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide) (by rw [hd, List.append_assoc])
+  obtain ⟨w4, w36, -⟩ := UniswapV2PairWeth9Joint.dataWord_twoWords hd
+  have hto : trTo (initSevm msg) = dst := by unfold trTo; rw [w4, toAdr_toB256]
+  have hval : trVal (initSevm msg) = v := w36
+  have hfromBal : mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller =
+      (b.getStor c).get (balSlot sevm.currentTarget) := by
     unfold mvFrom
     rw [hct, hget, hcl]
-    decide +kernel
-  have htoBal : mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
-      (trVal (initSevm msg)) = 0 := by
-    unfold mvTo mv2
-    show (Devm.getStor (afterSstore _ _ _ _) (initSevm msg).currentTarget).get _ = _
-    rw [afterSstore_getStor_self, hto, hcl, Stor.get_set_ne _ (by decide +kernel)]
+  have hs2 : Devm.getStor (mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller
+      (trVal (initSevm msg))) c = (b.getStor c).set (balSlot sevm.currentTarget)
+        ((b.getStor c).get (balSlot sevm.currentTarget) - v) := by
+    unfold mv2
+    rw [← hct, afterSstore_getStor_self, hct, hfromBal, hval, hcl]
     unfold mv1
-    rw [afterSload_getStor, hct]
-    exact (hget _).trans (by decide +kernel)
+    rw [afterSload_getStor, hgs]
+  have htoBal : mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
+      (trVal (initSevm msg)) = ((b.getStor c).set (balSlot sevm.currentTarget)
+        ((b.getStor c).get (balSlot sevm.currentTarget) - v)).get (balSlot dst) := by
+    unfold mvTo
+    rw [getStorVal_eq_getStor, hct, hs2, hto]
+  have hs4 : Devm.getStor (transferBase (initSevm msg) (initDevm msg)) c =
+      t20Move (b.getStor c) sevm.currentTarget dst v := by
+    unfold transferBase mv4
+    rw [← hct, afterSstore_getStor_self, hct]
+    unfold mv3
+    rw [afterSload_getStor, hs2, htoBal, hval, hto]
+    rfl
   have hused : transferGas (initSevm msg) (initDevm msg) ≤ 72918 := by
     unfold transferGas mvCost
     have := Lift.Curve3Pool.sstoreCost_le_22100 (initSevm msg) (mv3 (initSevm msg) (initDevm msg)
       (initSevm msg).caller (trTo (initSevm msg)) (trVal (initSevm msg)))
-      (VyperNonreentrantDeployed.Token20.balSlot (trTo (initSevm msg)))
+      (balSlot (trTo (initSevm msg)))
       (trVal (initSevm msg) + mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller
         (trTo (initSevm msg)) (trVal (initSevm msg)))
     have := Lift.Curve3Pool.sstoreCost_le_22100 (initSevm msg) (mv1 (initSevm msg) (initDevm msg)
-      (initSevm msg).caller) (VyperNonreentrantDeployed.Token20.balSlot (initSevm msg).caller)
+      (initSevm msg).caller) (balSlot (initSevm msg).caller)
       (mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller - trVal (initSevm msg))
     have := sloadCost_le (initSevm msg) (mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller
-      (trVal (initSevm msg))) (VyperNonreentrantDeployed.Token20.balSlot (trTo (initSevm msg)))
-    have := sloadCost_le (initSevm msg) (initDevm msg)
-      (VyperNonreentrantDeployed.Token20.balSlot (initSevm msg).caller)
+      (trVal (initSevm msg))) (balSlot (trTo (initSevm msg)))
+    have := sloadCost_le (initSevm msg) (initDevm msg) (balSlot (initSevm msg).caller)
     unfold gasColdSload at *
     omega
+  obtain ⟨fm, fn⟩ := hfits
   have run := transfer_runExact (pre := initDevm msg) (G := ccFwd b S M G t ii 0x44 oi -
       transferGas (initSevm msg) (initDevm msg)) hfC hsC hsel (by rw [← hmsg]; rfl)
     (by rw [← hmsg]; rfl) (by rw [hgl]; omega) (by unfold gCallStipend; omega)
-    (by rw [hfromBal, hval]; decide) (by rw [htoBal, hval]; decide)
+    (by rw [hfromBal, hval]; exact fm) (by rw [htoBal, hval]; exact fn)
   have hexec := (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) (.ok _)).mp
     (lift_exact cert_check cert_jumpsOk hcC hfC run)
   obtain ⟨pe, po, pg, ps⟩ := trPost_facts (initSevm msg) (initDevm msg)
     (ccFwd b S M G t ii 0x44 oi - transferGas (initSevm msg) (initDevm msg))
-  -- the refund counter and the created accounts
-  have hcrC : (initSevm msg).currentTarget ∉ (initDevm msg).createdAccounts := by
-    rw [hct, ← hmsg]; exact hcr
-  have horC : (getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor = coin1Stor := by
-    rw [hct, ← hmsg]; exact horig
   have c1 := afterSload_createdAccounts (initSevm msg) (initDevm msg)
-    (VyperNonreentrantDeployed.Token20.balSlot (initSevm msg).caller)
+    (balSlot (initSevm msg).caller)
   have c2 := (afterSstore_createdAccounts (initSevm msg)
     (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller)
-    (VyperNonreentrantDeployed.Token20.balSlot (initSevm msg).caller)
+    (balSlot (initSevm msg).caller)
     (mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller - trVal (initSevm msg))).trans c1
   have c3 := (afterSload_createdAccounts (initSevm msg)
     (mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller (trVal (initSevm msg)))
-    (VyperNonreentrantDeployed.Token20.balSlot (trTo (initSevm msg)))).trans c2
+    (balSlot (trTo (initSevm msg)))).trans c2
   have c4 := (afterSstore_createdAccounts (initSevm msg)
     (mv3 (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
       (trVal (initSevm msg)))
-    (VyperNonreentrantDeployed.Token20.balSlot (trTo (initSevm msg)))
+    (balSlot (trTo (initSevm msg)))
     (trVal (initSevm msg) + mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller
       (trTo (initSevm msg)) (trVal (initSevm msg)))).trans c3
-  have r2 : (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter ≤
-      (mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller
-        (trVal (initSevm msg))).refundCounter :=
-    sstore_first_ge (by unfold mv1; rw [c1]; exact hcrC) horC (by
-      unfold mv1; rw [getStorVal_afterSload]
-      show mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller = _
-      rw [hfromBal, hcl]; decide +kernel)
-  have r4 : (mv3 (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
-        (trVal (initSevm msg))).refundCounter ≤
-      (transferBase (initSevm msg) (initDevm msg)).refundCounter :=
-    sstore_first_ge (by unfold mv3; rw [c3]; exact hcrC) horC (by
-      unfold mv3; rw [getStorVal_afterSload]
-      show mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
-        (trVal (initSevm msg)) = _
-      rw [htoBal, hto]; decide +kernel)
-  have r1 : (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter = 0 := by
-    unfold mv1; rw [afterSload_refundCounter, ← hmsg]; rfl
-  have r3 := afterSload_refundCounter (sevm := initSevm msg)
-    (b := mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller (trVal (initSevm msg)))
-    (key := VyperNonreentrantDeployed.Token20.balSlot (trTo (initSevm msg)))
   obtain ⟨pr, pc⟩ := retPost_refund_created (transferBase (initSevm msg) (initDevm msg))
     [trVal (initSevm msg), (trTo (initSevm msg)).toB256, (initSevm msg).caller.toB256,
       Sevm.selector (initSevm msg)]
@@ -565,7 +655,7 @@ theorem push_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
     (ccFwd b S M G t ii 0x44 oi - transferGas (initSevm msg) (initDevm msg)) 1
   refine ⟨transferPost (initSevm msg) (initDevm msg)
       (ccFwd b S M G t ii 0x44 oi - transferGas (initSevm msg) (initDevm msg)),
-    transferGas (initSevm msg) (initDevm msg), hexec, ?_, po, pg, hused, ?_, ?_, ?_, ?_⟩
+    transferGas (initSevm msg) (initDevm msg), hexec, ?_, po, pg, hused, ?_, ?_, ?_, ?_, ?_⟩
   · rw [pe]
     unfold transferBase mv4 mv3 mv2 mv1
     rw [afterSstore_error, afterSload_error, afterSstore_error, afterSload_error, ← hmsg]
@@ -586,7 +676,39 @@ theorem push_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
     rw [afterSstore_getStor_ne _ _ _ _ _ hne, afterSload_getStor, afterSstore_getStor_ne _ _ _ _ _ hne,
       afterSload_getStor, ← hmsg]
     rfl
-  · change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
+  · rw [getStor_of_state ps]
+    exact hs4
+  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
+    rw [pc]
+    unfold transferBase mv4
+    rw [c4, ← hmsg]
+    rfl
+  · intro horig hcr hd1
+    have hcrC : (initSevm msg).currentTarget ∉ (initDevm msg).createdAccounts := by
+      rw [hct, ← hmsg]; exact hcr
+    have horC : (getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor = b.getStor c := by
+      rw [hct, ← hmsg]; exact horig
+    have r2 : (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter ≤
+        (mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller
+          (trVal (initSevm msg))).refundCounter :=
+      sstore_first_ge (by unfold mv1; rw [c1]; exact hcrC) horC (by
+        unfold mv1; rw [getStorVal_afterSload]
+        show mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller = _
+        rw [hfromBal, hcl])
+    have r4 : (mv3 (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
+          (trVal (initSevm msg))).refundCounter ≤
+        (transferBase (initSevm msg) (initDevm msg)).refundCounter :=
+      sstore_first_ge (by unfold mv3; rw [c3]; exact hcrC) horC (by
+        unfold mv3; rw [getStorVal_afterSload]
+        show mvTo (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
+          (trVal (initSevm msg)) = _
+        rw [htoBal, hto, Stor.get_set_ne _ hd1])
+    have r1 : (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter = 0 := by
+      unfold mv1; rw [afterSload_refundCounter, ← hmsg]; rfl
+    have r3 := afterSload_refundCounter (sevm := initSevm msg)
+      (b := mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller (trVal (initSevm msg)))
+      (key := balSlot (trTo (initSevm msg)))
+    change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
     rw [pr]
     calc (0 : Int) = (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter :=
           r1.symm
@@ -595,13 +717,132 @@ theorem push_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
       _ = (mv3 (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
             (trVal (initSevm msg))).refundCounter := r3.symm
       _ ≤ _ := r4
-  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
-    rw [pc]
-    unfold transferBase mv4
-    rw [c4, ← hmsg]
-    rfl
 
 end Push
+
+/-! ## The coins' premises, from `Token20`'s code
+
+`token20_coinPullOkAt` and `token20_coinPushOkAt` discharge the pool's `CoinPullOkAt` /
+`CoinPushOkAt` at any call window inside `[0, 0xc20)` and any gas bound `U ≥ 80000`, for a coin
+holding `Token20`, over any world invariants `W` (where the call fits the coin's ledger) and `W'`
+(closed under what the clean child leaves, `CoinLeaves`). -/
+
+/-- **What a clean coin child leaves**: every code kept, every storage but the coin's `c` kept, the
+coin's storage `σ'`, the error flag and the created accounts kept, and the refund counter not
+lowered when `R` holds. -/
+structure CoinLeaves (c : Adr) (σ' : Stor) (R : Prop) (b d : Devm) : Prop where
+  code : ∀ a, d.getCode a = b.getCode a
+  other : ∀ a, a ≠ c → d.getStor a = b.getStor a
+  stor : d.getStor c = σ'
+  error : d.error = b.error
+  created : d.createdAccounts = b.createdAccounts
+  refund : R → b.refundCounter ≤ d.refundCounter
+
+theorem token20_undelegated :
+    getDelegatedCodeAddress VyperNonreentrantDeployed.Token20.code = none :=
+  getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
+
+/-- A non-precompile, as the crossing states it. -/
+theorem prec_false {p : Prop} (h : ¬ p) : p = (false = true) :=
+  propext ⟨fun hp => absurd hp h, fun hf => absurd hf Bool.false_ne_true⟩
+
+theorem idReady_of_child {sevm : Sevm} {b d : Devm} (hcode : d.getCode 4 = b.getCode 4)
+    (hacc : ∀ a ∈ b.accessedAddresses, a ∈ d.accessedAddresses) (h : IdReady sevm b) :
+    IdReady sevm d :=
+  ⟨by rw [hcode]; exact h.nodeleg, hacc _ h.warm, h.pre, h.fork⟩
+
+theorem ccPost_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
+    (c : Devm) : (ccPost b S M G t ii is oi c).error = b.error := rfl
+
+theorem ccPost_refund (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
+    (c : Devm) :
+    (ccPost b S M G t ii is oi c).refundCounter = b.refundCounter + c.refundCounter := rfl
+
+theorem ccPost_created (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
+    (c : Devm) : (ccPost b S M G t ii is oi c).createdAccounts = c.createdAccounts := rfl
+
+section Premises
+
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+
+variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256}
+
+/-- **A coin answers the pool's pull from `Token20`'s code** (`CoinPullOkAt` at any window inside
+`[0, 0xc20)`): wherever the pull fits the coin's ledger, `Token20`'s actual `transferFrom` run
+answers it. -/
+theorem token20_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
+    (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
+    (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
+    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+      T20PullFits (b.getStor c) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+    (hW' : ∀ b d, W b → CoinLeaves c (t20Move (t20Allow (b.getStor c) sevm.caller
+        sevm.currentTarget amt) sevm.caller sevm.currentTarget amt)
+      ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.caller ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.currentTarget ∧
+        balSlot sevm.caller ≠ balSlot sevm.currentTarget) b d → W' d) :
+    Curve3Pool.CoinPullOkAt sevm W W' t amt U ii oi := by
+  intro b S M G hW0 hUG hG hin hS
+  obtain ⟨hc, hfits⟩ := hW b hW0
+  have hext : ccExt b S M G ii 0x64 oi ≤ 309 :=
+    ccExt_le (by decide) (by rw [show (0x64 : B256).toNat = 0x64 from rfl]; exact hii) hoi
+  have hfwd := ccFwd_ge (t := t) (by omega) hext
+  obtain ⟨cpost, used, hexec, herr, hout, hgas, hused, hcode, hstor, hs, hcr, hrf⟩ :=
+    pull_child hfork hstatic ht hc hin hfits hfwd
+  obtain ⟨hrun, hpost, hok, hlen, hg1, hg2, hst, hacc⟩ := cc_answer_true hfork
+    (by rw [ht, show b.state.getCode c = b.getCode c from rfl, hc]; exact token20_undelegated)
+    hdepth (by rw [ht]; exact prec_false hprec) hS hG (by omega) hext hused hexec herr hout hgas
+  refine ⟨_, hrun, hpost, hok, hlen, by omega, hg2,
+    by rw [getStor_of_state hst, hstor _ (Ne.symm hne)], hW' b _ hW0 ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
+    idReady_of_child (by rw [getCode_of_state hst, hcode]) hacc⟩
+  · intro a; rw [getCode_of_state hst, hcode]
+  · intro a ha; rw [getStor_of_state hst, hstor a ha]
+  · rw [getStor_of_state hst, hs]
+  · exact ccPost_error ..
+  · exact (ccPost_created ..).trans hcr
+  · rintro ⟨h1, h2, h3, h4, h5⟩
+    rw [ccPost_refund]
+    have := hrf h1 h2 h3 h4 h5
+    omega
+
+/-- **A coin answers the pool's push from `Token20`'s code** (`CoinPushOkAt` at any window inside
+`[0, 0xc20)`): wherever the transfer to the caller fits the coin's ledger, `Token20`'s actual
+`transfer` run answers it. -/
+theorem token20_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
+    (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
+    (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
+    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+      T20MoveFits (b.getStor c) sevm.currentTarget sevm.caller amt)
+    (hW' : ∀ b d, W b → CoinLeaves c (t20Move (b.getStor c) sevm.currentTarget sevm.caller amt)
+      ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
+        balSlot sevm.currentTarget ≠ balSlot sevm.caller) b d → W' d) :
+    Curve3Pool.CoinPushOkAt sevm W W' t amt U ii oi := by
+  intro b S M G hW0 hUG hG hin hS
+  obtain ⟨hc, hfits⟩ := hW b hW0
+  have hext : ccExt b S M G ii 0x44 oi ≤ 309 :=
+    ccExt_le (by decide) (by rw [show (0x44 : B256).toNat = 0x44 from rfl]; exact hii) hoi
+  have hfwd := ccFwd_ge (t := t) (by omega) hext
+  obtain ⟨cpost, used, hexec, herr, hout, hgas, hused, hcode, hstor, hs, hcr, hrf⟩ :=
+    push_child hfork hstatic ht hc hin hfits hfwd
+  obtain ⟨hrun, hpost, hok, hlen, hg1, hg2, hst, hacc⟩ := cc_answer_true hfork
+    (by rw [ht, show b.state.getCode c = b.getCode c from rfl, hc]; exact token20_undelegated)
+    hdepth (by rw [ht]; exact prec_false hprec) hS hG (by omega) hext hused hexec herr hout hgas
+  refine ⟨_, hrun, hpost, hok, hlen, by omega, hg2,
+    by rw [getStor_of_state hst, hstor _ (Ne.symm hne)], hW' b _ hW0 ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
+    idReady_of_child (by rw [getCode_of_state hst, hcode]) hacc⟩
+  · intro a; rw [getCode_of_state hst, hcode]
+  · intro a ha; rw [getStor_of_state hst, hstor a ha]
+  · rw [getStor_of_state hst, hs]
+  · exact ccPost_error ..
+  · exact (ccPost_created ..).trans hcr
+  · rintro ⟨h1, h2, h3⟩
+    rw [ccPost_refund]
+    have := hrf h1 h2 h3
+    omega
+
+end Premises
 
 /-! ## The coins' premises for `exchange(0, 1, 100, 0)`
 
@@ -635,111 +876,61 @@ def WPush (sevm : Sevm) (b : Devm) : Prop :=
   b.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code ∧ b.getStor coin1Addr = coin1Stor ∧
     WCore sevm b
 
-theorem token20_undelegated :
-    getDelegatedCodeAddress VyperNonreentrantDeployed.Token20.code = none :=
-  getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
-
-theorem getStor_of_state {d c : Devm} (h : d.state = c.state) (a : Adr) :
-    d.getStor a = c.getStor a := by
-  unfold Devm.getStor Devm.getAcct
-  rw [h]
-
-theorem getCode_of_state {d c : Devm} (h : d.state = c.state) (a : Adr) :
-    d.getCode a = c.getCode a := by
-  unfold Devm.getCode Devm.getAcct
-  rw [h]
-
-/-- A non-precompile, as the crossing states it. -/
-theorem prec_false {p : Prop} (h : ¬ p) : p = (false = true) :=
-  propext ⟨fun hp => absurd hp h, fun hf => absurd hf Bool.false_ne_true⟩
-
-theorem idReady_of_child {sevm : Sevm} {b d : Devm} (hcode : d.getCode 4 = b.getCode 4)
-    (hacc : ∀ a ∈ b.accessedAddresses, a ∈ d.accessedAddresses) (h : IdReady sevm b) :
-    IdReady sevm d :=
-  ⟨by rw [hcode]; exact h.nodeleg, hacc _ h.warm, h.pre, h.fork⟩
-
-theorem ccPost_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
-    (c : Devm) : (ccPost b S M G t ii is oi c).error = b.error := rfl
-
-theorem ccPost_refund (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
-    (c : Devm) :
-    (ccPost b S M G t ii is oi c).refundCounter = b.refundCounter + c.refundCounter := rfl
-
-theorem ccPost_created (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is oi : B256)
-    (c : Devm) : (ccPost b S M G t ii is oi c).createdAccounts = c.createdAccounts := rfl
-
-section Premises
-
-variable {sevm : Sevm} {t amt : B256}
-
-/-- A clean coin child keeps the core: it writes only its coin's storage, creates nothing, and
-adds a nonnegative refund. -/
-theorem wCore_child {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ii is oi : B256} {c : Devm}
-    (h : WCore sevm b) (hcr : c.createdAccounts = b.createdAccounts)
-    (hpool : (ccPost b S M G t ii is oi c).getStor poolAddr = b.getStor poolAddr)
-    (hr : 0 ≤ c.refundCounter) : WCore sevm (ccPost b S M G t ii is oi c) := by
+/-- A clean coin child keeps the core when its refund condition holds: it writes only its coin's
+storage, creates nothing, and does not lower the refund counter. -/
+theorem wCore_leaves {sevm : Sevm} {c : Adr} {σ' : Stor} {R : Prop} {b d : Devm}
+    (h : WCore sevm b) (hl : CoinLeaves c σ' R b d) (hc : c ≠ poolAddr) (hR : R) :
+    WCore sevm d := by
   obtain ⟨he, hp, h0, h1, hpot⟩ := h
-  have hc : (ccPost b S M G t ii is oi c).createdAccounts = b.createdAccounts :=
-    (ccPost_created b S M G t ii is oi c).trans hcr
-  refine ⟨(ccPost_error b S M G t ii is oi c).trans he, by rw [hc]; exact hp,
-    by rw [hc]; exact h0, by rw [hc]; exact h1, ?_⟩
-  rw [refundPotential_add (ccPost_refund b S M G t ii is oi c) hc hpool]
+  refine ⟨hl.error.trans he, by rw [hl.created]; exact hp, by rw [hl.created]; exact h0,
+    by rw [hl.created]; exact h1, ?_⟩
+  have hr := hl.refund hR
+  rw [refundPotential_add (x := d.refundCounter - b.refundCounter) (by omega) hl.created
+    (hl.other _ (Ne.symm hc))]
   omega
 
-/-- **Coin 0 answers the pull** (`CoinPullOkAt` at `exchange`'s window, from `Token20`'s code):
-a non-vacuity witness for the pool's coin-pull premise — the synthetic token's actual
-`transferFrom` run satisfies it, at `exchange`'s window `(0x600, 0x6c0)` over `WPull`/`WPush`. -/
-theorem token20_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+/-- **Coin 0 answers `exchange`'s pull** over `WPull`/`WPush`: `token20_coinPullOkAt` at the
+synthetic ledger. -/
+theorem wPull_pullOkAt {sevm : Sevm} {t : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hcaller : sevm.caller = trader)
     (htarget : sevm.currentTarget = poolAddr)
     (horig : (getOrigAcct sevm coin0Addr).stor = coin0Stor)
-    (hprec : ¬ sevm.benvStat.rules.isPrecomp coin0Addr) (ht : t.toAdr = coin0Addr)
-    (hamt : amt = Nat.toB256 exchangeDx) :
-    Curve3Pool.CoinPullOkAt sevm (WPull sevm) (WPush sevm) t amt 80000 0x600 0x6c0 := by
-  intro b S M G hW hU hG hin hS
-  obtain ⟨hc0, hc1, hs0, hs1, hcore⟩ := hW
-  have hext : ccExt b S M G 0x600 0x64 0x6c0 ≤ 309 := ccExt_le (by decide) (by decide) (by decide)
-  have hfwd := ccFwd_ge (t := t) hU hext
-  have hc0' : b.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code := hc0
-  obtain ⟨cpost, used, hexec, herr, hout, hgas, hused, hcode, hstor, hrf, hcr⟩ := pull_child
-    hfork hstatic htarget ht hc0' hs0 horig hcore.2.2.1
-    (by rw [hin, hcaller, htarget, hamt]; rfl) hfwd
-  obtain ⟨hrun, hpost, hok, hlen, hg1, hg2, hst, hacc⟩ := cc_answer_true hfork
-    (by rw [ht, hc0']; exact token20_undelegated) hdepth (by rw [ht]; exact prec_false hprec) hS hG
-    hU hext hused hexec herr hout hgas
-  have hpool : (ccPost b S M G t 0x600 0x64 0x6c0 cpost).getStor poolAddr = b.getStor poolAddr := by
-    rw [getStor_of_state hst, hstor _ (by decide +kernel)]
-  refine ⟨_, hrun, hpost, hok, hlen, hg1, hg2, by rw [htarget]; exact hpool, ⟨?_, ?_, ?_⟩, ?_⟩
-  · rw [getCode_of_state hst, hcode]; exact hc1
-  · rw [getStor_of_state hst, hstor _ (by decide +kernel)]; exact hs1
-  · exact wCore_child hcore hcr hpool hrf
-  · exact idReady_of_child (by rw [getCode_of_state hst, hcode]) hacc
+    (hprec : ¬ sevm.benvStat.rules.isPrecomp coin0Addr) (ht : t.toAdr = coin0Addr) :
+    Curve3Pool.CoinPullOkAt sevm (WPull sevm) (WPush sevm) t (Nat.toB256 exchangeDx) 80000
+      0x600 0x6c0 := by
+  refine token20_coinPullOkAt hfork hstatic hdepth hprec ht (by rw [htarget]; decide +kernel)
+    (le_refl _) (by decide) (by decide) (fun b hb => ⟨hb.1, ?_⟩) (fun b d hb hl => ?_)
+  · rw [hb.2.2.1, hcaller, htarget]
+    unfold T20PullFits T20MoveFits t20Allow
+    decide +kernel
+  · obtain ⟨c0, c1, s0, s1, hcore⟩ := hb
+    refine ⟨by rw [hl.code]; exact c1, by rw [hl.other _ (by decide +kernel)]; exact s1,
+      wCore_leaves hcore hl (by decide +kernel) ⟨by rw [horig, s0], hcore.2.2.1, ?_⟩⟩
+    rw [hcaller, htarget]
+    decide +kernel
 
-/-- **Coin 1 answers the push** (`CoinPushOkAt` at `exchange`'s window, from `Token20`'s code):
-a non-vacuity witness for the pool's coin-push premise — the synthetic token's actual `transfer`
-run satisfies it, at `exchange`'s window `(0xb60, 0xc00)` from `WPush` into `WCore`. -/
-theorem token20_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+/-- **Coin 1 answers `exchange`'s push** of `132` from `WPush` into `WCore`. -/
+theorem wPush_pushOkAt {sevm : Sevm} {t : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hcaller : sevm.caller = trader)
     (htarget : sevm.currentTarget = poolAddr)
     (horig : (getOrigAcct sevm coin1Addr).stor = coin1Stor)
-    (hprec : ¬ sevm.benvStat.rules.isPrecomp coin1Addr) (ht : t.toAdr = coin1Addr)
-    (hamt : amt = 132) :
-    Curve3Pool.CoinPushOkAt sevm (WPush sevm) (WCore sevm) t amt 80000 0xb60 0xc00 := by
-  intro b S M G hW hU hG hin hS
-  obtain ⟨hc1, hs1, hcore⟩ := hW
-  have hext : ccExt b S M G 0xb60 0x44 0xc00 ≤ 309 := ccExt_le (by decide) (by decide) (by decide)
-  have hfwd := ccFwd_ge (t := t) hU hext
-  have hc1' : b.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code := hc1
-  obtain ⟨cpost, used, hexec, herr, hout, hgas, hused, hcode, hstor, hrf, hcr⟩ := push_child
-    hfork hstatic htarget ht hc1' hs1 horig hcore.2.2.2.1 (by rw [hin, hcaller, hamt]; rfl) hfwd
-  obtain ⟨hrun, hpost, hok, hlen, hg1, hg2, hst, hacc⟩ := cc_answer_true hfork
-    (by rw [ht, hc1']; exact token20_undelegated) hdepth (by rw [ht]; exact prec_false hprec) hS hG
-    hU hext hused hexec herr hout hgas
-  have hpool : (ccPost b S M G t 0xb60 0x44 0xc00 cpost).getStor poolAddr = b.getStor poolAddr := by
-    rw [getStor_of_state hst, hstor _ (by decide +kernel)]
-  refine ⟨_, hrun, hpost, hok, hlen, hg1, hg2, by rw [htarget]; exact hpool,
-    wCore_child hcore hcr hpool hrf, ?_⟩
-  exact idReady_of_child (by rw [getCode_of_state hst, hcode]) hacc
+    (hprec : ¬ sevm.benvStat.rules.isPrecomp coin1Addr) (ht : t.toAdr = coin1Addr) :
+    Curve3Pool.CoinPushOkAt sevm (WPush sevm) (WCore sevm) t 132 80000 0xb60 0xc00 := by
+  refine token20_coinPushOkAt hfork hstatic hdepth hprec ht (by rw [htarget]; decide +kernel)
+    (le_refl _) (by decide) (by decide) (fun b hb => ⟨hb.1, ?_⟩) (fun b d hb hl => ?_)
+  · rw [hb.2.1, hcaller, htarget]
+    unfold T20MoveFits
+    decide +kernel
+  · obtain ⟨c1, s1, hcore⟩ := hb
+    refine wCore_leaves hcore hl (by decide +kernel) ⟨by rw [horig, s1], hcore.2.2.2.1, ?_⟩
+    rw [hcaller, htarget]
+    decide +kernel
+
+section Closed
+
+variable {sevm : Sevm}
 
 /-- The pool's snapshot storage is zero off `poolKeys`, as an `SSTORE` sentry reads it. -/
 theorem pool_hK (horig : (getOrigAcct sevm poolAddr).stor = poolStor) {b : Devm}
@@ -823,6 +1014,6 @@ theorem wPush_closed (htarget : sevm.currentTarget = poolAddr)
       (wCore_closed htarget horig).sha b b' rd hp hc⟩
   log _ _ h := h
 
-end Premises
+end Closed
 
 end Blanc.Composition.Curve3Pool3CrvInstance
