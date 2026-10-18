@@ -870,6 +870,8 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.AlLiveD1",
                     "Lift.Curve3Pool.Walk.AlLiveFee",
                     "Lift.Curve3Pool.Walk.AlLiveD2",
+                    "Lift.Curve3Pool.Walk.AlLiveD2Get",
+                    "Lift.Curve3Pool.Walk.AlLiveMint",
                     "Lift.Curve3Pool.Walk.ViewsDispatch",
                     "Lift.Curve3Pool.Walk.ViewsLoop",
                     "Lift.Curve3Pool.Walk.ViewsKit",
