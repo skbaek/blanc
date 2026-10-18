@@ -12,9 +12,8 @@ token0's `balanceOf(pair)` record as premises; here that record is USDC's own ru
 to `syncUsdcRead0` at the call gas WETH9's pin fixes, and WETH9's pin (`_read1`) reads USDC's result
 only through its gas-free skeleton (`syncWethRead1_withGasLeft`).
 
-What a new Pair frame at the history's future world knows about USDC (`pair_usdc_frame`): the Pair's
-stored `token0` word is USDC (the WETH9-side walk keeps both tokens), USDC is installed there and its
-admin word is the checkpoint's (`usdc_history_end_installed`).  No never-signer premise.
+The row is a corollary of its support-free twin `pair_usdc_weth9_history_sync_live_finite`
+(`UniswapV2PairUsdcWeth9SyncLiveF.lean`).  No never-signer premise.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -22,56 +21,6 @@ namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.Weth9Token Blanc.Composition.UsdcLive
-
-/-- **What a new Pair frame at the history's future world knows about USDC.**  The Pair's stored
-`token0` word is USDC, USDC is installed, and its admin word is the checkpoint's.  The tokens come
-from the WETH9-side walk (`pair_token_walk`, which keeps both of the Pair's tokens); USDC's facts
-from `usdc_history_end_installed`. -/
-theorem pair_usdc_frame {pair usdc weth : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
-    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
-    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
-    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
-    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
-    (governance : Usdc.UsdcGovernance usdc trace)
-    (factoryInstalled :
-      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
-    (factoryNotSystem : st₀.factory ≠ systemAddress)
-    {pre : Devm} (state : pre.state = future.state) :
-    ((pre.getStor pair).get 6).toAdr = usdc ∧ Usdc.UsdcInstalled usdc pre.state ∧
-      Usdc.adminOf pre.state usdc = Usdc.adminOf checkpoint.state usdc := by
-  obtain ⟨hist1, answerable, start⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
-  have walk := pair_token_walk (weth9Core weth KW).weak weth9Book_erc20Abi
-    (weth9SelfCaller weth KW).weak .one trace (weth9Book_laws.holderLaws weth trace pair)
-    joint.weth9.pairCode joint.weth9.pairRep pairFresh hist1 joint.weth9.token
-    joint.weth9.unlocked joint.weth9.apart answerable joint.weth9.distinct joint.weth9.notSystem
-    (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
-      joint.weth9.pairNonzero factoryNotSystem)
-    (weth9_tokenEntered trace joint.weth9)
-  obtain ⟨-, finish, K', replayed⟩ := pair_history_replayed trace joint.weth9.pairCode
-    joint.weth9.pairRep pairFresh
-  obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
-  obtain ⟨-, -, -, -, tokens, -, -⟩ := walk steps replay auth observed (pre := []) (post := [])
-    (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ joint.weth9.unlocked rfl start.1 start.2
-  obtain ⟨-, -, -, -, -, -, -, rep⟩ := replayed
-  obtain ⟨-, -, -, slot6, -⟩ := rep.fixed
-  obtain ⟨inst, admin⟩ := Usdc.usdc_history_end_installed trace
-    (⟨joint.usdcInstalled, governance, joint.usdcFoot, usdcFresh⟩ : Usdc.UsdcHist usdc KU trace)
-  refine ⟨?_, by rw [state]; exact inst, by rw [state]; exact admin⟩
-  have storPair : pre.getStor pair = future.state.getStor pair :=
-    congrArg (fun w : Jaune.State => w.getStor pair) state
-  rw [storPair, ← joint.token0]
-  exact slot6.trans tokens.1
-
-theorem notPrecompile_usdc {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
-    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {w : Jaune.State} {sevm : Sevm}
-    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ w) (fork : CoveredFork sevm.benvStat.fork) :
-    sevm.benvStat.rules.isPrecomp usdc = (false = true) := by
-  rw [Bool.false_eq_true]
-  exact eq_false (joint.usdcNotPrecompile _ fork)
 
 /-- **C6(c), the sync liveness row with both tokens' queries discharged** (USDC = token0, WETH9 =
 token1).  As `pair_history_sync_live`, from the two-token joint checkpoint: WETH9's second query is

@@ -54,7 +54,7 @@ theorem pair_usdc_weth9_history_feeOn_product_finite {pair usdc weth : Adr}
     joint.weth9.distinct joint.weth9.notSystem
     (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
       joint.weth9.pairNonzero factoryNotSystem)
-    (usdc_tokenEnteredF trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
+    (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
 
 /-- **C6(b), fee off, the exhibit, support-free**: only the factory's fee-off answer stays. -/
 theorem pair_usdc_weth9_history_feeOff_product_finite {pair usdc weth : Adr}
@@ -94,6 +94,6 @@ theorem pair_usdc_weth9_history_feeOff_product_finite {pair usdc weth : Adr}
     joint.weth9.distinct joint.weth9.notSystem
     (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
       joint.weth9.pairNonzero factoryNotSystem)
-    (usdc_tokenEnteredF trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
+    (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

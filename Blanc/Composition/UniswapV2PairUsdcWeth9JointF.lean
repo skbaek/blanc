@@ -21,9 +21,9 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.UsdcToken Blanc.Composition.PairTwoToken Blanc.Composition.Weth9Token
 
 /-- At every node of every settled frame, USDC's installed proxy runtime is no delegation
-designator and USDC is not a precompile of the frame's rules, support-free (twin of
-`usdc_tokenEntered`). -/
-theorem usdc_tokenEnteredF {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+designator and USDC is not a precompile of the frame's rules (from the support-free
+checkpoint). -/
+theorem usdc_tokenEntered {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (joint : JointCheckpoint2F pair usdc weth KU KW KP st₀ checkpoint.state)
@@ -93,7 +93,7 @@ theorem pair_usdc_weth9_joint_finite {pair usdc weth : Adr}
       joint.weth9.apart answerable0 answerable1 joint.weth9.distinct joint.weth9.notSystem
       (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
         joint.weth9.pairNonzero factoryNotSystem)
-      (usdc_tokenEnteredF trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
+      (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
   obtain ⟨-, finish', K', replayed⟩ :=
     pair_history_replayed trace joint.weth9.pairCode joint.weth9.pairRep pairFresh
   obtain ⟨-, -, -, -, -, -, -, rep'⟩ := id replayed

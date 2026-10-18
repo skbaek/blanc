@@ -6,9 +6,8 @@ import Blanc.Lift.Usdc.HistFFacts
 /-!
 # C6(c): the sync liveness row over the support-free checkpoint (finite twin)
 
-Twin of `UniswapV2PairUsdcWeth9SyncLive.lean`: `pair_usdc_frameF` is `pair_usdc_frame`
-with `joint : JointCheckpoint2F …` and `usdc_history_end_installedF` in place of the
-support version; `pair_usdc_weth9_history_sync_live_finite` is the sync row with the same
+Twin of `UniswapV2PairUsdcWeth9SyncLive.lean`: `pair_usdc_frame` takes
+`joint : JointCheckpoint2F …` and uses `usdc_history_end_installedF`; `pair_usdc_weth9_history_sync_live_finite` is the sync row with the same
 statement except the joint type. No quiet premise: the proof never uses USDC's joint
 relation (no never-signer premise), only the history-end installed/admin facts and the
 WETH9 side. The support-free world/code helpers (`usdc_world_congr`,
@@ -35,9 +34,9 @@ theorem usdc_world_congr {P : Adr} {w w' : Jaune.State} (code : ∀ a, w'.getCod
   · rw [stor]; exact inst.slot
   · unfold Usdc.adminOf; rw [stor]
 
-/-- **What a new Pair frame at the history's future world knows about USDC**, support-free
-(twin of `pair_usdc_frame`). -/
-theorem pair_usdc_frameF {pair usdc weth : Adr} {cfg : ChainConfig}
+/-- **What a new Pair frame at the history's future world knows about USDC**, from the
+support-free checkpoint. -/
+theorem pair_usdc_frame {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -81,7 +80,7 @@ theorem syncFirstWorld_getCode (sevm : Sevm) (pre : Devm) (a : Adr) :
   unfold syncFirstWorld syncLockedWorld
   rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]
 
-theorem notPrecompile_usdcF {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+theorem notPrecompile_usdc {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {w : Jaune.State} {sevm : Sevm}
     (joint : JointCheckpoint2F pair usdc weth KU KW KP st₀ w) (fork : CoveredFork sevm.benvStat.fork) :
     sevm.benvStat.rules.isPrecomp usdc = (false = true) := by
@@ -134,7 +133,7 @@ theorem pair_usdc_weth9_history_sync_live_finite {pair usdc weth : Adr} {cfg : C
     SyncLiveOutcome pair trace KP st₀ sevm pre d0 d1 callGas0 G := by
   have h0 : (syncUsdcRead0 sevm pre callGas1).1 = d0 := (congrArg Prod.fst _read0).symm
   have hg : (syncUsdcRead0 sevm pre callGas1).2 = callGas0 := (congrArg Prod.snd _read0).symm
-  obtain ⟨token0, inst, -⟩ := pair_usdc_frameF trace joint pairFresh usdcFresh wethFresh governance
+  obtain ⟨token0, inst, -⟩ := pair_usdc_frame trace joint pairFresh usdcFresh wethFresh governance
     factoryInstalled factoryNotSystem state
   have tok : (syncFirstToken sevm pre).toAdr = usdc := by
     unfold syncFirstToken
@@ -144,7 +143,7 @@ theorem pair_usdc_weth9_history_sync_live_finite {pair usdc weth : Adr} {cfg : C
   obtain ⟨winst, wadmin⟩ := usdc_world_congr (P := usdc) (w := pre.state)
     (w' := (syncFirstWorld sevm pre).state) (syncFirstWorld_getCode sevm pre) keeps.2
   have spec := syncUsdcRead0_spec (callGas1 := callGas1) fork depth (by rw [tok]; exact winst inst)
-    (by rw [tok]; exact notPrecompile_usdcF joint fork)
+    (by rw [tok]; exact notPrecompile_usdc joint fork)
     (by rw [tok, wadmin, target]; exact notAdmin) (by rw [hg]; exact fits0) room0
   dsimp only at spec
   rw [h0, hg] at spec

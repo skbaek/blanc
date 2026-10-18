@@ -7,15 +7,11 @@ import Blanc.MachineDataFacts
 /-!
 # C6(a) for the USDC/WETH9 Pair (Appendix A §10, U8b)
 
-The generic two-core headline `pair_two_token_joint` instantiated at the exhibit: `C0 := usdcCore`
-(USDC at `token0`), `C1 := (weth9Core weth KW).weak` (WETH9 at `token1`).  The USDC side's `hist`,
-`answerable`, joint relation and holder laws come from `JointCheckpoint2.toUsdcCore` (under the
-governance and never-signer premises); the WETH9 side's from the predecessor's
-`JointCheckpoint.toCore` and `weth9Book_laws`; `factoryQuiet` from the factory lift; `tokenEntered`
-for USDC from the proxy's code image persisting at every settled frame (`settled_codeImage`) and
-along each frame's same-frame prefix (`ParentPrefix.codePreserve`), the proxy's runtime being no
-delegation designator and USDC no precompile (`JointCheckpoint2.usdcNotPrecompile`); for WETH9 from
-`weth9_tokenEntered`.
+The headline is a corollary of its support-free twin `pair_usdc_weth9_joint_finite`
+(`UniswapV2PairUsdcWeth9JointF.lean`), which instantiates the generic two-core headline
+`pair_two_token_joint` at `C0 := usdcCoreF`, `C1 := (weth9Core weth KW).weak`: the checkpoint gives
+`JointCheckpoint2F` (`JointCheckpoint2.toF`) and the trace-local premise `PairUsdcAllowQuiet`
+(`JointCheckpoint2.allowQuiet`, from the storage-wide support).
 
 The generic `JointAtW` conclusions are read back as the concrete ledger forms at every position and
 as the stored balance words and zero allowance rows at the end.  No hypothesis mentions either
@@ -27,27 +23,6 @@ namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcToken Blanc.Composition.PairTwoToken Blanc.Composition.Weth9Token
-
-/-- At every node of every settled frame, USDC's installed proxy runtime is no delegation
-designator and USDC is not a precompile of the frame's rules. -/
-theorem usdc_tokenEntered {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
-    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
-    (hist : Usdc.UsdcHist usdc KU trace) :
-    ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →
-      ∀ {node : Exec.Deriv}, Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv G) node →
-        getDelegatedCodeAddress (node.devm.getCode usdc) = none ∧
-          ¬ node.sevm.benvStat.rules.isPrecomp usdc := by
-  intro G member _ _ node chain
-  have nonempty : Usdc.Proxy.code.toList ≠ [] := Usdc.proxySem.ne_nil rfl
-  have entryCode : (Blanc.Exec.Frame.rootDeriv G).devm.getCode usdc = Usdc.Proxy.code :=
-    bytes_eq_of_image (trace.settled_codeImage Usdc.proxySem usdc joint.usdcInstalled.proxy G member)
-  have atNode := Blanc.Exec.Deriv.ParentPrefix.codePreserve chain usdc
-    (by rw [entryCode]; exact nonempty)
-  refine ⟨by rw [atNode, entryCode]; exact Usdc.proxy_undelegated, ?_⟩
-  rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
-  exact joint.usdcNotPrecompile _ (Usdc.usdc_settled_facts trace hist G member).fork
 
 /-- **C6(a), the exhibit composition**: every V2 pair whose `token0` is USDC and `token1` is WETH9,
 from the two-token joint checkpoint, with HASH-T for the Pair, USDC and WETH9, USDC's governance

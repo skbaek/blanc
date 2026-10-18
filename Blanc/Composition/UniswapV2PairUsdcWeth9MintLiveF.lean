@@ -6,7 +6,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 
 Twin of `UniswapV2PairUsdcWeth9MintLive.lean`: `pair_usdc_weth9_history_mint_live_finite`
 is the mint row with `joint : JointCheckpoint2F …` and no quiet premise (the proof never
-uses USDC's joint relation). The frame facts come from `pair_usdc_frameF` and the shared
+uses USDC's joint relation). The frame facts come from `pair_usdc_frame` and the shared
 support-free world helpers in `UniswapV2PairUsdcWeth9SyncLiveF`; the support-free
 mint-stage code lemma (`mintStageWorld_getCode`) lives here under its original name.
 -/
@@ -115,7 +115,7 @@ theorem pair_usdc_weth9_history_mint_live_finite {pair usdc weth : Adr} {cfg : C
   have hg : (mintUsdcRead0 sevm (mintCacheWorld sevm pre) [0x6a627842] getterInitMemory
       (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256 0x039b
       callee.callGas1).2 = callee.callGas0 := (congrArg Prod.snd _read0).symm
-  obtain ⟨token0, inst, -⟩ := pair_usdc_frameF trace joint pairFresh usdcFresh wethFresh governance
+  obtain ⟨token0, inst, -⟩ := pair_usdc_frame trace joint pairFresh usdcFresh wethFresh governance
     factoryInstalled factoryNotSystem state
   have tok : ((mintCacheWorld sevm pre).getStorVal sevm.currentTarget 6).toAdr = usdc := by
     rw [mintLockedWorld_slot (by decide), target]
@@ -125,7 +125,7 @@ theorem pair_usdc_weth9_history_mint_live_finite {pair usdc weth : Adr} {cfg : C
     (w' := (afterSload sevm (mintCacheWorld sevm pre) 6).state) (mintStageWorld_getCode sevm pre)
     keeps.2
   have spec := mintUsdcRead0_spec (callGas1 := callee.callGas1) fork depth
-    (by rw [tok]; exact winst inst) (by rw [tok]; exact notPrecompile_usdcF joint fork)
+    (by rw [tok]; exact winst inst) (by rw [tok]; exact notPrecompile_usdc joint fork)
     (by rw [tok, wadmin, target]; exact notAdmin) (by decide) getterInitMemory_ptr.wf
     (by rw [hg]; exact fits0) room0
   rw [h0, hg] at spec
