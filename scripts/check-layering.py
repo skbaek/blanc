@@ -1219,6 +1219,7 @@ CONTRACTS["weth9"].extend([
 CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
     "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom",
 ])
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
@@ -1284,6 +1285,7 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvSigningHash",
     "Composition.Curve3Pool3CrvSigningRecover",
     "Composition.Curve3Pool3CrvBlock",
+    "Composition.Curve3Pool3CrvCoinCalls",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",
