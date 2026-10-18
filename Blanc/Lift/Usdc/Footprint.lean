@@ -27,8 +27,7 @@ view getters' keys by selector, and the decoded writer's keys (`Call.keys`, incl
 so one key function serves the three levels.
 
 Read lemmas (`ledger_bal`, …), write lemmas (`ledger_set_bal`, …, one per storage-write family and
-per fixed word) and `FootInv` preservation are below; `FootprintStep.lean` states that
-`Ledger.step` reads and writes only `frameKeys`.
+per written fixed word) and `FootInv` preservation are in `FootprintLedger.lean`.
 -/
 
 namespace Blanc.Lift.Usdc

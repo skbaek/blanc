@@ -5,10 +5,10 @@ import Blanc.Lift.Usdc.Footprint
 
 Read lemmas (`ledger_bal`, …: a tracked key's ledger entry is its storage word, read as the code
 reads it), write lemmas (one per storage-write family: the packed balance word, allowance, nonce,
-authorization state, minter flag, minter allowance, and each fixed word: the ledger of the written
+authorization state, minter flag, minter allowance, and the written fixed words: the ledger of the written
 storage is the matching `Ledger` update, under `Inj`/`Apart` and the written key tracked), and
-`FootInv` preservation (a write at a tracked key or a fixed word keeps the support; mapping writes
-keep `Good`; a step's result is good by `step_good`; touching fresh keys extends the footprint).
+`FootInv` preservation (`Good` reads only the `initialized` and version words; touching fresh keys
+extends the footprint).
 -/
 
 namespace Blanc.Lift.Usdc
@@ -220,33 +220,6 @@ theorem ledger_set_rescuer (w : B256) :
   unfold ledger ledgerOf
   simp (disch := decide) only [Stor.get_set_self, Stor.get_set_ne]
 
-/-- **`_initializedVersion` (slot 18).** -/
-theorem ledger_set_version (w : B256) :
-    ledger K (s.set 18 w) = { ledger K s with version := w.toNat % 256 } := by
-  rw [ledger_set_fixed apart (by decide)]
-  unfold ledger ledgerOf
-  simp (disch := decide) only [Stor.get_set_self, Stor.get_set_ne]
-
-/-- **The proxy's admin word.** -/
-theorem ledger_set_admin (w : B256) :
-    ledger K (s.set adminSlot w) = { ledger K s with admin := w.toAdr } := by
-  rw [ledger_set_fixed apart (by decide)]
-  unfold ledger ledgerOf
-  simp (disch := decide) only [Stor.get_set_self, Stor.get_set_ne]
-
-/-- **The words the ledger does not read** (`name`, `symbol`, `decimals`, `currency`, the
-deprecated domain separator, the implementation slot). -/
-theorem ledger_set_inert {x : B256} (hx : x ∈ [4, 5, 6, 7, 15, implSlot]) (w : B256) :
-    ledger K (s.set x w) = ledger K s := by
-  have hx' : x ∈ fixedSlots := by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-  rw [ledger_set_fixed apart hx']
-  unfold ledger ledgerOf
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
-  rcases hx with rfl | rfl | rfl | rfl | rfl | rfl <;>
-    simp (disch := decide) only [Stor.get_set_ne]
-
 end Fixed
 
 /-! ## The footprint invariant across writes -/
@@ -265,27 +238,6 @@ theorem ledger_good_congr {K K' : Key → Prop} {s s' : Stor} (good : (ledger K 
 section Inv
 
 variable {K : Key → Prop} {s : Stor}
-
-/-- **A write at a tracked key keeps the footprint invariant** (mapping words never touch the
-`initialized` and version words). -/
-theorem FootInv.set_key (h : FootInv K s) {k : Key} (hk : K k) (w : B256) :
-    FootInv K (s.set k.slot w) := by
-  have off : ∀ x ∈ fixedSlots, (s.set k.slot w).get x = s.get x := fun x hx =>
-    Stor.get_set_ne _ (fun e => h.apart k hk (by rw [e]; exact hx)) w
-  exact ⟨h.support.set hk w, h.inj, h.apart,
-    ledger_good_congr h.good (off 8 (by decide)) (off 18 (by decide))⟩
-
-/-- A write at a fixed word keeps the support; `Good` is the write's to show. -/
-theorem FootInv.set_fixed (h : FootInv K s) {x : B256} (hx : x ∈ fixedSlots) (w : B256)
-    (good : (ledger K (s.set x w)).Good) : FootInv K (s.set x w) :=
-  ⟨h.support.set_fixed hx w, h.inj, h.apart, good⟩
-
-/-- **A committed step keeps the footprint invariant**: the support is the writes' (`Support.set`,
-`Support.set_fixed`), `Good` is `step_good`'s. -/
-theorem FootInv.of_step (h : FootInv K s) {s' : Stor} (support : Support Key.slot fixedSlots K s')
-    {self caller : Adr} {c : Call} {l' : Ledger}
-    (st : (ledger K s).step self caller c = some l') (eq : ledger K s' = l') : FootInv K s' :=
-  ⟨support, h.inj, h.apart, eq ▸ Ledger.step_good h.good st⟩
 
 /-- **Touching fresh keys leaves the ledger alone.** -/
 theorem ledger_extend {ks : List Key} (support : Support Key.slot fixedSlots K s)

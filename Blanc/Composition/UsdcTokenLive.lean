@@ -25,10 +25,6 @@ structure FootCore (U : Key → Prop) (s : Stor) : Prop where
   apart : SlotFootprint.Apart Key.slot fixedSlots U
   good : (ledger U s).Good
 
-theorem _root_.Blanc.Lift.Usdc.FootInv.core {U : Key → Prop} {s : Stor} (h : FootInv U s) :
-    FootCore U s :=
-  ⟨h.inj, h.apart, h.good⟩
-
 /-- A write at a tracked key's slot keeps `FootCore`. -/
 theorem FootCore.set_key {U : Key → Prop} {s : Stor} (h : FootCore U s) {k : Key} (hk : U k)
     (w : B256) : FootCore U (s.set k.slot w) := by

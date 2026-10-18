@@ -1246,7 +1246,6 @@ import Blanc.Lift.Usdc.Families
 import Blanc.Lift.Usdc.FiniteFootprint
 import Blanc.Lift.Usdc.Footprint
 import Blanc.Lift.Usdc.FootprintLedger
-import Blanc.Lift.Usdc.FootprintStep
 import Blanc.Lift.Usdc.Governance
 import Blanc.Lift.Usdc.Hist
 import Blanc.Lift.Usdc.HistoryFamily

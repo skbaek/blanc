@@ -965,7 +965,6 @@ CONTRACTS = {
         "Lift.Usdc.FiniteFootprint",
         "Lift.Usdc.Footprint",
         "Lift.Usdc.FootprintLedger",
-        "Lift.Usdc.FootprintStep",
         "Lift.Usdc.Governance",
         "Lift.Usdc.Hist",
         "Lift.Usdc.HistoryFamily",

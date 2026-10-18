@@ -177,17 +177,6 @@ def BurnEnvUW.final0 (env : BurnEnvUW sevm b g) : B256 :=
 def BurnEnvUW.final1 (env : BurnEnvUW sevm b g) : B256 :=
   Bytes.toB256 (env.back.e1.returnData.take 32)
 
-/-- The factory query's staged state (`BurnFeeCallee.call`), as in `BurnEnvW1.factoryPre`. -/
-def BurnEnvUW.factoryPre (env : BurnEnvUW sevm b g) : Devm :=
-  St (feeFactoryCallWorld sevm (feeBurnWorld sevm env.d1))
-    (env.fee.factoryGas.toB256 :: feeFactoryWord sevm (feeBurnWorld sevm env.d1) :: 128 :: 4 ::
-      128 :: 32 :: 132 :: 0x017e7e58 :: feeFactoryWord sevm (feeBurnWorld sevm env.d1) :: 0 :: 0 ::
-      burnR1 sevm b :: burnR0 sevm b :: 0x15e2 ::
-      burnFeeLocalsAt sevm env.d1 (burnMem2 sevm env.d0 env.d1) (burnB0 env.d0) (burnT1 sevm b)
-        (burnT0 sevm b) (burnR1 sevm b) (burnR0 sevm b) (burnRecipientWord sevm) 0x053d [0x89afcb44])
-    (feeRequestMemory (feeBurnMemory (burnMem2 sevm env.d0 env.d1) sevm.currentTarget))
-    env.fee.factoryGas
-
 /-- **USDC's gas sentries**: each USDC leg's call gas a word, and room for USDC's run (proxy and
 implementation) under the 63/64 rule. -/
 structure BurnEnvUW.UsdcSentries (env : BurnEnvUW sevm b g) : Prop where

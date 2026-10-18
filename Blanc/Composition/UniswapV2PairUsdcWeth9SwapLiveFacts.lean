@@ -62,12 +62,6 @@ theorem swapWethRead1_withGasLeft0 (sevm : Sevm) (d : Devm) (M : Mem) (n : Nat) 
   simp only [withGasLeft_returnData, wethBalanceCall_withGasLeft, wethBalanceSkel_withGasLeft,
     balAcc_withGasLeft, balExt_withGasLeft, balUsed_withGasLeft]
 
-/-- WETH9's `transfer` CALL reads its staged world only off non-gas fields. -/
-theorem wethTransferCall_withGasLeft (sevm : Sevm) (W : Devm) (x : Nat) (L : List B256) (M : Mem)
-    (p amount toWord token rho : B256) (cg : Nat) :
-    wethTransferCall sevm (W.withGasLeft x) L M p amount toWord token rho cg =
-      wethTransferCall sevm W L M p amount toWord token rho cg := rfl
-
 theorem leg1Skel_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm)
     (x : Nat) : leg1Skel sevm b st (d0.withGasLeft x) = leg1Skel sevm b st d0 := by
   unfold leg1Skel leg1World leg1Mem leg1Ptr
@@ -75,23 +69,6 @@ theorem leg1Skel_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State
   · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte]
   · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, withGasLeft_returnData]
     rfl
-
-theorem leg1Used_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm)
-    (x : Nat) : leg1Used sevm b st (d0.withGasLeft x) = leg1Used sevm b st d0 := by
-  unfold leg1Used leg1World leg1Mem leg1Ptr
-  by_cases h : swapAmount0Out sevm = 0
-  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte]
-  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, withGasLeft_returnData]
-    rfl
-
-theorem leg1Need_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm)
-    (x cgC Gc : Nat) : leg1Need sevm b st (d0.withGasLeft x) cgC Gc = leg1Need sevm b st d0 cgC Gc := by
-  unfold leg1Need
-  rw [leg1Skel_withGasLeft0, swapFrontCallbackGas_withGasLeft0]
-  unfold leg1Mem leg1Ptr
-  by_cases h : swapAmount0Out sevm = 0
-  · simp only [swapOptMem, swapOptPtr, h, ↓reduceIte]
-  · simp only [swapOptMem, swapOptPtr, h, ↓reduceIte, withGasLeft_returnData]
 
 /-- WETH9's `transfer` leg reads the USDC transfer's result only off non-gas fields. -/
 theorem swapWethLeg1_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm)
