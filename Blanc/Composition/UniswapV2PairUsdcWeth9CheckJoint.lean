@@ -47,8 +47,11 @@ def checkUsdcHolder (rows : List (Usdc.Key × B256)) (s : Stor) (a : Adr) (n : N
       | .allow o _ => decide (o ≠ a) || decide (s.get r.2 = 0)
       | _ => true)
 
-theorem checkUsdcHolder_sound {rows : List (Usdc.Key × B256)} {s : Stor} {a : Adr} {n : Nat}
-    (sound : RowsSound Usdc.Key.slot Usdc.fixedSlots rows s)
+/-- Holder rows from word facts alone: the weakening of `checkUsdcHolder_sound` the
+support-free checker uses (`RowsSound` is unavailable without support; the proof reads only
+`word`). -/
+theorem checkUsdcHolder_soundW {rows : List (Usdc.Key × B256)} {s : Stor} {a : Adr} {n : Nat}
+    (word : ∀ r ∈ rows, Usdc.Key.slot r.1 = r.2)
     (h : checkUsdcHolder rows s a n = true) :
     rowKeys rows (.bal a) ∧ Usdc.frozenBit (s.get (Usdc.balSlot a)) = false ∧
       n ≤ Usdc.balanceBits (s.get (Usdc.balSlot a)) ∧
@@ -56,7 +59,7 @@ theorem checkUsdcHolder_sound {rows : List (Usdc.Key × B256)} {s : Stor} {a : A
   simp only [checkUsdcHolder, Bool.and_eq_true, List.any_eq_true, List.all_eq_true,
     decide_eq_true_eq] at h
   obtain ⟨⟨r, hr, ⟨hkey, hflag⟩, hn⟩, hall⟩ := h
-  have hword : Usdc.Key.slot r.1 = r.2 := sound.word r hr
+  have hword : Usdc.Key.slot r.1 = r.2 := word r hr
   rw [hkey] at hword
   change Usdc.balSlot a = r.2 at hword
   refine ⟨List.mem_map.mpr ⟨r, hr, hkey⟩, ?_, ?_, ?_⟩
@@ -66,7 +69,7 @@ theorem checkUsdcHolder_sound {rows : List (Usdc.Key × B256)} {s : Stor} {a : A
     exact hn
   · intro g hg
     obtain ⟨r', hr', hkey'⟩ := List.mem_map.mp hg
-    have hword' : Usdc.Key.slot r'.1 = r'.2 := sound.word r' hr'
+    have hword' : Usdc.Key.slot r'.1 = r'.2 := word r' hr'
     have hcheck := hall r' hr'
     rw [hkey'] at hword' hcheck
     simp only [Bool.or_eq_true, decide_eq_true_eq] at hcheck
@@ -75,6 +78,14 @@ theorem checkUsdcHolder_sound {rows : List (Usdc.Key × B256)} {s : Stor} {a : A
     · change Usdc.allowSlot a g = r'.2 at hword'
       rw [hword']
       exact hzero
+
+theorem checkUsdcHolder_sound {rows : List (Usdc.Key × B256)} {s : Stor} {a : Adr} {n : Nat}
+    (sound : RowsSound Usdc.Key.slot Usdc.fixedSlots rows s)
+    (h : checkUsdcHolder rows s a n = true) :
+    rowKeys rows (.bal a) ∧ Usdc.frozenBit (s.get (Usdc.balSlot a)) = false ∧
+      n ≤ Usdc.balanceBits (s.get (Usdc.balSlot a)) ∧
+      ∀ g, rowKeys rows (.allow a g) → s.get (Usdc.allowSlot a g) = 0 :=
+  checkUsdcHolder_soundW sound.word h
 
 /-- **The two-token joint checkpoint checker**: `checkJoint` on side `.one`, `checkUsdc`, and the
 Pair's USDC row checks. -/
