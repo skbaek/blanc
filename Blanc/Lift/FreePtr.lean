@@ -1,4 +1,5 @@
 import Blanc.Lift.Check
+import Blanc.Lift.MemPotential
 
 /-! ## F1  `Blanc/Lift/FreePtr.lean` (checker; contract-neutral) -/
 
@@ -61,9 +62,6 @@ def maxW : Nat := 2 ^ 256 - 1
 /-- The free-pointer bound every read must meet. -/
 def fpLo : Nat := 0x80
 def fpCap : Nat := 2 ^ 256 - 2 ^ 32
-
-/-- What a word size the memory potential allows (`Pot`, F2): every touched window ends below. -/
-def memCap : Nat := 2 ^ 160
 
 def bndOf (fs : List Fact) (s : Nat) : Nat × Nat :=
   fs.foldl (fun p f => match f with
