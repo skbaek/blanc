@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.ImplFrames
-import Blanc.Lift.Usdc.SpawnExact
+import Blanc.Lift.SpawnExact
 import Blanc.Lift.Usdc.Lib.Contract
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.CallChildren

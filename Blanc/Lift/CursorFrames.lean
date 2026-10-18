@@ -10,7 +10,8 @@ tree and at every pending continuation; `SStep.framesSat` keeps it, so from a ce
 every entry passes it (`Cert.framesSat`), every reachable cursor satisfies it
 (`Cursor.framesSat_of_reachable`), and at a cursor-placed node `P` holds of the node's actual
 instruction and abstract frame.  With `FrameMatches`, a `.const` position of that frame is the actual
-stack word (`FrameMatches.getElem?_const`).  Hoist candidate for `Blanc/Lift/CallRestriction.lean`.
+stack word (`FrameMatches.getElem?_const`).  Companion of `Blanc/Lift/CallRestriction.lean`'s
+`ExecsSatisfy`; worked uses: `Blanc/Lift/QuietDelegateSkip.lean`, `Blanc/Lift/Usdc/ImplFrames.lean`.
 -/
 
 namespace Blanc.Lift

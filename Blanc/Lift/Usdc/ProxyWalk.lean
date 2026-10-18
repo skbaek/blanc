@@ -4,6 +4,7 @@ import Blanc.Lift.ReachWalk
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.ExactLeaf
+import Blanc.Lift.RunPWalk
 import Blanc.AddressSlotProofs
 
 /-!
@@ -14,8 +15,8 @@ frame theorems (`ProxyForward.lean`) use.  Certificate-driven: every step is the
 checked tree's node (`rr_*` over a prefix reach, `rpw_*` over a big-step run, `ri_*` for the
 instruction), never an unfolding of the bytes.
 
-* The step kit (contract-neutral, hoist candidates): `ri_address`, `ri_dup_any`, `rr_branchTo`,
-  the big-step node inversions `rpw_*`, `St.self'`.
+* The step kit (`ri_address`, `ri_dup_any`, `rr_branchTo`, the big-step node inversions `rpw_*`,
+  `St.self'`) is the generic `Blanc/Lift/RunPWalk.lean`.
 * The internal getters: `_admin()` (entry 8) returns the admin word, `_implementation()`
   (entry 14) the implementation word; `_willFallback()` (entry 22) returns only for a caller
   other than the admin word (`willFallback_ret`).
@@ -24,113 +25,6 @@ instruction), never an unfolding of the bytes.
 namespace Blanc.Lift
 
 open Jaune Blanc
-
-section Kit
-
-variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
-  {S : List B256} {M : Mem} {G : Nat} {f g : SFunc} {o : Outcome} {K : List SFunc} {T : Conf}
-
-/-- Every machine is its own walk state. -/
-theorem St.self' (d : Devm) : d = St d d.stack d.memory d.gasLeft := St.self rfl rfl
-
-/-- `ADDRESS`, inverted. -/
-theorem ri_address {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .address) d) :
-    ∃ G', d = St b (sevm.currentTarget.toB256 :: S) M G' := by
-  have hp := of_run_address h
-  have hs : d.stack = sevm.currentTarget.toB256 :: S := by
-    have := hp.stack
-    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-/-- `DUP n` over a stack whose `n`-th word is not named. -/
-theorem ri_dup_any {n : Fin 16} {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg (.dup n)) d) :
-    ∃ w, S[n.val]? = some w ∧ ∃ G', d = St b (w :: S) M G' := by
-  obtain ⟨x, hx, -⟩ := of_run_dup h
-  simp only [St.stack] at hx
-  exact ⟨x, hx, ri_dup hx h⟩
-
-theorem rr_branchTo {k : Nat} {dd w : B256}
-    (run : Reach P fs sevm ⟨St b (dd :: w :: S) M G, .branchTo f k, K⟩ T) (hT : AtExec T) :
-    (w = 0 ∧ ∃ G', Reach P fs sevm ⟨St b S M G', f, K⟩ T) ∨
-      (w ≠ 0 ∧ ∃ g G', fs[k]? = some g ∧ Reach P fs sevm ⟨St b S M G', g, K⟩ T) := by
-  rcases Reach.branchTo run hT with ⟨t, d', pop, rest⟩ | ⟨t, w0, g, d', hw, hk, pop, rest⟩
-  · obtain ⟨-, hw, e⟩ := St.of_pop2 pop
-    exact .inl ⟨hw, _, e ▸ rest⟩
-  · obtain ⟨-, hw', e⟩ := St.of_pop2 pop
-    exact .inr ⟨hw' ▸ hw, g, _, hk, e ▸ rest⟩
-
-theorem rr_jump {k : Nat} {dd : B256}
-    (run : Reach P fs sevm ⟨St b (dd :: S) M G, .jump k, K⟩ T) (hT : AtExec T) :
-    ∃ g G', fs[k]? = some g ∧ Reach P fs sevm ⟨St b S M G', g, K⟩ T := by
-  obtain ⟨t, g, d', hk, pop, rest⟩ := Reach.jump run hT
-  exact ⟨g, _, hk, (St.of_pop1 pop).2 ▸ rest⟩
-
-/-! ### Big-step node inversions -/
-
-theorem rpw_next {n : Ninst} {d : Devm} (run : SFunc.RunP P fs sevm d (.next n f) o) :
-    ∃ d', P sevm d n d' ∧ SFunc.RunP P fs sevm d' f o := by
-  cases run with
-  | next h k => exact ⟨_, h, k⟩
-
-theorem rpw_dest (run : SFunc.RunP P fs sevm (St b S M G) (.dest f) o) :
-    ∃ G', SFunc.RunP P fs sevm (St b S M G') f o := by
-  cases run with
-  | dest h k => exact ⟨_, (St.of_burn h) ▸ k⟩
-
-theorem rpw_branch {dd w : B256}
-    (run : SFunc.RunP P fs sevm (St b (dd :: w :: S) M G) (.branch f g) o) :
-    (w = 0 ∧ ∃ G', SFunc.RunP P fs sevm (St b S M G') f o) ∨
-      (w ≠ 0 ∧ ∃ G', SFunc.RunP P fs sevm (St b S M G') g o) := by
-  cases run with
-  | zero d0 h k =>
-      obtain ⟨-, hw, e⟩ := St.of_pop2 h
-      exact .inl ⟨hw, _, e ▸ k⟩
-  | succ d0 w0 hw h k =>
-      obtain ⟨-, hw', e⟩ := St.of_pop2 h
-      exact .inr ⟨hw' ▸ hw, _, e ▸ k⟩
-
-/-- An internal call in a returning run: the callee returns, then the continuation runs. -/
-theorem rpw_callRet {k : Nat} {dd : B256} {D : Devm} (hk : fs[k]? = some g)
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) (.callNext k f) (.returned D)) :
-    ∃ G' D', SFunc.RunP P fs sevm (St b S M G') g (.returned D') ∧
-      SFunc.RunP P fs sevm D' f (.returned D) := by
-  cases run with
-  | callRet d0 hk' h hr k =>
-      rw [hk] at hk'
-      cases hk'
-      exact ⟨_, _, (St.of_pop1 h).2 ▸ hr, k⟩
-
-theorem rpw_ret {dd : B256} {D : Devm}
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) .ret (.returned D)) :
-    ∃ G', D = St b S M G' := by
-  cases run with
-  | ret d0 h => exact ⟨_, (St.of_pop1 h).2⟩
-
-/-- No returning run of a halting tree: no `.ret` and no reference. -/
-def SFunc.haltsOnly : SFunc → Bool
-  | .next _ f => f.haltsOnly
-  | .dest f => f.haltsOnly
-  | .branch f g => f.haltsOnly && g.haltsOnly
-  | .last _ => true
-  | .undefined => true
-  | _ => false
-
-theorem SFunc.RunP.not_returned_of_haltsOnly {d D : Devm}
-    (run : SFunc.RunP P fs sevm d f (.returned D)) (h : f.haltsOnly = true) : False := by
-  generalize ho : Outcome.returned D = o at run
-  induction run with
-  | zero _ _ _ ih => simp only [SFunc.haltsOnly, Bool.and_eq_true] at h; exact ih h.1 ho
-  | succ _ _ _ _ _ ih => simp only [SFunc.haltsOnly, Bool.and_eq_true] at h; exact ih h.2 ho
-  | next _ _ ih => exact ih h ho
-  | dest _ _ ih => exact ih h ho
-  | last _ => cases ho
-  | _ => simp only [SFunc.haltsOnly, Bool.false_eq_true] at h
-
-end Kit
 
 end Blanc.Lift
 

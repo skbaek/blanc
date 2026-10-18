@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.ProxyReach
 import Blanc.Lift.Quiet
+import Blanc.Lift.RunPWalk
 
 /-!
 # The successful runs of the proxy certificate (C2b)
@@ -14,59 +15,6 @@ the getter bodies are crossed by their specs, and quiet regions by `SFunc.Run.wo
 namespace Blanc.Lift
 
 open Jaune Blanc
-
-section Kit
-
-variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
-  {S : List B256} {M : Mem} {G : Nat} {f g : SFunc} {o : Outcome}
-
-theorem rpw_branchTo {k : Nat} {dd w : B256}
-    (run : SFunc.RunP P fs sevm (St b (dd :: w :: S) M G) (.branchTo f k) o) :
-    (w = 0 ∧ ∃ G', SFunc.RunP P fs sevm (St b S M G') f o) ∨
-      (w ≠ 0 ∧ ∃ g G', fs[k]? = some g ∧ SFunc.RunP P fs sevm (St b S M G') g o) := by
-  cases run with
-  | toZero d0 h k =>
-      obtain ⟨-, hw, e⟩ := St.of_pop2 h
-      exact .inl ⟨hw, _, e ▸ k⟩
-  | toSucc d0 w0 hw hk h k =>
-      obtain ⟨-, hw', e⟩ := St.of_pop2 h
-      exact .inr ⟨hw' ▸ hw, _, _, hk, e ▸ k⟩
-
-theorem rpw_jump {k : Nat} {dd : B256}
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) (.jump k) o) :
-    ∃ g G', fs[k]? = some g ∧ SFunc.RunP P fs sevm (St b S M G') g o := by
-  cases run with
-  | jump d0 hk h k => exact ⟨_, _, hk, (St.of_pop1 h).2 ▸ k⟩
-
-theorem rpw_call {k : Nat} {dd : B256} (hk : fs[k]? = some g)
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) (.callNext k f) o) :
-    ∃ G', (∃ D, SFunc.RunP P fs sevm (St b S M G') g (.returned D) ∧
-        SFunc.RunP P fs sevm D f o) ∨
-      (∃ D, SFunc.RunP P fs sevm (St b S M G') g (.halted D) ∧ o = .halted D) := by
-  cases run with
-  | callHalt d0 hk' h hr =>
-      rw [hk] at hk'
-      cases hk'
-      exact ⟨_, .inr ⟨_, (St.of_pop1 h).2 ▸ hr, rfl⟩⟩
-  | callRet d0 hk' h hr k =>
-      rw [hk] at hk'
-      cases hk'
-      exact ⟨_, .inl ⟨_, (St.of_pop1 h).2 ▸ hr, k⟩⟩
-
-/-- A call to a callee that cannot halt: it returns, then the continuation runs. -/
-theorem rpw_callOver {S' : List Nat} (hS : NoHaltSet fs S' = true) {k : Nat} {dd : B256}
-    (hk : fs[k]? = some g) (hkS : k ∈ S')
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) (.callNext k f) o) :
-    ∃ G' D, SFunc.RunP P fs sevm (St b S M G') g (.returned D) ∧ SFunc.RunP P fs sevm D f o := by
-  obtain ⟨G', ⟨D, callee, rest⟩ | ⟨D, callee, -⟩⟩ := rpw_call hk run
-  · exact ⟨G', D, callee, rest⟩
-  · exact (SFunc.RunP.not_halted_entry hS hkS hk callee rfl).elim
-
-theorem rpw_revert {d : Devm} (run : SFunc.RunP P fs sevm d (.last .revert) o) : False := by
-  cases run with
-  | last h => exact Linst.not_run_revert_ok h
-
-end Kit
 
 end Blanc.Lift
 

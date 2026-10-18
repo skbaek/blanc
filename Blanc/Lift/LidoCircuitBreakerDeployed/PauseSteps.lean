@@ -1,17 +1,19 @@
 import Blanc.Lift.LidoCircuitBreakerDeployed.Writers
 import Blanc.Lift.StaticCall
+import Blanc.Lift.RunPWalk
 
 /-!
 # Steps the `pause` walk needs
 
 Generic inversions the `pause` body (entry 13) uses beyond `Writers.lean`:
-node inversions for runs under an arbitrary step relation (`pause` runs under
-`StepIn R`, which the one `CALL` needs), the stack shape after `EXTCODESIZE`
-and `CALL`, code preservation for trees with no external step, and the return
-shapes of the decoders 7 and 33 (the transient-storage steps `ri_tload`,
-`ri_tstore` now live in `Blanc/Lift/WalkSteps.lean`).  None mentions the
-contract except the entry lemmas at the end.  Hoist candidates for `Blanc/Lift`
-(the node inversions, the stack shapes, `RunP.code_of_regOnly` with `NoHalt`'s
+the stack shape after `EXTCODESIZE` and `CALL`, code preservation for trees
+with no external step, and the return shapes of the decoders 7 and 33 (the
+node inversions for runs under an arbitrary step relation, `rpw_*`, which
+`pause` needs because it runs under `StepIn R` for its one `CALL`, live in
+`Blanc/Lift/RunPWalk.lean`; the transient-storage steps `ri_tload`,
+`ri_tstore` in `Blanc/Lift/WalkSteps.lean`).  None mentions the contract
+except the entry lemmas at the end.  Hoist candidates for `Blanc/Lift` (the
+stack shapes, `RunP.code_of_regOnly` with `NoHalt`'s
 `instRegOnly`/`treeRegOnly`/`RegOnlySet`).
 -/
 
@@ -22,52 +24,6 @@ open Blanc
 open Blanc.Lift
 open Blanc.LidoCircuitBreaker
 open AbstractStackSafety
-
-/-! ## Node inversions under an arbitrary step relation -/
-
-section RunP
-
-variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
-  {S : List B256} {M : Mem} {G : Nat} {f g : SFunc} {o : Outcome}
-
-theorem rp_next {n : Ninst} {d : Devm} (run : SFunc.RunP P fs sevm d (.next n f) o) :
-    ∃ d', P sevm d n d' ∧ SFunc.RunP P fs sevm d' f o := by
-  cases run with
-  | next h k => exact ⟨_, h, k⟩
-
-theorem rp_dest (run : SFunc.RunP P fs sevm (St b S M G) (.dest f) o) :
-    ∃ G', SFunc.RunP P fs sevm (St b S M G') f o := by
-  cases run with
-  | dest h k => exact ⟨_, (St.of_burn h) ▸ k⟩
-
-theorem rp_branch {dd w : B256}
-    (run : SFunc.RunP P fs sevm (St b (dd :: w :: S) M G) (.branch f g) o) :
-    (w = 0 ∧ ∃ G', SFunc.RunP P fs sevm (St b S M G') f o) ∨
-      (w ≠ 0 ∧ ∃ G', SFunc.RunP P fs sevm (St b S M G') g o) := by
-  cases run with
-  | zero d0 h k =>
-      obtain ⟨-, hw, e⟩ := St.of_pop2 h
-      exact .inl ⟨hw, _, e ▸ k⟩
-  | succ d0 w0 hw h k =>
-      obtain ⟨-, hw', e⟩ := St.of_pop2 h
-      exact .inr ⟨hw' ▸ hw, _, e ▸ k⟩
-
-theorem rp_call {k : Nat} {dd : B256} (hk : fs[k]? = some g)
-    (run : SFunc.RunP P fs sevm (St b (dd :: S) M G) (.callNext k f) o) :
-    ∃ G', (∃ D, SFunc.RunP P fs sevm (St b S M G') g (.returned D) ∧
-        SFunc.RunP P fs sevm D f o) ∨
-      (∃ D, SFunc.RunP P fs sevm (St b S M G') g (.halted D) ∧ o = .halted D) := by
-  cases run with
-  | callHalt d0 hk' h hr =>
-      rw [hk] at hk'
-      cases hk'
-      exact ⟨_, .inr ⟨_, (St.of_pop1 h).2 ▸ hr, rfl⟩⟩
-  | callRet d0 hk' h hr k =>
-      rw [hk] at hk'
-      cases hk'
-      exact ⟨_, .inl ⟨_, (St.of_pop1 h).2 ▸ hr, k⟩⟩
-
-end RunP
 
 /-! ## Transient storage, `EXTCODESIZE` and `CALL` -/
 

@@ -5,7 +5,7 @@ import Blanc.LockExclusion
 import Blanc.StorageOnlySpec
 
 /-!
-# A certified code image at every raw frame of a history (contract-neutral; U6h1)
+# A certified code image at every raw frame of a history (contract-neutral)
 
 `ConfiguredHistoryTrace.rawFrames_codeImage`: if the checkpoint holds the image of `c.sem` at `ca`
 and `c` is preserved under an admission the history meets, every raw frame of the history (rolled

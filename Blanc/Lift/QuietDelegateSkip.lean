@@ -1,7 +1,7 @@
 import Blanc.Lift.FrameSkip
 import Blanc.Lift.Quiet
-import Blanc.Lift.Usdc.CursorFrames
-import Blanc.Lift.Usdc.SpawnExact
+import Blanc.Lift.CursorFrames
+import Blanc.Lift.SpawnExact
 import Blanc.ExecutionMessageEffects
 import Blanc.StaticStorage
 

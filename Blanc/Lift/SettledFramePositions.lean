@@ -6,7 +6,7 @@ import Blanc.Lift.RetainedTargetCompleteness
 import Blanc.Lift.Token.FamilyReplay
 
 /-!
-# Positional facts about settled frames (contract-neutral; U6h2)
+# Positional facts about settled frames (contract-neutral)
 
 * `ConfiguredHistoryTrace.settledFrames_parent_of_codeAddress`: every settled frame at `ca` whose
   code address is not `ca` (so no message root, since a root at `ca` runs at code address `ca`) has

@@ -3,7 +3,7 @@ import Blanc.Lift.ReachChain
 import Blanc.Lift.CallSiteChildren
 
 /-!
-# A silent tail after an external instruction (contract-neutral; U6h1)
+# A silent tail after an external instruction (contract-neutral)
 
 `silent_after_exec`: in a certified frame whose program passes two decidable checks, the frame's
 post state is the state right after any external instruction it decodes, and no later node of the
