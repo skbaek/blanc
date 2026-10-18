@@ -4491,6 +4491,19 @@ contract-neutral.
   pointer, `FpStep`), `lift_sound_fp` (the same from `Cert.check` and a
   successful frame), `fp_run` (the big-step recursion), and `fstep_sound`
   (one accepted step keeps the invariant `FpInv`).
+- For the write-site checker's step and join soundness, use
+  [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
+  [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
+  (an abstract state's meaning), `wstep_sound` and `wstep_nonpush` (one step),
+  `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
+  `resume_sound` and `callNext_obs` (joins, calls and returns).
+- For which bytes one lifted step wrote, use
+  [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
+  and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
+  `CALL`/`DELEGATECALL`/`STATICCALL` (every outcome, including a failed call).
+- For the stack top after one lifted step of an environment or hashing instruction, use
+  [`Blanc/Lift/StepTops.lean`](../Blanc/Lift/StepTops.lean): `run_{caller,address,not,shl,exp,
+  calldataload,keccak256,sload}_top`, `Ninst.Run.getStor_of_storKeep` and `getStor_push`.
 - For a callee that cannot return, use
   [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
   predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
