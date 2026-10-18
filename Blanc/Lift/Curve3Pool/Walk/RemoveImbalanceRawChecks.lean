@@ -39,3 +39,30 @@ theorem removeLiquidityImbalance_raw {sevm : Sevm} {pre post : Devm} {s : State}
     hcoin hpc hid hkeep hidk
 
 end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+
+open Jaune Blanc.Lift
+
+/-- **Safety of `remove_liquidity_imbalance`, with the observed environment exposed**: `rliEnvW`
+at the supply reply `T`. -/
+theorem removeLiquidityImbalance_rawE {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ (T : B256) (o : Out), step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o :=
+  removeLiquidityImbalance_rawE_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+    hcoin hpc hid hkeep hidk
+
+end Blanc.Lift.Curve3Pool
