@@ -23,17 +23,6 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.Weth9Token Blanc.Composition.UsdcLive
 
-/-- USDC's installed runtimes and admin word read only the world's codes and USDC's storage. -/
-theorem usdc_world_congr {P : Adr} {w w' : Jaune.State} (code : ∀ a, w'.getCode a = w.getCode a)
-    (stor : w'.getStor P = w.getStor P) :
-    (Usdc.UsdcInstalled P w → Usdc.UsdcInstalled P w') ∧ Usdc.adminOf w' P = Usdc.adminOf w P := by
-  refine ⟨fun inst => ⟨?_, ?_, ?_, ?_, inst.implApart, inst.libApart⟩, ?_⟩
-  · rw [code]; exact inst.proxy
-  · rw [code]; exact inst.impl
-  · rw [code]; exact inst.lib
-  · rw [stor]; exact inst.slot
-  · unfold Usdc.adminOf; rw [stor]
-
 /-- **What a new Pair frame at the history's future world knows about USDC.**  The Pair's stored
 `token0` word is USDC, USDC is installed, and its admin word is the checkpoint's.  The tokens come
 from the WETH9-side walk (`pair_token_walk`, which keeps both of the Pair's tokens); USDC's facts
@@ -76,11 +65,6 @@ theorem pair_usdc_frame {pair usdc weth : Adr} {cfg : ChainConfig}
     congrArg (fun w : Jaune.State => w.getStor pair) state
   rw [storPair, ← joint.token0]
   exact slot6.trans tokens.1
-
-theorem syncFirstWorld_getCode (sevm : Sevm) (pre : Devm) (a : Adr) :
-    (syncFirstWorld sevm pre).getCode a = pre.getCode a := by
-  unfold syncFirstWorld syncLockedWorld
-  rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]
 
 theorem notPrecompile_usdc {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {w : Jaune.State} {sevm : Sevm}

@@ -18,11 +18,6 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcLive
 
-theorem mintStageWorld_getCode (sevm : Sevm) (pre : Devm) (a : Adr) :
-    (afterSload sevm (mintCacheWorld sevm pre) 6).getCode a = pre.getCode a := by
-  unfold mintCacheWorld mintLockedWorld
-  rw [afterSload_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
-
 /-- **C6(c), the mint liveness row with both tokens' queries discharged** (USDC = token0, WETH9 =
 token1).  As `pair_history_mint_live`, from the two-token joint checkpoint: WETH9's query is pinned
 (`_read1`) to `mintWethRead1` over USDC's gas-free skeleton, USDC's to `mintUsdcRead0` at the call

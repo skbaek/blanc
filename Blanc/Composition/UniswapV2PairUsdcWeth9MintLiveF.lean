@@ -6,9 +6,9 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 
 Twin of `UniswapV2PairUsdcWeth9MintLive.lean`: `pair_usdc_weth9_history_mint_live_finite`
 is the mint row with `joint : JointCheckpoint2F …` and no quiet premise (the proof never
-uses USDC's joint relation). The frame facts come from `pair_usdc_frameF` and the small
-world helpers in `UniswapV2PairUsdcWeth9SyncLiveF`; only the mint-stage code lemma is
-restated here.
+uses USDC's joint relation). The frame facts come from `pair_usdc_frameF` and the shared
+support-free world helpers in `UniswapV2PairUsdcWeth9SyncLiveF`; the support-free
+mint-stage code lemma (`mintStageWorld_getCode`) lives here under its original name.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -17,7 +17,9 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcLive
 
-theorem mintStageWorld_getCodeF (sevm : Sevm) (pre : Devm) (a : Adr) :
+/-- (Moved here from `UniswapV2PairUsdcWeth9MintLive`: support-free, shared under its
+original name.) -/
+theorem mintStageWorld_getCode (sevm : Sevm) (pre : Devm) (a : Adr) :
     (afterSload sevm (mintCacheWorld sevm pre) 6).getCode a = pre.getCode a := by
   unfold mintCacheWorld mintLockedWorld
   rw [afterSload_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
@@ -119,8 +121,8 @@ theorem pair_usdc_weth9_history_mint_live_finite {pair usdc weth : Adr} {cfg : C
     rw [mintLockedWorld_slot (by decide), target]
     exact token0
   have keeps := mintCacheWorld_keeps sevm pre (w := usdc) (target ▸ joint.apart)
-  obtain ⟨winst, wadmin⟩ := usdc_world_congrF (P := usdc) (w := pre.state)
-    (w' := (afterSload sevm (mintCacheWorld sevm pre) 6).state) (mintStageWorld_getCodeF sevm pre)
+  obtain ⟨winst, wadmin⟩ := usdc_world_congr (P := usdc) (w := pre.state)
+    (w' := (afterSload sevm (mintCacheWorld sevm pre) 6).state) (mintStageWorld_getCode sevm pre)
     keeps.2
   have spec := mintUsdcRead0_spec (callGas1 := callee.callGas1) fork depth
     (by rw [tok]; exact winst inst) (by rw [tok]; exact notPrecompile_usdcF joint fork)

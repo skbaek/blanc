@@ -11,8 +11,9 @@ with `joint : JointCheckpoint2F …` and `usdc_history_end_installedF` in place 
 support version; `pair_usdc_weth9_history_sync_live_finite` is the sync row with the same
 statement except the joint type. No quiet premise: the proof never uses USDC's joint
 relation (no never-signer premise), only the history-end installed/admin facts and the
-WETH9 side. The small world/code helpers are restated with an `F` suffix (same proofs)
-because the original file will import this one for its corollary.
+WETH9 side. The support-free world/code helpers (`usdc_world_congr`,
+`syncFirstWorld_getCode`) live here under their original names and are shared with the
+original row file; only the genuinely support-dependent helpers have `F` twins.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -21,9 +22,10 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.Weth9Token Blanc.Composition.UsdcLive
 
-/-- USDC's installed runtimes and admin word read only the world's codes and USDC's storage,
-support-free restatement (twin of `usdc_world_congr`). -/
-theorem usdc_world_congrF {P : Adr} {w w' : Jaune.State} (code : ∀ a, w'.getCode a = w.getCode a)
+/-- USDC's installed runtimes and admin word read only the world's codes and USDC's storage.
+(Moved here from `UniswapV2PairUsdcWeth9SyncLive`: support-free, shared under its original
+name.) -/
+theorem usdc_world_congr {P : Adr} {w w' : Jaune.State} (code : ∀ a, w'.getCode a = w.getCode a)
     (stor : w'.getStor P = w.getStor P) :
     (Usdc.UsdcInstalled P w → Usdc.UsdcInstalled P w') ∧ Usdc.adminOf w' P = Usdc.adminOf w P := by
   refine ⟨fun inst => ⟨?_, ?_, ?_, ?_, inst.implApart, inst.libApart⟩, ?_⟩
@@ -74,7 +76,7 @@ theorem pair_usdc_frameF {pair usdc weth : Adr} {cfg : ChainConfig}
   rw [storPair, ← joint.token0]
   exact slot6.trans tokens.1
 
-theorem syncFirstWorld_getCodeF (sevm : Sevm) (pre : Devm) (a : Adr) :
+theorem syncFirstWorld_getCode (sevm : Sevm) (pre : Devm) (a : Adr) :
     (syncFirstWorld sevm pre).getCode a = pre.getCode a := by
   unfold syncFirstWorld syncLockedWorld
   rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]
@@ -139,8 +141,8 @@ theorem pair_usdc_weth9_history_sync_live_finite {pair usdc weth : Adr} {cfg : C
     rw [toAdr_toB256, syncLockedWorld_slot (by decide), target]
     exact token0
   have keeps := syncFirstWorld_keeps sevm pre (w := usdc) (target ▸ joint.apart)
-  obtain ⟨winst, wadmin⟩ := usdc_world_congrF (P := usdc) (w := pre.state)
-    (w' := (syncFirstWorld sevm pre).state) (syncFirstWorld_getCodeF sevm pre) keeps.2
+  obtain ⟨winst, wadmin⟩ := usdc_world_congr (P := usdc) (w := pre.state)
+    (w' := (syncFirstWorld sevm pre).state) (syncFirstWorld_getCode sevm pre) keeps.2
   have spec := syncUsdcRead0_spec (callGas1 := callGas1) fork depth (by rw [tok]; exact winst inst)
     (by rw [tok]; exact notPrecompile_usdcF joint fork)
     (by rw [tok, wadmin, target]; exact notAdmin) (by rw [hg]; exact fits0) room0
