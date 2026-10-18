@@ -4,7 +4,21 @@ import Blanc.Lift.MemWrites
 import Blanc.Lift.StepTops
 
 /-!
-# W3: one step or one join of the write-site checker is sound
+# W3: one step of the write-site checker is sound
+
+The meaning of an abstract write-site state (`WSt.Holds`: frame words, entry words, the
+free-pointer facts through F3a's `Fact.Holds`, provenance terms through W2's `Term.Den`, the
+constant-offset memory map, `cur`/`ub` slot values of the executing account, `EQ` results and
+guards) and the soundness of one accepted non-jump step (`wstep_sound`): the state after the step
+holds, an executed `SSTORE` meets a site of the current summary read in the frame environment
+(`Site.Obs`, the frozen `WsObs` body), and a keeping summary's step writes no storage.  The joins
+are in `Blanc/Lift/WriteSiteJoin.lean`.  Consumers never unfold `wstep` (`wstep_nonpush`).
+
+Two semantic remarks.  `memBelow` keeps the words ending below a write's lower bound; memory is
+indexed by naturals, so a window starting at or above that bound never reaches below it, whether
+or not it crosses `2 ^ 256` (`memBelow_holds`, `Mem.WritesAt.agreeBelow`): no gas argument is
+needed.  `MSIZE` has no stack transfer (`ninstTransfer` rejects it), so `wstep` never accepts it
+and F3a's `opFacts` memory premise is discharged vacuously.  Contract-neutral.
 -/
 
 namespace Blanc.Lift.WriteSite
