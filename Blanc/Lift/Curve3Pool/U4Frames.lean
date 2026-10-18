@@ -137,7 +137,7 @@ theorem pool_getYD2_rootOrSucc_cwo {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
-  obtain ⟨e, o, hstep, hraw, hi, T, hT, hsec⟩ :=
+  obtain ⟨e, o, hstep, hraw, hi, T, hT, -, hsec⟩ :=
     cwo_raw_getYD2_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwSecondGetYD_law hsec⟩
 
@@ -158,7 +158,7 @@ theorem pool_getYD2_rootOrSucc_oneCoin {sevm : Sevm} {pre post : Devm} {s : Stat
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
-  obtain ⟨e, o, hstep, hraw, hi, T, hT, hsec⟩ :=
+  obtain ⟨e, o, hstep, hraw, hi, T, hT, -, hsec⟩ :=
     removeLiquidityOneCoin_raw_getYD2_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas
       hck henv.htok henv.hcoin hpc henv.id henv.keep henv.hidk
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwSecondGetYD_law hsec⟩

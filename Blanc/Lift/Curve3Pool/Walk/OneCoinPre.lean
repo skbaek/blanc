@@ -17,9 +17,9 @@ section
 
 variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : State}
 
--- SEGMENT: ocA
-/-- **The guards and the quote** (`0x440c` → `0x4491`). -/
-theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
+-- SEGMENT: ocA2
+/-- **The guards and the quote, with the second `get_y_D` call** (`0x440c` → `0x4491`). -/
+theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
@@ -41,6 +41,8 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
       XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
       VW M' [] ∧
       CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
+        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat ∧
+      CwSecondGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
         ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
@@ -143,8 +145,8 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
   have ha2 := ha.of_lock fun x hx => by rw [hs2, Stor.get_set_ne _ (Ne.symm hx)]
   have htok2 := htok
   rw [← Stor.get_set_ne _ lock_ne_token (v := 1), ← hs2] at htok2
-  obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, hst, hlg, h, hV', hout, hcd, hid⟩ :=
-    xa_cw hc hcode hfork ha2 (hV.sub (List.nil_subset _)) htok2 h
+  obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, hsec, hst, hlg, h, hV', hout, hcd, hid⟩ :=
+    xa_cw2 hc hcode hfork ha2 (hV.sub (List.nil_subset _)) htok2 h
   obtain ⟨A, x0, x1, x2, D0, D1, y, -, -, -, -, -, hA, hxp, hD0, hD1, -, hy⟩ := hfirst
   rw [hs2, Stor.get_set_ne _ lock_ne_token] at hsw
   rw [show (Nat.toB256 17547 + Bytes.toB256 [6]).toNat = 0x4491 from by decide] at h
@@ -152,9 +154,38 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
     fun x => by rw [hst, hs2], by rw [hlg, afterSload_logs, afterSstore_logs, afterSload_logs],
     by rw [hout, afterSload_output, afterSstore_output, afterSload_output], fun x hx => ?_,
     fun hb h4 => hid (((hb.afterSload _).afterSstore _ _).afterSload _) h4, h, hV',
-    A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩
+    ⟨A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩, hsec⟩
   rw [hcd x (by rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]; exact hx),
     afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+
+-- SEGMENT: ocA
+/-- **The guards and the quote** (`0x440c` → `0x4491`). -/
+theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (h : XAt sevm post 0x440c (St b [] (vdMem sevm) G) L) :
+    (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
+    (b.getStor sevm.currentTarget).get isKilledSlot = 0 ∧
+    ∃ (c : Exec.Frame) (L' : List Exec.Frame)
+      (hi : (Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat < 3) (dy fee : B256) (b' : Devm)
+      (M' : Mem) (G' : Nat), L = c :: L' ∧
+      StaticWordChild ((b.getStor sevm.currentTarget).get tokenSlot).toAdr totalSupplyData c ∧
+      (∀ e : Env, e.time = sevm.benvStat.time.toNat → e.supply = some (vSupply c).toNat →
+        calcWithdrawOne s e (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
+          ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ = some (dy.toNat, fee.toNat)) ∧
+      (∀ x, (b'.getStor sevm.currentTarget).get x =
+        ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
+      b'.logs = b.logs ∧ b'.output = b.output ∧
+      (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
+      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') ∧
+      XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
+      VW M' [] ∧
+      CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
+        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
+  obtain ⟨hlock, hval, hkill, c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hst, hlg, hout, hcd, hid, h, hV, hfirst, -⟩ :=
+    xa_oc_a2 hc hcode hfork ha htok h
+  exact ⟨hlock, hval, hkill, c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hst, hlg, hout, hcd, hid, h, hV, hfirst⟩
 
 /-- `FEE_DENOMINATOR` as the runtime pushes it. -/
 abbrev ocDen : B256 := Bytes.toB256 [0x02, 0x54, 0x0b, 0xe4, 0x00]
@@ -342,146 +373,6 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   · rw [afterSstore_logs, afterSload_logs, afterSload_logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
--- SEGMENT: ocA2
-/-- **The guards and the quote, with the second `get_y_D` call** (`0x440c` → `0x4491`). -/
-theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (ha : Abstracts (b.getStor sevm.currentTarget) s)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (h : XAt sevm post 0x440c (St b [] (vdMem sevm) G) L) :
-    (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
-    (b.getStor sevm.currentTarget).get isKilledSlot = 0 ∧
-    ∃ (c : Exec.Frame) (L' : List Exec.Frame)
-      (hi : (Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat < 3) (dy fee : B256) (b' : Devm)
-      (M' : Mem) (G' : Nat), L = c :: L' ∧
-      StaticWordChild ((b.getStor sevm.currentTarget).get tokenSlot).toAdr totalSupplyData c ∧
-      (∀ e : Env, e.time = sevm.benvStat.time.toNat → e.supply = some (vSupply c).toNat →
-        calcWithdrawOne s e (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
-          ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ = some (dy.toNat, fee.toNat)) ∧
-      (∀ x, (b'.getStor sevm.currentTarget).get x =
-        ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
-      b'.logs = b.logs ∧ b'.output = b.output ∧
-      (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') ∧
-      XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
-      VW M' [] ∧
-      CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
-        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat ∧
-      CwSecondGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
-        ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
-  have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
-    by rw [vyMem_empty_size]⟩
-  xs 0x4410 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 440c PUSH3 0xffffff
-  xw 0x4411 (.reg .sload) ri_sload  -- 4410 SLOAD
-  xs 0x4412 (.reg .iszero) ri_iszero  -- 4411 ISZERO
-  xs 0x4415 (.push [0x44, 0x1a] (by decide)) ri_push  -- 4412 PUSH2 0x441a
-  xji 0x4416 0x441a hw
-  · xdead
-  have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
-    rw [lockSlot_lit] at e
-    exact e
-  clear hw
-  xjd 0x441b  -- 441a JUMPDEST
-  xs 0x441d (.push [0x01] (by decide)) ri_push  -- 441b PUSH1 0x01
-  xs 0x4421 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 441d PUSH3 0xffffff
-  xw 0x4422 (.reg .sstore) ri_sstore  -- 4421 SSTORE
-  xs 0x4423 (.reg .callvalue) ri_callvalue  -- 4422 CALLVALUE
-  xs 0x4424 (.reg .iszero) ri_iszero  -- 4423 ISZERO
-  xs 0x4427 (.push [0x44, 0x2c] (by decide)) ri_push  -- 4424 PUSH2 0x442c
-  xji 0x4428 0x442c hw
-  · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
-  clear hw
-  xjd 0x442d  -- 442c JUMPDEST
-  xs 0x442f (.push [0x60] (by decide)) ri_push  -- 442d PUSH1 0x60
-  xlu 0x4430  -- 442f MLOAD
-  xs 0x4432 (.push [0x24] (by decide)) ri_push  -- 4430 PUSH1 0x24
-  xs 0x4433 (.reg .calldataload) ri_calldataload  -- 4432 CALLDATALOAD
-  xs 0x4434 (.reg (.dup 0)) (ri_dup (by rfl))  -- 4433 DUP1
-  xs 0x4436 (.push [0x40] (by decide)) ri_push  -- 4434 PUSH1 0x40
-  xlu 0x4437  -- 4436 MLOAD
-  xs 0x4438 (.reg (.swap 0)) (ri_swap (by rfl))  -- 4437 SWAP1
-  xs2 0x4439 (.reg .sgt) ri_sgt  -- 4438 SGT
-  xs 0x443a (.reg .iszero) ri_iszero  -- 4439 ISZERO
-  xs 0x443d (.push [0x44, 0x42] (by decide)) ri_push  -- 443a PUSH2 0x4442
-  xji 0x443e 0x4442 hw
-  · xdead
-  clear hw
-  xjd 0x4443  -- 4442 JUMPDEST
-  xs 0x4444 (.reg (.dup 0)) (ri_dup (by rfl))  -- 4443 DUP1
-  xs 0x4445 (.reg (.swap 1)) (ri_swap (by rfl))  -- 4444 SWAP2
-  xs 0x4446 (.reg (.swap 0)) (ri_swap (by rfl))  -- 4445 SWAP1
-  xs2 0x4447 (.reg .slt) ri_slt  -- 4446 SLT
-  xs 0x4448 (.reg .iszero) ri_iszero  -- 4447 ISZERO
-  xs 0x444b (.push [0x44, 0x50] (by decide)) ri_push  -- 4448 PUSH2 0x4450
-  xji 0x444c 0x4450 hw
-  · xdead
-  clear hw
-  xjd 0x4451  -- 4450 JUMPDEST
-  xs 0x4452 (.reg .pop) ri_pop  -- 4451 POP
-  xs 0x4454 (.push [0x0f] (by decide)) ri_push  -- 4452 PUSH1 0x0f
-  xw 0x4455 (.reg .sload) ri_sload  -- 4454 SLOAD
-  xs 0x4456 (.reg .iszero) ri_iszero  -- 4455 ISZERO
-  xs 0x4459 (.push [0x44, 0x5e] (by decide)) ri_push  -- 4456 PUSH2 0x445e
-  xji 0x445a 0x445e hw
-  · xdead
-  have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
-    rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
-      getStorVal_eq] at e
-    exact e
-  clear hw
-  xjd 0x445f  -- 445e JUMPDEST
-  xs 0x4461 (.push [0x00] (by decide)) ri_push  -- 445f PUSH1 0x00
-  xs 0x4464 (.push [0x01, 0x40] (by decide)) ri_push  -- 4461 PUSH2 0x0140
-  xsw 0x4465 0x140  -- 4464 MSTORE
-  xs 0x4467 (.push [0x00] (by decide)) ri_push  -- 4465 PUSH1 0x00
-  xs 0x446a (.push [0x01, 0x60] (by decide)) ri_push  -- 4467 PUSH2 0x0160
-  xsw 0x446b 0x160  -- 446a MSTORE
-  xs 0x446e (.push [0x01, 0x40] (by decide)) ri_push  -- 446b PUSH2 0x0140
-  xl 0x446f 0x140  -- 446e MLOAD
-  xs 0x4472 (.push [0x01, 0x60] (by decide)) ri_push  -- 446f PUSH2 0x0160
-  xl 0x4473 0x160  -- 4472 MLOAD
-  xs 0x4475 (.push [0x04] (by decide)) ri_push  -- 4473 PUSH1 0x04
-  xs 0x4476 (.reg .calldataload) ri_calldataload  -- 4475 CALLDATALOAD
-  xs 0x4479 (.push [0x01, 0xa0] (by decide)) ri_push  -- 4476 PUSH2 0x01a0
-  xsw 0x447a 0x1a0  -- 4479 MSTORE
-  xs 0x447c (.push [0x24] (by decide)) ri_push  -- 447a PUSH1 0x24
-  xs 0x447d (.reg .calldataload) ri_calldataload  -- 447c CALLDATALOAD
-  xs 0x4480 (.push [0x01, 0xc0] (by decide)) ri_push  -- 447d PUSH2 0x01c0
-  xsw 0x4481 0x1c0  -- 4480 MSTORE
-  xs 0x4484 (.push [0x01, 0xc0] (by decide)) ri_push  -- 4481 PUSH2 0x01c0
-  xl 0x4485 0x1c0  -- 4484 MLOAD
-  xs 0x4488 (.push [0x01, 0xa0] (by decide)) ri_push  -- 4485 PUSH2 0x01a0
-  xl 0x4489 0x1a0  -- 4488 MLOAD
-  xs 0x448b (.push [0x06] (by decide)) ri_push  -- 4489 PUSH1 0x06
-  cvpc 0x448c  -- 448b PC
-  xs 0x448d (.reg .add) ri_add  -- 448c ADD
-  xs 0x4490 (.push [0x3c, 0xca] (by decide)) ri_push  -- 448d PUSH2 0x3cca
-  xjmp 0x3cca  -- 4490 JUMP
-  have hs2 : ∀ x, ((afterSload sevm (afterSstore sevm (afterSload sevm b
-      (Bytes.toB256 [255, 255, 255])) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [1]))
-      (Bytes.toB256 [15])).getStor sevm.currentTarget).get x =
-      ((b.getStor sevm.currentTarget).set lockSlot 1).get x := by
-    intro x
-    rw [afterSload_getStor, afterSstore_getStor_self, afterSload_getStor, lockSlot_lit,
-      show Bytes.toB256 [1] = (1 : B256) from by decide]
-  have ha2 := ha.of_lock fun x hx => by rw [hs2, Stor.get_set_ne _ (Ne.symm hx)]
-  have htok2 := htok
-  rw [← Stor.get_set_ne _ lock_ne_token (v := 1), ← hs2] at htok2
-  obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, hsec, hst, hlg, h, hV', hout, hcd, hid⟩ :=
-    xa_cw2 hc hcode hfork ha2 (hV.sub (List.nil_subset _)) htok2 h
-  obtain ⟨A, x0, x1, x2, D0, D1, y, -, -, -, -, -, hA, hxp, hD0, hD1, -, hy⟩ := hfirst
-  rw [hs2, Stor.get_set_ne _ lock_ne_token] at hsw
-  rw [show (Nat.toB256 17547 + Bytes.toB256 [6]).toNat = 0x4491 from by decide] at h
-  refine ⟨hlock, hval, hkill, c, L', hi, dy, fee, b', M', G', hL, hsw, hmod,
-    fun x => by rw [hst, hs2], by rw [hlg, afterSload_logs, afterSstore_logs, afterSload_logs],
-    by rw [hout, afterSload_output, afterSstore_output, afterSload_output], fun x hx => ?_,
-    fun hb h4 => hid (((hb.afterSload _).afterSstore _ _).afterSload _) h4, h, hV',
-    ⟨A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩, hsec⟩
-  rw [hcd x (by rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]; exact hx),
-    afterSload_getCode, afterSstore_getCode, afterSload_getCode]
 
 end
 
