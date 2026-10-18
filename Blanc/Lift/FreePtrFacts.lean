@@ -166,6 +166,7 @@ def Fact.Holds (ν : Nat → B256) : Fact → Prop
   | .ltr r x y => ν r = B256.ltCheck (ν x) (ν y)
   | .isz r s => ν r = B256.eqCheck (ν s) 0
   | .orr r x y => ν r = ν x ||| ν y
+  | .rdsLe _ => True
 
 /-- Every fact of the list holds under `ν`. -/
 def AllHold (ν : Nat → B256) (fs : List Fact) : Prop := ∀ f ∈ fs, f.Holds ν
@@ -269,6 +270,9 @@ private theorem bndProj_sound (hf : AllHold ν fs) {f : Fact} (hmem : f ∈ fs)
   | orr _ _ _ =>
     simp only [bndProj] at h
     cases h
+  | rdsLe _ =>
+    simp only [bndProj] at h
+    cases h
 
 /-- A projected order fact holds under the valuation. -/
 private theorem ordProj_sound (hf : AllHold ν fs) {f : Fact} (hmem : f ∈ fs)
@@ -297,6 +301,9 @@ private theorem ordProj_sound (hf : AllHold ν fs) {f : Fact} (hmem : f ∈ fs)
     simp only [ordProj] at h
     cases h
   | orr _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | rdsLe _ =>
     simp only [ordProj] at h
     cases h
 
@@ -674,26 +681,34 @@ theorem learn1_sound (hf : AllHold ν fs) {z nz : List Nat} (hz : ∀ s ∈ z, �
     simp only at hg
     split at hg
     · rename_i hr
-      simp only [List.mem_singleton] at hg
-      subst hg
       have h0 := hz r (List.contains_iff_mem.mp hr)
-      show (ν y).toNat ≤ (ν x).toNat
-      by_contra hlt
-      have hxy : ν x < ν y := B256.lt_iff_toNat_lt_toNat.mpr (by omega)
-      rw [hfh] at h0
-      simp only [B256.ltCheck, hxy, ↓reduceIte] at h0
-      exact B256.one_ne_zero' h0
+      have hyx : (ν y).toNat ≤ (ν x).toNat := by
+        by_contra hlt
+        have hxy : ν x < ν y := B256.lt_iff_toNat_lt_toNat.mpr (by omega)
+        rw [hfh] at h0
+        simp only [B256.ltCheck, hxy, ↓reduceIte] at h0
+        exact B256.one_ne_zero' h0
+      have := le_hi hf x; have := lo_le hf y; have := toNat_le_maxW (ν x)
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
+      rcases hg with rfl | rfl | rfl
+      · exact hyx
+      · exact ⟨Nat.zero_le _, by omega⟩
+      · exact ⟨by omega, by omega⟩
     · split at hg
       · rename_i _ hr
-        simp only [List.mem_singleton] at hg
-        subst hg
         have h1 := hnz r (List.contains_iff_mem.mp hr)
-        show (ν x).toNat < (ν y).toNat
-        by_contra hge
-        have hxy : ¬ ν x < ν y := fun h => hge (B256.lt_iff_toNat_lt_toNat.mp h)
-        rw [hfh] at h1
-        simp only [B256.ltCheck, hxy, ↓reduceIte] at h1
-        exact h1 rfl
+        have hxy' : (ν x).toNat < (ν y).toNat := by
+          by_contra hge
+          have hxy : ¬ ν x < ν y := fun h => hge (B256.lt_iff_toNat_lt_toNat.mp h)
+          rw [hfh] at h1
+          simp only [B256.ltCheck, hxy, ↓reduceIte] at h1
+          exact h1 rfl
+        have := le_hi hf y; have := lo_le hf x; have := toNat_le_maxW (ν y)
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
+        rcases hg with rfl | rfl | rfl
+        · exact hxy'
+        · exact ⟨Nat.zero_le _, by omega⟩
+        · exact ⟨by omega, by omega⟩
       · simp only [List.not_mem_nil] at hg
   | orr r x y =>
     simp only [Fact.Holds] at hfh
@@ -713,6 +728,7 @@ theorem learn1_sound (hf : AllHold ν fs) {z nz : List Nat} (hz : ∀ s ∈ z, �
   | bnd _ _ _ => simp only [List.not_mem_nil] at hg
   | le _ _ => simp only [List.not_mem_nil] at hg
   | lt _ _ => simp only [List.not_mem_nil] at hg
+  | rdsLe _ => simp only [List.not_mem_nil] at hg
 
 theorem zeros_sound (hf : AllHold ν fs) : ∀ s ∈ zeros fs, ν s = 0 := by
   intro s hs
@@ -728,11 +744,9 @@ theorem zeros_sound (hf : AllHold ν fs) : ∀ s ∈ zeros fs, ν s = 0 := by
     | succ _ => simp only [reduceCtorEq] at hs
   | _ => simp only [reduceCtorEq] at hs
 
-private theorem ones_sound (hf : AllHold ν fs) :
-    ∀ s ∈ fs.filterMap (fun f => match f with
-      | .bnd s 1 _ => some s
-      | _ => none), ν s ≠ 0 := by
+theorem ones_sound (hf : AllHold ν fs) : ∀ s ∈ ones fs, ν s ≠ 0 := by
   intro s hs
+  unfold ones at hs
   obtain ⟨f, hfm, hs⟩ := List.mem_filterMap.mp hs
   have hfh := hf f hfm
   cases f with
@@ -745,15 +759,10 @@ private theorem ones_sound (hf : AllHold ν fs) :
       have := hfh.1
       rw [h0] at this
       exact absurd this (by decide)
-    · have : (match Fact.bnd s' l h with
-          | .bnd s 1 _ => some s
-          | _ => none) = none := by
-        rcases l with _ | _ | l
-        · rfl
-        · exact absurd rfl hl
-        · rfl
-      rw [this] at hs
-      cases hs
+    · rcases l with _ | _ | l
+      · cases hs
+      · exact absurd rfl hl
+      · cases hs
   | _ => simp only [reduceCtorEq] at hs
 
 /-- **`refineFacts` is sound** on the arm where the condition word is zero (`zero = true`)
@@ -788,7 +797,29 @@ theorem refineFacts_sound (hf : AllHold ν fs) {c : Nat} {zero : Bool}
         exact hnz rfl
       · simp only [↓reduceIte, List.not_mem_nil, IsEmpty.forall_iff, forall_const])
   have h2 := r1.append h1
-  exact (learn1_sound h2 (zeros_sound r1) (ones_sound r1)).append h2
+  have r2 := learn1_sound h2 (zeros_sound r1) (ones_sound r1)
+  have h3 := r2.append h2
+  exact (learn1_sound h3 (zeros_sound r2) (ones_sound r2)).append h3
+
+/-- A branch arm learns no return-data fact. -/
+theorem rdsLe_not_mem_learn1 {z nz : List Nat} {h : Nat} : Fact.rdsLe h ∉ learn1 fs z nz := by
+  intro hm
+  obtain ⟨f, -, hm⟩ := List.mem_flatMap.mp hm
+  cases f <;> simp only at hm <;> (repeat' split at hm) <;>
+    simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at hm
+
+/-- The return-data facts after a branch arm are the ones before it. -/
+theorem rdsLe_mem_refineFacts {c h : Nat} {zero : Bool} (hm : Fact.rdsLe h ∈ refineFacts fs c zero) :
+    Fact.rdsLe h ∈ fs := by
+  unfold refineFacts at hm
+  simp only [List.mem_append] at hm
+  rcases hm with hm | (hm | (hm | (hm | hm)))
+  · exact absurd hm rdsLe_not_mem_learn1
+  · exact absurd hm rdsLe_not_mem_learn1
+  · exact absurd hm rdsLe_not_mem_learn1
+  · cases zero <;> simp only [Bool.false_eq_true, ↓reduceIte, List.mem_singleton,
+      reduceCtorEq] at hm
+  · exact hm
 
 end Refine
 
@@ -875,7 +906,7 @@ theorem resume_sound {σ R : FSt} {below : List Nat} {ν μ : Nat → B256} {Sb 
   refine ⟨ν', hlow, hhigh, ?_, ?_, rfl⟩
   · exact forall₂_append' (forall₂_map_shift hhigh hR)
       (forall₂_agree hlow (fun s hs => lt_freshSym_kv (hb s hs)) hS)
-  · refine AllHold.closeLive _ _ (AllHold.append ?_ ?_)
+  · refine AllHold.closeLive _ _ (AllHold.filter _ (AllHold.append ?_ ?_))
     · intro g hg
       obtain ⟨f, hfm, rfl⟩ := List.mem_map.mp hg
       refine Fact.holds_rename.mpr ?_
