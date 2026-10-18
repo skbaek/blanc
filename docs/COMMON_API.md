@@ -234,6 +234,14 @@ registry has identified the likely vocabulary.
   bounds the charge at a zero (created-account) original by the charge at a
   `RefundSafe` snapshot original, so a snapshot-priced bound remains an upper
   bound.
+- To show a frame ends with a nonnegative refund counter when its own `SSTORE`s are arbitrary
+  (a world invariant closed under every step), track the refund potential
+  `refundPotential sevm b a K` (counter less the clear refund per currently cleared slot of `a`
+  over a key set `K` covering the nonzero originals): `refundPotential_afterSstore` (never lowered
+  by an `SSTORE` at `a`), `refundPotential_add` / `refundPotential_congr`, `clearedCount_eq_zero`
+  and `refundCounter_nonneg_of_potential` in
+  [`Blanc/StorageRefundPotential.lean`](../Blanc/StorageRefundPotential.lean). `ShaCallPost`
+  (precompile calls) keeps the refund counter (`ShaCallPost.refund`).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -4412,6 +4420,25 @@ contract-neutral.
   `PUSH` immediate covers, and `callKinds_of_check` refuses every external instruction but
   `CALL`/`STATICCALL` there; the walk reads `code.data.toList`, so the kernel decision is
   linear, in [`Blanc/Lift/SpawnKindsM.lean`](../Blanc/Lift/SpawnKindsM.lean).
+- To show that every raw frame a successful frame enters lies under a direct *committed*
+  child (no failed or reverted child frames), when its code tests every call's success flag,
+  decide `guardCheck code` for the runtime bytes (each `CALL`/`STATICCALL` at an instruction
+  start is followed by `PUSH2; JUMPI` falling through to `PUSH1 0; DUP1; REVERT`, or is an
+  identity copy `PUSH1 4; GAS; CALL`) and apply `Exec.rawFrameDescendants_of_guardCheck_entry`
+  (premises: covered fork, `4` a precompile and undelegated at entry, committed children keep the
+  code at `4`), in [`Blanc/Lift/GuardedCalls.lean`](../Blanc/Lift/GuardedCalls.lean).  The same
+  module proves the linear walk's predecessors unique (`PushReach.succ_inj`) and where a continued
+  step lands (`Evm.step_cont_succ`).
+- To know what a direct committed child of a call-only frame runs, use
+  `Exec.childFrames_code` (a child at an address holding nonempty undelegated code at the frame's
+  entry runs that code; `Xinst.step_staticcall_spawn` is the `STATICCALL` sibling of
+  `Xinst.step_call_spawn`), and for a child of spawn-free code `Exec.Frame.keeps_of_spawnFree`
+  (it keeps every other address's code and the storage of every other address with code), in
+  [`Blanc/Lift/ChildFrameCode.lean`](../Blanc/Lift/ChildFrameCode.lean).
+- To know where every log of a committed execution came from, use `Exec.log_addresses` (each
+  post log is an entry log or was emitted at the current target of one of the execution's raw
+  frames), e.g. to show no log comes from the deposit contract when the raw frames' targets are
+  known, in [`Blanc/Lift/LogAddresses.lean`](../Blanc/Lift/LogAddresses.lean).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness

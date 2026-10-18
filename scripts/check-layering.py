@@ -123,7 +123,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
-          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
@@ -218,6 +218,9 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # Spawn kinds from code bytes (curve-3pool-stableswap-v1): contract-neutral.
 SHARED += ["Lift.SpawnKindsM"]
+SHARED += ["Lift.GuardedCalls"]
+SHARED += ["Lift.ChildFrameCode"]
+SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
@@ -725,6 +728,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Creation.Jumps",
                     "Lift.Curve3Pool.Model",
                     "Lift.Curve3Pool.SpawnKinds",
+                    "Lift.Curve3Pool.CallGuards",
                     "Lift.Curve3Pool.Bridge",
                     "Lift.Curve3Pool.U5",
                     "Lift.Curve3Pool.U3Refute",
@@ -1241,6 +1245,7 @@ CONTRACTS["weth9"].extend([
 CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
     "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom",
 ])
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
@@ -1302,6 +1307,22 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvU3",
     "Composition.Curve3PoolCalleeLive",
     "Composition.Curve3Pool3CrvHeadlines",
+    "Composition.Curve3Pool3CrvWorld",
+    "Composition.Curve3Pool3CrvTxData",
+    "Composition.Curve3Pool3CrvSigningEncoding",
+    "Composition.Curve3Pool3CrvSigningHash",
+    "Composition.Curve3Pool3CrvSigningRecover",
+    "Composition.Curve3Pool3CrvBlock",
+    "Composition.Curve3Pool3CrvCoinCalls",
+    "Composition.Curve3Pool3CrvExRoot",
+    "Composition.Curve3Pool3CrvTxFrame",
+    "Composition.Curve3Pool3CrvTraceEnv",
+    "Composition.Curve3Pool3CrvCapstoneModel",
+    "Composition.Curve3Pool3CrvWorldAgrees",
+    "Composition.Curve3Pool3CrvCoinAnswers",
+    "Composition.Curve3Pool3CrvCapstoneFrame",
+    "Composition.Curve3Pool3CrvCapstoneTx",
+    "Composition.Curve3Pool3CrvCapstone",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",

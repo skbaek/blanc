@@ -47,9 +47,9 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     (hcoinI : (exI sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exI sevm)).toAdr)
     (hcoinJ : (exJ sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
-    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+    (hkeep : ∀ c ∈ L, ExCoinChild sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
-    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (hidk : ∀ c ∈ L, ExCoinChild sevm b c → c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     σ.get lockSlot = 0 ∧ sevm.value = 0 ∧ σ.get isKilledSlot = 0 ∧ (exI sevm).toNat < 3 ∧
     (exJ sevm).toNat < 3 ∧
@@ -123,10 +123,10 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     hcpm, hct, hcdata, hcv, hcs, hcok, hpull, hB, hlogs, hR, hW, hF, h⟩ :=
     xa_ex_front hcode hfork hlen hcd hsel hcoinI hpc hid hkeep hidk h
   refine ⟨hlock, hval, hkill, hi3, ?_⟩
-  have hk1 : ∀ c ∈ L1, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+  have hk1 : ∀ c ∈ L1, ExCoinChild sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x :=
     fun c hc => hkeep c (List.mem_append_right _ hc)
-  have hi1 : ∀ c ∈ L1, c.post.getCode 4 = c.pre.getCode 4 :=
+  have hi1 : ∀ c ∈ L1, ExCoinChild sevm b c → c.post.getCode 4 = c.pre.getCode 4 :=
     fun c hc => hidk c (List.mem_append_right _ hc)
   clear hkeep hidk
   -- `x`
@@ -202,7 +202,9 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   obtain ⟨bq, cq, L2, dq, img9, G9, hbq, rfl, hcq, hv9, hR9, hW9, hrd9, h⟩ :=
     xa_ex_push hcode hfork hj hR8 hW8
       (hk8 _ _ hout7 (by omega) (by omega)) hB8.id hdepth hcw (hcoinJ hj) h
-  have hBq := (hB8.rel hbq).child hcq hpc (hk1 cq List.mem_cons_self) (hi1 cq List.mem_cons_self)
+  have hcqC : ExCoinChild sevm b cq := exCoinChild_of hj (by rw [hcq.target])
+  have hBq := (hB8.rel hbq).child hcq hpc (hk1 cq List.mem_cons_self hcqC)
+    (hi1 cq List.mem_cons_self hcqC)
   obtain ⟨hok2, b10, M10, img10, G10, hb10, hR10, hW10, hk10, h⟩ :=
     xa_ex_tail2 hcode hBq.id hR9 hW9 hrd9 h
   -- the event and the lock

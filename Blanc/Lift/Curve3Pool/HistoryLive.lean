@@ -74,7 +74,7 @@ theorem pool_history_exchange_live (trace : ConfiguredHistoryTrace cfg checkpoin
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool s₀ s ∧
-      ∀ {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' : Devm → Prop} {U G : Nat}
+      ∀ {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -96,7 +96,8 @@ theorem pool_history_exchange_live (trace : ConfiguredHistoryTrace cfg checkpoin
             0x71c 0x780)
         (_hpull : CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
           (exDx sevm) U 0x600 0x6c0)
-        (_hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot j))
+        (_hW''c : WClosed sevm W'')
+        (_hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot j))
           (Nat.toB256 (exPushAmt o)) U 0xb60 0xc00)
         (_hG : costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
           (exDx sevm).toNat + 4 * U ≤ G)
@@ -106,11 +107,11 @@ theorem pool_history_exchange_live (trace : ConfiguredHistoryTrace cfg checkpoin
             pullIn (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i (exDx sevm).toNat ∧
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (exEnv sevm i j bp bq)
             o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post := by
   obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace installed initial env target state
   exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hi hj hstep hcoin hpc hid hkeep hWc
-    hW'c hWb hbal hpull hpush hG hGm => exchange_live hcode hfork hstatic hdepth hlen hcd hsel hi
-    hj hck hstep hcoin hpc hid hkeep hWc hW'c hWb hbal hpull hpush hG hGm⟩
+    hW'c hWb hbal hpull hW''c hpush hG hGm => exchange_live hcode hfork hstatic hdepth hlen hcd hsel hi
+    hj hck hstep hcoin hpc hid hkeep hWc hW'c hWb hbal hpull hW''c hpush hG hGm⟩
 
 /-- **`add_liquidity` is live at every reachable state** (`addLiquidity_live` after any
 configured history). -/

@@ -357,8 +357,9 @@ theorem checkJoint_sound {pool c3crv : Adr} {ps : Lift.Curve3Pool.State}
 
 /-! ## One concrete synthetic world -/
 
-/-- The synthetic pool address (not a precompile). -/
-def poolAddr : Adr := 0x100
+/-- The synthetic pool address (not a precompile under any covered fork: `0x100` is BPO2's
+`P256VERIFY`). -/
+def poolAddr : Adr := 0x1000
 
 /-- The synthetic 3Crv address (not a precompile). -/
 def c3crvAddr : Adr := 0x101

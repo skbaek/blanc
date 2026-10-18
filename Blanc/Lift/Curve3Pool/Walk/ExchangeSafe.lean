@@ -61,7 +61,8 @@ theorem exchange_rawEY {sevm : Sevm} {pre post : Devm} {s : State}
   obtain ⟨hlock,hval,hkill,hi3,hj3,x0,x1,x2,hxp,Lp,cp,cq,D,y,amp,hL,hcpm,hpt,hpd,hpv,hps,hpok,
     hpull,hmx,hax,hamp,⟨hi,hj,hy⟩,hy1,hy2,hmf,hsf,hmo,hmin,hma,hmap,hbi,hbj1,hbj2,
     hqt,hqd,hqv,hqs,hqok,hstor,hlogs,hout⟩ :=
-    xa_exchange hcode hfork hlen hcd hsel rfl hck.abs hcoinI hcoinJ hpc hid hkeep hidk hx
+    xa_exchange hcode hfork hlen hcd hsel rfl hck.abs hcoinI hcoinJ hpc hid
+      (fun c hc _ => hkeep c hc) (fun c hc _ => hidk c hc) hx
   let i : Fin 3 := ⟨(exI sevm).toNat,hi3⟩
   let j : Fin 3 := ⟨(exJ sevm).toNat,hj3⟩
   have hI : Nat.toB256 i.val = exI sevm := toB256_toNat _

@@ -621,7 +621,7 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
       (Curve3Pool.pool_frame_refines_at ps₀.coins ps₀.token) trace poolInstalled joint.poolCk
       ⟨rfl, rfl⟩
       (Curve3Pool.pool_trace_admitted trace poolInstalled env.callbacks env.parties env.idEmpty
-        env.idNoAuthority env.idNoFrame env.sysInstalled env.sysNoAuthority env.sysNoFrame)
+        env.idNoAuthority env.idNoFrame env.sysNe)
   obtain ⟨Y, runY, minY, supY, steps⟩ := supply_walk W invs run entries auth obs
     (pre := []) (post := []) (by rw [List.nil_append, List.append_nil])
     (PairTokenJoint.PairClosed.nil pool) (by
