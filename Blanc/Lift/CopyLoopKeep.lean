@@ -1,5 +1,6 @@
 import Blanc.Lift.CopyLoop
 import Blanc.Lift.InvWalk
+import Blanc.Lift.InvWalkOps
 import Blanc.Lift.Loop
 import Blanc.Lift.MemMap
 import Blanc.Lift.MemPotential
@@ -20,9 +21,8 @@ the head++body straight line at a time (`J` below); the exit arm supplies the
 witness (the first exit) directly, so `exitT` is never analyzed. Reuses the
 `ri_*` inversion kit (`Blanc/Lift/InvWalk.lean`), `Mem.write_agree`
 (`Blanc/Lift/MemMap.lean`), `Pot.size_lt` (`Blanc/Lift/MemPotential.lean`),
-`B256.toNat_add_eq_of_nof`, `toNat_ge_of_ltCheck_eq_zero` and
-`eq_zero_of_iszero_ne_zero` (`Blanc/Lift/InvWalkOps.lean`, restated below where
-the `Silent`/`MemPotential` import clash forbids the import; see the note).
+`B256.toNat_add_eq_of_nof`, and `ri_mload`, `ri_mstore`, `toNat_ge_of_ltCheck_eq_zero` and
+`eq_zero_of_iszero_ne_zero` (`Blanc/Lift/InvWalkOps.lean`).
 
 Nothing here mentions a contract.
 -/
@@ -278,78 +278,6 @@ inductive J {b : Devm} {src dst len : B256} {R : List B256} {M0 : Mem}
       (St b (Bytes.toB256 [r0, r1] :: (Bytes.toB256 [0x20] + j) ::
         src :: dst :: len :: R) M' G')
       (.jump k)
-
-/-! ## Restated inversion kit
-
-`Blanc/Lift/InvWalkOps.lean` cannot be imported here: it (transitively via
-`Blanc/Lift/Silent.lean`) defines `Blanc.Lift.Outcome.devm`, which
-`Blanc/Lift/MemPotential.lean` (needed for `Pot`) defines a second time, so
-importing both fails. The brief forbids editing existing files, so the four
-facts below are proved here instead of reused; each proof is copied from
-`InvWalkOps`. If the duplicate `Outcome.devm` is ever removed, delete these and
-import `InvWalkOps`.
--/
-
-theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
-    ((St b S M G).memRead i sz).1 = (M.read i sz).1 := rfl
-
-theorem St.memRead_snd {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
-    ((St b S M G).memRead i sz).2 = St b S (M.read i sz).2 G := rfl
-
-/-- `MLOAD`, inverted. -/
-theorem ri_mload {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {i : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (i :: S) M G) (.reg .mload) d) :
-    ∃ G', d = St b (Bytes.toB256 (M.read i.toNat 32).1 :: S) (M.read i.toNat 32).2 G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨si, s₁⟩, h1, run₁⟩
-  rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
-  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
-  have hb := Devm.burn_of_chargeGas h2
-  have hpb := Devm.popBurn_of_pop_of_burn p1 hb
-  obtain ⟨rfl, hs₂⟩ := St.of_pop1 hpb
-  rw [hs₂] at run₂
-  simp only [St.memRead_fst, St.memRead_snd] at run₂
-  have hp := Devm.push_of_push run₂
-  have hs : d.stack = Bytes.toB256 (M.read i.toNat 32).1 :: S := by
-    have := hp.stack
-    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
-  have e := St.of_stackRel (S := S) (M := (M.read i.toNat 32).2) (G := s₂.gasLeft) hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-/-- `MSTORE`, inverted. -/
-theorem ri_mstore {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {i v : B256} {d : Devm}
-    (h : Ninst.Run sevm (St b (i :: v :: S) M G) (.reg .mstore) d) :
-    ∃ G', d = St b S (M.write i.toNat v.toBytes) G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨⟨i', s₁⟩, h1, run'⟩
-  rcases Except.bind_eq_ok run' with ⟨⟨v', s₂⟩, h2, run''⟩
-  rcases Except.bind_eq_ok run'' with ⟨s₃, h3, h4⟩
-  rcases Devm.pop_of_popToNat_val h1 with ⟨x, p1, rfl⟩
-  have p2 := Devm.pop_of_pop h2
-  have hb := Devm.burn_of_chargeGas h3
-  injection h4 with eq
-  have hpb := Devm.popBurn_of_pop_of_burn (Devm.pop_append p1 p2) hb
-  obtain ⟨rfl, rfl, hs₃⟩ := St.of_pop2 hpb
-  rw [hs₃] at eq
-  exact ⟨_, eq.symm⟩
-
-lemma toNat_ge_of_ltCheck_eq_zero {x y : B256} (h : B256.ltCheck x y = 0) :
-    y.toNat ≤ x.toNat := by
-  unfold B256.ltCheck at h; split at h
-  · cases h
-  · rename_i hnlt
-    rw [B256.lt_iff_toNat_lt_toNat] at hnlt
-    omega
-
-lemma eq_zero_of_iszero_ne_zero {x : B256} (h : B256.eqCheck x 0 ≠ 0) : x = 0 := by
-  unfold B256.eqCheck at h; split at h
-  · assumption
-  · contradiction
 
 /-! ## The shape of `J` -/
 

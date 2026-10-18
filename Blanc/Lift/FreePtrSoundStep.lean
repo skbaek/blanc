@@ -52,7 +52,8 @@ private theorem upd_ne {ν : Nat → B256} {r s : Nat} {w : B256} (h : s ≠ r) 
 
 /-! ## Lengths: the checker frame never outgrows the abstract stack -/
 
-private theorem mapM_length {α β : Type} {g : α → Option β} :
+/-- A successful `List.mapM` into `Option` keeps the length. -/
+theorem mapM_length {α β : Type} {g : α → Option β} :
     ∀ {l : List α} {l' : List β}, l.mapM g = some l' → l'.length = l.length
   | [], l', h => by
     simp only [List.mapM_nil, Option.pure_def, Option.some.injEq] at h
@@ -88,7 +89,8 @@ theorem transfer_length_mono {n : Ninst} {k m : Nat} {o o' : Pattern}
   simp only [List.length_append]
   omega
 
-private theorem foldTop_length (c : Option B256) (a : List AVal) :
+/-- `foldTop` keeps the frame's length. -/
+theorem foldTop_length (c : Option B256) (a : List AVal) :
     (foldTop c a).length = a.length := by
   cases c <;> cases a <;> rfl
 

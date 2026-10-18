@@ -4489,14 +4489,22 @@ contract-neutral.
   [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
   `fpRun_sound` (every run of an accepted certificate reads a good free
   pointer, `FpStep`), `lift_sound_fp` (the same from `Cert.check` and a
-  successful frame), `fp_run` (the big-step recursion), and `fstep_sound`
-  (one accepted step keeps the invariant `FpInv`).
+  successful frame), `fp_run` (the big-step recursion), `fstep_sound`
+  (one accepted step keeps the invariant `FpInv`), and the frame-length facts
+  `mapM_length` (an `Option` `mapM` keeps length), `foldTop_length` and
+  `transfer_length_mono`.
 - For the write-site checker's step and join soundness, use
   [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
   [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
   (an abstract state's meaning), `wstep_sound` and `wstep_nonpush` (one step),
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
   `resume_sound` and `callNext_obs` (joins, calls and returns).
+- For the write-site checker's run-level soundness, use
+  [`Blanc/Lift/WriteSiteSound.lean`](../Blanc/Lift/WriteSiteSound.lean): `wsRun_sound`
+  (every run of an accepted certificate's entry `0` is a `WsStep` run), `lift_sound_ws` (the
+  same from `Cert.check` and a successful frame), `ws_run` (the big-step recursion: `WsStep`
+  steps, `RetObs` at a return), and `SFunc.RunP.mono_at` (a run under a step relation implied
+  at the run's own frame).
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
