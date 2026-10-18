@@ -880,6 +880,7 @@ import Blanc.Composition.Curve3Pool3CrvTxData
 import Blanc.Composition.Curve3Pool3CrvSigningEncoding
 import Blanc.Composition.Curve3Pool3CrvSigningHash
 import Blanc.Composition.Curve3Pool3CrvSigningRecover
+import Blanc.Composition.Curve3Pool3CrvBlock
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp

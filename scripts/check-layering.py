@@ -1283,6 +1283,7 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvSigningEncoding",
     "Composition.Curve3Pool3CrvSigningHash",
     "Composition.Curve3Pool3CrvSigningRecover",
+    "Composition.Curve3Pool3CrvBlock",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",
