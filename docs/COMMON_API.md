@@ -234,6 +234,14 @@ registry has identified the likely vocabulary.
   bounds the charge at a zero (created-account) original by the charge at a
   `RefundSafe` snapshot original, so a snapshot-priced bound remains an upper
   bound.
+- To show a frame ends with a nonnegative refund counter when its own `SSTORE`s are arbitrary
+  (a world invariant closed under every step), track the refund potential
+  `refundPotential sevm b a K` (counter less the clear refund per currently cleared slot of `a`
+  over a key set `K` covering the nonzero originals): `refundPotential_afterSstore` (never lowered
+  by an `SSTORE` at `a`), `refundPotential_add` / `refundPotential_congr`, `clearedCount_eq_zero`
+  and `refundCounter_nonneg_of_potential` in
+  [`Blanc/StorageRefundPotential.lean`](../Blanc/StorageRefundPotential.lean). `ShaCallPost`
+  (precompile calls) keeps the refund counter (`ShaCallPost.refund`).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).

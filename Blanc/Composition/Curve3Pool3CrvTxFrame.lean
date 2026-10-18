@@ -82,6 +82,11 @@ structure ExFrame (sevm : Sevm) (b : Devm) : Prop where
   createdCoin0 : coin0Addr ∉ b.createdAccounts
   createdCoin1 : coin1Addr ∉ b.createdAccounts
   spill : b.mach.stateGas.spilled = 0 ∧ b.mach.stateGas.committedSpill = 0
+  error : b.error = none
+  refund : b.refundCounter = 0
+  origPool : (getOrigAcct sevm poolAddr).stor = Curve3Pool3CrvJoint.poolStor
+  origCoin0 : (getOrigAcct sevm coin0Addr).stor = Curve3Pool3CrvInstance.coin0Stor
+  origCoin1 : (getOrigAcct sevm coin1Addr).stor = Curve3Pool3CrvInstance.coin1Stor
 
 /-- After admission: the trader's nonce bumped and the maximal fee `900000 × 2` taken. -/
 def exDebitState (st : Jaune.State) : Jaune.State :=
@@ -153,7 +158,10 @@ theorem ex_prepared_frame {benv : Benv} (ctx : ExTxContext benv)
   have h3 := exDebitState_get_ne benv.state (a := c3crvAddr) (by decide +kernel)
   refine ⟨⟨?code, ctx.fork, rfl, rfl, rfl, rfl, rfl, rfl, ctx.time, rfl, rfl, ?gas, ?pstor,
     ?pcode, ?c0, ?c1, ?c2, ?c3, ?s0, ?s1, ?k4, ?w4, ctx.createdPool, ctx.createdCoin0,
-    ctx.createdCoin1, ⟨rfl, rfl⟩⟩, rfl⟩
+    ctx.createdCoin1, ⟨rfl, rfl⟩, rfl, rfl, ?o0, ?o1, ?o2⟩, rfl⟩
+  case o0 => exact ctx.poolStor
+  case o1 => exact ctx.coin0Stor
+  case o2 => exact ctx.coin1Stor
   case code =>
     change ((exDebitState benv.state).get poolAddr).code = _
     rw [hP.2]

@@ -123,7 +123,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
-          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",

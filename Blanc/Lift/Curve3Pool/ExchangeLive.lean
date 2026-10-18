@@ -16,8 +16,9 @@ push; the push is the last call, so `W''` need not support another push — a `W
 transfer of a positive amount out of the pool would admit no honest token) — then every frame
 gas `G ≥ costExchange … + 4 U` yields an actual successful execution of the pool's runtime whose
 effect is the model's step: the `RawEffect` (in an environment differing from the premised one at
-most in the fee coin's two individual answers, whose difference is the same) and `Checkpoint post
-o.state`. `costExchange` is a closed sufficient-gas bound, not the exact gas: gas after a call
+most in the fee coin's two individual answers, whose difference is the same), `Checkpoint post
+o.state`, and the post-push invariant `W''` at the post (how a caller learns what its invariants
+track at the frame's end, e.g. the error flag). `costExchange` is a closed sufficient-gas bound, not the exact gas: gas after a call
 depends on the callee.
 
 The route is `removeLiquidity_live`'s: the forward run `rx_ex_frame`, `lift_exactM`, the safety
@@ -106,7 +107,7 @@ theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fi
       pullIn (exEnv sevm i j bp bq) i (exDx sevm).toNat =
         pullIn (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i (exDx sevm).toNat ∧
       RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (exEnv sevm i j bp bq) o ∧
-        Checkpoint (post.getStor sevm.currentTarget) o.state := by
+        Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post := by
   have hG256 : G < 2 ^ 256 := by
     have e : (St pre [] Mem.empty G).gasMeasure =
       G + pre.mach.stateGas.spilled + pre.mach.stateGas.committedSpill := rfl
@@ -187,7 +188,7 @@ theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fi
     (e' := exEnv sevm ⟨_, hi3⟩ ⟨_, hj3⟩ (exBalOpt ⟨_, hi3⟩ B1)
     (exBalOpt ⟨_, hi3⟩ B2)) rfl rfl hpeq rfl, hex] at hex'
   cases Option.some.inj hex'
-  refine ⟨D, exc, bp, bq, hpeq, hraw, ?_⟩
+  refine ⟨D, exc, bp, bq, hpeq, hraw, ?_, hL.w⟩
   exact (rawEffect_refines (D := ⟨0, sevm, St pre [] Mem.empty G, .ok D, exc⟩) hck hstep' hraw).1
 
 end Blanc.Lift.Curve3Pool

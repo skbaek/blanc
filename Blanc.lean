@@ -890,6 +890,7 @@ import Blanc.Composition.Curve3Pool3CrvTxFrame
 import Blanc.Composition.Curve3Pool3CrvTraceEnv
 import Blanc.Composition.Curve3Pool3CrvCapstoneModel
 import Blanc.Composition.Curve3Pool3CrvWorldAgrees
+import Blanc.StorageRefundPotential
 import Blanc.Composition.Curve3Pool3CrvCoinAnswers
 import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
 import Blanc.Lift.Curve3Pool.Callee.A

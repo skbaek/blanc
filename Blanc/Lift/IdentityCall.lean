@@ -54,7 +54,8 @@ theorem processMessage_identity_clean
     child.output = calldata ∧ child.state = parent.state ∧
       child.accessedAddresses = parent.accessedAddresses ∧
       child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
-      child.createdAccounts = parent.createdAccounts ∧ idCost calldata.length ≤ gas := by
+      child.createdAccounts = parent.createdAccounts ∧ idCost calldata.length ≤ gas ∧
+      child.refundCounter = 0 := by
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
   unfold FrameBody at hbody
   rw [Msg.benvAfterTransfer_of_value_zero (by rfl)] at hbody
@@ -77,14 +78,16 @@ theorem processMessage_identity_clean
         simp only [bind, Except.bind, Option.isSome] at hset
         injection hset with hchild
         subst child
-        refine ⟨rfl, rfl, rfl, rfl, ?_, rfl, hgas⟩
-        simp only [initEvm, initDevm, Devm.withOutput_logs]
-        dsimp only [Devm.withGasLeft, Devm.setMach, Devm.logs, liftMachPure]
-        split
-        · rfl
-        · rename_i heq
-          exact absurd (heq.symm.trans hfork.rules_stateGas_none)
-            (by simp only [reduceCtorEq, not_false_eq_true])
+        refine ⟨rfl, rfl, rfl, rfl, ?_, rfl, hgas, ?_⟩
+        all_goals
+          simp only [initEvm, initDevm, Devm.withOutput_logs, Devm.withOutput_refundCounter]
+          dsimp only [Devm.withGasLeft, Devm.setMach, Devm.logs, Devm.refundCounter, liftMachPure]
+          try split
+          all_goals first
+            | rfl
+            | (rename_i heq
+               exact absurd (heq.symm.trans hfork.rules_stateGas_none)
+                 (by simp only [reduceCtorEq, not_false_eq_true]))
     · simp only [applyPrecompResult, executeCode.handleErrorWith] at hexec
       split at hexec <;>
         simp only [executeCode.handleError, executeCode.handleErrorAmsterdam] at hexec
@@ -187,9 +190,9 @@ theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b
   obtain ⟨gas, pm⟩ : ∃ gas, ProcessMessage (callMsg sevm P gas 0 sevm.currentTarget 4 4 true false
       (M.read ii.toNat is.toNat).1 (b.getCode 4) false) xl (.ok child) :=
     ⟨_, by simpa only [ProcessMessage, St.gasLeft, add_zero] using run_pm₀⟩
-  obtain ⟨hout, hcst, hca, hck, hcl, hcc, -⟩ :=
+  obtain ⟨hout, hcst, hca, hck, hcl, hcc, -, hcr⟩ :=
     processMessage_identity_clean hid.pre pm hclean hfork
-  obtain ⟨hra, hrk, hre, hrc⟩ := Resume.call_ok_meta hsplit hclean
+  obtain ⟨hra, hrk, hre, hrc, hrr⟩ := Resume.call_ok_meta hsplit hclean
   have hlogs := Resume.call_logs hsplit
   simp only [hclean, Bool.false_eq_true, ↓reduceIte, hcl, List.append_nil] at hlogs
   have hmem := Resume.call_memory hsplit
@@ -197,7 +200,7 @@ theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b
   have hst := Resume.call_state hsplit
   refine ⟨d, d.gasLeft, ⟨fun a => ?_, fun a => ?_, ?_, ?_, hlogs,
     (Resume.call_output hsplit).trans rfl, hre, (Resume.call_returnData hsplit).trans hout,
-    hrc.trans (hcc.trans rfl)⟩, St.self hstk hmem⟩
+    hrc.trans (hcc.trans rfl), by rw [hrr, hcr, Int.add_zero]; rfl⟩, St.self hstk hmem⟩
   · exact getStor_eq_of_state_eq (hst.trans hcst) a
   · exact getCode_eq_of_state_eq (hst.trans hcst) a
   · rw [hra, hca, hashSet_union_self]; rfl
@@ -297,7 +300,7 @@ theorem call_identity_step {g ii is oi os : B256} {ext : Nat} (hid : IdReady sev
         (by rw [show (St b S M G).gasLeft = G from rfl]; exact hcross) hdepth) henter hres
   have hcevdata : cev.sta.data = (M.read ii.toNat is.toNat).1 := rfl
   have hchildState : child.state = b.state := rfl
-  refine ⟨post, ⟨fun a => ?_, fun a => ?_, ?_, ?_, ?_, rfl, rfl, hcevdata, rfl⟩, ?_⟩
+  refine ⟨post, ⟨fun a => ?_, fun a => ?_, ?_, ?_, ?_, rfl, rfl, hcevdata, rfl, ?_⟩, ?_⟩
   · change (child.state.get a).stor = (b.state.get a).stor
     rw [hchildState]
   · change child.state.getCode a = b.state.getCode a
@@ -317,6 +320,16 @@ theorem call_identity_step {g ii is oi os : B256} {ext : Nat} (hid : IdReady sev
       rw [hsg']
       rfl
     rw [hcl, List.append_nil]
+    rfl
+  · change p.refundCounter + child.refundCounter = b.refundCounter
+    have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+    have hsg' : msg.benv.stat.rules.stateGas = none := hsg
+    have hcr : child.refundCounter = 0 := by
+      change cev.dyna.refundCounter = 0
+      dsimp only [cev, initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules]
+      rw [hsg']
+      rfl
+    rw [hcr, Int.add_zero]
     rfl
   · have e : post = St post (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
         oi.toNat ((M.read ii.toNat is.toNat).1.take os.toNat)) post.gasLeft := St.self rfl rfl
