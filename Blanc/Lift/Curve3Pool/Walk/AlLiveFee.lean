@@ -61,7 +61,7 @@ theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 
     (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hD1 : WordAt img 0x900 D1)
     (hD0w : WordAt img 0x2e0 D0) (hB : WordAt img (0x300 + 32 * i) B)
     (hN : WordAt img (0x460 + 32 * i) N) (hm1 : D1.Nofm B) (hD0 : D0 ≠ 0)
-    (hk : cert.prog[k]? = some tZ) (hG : 700 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (hk : cert.prog[k]? = some tZ) (hG : R + 700 ≤ G) (hroom : S.length + 20 < 1024)
     (kk : ∀ (M' : Mem) (img' : Bytes) (g : Nat) (dif : B256) (t : SFunc), Mem.Reads M' img' →
       Mem.Wf M' → M'.size = 0xaa0 →
       (∀ o w, WordAt img o w → o + 32 ≤ 0xa60 ∨ 0xaa0 ≤ o → WordAt img' o w) →
@@ -246,7 +246,7 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
     (hN : WordAt img (0x460 + 32 * i) N)
     (hm2 : F.Nofm dif) (hf : f = F * dif / rliDen) (hm3 : f.Nofm AF)
     (hs3 : ¬ N < f * AF / rliDen) (hst : st = N - f * AF / rliDen) (hs4 : ¬ N < f)
-    (haf : af = N - f) (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (haf : af = N - f) (hG : R + 26000 ≤ G) (hroom : S.length + 20 < 1024)
     (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
       ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 i) st) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xaa0 →

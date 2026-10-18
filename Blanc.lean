@@ -1282,3 +1282,4 @@ import Blanc.Lift.Curve3Pool.Walk.AlLiveBal
 import Blanc.Lift.Curve3Pool.Walk.AlLiveLoop
 import Blanc.Lift.Curve3Pool.Walk.AlLiveD1
 import Blanc.Lift.Curve3Pool.Walk.AlLiveFee
+import Blanc.Lift.Curve3Pool.Walk.AlLiveD2
