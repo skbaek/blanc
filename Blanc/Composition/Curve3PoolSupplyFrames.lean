@@ -414,7 +414,7 @@ theorem frame_positional {ca : Adr} {U : Key → Prop}
   subst hpc
   obtain ⟨steps, replay, observed⟩ :=
     c3crv_positionalFa ca U injective apart 0 sevm pre out run at_ run committed fork at_ admitted
-      bound before g after split noOpaque
+      bound before g after split (Exec.NoOpaqueAbove.of_encloses noOpaque)
   change steps = _ at observed
   subst observed
   exact replay
