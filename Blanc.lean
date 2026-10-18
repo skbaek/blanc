@@ -1277,6 +1277,14 @@ import Blanc.Lift.Usdc.Impl.Contract
 import Blanc.Lift.Usdc.Impl.Jumps
 import Blanc.Lift.Usdc.ImplFrames
 import Blanc.Lift.Usdc.ImplSpawns
+import Blanc.Lift.Usdc.ImplV1.Cert
+import Blanc.Lift.Usdc.ImplV1.Check
+import Blanc.Lift.Usdc.ImplV1.CheckPart0
+import Blanc.Lift.Usdc.ImplV1.CheckPart1
+import Blanc.Lift.Usdc.ImplV1.CheckPart2
+import Blanc.Lift.Usdc.ImplV1.CheckPart3
+import Blanc.Lift.Usdc.ImplV1.CheckTries
+import Blanc.Lift.Usdc.ImplV1.Jumps
 import Blanc.Lift.Usdc.Lib.Cert
 import Blanc.Lift.Usdc.Lib.Check
 import Blanc.Lift.Usdc.Lib.Contract

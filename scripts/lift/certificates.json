@@ -569,7 +569,7 @@
         "file_sha256": "598d1a1a003cf098a465fadcf3ae71d32778629495a44c0a68ccd76adc625719",
         "runtime_sha256": "fc8ac969d32cd2cb443a9aba1cefe06f2da079a4ea8936f1c7048491eb9dea66",
         "runtime_bytes": 54,
-        "provenance": "SYNTHETIC V− setup harness, not a mainnet artifact: a labelled clone creation input for the reachable V− witness. A hand-assembled 9-byte copier (602d3d8160093d39f3: copy code[9,54) to memory 0 and RETURN it; Blanc.Lift.Clone1167.copier) followed by the 45-byte EIP-1167 forwarder to the implementation 0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e (Blanc.forwarderCode curvePlainImpl6326, raw sha256 8824bf983cdca217bd1e4d2d2a0a66b0ca5f39e25ca4897095d72ae8a41b15e1, the runtime retained for pool 0x9848482da3ee3076165ce6497eda906e66bb85c5). The historical Curve factory's clone creation input is not retained; this is not it and proves nothing about the factory. Lean cloneCreationCode is Blanc.Lift.Clone1167.creationCode curvePlainImpl6326."
+        "provenance": "SYNTHETIC V\u2212 setup harness, not a mainnet artifact: a labelled clone creation input for the reachable V\u2212 witness. A hand-assembled 9-byte copier (602d3d8160093d39f3: copy code[9,54) to memory 0 and RETURN it; Blanc.Lift.Clone1167.copier) followed by the 45-byte EIP-1167 forwarder to the implementation 0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e (Blanc.forwarderCode curvePlainImpl6326, raw sha256 8824bf983cdca217bd1e4d2d2a0a66b0ca5f39e25ca4897095d72ae8a41b15e1, the runtime retained for pool 0x9848482da3ee3076165ce6497eda906e66bb85c5). The historical Curve factory's clone creation input is not retained; this is not it and proves nothing about the factory. Lean cloneCreationCode is Blanc.Lift.Clone1167.creationCode curvePlainImpl6326."
       },
       "namespace": "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone",
       "cert": "Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Clone/Cert.lean",
@@ -604,7 +604,7 @@
         "file_sha256": "eb056900be76e041f33573c86a0298bef6bce25fdf1a068aac60c3786412f12b",
         "runtime_sha256": "03cbc38e629497c084b384095278a2730b3236f802632f408395dcd828bc3bcf",
         "runtime_bytes": 186,
-        "provenance": "SYNTHETIC V− reachable-witness fixture, not a mainnet contract: the attacker A = 0x4444444444444444444444444444444444444444 of the reachable V− violation (vyper-minus-reachable-reentrancy-v1, V4). Byte-for-byte the registered vminus-attacker2 dispatcher (selector 0x12345678 starts: builds remove_liquidity(200, [0, 0], A) calldata and CALLs the pool proxy with value 0 and all gas; any other calldata, including the empty ETH callback: builds add_liquidity([100, 0], 0, A) calldata and CALLs the pool proxy forwarding CALLVALUE and all gas) with its two embedded addresses replaced: the receiver word 0xaaaa0000000000000000000000000000a2a2a2a2 by A and the proxy 0x9848482da3ee3076165ce6497eda906e66bb85c5 by the reachable setup's synthetic clone 0x5555555555555555555555555555555555555555. Created at A by the synthetic input vminus-attacker-r-creation."
+        "provenance": "SYNTHETIC V\u2212 reachable-witness fixture, not a mainnet contract: the attacker A = 0x4444444444444444444444444444444444444444 of the reachable V\u2212 violation (vyper-minus-reachable-reentrancy-v1, V4). Byte-for-byte the registered vminus-attacker2 dispatcher (selector 0x12345678 starts: builds remove_liquidity(200, [0, 0], A) calldata and CALLs the pool proxy with value 0 and all gas; any other calldata, including the empty ETH callback: builds add_liquidity([100, 0], 0, A) calldata and CALLs the pool proxy forwarding CALLVALUE and all gas) with its two embedded addresses replaced: the receiver word 0xaaaa0000000000000000000000000000a2a2a2a2 by A and the proxy 0x9848482da3ee3076165ce6497eda906e66bb85c5 by the reachable setup's synthetic clone 0x5555555555555555555555555555555555555555. Created at A by the synthetic input vminus-attacker-r-creation."
       },
       "namespace": "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR",
       "cert": "Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/AttackerR/Cert.lean",
@@ -621,7 +621,7 @@
         "file_sha256": "c41077b0248bbb342349b4a98e179c38f0743810ab1ed83d422e8791ca7d3f0f",
         "runtime_sha256": "a45c04d140a1160df40ee95209709d44d158eb95d524407ea993785a6cffc5cd",
         "runtime_bytes": 195,
-        "provenance": "SYNTHETIC V− setup harness, not a mainnet artifact: the creation input of the reachable V− attacker. A hand-assembled 9-byte copier (60ba3d8160093d39f3: copy code[9,195) to memory 0 and RETURN it; the Blanc.Lift.Clone1167.copier shape for 186 bytes) followed by the registered 186-byte vminus-attacker-r runtime. Lean creationCode references that runtime."
+        "provenance": "SYNTHETIC V\u2212 setup harness, not a mainnet artifact: the creation input of the reachable V\u2212 attacker. A hand-assembled 9-byte copier (60ba3d8160093d39f3: copy code[9,195) to memory 0 and RETURN it; the Blanc.Lift.Clone1167.copier shape for 186 bytes) followed by the registered 186-byte vminus-attacker-r runtime. Lean creationCode references that runtime."
       },
       "namespace": "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation",
       "cert": "Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/AttackerR/Creation/Cert.lean",
@@ -759,6 +759,36 @@
         "ann": "Blanc/Lift/Usdc/ImplWs/Ann.lean",
         "check_dir": "Blanc/Lift/Usdc/ImplWs",
         "parts": 4
+      }
+    },
+    {
+      "id": "usdc-impl-v1",
+      "input": {
+        "hex": "scripts/lift/inputs/usdc-impl-v1-runtime.hex",
+        "file_sha256": "d3d9cef4b847c61e581f4391748eb77e4ee9b8f02d679bd11dd590ce36a073dc",
+        "runtime_sha256": "41eae9af207cf1a279fdf58a4116f5131d20301c67cb5d2f15dbf3e495d9dc99",
+        "runtime_bytes": 12123,
+        "provenance": "Ethereum chain 1 deployed USDC implementation FiatTokenV1 0x0882477e7895bdC5cea7cB1552ed914aB157Fe56, created at block 6082458 (tx 0xa40b41d5a00b8b1a1d591dc60882521942f5b98b277bb3e8ba6e0edda0a2e550), the proxy 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48's implementation from block 6082465 to block 10743413 (implementation word in scripts/usdc-history-reference.json, four archive operators). eth_getCode at blocks 6082465, 10008355, 10743413 on the archive operators and at latest on 8 separately operated RPC services (1rpc, blastapi, bloxroute, drpc, flashbots, nodies, publicnode, tenderly) agree byte for byte (20 reads; 12123 bytes, SHA-256 41eae9af207cf1a279fdf58a4116f5131d20301c67cb5d2f15dbf3e495d9dc99, keccak-256 codehash 0x767fcf585fbd2983505154555f183b121c91e5dd4d56608f2d6448fb82a1fdfa). The lock scripts/usdc-history-reference.json (implementations[usdc-impl-v1].runtime, written by scripts/usdc-history-reference.py fetch; check-offline re-hashes this file against it) records every read; Plans evidence/usdc-history-p1-v1/h0a-h1/fetch/rpc/ holds the requests and responses. Source record: Sourcify v2 matchId 7345213 (response SHA-256 bc0628846c75f7fbbc630e5c39a868ec7ec2d5c14d7f2fbeb5e3ff947dcd5273), solc 0.4.24+commit.e67f0147, optimizer off, runtime match, creation match; source tag circlefin/stablecoin-evm v1.0.0 (19cb665ee89a419063adfa89baa9f568194417f2). No Solidity recompilation."
+      },
+      "namespace": "Blanc.Lift.Usdc.ImplV1",
+      "cert": "Blanc/Lift/Usdc/ImplV1/Cert.lean",
+      "header": "GENERATED by scripts/lift/lift.py (registered in scripts/lift/certificates.json) -- do not edit.\nThe producer is untrusted; Check.cert_check checks this data.",
+      "options": {
+        "fold": true,
+        "max_run": 128
+      },
+      "check": {
+        "path": "Blanc/Lift/Usdc/ImplV1/Check.lean",
+        "header": "GENERATED by scripts/lift/lift.py (registered in scripts/lift/certificates.json) -- do not edit.",
+        "parts": 4,
+        "literal_tries": true,
+        "split_nodes": 1000,
+        "assembly": "chain"
+      },
+      "jumps": {
+        "path": "Blanc/Lift/Usdc/ImplV1/Jumps.lean",
+        "header": "GENERATED by scripts/lift/lift.py (registered in scripts/lift/certificates.json) -- do not edit.",
+        "assembly": "chain"
       }
     },
     {

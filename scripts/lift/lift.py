@@ -348,6 +348,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv += ["--wrapper-order", opts["wrapper_order"]]
             if opts.get("fold") is True:
                 argv.append("--fold")
+            if "max_run" in opts:
+                argv += ["--max-run", str(opts["max_run"])]
             if opts.get("pc") is True:
                 argv.append("--pc")
             if opts.get("decide_jumpi") is True:
@@ -518,6 +520,9 @@ parser.add_argument("--pc", action="store_true",
                     help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
                     help="fold ADD/MUL/SUB/LT/GT/EQ/AND/ISZERO over constant operands (mirror of foldConst)")
+parser.add_argument("--max-run", type=int, default=None,
+                    help="name the rest of a straight-line .next run after this many nodes (a long "
+                         "run of unoptimized code exceeds the elaborator's recursion depth); off by default")
 parser.add_argument("--lock-spec", type=str, default=None,
                     help="reentrancy-lock spec as JSON {slot, locked, bodies, mutBodies, setPcs, releasePcs}")
 parser.add_argument("--lock-spec-module", type=str, default=None, help="Lean module defining `lockSpec` (hand-written)")
@@ -1749,22 +1754,24 @@ def_memo: Dict[Tuple[int, int], str] = {} # (pc, entry_idx) -> def_name
 def_variants: Dict[Tuple[int, int], List[Tuple[Any, str]]] = {}
 probe_def_variants = [0]
 
-def render_sfunc(t: Any, entry_idx: int) -> str:
+def render_sfunc(t: Any, entry_idx: int, run: int = 0) -> str:
     """One SFunc node as Lean syntax: inlines a straight-line `.next`/`.dest` run and refers to
     any `.dest`/join-reference or `.branch`-child boundary by its `emit_block`-memoized name
     (never inlining a named boundary's own body), so the result only ever references names
     already written to `Cert.lean` -- safe to use standalone, without minting a new top-level
     `def` (`split_entry_plan` uses this for a piece boundary that falls inside a run rather than
-    exactly at one of those boundaries)."""
+    exactly at one of those boundaries).  With `--max-run N` (registry option `"max_run": N`) a
+    run that reaches N inlined nodes names its remaining `.next` tail as its own block, so no
+    term nests deeper than N; the named definition unfolds to the same tree."""
     k = t[0]
     if k == 'join_ref':
         target_k = t[1]
         return f"t_{entries[target_k][0]:04x}_c{target_k}"
     elif k == 'next' and t[1][0] == 0x58:  # PC at the node's pc
         sub = t[2]
-        if sub[0] in ('dest', 'join_ref'):
+        if sub[0] in ('dest', 'join_ref') or run_ends(sub, run):
             return f"(.pcAt 0x{t[3]:x} {emit_block(sub, entry_idx)})"
-        return f"(.pcAt 0x{t[3]:x} {render_sfunc(sub, entry_idx)})"
+        return f"(.pcAt 0x{t[3]:x} {render_sfunc(sub, entry_idx, run + 1)})"
     elif k == 'next':
         op, d = t[1]
         sub = t[2]
@@ -1775,11 +1782,11 @@ def render_sfunc(t: Any, entry_idx: int) -> str:
             op_str = op_to_lean_reg(op)
 
         # If next instruction is JUMPDEST or join_ref, branch to new block def
-        if sub[0] in ('dest', 'join_ref'):
+        if sub[0] in ('dest', 'join_ref') or run_ends(sub, run):
             child_name = emit_block(sub, entry_idx)
             return f"(.next ({op_str}) {child_name})"
         else:
-            return f"(.next ({op_str}) {render_sfunc(sub, entry_idx)})"
+            return f"(.next ({op_str}) {render_sfunc(sub, entry_idx, run + 1)})"
     elif k == 'dest':
         sub = t[1]
         if sub[0] in ('dest', 'join_ref'):
@@ -1819,6 +1826,11 @@ def render_sfunc(t: Any, entry_idx: int) -> str:
         return f"(.branchTo .undefined {t[1]})"
     else:
         raise ValueError(f"Unknown kind {k}")
+
+
+def run_ends(sub: Any, run: int) -> bool:
+    """`--max-run`: the inlined run has reached its bound and continues with another `.next`."""
+    return args.max_run is not None and run + 1 >= args.max_run and sub[0] == 'next'
 
 
 def emit_block(tree: Any, entry_idx: int) -> str:
