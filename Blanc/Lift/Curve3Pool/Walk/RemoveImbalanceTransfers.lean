@@ -88,6 +88,77 @@ theorem xa_rli_iter {b0 : Devm} {σ : Stor} {k : Nat}
     exact ⟨[], L, b, M, img, _, rfl, hB, by simp only [List.flatMap_nil, List.append_nil],
       .inl ⟨he, rfl⟩, hR, hW, hI, hctr, h⟩
 
+/-- **One transfer iteration under the conditional keep** (`0x3769` → `0x38f7`) for coin `k`:
+the same conclusion as `xa_rli_iter` when only the children at neither the pool nor `4` are
+known to keep the pool (`RlKeepC`, which every frame at depth `1` satisfies), given that coin
+`k` is neither. -/
+theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hB : ExBase sevm b0 b σ) (hpc : b0.getCode sevm.currentTarget ≠ .empty)
+    (hcoinne : (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
+      (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ 4)
+    (hK : RlKeepC sevm L) (hdepth : 0 < sevm.depth)
+    (hcoin : rliAmt sevm k ≠ 0 →
+      ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hI : RliImg img X D1 T f0 f1 f2)
+    (hctr : WordAt img 0x900 (Nat.toB256 k))
+    (h : XAt sevm post 0x3769 (St b [Bytes.toB256 [3], Bytes.toB256 [9, 0]] M G) L) :
+    ∃ (Lc L' : List Exec.Frame) (b' : Devm) (M' : Mem) (img' : Bytes) (G' : Nat),
+      L = Lc ++ L' ∧ ExBase sevm b0 b' σ ∧ b'.logs = b.logs ++ Lc.flatMap (fun c => c.post.logs) ∧
+      ((rliAmt sevm k = 0 ∧ Lc = []) ∨
+        (rliAmt sevm k ≠ 0 ∧ ∃ c, Lc = [c] ∧
+          c.sevm.currentTarget = (σ.get (coinsBase + Nat.toB256 k)).toAdr ∧
+          c.sevm.data = exPushData sevm (rliAmt sevm k) ∧ c.sevm.value = 0 ∧
+          c.sevm.isStatic = sevm.isStatic ∧ RawCallOk c.post.output)) ∧
+      Mem.Reads M' img' ∧ Mem.Wf M' ∧ RliImg img' X D1 T f0 f1 f2 ∧
+      WordAt img' 0x900 (Nat.toB256 k) ∧
+      XAt sevm post 0x38f7 (St b' [Bytes.toB256 [3], Bytes.toB256 [9, 0]] M' G') L' := by
+  xjd 0x376a
+  xs 0x376c (.push [0x00] (by decide)) ri_push
+  xs 0x376e (.push [0x04] (by decide)) ri_push
+  xs 0x3771 (.push [0x09, 0x00] (by decide)) ri_push
+  xmo 0x3772 (.reg .mload) (ri_mload_imgAt (o := 0x900) rfl)
+  rw [hctr.read] at h
+  xs 0x3774 (.push [0x03] (by decide)) ri_push
+  xs 0x3775 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x3776 (.reg .lt) ri_lt
+  xs 0x3779 (.push [0x37, 0x7e] (by decide)) ri_push
+  xji 0x377a 0x377e hw
+  · xdead
+  clear hw
+  xjd 0x377f
+  xs 0x3781 (.push [0x20] (by decide)) ri_push
+  xs 0x3782 (.reg .mul) ri_mul
+  xs 0x3783 (.reg .add) ri_add
+  xs 0x3784 (.reg .calldataload) ri_calldataload
+  xs 0x3785 (.reg .xor) ri_xor
+  xs 0x3786 (.reg .iszero) ri_iszero
+  xs 0x3789 (.push [0x38, 0xf7] (by decide)) ri_push
+  xji 0x378a 0x38f7 hw
+  · -- `amounts[k] != 0`: the transfer
+    have hne : rliAmt sevm k ≠ 0 := by
+      have e := eqCheck_eq_zero hw
+      rwa [zero_lit, B256.xor_zero] at e
+    clear hw
+    obtain ⟨bq, c, L1, d, img1, G1, hbq, rfl, hcq, hkp, hR1, hW1, hrd, h⟩ :=
+      xa_rli_push hcode hfork hR hW hctr hB.id hdepth (hB.stor _) (hcoin hne) h
+    have hkc := hK c List.mem_cons_self (by rw [hcq.target]; exact hcoinne.1)
+      (by rw [hcq.target]; exact hcoinne.2)
+    have hBq := (hB.rel hbq).child hcq hpc hkc.1 hkc.2
+    obtain ⟨hok, b6, M6, img6, G7, hb6, hR6, hW6, hk6, h⟩ := xa_rli_tail hcode hBq.id hR1 hW1 hrd h
+    refine ⟨[c], L1, b6, M6, img6, G7, rfl, hBq.rel hb6, ?_, .inr ⟨hne, c, rfl, hcq.target,
+      hcq.data, hcq.value, hcq.isStatic, hcq.output ▸ hok⟩, hR6, hW6,
+      hI.keep fun o w hw h1 h2 => hk6 o w (hkp o w hw (by omega) (by omega)) (by omega) (by omega),
+      hk6 _ _ (hkp _ _ hctr (by decide) (by decide)) (by decide) (by decide), h⟩
+    rw [hb6.logs, hcq.logs, hbq.logs]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  · -- `amounts[k] == 0`: skipped
+    have he : rliAmt sevm k = 0 := by
+      have e := eqCheck_ne_zero_eq hw
+      rwa [zero_lit, B256.xor_zero] at e
+    exact ⟨[], L, b, M, img, _, rfl, hB, by simp only [List.flatMap_nil, List.append_nil],
+      .inl ⟨he, rfl⟩, hR, hW, hI, hctr, h⟩
+
 /-- **The counter advanced** (`0x38f7`): back to the loop head, or past the loop. -/
 theorem xa_rli_next {k : Nat} (hcode : sevm.code = code)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hI : RliImg img X D1 T f0 f1 f2)
