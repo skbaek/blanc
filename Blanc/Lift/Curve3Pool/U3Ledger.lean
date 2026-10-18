@@ -154,4 +154,15 @@ theorem FeeBounded.le_feeDen {s : State} (h : FeeBounded s) : s.adminFee ≤ fee
   simp only [maxAdminFee, feeDen] at this ⊢
   omega
 
+/-- `FeeBounded` holds at the recorded deployment state: the constructor sets both the admin
+fee and the future admin fee to `0`. -/
+theorem feeBounded_poolInit (t : Nat) : FeeBounded (Creation.poolInitState t) := by
+  simp only [FeeBounded, Creation.poolInitState]
+  exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+
+/-- Any replay from the recorded deployment state stays fee-bounded. -/
+theorem feeBounded_of_poolRun_init {t : Nat} {invs : List PoolInvocation} {s : State}
+    (h : PoolRun (Creation.poolInitState t) invs s) : FeeBounded s :=
+  PoolRun.keeps feeBounded_keeps h (feeBounded_poolInit t)
+
 end Blanc.Lift.Curve3Pool
