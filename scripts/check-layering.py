@@ -180,7 +180,8 @@ SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "L
 # each imports only SHARED modules and Jaune, and no statement names a contract.
 SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePtrFacts",
            "Lift.WriteSite", "Lift.WriteSiteTerm", "Lift.WriteSiteObs", "Lift.WriteSiteLocality",
-           "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem"]
+           "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem",
+           "Lift.CopyLoopKeep"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
