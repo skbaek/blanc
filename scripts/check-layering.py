@@ -183,7 +183,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
            "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem",
            "Lift.CopyLoopKeep", "Lift.NodeRet", "Lift.FreePtrSoundStep", "Lift.FreePtrSound",
            "Lift.MemWrites", "Lift.StepTops", "Lift.WriteSiteStep", "Lift.WriteSiteJoin",
-           "Lift.WriteSiteSound"]
+           "Lift.WriteSiteSound", "Lift.WriteSiteRows"]
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", "Lift.SilentCallP"]
@@ -1052,6 +1052,28 @@ CONTRACTS = {
         "Lift.Usdc.ImplV2_1.CheckPart3",
         "Lift.Usdc.ImplV2_1.CheckTries",
         "Lift.Usdc.ImplV2_1.Jumps",
+        "Lift.Usdc.AllowLocality",
+        "Lift.Usdc.ImplV1Ws",
+        "Lift.Usdc.ImplV1Ws.Ann",
+        "Lift.Usdc.ImplV1Ws.Check",
+        "Lift.Usdc.ImplV1Ws.Check0",
+        "Lift.Usdc.ImplV1Ws.Check1",
+        "Lift.Usdc.ImplV1Ws.Check2",
+        "Lift.Usdc.ImplV1Ws.Check3",
+        "Lift.Usdc.ImplV2Ws",
+        "Lift.Usdc.ImplV2Ws.Ann",
+        "Lift.Usdc.ImplV2Ws.Check",
+        "Lift.Usdc.ImplV2Ws.Check0",
+        "Lift.Usdc.ImplV2Ws.Check1",
+        "Lift.Usdc.ImplV2Ws.Check2",
+        "Lift.Usdc.ImplV2Ws.Check3",
+        "Lift.Usdc.ImplV2_1Ws",
+        "Lift.Usdc.ImplV2_1Ws.Ann",
+        "Lift.Usdc.ImplV2_1Ws.Check",
+        "Lift.Usdc.ImplV2_1Ws.Check0",
+        "Lift.Usdc.ImplV2_1Ws.Check1",
+        "Lift.Usdc.ImplV2_1Ws.Check2",
+        "Lift.Usdc.ImplV2_1Ws.Check3",
         "Lift.Usdc.ImplFrames",
         "Lift.Usdc.ImplSpawns",
         "Lift.Usdc.Lib.Cert",

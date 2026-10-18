@@ -4555,6 +4555,13 @@ contract-neutral.
   `Term.den_subst` (instantiating a callee's term at a call site is sound)
   and `ws_locality_keys` (every `SSTORE` at a protected slot is
   non-increasing or happens in an allowed frame).
+- For write locality at one owner's rows of a solc two-level mapping
+  (`m[p][g]` at `mapSlot g (mapSlot p b)`) over a certificate's root sites, use
+  [`Blanc/Lift/WriteSiteRows.lean`](../Blanc/Lift/WriteSiteRows.lean):
+  `ws_row_locality` (`ws_locality_keys` at a row-or-raw key type, so every
+  listed site, `top` included, names a key) under the frame-local collision
+  premise `RowSep`, with `rowOf`/`rowOf_eval` (a row slot term's owner and key)
+  and `GuardObs.mono`.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
