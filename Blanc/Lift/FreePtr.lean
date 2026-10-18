@@ -1,3 +1,4 @@
+import Blanc.Lift.BndInterval
 import Blanc.Lift.Check
 import Blanc.Lift.MemPotential
 
@@ -63,21 +64,25 @@ def maxW : Nat := 2 ^ 256 - 1
 def fpLo : Nat := 0x80
 def fpCap : Nat := 2 ^ 256 - 2 ^ 32
 
-def bndOf (fs : List Fact) (s : Nat) : Nat × Nat :=
-  fs.foldl (fun p f => match f with
-    | .bnd s' lo hi => if s' = s then (max p.1 lo, min p.2 hi) else p
-    | _ => p) (0, maxW)
+/-- Project a fact to its `bnd` bounds, for the shared interval reading. -/
+def bndProj : Fact → Option (Nat × Nat × Nat)
+  | .bnd s lo hi => some (s, lo, hi)
+  | _ => none
 
-/-- `bndOf`, refined once through the order facts. -/
+/-- Project a fact to its order content (`lt` is strict, `le` is not), for the
+shared interval reading. -/
+def ordProj : Fact → Option (Bool × Nat × Nat)
+  | .lt a b => some (true, a, b)
+  | .le a b => some (false, a, b)
+  | _ => none
+
+/-- The bounds the `bnd` facts give a symbol: the shared `bnd` fold. -/
+def bndOf (fs : List Fact) (s : Nat) : Nat × Nat :=
+  BndInterval.bndOfG bndProj maxW fs s
+
+/-- `bndOf`, refined once through the order facts: the shared `bnd2` fold. -/
 def bnd2 (fs : List Fact) (s : Nat) : Nat × Nat :=
-  fs.foldl (fun p f => match f with
-    | .lt a b =>
-      if a = s then (p.1, min p.2 ((bndOf fs b).2 - 1))
-      else if b = s then (max p.1 ((bndOf fs a).1 + 1), p.2) else p
-    | .le a b =>
-      if a = s then (p.1, min p.2 (bndOf fs b).2)
-      else if b = s then (max p.1 (bndOf fs a).1, p.2) else p
-    | _ => p) (bndOf fs s)
+  BndInterval.bnd2G bndProj ordProj maxW fs s
 
 def lo (fs : List Fact) (s : Nat) : Nat := (bnd2 fs s).1
 def hi (fs : List Fact) (s : Nat) : Nat := (bnd2 fs s).2

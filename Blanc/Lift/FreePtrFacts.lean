@@ -243,95 +243,77 @@ section Entails
 
 variable {ν : Nat → B256} {fs : List Fact}
 
+/-- A projected `bnd` bound holds under the valuation. -/
+private theorem bndProj_sound (hf : AllHold ν fs) {f : Fact} (hmem : f ∈ fs)
+    {s' lo hi : Nat} (h : bndProj f = some (s', lo, hi)) :
+    lo ≤ (ν s').toNat ∧ (ν s').toNat ≤ hi := by
+  have hH := hf f hmem
+  cases f with
+  | bnd s'' lo' hi' =>
+    simp only [Fact.Holds] at hH
+    simp only [bndProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact hH
+  | le _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | lt _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | ltr _ _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | isz _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | orr _ _ _ =>
+    simp only [bndProj] at h
+    cases h
+
+/-- A projected order fact holds under the valuation. -/
+private theorem ordProj_sound (hf : AllHold ν fs) {f : Fact} (hmem : f ∈ fs)
+    {strict : Bool} {a b : Nat} (h : ordProj f = some (strict, a, b)) :
+    (strict = true → (ν a).toNat < (ν b).toNat) ∧
+      (strict = false → (ν a).toNat ≤ (ν b).toNat) := by
+  have hH := hf f hmem
+  cases f with
+  | lt a' b' =>
+    simp only [Fact.Holds] at hH
+    simp only [ordProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact ⟨fun _ => hH, fun hcon => absurd hcon (by decide)⟩
+  | le a' b' =>
+    simp only [Fact.Holds] at hH
+    simp only [ordProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact ⟨fun hcon => absurd hcon (by decide), fun _ => hH⟩
+  | bnd _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | ltr _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | isz _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | orr _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+
+/-- Every symbol value fits in the checker's largest word. -/
+private theorem val_le_maxW (ν : Nat → B256) (t : Nat) : (ν t).toNat ≤ maxW := by
+  have := B256.toNat_lt (ν t); unfold maxW; omega
+
 theorem bndOf_sound (hf : AllHold ν fs) (s : Nat) :
-    (bndOf fs s).1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ (bndOf fs s).2 := by
-  unfold bndOf
-  have key : ∀ (gs : List Fact) (p : Nat × Nat), (∀ g ∈ gs, g ∈ fs) →
-      p.1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ p.2 →
-      (gs.foldl (fun p f => match f with
-        | .bnd s' lo hi => if s' = s then (max p.1 lo, min p.2 hi) else p
-        | _ => p) p).1 ≤ (ν s).toNat ∧
-      (ν s).toNat ≤ (gs.foldl (fun p f => match f with
-        | .bnd s' lo hi => if s' = s then (max p.1 lo, min p.2 hi) else p
-        | _ => p) p).2 := by
-    intro gs
-    induction gs with
-    | nil => intro p _ hp; exact hp
-    | cons g gs ih =>
-      intro p hsub hp
-      simp only [List.foldl_cons]
-      apply ih _ (fun x hx => hsub x (List.mem_cons_of_mem _ hx))
-      cases g with
-      | bnd s' lo hi =>
-        by_cases hs : s' = s
-        · subst hs
-          have hg := hf _ (hsub _ List.mem_cons_self)
-          simp only [Fact.Holds] at hg
-          simp only [ite_true]
-          exact ⟨Nat.max_le.mpr ⟨hp.1, hg.1⟩, Nat.le_min.mpr ⟨hp.2, hg.2⟩⟩
-        · simp only [hs, ite_false]; exact hp
-      | _ => exact hp
-  exact key fs _ (fun _ h => h) ⟨Nat.zero_le _, by
-    have := B256.toNat_lt (ν s); unfold maxW; omega⟩
+    (bndOf fs s).1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ (bndOf fs s).2 :=
+  BndInterval.bndOfG_sound (val_le_maxW ν)
+    (fun _f hmem _ _ _ h => bndProj_sound hf hmem h) s
 
 theorem bnd2_sound (hf : AllHold ν fs) (s : Nat) :
-    (bnd2 fs s).1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ (bnd2 fs s).2 := by
-  unfold bnd2
-  have key : ∀ (gs : List Fact) (p : Nat × Nat), (∀ g ∈ gs, g ∈ fs) →
-      p.1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ p.2 →
-      (gs.foldl (fun p f => match f with
-        | .lt a b =>
-          if a = s then (p.1, min p.2 ((bndOf fs b).2 - 1))
-          else if b = s then (max p.1 ((bndOf fs a).1 + 1), p.2) else p
-        | .le a b =>
-          if a = s then (p.1, min p.2 (bndOf fs b).2)
-          else if b = s then (max p.1 (bndOf fs a).1, p.2) else p
-        | _ => p) p).1 ≤ (ν s).toNat ∧
-      (ν s).toNat ≤ (gs.foldl (fun p f => match f with
-        | .lt a b =>
-          if a = s then (p.1, min p.2 ((bndOf fs b).2 - 1))
-          else if b = s then (max p.1 ((bndOf fs a).1 + 1), p.2) else p
-        | .le a b =>
-          if a = s then (p.1, min p.2 (bndOf fs b).2)
-          else if b = s then (max p.1 (bndOf fs a).1, p.2) else p
-        | _ => p) p).2 := by
-    intro gs
-    induction gs with
-    | nil => intro p _ hp; exact hp
-    | cons g gs ih =>
-      intro p hsub hp
-      simp only [List.foldl_cons]
-      apply ih _ (fun x hx => hsub x (List.mem_cons_of_mem _ hx))
-      have hg := hf _ (hsub _ List.mem_cons_self)
-      cases g with
-      | lt a b =>
-        simp only [Fact.Holds] at hg
-        by_cases ha : a = s
-        · subst ha
-          have hb := bndOf_sound hf b
-          simp only [ite_true]
-          exact ⟨hp.1, Nat.le_min.mpr ⟨hp.2, by omega⟩⟩
-        · by_cases hb : b = s
-          · subst hb
-            have ha' := bndOf_sound hf a
-            simp only [ha, ite_false, ite_true]
-            exact ⟨Nat.max_le.mpr ⟨hp.1, by omega⟩, hp.2⟩
-          · simp only [ha, hb, ite_false]; exact hp
-      | le a b =>
-        simp only [Fact.Holds] at hg
-        by_cases ha : a = s
-        · subst ha
-          have hb := bndOf_sound hf b
-          simp only [ite_true]
-          exact ⟨hp.1, Nat.le_min.mpr ⟨hp.2, by omega⟩⟩
-        · by_cases hb : b = s
-          · subst hb
-            have ha' := bndOf_sound hf a
-            simp only [ha, ite_false, ite_true]
-            exact ⟨Nat.max_le.mpr ⟨hp.1, by omega⟩, hp.2⟩
-          · simp only [ha, hb, ite_false]; exact hp
-      | _ => exact hp
-  exact key fs _ (fun _ h => h) (bndOf_sound hf s)
+    (bnd2 fs s).1 ≤ (ν s).toNat ∧ (ν s).toNat ≤ (bnd2 fs s).2 :=
+  BndInterval.bnd2G_sound (val_le_maxW ν)
+    (fun _f hmem _ _ _ h => bndProj_sound hf hmem h)
+    (fun _f hmem _ _ _ h => ordProj_sound hf hmem h) s
 
 theorem lo_le (hf : AllHold ν fs) (s : Nat) : lo fs s ≤ (ν s).toNat := (bnd2_sound hf s).1
 
