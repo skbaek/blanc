@@ -138,9 +138,10 @@ theorem pool_other_fails {sevm : Sevm} {pre post : Devm}
   · exact fb_short hcode hshort hcd hx
   · exact fb_miss hcode hlen hcd hmiss hx
 
-/-- **Static frames have no effect**: a successful, committing (`post.error = none`) static
-frame on a covered fork whose target carries code keeps every account's storage and the log
-list. -/
+/-- **Static frames write no storage and emit no logs**: a successful, committing
+(`post.error = none`) static frame on a covered fork whose target carries code writes no
+storage at any address (`post.getStor a = pre.getStor a` for every `a`) and emits no logs
+(`post.logs = pre.logs`). -/
 theorem pool_static_noEffect {sevm : Sevm} {pre post : Devm}
     (exc : Exec 0 sevm pre (.ok post)) (hs : sevm.isStatic = true)
     (hfork : CoveredFork sevm.benvStat.fork) (hpc : pre.getCode sevm.currentTarget ≠ .empty)

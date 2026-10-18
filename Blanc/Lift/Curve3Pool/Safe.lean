@@ -13,10 +13,11 @@ import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.Fallback
 
 /-!
-# Curve 3pool: every successful pool frame refines the model (U2(a))
+# Curve 3pool: every successful pc-`0` pool frame at a `Checkpoint` with `PoolFrameEnv` on installed code over a covered fork refines the model (U2(a))
 
-The all-selector frame headline (design §1.1).  A successful pc-`0` frame of the certified runtime,
-entered fresh at a `Checkpoint`, is accepted by `Model.step` on its decoded call with the frame's
+The all-selector frame headline (design §1.1).  A successful pc-`0` frame of the certified runtime
+(installed code) on a covered fork, entered fresh at a `Checkpoint` abstracting `s` with the ENV
+bundle `PoolFrameEnv`, is accepted by `Model.step` on its decoded call with the frame's
 exact raw effect.  The proof splits on the dispatcher: short calldata or a selector missing every
 test cannot succeed (`pool_other_fails`), and a hit on one of the 38 tests is that entry's `*_raw`,
 its world premises projected from the ENV bundle `PoolFrameEnv`.

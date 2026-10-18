@@ -307,8 +307,7 @@ def monoPre : Fin 3 → Nat := fun k =>
 def monoPost : Fin 3 → Nat := fun k => if k = 0 then monoPre 0 + 1 else monoPre k
 
 /-- **Integer `get_D` is not monotone.** One more wei of coin 0 lowers `get_D` at
-`A = 1`, both loops having stopped normally; the same holds at tolerance 2, so the
-tolerance is not what breaks monotonicity. -/
+`A = 1`; the same holds at tolerance 2, so the tolerance is not what breaks monotonicity. -/
 theorem getD_not_mono :
     (∀ i, monoPre i ≤ monoPost i) ∧
     getD monoPost 1 1 < getD monoPre 1 1 ∧ getD monoPost 1 2 < getD monoPre 1 2 := by
