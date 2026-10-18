@@ -809,6 +809,7 @@ import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
+import Blanc.Lift.Curve3Crv.CostBounds
 import Blanc.Lift.StableSwapNewton.Defs
 import Blanc.Lift.StableSwapNewton.Root
 import Blanc.Lift.StableSwapNewton.D

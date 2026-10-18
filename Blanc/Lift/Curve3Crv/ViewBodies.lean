@@ -21,7 +21,7 @@ variable {sevm : Sevm} {b : Devm}
 private theorem vyMem_size (w : B256) : (vyMem Mem.empty w).size = 192 := vyMem_empty_size w
 
 /-- The tail every word view ends with: `SLOAD` the key on the stack, return the word. -/
-private theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {img : Bytes}
+theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {img : Bytes}
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hn : 32 ≤ M.size) (hn32 : M.size % 32 = 0)
     (k : B256) (G : Nat) :
     ∃ post, SFunc.RunExact prog sevm (St b [k] M (G + 3 + 3 + 3 + 3 + sloadCost sevm b k))

@@ -715,7 +715,8 @@ CONTRACTS = {
                    "Lift.Curve3Crv.Exec", "Lift.Curve3Crv.Slots", "Lift.Curve3Crv.Ladder",
                    "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
                    "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
-                   "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness"],
+                   "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness",
+                   "Lift.Curve3Crv.CostBounds"],
     # The Curve 3pool StableSwap (StableSwap3Pool.vy, Vyper 0.2.4): the deployed creation input,
     # lifted runtime and creation input, its functional model, U5, the U3 refutation and bounds, the storage
     # abstraction and checkpoint predicate, U7 deployment, and the U2 pure refinement layer (curve-3pool-stableswap-v1).
