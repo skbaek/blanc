@@ -4440,6 +4440,17 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- For one lifted step's effect on memory, use
+  [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
+  forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
+  `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
+  `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
+  `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
+  `Mem.write_size_ge` (a write never shrinks memory).
+- For the free-pointer checker's memory effect, use
+  [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
+  (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
+  `memEff_obs` and `memEff_mload_top`.
 - For the static code an instruction reads, use
   [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
   `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),
