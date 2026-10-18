@@ -1,5 +1,6 @@
 import Blanc.Composition.PairTwoToken
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
+import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
 import Blanc.Composition.UniswapV2PairWeth9Joint
 import Blanc.MachineDataFacts
 
@@ -94,43 +95,7 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
         finish.reserve1.val ≤ ((future.state.getStor weth).get (Weth9.balSlot pair)).toNat ∧
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
-  obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2.toUsdcCore trace joint governance neverSigner usdcFresh
-  obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
-  obtain ⟨positions, finish, K₁, -, -, -, -, -, rep, ⟨res0, zero0⟩, ⟨res1, zero1⟩, -⟩ :=
-    pair_two_token_joint (usdcCore usdc KU) (weth9Core weth KW).weak (usdcBook_erc20Abi usdc)
-      weth9Book_erc20Abi (usdcSelfCaller usdc KU) (weth9SelfCaller weth KW).weak trace laws0
-      (weth9Book_laws.holderLaws weth trace pair) joint.weth9.pairCode joint.weth9.pairRep
-      pairFresh hist0 hist1 joint.token0 joint.weth9.token joint.weth9.unlocked joint.apart
-      joint.weth9.apart answerable0 answerable1 joint.weth9.distinct joint.weth9.notSystem
-      (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
-        joint.weth9.pairNonzero factoryNotSystem)
-      (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
-  obtain ⟨-, finish', K', replayed⟩ :=
-    pair_history_replayed trace joint.weth9.pairCode joint.weth9.pairRep pairFresh
-  obtain ⟨-, -, -, -, -, -, -, rep'⟩ := id replayed
-  obtain ⟨r0, r1⟩ := WriterFixedMatches.reserves_eq rep'.fixed rep.fixed
-  refine ⟨fun before f after split noOpaque lit => ?_, finish', K', replayed, ?_, ?_, ?_, ?_⟩
-  · obtain ⟨st, K, rep, opened, token0, token1, ⟨reserveAt0, zeroAt0⟩, ⟨reserveAt1, zeroAt1⟩⟩ :=
-      positions before f after split noOpaque lit id
-    exact ⟨st, K, rep, opened, token0, token1, reserveAt0, zeroAt0, reserveAt1,
-      fun g => B256.eq_zero_of_toNat (zeroAt1 g)⟩
-  · change finish.reserve0.val ≤
-      (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (future.state.getStor usdc)).bal pair
-      at res0
-    rwa [Usdc.ledger_bal (Or.inl joint.tracked), ← r0] at res0
-  · intro g row
-    have zeroG : (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU)
-      (future.state.getStor usdc)).allow pair g = 0 := zero0 g
-    rw [Usdc.ledger_allow row] at zeroG
-    exact B256.eq_zero_of_toNat zeroG
-  · change finish.reserve1.val ≤ (Weth9.tracked (Weth9.historyKeyUniverse weth trace KW)
-      (future.state.getStor weth) pair).toNat at res1
-    rwa [Weth9.tracked_self (Or.inl joint.weth9.tracked), ← r1] at res1
-  · intro g row
-    have zeroG := B256.eq_zero_of_toNat (zero1 g)
-    change Weth9.trackedAllow (Weth9.historyKeyUniverse weth trace KW) (future.state.getStor weth)
-      pair g = 0 at zeroG
-    rwa [Weth9.trackedAllow_self row] at zeroG
+  exact pair_usdc_weth9_joint_finite trace joint.toF pairFresh usdcFresh wethFresh
+    governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

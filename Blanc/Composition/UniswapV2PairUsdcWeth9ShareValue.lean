@@ -1,5 +1,6 @@
 import Blanc.Composition.PairTwoTokenShareValue
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
+import Blanc.Composition.UniswapV2PairUsdcWeth9ShareValueF
 
 /-!
 # C6(b) for the USDC/WETH9 Pair (Appendix A §10, U8b)
@@ -45,18 +46,9 @@ theorem pair_usdc_weth9_history_feeOn_product {pair usdc weth : Adr}
           before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
             after.reserve0.val * after.reserve1.val *
               (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 := by
-  obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2.toUsdcCore trace joint governance neverSigner usdcFresh
-  obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
-  exact pair_two_token_feeOn_product (usdcCore usdc KU) (weth9Core weth KW).weak
-    (usdcBook_erc20Abi usdc) weth9Book_erc20Abi (usdcSelfCaller usdc KU)
-    (weth9SelfCaller weth KW).weak trace laws0 (weth9Book_laws.holderLaws weth trace pair)
-    joint.weth9.pairCode joint.weth9.pairRep pairFresh hist0 hist1 joint.token0 joint.weth9.token
-    joint.weth9.unlocked joint.apart joint.weth9.apart answerable0 answerable1
-    joint.weth9.distinct joint.weth9.notSystem
-    (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
-      joint.weth9.pairNonzero factoryNotSystem)
-    (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
+  exact pair_usdc_weth9_history_feeOn_product_finite trace joint.toF pairFresh usdcFresh
+    wethFresh governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled
+    factoryNotSystem
 
 /-- **C6(b), fee off, the exhibit**: only the factory's fee-off answer stays. -/
 theorem pair_usdc_weth9_history_feeOff_product {pair usdc weth : Adr}
@@ -84,17 +76,8 @@ theorem pair_usdc_weth9_history_feeOff_product {pair usdc weth : Adr}
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
-  obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2.toUsdcCore trace joint governance neverSigner usdcFresh
-  obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
-  exact pair_two_token_feeOff_product (usdcCore usdc KU) (weth9Core weth KW).weak
-    (usdcBook_erc20Abi usdc) weth9Book_erc20Abi (usdcSelfCaller usdc KU)
-    (weth9SelfCaller weth KW).weak trace laws0 (weth9Book_laws.holderLaws weth trace pair)
-    joint.weth9.pairCode joint.weth9.pairRep pairFresh hist0 hist1 joint.token0 joint.weth9.token
-    joint.weth9.unlocked joint.apart joint.weth9.apart answerable0 answerable1
-    joint.weth9.distinct joint.weth9.notSystem
-    (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
-      joint.weth9.pairNonzero factoryNotSystem)
-    (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
+  exact pair_usdc_weth9_history_feeOff_product_finite trace joint.toF pairFresh usdcFresh
+    wethFresh governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled
+    factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9
