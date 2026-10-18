@@ -173,8 +173,8 @@ theorem implStepLaw_famAdmin : ImplStepLaw famAdmin := by
       (post.state.getStor sevm.currentTarget) sevm.caller c ∧
       ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
         ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) by
-    obtain ⟨⟨hstep, himpl, hadmin⟩, hno⟩ := H
-    exact ⟨(book_step_of notAdmin dec).trans hstep, himpl, hadmin,
+    obtain ⟨⟨hstep, himpl, hadmin, hsup⟩, hno⟩ := H
+    exact ⟨(book_step_of notAdmin dec).trans hstep, himpl, hadmin, hsup,
       fun N hp x hat => (hno N hp x hat).elim⟩
   cases c <;> simp only [famAdmin] at fam
   case pause  =>

@@ -82,7 +82,7 @@ theorem implStepLaw_permit : ImplStepLaw (fun c => ∃ o s v, c = .permit o s v)
     · exact ⟨frame_permitVrs fork hcode sel hrun, permit_node_vrs run codeEq fork sel⟩
   clear hrun
   have hp : (ledger U (pre.state.getStor sevm.currentTarget)).paused = false := p0
-  refine ⟨?_, ?_, ?_, fun N hN x hx => ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, fun N hN x hx => ?_⟩
   · simp only [usdcBookS, na, dec, ↓reduceIte, Ledger.step, Ledger.approveOf]
     rw [hp, ite_eq_right (by simp only [Bool.false_eq_true, not_false_eq_true]),
       ite_eq_right (by rintro (h | h); exact o0 h; exact s0 h), sp]
@@ -97,6 +97,9 @@ theorem implStepLaw_permit : ImplStepLaw (fun c => ∃ o s v, c = .permit o s v)
     unfold permitStor
     rw [get_set_off (y := allowSlot _ _) (x := adminSlot) (apart _ ka) (by decide),
       get_set_off (y := nonceSlot _) (x := adminSlot) (apart _ kn) (by decide)]
+  · intro sup
+    rw [sp]
+    exact (sup.set kn _).set ka _
   · obtain ⟨rfl, w, hw⟩ := node N hN x hx
     exact ⟨rfl, libNode_clause apart (.inr ⟨_, w, kn, hw⟩)⟩
 
@@ -133,12 +136,15 @@ theorem implStepLaw_cancel : ImplStepLaw (fun c => ∃ a n, c = .cancelAuthoriza
     change ¬ (flag20 _ = true ∨ _)
     rw [p0, a0]
     simp only [Bool.false_eq_true, or_self, not_false_eq_true]
-  refine ⟨?_, ?_, ?_, fun N hN x hx => ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, fun N hN x hx => ?_⟩
   · simp only [usdcBookS, na, dec, ↓reduceIte, Ledger.step]
     rw [ite_eq_right g, sp]
     exact congrArg some (ledger_set_auth inj apart ka (boolBit_authMark _)).symm
   · rw [sp, cancelStor, get_set_off (y := authSlot _ _) (x := implSlot) (apart _ ka) (by decide)]
   · rw [sp, cancelStor, get_set_off (y := authSlot _ _) (x := adminSlot) (apart _ ka) (by decide)]
+  · intro sup
+    rw [sp]
+    exact sup.set ka _
   · obtain ⟨rfl, hst⟩ := node N hN x hx
     exact ⟨rfl, libNode_clause apart (.inl (by rw [hst]))⟩
 

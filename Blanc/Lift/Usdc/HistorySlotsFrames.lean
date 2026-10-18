@@ -80,18 +80,20 @@ theorem impl_node {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sev
       exact .inr ⟨rfl, g, rest, hs⟩
   | _ => simp only [implKinds, reduceCtorEq, beq_iff_eq, Bool.or_eq_true, or_self] at kind
 
-/-- The whole-frame keeping of a successful implementation frame: the ledger good and the proxy's
-slots kept at its end and at every external node. -/
+/-- The whole-frame keeping of a successful implementation frame: the ledger good, the proxy's
+slots kept and the support kept at its end and at every external node. -/
 def ImplKeeps (P : Adr) (U : Key → Prop) {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) : Prop :=
   ((ledger U (post.state.getStor P)).Good ∧
       (post.state.getStor P).get implSlot = (pre.state.getStor P).get implSlot ∧
-      (post.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot) ∧
+      (post.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot ∧
+      SlotFootprint.Support Key.slot fixedSlots U (post.state.getStor P)) ∧
     ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
       ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
         (ledger U (N.devm.state.getStor P)).Good ∧
         (N.devm.state.getStor P).get implSlot = (pre.state.getStor P).get implSlot ∧
-        (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot
+        (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot ∧
+        SlotFootprint.Support Key.slot fixedSlots U (N.devm.state.getStor P)
 
 /-- **The family laws at a good ledger.**  A successful non-static implementation frame keeps the
 proxy's slots and the ledger good, at its end and at every external node; or it is `rescueERC20`. -/
@@ -102,16 +104,17 @@ theorem impl_laws {P : Adr} {U : Key → Prop} (inj : SlotFootprint.Inj Key.slot
     (codeAddr : sevm.codeAddress = some usdcImpl) (fork : CoveredFork sevm.benvStat.fork)
     (nonstatic : sevm.isStatic = false) (keys : ∀ k ∈ frameKeys sevm, U k)
     (lib : some (pre.state.getCode usdcLib).toList = libSem.image)
-    (notAdmin : sevm.caller ≠ adminOf pre.state P) (good : (ledger U (pre.state.getStor P)).Good) :
+    (notAdmin : sevm.caller ≠ adminOf pre.state P) (good : (ledger U (pre.state.getStor P)).Good)
+    (sup : SlotFootprint.Support Key.slot fixedSlots U (pre.state.getStor P)) :
     ImplKeeps P U run ∨ Blanc.Sevm.selector sevm = rescueSelector := by
   obtain ⟨c, dec⟩ := impl_decodes run codeEq fork
   have whole : ∀ fam, ImplStepLaw fam → fam c →
       ImplKeeps P U run ∨ Blanc.Sevm.selector sevm = rescueSelector := fun fam law hc => by
-    obtain ⟨step, hi, ha, nodes⟩ :=
+    obtain ⟨step, hi, ha, hs, nodes⟩ :=
       law run codeEq target codeAddr fork nonstatic inj apart keys lib notAdmin c dec hc
-    exact Or.inl ⟨⟨book_good step good, hi, ha⟩, fun N chain x hat =>
-      let ⟨_, g, i, a⟩ := nodes N chain x hat
-      ⟨g good, i, a⟩⟩
+    exact Or.inl ⟨⟨book_good step good, hi, ha, hs sup⟩, fun N chain x hat =>
+      let ⟨_, g, i, a, ns⟩ := nodes N chain x hat
+      ⟨g good, i, a, ns sup⟩⟩
   rcases call_family_cases c with h | h | h | h | h | h | ⟨t, d, v, rfl⟩
   · exact whole _ implStepLaw_famTransfer h
   · exact whole _ signed h
@@ -275,13 +278,13 @@ theorem implFrame (inj : SlotFootprint.Inj Key.slot U)
     exact (node_child chain fork codes step enter).2.2.2.2.2.2.2
   cases hs : sevm.isStatic
   · rcases impl_laws inj apart signed run codeEq target codeAddr fork hs keys lib notAdmin
-      inv.2.2 with ⟨⟨pg, pi, pa⟩, nodes⟩ | hsel
+      inv.2.2.1 inv.2.2.2 with ⟨⟨pg, pi, pa, ps⟩, nodes⟩ | hsel
     · have nodeInv : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
           ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → SlotInv U a₀ (N.devm.state.getStor P) :=
         fun N chain x hat =>
-          let ⟨g, i, a⟩ := nodes N chain x hat
-          ⟨i.trans inv.1, by rw [a]; exact inv.2.1, g⟩
-      refine ⟨⟨pi.trans inv.1, by rw [pa]; exact inv.2.1, pg⟩, ?_⟩
+          let ⟨g, i, a, ns⟩ := nodes N chain x hat
+          ⟨i.trans inv.1, by rw [a]; exact inv.2.1, g, ns⟩
+      refine ⟨⟨pi.trans inv.1, by rw [pa]; exact inv.2.1, pg, ps⟩, ?_⟩
       refine impl_children_slots deeper run depth codeEq target fork admitted codes avail ?_
       intro N chain f rsm pc' cevm raw child h step enter _
       obtain ⟨x, hat, -, -⟩ := Evm.step_spawn_inv step

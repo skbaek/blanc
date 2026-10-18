@@ -16,8 +16,8 @@ import Blanc.Lift.RetainedTargetCompleteness
 
 The joint in-run induction behind `usdc_history_slots` and `usdc_history_settled_owner`.  The
 carrier is the proxy's storage alone: `SlotInv U a₀ s` says that the implementation slot names the
-implementation, the admin slot holds the checkpoint's admin word `a₀`, and the footprint ledger is
-good.  `SlotsOk` is the motive of a depth induction through `lift_core_sem`, located by the proxy's
+implementation, the admin slot holds the checkpoint's admin word `a₀`, the footprint ledger is
+good, and every nonzero word sits at a fixed slot or a tracked key's slot (`Support`, U6s).  `SlotsOk` is the motive of a depth induction through `lift_core_sem`, located by the proxy's
 certified code (`proxySem`): a committed derivation entered with `SlotInv` ends with it, and every
 committed descendant frame (`FrameQ`) is entered with it and, if it runs at the proxy, runs the
 proxy (an entry), the implementation or the library.  The facts the history supplies about settled
@@ -42,7 +42,8 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.Lift.Token
 /-- The proxy's slot invariant: the implementation slot names the implementation, the admin slot
 holds `a₀`, and the footprint ledger over `U` is good. -/
 def SlotInv (U : Key → Prop) (a₀ : Adr) (s : Stor) : Prop :=
-  s.get implSlot = usdcImpl.toB256 ∧ (s.get adminSlot).toAdr = a₀ ∧ (ledger U s).Good
+  s.get implSlot = usdcImpl.toB256 ∧ (s.get adminSlot).toAdr = a₀ ∧ (ledger U s).Good ∧
+    SlotFootprint.Support Key.slot fixedSlots U s
 
 theorem SlotInv.congr {U : Key → Prop} {a₀ : Adr} {s s' : Stor} (h : ∀ k, s'.get k = s.get k)
     (inv : SlotInv U a₀ s) : SlotInv U a₀ s' := by
@@ -51,8 +52,8 @@ theorem SlotInv.congr {U : Key → Prop} {a₀ : Adr} {s s' : Stor} (h : ∀ k, 
     funext fun k => by simp only [SlotFootprint.trackedWord, h]
   have hl : ledger U s' = ledger U s := by
     simp only [ledger, ht, hg]
-  obtain ⟨hi, ha, hgood⟩ := inv
-  refine ⟨?_, ?_, ?_⟩
+  obtain ⟨hi, ha, hgood, hsup⟩ := inv
+  refine ⟨?_, ?_, ?_, fun x hx => hsup x (by rw [← h]; exact hx)⟩
   · rw [h]; exact hi
   · rw [h]; exact ha
   · rw [hl]; exact hgood

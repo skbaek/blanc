@@ -130,7 +130,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
           (N.devm.state.getStor sevm.currentTarget).get implSlot =
             (pre.state.getStor sevm.currentTarget).get implSlot ∧
           (N.devm.state.getStor sevm.currentTarget).get adminSlot =
-            (pre.state.getStor sevm.currentTarget).get adminSlot :=
+            (pre.state.getStor sevm.currentTarget).get adminSlot ∧
+          (Support Key.slot fixedSlots U (pre.state.getStor sevm.currentTarget) →
+            Support Key.slot fixedSlots U (N.devm.state.getStor sevm.currentTarget)) :=
     fun sel N hN x hx => absurd hx (family_noExec run codeEq fork sel N hN x)
   rw [stepEq]
   cases c <;> simp only [famTransfer] at fam
@@ -154,7 +156,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       change ¬ (flag20 _ = true ∨ _) 
       rw [p0, fc, fdst]
       simp only [Bool.false_eq_true, or_self, not_false_eq_true]
-    refine ⟨?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or])⟩
+    refine ⟨?_, ?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or])⟩
     · simp only [Ledger.step]
       rw [ite_eq_right g]
       exact (ledger_move inj apart kc kd c0 d0 fc hv fd hb).trans (by rw [sp'])
@@ -166,6 +168,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       unfold creditStor debitStor
       rw [get_set_off (y := balSlot _) (x := adminSlot) (apart _ kd) (by decide),
         get_set_off (y := balSlot _) (x := adminSlot) (apart _ kc) (by decide)]
+    · intro sup
+      rw [sp']
+      exact (sup.set kc _).set kd _
   · rename_i src dst v
     obtain ⟨sel, rfl, rfl, rfl⟩ := decode_transferFrom dec
     obtain ⟨p0, fcl, fs, fdst, a1, s0, d0, hv, fd, hb, a2, sp⟩ := frame_transferFrom fork sel hrun
@@ -193,7 +198,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       rw [p0, fcl, fs, fdst]
       simp only [Bool.false_eq_true, false_or, Nat.not_lt]
       exact a1
-    refine ⟨?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
+    refine ⟨?_, ?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
     · simp only [Ledger.step]
       rw [ite_eq_right g, ledger_move inj apart ks kd s0 d0 fs hv fd hb, Option.map_some,
         ledger_allow ka]
@@ -212,6 +217,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       rw [get_set_off (y := allowSlot _ _) (x := adminSlot) (apart _ ka) (by decide),
         get_set_off (y := balSlot _) (x := adminSlot) (apart _ kd) (by decide),
         get_set_off (y := balSlot _) (x := adminSlot) (apart _ ks) (by decide)]
+    · intro sup
+      rw [sp']
+      exact ((sup.set ks _).set kd _).set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_approve dec
     obtain ⟨p0, c0, s0, sp⟩ := frame_approve fork sel hrun
@@ -222,7 +230,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       tk _ (by simp only [Call.keys, List.mem_cons, true_or])
     have sp' : post.state.getStor sevm.currentTarget = _ := sp
     have hp : (ledger U (pre.state.getStor sevm.currentTarget)).paused = false := p0
-    refine ⟨?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
+    refine ⟨?_, ?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
     · simp only [Ledger.step, Ledger.approveOf]
       rw [hp, ite_eq_right (by simp only [Bool.false_eq_true, not_false_eq_true])]
       rw [ite_eq_right (by rintro (h | h); exact c0 h; exact s0 h)]
@@ -230,6 +238,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact congrArg some (ledger_set_allow inj apart ka _).symm
     · rw [sp', get_set_off (y := allowSlot _ _) (x := implSlot) (apart _ ka) (by decide)]
     · rw [sp', get_set_off (y := allowSlot _ _) (x := adminSlot) (apart _ ka) (by decide)]
+    · intro sup
+      rw [sp']
+      exact sup.set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_increaseAllowance dec
     obtain ⟨p0, c0, s0, a1, sp⟩ := frame_increaseAllowance fork sel hrun
@@ -240,7 +251,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       tk _ (by simp only [Call.keys, List.mem_cons, true_or])
     have sp' : post.state.getStor sevm.currentTarget = _ := sp
     have hp : (ledger U (pre.state.getStor sevm.currentTarget)).paused = false := p0
-    refine ⟨?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
+    refine ⟨?_, ?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
     · simp only [Ledger.step, Ledger.approveOf]
       rw [ledger_allow ka, hp, ite_eq_right (by
         simp only [Bool.false_eq_true, false_or, Nat.not_le]; exact a1)]
@@ -249,6 +260,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact congrArg some (ledger_allow_toB256 inj apart ka a1).symm
     · rw [sp', get_set_off (y := allowSlot _ _) (x := implSlot) (apart _ ka) (by decide)]
     · rw [sp', get_set_off (y := allowSlot _ _) (x := adminSlot) (apart _ ka) (by decide)]
+    · intro sup
+      rw [sp']
+      exact sup.set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_decreaseAllowance dec
     obtain ⟨p0, c0, s0, a1, sp⟩ := frame_decreaseAllowance fork sel hrun
@@ -259,7 +273,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       tk _ (by simp only [Call.keys, List.mem_cons, true_or])
     have sp' : post.state.getStor sevm.currentTarget = _ := sp
     have hp : (ledger U (pre.state.getStor sevm.currentTarget)).paused = false := p0
-    refine ⟨?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
+    refine ⟨?_, ?_, ?_, ?_, node (by simp only [famSelectors, sel, List.mem_cons, true_or, or_true])⟩
     · simp only [Ledger.step, Ledger.approveOf]
       rw [ledger_allow ka, hp, ite_eq_right (by
         simp only [Bool.false_eq_true, false_or, Nat.not_lt]; exact a1)]
@@ -269,6 +283,9 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
         sevm.currentTarget).get (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr)); omega)).symm
     · rw [sp', get_set_off (y := allowSlot _ _) (x := implSlot) (apart _ ka) (by decide)]
     · rw [sp', get_set_off (y := allowSlot _ _) (x := adminSlot) (apart _ ka) (by decide)]
+    · intro sup
+      rw [sp']
+      exact sup.set ka _
 
 
 end Blanc.Lift.Usdc

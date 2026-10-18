@@ -14,10 +14,11 @@ namespace Blanc.Lift.Usdc
 open Jaune Blanc Blanc.Lift
 
 /-- What an admin call's run delivers at the proxy's storage: the model step, the two proxy slots
-kept. -/
+kept, the support over `U` kept (the writes land at fixed slots and tracked keys' slots). -/
 def AdminOut (P : Adr) (U : Key → Prop) (s s' : Stor) (caller : Adr) (c : Call) : Prop :=
   (ledger U s).step P caller c = some (ledger U s') ∧ s'.get implSlot = s.get implSlot ∧
-    s'.get adminSlot = s.get adminSlot
+    s'.get adminSlot = s.get adminSlot ∧
+    (SlotFootprint.Support Key.slot fixedSlots U s → SlotFootprint.Support Key.slot fixedSlots U s')
 
 theorem and_ff20_word (x : B256) : x &&& ff20 = x.toAdr.toB256 := by
   rw [B256.and_comm, ff20_and_word]
@@ -56,7 +57,8 @@ theorem pause_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   obtain ⟨f1, rfl⟩ := h
   rw [b1] at f1 ⊢
   have hc := caller_of_eqCheck f1
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_pauser apart, toAdr_pauseWord, flag20_pauseWord]
   show (if e.caller ≠ (s.get 1).toAdr then none else some _) = _
   rw [ite_eq_right (not_not.mpr hc)]
@@ -70,7 +72,8 @@ theorem unpause_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   obtain ⟨f1, rfl⟩ := h
   rw [b1] at f1 ⊢
   have hc := caller_of_eqCheck f1
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_pauser apart, toAdr_unpauseWord, flag20_unpauseWord]
   show (if e.caller ≠ (s.get 1).toAdr then none else some _) = _
   rw [ite_eq_right (not_not.mpr hc)]
@@ -88,7 +91,8 @@ theorem updatePauser_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   have hc := caller_of_eqCheck f1
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b1, b4] at f2 ⊢
   have ha := adr_ne_zero_of f2
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_pauser apart, toAdr_addrWord, flag20_addrWord]
   show (if e.caller ≠ (s.get 0).toAdr ∨ (Sevm.dataWord e 4).toAdr = 0 then none else some _) = _
   rw [b0] at hc
@@ -107,7 +111,8 @@ theorem updateMasterMinter_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : S
   have hc := caller_of_eqCheck f1
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b8, b4] at f2 ⊢
   have ha := adr_ne_zero_of f2
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_masterMinter apart, toAdr_addrWord, flag20_addrWord]
   show (if e.caller ≠ (s.get 0).toAdr ∨ (Sevm.dataWord e 4).toAdr = 0 then none else some _) = _
   rw [b0] at hc
@@ -126,7 +131,8 @@ theorem updateBlacklister_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Se
   have hc := caller_of_eqCheck f1
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b2, b4] at f2 ⊢
   have ha := adr_ne_zero_of f2
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_blacklister apart, toAdr_addrWord]
   show (if e.caller ≠ (s.get 0).toAdr ∨ (Sevm.dataWord e 4).toAdr = 0 then none else some _) = _
   rw [b0] at hc
@@ -144,7 +150,8 @@ theorem transferOwnership_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Se
   have hc := caller_of_eqCheck f1
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b0, b4] at f2 ⊢
   have ha := adr_ne_zero_of f2
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_owner apart, toAdr_addrWord]
   show (if e.caller ≠ (s.get 0).toAdr ∨ (Sevm.dataWord e 4).toAdr = 0 then none else some _) = _
   rw [b0] at hc
@@ -162,7 +169,8 @@ theorem updateRescuer_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   have hc := caller_of_eqCheck f1
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b14, b4] at f2 ⊢
   have ha := adr_ne_zero_of f2
-  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _⟩
+  refine ⟨?_, Stor.get_set_ne _ (by decide) _, Stor.get_set_ne _ (by decide) _,
+    fun sup => sup.set_fixed (by decide) _⟩
   rw [ledger_set_rescuer apart, toAdr_addrWord]
   show (if e.caller ≠ (s.get 0).toAdr ∨ (Sevm.dataWord e 4).toAdr = 0 then none else some _) = _
   rw [b0] at hc
@@ -185,7 +193,7 @@ theorem removeMinter_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   rw [show mapSlot (Sevm.dataWord e 4).toAdr.toB256 12 = minterSlot (Sevm.dataWord e 4).toAdr from rfl,
     show mapSlot (Sevm.dataWord e 4).toAdr.toB256 13 =
       minterAllowanceSlot (Sevm.dataWord e 4).toAdr from rfl]
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, fun sup => (sup.set hm _).set hma _⟩
   · rw [ledger_set_minterAllowance inj apart hma, ledger_set_minter inj apart hm, boolBit_clearWord,
       B256.toNat_zero]
     show (if e.caller ≠ (s.get 8).toAdr then none else some _) = _
@@ -221,7 +229,7 @@ theorem configureMinter_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm
   rw [show mapSlot (Sevm.dataWord e 4).toAdr.toB256 12 = minterSlot (Sevm.dataWord e 4).toAdr from rfl,
     show mapSlot (Sevm.dataWord e 4).toAdr.toB256 13 =
       minterAllowanceSlot (Sevm.dataWord e 4).toAdr from rfl]
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, fun sup => (sup.set hm _).set hma _⟩
   · rw [ledger_set_minterAllowance inj apart hma, ledger_set_minter inj apart hm, boolBit_setWord]
     show (if flag20 (s.get 1) = true ∨ e.caller ≠ (s.get 8).toAdr then none else some _) = _
     rw [ite_eq_right (not_or.mpr ⟨by rw [hp]; exact Bool.false_ne_true, not_not.mpr hc⟩)]
@@ -251,7 +259,7 @@ theorem unBlacklist_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   refine ⟨?_, Stor.get_set_ne _ (show balSlot (Sevm.dataWord e 4).toAdr ≠ implSlot from
       slot_ne_fixed apart hb (by decide)) _,
     Stor.get_set_ne _ (show balSlot (Sevm.dataWord e 4).toAdr ≠ adminSlot from
-      slot_ne_fixed apart hb (by decide)) _⟩
+      slot_ne_fixed apart hb (by decide)) _, fun sup => sup.set hb _⟩
   rw [ledger_set_bal inj apart hb, Ledger.setWord_eq_setFrozen (by
       rw [balanceBits_unBlacklistWord, ledger_bal hb]), frozenBit_unBlacklistWord]
   show (if e.caller ≠ (s.get 2).toAdr then none else some _) = _
@@ -273,7 +281,7 @@ theorem blacklist_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   refine ⟨?_, Stor.get_set_ne _ (show balSlot (Sevm.dataWord e 4).toAdr ≠ implSlot from
       slot_ne_fixed apart hb (by decide)) _,
     Stor.get_set_ne _ (show balSlot (Sevm.dataWord e 4).toAdr ≠ adminSlot from
-      slot_ne_fixed apart hb (by decide)) _⟩
+      slot_ne_fixed apart hb (by decide)) _, fun sup => sup.set hb _⟩
   rw [ledger_set_bal inj apart hb, Ledger.setWord_eq_setFrozen (by
       rw [balanceBits_blacklistWord, ledger_bal hb]), frozenBit_blacklistWord]
   show (if e.caller ≠ (s.get 2).toAdr then none else some _) = _
@@ -335,7 +343,7 @@ theorem burn_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   have ns : (s.get 11 - Sevm.dataWord e 4).toNat = (s.get 11).toNat - (Sevm.dataWord e 4).toNat :=
     B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat hsup)
   have h11 : balSlot e.caller ≠ 11 := slot_ne_fixed apart hb (by decide)
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, fun sup => (sup.set_fixed (by decide) _).set hb _⟩
   · rw [ledger_set_bal inj apart hb, ledger_set_supply apart,
       Ledger.setWord_eq_setBal (by rw [frozenBit_of_le f6]; exact ((ledger_frozen hb).trans hfr).symm),
       balanceBits_of_le f6, nb, ns]
@@ -418,7 +426,7 @@ theorem mint_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   have na : (s.get (minterAllowanceSlot e.caller) - Sevm.dataWord e 36).toNat =
       (s.get (minterAllowanceSlot e.caller)).toNat - (Sevm.dataWord e 36).toNat :=
     B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat hal)
-  refine ⟨?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, fun sup => ((sup.set_fixed (by decide) _).set hd _).set hma _⟩
   · rw [ledger_set_minterAllowance inj apart hma, ledger_set_bal inj apart hd, ledger_set_supply apart,
       Ledger.setWord_eq_setBal (by rw [frozenBit_of_le f10]; exact ((ledger_frozen hd).trans hfd).symm),
       balanceBits_of_le f10, hbal.1, hsup.1, na]

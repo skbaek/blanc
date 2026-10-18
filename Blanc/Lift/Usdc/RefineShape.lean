@@ -29,7 +29,9 @@ U6f (roles/mint/burn/pause/blacklist), U6g (dispatch, views, `initialize*`) each
 calls).  A successful non-static implementation frame at the proxy's storage, entered by a caller
 other than the admin word, with the library installed and its keys tracked in an injective universe
 apart from the fixed slots, whose message decodes to a call of the family, commits the book's step on
-its message, keeps the proxy's two slots, and spawns only library frames. -/
+its message, keeps the proxy's two slots, writes the proxy's storage only at fixed slots and tracked
+keys' slots (the support over `U` is kept, at its end and at each node), and spawns only library
+frames. -/
 def ImplStepLaw (fam : Call → Prop) : Prop :=
   ∀ {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
     sevm.code = Impl.code → sevm.currentTarget = P → sevm.codeAddress = some usdcImpl →
@@ -42,12 +44,16 @@ def ImplStepLaw (fam : Call → Prop) : Prop :=
           some (ledger U (post.state.getStor P)) ∧
         (post.state.getStor P).get implSlot = (pre.state.getStor P).get implSlot ∧
         (post.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot ∧
+        (SlotFootprint.Support Key.slot fixedSlots U (pre.state.getStor P) →
+          SlotFootprint.Support Key.slot fixedSlots U (post.state.getStor P)) ∧
         ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
           ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
             x = .delegatecall ∧ ((ledger U (pre.state.getStor P)).Good →
               (ledger U (N.devm.state.getStor P)).Good) ∧
             (N.devm.state.getStor P).get implSlot = (pre.state.getStor P).get implSlot ∧
-            (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot
+            (N.devm.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot ∧
+            (SlotFootprint.Support Key.slot fixedSlots U (pre.state.getStor P) →
+              SlotFootprint.Support Key.slot fixedSlots U (N.devm.state.getStor P))
 
 /-- **The model law of `rescueERC20`** (U6f): the frame's storage at the proxy is unchanged up to and
 after its single `CALL`, and, for a caller other than the admin word, the book's step on its message

@@ -140,9 +140,12 @@ theorem implStepLaw_twa :
     · exact ⟨frame_twa_vrs run codeEq fork hcode sel,
         auth_node run codeEq fork sel route_twa_vrs (by decide)⟩
   obtain ⟨step, ki, ka⟩ := auth_ledger inj apart False not_false hs hd ha fr
-  refine ⟨?_, ki, ka, fun N hN x hx => ?_⟩
+  refine ⟨?_, ki, ka, fun sup => ?_, fun N hN x hx => ?_⟩
   · simp only [usdcBookS, na, dec, ↓reduceIte, Ledger.step]
     simpa only [false_or] using step
+  · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, sp⟩ := fr
+    rw [sp]
+    exact ((sup.set ha _).set hs _).set hd _
   · obtain ⟨rfl, hst⟩ := node N hN x hx
     have h := libNode_clause (N := N.devm.state.getStor sevm.currentTarget) apart
       (.inl (by rw [hst]))
@@ -176,9 +179,12 @@ theorem implStepLaw_rwa :
         auth_node run codeEq fork sel route_rwa_vrs (by decide)⟩
   obtain ⟨step, ki, ka⟩ := auth_ledger inj apart ((Sevm.dataWord sevm 36).toAdr ≠ sevm.caller)
     (fun h => h cl.symm) hs hd ha fr
-  refine ⟨?_, ki, ka, fun N hN x hx => ?_⟩
+  refine ⟨?_, ki, ka, fun sup => ?_, fun N hN x hx => ?_⟩
   · simp only [usdcBookS, na, dec, ↓reduceIte, Ledger.step]
     exact step
+  · obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, sp⟩ := fr
+    rw [sp]
+    exact ((sup.set ha _).set hs _).set hd _
   · obtain ⟨rfl, hst⟩ := node N hN x hx
     have h := libNode_clause (N := N.devm.state.getStor sevm.currentTarget) apart
       (.inl (by rw [hst]))

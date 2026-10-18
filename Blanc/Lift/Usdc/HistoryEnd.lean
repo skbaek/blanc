@@ -53,6 +53,6 @@ theorem usdc_history_end_core {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig
       (ledger (historyKeyUniverse P tr K₀) (future.state.getStor P)).Good := by
   have ext := hist.2.2.1.extend hist.2.2.2
   obtain ⟨inst, admin⟩ := usdc_history_end_installed tr hist
-  exact ⟨inst, admin, ext.inj, ext.apart, (usdc_history_frames_of impl_signed_law tr hist).2.2.2⟩
+  exact ⟨inst, admin, ext.inj, ext.apart, (usdc_history_frames_of impl_signed_law tr hist).2.2.2.1⟩
 
 end Blanc.Lift.Usdc
