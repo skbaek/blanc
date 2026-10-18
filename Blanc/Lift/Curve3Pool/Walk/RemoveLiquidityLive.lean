@@ -6,13 +6,38 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
 
 The liveness walk builds `SFunc.RunEx` over the certificate's trees, read forwards: the
 dispatcher (`rx_dispatch_rl`), the guarded prologue with the `totalSupply` call
-(`rx_rl_pre`), the loop (`rx_rl_iter`), and the burn, event and lock clear (`rx_rl_post`).
+(`rx_rl_pre`), the loop (`rx_rl_iter`), and the burn, event and lock clear (`rx_rl_postW`).
 Each segment is continuation-passing: it builds the run of its tree from the run of the rest.
 -/
 
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
+
+/-- **`BurnOk` with a separate world after the burn.** `remove_liquidity`'s burn is its last call
+and its walk (`rx_rl_postW`) uses nothing of the world the burn leaves, so the world after the burn
+(`W'`) need not be the call-site world `W`: a call-site world fixing 3Crv's storage is then
+admissible although the burn changes that storage. -/
+def BurnOkTo (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
+  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
+    (M.read 0x61c 0x44).1 = burnFromSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes →
+    S.length < 1024 →
+    ∃ d, Ninst.RunCompiled sevm
+        (St b (Nat.toB256 G :: t :: 0 :: 0x61c :: 0x44 :: 0x6a0 :: 0x20 :: S) M G) (.exec .call) d ∧
+      MutableCallPost b d S M 0x61c 0x44 0x6a0 0x20 1 ∧ 32 ≤ d.returnData.length ∧
+      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
+      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W' d
+
+/-- `BurnOk` is `BurnOkTo` with the same world before and after. -/
+theorem BurnOk.burnOkTo {sevm : Sevm} {W : Devm → Prop} {t amt : B256} {U : Nat}
+    (h : BurnOk sevm W t amt U) : BurnOkTo sevm W W t amt U := h
+
+/-- The generalized burn premise at `remove_liquidity`'s window gives `BurnOkTo`. -/
+theorem BurnOkAt.burnOkTo {sevm : Sevm} {W W' : Devm → Prop} {t amt : B256} {U : Nat}
+    (h : BurnOkAt sevm W W' t amt U 0x61c 0x6a0) : BurnOkTo sevm W W' t amt U := by
+  intro b S M G hW hU hG hin hS
+  obtain ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd, -⟩ := h b S M G hW hU hG hin hS
+  exact ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd⟩
 
 /-- **The dispatcher, forward**: with the `remove_liquidity` selector, the frame's entry tree
 runs to the arm's body `t_2c68_c0` over the prologue's memory, at 451 gas. -/
@@ -1171,15 +1196,15 @@ theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M :
 def rlPostCost (sevm : Sevm) (b : Devm) : Nat := 67 + sloadCost sevm b tokenSlot
 
 /-- **After the loop, forward** (`0x2f7b` → `STOP`): `token.burnFrom(msg.sender, _amount)`
-answered by `BurnOk`, its reply length check, the `RemoveLiquidity` event (with
+answered by `BurnOkTo`, its reply length check, the `RemoveLiquidity` event (with
 `total_supply - _amount` checked) and the lock cleared. -/
-theorem rx_rl_post {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
-    {img : Bytes} {T : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+theorem rx_rl_postW {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
+    {img : Bytes} {T : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hWc : WClosed sevm W) (hWb : W b)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img 3 T a)
     (hTa : (rlAmt sevm).toNat ≤ T.toNat)
-    (hburn : BurnOk sevm W ((b.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
+    (hburn : BurnOkTo sevm W W' ((b.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
     (hGx : U + 30000 ≤ Gx) (hGb : Gx < 2 ^ 256)
     (hQ : ∀ D, (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
       Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) → Q (.halted D)) :
@@ -1483,10 +1508,11 @@ theorem rlPreCost_le (sevm : Sevm) (b : Devm) : rlPreCost sevm b ≤ 26389 := by
 /-- **`remove_liquidity`, the whole frame forward.** From the frame's entry (empty stack and
 memory) with the `remove_liquidity` selector, the lock clear, no value, every check of the
 model passing on the entry storage `σ` and the supply `T`, and the callees answering
-(`SupplyOk`, `CoinPushOk` for each coin with its amount, `BurnOk`), every gas
+(`SupplyOk`, `CoinPushOk` for each coin with its amount, `BurnOkTo` into any world `W'`: the
+burn is the last call, so nothing after it reads `W'`), every gas
 `G ≥ 167000 + 5 U` runs the frame to `STOP`, whose last log carries `T - _amount`. -/
 theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome → Prop}
-    {W : Devm → Prop} {U : Nat} {T : B256}
+    {W W' : Devm → Prop} {U : Nat} {T : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity) (hid : IdReady sevm b)
@@ -1494,7 +1520,7 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     (hWc : WClosed sevm W) (hWb : W b)
     (hsup : SupplyOk sevm W (σ.get tokenSlot) T U)
     (hpush : ∀ i, i < 3 → CoinPushOk sevm W (coinAt σ i) (balAt σ i * rlAmt sevm / T) U)
-    (hburn : BurnOk sevm W (σ.get tokenSlot) (rlAmt sevm) U)
+    (hburn : BurnOkTo sevm W W' (σ.get tokenSlot) (rlAmt sevm) U)
     (hmulw : ∀ i, i < 3 →
       (B256.eqCheck (balAt σ i * rlAmt sevm / balAt σ i) (rlAmt sevm) ||| B256.eqCheck (balAt σ i) 0)
         ≠ 0)
@@ -1555,7 +1581,7 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     have e : gasColdSload = 2100 := rfl
     omega
   obtain ⟨Gx, rfl⟩ : ∃ Gx, G4 = Gx + rlPostCost sevm b4 := ⟨G4 - rlPostCost sevm b4, by omega⟩
-  exact rx_rl_post hfork hstatic hWc hWb4 hR4 hW4 hsz4 hL4 hTa (by rw [htok]; exact hburn)
+  exact rx_rl_postW hfork hstatic hWc hWb4 hR4 hW4 hsz4 hL4 hTa (by rw [htok]; exact hburn)
     (by omega) (by omega) hQ
 
 end Blanc.Lift.Curve3Pool

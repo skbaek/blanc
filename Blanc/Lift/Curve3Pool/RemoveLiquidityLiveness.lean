@@ -114,11 +114,11 @@ theorem rlEvent_supply (pool : Adr) (p : Nat) (a f : V3) (n : Nat) :
 `remove_liquidity` succeeds in the environment `rlEnv sevm T` (`hstep`), the frame premises of the
 safety theorem hold, the frame is a non-static call at nonzero depth, and the callees answer for
 a world invariant `W` with gas use at most `U` each (`SupplyOk` with `T`, `CoinPushOk` for each
-coin with its amount `balances[k] * _amount / T`, `BurnOk`), then every frame gas
-`G ≥ 167000 + 5 U` yields an actual successful execution whose post state is the model's step:
+coin with its amount `balances[k] * _amount / T`, `BurnOkTo` into any world `W'`), then every
+frame gas `G ≥ 167000 + 5 U` yields an actual successful execution whose post state is the model's step:
 its `RawEffect` in `rlEnv sevm T` with `o`, and `Checkpoint post o.state`. -/
-theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256}
-    {W : Devm → Prop} {U G : Nat}
+theorem removeLiquidity_liveW {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256}
+    {W W' : Devm → Prop} {U G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -137,7 +137,7 @@ theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T
     (hsup : SupplyOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
     (hpush : ∀ k : Fin 3, CoinPushOk sevm W ((pre.getStor sevm.currentTarget).get (coinSlot k))
       (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U)
-    (hburn : BurnOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
+    (hburn : BurnOkTo sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
     (hG : 167000 + 5 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256) :
     ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
       RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
@@ -233,5 +233,35 @@ theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T
   · rw [hstep] at hstep'
     cases Option.some.inj hstep'
     exact (rawEffect_refines (D := ⟨0, sevm, St pre [] Mem.empty G, .ok D, exc⟩) hck hstep hraw).1
+
+/-- **Liveness of `remove_liquidity`** with the burn's world after the call the call-site world
+`W` (`BurnOk`): `removeLiquidity_liveW` at `W' = W`. -/
+theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256}
+    {W : Devm → Prop} {U G : Nat}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidity)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
+    (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+    (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+    (hWc : WClosed sevm W) (hWb : W pre)
+    (hsup : SupplyOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
+    (hpush : ∀ k : Fin 3, CoinPushOk sevm W ((pre.getStor sevm.currentTarget).get (coinSlot k))
+      (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U)
+    (hburn : BurnOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
+    (hG : 167000 + 5 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256) :
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  removeLiquidity_liveW hcode hfork hstatic hdepth hlen hcd hsel hck hstep htok hcoin hpc hid
+    hckeep hsk htk hWc hWb hsup hpush hburn.burnOkTo hG hGm
 
 end Blanc.Lift.Curve3Pool
