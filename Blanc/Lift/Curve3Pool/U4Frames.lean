@@ -15,7 +15,9 @@ environment, so the law holds of that word.
   (`cwo_raw_getYD_of`, through `xa_cw`);
 * `pool_getYD_rootOrSucc_oneCoin` — a `remove_liquidity_one_coin` frame's first `get_y_D` call
   (`removeLiquidityOneCoin_raw_getYD_of`);
-* `pool_getY_rootOrSucc_exchange` — an `exchange` frame's `get_y` call (`exchange_raw_getY`).
+* `pool_getY_rootOrSucc_exchange` — an `exchange` frame's `get_y` call (`exchange_raw_getY`);
+* `pool_getY_rootOrSucc_dy` / `pool_getY_rootOrSucc_dyu` — a `get_dy` / `get_dy_underlying`
+  frame's `get_y` call (`dy_raw_getY`, `dyu_raw_getY`).
 
 Per §12 (decision `curve3pool-u4-gety-amend-trigger-20261018`) both `get_y_D` and `get_y` take the
 root-or-successor form; the exact floor holds under `rootGap` (`rootOrSucc`'s second disjunct
@@ -126,5 +128,67 @@ theorem pool_getY_rootOrSucc_exchange {sevm : Sevm} {pre post : Devm} {s : State
       henv.keep henv.hidk
   exact ⟨e, o, hstep, hraw, i, j, dx, md, hdec, amp, x0, x1, x2, x, y, hA, hxp, hy,
     getYChk_rootOrSucc hy⟩
+
+/-- **U4 `get_y` at the `get_dy` frame.** A successful `get_dy` frame, entered fresh at a `Checkpoint`, refines the model with its raw effect, and its `get_y` call, on the decoded coins, the word `dyX` the bytecode passed and the stored `xp` at the model's `amp` for the observed time, returned a word `y` that is the floor root of the floored-coefficient quadratic or its successor. -/
+theorem pool_getY_rootOrSucc_dy {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetDy)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3) (amp : Nat)
+        (x0 x1 x2 y : B256),
+        aChk s e.time = some amp ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp ⟨(dyI sevm).toNat, hi⟩ ⟨(dyJ sevm).toNat, hj⟩ (dyX sevm x0 x1 x2).toNat
+          (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat ∧
+        rootOrSucc
+          (cOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (bOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat := by
+  obtain ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy⟩ :=
+    dy_raw_getY checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+  exact ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy, getYChk_rootOrSucc hy⟩
+
+/-- **U4 `get_y` at the `get_dy_underlying` frame.** The `get_dy_underlying` analogue of `pool_getY_rootOrSucc_dy`, on the word `dyuX` the bytecode passed. -/
+theorem pool_getY_rootOrSucc_dyu {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetDyUnderlying)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3) (amp : Nat)
+        (x0 x1 x2 y : B256),
+        aChk s e.time = some amp ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp ⟨(dyI sevm).toNat, hi⟩ ⟨(dyJ sevm).toNat, hj⟩ (dyuX sevm x0 x1 x2).toNat
+          (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat ∧
+        rootOrSucc
+          (cOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (bOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat := by
+  obtain ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy⟩ :=
+    dyu_raw_getY checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+  exact ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy, getYChk_rootOrSucc hy⟩
 
 end Blanc.Lift.Curve3Pool

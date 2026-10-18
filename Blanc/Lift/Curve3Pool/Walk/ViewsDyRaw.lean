@@ -12,8 +12,10 @@ theorem dy_rates_toNat {n : Nat} (hn : n < 3) :
     (pickWord3 n rP rQ rQ).toNat = rates.get ⟨n, hn⟩ :=
   dy_pickWord3_toNat hn rP rQ rQ
 
-/-- A successful `get_dy` frame computes the model, with no children or state change. -/
-theorem dy_raw_of (hc : Cert.CheckedM code cert mems true)
+/-- **A successful `get_dy` frame, with its `get_y` call.** The frame computes the model and
+its raw effect; its `get_y` call, on the decoded coins and the word `dyX` the bytecode passed
+(the stored `xp` at the model's `amp` for the frame's time), returned the word `y`. -/
+theorem dy_raw_getY (hc : Cert.CheckedM code cert mems true)
     {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
@@ -22,7 +24,12 @@ theorem dy_raw_of (hc : Cert.CheckedM code cert mems true)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3) (amp : Nat)
+        (x0 x1 x2 y : B256),
+        aChk s e.time = some amp ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp ⟨(dyI sevm).toNat, hi⟩ ⟨(dyJ sevm).toNat, hj⟩ (dyX sevm x0 x1 x2).toNat
+          (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat := by
   have h : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   obtain ⟨_, h⟩ := xa_vd_getDy hcode hlen hcd hsel h
@@ -62,7 +69,7 @@ theorem dy_raw_of (hc : Cert.CheckedM code cert mems true)
   have hdec : decodeCall sevm = .getDy (dyI sevm).toNat (dyJ sevm).toNat (dyDx sevm).toNat :=
     decodeCall_at (k := 4) rfl hsel hlen
   refine ⟨quietEnv sevm,
-    viewOut s (dyAmount sevm x0 x1 x2 y - dyFee sevm b2 x0 x1 x2 y).toNat, ?_, ?_⟩
+    viewOut s (dyAmount sevm x0 x1 x2 y - dyFee sevm b2 x0 x1 x2 y).toNat, ?_, ?_, ?_⟩
   · rw [hdec]
     show (if (quietEnv sevm).value = 0 then body s (quietEnv sevm) _ else none) = _
     rw [show (quietEnv sevm).value = 0 by rw [quietEnv, hval]; rfl, ite_eq_left rfl]
@@ -79,5 +86,21 @@ theorem dy_raw_of (hc : Cert.CheckedM code cert mems true)
       change c ∈ Exec.childFrames exc at hc'
       rw [hL] at hc'
       cases hc'
+  · exact ⟨hi', hj, amp, x0, x1, x2, y, hamp, hxp, hy⟩
+
+/-- A successful `get_dy` frame computes the model, with no children or state change. -/
+theorem dy_raw_of (hc : Cert.CheckedM code cert mems true)
+    {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selGetDy)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+  obtain ⟨e, o, hstep, hraw, -⟩ :=
+    dy_raw_getY hc exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+  exact ⟨e, o, hstep, hraw⟩
 
 end Blanc.Lift.Curve3Pool
