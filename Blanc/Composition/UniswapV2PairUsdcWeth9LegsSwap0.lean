@@ -70,7 +70,7 @@ theorem swapRecipientWord_toAdr (sevm : Sevm) : (swapRecipientWord sevm).toAdr =
   rw [B256.and_comm, mask_toAdr]
 
 /-- **The USDC `transfer` leg's spec, token0 = USDC (frame level).**  At the swap's prefix world,
-for any outputs: USDC installed at token0 with its footprint invariant, token0 not a precompile, two
+for any outputs: USDC installed at token0 with its footprint facts (`FootCore`), token0 not a precompile, two
 levels of call depth left, the Pair and the recipient tracked, the Pair not USDC's admin, the
 transfer's ledger conditions and the Pair's USDC balance covering `amount0Out`, the leg's call gas
 a word, and the child's budget under the 63/64 rule.  Then `swapUsdcLeg0` is the transfer record
@@ -80,7 +80,7 @@ theorem swapUsdcLeg0_spec {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.State} {c
     (fork : CoveredFork sevm.benvStat.fork) (nonstatic : sevm.isStatic = false)
     (depth : 2 ≤ sevm.depth)
     (inst : UsdcInstalled st.token0 (swapPrefixWorld sevm b).state)
-    (finv : FootInv U ((swapPrefixWorld sevm b).state.getStor st.token0))
+    (finv : FootCore U ((swapPrefixWorld sevm b).state.getStor st.token0))
     (notPrecompile : sevm.benvStat.rules.isPrecomp st.token0 = false)
     (kPair : U (.bal sevm.currentTarget)) (kTo : U (.bal (swapRecipient sevm)))
     (notAdmin : sevm.currentTarget ≠ adminOf (swapPrefixWorld sevm b).state st.token0)
