@@ -34,13 +34,13 @@ def exchangeTx (v : Nat) (r s : Bytes) : Tx :=
 
 /-- The signature's `r`. -/
 def exchangeSigR : Bytes :=
-  (0x044a360d2779720b302e4dda6b0723afa1ba1b86750ee95288593514e90e7d93 : B256).toBytes
+  (0xcfb3a94636de199e6bc679910e3de70b12bae57febc6ec7aee811830d22f6bcc : B256).toBytes
 
 /-- The signature's `s`. -/
 def exchangeSigS : Bytes :=
-  (0x0aa1aa584f043b29e283f18a8b6a4a230051713719ce317bc8150758d447267f : B256).toBytes
+  (0x27ffd7cf61b42b21baafd3d3515894a3dc5dbd4c92ed982a5981cbf2f74383b7 : B256).toBytes
 
-/-- **The signed exchange transaction** (`y`-parity `0`). -/
-def signedExchangeTx : Tx := exchangeTx 0 exchangeSigR exchangeSigS
+/-- **The signed exchange transaction** (`y`-parity `1`). -/
+def signedExchangeTx : Tx := exchangeTx 1 exchangeSigR exchangeSigS
 
 end Blanc.Composition.Curve3Pool3CrvInstance
