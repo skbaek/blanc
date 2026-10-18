@@ -9,7 +9,7 @@ machine's logs or was emitted at the current target of one of the execution's ra
 own target (`Exec.logAt?`); a precompile child adds none; a settled child contributes exactly the
 logs it emitted, and a child starts with no log.  Nothing here mentions a contract: a caller that
 knows the targets of its raw frames knows the addresses of every log, e.g. that no log comes from
-the deposit contract.
+a given non-participating address.
 -/
 
 namespace Blanc

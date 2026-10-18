@@ -90,8 +90,8 @@ theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
   ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork⟩
 
 /-- What a step that writes no storage and emits no log leaves of the world: storage, code, the
-warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data and the
-key set). -/
+warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data, the key
+set, the created-account set, and the refund counter). -/
 structure BaseRel (b b' : Devm) : Prop where
   stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
   code : ∀ a, b'.getCode a = b.getCode a

@@ -28,7 +28,7 @@ discharges three of them once, for every contract:
   (`Exec.childFrames_codeAt_keep`), from `Exec.codeAt_avoid` on each committed direct child.
 * **System frames never target a contract whose code differs in size from every canonical
   system code** (`not_mem_systemTargets_of_size`, `ConfiguredHistoryTrace.system_ne_of_size`),
-  hoisted from the Beacon deposit contract.
+  hoisted from a contract-specific proof and stated generically.
 -/
 
 namespace Blanc
