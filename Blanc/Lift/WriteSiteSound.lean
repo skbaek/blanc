@@ -14,13 +14,6 @@ A callee runs in its own environment (`Env.callee`, its entry words); its steps 
 caller's through the call's site coverage.  A `callNext` whose callee frame holds no return marker
 leaves its continuation unchecked; such a callee never returns
 (`SFunc.RunP.not_returned_of_noRet`).  Bytes-free and contract-neutral.
-
-The frame-level statements here take `WsDeep`: at every accepted `callNext` the checker frame
-below the destination names the callee's whole declared frame, which `param_sat` needs at the
-callee's entry.  `wsNode` does not check it (its callNext arm has no counterpart of `checkNode`'s
-`e.frame.length ≤ a'.length`, and the checker frame may be shorter than the abstract stack), so
-the frozen `wsRun_sound`/`lift_sound_ws` follow from `wsRun_sound_of_deep`/`lift_sound_ws_of_deep`
-once that guard is in the walk.
 -/
 
 namespace Blanc.Lift.WriteSite
@@ -99,7 +92,8 @@ theorem wsNode_next_inv {n : Ninst} {f : SFunc} (h : wsNode es ann R a σ (.next
 theorem wsNode_callNext_inv {k : Nat} {f : SFunc}
     (h : wsNode es ann R a σ (.callNext k f) = true) :
     ∃ t a' x' kv e A, a = .const t :: a' ∧ σ.kv = x' :: kv ∧ es[k]? = some e ∧
-      ann[k]? = some A ∧ A.entry = WSt.param e.frame.length ∧ A.ret.prov.length = e.rets ∧
+      ann[k]? = some A ∧ e.frame.length ≤ kv.length ∧ A.entry = WSt.param e.frame.length ∧
+      A.ret.prov.length = e.rets ∧
       (R.keeps = true → A.ret.keeps = true) ∧
       A.ret.sites.all (fun s => R.sites.any
         (·.covers (instSite ((kv.take e.frame.length).map σ.provOf) σ.guards s))) = true ∧
@@ -109,8 +103,8 @@ theorem wsNode_callNext_inv {k : Nat} {f : SFunc}
   simp only [wsNode] at h
   split at h
   · simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
-    obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := h
-    refine ⟨_, _, _, _, _, _, rfl, ‹_›, ‹_›, ‹_›, h1, h2, fun hk => ?_, h4, fun i hi => ?_⟩
+    obtain ⟨⟨⟨⟨⟨h0, h1⟩, h2⟩, h3⟩, h4⟩, h5⟩ := h
+    refine ⟨_, _, _, _, _, _, rfl, ‹_›, ‹_›, ‹_›, h0, h1, h2, fun hk => ?_, h4, fun i hi => ?_⟩
     · rw [hk] at h3
       simpa only [Bool.not_true, Bool.false_or] using h3
     · rw [hi] at h5
@@ -149,7 +143,7 @@ theorem wsNode_retClosed {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
     exact ⟨x, a', e, rfl, he, hg⟩
   callNext := by
     rintro a k f ⟨R, σ, h⟩
-    obtain ⟨t, a', -, kv, e, A, rfl, -, he, -, -, -, -, -, hk⟩ := wsNode_callNext_inv h
+    obtain ⟨t, a', -, kv, e, A, rfl, -, he, -, -, -, -, -, -, hk⟩ := wsNode_callNext_inv h
     exact ⟨_, a', e, rfl, he, fun i hi => ⟨R, _, hk i hi⟩⟩
   ret := by
     rintro a ⟨R, σ, h⟩
@@ -314,15 +308,6 @@ theorem param_kv_length (n : Nat) : (WSt.param n).kv.length = n := by
 
 /-! ## The big-step induction -/
 
-/-- **Every call passes its callee's whole frame**: at each `callNext` the walk accepts, the
-checker frame below the destination names at least the callee's declared frame words.  `wsNode`
-does not check this (`checkNode` checks `e.frame.length ≤ a'.length` on the abstract stack, and the
-checker frame may be shorter than that); it is what `param_sat` needs at the callee's entry. -/
-def WsDeep (c : Cert) (ann : List WAnn) : Prop :=
-  ∀ {R : WRet} {a : List AVal} {σ : WSt} {k : Nat} {f : SFunc} {x' : Nat} {kv : List Nat}
-    {e : Entry}, wsNode c.entries ann R a σ (.callNext k f) = true → σ.kv = x' :: kv →
-      c.entries[k]? = some e → e.frame.length ≤ kv.length
-
 /-- What a return establishes: the returned words above the untouched base meet the summary,
 and a keeping summary left the executing account's storage as it was at `d`. -/
 def RetObs (ε : Env) (sevm : Sevm) (R : WRet) (rest : List B256) (d d'' : Devm) : Prop :=
@@ -341,7 +326,7 @@ walk's state describes in the environment `ε` of the frame, is a run under `WsS
 if it returns, the summary holds of the result above the same untouched base. -/
 theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true) (hdeep : WsDeep c ann)
+    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
     {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunP P c.prog sevm d f o) :
     ∀ {a : List AVal} {σ : WSt} {R : WRet} {ε : Env} {rest : List B256},
@@ -429,24 +414,24 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     exact ⟨⟨_, hst, hR⟩, fun _ => popBurn_getStor pop _⟩
   | callHalt dw hk pop runC ih =>
     intro a σ R ε rest hn hlen hε ⟨ν, S, hS, h⟩
-    obtain ⟨t, a', x', kv, e, A, rfl, hkv, he, hA, hent, -, -, hall, -⟩ :=
+    obtain ⟨t, a', x', kv, e, A, rfl, hkv, he, hA, hdp, hent, -, -, hall, -⟩ :=
       wsNode_callNext_inv hn
     obtain ⟨A', hA', hnode⟩ := wsCert_at hw (cert_at he hk)
     rw [hA] at hA'
     cases hA'
-    have sat := call_entry h hS hkv pop (hdeep hn hkv he)
+    have sat := call_entry h hS hkv pop hdp
     rw [← hent] at sat
     have hl : A.entry.kv.length ≤ e.frame.length := by rw [hent, param_kv_length]
     obtain ⟨r1, -⟩ := ih hnode hl hε.callee sat
     exact ⟨.callHalt dw hk pop (callee_steps h hall r1), fun _ ho => by cases ho⟩
   | callRet dw hk pop runC _ ihC ihK =>
     intro a σ R ε rest hn hlen hε ⟨ν, S, hS, h⟩
-    obtain ⟨t, a', x', kv, e, A, rfl, hkv, he, hA, hent, hrets, hkeeps, hall, hcont⟩ :=
+    obtain ⟨t, a', x', kv, e, A, rfl, hkv, he, hA, hdp, hent, hrets, hkeeps, hall, hcont⟩ :=
       wsNode_callNext_inv hn
     obtain ⟨A', hA', hnode⟩ := wsCert_at hw (cert_at he hk)
     rw [hA] at hA'
     cases hA'
-    have sat := call_entry h hS hkv pop (hdeep hn hkv he)
+    have sat := call_entry h hS hkv pop hdp
     rw [← hent] at sat
     have hl : A.entry.kv.length ≤ e.frame.length := by rw [hent, param_kv_length]
     obtain ⟨r1, r2⟩ := ihC hnode hl hε.callee sat
@@ -476,12 +461,14 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     simp only [wsNode] at hn
     cases hn
 
-/-! ## The frame-level statements, given full-frame calls -/
+/-! ## The frozen statements -/
 
-/-- `wsRun_sound` for a certificate whose calls pass their callee's whole frame (`WsDeep`). -/
-theorem wsRun_sound_of_deep {P : Sevm → Devm → Ninst → Devm → Prop}
+/-- **Soundness of the write-site checker** (tree level, no bytes): every run of entry `0` of an
+accepted certificate executes only `SSTORE`s that meet a root site, read in the frame's root
+environment. -/
+theorem wsRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true) (hdeep : WsDeep c ann)
+    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
     {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {pre post : Devm}
     (run : SProg.RunP P c.prog sevm pre post) :
     SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) P) c.prog sevm pre post := by
@@ -505,16 +492,17 @@ theorem wsRun_sound_of_deep {P : Sevm → Devm → Ninst → Devm → Prop}
     simp only [wsRoot, hA, Option.map_some, Option.getD_some]
   rw [hinit] at hnode
   rw [hroot]
-  exact ⟨f, hf0, (ws_run hP hw hdeep hfork r hnode (Nat.zero_le _) (Env.root_frame sevm)
+  exact ⟨f, hf0, (ws_run hP hw hfork r hnode (Nat.zero_le _) (Env.root_frame sevm)
     (init_sat sevm pre)).1⟩
 
-/-- `lift_sound_ws` for a certificate whose calls pass their callee's whole frame (`WsDeep`). -/
-theorem lift_sound_ws_of_deep {code : ByteArray} {c : Cert} {ann : List WAnn}
-    (hc : Cert.check code c = true) (hw : wsCert c ann = true) (hdeep : WsDeep c ann)
+/-- **The walk-facing lifting theorem**: a successful frame of certified bytes is a run of the
+certified program whose steps sit in the derivation and whose `SSTORE`s meet a root site. -/
+theorem lift_sound_ws {code : ByteArray} {c : Cert} {ann : List WAnn}
+    (hc : Cert.check code c = true) (hw : wsCert c ann = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) (StepIn ⟨0, sevm, pre, .ok post, exc⟩))
-      c.prog sevm pre post :=
-  wsRun_sound_of_deep (fun h => StepIn.toRun h) hw hdeep hfork (lift_sound_in hc hcode hfork exc)
+      c.prog sevm pre post := by
+  exact wsRun_sound (fun h => StepIn.toRun h) hw hfork (lift_sound_in hc hcode hfork exc)
 
 end Blanc.Lift.WriteSite
