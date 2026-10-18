@@ -125,7 +125,7 @@ theorem usdc_accessDelegation (cg : Nat)
 
 /-- **The Pair's USDC `transfer` CALL, at the call gas USDC's own charge fixes.**  From the staged
 `CALL` state with the whole remaining gas `cg` as the gas word: USDC installed at the token with its
-footprint invariant, the token not a precompile, two levels of call depth left (the Pair's `CALL`
+footprint facts (`FootCore`), the token not a precompile, two levels of call depth left (the Pair's `CALL`
 and the proxy's `DELEGATECALL`), the Pair and the recipient tracked, the Pair not USDC's admin, the
 transfer's ledger conditions and the Pair's balance covering the amount, and the child's budget
 after the 63/64 rule: the `CALL` resumes with the success flag, USDC's `true` reply, and `cg` less
@@ -133,7 +133,7 @@ the access charge, the expansion and USDC's exact charge. -/
 theorem usdcTransferCall_spec {U : Key → Prop} {cg : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (inst : UsdcInstalled (tokenMask token).toAdr W.state)
-    (finv : FootInv U (W.state.getStor (tokenMask token).toAdr))
+    (finv : FootCore U (W.state.getStor (tokenMask token).toAdr))
     (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
     (hprec : sevm.benvStat.rules.isPrecomp (tokenMask token).toAdr = false)
     (hroom : L.length < 1016)
