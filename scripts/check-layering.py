@@ -934,6 +934,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.History",
                     "Lift.Curve3Pool.AmpHistory",
                     "Lift.Curve3Pool.U3History",
+                    "Lift.Curve3Pool.HistoryLive",
                     "Lift.Curve3Pool.SupplyMoves",
                     "Lift.Curve3Pool.U3Ledger",
                     "Lift.Curve3Pool.U4Frames",
