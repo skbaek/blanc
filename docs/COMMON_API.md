@@ -4447,6 +4447,10 @@ contract-neutral.
   `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
   `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
   `Mem.write_size_ge` (a write never shrinks memory).
+- For crossing solc's word-copy loop without knowing the copied bytes, use
+  [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
+  `copy_loop_keep` (under the memory potential the loop leaves every byte below
+  the destination alone and exits with `len ≤ i'`).
 - For the free-pointer checker's memory effect, use
   [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
   (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
