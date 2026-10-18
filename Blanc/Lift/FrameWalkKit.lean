@@ -7,6 +7,7 @@ import Blanc.Lift.InvWalkGas
 import Blanc.Lift.IdentityCallGas
 import Blanc.Lift.ReturnDataBound
 import Blanc.Lift.InvWalkStep
+import Blanc.Lift.WalkCutKit
 
 /-!
 # Walking an actual frame derivation over a memory image
@@ -366,9 +367,6 @@ macro "wchain" : tactic => `(tactic| repeat (first
   | exact Region.write_self _ _ _))
 
 /-! ## Storage reads through the walk's bases -/
-
-theorem getStorVal_eq (d : Devm) (a : Adr) (k : B256) : d.getStorVal a k = (d.getStor a).get k :=
-  rfl
 
 theorem getStorVal_afterSstore_self {sevm : Sevm} {b : Devm} {k v : B256} (x : B256) :
     (afterSstore sevm b k v).getStorVal sevm.currentTarget x =
