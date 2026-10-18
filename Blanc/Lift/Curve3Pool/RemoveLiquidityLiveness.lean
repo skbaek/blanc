@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Check
 import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityRawK
 
 /-!
 # Liveness of `remove_liquidity`
@@ -13,8 +14,9 @@ execution of the pool's runtime whose effect is the model's step: the `RawEffect
 calls) and `Checkpoint post o.state`.
 
 The route: the forward walk `rx_rl_frame` gives an exact run of the certificate's trees to
-`STOP`; `lift_exactM` turns it into an `Exec`; the safety theorem `removeLiquidity_rawT` read on
-that execution gives the model's step in the environment the frame observed, whose supply is `T`
+`STOP`; `lift_exactM` turns it into an `Exec`; the safety theorem `removeLiquidity_rawTK` read on
+that execution (under the per-child keep `hkeep`, as the other entries' liveness theorems take it)
+gives the model's step in the environment the frame observed, whose supply is `T`
 because the frame's last log carries `T - _amount`.
 
 `removeLiquidity_none_of_push`: the control — a coin whose `transfer` is refused makes the
@@ -116,7 +118,8 @@ theorem rlEvent_supply (pool : Adr) (p : Nat) (a f : V3) (n : Nat) :
 safety theorem hold, the frame is a non-static call at nonzero depth, and the callees answer
 along a world chain `W 0 → W 1 → W 2 → W 3 → W 4` with gas use at most `U` each (`SupplyOk` with
 `T` in `W 0`; coin `k`'s `transfer` of `balances[k] * _amount / T` from `W k` to `W (k + 1)`; the
-`burnFrom` from `W 3` to `W 4`), then every frame gas `G ≥ 167000 + 5 U` yields an actual successful execution whose post state is the model's step:
+`burnFrom` from `W 3` to `W 4`), and every execution from the entry has children that keep the
+pool's storage and the code at `4` (`hkeep`), then every frame gas `G ≥ 167000 + 5 U` yields an actual successful execution whose post state is the model's step:
 its `RawEffect` in `rlEnv sevm T` with `o`, and `Checkpoint post o.state`. -/
 theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256}
     {W : Nat → Devm → Prop} {U G : Nat}
@@ -131,9 +134,9 @@ theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T
     (hcoin : ∀ k : Fin 3,
       ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
-    (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-    (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-    (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+    (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
     (hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (hWb : W 0 pre)
     (hsup : SupplyOk sevm (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
     (hpush : ∀ k : Fin 3, CoinPushOkAt sevm (W k) (W (k + 1))
@@ -203,8 +206,9 @@ theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T
     (by rw [← hA]; exact hTa) hG hG256 (fun D h => ⟨D, rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety theorem on that execution
-  obtain ⟨T', o', hstep', hraw⟩ := removeLiquidity_rawT exc hcode hfork hlen hcd hsel rfl rfl hGm
-    hck htok hcoin hpc (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hckeep hsk htk
+  obtain ⟨T', o', hstep', hraw⟩ := removeLiquidity_rawTK exc hcode hfork hlen hcd hsel rfl rfl hGm
+    hck htok hcoin hpc (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩)
+    (hkeep D exc).1 (hkeep D exc).2
   -- the observed supply is `T`
   obtain ⟨-, hrl'⟩ := hbody hstep'
   obtain ⟨Tn', hTn', hT0', hmul', hmin', hle', hp', hb', hTa'⟩ := removeLiquidity_inv hrl'

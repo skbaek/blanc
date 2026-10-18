@@ -447,7 +447,7 @@ theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
       Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++ v.toBytes)))
     (hcw : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = cw)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp cw.toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hK : CallKeeps sevm cw ∨ RlKeep sevm L)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hK : RlKeepAt sevm cw L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2eaa (St b [3, 0x2a0] M G) L) :
     ∃ c L' d G', L = c :: L' ∧
       ChildOf b d cw.toAdr (transferSel ++ sevm.caller.toB256.toBytes ++ v.toBytes) 0
@@ -510,8 +510,7 @@ theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   have hkc : (∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x) ∧ c.post.getCode 4 = c.pre.getCode 4 := by
     rcases hK with hK | hK
-    · obtain ⟨hks, hk4⟩ := hK _ _ _ _ _ _ _ _ _ rfl hrun4
-      exact hc.keeps hX hks hk4
+    · exact hK.head hc.target
     · exact hK.head
   refine ⟨c, L4, d4, _, rfl, ?_, hkc, hR, hW, hrd4, h⟩
   have e0 : Bytes.toB256 [0] = 0 := zero_lit
@@ -768,7 +767,7 @@ theorem xa_rl_iter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
     (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
-    (hK : CallKeeps sevm (coinAt σ i) ∨ RlKeep sevm L)
+    (hK : RlKeepAt sevm (coinAt σ i) L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2cdb (St b [3, 0x2a0] M G) L) :
     (balAt σ i * rlAmt sevm / balAt σ i = rlAmt sevm ∨ balAt σ i = 0) ∧ T ≠ 0 ∧
       ¬ rlVal sevm σ T i < rlMin sevm i ∧ ¬ balAt σ i < rlVal sevm σ T i ∧
