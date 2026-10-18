@@ -214,6 +214,121 @@ theorem removeLiquidityOneCoin_raw_of (hc : Cert.CheckedM code cert mems true)
     hsel hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
   exact ⟨e, o, hstep, hraw⟩
 
+/-- **`remove_liquidity_one_coin`'s raw effect with the second `get_y_D` call**, given the
+certificate's checkedness: the frame's observed environment `e` (its time, the supply `T` the frame
+read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
+theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems true)
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwSecondGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
+  have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
+    XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
+  have hcoinJ : (exJ sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm)).toAdr := fun hi => by
+    simpa only [coinSlot, toB256_toNat] using hcoin ⟨(exJ sevm).toNat, hi⟩
+  obtain ⟨hlock, hval, hkill, cs, cb, cp, hi, dy, fee, hL, hsw, hmod, hmin, hmf, hadd, hsub,
+    hbt, hbd, hbv, hbs, hblen, hpt, hpd, hpv, hps, hpok, hstor, hlogs, hout, -, hsec⟩ :=
+    xa_oneCoin2 hc hcode hfork hlen hcd hsel rfl hck.abs htok hcoinJ hpc hid hkeep hidk hx
+  let i : Fin 3 := ⟨(exJ sevm).toNat, hi⟩
+  have hI : Nat.toB256 i.val = exJ sevm := toB256_toNat _
+  have hch : children ⟨0, sevm, pre, .ok post, exc⟩ = [cs, cb, cp] := hL
+  have ha0 : arg sevm 0 = (ocAmt sevm).toNat := by
+    unfold arg Sevm.argWord
+    rw [show (32 * 0 + 4 : B256) = Bytes.toB256 [4] by decide]
+  have ha1 : arg sevm 1 = (exJ sevm).toNat := by
+    unfold arg Sevm.argWord
+    rw [show (32 * 1 + 4 : B256) = Bytes.toB256 [0x24] by decide]
+  have ha2 : arg sevm 2 = (Sevm.dataWord sevm (Bytes.toB256 [0x44])).toNat := by
+    unfold arg Sevm.argWord
+    rw [show (32 * 2 + 4 : B256) = Bytes.toB256 [0x44] by decide]
+  have hdec : decodeCall sevm = .removeLiquidityOneCoin (arg sevm 0) (arg sevm 1) (arg sevm 2) :=
+    decodeCall_at (k := 10) rfl hsel hlen
+  have hi1 : arg sevm 1 < 3 := by rw [ha1]; exact hi
+  have hk : s.isKilled = false := boolWord_inj (hck.abs.isKilled.symm.trans hkill)
+  have hbK : balanceSlot i = balancesBase + exJ sevm := by rw [balanceSlot, hI]
+  have hmodel := oc_model (i := i) (e := ocEnv sevm i (vSupply cs).toNat) hck.abs hk
+    (hmod _ rfl rfl) (toNat_le_of_not_lt hmin) hmf hadd (by rw [hbK]; exact hsub) rfl
+    (by simp only [ocEnv, decide_true])
+  refine ⟨ocEnv sevm i (vSupply cs).toNat, ?o, ?step, ?raw, hi1, (vSupply cs).toNat, rfl, ?first⟩
+  case first =>
+    rw [ha0, show (⟨arg sevm 1, hi1⟩ : Fin 3) = i from Fin.ext ha1]
+    exact hsec
+  case step =>
+    rw [hdec]
+    show (if (ocEnv sevm i (vSupply cs).toNat).value = 0 then _ else none) = _
+    rw [show (ocEnv sevm i (vSupply cs).toNat).value = 0 by rw [ocEnv, hval]; rfl,
+      ite_eq_left rfl]
+    simp only [body, idx, hi1, ↓reduceDIte, Option.bind_eq_bind, Option.bind_some]
+    rw [show (⟨arg sevm 1, hi1⟩ : Fin 3) = i from Fin.ext ha1, ha0, ha2]
+    exact hmodel
+  case raw =>
+    have hci : coinAdr ⟨0, sevm, pre, .ok post, exc⟩ i =
+        ((pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm)).toAdr := by
+      change ((pre.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i.val)).toAdr = _
+      rw [hI]
+    have hcbm : cb ∈ children ⟨0, sevm, pre, .ok post, exc⟩ := by
+      rw [hch]; simp only [List.mem_cons, true_or, or_true]
+    have hcpm : cp ∈ children ⟨0, sevm, pre, .ok post, exc⟩ := by
+      rw [hch]; simp only [List.mem_cons, List.not_mem_nil, or_false, or_true]
+    have hbSel : cb.sevm.data.take 4 = burnFromSel := by
+      rw [hbd, List.append_assoc]; exact List.take_left' rfl
+    have hpSel : cp.sevm.data.take 4 = transferSel := by
+      rw [hpd]; unfold exPushData; rw [List.append_assoc]; exact List.take_left' rfl
+    refine ⟨⟨rfl, rfl, rfl, fun k => ⟨fun _ h => (by cases h), fun _ h => (by cases h),
+      fun h => (by cases h), fun h => ?_⟩, fun T hT => ?_, fun h => (by cases h),
+      fun _ => .inr ⟨cb, hcbm, hbt, hbSel, hblen⟩⟩, ?stor, ?logs, hout, ?calls⟩
+    · have heq : k = i := of_decide_eq_true h
+      subst heq
+      exact .inr ⟨cp, hcpm, by rw [hci]; exact hpt, hpSel, hpok⟩
+    · cases hT
+      exact .inr ⟨0, ⟨cs, by rw [hch]; rfl, hsw.target, hsw.data, hsw.len, rfl⟩,
+        supplyFirst_zero hch hsw.static⟩
+    case stor =>
+      rw [hdec]
+      refine ⟨fun x hx => ?_, fun f hf => ?_⟩
+      · have hne : balancesBase + exJ sevm ≠ x := by
+          simpa only [Fld.slot, balanceSlot, hI] using hx (.bal i) (bal_mem i)
+        rw [hstor, Stor.get_set_ne _ hne]
+        rfl
+      · have hf' : ∃ k : Fin 3, f = .bal k := by
+          have h : f = .bal 0 ∨ f = .bal 1 ∨ f = .bal 2 := by
+            simpa only [footprint, balFlds, List.mem_cons, List.not_mem_nil, or_false] using hf
+          rcases h with rfl | rfl | rfl
+          · exact ⟨0, rfl⟩
+          · exact ⟨1, rfl⟩
+          · exact ⟨2, rfl⟩
+        obtain ⟨k, rfl⟩ := hf'
+        show ((post.getStor sevm.currentTarget).get (balanceSlot k)).toNat = _
+        rw [hstor, ocBal, ← hbK]
+        exact oc_stor_bal hck.abs i k _
+    case logs =>
+      have ht : topicRemoveLiquidityOne = ocTopic := by decide
+      rw [hlogs, hch]
+      show _ = _ ++ _ ++ [eventLog sevm.currentTarget _]
+      simp only [eventLog, ocEnv, word, toB256_toNat, ht]
+    case calls =>
+      intro hs
+      replace hs : sevm.isStatic = false := hs
+      simp only [CallsOf, modelCalls, hch, List.filterMap_cons, List.filterMap_nil, hsw.static,
+        hbs, hps, hs, Bool.false_eq_true, ↓reduceIte, List.map_cons, List.map_nil, encodeCall,
+        List.filter_cons, List.filter_nil, framed, tokenAdr, entryStor, hci,
+        decide_eq_false htok, decide_eq_false (hcoinJ hi), Bool.not_false, Bool.true_or,
+        hbt, hpt, hbd, hpd, hbv, hpv, exPushData, word, toB256_toNat, ocEnv]
+
 end
 
 end Blanc.Lift.Curve3Pool

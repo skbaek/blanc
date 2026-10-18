@@ -135,6 +135,18 @@ section
 variable {sevm : Sevm} {post b : Devm} {ρ : B256} {S : List B256} {M : Mem} {G : Nat}
   {L : List Exec.Frame} {s : State}
 
+/-- **The second `get_y_D` call of `_calc_withdraw_one_coin`**, as the words the bytecode passed
+and received (`xa_cw_d`): the first call's chain for `D1`, and the second call on the fee loop's
+output words `r0, r1, r2` at the same `amp` and `D1`. -/
+def CwSecondGetYD (s : State) (t a : Nat) (i : Fin 3) (T : Nat) : Prop :=
+  ∃ (A x0 x1 x2 D0 D1 r0 r1 r2 y2 : B256),
+    aChk s t = some A.toNat ∧
+    xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+    getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get A.toNat 1 = some D0.toNat ∧
+    ((chkMul a D0.toNat).bind fun m => (chkDiv m T).bind fun q => chkSub D0.toNat q) =
+      some D1.toNat ∧
+    getYDChk A.toNat i (V3.mk r0.toNat r1.toNat r2.toNat).get D1.toNat = some y2.toNat
+
 /-- **`_calc_withdraw_one_coin` on the derivation.** Entered at `0x3cca` with the return
 address `ρ`, `_token_amount` `a` and `i` above `S` (carrier memory, storage abstracting `s`, the
 token not a precompile): the frame's next child `c` is the static `totalSupply()` call at the
@@ -185,6 +197,62 @@ theorem xa_cw (hc : Cert.CheckedM code cert mems true)
     exact calcWithdrawOne_eq hi hamp hfee hT hxp hD0 hm hT0 hle hy hyl hp h0 h1 h2 hy2 hs0 hs1 hs2
   · rw [chkMul_toNat_of_nofm hm, Option.bind_some, chkDiv_toNat_of_ne hT0, Option.bind_some,
       chkSub_toNat_of_le hle]
+
+/-- **`_calc_withdraw_one_coin` on the derivation, with its second `get_y_D` call.** Entered at `0x3cca` with the return
+address `ρ`, `_token_amount` `a` and `i` above `S` (carrier memory, storage abstracting `s`, the
+token not a precompile): the frame's next child `c` is the static `totalSupply()` call at the
+token; the function returns to `ρ` with `(dy, dy_fee)` above `S`, storage and logs unchanged,
+and `calcWithdrawOne` computes `(dy, dy_fee)` in every environment with the frame's time and
+the reply as supply. The first `get_y_D` call is exposed with its actual stack arguments
+`(amp, i, xp, D1)` at `0x3999` and the model's checked prefix that produces them. -/
+theorem xa_cw2 (hc : Cert.CheckedM code cert mems true)
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {a i : B256}
+    (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M [])
+    (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (h : XAt sevm post 0x3cca (St b (ρ :: a :: i :: S) M G) L) :
+    ∃ (c : Exec.Frame) (L' : List Exec.Frame) (hi : i.toNat < 3) (dy fee : B256) (b' : Devm)
+      (M' : Mem) (G' : Nat), L = c :: L' ∧
+      StaticWordChild ((b.getStor sevm.currentTarget).get tokenSlot).toAdr totalSupplyData c ∧
+      (∀ e : Env, e.time = sevm.benvStat.time.toNat → e.supply = some (vSupply c).toNat →
+        calcWithdrawOne s e a.toNat ⟨i.toNat, hi⟩ = some (dy.toNat, fee.toNat)) ∧
+      (∃ (A x0 x1 x2 D0 D1 y ρ' : B256) (R : List B256) (b0 : Devm) (M0 : Mem) (G0 : Nat),
+        aChk s sevm.benvStat.time.toNat = some A.toNat ∧
+        xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get A.toNat 1 = some D0.toNat ∧
+        ((chkMul a.toNat D0.toNat).bind fun m => (chkDiv m (vSupply c).toNat).bind fun q =>
+          chkSub D0.toNat q) = some D1.toNat ∧
+        XAt sevm post 0x3999 (St b0 (ρ' :: A :: i :: x0 :: x1 :: x2 :: D1 :: R) M0 G0) L' ∧
+        getYDChk A.toNat ⟨i.toNat, hi⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D1.toNat =
+          some y.toNat) ∧
+      CwSecondGetYD s sevm.benvStat.time.toNat a.toNat ⟨i.toNat, hi⟩ (vSupply c).toNat ∧
+      (∀ x, b'.getStor x = b.getStor x) ∧ b'.logs = b.logs ∧
+      XAt sevm post ρ.toNat (St b' (dy :: fee :: S) M' G') L' ∧ VW M' [] ∧
+      b'.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
+      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') := by
+  obtain ⟨A, F, c, d, M1, G1, L1, hL, hsw, hamp, hfee, hdst, hdlg, h, hV, hdo, hdc, hdi⟩ :=
+    xa_cw_a hc hcode hfork ha hV htok h
+  have had : Abstracts (d.getStor sevm.currentTarget) s := by rw [hdst]; exact ha
+  obtain ⟨x0, x1, x2, D0, b1, M2, G2, hb1, hxp, hD0, hm, hT0, hle, h, hV⟩ :=
+    xa_cw_b hc hcode hfork had hV h
+  obtain ⟨y, hi, M3, G3, hcall, hy, hyl, hp, h, hV⟩ := xa_cw_c hc hcode hfork hV h
+  obtain ⟨r0, M4, G4, h0, h, hV⟩ := xa_cw_it0 hcode rfl hV h
+  obtain ⟨r1, M5, G5, h1, h, hV⟩ := xa_cw_it1 hcode (by decide) hV h
+  obtain ⟨r2, M6, G6, h2, h, hV⟩ := xa_cw_it2 hcode (by decide) hV h
+  obtain ⟨y2, M7, G7, hy2, hs0, hs1, hp', hs2, h, hV⟩ := xa_cw_d hc hcode hfork hi hV h
+  obtain ⟨ρ', R, M0, G0, hcall⟩ := hcall
+  have hD1c : ((chkMul a.toNat D0.toNat).bind fun m => (chkDiv m (vSupply c).toNat).bind
+      fun q => chkSub D0.toNat q) = some (D0 - a * D0 / vSupply c).toNat := by
+    rw [chkMul_toNat_of_nofm hm, Option.bind_some, chkDiv_toNat_of_ne hT0, Option.bind_some,
+      chkSub_toNat_of_le hle]
+  refine ⟨c, L1, hi, _, _, b1, M7, G7, hL, hsw, fun e ht hT => ?_, ⟨A, x0, x1, x2, D0, _, y, ρ',
+    R, b1, M0, G0, hamp, hxp, hD0, hD1c, hcall, hy⟩,
+    ⟨A, x0, x1, x2, D0, _, r0, r1, r2, y2, hamp, hxp, hD0, hD1c, hy2⟩,
+    fun x => by rw [hb1.getStor, hdst],
+    by rw [hb1.logs, hdlg], h, hV, by rw [hb1.output, hdo],
+    fun x hx => by rw [cw_sloads_getCode hb1, hdc x hx],
+    fun hid h4 => cw_sloads_idReady hb1 (hdi hid h4)⟩
+  · rw [← ht] at hamp
+    exact calcWithdrawOne_eq hi hamp hfee hT hxp hD0 hm hT0 hle hy hyl hp h0 h1 h2 hy2 hs0 hs1 hs2
 
 end
 
