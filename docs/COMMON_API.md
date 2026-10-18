@@ -4434,6 +4434,12 @@ contract-neutral.
   in [`Blanc/Lift/CheckChain.lean`](../Blanc/Lift/CheckChain.lean), emitted by the registered producer in its opt-in `chain`
   assembly mode (`check.assembly`/`jumps.assembly`); the non-memory counterparts of
   `Cert.checkEntriesM_drop`/`Cert.jumpsEntriesM_drop`. Worked use: `Blanc/Lift/Usdc/Impl/Check.lean`.
+- Assemble the free-pointer check of a long certificate from per-entry kernel decisions: `fpEntry`
+  (entry `k` under its annotation, `false` past either end), `fpFrom` over the tails
+  `(c.zip ann).drop k`, the step `fpFrom_step`, the end `fpFrom_of_le` and the assembly
+  `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
+  the registered `scripts/lift/fp_annot.py` (registry key `fp`). Worked use:
+  `Blanc/Lift/Usdc/ImplFp/Check.lean`, `Blanc/Lift/Usdc/ImplFp.lean`.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
