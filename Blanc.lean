@@ -60,6 +60,7 @@ import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission
 import Blanc.ExecutionWarmth
+import Blanc.ExecutionErrorKeep
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
 import Blanc.ExecutionTraceCodeAt
@@ -489,6 +490,7 @@ import Blanc.Lift.ReachChain
 import Blanc.Lift.ReachDispatch
 import Blanc.Lift.CallRestriction
 import Blanc.Lift.StaticOnlyFrames
+import Blanc.Lift.StaticOnlyRoots
 import Blanc.LockExclusion
 import Blanc.OwnerDiscipline
 import Blanc.Lift.LockCheck
@@ -875,6 +877,7 @@ import Blanc.Composition.Curve3PoolSupplyCalls
 import Blanc.Composition.Curve3PoolSupplyStep
 import Blanc.Composition.Curve3PoolSupply
 import Blanc.Composition.Curve3Pool3CrvU3
+import Blanc.Composition.Curve3PoolCalleeLive
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp

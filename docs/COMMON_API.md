@@ -3102,7 +3102,11 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionCodeAt.lean`](../Blanc/ExecutionCodeAt.lean),
   [`Blanc/ExecutionTraceCodeAt.lean`](../Blanc/ExecutionTraceCodeAt.lean)) keep the
   code at an address empty through a trace given no CREATE frame targets it and no
-  authorization recovers to it (`NoAuthorityAt`). For transaction caller
+  authorization recovers to it (`NoAuthorityAt`). To settle a callee frame known only by an
+  `Exec` derivation (a `CALL`/`STATICCALL` crossing needs `cpost.error = none`):
+  `Exec.ok_error_eq` ([`Blanc/ExecutionErrorKeep.lean`](../Blanc/ExecutionErrorKeep.lean))
+  says an execution ending `.ok post` keeps the error field it started with (the
+  `ExecutionWarmth` walk for `Devm.ErrKeep`); `initDevm` starts at `none`. For transaction caller
   exclusion, `Exec.rawFrameRoots_caller_excluded` in
   [`Blanc/ExecutionCallerExclusion.lean`](../Blanc/ExecutionCallerExclusion.lean)
   tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code.
@@ -3502,6 +3506,14 @@ by `STATICCALL` shares one descendant argument,
 descendant of a target frame from that restriction and the ladder's lower-depth
 hypothesis. The static callee may be the contract itself; it is then a static
 lower-depth target frame closed by the same hypothesis.
+The raw (all entered frames, committed or not) form is
+[`Blanc/Lift/StaticOnlyRoots.lean`](../Blanc/Lift/StaticOnlyRoots.lean): a static frame is
+never a CREATE frame (`Xinst.step_spawn_codeAddress_of_static`), every frame a static execution
+enters is static with a code address (`Exec.static_rawFrameRoots`), and every frame entered
+below a frame of such static-only certified code has a code address
+(`Exec.staticOnly_rawFrameDescendants`), which is `Exec.codeAt_avoid`'s premise for every
+address. Worked use: the 3Crv callee crossing in
+`Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`).
 
 A target frame whose children may be non-static and may re-enter the contract
 (Lido `pause`'s `CALL`, WETH9 `withdraw`'s ETH send) uses the entry carrier of
