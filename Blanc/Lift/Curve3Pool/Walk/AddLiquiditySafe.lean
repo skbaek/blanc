@@ -299,7 +299,7 @@ memory, under the frame premises (the coins and 3Crv are not precompiles; the po
 nonempty; the identity precompile is ready; every child keeps the pool's storage and address
 4's code), computed the model's step on the decoded call in the environment it observed, with
 the raw effect Spec states. -/
-theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
+theorem addLiquidity_rawE_of (hchk : Cert.CheckedM code cert mems true)
     {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
@@ -314,8 +314,10 @@ theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+    ∃ (T : B256) (L0 L1 L2 : List Exec.Frame) (o : Out),
+      step s (alEnv sevm T L0 L1 L2) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (alEnv sevm T L0 L1 L2) o ∧
+      ∃ c L, Exec.childFrames exc = c :: L ∧ alWord c = T := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   obtain ⟨hlock, hval, hkill, hfee, A, cT, L0, L1, L2, L', D0, D1, cr0, cr1, cr2, b', M, img, G',
@@ -435,11 +437,11 @@ theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
         (chkMul_toNat_of_nofm (B256.nofm_of_mulGuard hmul)) (chkDiv_toNat_of_ne hD0ne) hmin rfl hT'
   have hdec : decodeCall sevm = .addLiquidity (argV3 sevm 0) (arg sevm 3) :=
     decodeCall_at (k := 3) rfl hsel hlen
-  refine ⟨alEnv sevm T L0 L1 L2, ⟨{ s with balances := ⟨s0.toNat, s1.toNat, s2.toNat⟩ }, none,
+  refine ⟨T, L0, L1, L2, ⟨{ s with balances := ⟨s0.toNat, s1.toNat, s2.toNat⟩ }, none,
         [.addLiquidity sevm.caller.toB256.toNat (argV3 sevm 0) ⟨f0.toNat, f1.toNat, f2.toNat⟩
           D1.toNat (T + mint).toNat],
         pullCalls sevm.caller.toB256.toNat (argV3 sevm 0) ++
-          [.mint sevm.caller.toB256.toNat mint.toNat]⟩, ?step, ?raw⟩
+          [.mint sevm.caller.toB256.toNat mint.toNat]⟩, ?step, ?raw, cT, _, hch, hTw⟩
   case step =>
     rw [hdec]
     show (if (alEnv sevm T L0 L1 L2).value = 0 then body s _ _ else none) = _
@@ -525,5 +527,26 @@ theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
       simp only [List.filterMap_cons, List.filterMap_nil, hms, hs, Bool.false_eq_true,
         ↓reduceIte, hmt, hmd, hmv, htokL, word_toNat, tokenAdr, entryStor]
       rfl
+
+theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
+    {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selAddLiquidity)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+  obtain ⟨T, L0, L1, L2, o, h1, h2, -⟩ := addLiquidity_rawE_of hchk exc hcode hfork hlen hcd hsel
+    hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
+  exact ⟨_, o, h1, h2⟩
 
 end Blanc.Lift.Curve3Pool
