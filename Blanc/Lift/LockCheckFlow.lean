@@ -16,7 +16,7 @@ absence of forbidden opcodes as separate theorems.
 
 namespace Blanc.Lift.LockCheck
 
-open Jaune AbstractStackSafety Blanc.LockExclusion
+open Jaune AbstractStackSafety Blanc.LockExclusion Blanc.Lift.SymTransfer
 
 local notation "PP" => Exec.Deriv.ParentPrefix
 
