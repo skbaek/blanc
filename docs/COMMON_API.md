@@ -4439,7 +4439,14 @@ contract-neutral.
   `(c.zip ann).drop k`, the step `fpFrom_step`, the end `fpFrom_of_le` and the assembly
   `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
   the registered `scripts/lift/fp_annot.py` (registry key `fp`). Worked use:
-  `Blanc/Lift/Usdc/ImplFp/Check.lean`, `Blanc/Lift/Usdc/ImplFp.lean`.
+  `Blanc/Lift/Usdc/ImplFp/Check.lean`, `Blanc/Lift/Usdc/ImplFp.lean`. For any other annotated
+  per-entry check, instantiate the generic kit there: `chainEntry`/`chainFrom` over a check
+  function, with `chainFrom_step` and `chainFrom_of_le`.
+- Assemble the write-site check of a long certificate the same way: `wsEntry`, `wsFrom`,
+  `wsFrom_step`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
+  [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
+  `scripts/lift/ws_annot.py` (registry key `ws`). Worked use: `Blanc/Lift/Usdc/ImplWs/Check.lean`,
+  `Blanc/Lift/Usdc/ImplWs.lean`.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
@@ -4504,13 +4511,17 @@ contract-neutral.
   [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
   (an abstract state's meaning), `wstep_sound` and `wstep_nonpush` (one step),
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
-  `resume_sound` and `callNext_obs` (joins, calls and returns).
+  `resume_sound` and `callNext_obs` (joins, calls and returns); `map_of_zip_prefix` (an
+  annotation's entry words name a prefix of the incoming ones).
 - For the write-site checker's run-level soundness, use
   [`Blanc/Lift/WriteSiteSound.lean`](../Blanc/Lift/WriteSiteSound.lean): `wsRun_sound`
   (every run of an accepted certificate's entry `0` is a `WsStep` run), `lift_sound_ws` (the
   same from `Cert.check` and a successful frame), `ws_run` (the big-step recursion: `WsStep`
-  steps, `RetObs` at a return), and `SFunc.RunP.mono_at` (a run under a step relation implied
-  at the run's own frame).
+  steps, `RetObs` at a return), `goto_run` (an accepted goto: `compat` or a tail call, under a
+  summary below the jumper's, via `retLe_steps`, `argFree_steps`, `RetObs.of_retLe`,
+  `RetObs.of_callee` and `tail_entry`), `Term.eval_argFree` (an entry-word-free term reads the
+  same in every environment of a frame), and `SFunc.RunP.mono_at` (a run under a step relation
+  implied at the run's own frame).
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of

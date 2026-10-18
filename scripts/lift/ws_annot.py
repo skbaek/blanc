@@ -96,6 +96,15 @@ OP2_COMM = {'add', 'mul', 'and', 'or'}
 # ('kecc', a, b) ('kecc1', t). B256 values are Python ints.
 TOP = ('top',)
 
+# Amendment A9 (WriteSite.lean): `compat` accepts an annotation whose entry
+# words are a prefix of the incoming ones (C1), a goto may be a tail call into
+# a parameter entry under an entry-word-free summary (C2), and a goto needs
+# the target's summary below the jumper's (`retLe`, C3), so summaries are per
+# entry. Both switches mirror the checker; False reproduces the pre-A9 walk
+# (kept for the focused tests only).
+ARGS_PREFIX = True
+SUB_SUMMARY = True
+
 
 def known(t) -> bool:
     """Term.known: the term mentions no `top`."""
@@ -566,7 +575,7 @@ def compat_w(st: WSt, A: WSt) -> Optional[str]:
     """The incoming state satisfies the annotation (WriteSite.compat)."""
     if len(st.kv) != len(A.kv):
         return "length"
-    if len(st.args) != len(A.args):
+    if (len(A.args) > len(st.args)) if ARGS_PREFIX else (len(st.args) != len(A.args)):
         return "args length"
     m = _build_map(A, st)
     for x, s in zip(list(A.kv) + list(A.args), list(st.kv) + list(st.args)):
@@ -736,6 +745,23 @@ def resolve_args(entries, trees, called):
         pins[ck] = tuple(range(1, len(entries[ck][1]) + 1))
     argmap: Dict[int, tuple] = {}
     conflicts = []
+    if ARGS_PREFIX:
+        # each goto S->T needs len(args[T]) <= len(args[S]); unpinned entries
+        # take the least length over their sources (fixpoint, lengths only fall)
+        length: Dict[int, int] = dict((k, len(v)) for k, v in pins.items())
+        changed = True
+        while changed:
+            changed = False
+            for a, b in edges:
+                if a in length and b not in pins:
+                    if b not in length or length[a] < length[b]:
+                        length[b] = length[a]
+                        changed = True
+        for a, b in edges:
+            if b in pins and a in length and length[a] < length[b]:
+                conflicts.append((b, [a, b], [length[a], length[b]]))
+        argmap = {k: tuple(range(1, length.get(k, 0) + 1)) for k in range(n)}
+        return argmap, conflicts, edges
     by_root: Dict[int, List[int]] = {}
     for k in range(n):
         by_root.setdefault(find(k), []).append(k)
@@ -769,6 +795,7 @@ class Checker:
         self.incoming_src: Dict[int, List[int]] = {}
         self.seeded: Dict[int, str] = {}
         self.stores: List = []
+        self.cost: Dict[int, int] = {}
         self.notes: List[str] = []
         self.mode = 'infer'
         self._noted = set()
@@ -825,7 +852,7 @@ class Checker:
                     except Reject:
                         kk = ('exec', 'unknown')
                     if writes_stor(kk):
-                        writes.add(self.comp[k])
+                        writes.add(self.rkey(k))
                     stack.append(u['sub'])
                 elif kind == 'dest':
                     stack.append(u['sub'])
@@ -834,16 +861,21 @@ class Checker:
                     stack.append(u['taken'])
                 elif kind == 'branchTo':
                     stack.append(u['fall'])
+                    if SUB_SUMMARY and 0 <= u['target_entry'] < len(self.entries):
+                        call_edges.setdefault(k, set()).add(u['target_entry'])
+                elif kind == 'jump':
+                    if SUB_SUMMARY and 0 <= u['target_entry'] < len(self.entries):
+                        call_edges.setdefault(k, set()).add(u['target_entry'])
                 elif kind == 'callNext':
                     ck = u['target_entry']
                     if 0 <= ck < len(self.entries):
-                        call_edges.setdefault(self.comp[k], set()).add(self.comp[ck])
+                        call_edges.setdefault(self.rkey(k), set()).add(self.rkey(ck))
                     stack.append(u['continuation'])
                 elif kind == 'join':
                     if u['target_entry'] in self.trees:
                         stack.append(self.trees[u['target_entry']])
-        keeps = {c: (c not in writes)
-                 for c in set(self.comp.values())}
+        keys = range(len(self.entries)) if SUB_SUMMARY else set(self.comp.values())
+        keeps = {c: (c not in writes) for c in keys}
         changed = True
         while changed:
             changed = False
@@ -909,6 +941,15 @@ class Checker:
             return b
         if len(a.kv) != len(b.kv):
             raise Reject(f"entry {k}: incoming frames of different lengths")
+        if ARGS_PREFIX:
+            n_args = 0
+            while (n_args < min(len(a.args), len(b.args))
+                   and a.args[n_args] == b.args[n_args]):
+                n_args += 1
+            a = WSt(a.kv, a.args[:n_args], a.facts, a.prov, a.mem, a.cur,
+                    a.ub, a.eqs, a.guards)
+            b = WSt(b.kv, b.args[:n_args], b.facts, b.prov, b.mem, b.cur,
+                    b.ub, b.eqs, b.guards)
         if tuple(a.args) != tuple(b.args):
             raise Reject(f"entry {k}: incoming entry words differ")
         first: Dict[Tuple[int, int], int] = {}
@@ -983,6 +1024,21 @@ class Checker:
                     self.keeps.get(c, True),
                     self.sites.get(c, frozenset()))
 
+    def rkey(self, k: int) -> int:
+        """The key of entry k's sites and keeps: its component, or (under the
+        A9 per-entry summaries) the entry itself."""
+        return k if SUB_SUMMARY else self.comp[k]
+
+    def get_ret_e(self, k: int) -> WRet:
+        """Entry k's summary: the component's return words and order facts,
+        the key's keeps and sites."""
+        c = self.comp[k]
+        r = self.rkey(k)
+        n = self.comp_n[c]
+        return WRet(self.ret_prov.get(c, tuple([TOP] * n)),
+                    self.ret_les.get(c, frozenset()),
+                    self.keeps.get(r, True), self.sites.get(r, frozenset()))
+
     def _cover(self, c: int, obs) -> None:
         """Infer mode: list the observed site when nothing covers it yet."""
         if not any(site_covers(s, obs) for s in self.sites.get(c, frozenset())):
@@ -1001,6 +1057,9 @@ class Checker:
             else:
                 self.incoming.setdefault(k, []).append(st)
                 self.incoming_src.setdefault(k, []).append(cur)
+                if SUB_SUMMARY and check_ret:
+                    for s in sorted(self.sites.get(self.rkey(k), ()), key=repr):
+                        self._cover(self.rkey(cur), s)
             return
         if is_join or not do_compat:
             # Lean's wsNode checks no compat at a call (only the parameter
@@ -1010,11 +1069,35 @@ class Checker:
         if A is None:
             raise Reject(f"{what} to entry {k}: no annotation")
         why = compat_w(st, A)
+        if why is not None and ARGS_PREFIX and self._tail_ok(k, st, cur):
+            why = None
         if why is not None:
             raise Reject(f"{what} to entry {k} "
                          f"(pc {self.entries[k][0]:#x}): {why}")
-        if check_ret and self.get_ret(self.comp[k]) != self.get_ret(self.comp[cur]):
+        if check_ret and not self._ret_ok_goto(k, cur):
             raise Reject(f"{what} to entry {k}: return summary differs")
+
+    def _ret_ok_goto(self, k: int, cur: int) -> bool:
+        """The goto's summary condition: WriteSite.retLe (A9 C3), or equality
+        before A9."""
+        Rt, Rs = self.get_ret_e(k), self.get_ret_e(cur)
+        if not SUB_SUMMARY:
+            return Rt == Rs
+        return (tuple(Rt.prov) == tuple(Rs.prov) and Rt.les == Rs.les
+                and (not Rs.keeps or Rt.keeps)
+                and all(any(site_covers(q, s) for q in Rs.sites) for s in Rt.sites))
+
+    def _tail_ok(self, k: int, st: WSt, cur: int) -> bool:
+        """WriteSite.gotoOk's tail call (A9 C2): a jump into a callee entry
+        (parameter annotation) whose summary names no entry word, with
+        exactly the callee's frame on the stack."""
+        n = len(self.entries[k][1])
+        # the target's summary is read in the callee environment: it must
+        # name no entry word (under SUB_SUMMARY the target's own summary,
+        # else the shared one)
+        R = self.get_ret_e(k if SUB_SUMMARY else cur)
+        return (self.ann.get(k) == wst_param(n) and len(st.kv) == n
+                and ret_arg_free(R))
 
     def walk(self, t, a: List[Tuple], st: WSt, R: WRet, k: int):
         """Walk tree `t` (json) from AVal stack `a` and state `st`, under the
@@ -1035,10 +1118,13 @@ class Checker:
                 # List the observed site first: wstep below checks coverage
                 # against the summary, which must already include it.
                 if kk == ('reg', 'sstore') and len(st.kv) >= 2:
-                    self._cover(self.comp[k], site_of(st, st.kv[0], st.kv[1]))
-                R = self.get_ret(self.comp[k])
+                    self._cover(self.rkey(k), site_of(st, st.kv[0], st.kv[1]))
+                R = self.get_ret_e(k)
             lab = None if kk[0] == 'push' else lockann.labels(op, len(st.kv), self.effects)
             st2 = wstep(R, op, data, kk, lab, st, pc)
+            if self.mode == 'check':
+                # cost proxy for the kernel decide of entry k (Check part balance)
+                self.cost[k] = self.cost.get(k, 0) + 1 + len(st.facts) + len(st.prov)
             if self.mode == 'check' and kk == ('reg', 'sstore'):
                 obs = site_of(st, st.kv[0], st.kv[1])
                 self.stores.append((k, pc, obs))
@@ -1122,7 +1208,7 @@ class Checker:
                 raise Reject(f"call at {t['pc']:#x}: frame shorter than callee's")
             cw = kv[:L]
             below = kv[L:]
-            Rc = self.get_ret(self.comp[ck])
+            Rc = self.get_ret_e(ck)
             want_entry = wst_param(L)
             if self.ann.get(ck) != want_entry:
                 raise Reject(f"call at {t['pc']:#x}: entry {ck} annotation "
@@ -1134,11 +1220,11 @@ class Checker:
                 raise Reject(f"call at {t['pc']:#x}: callee does not keep")
             pa = [prov_of(st, s) for s in cw]
             if self.mode == 'infer':
-                for s in Rc.sites:
-                    self._cover(self.comp[k], inst_site(pa, list(st.guards), s))
-                R = self.get_ret(self.comp[k])
+                for s in sorted(Rc.sites, key=repr):
+                    self._cover(self.rkey(k), inst_site(pa, list(st.guards), s))
+                R = self.get_ret_e(k)
             else:
-                for s in Rc.sites:
+                for s in sorted(Rc.sites, key=repr):
                     inst = inst_site(pa, list(st.guards), s)
                     if not any(site_covers(q, inst) for q in R.sites):
                         raise Reject(f"call at {t['pc']:#x}: callee site "
@@ -1183,7 +1269,7 @@ class Checker:
                     continue
                 try:
                     self.walk(self.trees[k], list(self.entries[k][1]),
-                              self.ann[k], self.get_ret(self.comp[k]), k)
+                              self.ann[k], self.get_ret_e(k), k)
                 except Reject:
                     pass
             changed = self._sites_grew
@@ -1343,7 +1429,7 @@ class Checker:
                 continue
             try:
                 self.walk(self.trees[k], list(self.entries[k][1]),
-                          self.ann[k], self.get_ret(self.comp[k]), k)
+                          self.ann[k], self.get_ret_e(k), k)
             except Reject as e:
                 tag = getattr(self, "seeded", {}).get(k, "inferred")
                 errors.append(f"entry {k} (pc {self.entries[k][0]:#x}) [{tag}]: {e}")
@@ -1354,13 +1440,34 @@ class Checker:
 FACT_ORDER = {'bnd': 0, 'le': 1, 'lt': 2, 'ltr': 3, 'isz': 4, 'orr': 5, 'rds': 6}
 
 
+def term_arg_free(t) -> bool:
+    k = t[0]
+    if k == 'arg':
+        return False
+    if k in ('cd', 'kecc1'):
+        return term_arg_free(t[1])
+    if k == 'kecc':
+        return term_arg_free(t[1]) and term_arg_free(t[2])
+    if k == 'op2':
+        return term_arg_free(t[2]) and term_arg_free(t[3])
+    return True
+
+
+def ret_arg_free(R: WRet) -> bool:
+    """No returned term, order fact, site slot or guard names an entry word."""
+    return (not R.les and all(term_arg_free(t) for t in R.prov)
+            and all(term_arg_free(sl) and all(term_arg_free(g[0]) for g in gs)
+                    for sl, gs, _ in R.sites))
+
+
 def lean_fact(f: Tuple) -> str:
     name = 'rdsLe' if f[0] == 'rds' else f[0]
     return "(." + name + "".join(f" {x}" for x in f[1:]) + ")"
 
 
 def lean_b256(c: int) -> str:
-    return f"(Nat.toB256 0x{c:x})"
+    # a numeral at type `B256` (Jaune's `OfNat B256` instance, `Nat.toB256`)
+    return f"0x{c:x}"
 
 
 def lean_term(t) -> str:
@@ -1439,10 +1546,38 @@ def emit_ann(checker: Checker, namespace: str, errors: List[str]) -> str:
         "open Blanc.Lift.WriteSite",
         "open Blanc.Lift.FreePtr",
         "",
+    ]
+    # One summary per function component, named once and shared by its
+    # entries (the summaries repeat across a component's entries); under the
+    # A9 per-entry summaries, one per distinct summary, named by its first entry.
+    ret_name: Dict[int, str] = {}
+    if SUB_SUMMARY:
+        by_text: Dict[str, str] = {}
+        for k in range(n):
+            text = lean_wret(checker.get_ret_e(k))
+            if text not in by_text:
+                by_text[text] = f"implWsRet{k}"
+                lines += [
+                    f"/-- A summary, first of entry {k}. -/",
+                    f"def implWsRet{k} : WRet :=",
+                    f"  {text}",
+                    "",
+                ]
+            ret_name[k] = by_text[text]
+    else:
+        comps = sorted(set(checker.comp[k] for k in range(n)))
+        for c in comps:
+            lines += [
+                f"/-- The summary of the function component rooted at entry {c}. -/",
+                f"def implWsRet{c} : WRet :=",
+                f"  {lean_wret(checker.get_ret(c))}",
+                "",
+            ]
+        ret_name = {k: f"implWsRet{checker.comp[k]}" for k in range(n)}
+    lines += [
         "def implWsAnn : List WAnn :=",
         "  [ " + (",\n    ".join(
-            f"⟨{lean_wst(checker.ann[k])}, "
-            f"{lean_wret(checker.get_ret(checker.comp[k]))}⟩"
+            f"⟨{lean_wst(checker.ann[k])}, {ret_name[k]}⟩"
             for k in range(n))) if n else "",
         "  ]",
         "",
@@ -1450,6 +1585,92 @@ def emit_ann(checker: Checker, namespace: str, errors: List[str]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+CHECK_HEADER = ("GENERATED by scripts/lift/ws_annot.py (registered in "
+                "scripts/lift/certificates.json) -- do not edit.")
+
+
+def lean_module(path: Path) -> str:
+    """The Lean module name of a Blanc-relative source path."""
+    return ".".join(Path(path).with_suffix("").parts)
+
+
+def split_parts(costs: List[int], parts: int) -> List[Tuple[int, int]]:
+    """Contiguous entry ranges [a, b) of roughly equal total cost."""
+    n = len(costs)
+    parts = max(1, min(parts, n))
+    total = sum(costs)
+    bounds, acc, start = [], 0, 0
+    for i, c in enumerate(costs):
+        acc += c
+        left = parts - len(bounds) - 1
+        if left > 0 and acc * parts >= total * (len(bounds) + 1) and n - (i + 1) >= left:
+            bounds.append((start, i + 1))
+            start = i + 1
+    bounds.append((start, n))
+    return bounds
+
+
+def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
+                cert_module: str, ann_module: str) -> Dict[str, str]:
+    """Kernel-decide modules for `wsCert`: `Check<i>.lean` decides
+    `wsEntry cert implWsAnn k` for one contiguous entry range each;
+    `Check.lean` chains them (`WriteSiteChain.wsFrom_step`) into
+    `ws_rest_0 : wsFrom cert implWsAnn 0 = true`."""
+    n = len(checker.entries)
+    costs = [checker.cost.get(k, 1) for k in range(n)]
+    files: Dict[str, str] = {}
+    ranges = split_parts(costs, parts)
+    for i, (a, b) in enumerate(ranges):
+        lines = [
+            "import Blanc.Lift.WriteSiteChain",
+            f"import {cert_module}",
+            f"import {ann_module}",
+            "",
+            f"/-! {CHECK_HEADER}",
+            f"Entries {a}..{b - 1} of `wsCert {cert_ref} implWsAnn`, each decided by the",
+            "kernel (`WriteSiteChain.wsEntry`); `Check.lean` chains them.",
+            f"Producer cost proxy for this part: {sum(costs[a:b])}. -/",
+            "",
+            f"namespace {namespace}",
+            "",
+            "open Blanc.Lift.WriteSite",
+            "",
+        ]
+        for k in range(a, b):
+            lines += [
+                f"theorem ws_entry_{k} : wsEntry {cert_ref} implWsAnn {k} = true := by",
+                "  decide +kernel",
+                "",
+            ]
+        lines += [f"end {namespace}", ""]
+        files[f"Check{i}.lean"] = "\n".join(lines)
+    lines = ["import Blanc.Lift.WriteSiteChain"]
+    lines += [f"import {namespace}.Check{i}" for i in range(len(ranges))]
+    lines += [
+        "",
+        f"/-! {CHECK_HEADER}",
+        "Chains the per-entry decisions of the Check<i> modules over the tails",
+        f"of `{cert_ref}.zip implWsAnn`, from the end. -/",
+        "",
+        f"namespace {namespace}",
+        "",
+        "open Blanc.Lift.WriteSite",
+        "",
+        f"theorem ws_rest_{n} : wsFrom {cert_ref} implWsAnn {n} = true :=",
+        "  wsFrom_of_le (by decide +kernel)",
+        "",
+    ]
+    for k in range(n - 1, -1, -1):
+        lines += [
+            f"theorem ws_rest_{k} : wsFrom {cert_ref} implWsAnn {k} = true :=",
+            f"  wsFrom_step {k} ws_entry_{k} ws_rest_{k + 1}",
+            "",
+        ]
+    lines += [f"end {namespace}", ""]
+    files["Check.lean"] = "\n".join(lines)
+    return files
 
 
 def show_site(s) -> str:
@@ -1466,6 +1687,9 @@ def main() -> int:
     ap.add_argument("--ann-out", default=None)
     ap.add_argument("--namespace", default=None)
     ap.add_argument("--max-rounds", type=int, default=200)
+    ap.add_argument("--check-dir", default=None,
+                    help="also write the kernel-decide Check<i>.lean and Check.lean here")
+    ap.add_argument("--check-parts", type=int, default=4)
     args = ap.parse_args()
 
     t0 = time.time()
@@ -1552,7 +1776,7 @@ def main() -> int:
         else:
             print(f"entry {k} pc 0x{pc:x}: ACCEPT")
     print("ROOT SITES (entry 0 summary):")
-    for s in sorted(checker.get_ret(checker.comp[0]).sites, key=show_site):
+    for s in sorted(checker.get_ret_e(0).sites, key=show_site):
         print(f"  {show_site(s)}")
     print("OBSERVED SSTORE SITES (check walk, deduplicated):")
     seen = set()
@@ -1568,6 +1792,16 @@ def main() -> int:
     text = emit_ann(checker, namespace, errors)
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     Path(out).write_text(text)
+    if args.check_dir is not None:
+        # the modules live at the namespace's path: <namespace>.Ann, <namespace>.Check<i>
+        checks = emit_checks(checker, args.check_parts, namespace,
+                             row["namespace"] + ".cert", lean_module(Path(row["cert"])),
+                             namespace + ".Ann")
+        Path(args.check_dir).mkdir(parents=True, exist_ok=True)
+        for name, body in checks.items():
+            (Path(args.check_dir) / name).write_text(body)
+        print(f"ws_annot: wrote {len(checks)} check modules to {args.check_dir}",
+              file=sys.stderr)
     print(f"ws_annot: wrote {out} ({len(text)} bytes, "
           f"{time.time() - t0:.1f}s total)", file=sys.stderr)
     return 1 if errors else 0

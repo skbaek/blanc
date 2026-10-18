@@ -59,19 +59,19 @@ theorem wsNode_branchTo_inv {f : SFunc} {k : Nat}
     ∃ x y a' x' c kv e A, a = x :: y :: a' ∧ σ.kv = x' :: c :: kv ∧ es[k]? = some e ∧
       ann[k]? = some A ∧ gotoCompat a' e.frame = true ∧
       wsNode es ann R a' (refine σ c kv true) f = true ∧
-      compat (refine σ c kv false) A.entry = true ∧ A.ret = R := by
+      gotoOk e (refine σ c kv false) A = true ∧ retLe A.ret R = true := by
   simp only [wsNode] at h
   split at h
-  · simp only [Bool.and_eq_true, beq_iff_eq] at h
+  · simp only [Bool.and_eq_true] at h
     exact ⟨_, _, _, _, _, _, _, _, rfl, ‹_›, ‹_›, ‹_›, h.1.1.1, h.1.1.2, h.1.2, h.2⟩
   · cases h
 
 theorem wsNode_jump_inv {k : Nat} (h : wsNode es ann R a σ (.jump k) = true) :
     ∃ x a' x' kv e A, a = x :: a' ∧ σ.kv = x' :: kv ∧ es[k]? = some e ∧ ann[k]? = some A ∧
-      gotoCompat a' e.frame = true ∧ compat (popped σ kv) A.entry = true ∧ A.ret = R := by
+      gotoCompat a' e.frame = true ∧ gotoOk e (popped σ kv) A = true ∧ retLe A.ret R = true := by
   simp only [wsNode] at h
   split at h
-  · simp only [Bool.and_eq_true, beq_iff_eq] at h
+  · simp only [Bool.and_eq_true] at h
     exact ⟨_, _, _, _, _, _, rfl, ‹_›, ‹_›, ‹_›, h.1.1, h.1.2, h.2⟩
   · cases h
 
@@ -290,6 +290,61 @@ theorem param_kv_length (n : Nat) : (WSt.param n).kv.length = n := by
   show ((List.range n).map (· + 1)).length = n
   rw [List.length_map, List.length_range]
 
+/-! ## Gotos: summaries below the jumper's, and tail calls -/
+
+/-- An entry-word-free term reads the same in two environments of one frame. -/
+theorem Term.eval_argFree {ε ε' : Env} (hc : ε'.caller = ε.caller) (hs : ε'.self = ε.self)
+    (hd : ε'.data = ε.data) : ∀ {t : Term}, t.argFree = true → t.eval ε' = t.eval ε
+  | .top, _ => rfl
+  | .caller, _ => hc
+  | .self, _ => hs
+  | .const _, _ => rfl
+  | .arg _, h => by cases h
+  | .cd t, h => by
+    simp only [Term.argFree] at h
+    simp only [Term.eval]
+    rw [Term.eval_argFree hc hs hd h, hd]
+  | .op2 o a b, h => by
+    simp only [Term.argFree, Bool.and_eq_true] at h
+    simp only [Term.eval]
+    rw [Term.eval_argFree hc hs hd h.1, Term.eval_argFree hc hs hd h.2]
+  | .kecc a b, h => by
+    simp only [Term.argFree, Bool.and_eq_true] at h
+    simp only [Term.eval]
+    rw [Term.eval_argFree hc hs hd h.1, Term.eval_argFree hc hs hd h.2]
+  | .kecc1 t, h => by
+    simp only [Term.argFree] at h
+    simp only [Term.eval]
+    rw [Term.eval_argFree hc hs hd h]
+
+theorem Term.den_callee {ε : Env} {W : List B256} {t : Term} {w : B256} (ht : t.argFree = true)
+    (h : t.Den (ε.callee W) w) : t.Den ε w := fun hk => by
+  rw [h hk]
+  exact Term.eval_argFree (ε := ε) (ε' := ε.callee W) rfl rfl rfl ht
+
+/-- A tail call's steps, observed against an entry-word-free summary in the callee environment,
+are observed against it in the caller's. -/
+theorem argFree_steps {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {ε : Env}
+    {W : List B256} {sevm : Sevm} {d₀ : Devm} {g : SFunc} {o : Outcome} {A : WRet}
+    (hA : A.argFree = true) (run : SFunc.RunP (WsStep A.sites (ε.callee W) P) fs sevm d₀ g o) :
+    SFunc.RunP (WsStep A.sites ε P) fs sevm d₀ g o := by
+  simp only [WRet.argFree, Bool.and_eq_true, List.all_eq_true] at hA
+  refine run.mono_at fun ⟨hp, hobs⟩ => ⟨hp, fun hn x v rs hst => ?_⟩
+  obtain ⟨s, hs, hslot, hg, hni⟩ := hobs hn x v rs hst
+  obtain ⟨hsl, hgs⟩ := hA.2 s hs
+  exact ⟨s, hs, Term.den_callee hsl hslot,
+    fun g' hm => Term.den_callee (hgs g' hm) (hg g' hm), hni⟩
+
+/-- Steps observed against a goto target's summary are observed against the jumper's. -/
+theorem retLe_steps {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {ε : Env}
+    {sevm : Sevm} {d₀ : Devm} {g : SFunc} {o : Outcome} {A R : WRet} (hle : retLe A R = true)
+    (run : SFunc.RunP (WsStep A.sites ε P) fs sevm d₀ g o) :
+    SFunc.RunP (WsStep R.sites ε P) fs sevm d₀ g o := by
+  simp only [retLe, Bool.and_eq_true, List.all_eq_true] at hle
+  exact run.mono_at fun ⟨hp, hobs⟩ => ⟨hp, fun hn x v rs hs => by
+    obtain ⟨s, hs', ho⟩ := hobs hn x v rs hs
+    exact Site.Obs.of_any (hle.2 s hs') ho⟩
+
 /-! ## The big-step induction -/
 
 /-- What a return establishes: the returned words above the untouched base meet the summary,
@@ -297,6 +352,75 @@ and a keeping summary left the executing account's storage as it was at `d`. -/
 def RetObs (ε : Env) (sevm : Sevm) (R : WRet) (rest : List B256) (d d'' : Devm) : Prop :=
   (∃ Wr, d''.stack = Wr ++ rest ∧ R.Holds ε Wr) ∧
     (R.keeps = true → Devm.getStor d'' sevm.currentTarget = Devm.getStor d sevm.currentTarget)
+
+/-- A return meeting a goto target's summary meets the jumper's. -/
+theorem RetObs.of_retLe {ε : Env} {sevm : Sevm} {A R : WRet} {rest : List B256} {d d'' : Devm}
+    (hle : retLe A R = true) (h : RetObs ε sevm A rest d d'') : RetObs ε sevm R rest d d'' := by
+  simp only [retLe, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, Bool.not_eq_true'] at hle
+  obtain ⟨⟨⟨hp, hl⟩, hk⟩, -⟩ := hle
+  obtain ⟨⟨Wr, hd, hR⟩, hst⟩ := h
+  refine ⟨⟨Wr, hd, ?_⟩, fun hkR => hst ?_⟩
+  · unfold WRet.Holds at hR ⊢
+    rw [← hp, ← hl]
+    exact hR
+  · rcases hk with hk | hk
+    · rw [hk] at hkR; cases hkR
+    · exact hk
+
+/-- A return meeting an entry-word-free summary in the callee environment meets it in the
+caller's. -/
+theorem RetObs.of_callee {ε : Env} {W : List B256} {sevm : Sevm} {A : WRet} {rest : List B256}
+    {d d'' : Devm} (hA : A.argFree = true) (h : RetObs (ε.callee W) sevm A rest d d'') :
+    RetObs ε sevm A rest d d'' := by
+  simp only [WRet.argFree, Bool.and_eq_true, List.all_eq_true, List.isEmpty_iff] at hA
+  obtain ⟨⟨Wr, hd, hl, hprov, -⟩, hst⟩ := h
+  refine ⟨⟨Wr, hd, hl, fun j t w ht hw => Term.den_callee (hA.1.2 t (List.mem_of_getElem? ht))
+    (hprov j t w ht hw), ?_⟩, hst⟩
+  rw [hA.1.1]
+  intro p hp
+  cases hp
+
+/-- **A tail call's entry**: a state of exactly `n` frame words above `rest` makes the callee's
+parameter state hold in the callee environment of those words. -/
+theorem tail_entry {ε : Env} {sevm : Sevm} {σ : WSt} {d : Devm} {rest : List B256} {n : Nat}
+    (h : σ.Sat ε sevm d rest) (hn : σ.kv.length = n) :
+    ∃ W, (WSt.param n).Sat (ε.callee W) sevm d rest := by
+  obtain ⟨ν, S, hS, hh⟩ := h
+  have hl : S.length = n := by rw [← hn]; exact (List.Forall₂.length_eq hh.kv).symm
+  refine ⟨S, ?_⟩
+  have := param_sat (ε := ε) (sevm := sevm) hS
+  rwa [hl] at this
+
+/-- **An accepted goto is sound**: the target's walk, run from the goto's state, observes the
+jumper's summary and returns meeting it. -/
+theorem goto_run {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {ε : Env}
+    {sevm : Sevm} {d₀ : Devm} {g : SFunc} {o : Outcome} {e : Entry} {σ : WSt} {A : WAnn}
+    {R : WRet} {rest : List B256} (hgo : gotoOk e σ A = true) (hle : retLe A.ret R = true)
+    (sat : σ.Sat ε sevm d₀ rest)
+    (ih : ∀ {ε' : Env}, ε'.caller = ε.caller → ε'.self = ε.self → ε'.data = ε.data →
+      A.entry.Sat ε' sevm d₀ rest →
+      SFunc.RunP (WsStep A.ret.sites ε' P) fs sevm d₀ g o ∧
+        ∀ d'', o = .returned d'' → RetObs ε' sevm A.ret rest d₀ d'') :
+    SFunc.RunP (WsStep R.sites ε P) fs sevm d₀ g o ∧
+      ∀ d'', o = .returned d'' → RetObs ε sevm R rest d₀ d'' := by
+  unfold gotoOk at hgo
+  simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at hgo
+  rcases hgo with hc | ⟨⟨hA, hent⟩, hn⟩
+  · obtain ⟨r1, r2⟩ := ih rfl rfl rfl (compat_sat hc sat)
+    exact ⟨retLe_steps hle r1, fun d'' ho => (r2 d'' ho).of_retLe hle⟩
+  · obtain ⟨W, sat'⟩ := tail_entry sat hn
+    rw [← hent] at sat'
+    obtain ⟨r1, r2⟩ := ih (ε' := ε.callee W) rfl rfl rfl sat'
+    exact ⟨retLe_steps hle (argFree_steps hA r1),
+      fun d'' ho => ((r2 d'' ho).of_callee hA).of_retLe hle⟩
+
+theorem gotoOk_len {e : Entry} {σ : WSt} {A : WAnn} (h : gotoOk e σ A = true)
+    (hl : σ.kv.length ≤ e.frame.length) : A.entry.kv.length ≤ e.frame.length := by
+  unfold gotoOk at h
+  simp only [Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at h
+  rcases h with hc | ⟨⟨-, hent⟩, -⟩
+  · rw [← compat_kv_length hc]; exact hl
+  · rw [hent, param_kv_length]
 
 theorem RetObs.stor {ε : Env} {sevm : Sevm} {R : WRet} {rest : List B256} {d d' d'' : Devm}
     (h : RetObs ε sevm R rest d' d'')
@@ -351,13 +475,14 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [hA] at hA'
     cases hA'
     have hl : A.entry.kv.length ≤ e.frame.length := by
-      rw [← compat_kv_length hcA, ← gotoCompat_length hgo]
+      refine gotoOk_len hcA ?_
+      rw [← gotoCompat_length hgo]
       rw [hkv] at hlen; simp only [List.length_cons] at hlen
       show kv.length ≤ _
       omega
-    obtain ⟨r1, r2⟩ := ih hnode hl hε
-      (compat_sat hcA (refine_sound h hS hkv pop (fun h => by cases h) (fun _ => hnz)))
-    rw [hR] at r1 r2
+    obtain ⟨r1, r2⟩ := goto_run hcA hR
+      (refine_sound h hS hkv pop (fun h => by cases h) (fun _ => hnz))
+      (fun hc hs hd sat => ih hnode hl ⟨hc.trans hε.1, hs.trans hε.2.1, hd.trans hε.2.2⟩ sat)
     exact ⟨.toSucc dw w hnz hk pop r1, fun d'' ho => (r2 d'' ho).stor fun _ => popBurn_getStor pop _⟩
   | last h =>
     intro a σ R ε rest _ _ _ _
@@ -382,12 +507,13 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [hA] at hA'
     cases hA'
     have hl : A.entry.kv.length ≤ e.frame.length := by
-      rw [← compat_kv_length hcA, ← gotoCompat_length hgo]
+      refine gotoOk_len hcA ?_
+      rw [← gotoCompat_length hgo]
       rw [hkv] at hlen; simp only [List.length_cons] at hlen
       show kv.length ≤ _
       omega
-    obtain ⟨r1, r2⟩ := ih hnode hl hε (compat_sat hcA (popped_sound h hS hkv pop))
-    rw [hR] at r1 r2
+    obtain ⟨r1, r2⟩ := goto_run hcA hR (popped_sound h hS hkv pop)
+      (fun hc hs hd sat => ih hnode hl ⟨hc.trans hε.1, hs.trans hε.2.1, hd.trans hε.2.2⟩ sat)
     exact ⟨.jump dw hk pop r1, fun d'' ho => (r2 d'' ho).stor fun _ => popBurn_getStor pop _⟩
   | ret dw pop =>
     intro a σ R ε rest hn hlen hε ⟨ν, S, hS, h⟩

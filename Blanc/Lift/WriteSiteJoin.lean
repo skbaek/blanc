@@ -126,6 +126,17 @@ theorem forall₂_of_zip' {m : Nat → Nat} :
   | [], _ :: _, _, hl, _, _ => by cases hl
   | _ :: _, [], _, hl, _, _ => by cases hl
 
+/-- The prefix form of `map_of_zip`: a shorter annotation list names a prefix. -/
+theorem map_of_zip_prefix {m : Nat → Nat} :
+    ∀ {as ss : List Nat}, as.length ≤ ss.length → (∀ p ∈ as.zip ss, m p.1 = p.2) →
+      as.map (ν ∘ m) <+: ss.map ν
+  | [], _, _, _ => List.nil_prefix
+  | a :: as, s :: ss, hl, hz => by
+    rw [List.map_cons, List.map_cons, Function.comp_apply, hz (a, s) List.mem_cons_self]
+    exact List.prefix_cons_inj _ |>.mpr (map_of_zip_prefix (Nat.le_of_succ_le_succ hl)
+      (fun p hp => hz p (List.mem_cons_of_mem _ hp)))
+  | _ :: _, [], hl, _ => by cases hl
+
 theorem map_of_zip {m : Nat → Nat} :
     ∀ {as ss : List Nat}, as.length = ss.length → (∀ p ∈ as.zip ss, m p.1 = p.2) →
       as.map (ν ∘ m) = ss.map ν
@@ -145,13 +156,14 @@ theorem compat_sound {A : WSt} (hc : compat σ A = true) (h : σ.Holds ε sevm �
   simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.contains_iff_mem,
     Bool.or_eq_true, Bool.not_eq_true'] at hc
   obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hl1, hl2⟩, hzip⟩, -⟩, hfacts⟩, hprov⟩, hmem⟩, hcur⟩, hub⟩, heqs⟩, hguards⟩ := hc
+  rw [decide_eq_true_eq] at hl2
   rw [List.zip_append hl1.symm] at hzip
   have hz1 : ∀ p ∈ A.kv.zip σ.kv, symMap A σ p.1 = p.2 :=
     fun p hp => hzip p (List.mem_append_left _ hp)
   have hz2 : ∀ p ∈ A.args.zip σ.args, symMap A σ p.1 = p.2 :=
     fun p hp => hzip p (List.mem_append_right _ hp)
   refine ⟨forall₂_of_zip' (m := symMap A σ) hl1.symm hz1 h.kv,
-    by rw [map_of_zip (m := symMap A σ) hl2.symm hz2, h.args], ?_, ?_, ?_,
+    (map_of_zip_prefix (m := symMap A σ) hl2 hz2).trans h.args, ?_, ?_, ?_,
     ?_, ?_, ?_, ?_⟩
   · exact fun f hf => FreePtr.Fact.holds_rename.mp (FreePtr.entails_sound h.facts (hfacts f hf))
   · intro p hp
@@ -225,7 +237,10 @@ theorem param_sat {W : List B256} (hd : d.stack = W ++ rest) :
   have hkv : List.Forall₂ (fun s w => ν0 s = w) ((List.range W.length).map (· + 1)) W := by
     have := forall₂_map_self ν0 ((List.range W.length).map (· + 1))
     rwa [hmap] at this
-  refine ⟨ν0, W, hd, hkv, hmap, (fun _ hf => by cases hf), ?_, (fun _ hp => by cases hp),
+  refine ⟨ν0, W, hd, hkv, (show ((List.range W.length).map (· + 1)).map ν0 <+: W by
+      rw [hmap]),
+    (fun _ hf => by cases hf), ?_,
+    (fun _ hp => by cases hp),
     (fun _ hp => by cases hp), (fun _ hp => by cases hp), (fun _ hp => by cases hp),
     (fun _ hp => by cases hp)⟩
   intro p hp
@@ -289,7 +304,9 @@ theorem retOk_sound {t : Nat} {kv : List Nat} {dw : B256} {R : WRet}
         intro hle
         refine ⟨ν s, ν a, by rw [List.getElem?_map, hs]; rfl, ?_,
           FreePtr.entails_sound h.facts hle⟩
-        rw [← h.args, List.getElem?_map, ha]
+        obtain ⟨tl, htl⟩ := h.args
+        rw [← htl, List.getElem?_append_left (by
+          rw [List.length_map]; exact (List.getElem?_eq_some_iff.mp ha).1), List.getElem?_map, ha]
         rfl
 
 /-- **A callee's instantiated sites are covered**: a site of the callee's summary that holds in the

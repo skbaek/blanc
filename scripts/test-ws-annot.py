@@ -8,7 +8,8 @@ the `wstep` arms (push, keeps guard, SSTORE coverage, SLOAD naming, EQ
 guards, keccak shapes, SUB facts), the goal-branch gates (`.ret` top rule,
 `.jump`/`.branchTo` `gotoCompat` and return-summary equality, `callNext`
 parameter-state/arity/keeps/coverage/continuation rules), the union-find
-entry-word assignment (pins, propagation, conflict reporting), and the
+entry-word assignment (pins, least-length propagation, conflict reporting),
+the amendment-A9 goto rules (prefix entry words, tail calls, `retLe`), and the
 negative-canonical rebase (valid naturals, preserved `compat` verdicts).
 
 The producer's own per-entry self-check exercises these arms over all 180
@@ -27,6 +28,7 @@ from ws_annot import (
     wst_param, prov_of, compat_w, site_covers, site_of,
     wstep, refine_w, popped_w, eq_guard, inst_site, resume_w, ret_ok,
     resolve_args, lean_term, lean_site, lean_b256,
+    emit_ann, emit_checks, split_parts, ret_arg_free,
 )
 from symcore import goto_compat, ninst_kind
 
@@ -194,7 +196,7 @@ m_st = WSt((1, 2), (), frozenset(),
 st = wstep(R0(), 0x52, b'', ('reg', 'mstore'), [], m_st, 0x60)
 require((0, 2) in st.mem, "constant mstore records the word")
 
-# -- compat: ub may be met by cur; prov must match; args lengths must match --
+# -- compat: ub may be met by cur; prov must match; annotation entry words a prefix --
 A = WSt((1,), (-1,), frozenset(), (), (), (), ((1, CALLER),), (), ())
 S = WSt((5,), (9,), frozenset(), (), (), ((5, CALLER),), (), (), ())
 require(compat_w(S, A) is None, "ub met by cur")
@@ -215,22 +217,22 @@ require(inst_site([TOP], [(SELF, 1)], s)
         == (TOP, ((SELF, 1),), False),
         "instSite drops unknown instantiated guards")
 
-# -- resolve_args: pins propagate, conflicts reported --
+# -- resolve_args: pins fixed, unpinned take the least source length, a
+# pinned target longer than a source is a conflict (compat's prefix rule) --
 entries = [(0, [], 0), (0, [U()] * 3, 0), (0, [U()] * 4, 0)]
 trees = {0: {'kind': 'jump', 'pc': 0, 'target_entry': 1},
          1: {'kind': 'last', 'pc': 1, 'op': '0x0'},
          2: {'kind': 'jump', 'pc': 2, 'target_entry': 1}}
 argmap, conflicts, _ = resolve_args(entries, trees, {1, 2})
-require(len(conflicts) == 1 and conflicts[0][1] == [0, 1, 2],
-        "conflict set reported")
-require(argmap[0] == argmap[1] == argmap[2] == (),
-        "first pin wins for every member")
+require(conflicts == [(1, [0, 1], [0, 3])], "shorter source into a pinned target reported")
+require(argmap[0] == () and argmap[1] == (1, 2, 3) and argmap[2] == (1, 2, 3, 4),
+        "pins keep their parameter words")
 argmap2, conflicts2, _ = resolve_args(entries, trees, {1})
-require(len(conflicts2) == 1 and conflicts2[0][2] == [(), (1, 2, 3)],
+require(len(conflicts2) == 1 and argmap2[2] == (),
         "dispatcher pin conflicts with a called jump target")
 argmap3, conflicts3, _ = resolve_args(entries, trees, set())
 require(conflicts3 == [] and argmap3[0] == argmap3[1] == argmap3[2] == (),
-        "unpinned sets take empty entry words")
+        "unpinned entries take the least source length")
 
 
 def checker(entries, trees):
@@ -357,11 +359,81 @@ require(st.kv[0] not in (3, 4) and prov_of(st, st.kv[0]) == CALLER,
 require(('le', st.kv[0], 3) in st.facts, "resume instantiates order facts")
 
 # -- emission shapes --
-require(lean_b256(0) == "(Nat.toB256 0x0)", "b256 emission")
+require(lean_b256(0) == "0x0", "b256 emission (a numeral at type B256)")
 require(lean_term(('kecc', CALLER, ('const', 3)))
-        == "(.kecc .caller (.const (Nat.toB256 0x3)))", "kecc emission")
+        == "(.kecc .caller (.const 0x3))", "kecc emission")
 require(lean_term(('op2', 'shr', ('const', 2), CALLER))
-        == "(.op2 .shr (.const (Nat.toB256 0x2)) .caller)", "op2 emission")
+        == "(.op2 .shr (.const 0x2) .caller)", "op2 emission")
 require(lean_site((TOP, [], True)) == "⟨.top, [], true⟩", "site emission")
+c4 = checker([(0, [], 0), (5, [], 0)],
+             {0: {'kind': 'last', 'pc': 0, 'op': '0x0'},
+              1: {'kind': 'last', 'pc': 5, 'op': '0x0'}})
+c4.ann = {0: INIT, 1: INIT}
+c4.comp = {0: 0, 1: 0}
+text = emit_ann(c4, "T", [])
+require(text.count("def implWsRet0 : WRet :=") == 1
+        and text.count(", implWsRet0⟩") == 2,
+        "one shared summary per component, referenced by each entry")
+require("Nat.toB256" not in text, "no unqualified Nat.toB256 in the module")
+checks = emit_checks(c4, 2, "T", "C.cert", "C.Cert", "T.Ann")
+require(sorted(checks) == ["Check.lean", "Check0.lean", "Check1.lean"],
+        "two parts and the chain")
+require("theorem ws_entry_1 : wsEntry C.cert implWsAnn 1 = true := by" in checks["Check1.lean"]
+        and "wsFrom_step 0 ws_entry_0 ws_rest_1" in checks["Check.lean"]
+        and "ws_rest_2 : wsFrom C.cert implWsAnn 2 = true" in checks["Check.lean"],
+        "per-entry kernel decides and the chain from the end")
+require(split_parts([1, 1, 1, 1], 2) == [(0, 2), (2, 4)], "balanced split")
+
+# -- the A9 relaxations, and the pre-A9 walk they replace --
+inc = WSt((1,), (2, 3), frozenset(), (), (), (), (), (), ())
+ann_short = WSt((4,), (5,), frozenset(), (), (), (), (), (), ())
+require(compat_w(inc, ann_short) is None, "A9: annotation entry words a prefix")
+require(compat_w(ann_short, inc) == "args length", "A9: never longer")
+ws_annot.ARGS_PREFIX = False
+require(compat_w(inc, ann_short) == "args length", "pre-A9: equal entry-word counts")
+ws_annot.ARGS_PREFIX = True
+pa = resolve_args([(0, [], 0), (1, [U(), U()], 0), (2, [U()], 0), (3, [U()], 0)],
+                  {0: {'kind': 'last'}, 1: {'kind': 'jump', 'target_entry': 3},
+                   2: {'kind': 'jump', 'target_entry': 3}, 3: {'kind': 'last'}},
+                  {1, 2})
+require(pa[0][3] == (1,) and not pa[1], "A9: least source length, no conflict")
+c5 = checker([(0, [], 0), (5, [], 0)],
+             {0: {'kind': 'last', 'pc': 0, 'op': '0x0'},
+              1: {'kind': 'last', 'pc': 5, 'op': '0x0'}})
+c5.comp = {0: 0, 1: 0}
+site_a = (('kecc', CALLER, ('const', 9)), (), False)
+site_b = (('const', 1), (), False)
+c5.sites = {0: {site_a, site_b}, 1: {site_a}}
+c5.keeps = {0: False, 1: True}
+require(c5._ret_ok_goto(1, 0), "A9: a target summary below the jumper's")
+require(not c5._ret_ok_goto(0, 1), "A9: an uncovered target site rejects")
+c5.keeps = {0: True, 1: False}
+require(not c5._ret_ok_goto(1, 0), "A9: a keeping jumper needs a keeping target")
+ws_annot.SUB_SUMMARY = False
+c5.sites = {0: {site_a}}
+c5.keeps = {0: True}
+require(c5._ret_ok_goto(1, 0), "pre-A9: one summary per component")
+ws_annot.SUB_SUMMARY = True
+c6 = checker([(0, [], 0), (9, [U(), U()], 0)],
+             {0: {'kind': 'last', 'pc': 0, 'op': '0x0'},
+              1: {'kind': 'last', 'pc': 9, 'op': '0x0'}})
+c6.comp = {0: 0, 1: 1}
+c6.comp_n = {0: 0, 1: 0}
+c6.ann = {0: INIT, 1: wst_param(2)}
+two = WSt((4, 5), (), frozenset(), (), (), (), (), (), ())
+three = WSt((4, 5, 6), (), frozenset(), (), (), (), (), (), ())
+require(c6._tail_ok(1, two, 0), "A9: tail call with exactly the callee frame")
+require(not c6._tail_ok(1, three, 0), "A9: tail call needs exactly the callee frame")
+c6.sites = {1: {(('arg', 0), (), False)}}
+require(not c6._tail_ok(1, two, 0), "A9: tail call needs an entry-word-free summary")
+require(ret_arg_free(WRet([TOP], frozenset(), True, frozenset())),
+        "summary without entry words")
+require(not ret_arg_free(WRet([('arg', 0)], frozenset(), True, frozenset())),
+        "returned entry word")
+require(not ret_arg_free(WRet([], frozenset(), True,
+                              frozenset({(('kecc', ('arg', 1), ('const', 9)), (), False)}))),
+        "site over an entry word")
+require(not ret_arg_free(WRet([TOP], frozenset({(0, 0)}), True, frozenset())),
+        "order fact")
 
 print(f"ws_annot checks: {COUNT} passed")

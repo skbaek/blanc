@@ -343,11 +343,13 @@ def popped (σ : WSt) (kv : List Nat) : WSt := WSt.prune { σ with kv := kv }
 /-- The incoming symbol an annotation symbol names (frame words, then entry words). -/
 def symMap (A σ : WSt) (a : Nat) : Nat := (((A.kv ++ A.args).zip (σ.kv ++ σ.args)).lookup a).getD 0
 
-/-- The incoming state satisfies the annotation (a goto, a loop head, a join). -/
+/-- The incoming state satisfies the annotation (a goto, a loop head, a join).  The annotation's
+entry words may be a prefix of the incoming ones: a tail shared by functions of different arities
+(amendment A9, C1). -/
 def compat (σ A : WSt) : Bool :=
   let m := symMap A σ
   let own := A.kv ++ A.args
-  σ.kv.length == A.kv.length && σ.args.length == A.args.length &&
+  σ.kv.length == A.kv.length && decide (A.args.length ≤ σ.args.length) &&
     ((A.kv ++ A.args).zip (σ.kv ++ σ.args)).all (fun p => m p.1 == p.2) &&
     A.syms.all (own.contains ·) &&
     A.facts.all (fun f => FreePtr.entails σ.facts (f.rename m)) &&
@@ -398,6 +400,33 @@ def retOk (σ : WSt) (kv : List Nat) (R : WRet) : Bool :=
       | some s, some a => FreePtr.entails σ.facts (.le s a)
       | _, _ => false
 
+/-- The term names no entry word. -/
+def Term.argFree : Term → Bool
+  | .arg _ => false
+  | .cd t => t.argFree
+  | .op2 _ a b => a.argFree && b.argFree
+  | .kecc a b => a.argFree && b.argFree
+  | .kecc1 t => t.argFree
+  | _ => true
+
+/-- The summary names no entry word: it reads the same in every environment of the frame. -/
+def WRet.argFree (R : WRet) : Bool :=
+  R.les.isEmpty && R.prov.all Term.argFree &&
+    R.sites.all fun s => s.slot.argFree && s.guards.all fun g => g.1.argFree
+
+/-- A goto target's summary `A` is below the jumper's `R`: the same returned words and order facts,
+keeping when `R` keeps, and each site covered (amendment A9, C3). -/
+def retLe (A R : WRet) : Bool :=
+  A.prov == R.prov && A.les == R.les && (!R.keeps || A.keeps) &&
+    A.sites.all fun s => R.sites.any (·.covers s)
+
+/-- A goto's state check: `compat`, or a tail call into a callee entry (its parameter state)
+whose summary names no entry word, with exactly the callee's frame on the stack (amendment A9,
+C2). -/
+def gotoOk (e : Entry) (σ : WSt) (A : WAnn) : Bool :=
+  compat σ A.entry ||
+    (A.ret.argFree && A.entry == WSt.param e.frame.length && σ.kv.length == e.frame.length)
+
 /-- The write-site walk over one tree, under the current function's summary `R`. -/
 def wsNode (es : List Entry) (ann : List WAnn) (R : WRet) :
     List AVal → WSt → SFunc → Bool
@@ -416,13 +445,13 @@ def wsNode (es : List Entry) (ann : List WAnn) (R : WRet) :
     match a, σ.kv, es[k]?, ann[k]? with
     | _ :: _ :: a', _ :: c :: kv, some e, some A =>
       gotoCompat a' e.frame &&
-        wsNode es ann R a' (refine σ c kv true) f && compat (refine σ c kv false) A.entry &&
-        A.ret == R
+        wsNode es ann R a' (refine σ c kv true) f && gotoOk e (refine σ c kv false) A &&
+        retLe A.ret R
     | _, _, _, _ => false
   | a, σ, .jump k =>
     match a, σ.kv, es[k]?, ann[k]? with
     | _ :: a', _ :: kv, some e, some A =>
-      gotoCompat a' e.frame && compat (popped σ kv) A.entry && A.ret == R
+      gotoCompat a' e.frame && gotoOk e (popped σ kv) A && retLe A.ret R
     | _, _, _, _ => false
   | a, σ, .callNext k f =>
     match a, σ.kv, es[k]?, ann[k]? with
