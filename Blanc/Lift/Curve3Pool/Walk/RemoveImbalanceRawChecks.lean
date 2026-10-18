@@ -61,7 +61,8 @@ theorem removeLiquidityImbalance_rawE {sevm : Sevm} {pre post : Devm} {s : State
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (T : B256) (o : Out), step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o :=
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o ∧
+      ∃ c L, Exec.childFrames exc = c :: L ∧ vSupply c = T :=
   removeLiquidityImbalance_rawE_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
     hcoin hpc hid hkeep hidk
 

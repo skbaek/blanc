@@ -828,6 +828,7 @@ import Blanc.Lift.FrameWalk
 -- Crossing certified callees from walked states: span soundness, memory glue (contract-neutral).
 import Blanc.Lift.SoundSpan
 import Blanc.Lift.FrameWalkNode
+import Blanc.Lift.FrameWalkCut
 import Blanc.Lift.MemGlue
 
 -- Contract-neutral internal-call idiom and Vyper frame save/restore chains.
@@ -1268,4 +1269,6 @@ import Blanc.Lift.Curve3Pool.Walk.RliLiveTail
 import Blanc.Lift.Curve3Pool.Walk.RliLiveFrame
 import Blanc.Lift.Curve3Pool.Walk.RliLiveModel
 import Blanc.Lift.Curve3Pool.Walk.RliLiveWords
+import Blanc.Lift.Curve3Pool.Walk.LiveLink
+import Blanc.Lift.Curve3Pool.Walk.RliLiveCut
 import Blanc.Lift.Curve3Pool.RemoveImbalanceLive

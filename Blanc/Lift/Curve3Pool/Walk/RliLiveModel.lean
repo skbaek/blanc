@@ -145,34 +145,4 @@ theorem rli_getDMem {b : V3} {amp D : Nat} (h : getDMem b amp = some D) :
   obtain ⟨x, hx, h⟩ := Option.bind_eq_some_iff.mp h
   exact ⟨x, hx, h⟩
 
-/-- **The supply reply moves only the burn and the new supply**: two successful steps of the
-model's `remove_liquidity_imbalance` in environments that agree but for 3Crv's `totalSupply()`
-store the same balances, log the same fees and invariant, and make the same transfers. -/
-theorem rli_det {s : State} {e e' : Env} {amounts : V3} {mx : Nat} {o o' : Out}
-    (ht : e'.time = e.time) (hc : e'.caller = e.caller)
-    (h : removeLiquidityImbalance s e amounts mx = some o)
-    (h' : removeLiquidityImbalance s e' amounts mx = some o') :
-    o'.state = o.state ∧ o'.ret = o.ret ∧ o'.calls.tail = o.calls.tail ∧
-      ∃ fees D1 T1 T2, o.events = [.removeLiquidityImbalance e.caller amounts fees D1 T1] ∧
-        o'.events = [.removeLiquidityImbalance e.caller amounts fees D1 T2] := by
-  obtain ⟨-, T, fee, amp, D0, new, D1, fees, stored, after, D2, d, m, b0, b, T', -, -, hfee, hamp,
-    hD0, hnew, hD1, hfl, -, -, -, -, -, -, -, -, -, -, ho⟩ := removeLiquidityImbalance_inv h
-  obtain ⟨-, T2, fee2, amp2, D02, new2, D12, fees2, stored2, after2, D22, d2, m2, b02, b2, T'2, -, -,
-    hfee2, hamp2, hD02, hnew2, hD12, hfl2, -, -, -, -, -, -, -, -, -, -, ho2⟩ :=
-    removeLiquidityImbalance_inv h'
-  rw [ht, hamp] at hamp2
-  cases Option.some.inj hamp2
-  rw [hfee] at hfee2
-  cases Option.some.inj hfee2
-  rw [hD0] at hD02
-  cases Option.some.inj hD02
-  rw [hnew] at hnew2
-  cases Option.some.inj hnew2
-  rw [hD1] at hD12
-  cases Option.some.inj hD12
-  rw [hfl] at hfl2
-  cases Option.some.inj hfl2
-  subst ho ho2
-  exact ⟨rfl, rfl, by rw [hc]; rfl, fees, D1, T', T'2, rfl, by rw [hc]⟩
-
 end Blanc.Lift.Curve3Pool

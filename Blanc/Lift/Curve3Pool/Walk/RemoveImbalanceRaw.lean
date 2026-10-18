@@ -265,7 +265,8 @@ theorem removeLiquidityImbalance_rawE_of (hc : Cert.CheckedM code cert mems true
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (T : B256) (o : Out), step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o := by
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o ∧
+      ∃ c L, Exec.childFrames exc = c :: L ∧ vSupply c = T := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   have hcoin' : ∀ k, k < 3 → ¬ sevm.benvStat.rules.isPrecomp
@@ -300,7 +301,7 @@ theorem removeLiquidityImbalance_rawE_of (hc : Cert.CheckedM code cert mems true
     fun h => by
       show decide ((rliAmt sevm 2).toNat ≠ 0) = true
       rw [rli_amt2]; exact decide_eq_true h⟩
-  refine ⟨vSupply cs, ?o, ?step, ?raw⟩
+  refine ⟨vSupply cs, ?o, ?step, ?raw, cs, _, hch, rfl⟩
   case step =>
     rw [hdec, rli_step (by show sevm.value.toNat = 0; rw [hval]; rfl), hav, hmx]
     exact hmodel
@@ -392,7 +393,7 @@ theorem removeLiquidityImbalance_raw_of (hc : Cert.CheckedM code cert mems true)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
-  obtain ⟨T, o, h1, h2⟩ := removeLiquidityImbalance_rawE_of hc exc hcode hfork hlen hcd hsel
+  obtain ⟨T, o, h1, h2, -⟩ := removeLiquidityImbalance_rawE_of hc exc hcode hfork hlen hcd hsel
     hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
   exact ⟨_, o, h1, h2⟩
 
