@@ -9,8 +9,8 @@ position `i` of entry `k`'s frame by `v` and keeps every tree.  The refined cert
 checked by `Cert.check` from scratch; `Cert.check_of_agree` reduces that check to the entries in
 a list `T` (re-decided) when every other entry is unchanged and references no refined entry, so the
 per-entry decisions of the original certificate are reused through `checkNode_congr`.  A refined
-`.const` frame position then reaches every cursor of the refined certificate.  Hoist candidates for
-`Blanc/Lift/Check.lean`.
+`.const` frame position then reaches every cursor of the refined certificate.  Worked use:
+`Blanc/Lift/Usdc/ImplFrames.lean`.
 -/
 
 namespace Blanc.Lift

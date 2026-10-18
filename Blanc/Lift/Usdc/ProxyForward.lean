@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.ProxyHalt
-import Blanc.Lift.Usdc.SpawnExact
+import Blanc.Lift.SpawnExact
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.CallChildren
 import Blanc.Lift.RetainedTargetCompleteness

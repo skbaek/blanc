@@ -3,7 +3,7 @@ import Blanc.Lift.ShuffleSkip
 import Blanc.Lift.ReachFirstExec
 
 /-!
-# The world at the first external instruction of a reach (U6e3)
+# The world at the first external instruction of a reach
 
 A reach of a certified frame to an external instruction (`AtExec`), from a tree whose every path
 runs state-silent instructions, calls into state-silent closures, and reaches at most one external
@@ -17,7 +17,8 @@ remains, arrives at that instruction with the world state it started from.
 * `PreExecSet`: every member of `W` is `preExec`;
 * `Reach.preExec_state`: the reach's target runs an `okx` instruction from the starting world.
 
-Nothing here mentions a contract.  (Hoist candidate: a contract-neutral reach lemma.)
+Nothing here mentions a contract.  Worked use: the USDC authorization wrappers
+(`Blanc/Lift/Usdc/RefineSignedAuth.lean`).
 -/
 
 namespace Blanc.Lift

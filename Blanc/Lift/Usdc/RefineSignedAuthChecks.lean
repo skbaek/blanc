@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.ShuffleSegments
-import Blanc.Lift.Usdc.RefineSignedAuthReach
+import Blanc.Lift.ReachPreExec
 import Blanc.Lift.Usdc.SignedSkip
 import Blanc.Lift.InvWalkStep
 
@@ -11,7 +11,7 @@ overloads: wrappers 129/138 and 125/151, bodies 20/30 and 15/43, internal 87/90 
 
 * `auth_noHalt`: no callee of the four wrappers halts the frame;
 * `auth_silent`, `auth_execFree`, `auth_preExec`: the before-phase sets of
-  `Reach.preExec_state` (`RefineSignedAuthReach.lean`) — every path of the four wrappers reaches at
+  `Reach.preExec_state` (`Blanc/Lift/ReachPreExec.lean`) — every path of the four wrappers reaches at
   most the library `DELEGATECALL`, with the world unchanged;
 * the shuffle segments (route C, C3) the walks cross by one decision each: `abi.encodePacked(r, s,
   v)` in entries 87 and 84, and the `bytes` decoding tails of wrappers 138 and 151;

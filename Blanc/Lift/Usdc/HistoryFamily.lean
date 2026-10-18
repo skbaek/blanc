@@ -3,7 +3,7 @@ import Blanc.Lift.Token.FamilyReplay
 import Blanc.Lift.Token.Holder
 import Blanc.Lift.Usdc.RefineSigned
 import Blanc.ExecutionOwnerFamilyPositional
-import Blanc.Lift.Usdc.HistoryFamilyCodes
+import Blanc.ExecutionRawFramesCodeImage
 
 /-!
 # USDC's code family ladder (U6h1)

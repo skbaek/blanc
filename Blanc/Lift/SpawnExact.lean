@@ -8,8 +8,9 @@ import Blanc.Lift.InvWalkWorld
 `Xinst.step_delegatecall_spawn_exact`: a `DELEGATECALL` step that spawns, on a covered fork, whose
 code-address operand `w` names an undelegated account, enters a child message at the parent's
 storage owner with code address `w`, the parent's caller, value and static flag, `w`'s code, and
-the calldata the input window of the parent's (extended) memory holds.  A hoist candidate for
-`Blanc/DelegatecallEnvelope.lean`.
+the calldata the input window of the parent's (extended) memory holds.  The `DELEGATECALL`
+companion of `Blanc/CallSpawnExact.lean`; worked uses: `Blanc/Lift/QuietDelegateSkip.lean`,
+`Blanc/Lift/Usdc/ProxyForward.lean`, `ImplSpawns.lean`.
 -/
 
 namespace Blanc

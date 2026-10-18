@@ -1,7 +1,7 @@
 import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.Usdc.Constants
-import Blanc.Lift.Usdc.CertRefine
-import Blanc.Lift.Usdc.CursorFrames
+import Blanc.Lift.CertRefine
+import Blanc.Lift.CursorFrames
 
 /-!
 # The implementation certificate with the library address as a frame constant

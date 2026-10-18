@@ -18,7 +18,7 @@ form:
 * `rr_call_silent`: a silent, exec-free internal call on such a reach returns, with the same world
   and the declared number of words over the stack below the callee's frame.
 
-Nothing here mentions a contract.  (Hoist candidates, next to `ShuffleSkip` and `FrameSkip`.)
+Nothing here mentions a contract.  Worked use: `Blanc/Lift/Usdc/RefineSignedPermitNodes.lean`.
 -/
 
 namespace Blanc.Lift

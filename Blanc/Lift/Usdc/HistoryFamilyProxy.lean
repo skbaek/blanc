@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.HistorySlots
-import Blanc.Lift.Usdc.HistoryFamilyTail
+import Blanc.Lift.ReachSilentTail
 
 /-!
 # Code facts behind USDC's family obligations (U6h1)
