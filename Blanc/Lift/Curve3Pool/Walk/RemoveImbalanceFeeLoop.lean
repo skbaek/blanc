@@ -130,7 +130,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD
@@ -570,7 +570,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD
@@ -1010,7 +1010,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD

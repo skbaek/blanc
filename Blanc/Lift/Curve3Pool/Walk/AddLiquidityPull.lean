@@ -127,7 +127,7 @@ theorem xa_al_pl1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     xs 0x1080 (.reg .iszero) ri_iszero
     xs 0x1083 (.push [0x10, 0x94] (by decide)) ri_push
     xji 0x1084 0x1094 hw
-    · have hT : T = 0 := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+    · have hT : T = 0 := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
       xs 0x1086 (.push [0x00] (by decide)) ri_push
       xs 0x1089 (.push [0x04, 0xe0] (by decide)) ri_push
       xml 0x108a 0x4e0 (WordAt.write_self _ _ _)
@@ -140,7 +140,7 @@ theorem xa_al_pl1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       xjd 0x1094
       xjd 0x1095
       exact ⟨_, _, hR, hW, hA, fun _ => hpos, h⟩
-    · have hT : T ≠ 0 := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    · have hT : T ≠ 0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
       xjd 0x1095
       exact ⟨_, _, hR, hW, hA, fun e => absurd e hT, h⟩
   clear hR hW hA h
@@ -251,7 +251,7 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x10c1 (.push [0x12, 0xd6] (by decide)) ri_push
   xji 0x10c2 0x12d6 hw
   · have hpos : v ≠ 0 := by
-      have e := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have e := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro hv0; rw [hv0] at e; exact absurd e (by decide)
     clear hw
     xs 0x10c4 (.push [0x02] (by decide)) ri_push

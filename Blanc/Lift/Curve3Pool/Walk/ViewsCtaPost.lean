@@ -181,7 +181,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
         show (Bytes.toB256 [4]).toNat = 4 from rfl,
         Mem.read_write_word_inside hW0 1152 _ (by decide) (by decide)]
       decide
-  have hd1 := eqCheck_eq_zero hw
+  have hd1 := ne_of_eqCheck_eq_zero hw
   clear hw
   xs 0xdc1 (.push [0x03, 0x40] (by decide)) ri_push  -- dbe PUSH2 0x0340
   xl 0xdc2 0x340  -- dc1 MLOAD

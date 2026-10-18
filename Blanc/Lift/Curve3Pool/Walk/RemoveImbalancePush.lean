@@ -277,7 +277,7 @@ theorem xa_rli_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
       xjmp 0x387e
       xjd 0x387f
       refine ⟨_, _, ?_, h⟩
-      have hlt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have hlt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hlt
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
@@ -368,7 +368,7 @@ theorem xa_rli_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
     xs 0x38ae (.reg .iszero) ri_iszero
     xs 0x38b1 (.push [0x38, 0xf6] (by decide)) ri_push
     xji 0x38b2 0x38f6 hw
-    · have hpos := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    · have hpos := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x00]).toNat = 0 by decide] at hpos
       clear hw
       xs 0x38b5 (.push [0x09, 0x20] (by decide)) ri_push
@@ -421,7 +421,7 @@ theorem xa_rli_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
       xjd 0x38f6
       xjd 0x38f7
       refine ⟨.inr ?_, _, _, hR, hW, h⟩
-      have hq0 := eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
+      have hq0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
       have hxs : (img6.sliceD 0x940 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot

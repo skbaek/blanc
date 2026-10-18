@@ -229,7 +229,7 @@ theorem xa_ex_saveStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b : De
   xs 0x2771 (.push [0x27, 0x76] (by decide)) ri_push
   xji 0x2772 0x2776 hw
   · have hlt : p + 32 < 0x7e0 := by
-      have e := eqCheck_eq_zero hw
+      have e := ne_of_eqCheck_eq_zero hw
       by_contra hn
       exact e ((ex_ltCheck (q := 0x7e0) (by omega) (by decide)).mpr hn)
     xs 0x2775 (.push [0x27, 0x54] (by decide)) ri_push
@@ -312,13 +312,13 @@ theorem xa_ex_restoreStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b :
   xs 0x27f7 (.push [0x27, 0xfc] (by decide)) ri_push
   xji 0x27f8 0x27fc hw
   · have hge : ¬ q - 32 < 0x140 := (ex_ltCheck (q := 0x140) (by omega) (by decide)).mp
-      (eqCheck_ne_zero_eq (eqCheck_eq_zero hw))
+      (eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw))
     xs 0x27fb (.push [0x27, 0xd9] (by decide)) ri_push
     xjmp 0x27d9
     rw [if_neg (by omega)]
     exact ⟨_, _, hR, hW, h⟩
   · have hlt : q - 32 < 0x140 := by
-      have e := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have e := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
       by_contra hn
       exact e ((ex_ltCheck (q := 0x140) (by omega) (by decide)).mpr hn)
     xjd 0x27fd

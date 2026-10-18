@@ -51,7 +51,7 @@ theorem donX_disp_to_3040 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   xs 0x5 (.reg .iszero) ri_iszero
   xs 0x8 (.push [0x00, 0x0d] (by decide)) ri_push
   xji 0x9 0xd hw
-  · exact absurd (eqCheck_eq_zero hw) (by
+  · exact absurd (ne_of_eqCheck_eq_zero hw) (by
       rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide)
   xjd 0xe
   xs 0x10 (.push [0x00] (by decide)) ri_push

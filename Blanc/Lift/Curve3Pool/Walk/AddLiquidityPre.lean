@@ -29,7 +29,7 @@ theorem xa_dispatch_addLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Fr
   xs 0x5 (.reg .iszero) ri_iszero  -- 0004 ISZERO
   xs 0x8 (.push [0x00, 0x0d] (by decide)) ri_push  -- 0005 PUSH2 0x000d
   xji 0x9 0xd hw  -- taken
-  · exact absurd (eqCheck_eq_zero hw) (by
+  · exact absurd (ne_of_eqCheck_eq_zero hw) (by
       rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide)
   xjd 0xe
   xs 0x10 (.push [0x00] (by decide)) ri_push  -- 000e PUSH1 0x00

@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.StaticCall
+import Blanc.Lift.RunPWalk
 
 /-!
 # Safety: `admin_balances(i)`, inverted
@@ -21,23 +22,6 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune
 open Blanc.StableSwapNewton
-
-section AB
-variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-
-/-- `ADDRESS`, inverted. -/
-theorem ri_address {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .address) d) :
-    ∃ G', d = St b (sevm.currentTarget.toB256 :: S) M G' := by
-  have hp := of_run_address h
-  have hs : d.stack = sevm.currentTarget.toB256 :: S := by
-    have := hp.stack
-    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
-
-end AB
 
 /-- The environment of a frame whose only external call is coin `k`'s `balanceOf(self)`,
 answered with the word `w`. -/

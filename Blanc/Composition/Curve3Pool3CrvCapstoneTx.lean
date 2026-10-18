@@ -1,6 +1,6 @@
 import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
 import Blanc.Composition.Curve3Pool3CrvSigningRecover
-import Blanc.Composition.UniswapV2PairWeth9Tx2Receipts
+import Blanc.TransactionForward
 import Blanc.Composition.UniswapV2PairWeth9CapstoneRaw
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionTraceCodeKeep
@@ -76,8 +76,8 @@ theorem ex_transaction :
   have fork := ex_fork ctx
   let Q : Jaune.State → Devm → Prop := fun _ post =>
     ∀ log ∈ post.logs, log.address ≠ depositContractAddress
-  obtain ⟨debit, post, bout', hq, process, -, gas, keys, receipt, -⟩ :=
-    processTransaction_call_value_of_exec_receipts_frame (Q := Q) (bout := BlockOutput.init)
+  obtain ⟨debit, post, bout', hq, process, -, gas, keys, receipt⟩ :=
+    processTransaction_call_value_of_exec_receipts (Q := Q) (bout := BlockOutput.init)
       (tx := signedExchangeTx) (E := trader) (t := poolAddr) (chainId := 1)
       (maxPriorityFee := 1) (maxFee := 8) (intrinsicGas := 21600)
       (calldataFloorGas := 22500) (index := 0)

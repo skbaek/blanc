@@ -49,7 +49,7 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0xf8e (.push [0x10, 0x31] (by decide)) ri_push
   xji 0xf8f 0x1031 hw
   · have hT : T ≠ 0 := by
-      have e := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have e := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro hT0; rw [hT0] at e; exact absurd e (by decide)
     clear hw
     xs 0xf92 (.push [0x01, 0x40] (by decide)) ri_push

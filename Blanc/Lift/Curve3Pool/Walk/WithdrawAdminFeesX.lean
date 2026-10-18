@@ -46,7 +46,7 @@ theorem wdx_disp_to_3040 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   xs 0x5 (.reg .iszero) ri_iszero
   xs 0x8 (.push [0x00, 0x0d] (by decide)) ri_push
   xji 0x9 0xd hw
-  · exact absurd (eqCheck_eq_zero hw) (by
+  · exact absurd (ne_of_eqCheck_eq_zero hw) (by
       rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide)
   xjd 0xe
   xs 0x10 (.push [0x00] (by decide)) ri_push
@@ -713,7 +713,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xji 0x4dfc 0x4f3c hw
   · have hneFees : B256.gtCheck (Bytes.toB256 (out.take 32) -
         (d1.getStor sevm.currentTarget).get (balanceSlot k)) 0 ≠ 0 :=
-      eqCheck_eq_zero hw
+      ne_of_eqCheck_eq_zero hw
     have hpos := gtCheck_ne_zero hneFees
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, hfees] at hpos
     have hne : Bytes.toB256 (out.take 32) ≠
@@ -1202,7 +1202,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
       xjmp 0x4ec3
       xjd 0x4ec4
       refine ⟨_, _, ?_, h⟩
-      have hlt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have hlt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hlt
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
@@ -1293,7 +1293,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
     xs 0x4ef3 (.reg .iszero) ri_iszero
     xs 0x4ef6 (.push [0x4f, 0x3b] (by decide)) ri_push
     xji 0x4ef7 0x4f3b hw
-    · have hpos := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    · have hpos := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hpos
       clear hw
       xs 0x4efa (.push [0x2, 0x40] (by decide)) ri_push
@@ -1346,7 +1346,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
       xjd 0x4f3b
       xjd 0x4f3c
       refine ⟨.inr ?_, _, _, hR, hW, h⟩
-      have hq0 := eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
+      have hq0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
       have hxs : (img6.sliceD 0x260 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot

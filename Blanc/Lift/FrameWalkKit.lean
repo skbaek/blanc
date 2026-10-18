@@ -6,6 +6,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.InvWalkGas
 import Blanc.Lift.IdentityCallGas
 import Blanc.Lift.ReturnDataBound
+import Blanc.Lift.InvWalkStep
 
 /-!
 # Walking an actual frame derivation over a memory image
@@ -387,19 +388,13 @@ theorem eqCheck_ne_zero_eq {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := 
   · exact e
   · exact absurd rfl h
 
-theorem eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
-  intro e
-  unfold B256.eqCheck at h
-  simp only [e, ↓reduceIte] at h
-  exact absurd h (by decide)
-
 /-- `ISZERO (EQ x y)` fell through: `x = y`. -/
 theorem isNe_fall {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 = 0) : x = y :=
-  eqCheck_ne_zero_eq (eqCheck_eq_zero h)
+  eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero h)
 
 /-- `ISZERO (EQ x y)` jumped: `x ≠ y`. -/
 theorem isNe_jump {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 ≠ 0) : x ≠ y :=
-  eqCheck_eq_zero (eqCheck_ne_zero_eq h)
+  ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq h)
 
 theorem gtCheck_ne_zero {x y : B256} (h : B256.gtCheck x y ≠ 0) : y < x := by
   unfold B256.gtCheck at h

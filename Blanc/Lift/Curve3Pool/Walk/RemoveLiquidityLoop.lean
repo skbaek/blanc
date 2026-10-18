@@ -548,7 +548,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
       xjmp 0x2ef2
       xjd 0x2ef3
       refine ⟨_, _, ?_, h⟩
-      have hlt := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have hlt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hlt
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
@@ -639,7 +639,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
     xs 0x2f22 (.reg .iszero) ri_iszero
     xs 0x2f25 (.push [0x2f, 0x6a] (by decide)) ri_push
     xji 0x2f26 0x2f6a hw
-    · have hpos := gtCheck_ne_zero (eqCheck_eq_zero hw)
+    · have hpos := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x00]).toNat = 0 by decide] at hpos
       clear hw
       xs 0x2f29 (.push [0x03, 0xa0] (by decide)) ri_push
@@ -692,7 +692,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
       xjd 0x2f6a
       xjd 0x2f6b
       refine ⟨.inr ?_, _, _, hR, hW, h⟩
-      have hq0 := eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
+      have hq0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
       have hxs : (img6.sliceD 0x3c0 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot
@@ -740,7 +740,7 @@ theorem xa_rl_s5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0x2f7a (.push [0x2c, 0xdb] (by decide)) ri_push
   xji 0x2f7b 0x2cdb hw
   · have e : i + 1 = 3 := by
-      have := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+      have := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
       rcases (show i = 0 ∨ i = 1 ∨ i = 2 by omega) with rfl | rfl | rfl
       · exact absurd this (by decide)
       · exact absurd this (by decide)
@@ -749,7 +749,7 @@ theorem xa_rl_s5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     next => exact ⟨_, _, hR, hW, h⟩
     next he => exact absurd e he
   · have e : i + 1 ≠ 3 := by
-      have := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
       intro e; apply this; rw [show i = 2 by omega]; decide
     split
     next he => exact absurd he e

@@ -71,7 +71,7 @@ theorem xa_al_save1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     xs 0xfb0 (.reg .iszero) ri_iszero
     xs 0xfb3 (.push [0x0f, 0xb8] (by decide)) ri_push
     xji 0xfb4 0xfb8 hw
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero hw)) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero hw)) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)]
         rw [show (Bytes.toB256 [0x03, 0x60]).toNat = 0x360 by decide]; omega)
     clear hw
@@ -153,7 +153,7 @@ theorem xa_al_save2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     xs 0x1357 (.reg .iszero) ri_iszero
     xs 0x135a (.push [0x13, 0x5f] (by decide)) ri_push
     xji 0x135b 0x135f hw
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero hw)) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero hw)) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)]
         rw [show (Bytes.toB256 [0x09, 0x20]).toNat = 0x920 by decide]; omega)
     clear hw
@@ -235,7 +235,7 @@ theorem xa_al_save3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     xs 0x165e (.reg .iszero) ri_iszero
     xs 0x1661 (.push [0x16, 0x66] (by decide)) ri_push
     xji 0x1662 0x1666 hw
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero hw)) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero hw)) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega)]
         rw [show (Bytes.toB256 [0x0a, 0x40]).toNat = 0xa40 by decide]; omega)
     clear hw
@@ -322,7 +322,7 @@ theorem xa_al_restore1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
     xs 0x1020 (.reg .iszero) ri_iszero
     xs 0x1023 (.push [0x10, 0x28] (by decide)) ri_push
     xji 0x1024 0x1028 hw
-    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (eqCheck_eq_zero hw))) (by
+    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw))) (by
         rw [not_not, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
     simp only [svWords, List.nil_append] at h
@@ -370,7 +370,7 @@ theorem xa_al_restore1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
       · exact hk o w (WordAt.write_other (WordAt.write_other hw (by
           simp only [B256.length_toBytes]; omega)) (by simp only [B256.length_toBytes]; omega))
           (by omega) h2
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
 
@@ -414,7 +414,7 @@ theorem xa_al_restore2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
     xs 0x13c7 (.reg .iszero) ri_iszero
     xs 0x13ca (.push [0x13, 0xcf] (by decide)) ri_push
     xji 0x13cb 0x13cf hw
-    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (eqCheck_eq_zero hw))) (by
+    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw))) (by
         rw [not_not, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
     simp only [svWords, List.nil_append] at h
@@ -462,7 +462,7 @@ theorem xa_al_restore2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
       · exact hk o w (WordAt.write_other (WordAt.write_other hw (by
           simp only [B256.length_toBytes]; omega)) (by simp only [B256.length_toBytes]; omega))
           (by omega) h2
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
 
@@ -506,7 +506,7 @@ theorem xa_al_restore3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
     xs 0x16ce (.reg .iszero) ri_iszero
     xs 0x16d1 (.push [0x16, 0xd6] (by decide)) ri_push
     xji 0x16d2 0x16d6 hw
-    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (eqCheck_eq_zero hw))) (by
+    · exact absurd (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw))) (by
         rw [not_not, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
     simp only [svWords, List.nil_append] at h
@@ -554,7 +554,7 @@ theorem xa_al_restore3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {src 
       · exact hk o w (WordAt.write_other (WordAt.write_other hw (by
           simp only [B256.length_toBytes]; omega)) (by simp only [B256.length_toBytes]; omega))
           (by omega) h2
-    · exact absurd (al_lt_of_ltCheck (eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
+    · exact absurd (al_lt_of_ltCheck (ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw))) (by
         rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
           show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by decide]; omega)
 

@@ -176,7 +176,7 @@ theorem xa_rampA_or {b2 : Devm} {M : Mem} {A c : B256}
     xs 0x48ab (.push [0x48, 0xb0] (by decide)) ri_push  -- 48a8 PUSH2 0x48b0
     xji 0x48ac 0x48b0 hw2
     · exact absurd hw2 (by decide)
-    · exact ⟨.inl (eqCheck_eq_zero hw), _, h⟩
+    · exact ⟨.inl (ne_of_eqCheck_eq_zero hw), _, h⟩
   clear hw
   xjd 0x486b  -- 486a JUMPDEST
   xs 0x486e (.push [0x01, 0x40] (by decide)) ri_push  -- 486b PUSH2 0x0140
@@ -187,7 +187,7 @@ theorem xa_rampA_or {b2 : Devm} {M : Mem} {A c : B256}
   xs 0x4874 (.reg .iszero) ri_iszero  -- 4873 ISZERO
   xs 0x4877 (.push [0x48, 0xa2] (by decide)) ri_push  -- 4874 PUSH2 0x48a2
   xji 0x4878 0x48a2 hw
-  · have hlt := ltCheck_ne_zero (eqCheck_eq_zero hw)
+  · have hlt := ltCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x487b (.push [0x01, 0x40] (by decide)) ri_push  -- 4878 PUSH2 0x0140
     xl 0x487c 0x140  -- 487b MLOAD

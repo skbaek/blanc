@@ -113,7 +113,7 @@ theorem xa_cta_it0 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, .inr ⟨hd0, hle, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have hd1 := eqCheck_eq_zero hw
+  have hd1 := ne_of_eqCheck_eq_zero hw
   clear hw
   xs 0xc2b (.push [0x01, 0x40] (by decide)) ri_push  -- c28 PUSH2 0x0140
   xs 0xc2e (.push [0x03, 0x20] (by decide)) ri_push  -- c2b PUSH2 0x0320
@@ -278,7 +278,7 @@ theorem xa_cta_it1 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, .inr ⟨hd0, hle, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have hd1 := eqCheck_eq_zero hw
+  have hd1 := ne_of_eqCheck_eq_zero hw
   clear hw
   xs 0xc2b (.push [0x01, 0x40] (by decide)) ri_push  -- c28 PUSH2 0x0140
   xs 0xc2e (.push [0x03, 0x20] (by decide)) ri_push  -- c2b PUSH2 0x0320
@@ -444,7 +444,7 @@ theorem xa_cta_it2 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, .inr ⟨hd0, hle, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have hd1 := eqCheck_eq_zero hw
+  have hd1 := ne_of_eqCheck_eq_zero hw
   clear hw
   xs 0xc2b (.push [0x01, 0x40] (by decide)) ri_push  -- c28 PUSH2 0x0140
   xs 0xc2e (.push [0x03, 0x20] (by decide)) ri_push  -- c2b PUSH2 0x0320

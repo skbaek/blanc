@@ -31,7 +31,7 @@ theorem xa_al_feePre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
   xs 0x13fd (.push [0x16, 0xe3] (by decide)) ri_push
   xji 0x13fe 0x16e3 hw
   · have hn : T ≠ 0 := by
-      have hg := gtCheck_ne_zero (eqCheck_eq_zero hw)
+      have hg := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro e; subst e; exact absurd hg (by decide)
     xs 0x1401 (.push [0x0a, 0x40] (by decide)) ri_push
     xs 0x1403 (.push [0x00] (by decide)) ri_push
@@ -203,7 +203,7 @@ theorem xa_al_feeDiff {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     xma 0x14b9 (.reg .mstore) (ri_mstore_imgAtA (o := 0xa80) rfl)
     xs 0x14bc (.push [0x14, 0xf3] (by decide)) ri_push
     xjmp 0x14f3
-    refine ⟨_, _, _, _, hmul', hd, .inl ⟨gtCheck_ne_zero (eqCheck_eq_zero hdiff), rfl⟩,
+    refine ⟨_, _, _, _, hmul', hd, .inl ⟨gtCheck_ne_zero (ne_of_eqCheck_eq_zero hdiff), rfl⟩,
       hR, hW, hA, ?_, ?_, ?_, WordAt.write_self _ _ _, h⟩
     · intro o w hw ho
       exact ((hw.write_other (by simp only [B256.length_toBytes]; omega)).write_other
@@ -563,7 +563,7 @@ theorem xa_al_feeNext {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     (WordAt.write_self _ _ _).write_other (by simp only [B256.length_toBytes]; omega)
   xji 0x163a 0x1409 hw
   · have e : i + 1 = 3 := by
-      have he := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+      have he := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
       rcases three_cases hi with rfl | rfl | rfl
       · exact absurd he (by decide)
       · exact absurd he (by decide)
@@ -571,7 +571,7 @@ theorem xa_al_feeNext {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     rw [ite_eq_left e]
     exact ⟨_, _, _, hR, hW, hA, P, WordAt.write_self _ _ _, hn, h⟩
   · have e : i + 1 ≠ 3 := by
-      have he := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have he := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
       intro e
       rcases three_cases hi with rfl | rfl | rfl
       · omega

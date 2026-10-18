@@ -58,7 +58,7 @@ theorem xa_cw_it0 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
   xs 0x4072 (.push [0x40, 0xe0] (by decide)) ri_push  -- 406f PUSH2 0x40e0
   xji 0x4073 0x40e0 hw
   swap
-  · have hne := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  · have hne := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
     clear hw
     xjd 0x40e1  -- 40e0 JUMPDEST
     xs 0x40e4 (.push [0x03, 0x20] (by decide)) ri_push  -- 40e1 PUSH2 0x0320
@@ -247,7 +247,7 @@ theorem xa_cw_it0 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, ⟨hm1, hd0, _, .inr ⟨hne, hs, rfl⟩, hm2, hs2, rfl⟩, h, hV.sub (by
         simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have heq := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+  have heq := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
   clear hw
   xs 0x4076 (.push [0x03, 0x20] (by decide)) ri_push  -- 4073 PUSH2 0x0320
   xs 0x4079 (.push [0x07, 0x20] (by decide)) ri_push  -- 4076 PUSH2 0x0720
@@ -456,7 +456,7 @@ theorem xa_cw_it1 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
   xs 0x4072 (.push [0x40, 0xe0] (by decide)) ri_push  -- 406f PUSH2 0x40e0
   xji 0x4073 0x40e0 hw
   swap
-  · have hne := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  · have hne := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
     clear hw
     xjd 0x40e1  -- 40e0 JUMPDEST
     xs 0x40e4 (.push [0x03, 0x20] (by decide)) ri_push  -- 40e1 PUSH2 0x0320
@@ -645,7 +645,7 @@ theorem xa_cw_it1 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, ⟨hm1, hd0, _, .inr ⟨hne, hs, rfl⟩, hm2, hs2, rfl⟩, h, hV.sub (by
         simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have heq := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+  have heq := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
   clear hw
   xs 0x4076 (.push [0x03, 0x20] (by decide)) ri_push  -- 4073 PUSH2 0x0320
   xs 0x4079 (.push [0x07, 0x20] (by decide)) ri_push  -- 4076 PUSH2 0x0720
@@ -854,7 +854,7 @@ theorem xa_cw_it2 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
   xs 0x4072 (.push [0x40, 0xe0] (by decide)) ri_push  -- 406f PUSH2 0x40e0
   xji 0x4073 0x40e0 hw
   swap
-  · have hne := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  · have hne := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
     clear hw
     xjd 0x40e1  -- 40e0 JUMPDEST
     xs 0x40e4 (.push [0x03, 0x20] (by decide)) ri_push  -- 40e1 PUSH2 0x0320
@@ -1044,7 +1044,7 @@ theorem xa_cw_it2 {M : Mem} {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256}
     · exact absurd hw (by decide)
     exact ⟨_, _, _, ⟨hm1, hd0, _, .inr ⟨hne, hs, rfl⟩, hm2, hs2, rfl⟩, h, hV.sub (by
         simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
-  have heq := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+  have heq := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
   clear hw
   xs 0x4076 (.push [0x03, 0x20] (by decide)) ri_push  -- 4073 PUSH2 0x0320
   xs 0x4079 (.push [0x07, 0x20] (by decide)) ri_push  -- 4076 PUSH2 0x0720

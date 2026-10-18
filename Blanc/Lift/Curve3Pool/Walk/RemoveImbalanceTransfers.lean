@@ -67,7 +67,7 @@ theorem xa_rli_iter {b0 : Devm} {σ : Stor} {k : Nat}
   xji 0x378a 0x38f7 hw
   · -- `amounts[k] != 0`: the transfer
     have hne : rliAmt sevm k ≠ 0 := by
-      have e := eqCheck_eq_zero hw
+      have e := ne_of_eqCheck_eq_zero hw
       rwa [zero_lit, B256.xor_zero] at e
     clear hw
     obtain ⟨bq, c, L1, d, img1, G1, hbq, rfl, hcq, hkp, hR1, hW1, hrd, h⟩ :=
@@ -118,12 +118,12 @@ theorem xa_rli_next {k : Nat} (hcode : sevm.code = code)
   xs 0x3904 (.reg .iszero) ri_iszero
   xs 0x3907 (.push [0x37, 0x69] (by decide)) ri_push
   xji 0x3908 0x3769 hw
-  · have he := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+  · have he := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
     xjd 0x3909
     xs 0x390a (.reg .pop) ri_pop
     xs 0x390b (.reg .pop) ri_pop
     exact ⟨_, img1, _, hR, hW, hI1, hc1, .inr ⟨he.symm, h⟩⟩
-  · have hne := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  · have hne := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
     exact ⟨_, img1, _, hR, hW, hI1, hc1, .inl ⟨Ne.symm hne, h⟩⟩
 
 /-- The `RemoveLiquidityImbalance` topic word. -/
