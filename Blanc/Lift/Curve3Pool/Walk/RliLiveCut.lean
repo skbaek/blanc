@@ -29,7 +29,7 @@ def rliSupplyPath : List CutStep :=
   .nx, .nx, .nx, .s, .ds, .nx, .nx, .nx, .nx, .nx, .nx, .s, .ds, .nx, .nx, .nx,
   .nx, .s, .ds, .nx, .nx, .nx, .nx, .nx, .nx, .nx, .nx, .nx, .nx]
 
-theorem rliSupplyPath_ok : SFunc.cutPathOk cert.prog rliSupplyPath t_0000_c0 = true := by
+theorem rliSupplyPath_ok : SFunc.cutPathOk cert.prog [] rliSupplyPath t_0000_c0 = true := by
   decide
 
 /-- **The frame's start to its supply call, forward** (see the module note). -/

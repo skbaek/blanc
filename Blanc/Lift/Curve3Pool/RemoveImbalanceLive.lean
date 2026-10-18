@@ -119,9 +119,11 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
     (by rw [hcost] at hG; omega) (by omega)
   have hx : XAt sevm D 0 (St pre [] Mem.empty G) (Exec.childFrames exc) :=
     XAt.of_exec exc (by omega)
-  obtain ⟨pc1, m1, a1, -, μ1, hx1, hchk1, -⟩ := xa_cutAt_start checkedM
-    (Cert.jumpsOkM_of_jumpsOkM cert_jumpsOkM) hcode hfork rfl rfl rfl rfl
-    rfl (SFunc.cutAt_of_cutPathOk _ _ rliSupplyPath_ok) hr1 hx
+  obtain ⟨m1, pc1, a1, μ1, hw1⟩ := xa_cutAt_start checkedM
+    (Cert.jumpsOkM_of_jumpsOkM cert_jumpsOkM) hcode hfork (E := []) rfl rfl rfl rfl rfl rfl rfl
+    (SFunc.cutCall_of_cutPathOk _ _ rliSupplyPath_ok) hr1 hx
+  have hx1 := hw1.xat
+  have hchk1 := hw1.check
   obtain ⟨X, hX⟩ : ∃ X, SFunc.subAt cert.prog rliSupplyPath t_0000_c0 =
       .next (.exec .staticcall) X := ⟨_, rfl⟩
   rw [hX] at hchk1
