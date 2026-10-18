@@ -225,12 +225,13 @@ theorem al_balanceOf_input (img : Bytes) (self : Adr) :
 
 /-- **Pull, part 2** (`0x10b6`): a zero amount skips to `0x12d6`; a positive amount continues at
 `0x110d`, for coin `2` after `in_amount = coin.balanceOf(self)` (a `STATICCALL`). -/
-theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {v C : B256} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (hidk : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
+      c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x10b6 (St b [3, 0x4c0] M G) L) :
     (v = 0 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -293,7 +294,7 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       · exact absurd hpre hcoin
       clear hk
       have h4 : d1.getCode 4 = b.getCode 4 := by
-        rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self), hcpre]
+        rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
       xjd 0x10f5
       xs 0x10f7 (.push [0x1f] (by decide)) ri_push
       xs 0x10f8 (.reg .returndatasize) ri_returndatasize
@@ -328,6 +329,26 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       exact B256.toNat_inj _ _ (by rw [show (0 : B256).toNat = 0 from rfl]; omega)
     exact .inl ⟨hv0, _, _, hR, hW, hA, h⟩
 
+/-- **`xa_al_pl2`**: `xa_al_pl2C` with every child keeping the pool. -/
+theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {i : Nat} {v C : B256} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
+    (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (h : XAt sevm post 0x10b6 (St b [3, 0x4c0] M G) L) :
+    (v = 0 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
+    (v ≠ 0 ∧ i ≠ 2 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      XAt sevm post 0x110d (St b [3, 0x4c0] M' G') L) ∨
+    (v ≠ 0 ∧ i = 2 ∧ ∃ (c : Exec.Frame) (L' : List Exec.Frame) (d : Devm) (M' : Mem) (img' : Bytes)
+      (G' : Nat), L = c :: L' ∧ AlStatic sevm b d C.toAdr (balanceOfData sevm.currentTarget) c ∧
+      Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      (∀ o w, WordAt img o w → (o + 32 ≤ 0x4e0 ∨ 0x500 ≤ o) → (o + 32 ≤ 0x520 ∨ 0x5c0 ≤ o) →
+        WordAt img' o w) ∧
+      WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32)) ∧
+      XAt sevm post 0x110d (St d [3, 0x4c0] M' G') L') :=
+  xa_al_pl2C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ => hidk c hc) h
 
 theorem al_tf_copy {img : Bytes} (E Cw S V : B256) (hsel : Region img 0x6a0 transferFromSel) :
     ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img 0x6a4 Cw.toBytes) 0x6c4
@@ -356,15 +377,15 @@ theorem al_tf_copy {img : Bytes} (E Cw S V : B256) (hsel : Region img 0x6a0 tran
 /-- **Pull, part 3** (`0x110d` → `0x11e6`): the `transferFrom(msg.sender, self, amounts[i])`
 payload laid out by two identity copies and the `raw_call` `CALL` to `coins[i]` (value `0`,
 output window `0x820`); a zero flag reverts. -/
-theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+theorem xa_al_pl3C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {C : B256} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hid : IdReady sevm b)
     (hdepth : 0 < sevm.depth) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hC : WordAt img 0x500 C)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
-      (c.pre.getStor sevm.currentTarget).get x)
-    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (hK : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
+      (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
+        c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x110d (St b [3, 0x4c0] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b3 d : Devm) (G' : Nat), L = c :: L' ∧
       BaseRel b b3 ∧
@@ -579,8 +600,33 @@ theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   rcases hch with ⟨hp, -⟩ | ⟨c, rfl, -, -, hc⟩
   · exact absurd hp hcoin
   refine ⟨c, L4, b3, d4, _, rfl, hb12.trans hb23, ?_,
-    ⟨hkeep c List.mem_cons_self, hidk c List.mem_cons_self⟩, ⟨img3, hR, hW, hA, hrd4,
+    hK c List.mem_cons_self hc.target, ⟨img3, hR, hW, hA, hrd4,
     k_ctr, fun o w hw ho => P3 o w (P2 o w (P1 o w hw ho) ho) ho⟩, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
+
+/-- **`xa_al_pl3`**: `xa_al_pl3C` with every child keeping the pool. -/
+theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {i : Nat} {C : B256} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hid : IdReady sevm b)
+    (hdepth : 0 < sevm.depth) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hC : WordAt img 0x500 C)
+    (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
+    (h : XAt sevm post 0x110d (St b [3, 0x4c0] M G) L) :
+    ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b3 d : Devm) (G' : Nat), L = c :: L' ∧
+      BaseRel b b3 ∧
+      ChildOf b3 d C.toAdr (transferFromSel ++ sevm.caller.toB256.toBytes ++
+        sevm.currentTarget.toB256.toBytes ++ (alAmt sevm i).toBytes) 0 sevm.isStatic c ∧
+      ((∀ x, (c.post.getStor sevm.currentTarget).get x =
+        (c.pre.getStor sevm.currentTarget).get x) ∧ c.post.getCode 4 = c.pre.getCode 4) ∧
+      (∃ img3, Mem.Reads d.memory (Bytes.writeAt img3 0x820 (d.returnData.take 0x20)) ∧
+        Mem.Wf d.memory ∧ d.memory.size % 32 = 0 ∧ d.returnData.length < 2 ^ 256 ∧
+        WordAt img3 0x4c0 (Nat.toB256 i) ∧
+        (∀ o w, WordAt img o w → (o + 32 ≤ 0x620 ∨ 0x7e0 ≤ o) → WordAt img3 o w)) ∧
+      XAt sevm post 0x11e6 (St d [3, 0x4c0] d.memory G') L' :=
+  xa_al_pl3C hcode hfork hi hid hdepth hR hW hA hctr hC hcoin
+    (fun c hc _ => ⟨hkeep c hc, hidk c hc⟩) h
 
 end Blanc.Lift.Curve3Pool
