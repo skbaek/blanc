@@ -1258,6 +1258,7 @@ class Checker:
         self.sites = {}
         widen: Dict[int, int] = {}
         sys.setrecursionlimit(50000)
+        tightened = False
         for _ in range(max_rounds):
             self.mode = 'infer'
             self.incoming = {}
@@ -1315,7 +1316,17 @@ class Checker:
                     self.ret_les[c] = les
                     changed = True
             if not changed:
-                return
+                if tightened:
+                    return
+                # Sites only grow during inference, so a site listed in an
+                # early round, before the states and summaries settled, stays
+                # even when every final observation is stronger (a
+                # non-increasing write first seen without its order fact).
+                # States and summaries never depend on sites: re-collect the
+                # sites from scratch under the settled annotations.
+                tightened = True
+                self.sites = {}
+                continue
         raise Reject("write-site annotation inference did not converge")
 
     @staticmethod

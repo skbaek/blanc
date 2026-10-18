@@ -436,4 +436,25 @@ require(not ret_arg_free(WRet([], frozenset(), True,
 require(not ret_arg_free(WRet([TOP], frozenset({(0, 0)}), True, frozenset())),
         "order fact")
 
+# -- inference: sites are re-collected under the settled annotations --
+# An early round may observe a write before its order fact settles (here: a
+# non-increasing write first seen as a plain write). The listed site must be
+# the settled observation, not the stale weaker one that covers it.
+c7 = checker([(0, [], 0)], {0: {'kind': 'last', 'pc': 0, 'op': '0x0'}})
+weak = (('kecc', CALLER, ('const', 10)), (), False)
+strong = (('kecc', CALLER, ('const', 10)), (), True)
+rounds = []
+
+
+def fake_walk(tree, a, st, R, k):
+    rounds.append(k)
+    c7._cover(c7.rkey(k), weak if len(rounds) == 1 else strong)
+
+
+c7.walk = fake_walk
+c7.infer()
+require(set(c7.sites[c7.rkey(0)]) == {strong},
+        "a stale weaker site is dropped once the observations settle")
+require(len(rounds) >= 3, "the settled sites take a re-collection round")
+
 print(f"ws_annot checks: {COUNT} passed")
