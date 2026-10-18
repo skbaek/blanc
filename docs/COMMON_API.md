@@ -4497,6 +4497,11 @@ contract-neutral.
   (an abstract state's meaning), `wstep_sound` and `wstep_nonpush` (one step),
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
   `resume_sound` and `callNext_obs` (joins, calls and returns).
+- For the write-site checker's run-level soundness, use
+  [`Blanc/Lift/WriteSiteSound.lean`](../Blanc/Lift/WriteSiteSound.lean): `ws_run` (the
+  big-step recursion: `WsStep` steps, `RetObs` at a return), `wsRun_sound_of_deep` and
+  `lift_sound_ws_of_deep` (frame level, given `WsDeep`), and `SFunc.RunP.mono_at` (a run
+  under a step relation implied at the run's own frame).
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
