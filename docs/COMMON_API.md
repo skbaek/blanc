@@ -4472,6 +4472,19 @@ contract-neutral.
   `opFacts_sound` (the facts about an instruction's fresh result),
   `learn1_sound` (what a `JUMPI` arm learns), and `transfer_val` (symbols
   through an instruction's stack transfer).
+- For the free-pointer checker's soundness, use
+  [`Blanc/Lift/FreePtrSound.lean`](../Blanc/Lift/FreePtrSound.lean) and
+  [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
+  `fpRun_sound` (every run of an accepted certificate reads a good free
+  pointer, `FpStep`), `lift_sound_fp` (the same from `Cert.check` and a
+  successful frame), `fp_run` (the big-step recursion), and `fstep_sound`
+  (one accepted step keeps the invariant `FpInv`).
+- For a callee that cannot return, use
+  [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
+  predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
+  returning run starts from a frame holding `.ret`) and
+  `SFunc.RunP.not_returned_of_noRet` (a callee whose frame has no `.ret` never
+  returns), bytes-free and for any step relation.
 - For write-site provenance terms and the generic locality corollary, use
   [`Blanc/Lift/WriteSite.lean`](../Blanc/Lift/WriteSite.lean),
   [`Blanc/Lift/WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean),
