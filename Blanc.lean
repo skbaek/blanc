@@ -488,6 +488,7 @@ import Blanc.Lift.SpawnKindsM
 import Blanc.Lift.GuardedCalls
 import Blanc.Lift.LogAddresses
 import Blanc.Lift.ChildFrameCode
+import Blanc.Lift.ChildFrameDepth
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ReachChain
 import Blanc.Lift.ReachDispatch
@@ -905,6 +906,7 @@ import Blanc.Composition.Curve3Pool3CrvLiveConcrete
 import Blanc.Composition.Curve3Pool3CrvLiveEndEntry
 import Blanc.Composition.Curve3Pool3CrvLiveEndRL
 import Blanc.Composition.Curve3Pool3CrvLiveEndOC
+import Blanc.Composition.Curve3Pool3CrvLiveEndKeep
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp

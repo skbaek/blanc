@@ -4435,6 +4435,11 @@ contract-neutral.
   `Xinst.step_call_spawn`), and for a child of spawn-free code `Exec.Frame.keeps_of_spawnFree`
   (it keeps every other address's code and the storage of every other address with code), in
   [`Blanc/Lift/ChildFrameCode.lean`](../Blanc/Lift/ChildFrameCode.lean).
+- To know what a direct committed child of a depth-`1` frame keeps whatever code it runs, use
+  `Exec.childFrames_keeps_of_depth_one` (it keeps every other address's code and the storage of
+  every other address with code: a depth-`0` frame enters no frame,
+  `Exec.rawFrameDescendants_eq_nil_of_depth_zero`; `Exec.childFrames_depth` bounds a child's depth),
+  in [`Blanc/Lift/ChildFrameDepth.lean`](../Blanc/Lift/ChildFrameDepth.lean).
 - To know where every log of a committed execution came from, use `Exec.log_addresses` (each
   post log is an entry log or was emitted at the current target of one of the execution's raw
   frames), e.g. to show no log comes from the deposit contract when the raw frames' targets are
