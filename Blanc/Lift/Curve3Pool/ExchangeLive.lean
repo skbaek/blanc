@@ -11,7 +11,9 @@ import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveWords
 `B2`; every call accepted) and the callees answer as `LivePremises` describes — the input coin's
 `transferFrom` (`CoinPullOkAt`), for `i == FEE_INDEX` its two `balanceOf(self)` reads
 (`CoinBalOkAt`), the output coin's `transfer` of the model's amount (`CoinPushOkAt`), each using
-at most `U` gas, over world invariants `W` (before the pull) and `W'` (after it) — then every frame
+at most `U` gas, over world invariants `W` (before the pull), `W'` (after it) and `W''` (after the
+push; the push is the last call, so `W''` need not support another push — a `W'` closed under a
+transfer of a positive amount out of the pool would admit no honest token) — then every frame
 gas `G ≥ costExchange … + 4 U` yields an actual successful execution of the pool's runtime whose
 effect is the model's step: the `RawEffect` (in an environment differing from the premised one at
 most in the fee coin's two individual answers, whose difference is the same) and `Checkpoint post
@@ -74,7 +76,7 @@ theorem ex_body {sevm : Sevm} {s : State} {e : Env} {o : Out} (hi3 : (exI sevm).
 
 /-- **`exchange` is live** (see the module note). -/
 theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fin 3} {B1 B2 : B256}
-    {W W' : Devm → Prop} {U G : Nat}
+    {W W' W'' : Devm → Prop} {U G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -94,7 +96,8 @@ theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fi
       CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i)) B2 U 0x71c 0x780)
     (hpull : CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
       (exDx sevm) U 0x600 0x6c0)
-    (hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot j))
+    (hW''c : WClosed sevm W'')
+    (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot j))
       (Nat.toB256 (exPushAmt o)) U 0xb60 0xc00)
     (hG : costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
       (exDx sevm).toNat + 4 * U ≤ G)
@@ -128,14 +131,14 @@ theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fi
   have hcy := hcost pre
   -- the forward run
   obtain ⟨r, hr, D, rfl, hL⟩ := rx_ex_frame (pre := pre) (s0 := s) (B1 := B1) (B2 := B2)
-    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm W' D'
+    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm W'' D'
       (exFinal ((pre.getStor sevm.currentTarget).set lockSlot 1) sevm
         (exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi3⟩ + exCred sevm B1 B2) _))
     hfork hstatic hdepth hlen hcd hsel hid hWc hW'c hWb hck.abs hck.unlocked hval
     (by rw [hck.abs.isKilled, hk]; rfl) hi3 hj3 hX
     (fun h2 => ⟨(hbal (Fin.ext (show (exI sevm).toNat = 2 by rw [h2]; rfl))).1,
       (hbal (Fin.ext (show (exI sevm).toNat = 2 by rw [h2]; rfl))).2, hsub h2⟩)
-    hpull hmx hax hA hres hy1 hy2 hmf hsf hmo hmin hma hmap hbi hbj1 hbj2 hpush (by omega) hG256
+    hpull hmx hax hA hres hy1 hy2 hmf hsf hmo hmin hma hmap hbi hbj1 hbj2 hW''c hpush (by omega) hG256
     (fun D' h => ⟨D', rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety theorem on that execution

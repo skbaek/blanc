@@ -42,7 +42,7 @@ abbrev exFinal (σ : Stor) (sevm : Sevm) (bi bj : B256) : Stor :=
 section Back
 
 variable {sevm : Sevm} {b : Devm} {σ : Stor} {s0 : State} {G U amp v : Nat} {Q : Outcome → Prop}
-  {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
+  {M : Mem} {img : Bytes} {W W'' : Devm → Prop} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
 
 /-- **`exchange` after the pull, forward** (`t_26c9_c13` → `STOP`). -/
 theorem rx_ex_back (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -87,13 +87,13 @@ theorem rx_ex_back (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
         (exRate (exJ sevm).toNat) <
       exAdm (exDyFee (X (exJ sevm).toNat) (Nat.toB256 v) (σ.get feeSlot)) (σ.get adminFeeSlot)
         (exRate (exJ sevm).toNat))
-    (hpush : CoinPushOkAt sevm W W (σ.get (coinsBase + exJ sevm))
+    (hW''c : WClosed sevm W'') (hpush : CoinPushOkAt sevm W W'' (σ.get (coinsBase + exJ sevm))
       (exDyOut (X (exJ sevm).toNat) (Nat.toB256 v) (σ.get feeSlot) (exRate (exJ sevm).toNat))
       U 0xb60 0xc00)
     (hG : costGetY sevm b amp (exI sevm).toNat (exJ sevm).toNat
       (X (exI sevm).toNat + D * exRate (exI sevm).toNat / exR0).toNat (X 0).toNat (X 1).toNat
       (X 2).toNat + 101000 + U ≤ G) (hGb : G + 2000 < 2 ^ 256)
-    (k : ∀ D' : Devm, ExLive sevm W D' (exFinal σ sevm (B (exI sevm).toNat + D)
+    (k : ∀ D' : Devm, ExLive sevm W'' D' (exFinal σ sevm (B (exI sevm).toNat + D)
       (B (exJ sevm).toNat - exDyOut (X (exJ sevm).toNat) (Nat.toB256 v) (σ.get feeSlot)
         (exRate (exJ sevm).toNat) -
         exAdm (exDyFee (X (exJ sevm).toNat) (Nat.toB256 v) (σ.get feeSlot)) (σ.get adminFeeSlot)
@@ -134,7 +134,7 @@ theorem rx_ex_back (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
       rw [toB256_toNat]
     rw [Stor.get_set_ne _ (by rw [hjN, hcN]; exact bal_ne_coin hj hj),
       Stor.get_set_ne _ (by rw [hiN, hcN]; exact bal_ne_coin hi hj)]
-  refine rx_ex_push hfork hstatic hdepth hL5 hL5.wc hj hR5 hW5 hsz5 hdata5 hout5 (by rw [hcj]; exact hpush)
+  refine rx_ex_push hfork hstatic hdepth hL5 hW''c hj hR5 hW5 hsz5 hdata5 hout5 (by rw [hcj]; exact hpush)
     (by omega) (by omega) k
 
 end Back
@@ -191,7 +191,7 @@ abbrev exCred (sevm : Sevm) (B1 B2 : B256) : B256 := if exI sevm = 2 then B2 - B
 section Frame
 
 variable {sevm : Sevm} {pre : Devm} {s0 : State} {G U amp v : Nat} {Q : Outcome → Prop}
-  {W W' : Devm → Prop} {x0 x1 x2 B1 B2 : B256}
+  {W W' W'' : Devm → Prop} {x0 x1 x2 B1 B2 : B256}
 
 /-- **The `exchange` frame, forward** (see the module note): `σ` is the entry storage, `X` the
 `_xp_mem` words, `D = exCred` the credited amount. -/
@@ -270,13 +270,14 @@ theorem rx_ex_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
       exAdm (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
         ((pre.getStor sevm.currentTarget).get feeSlot))
         ((pre.getStor sevm.currentTarget).get adminFeeSlot) (exRate (exJ sevm).toNat))
-    (hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm))
+    (hW''c : WClosed sevm W'')
+    (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm))
       (exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
         ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat)) U 0xb60 0xc00)
     (hG : costGetY sevm pre amp (exI sevm).toNat (exJ sevm).toNat
       (exW3 x0 x1 x2 (exI sevm).toNat + exCred sevm B1 B2 * exRate (exI sevm).toNat / exR0).toNat
       x0.toNat x1.toNat x2.toNat + 154000 + 4 * U ≤ G) (hGb : G < 2 ^ 256)
-    (k : ∀ D' : Devm, ExLive sevm W' D' (exFinal ((pre.getStor sevm.currentTarget).set lockSlot 1)
+    (k : ∀ D' : Devm, ExLive sevm W'' D' (exFinal ((pre.getStor sevm.currentTarget).set lockSlot 1)
       sevm (exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi⟩ + exCred sevm B1 B2)
       (exBal (pre.getStor sevm.currentTarget) ⟨(exJ sevm).toNat, hj⟩ -
         exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
@@ -342,7 +343,7 @@ theorem rx_ex_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
     exact rx_ex_back hfork hstatic hdepth hL7 ha1 hi hj hR7 hWf7 hsz7 (.inr ⟨rfl, rfl⟩) hF7 hmx hax
       hA hres hy1 hy2 (by rw [ef]; exact hmf) (by rw [ef]; exact hsf) (by rw [ef]; exact hmo)
       (by rw [ef]; exact hmin) (by rw [ef, eaf]; exact hma) (by rw [ef, eaf]; exact hmap) hbi
-      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) (by rw [ef, ecj]; exact hpush)
+      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) hW''c (by rw [ef, ecj]; exact hpush)
       (by omega) (by omega) (by rw [ef, eaf]; exact k)
   · -- another coin: the pull alone
     have hD : exCred sevm B1 B2 = exDx sevm := if_neg hfee
@@ -362,7 +363,7 @@ theorem rx_ex_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
     exact rx_ex_back hfork hstatic hdepth hL5 ha1 hi hj hR5 hWf5 hsz5 (.inl ⟨rfl, rfl⟩) hF5 hmx hax
       hA hres hy1 hy2 (by rw [ef]; exact hmf) (by rw [ef]; exact hsf) (by rw [ef]; exact hmo)
       (by rw [ef]; exact hmin) (by rw [ef, eaf]; exact hma) (by rw [ef, eaf]; exact hmap) hbi
-      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) (by rw [ef, ecj]; exact hpush)
+      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) hW''c (by rw [ef, ecj]; exact hpush)
       (by omega) (by omega) (by rw [ef, eaf]; exact k)
 
 end Frame
