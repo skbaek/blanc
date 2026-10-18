@@ -42,7 +42,6 @@ theorem b11 : Bytes.toB256 [11] = 11 := by decide
 theorem b12 : Bytes.toB256 [12] = 12 := by decide
 theorem b13 : Bytes.toB256 [13] = 13 := by decide
 theorem b14 : Bytes.toB256 [14] = 14 := by decide
-theorem b36 : Bytes.toB256 [32] + Bytes.toB256 [4] = 36 := by decide
 theorem b36' : Bytes.toB256 [32] + (4 : B256) = 36 := by decide
 
 theorem slot_ne_fixed {U : Key → Prop} (apart : SlotFootprint.Apart Key.slot fixedSlots U) {k : Key}

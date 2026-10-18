@@ -280,11 +280,6 @@ theorem div_160_toNat (x : B256) :
   rw [B256.toNat_div (by decide)]
   rfl
 
-theorem ne_zero_of_eqCheck_zero {x : B256} (h : B256.eqCheck x 0 = 0) : x ≠ 0 := by
-  intro hx
-  subst hx
-  exact absurd h (by decide)
-
 /-- The packed flag at byte 20 of a word, as the code reads it, is nonzero when the flag is set. -/
 theorem flag20_read {v : B256} (h : flag20 v = true) :
     Bytes.toB256 [0xff] &&& (v / Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
