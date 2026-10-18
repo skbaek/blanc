@@ -33,7 +33,6 @@ theorem pair_usdc_weth9_history_swap_live_finite {pair usdc weth : Adr} {cfg : C
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress)
@@ -95,7 +94,7 @@ theorem pair_usdc_weth9_history_swap_live_finite {pair usdc weth : Adr} {cfg : C
               ⟨0, sevm, _, .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) := by
   obtain ⟨-, finish, K', replayed, reserve0, -, reserve1, -⟩ := pair_usdc_weth9_joint_finite trace
-    joint pairFresh usdcFresh wethFresh governance quiet neverSigner factoryInstalled
+    joint pairFresh usdcFresh wethFresh governance quiet factoryInstalled
     factoryNotSystem
   have futureCode := (pair_history_replayed trace joint.weth9.pairCode joint.weth9.pairRep pairFresh).1
   obtain ⟨-, tokens⟩ := replayed.fixed joint.weth9.unlocked

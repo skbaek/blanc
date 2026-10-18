@@ -9,9 +9,9 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9ShareValueF
 (`pair_two_token_feeOn_product` / `pair_two_token_feeOff_product`) at the exhibit, with every generic
 premise discharged exactly as `pair_usdc_weth9_joint` discharges C6(a)'s.  The fee-on row keeps no
 token antecedent; the fee-off row keeps only the factory's fee-off answer `sourceReplayFeeOff`.
-Premises: the two-token joint checkpoint, the three HASH-T premises, USDC's governance premise F2,
-the never-signer premise for the Pair and the two factory premises.  No hypothesis mentions either
-token's answers.
+Premises: the two-token joint checkpoint, the three HASH-T premises, USDC's governance premise F2
+and the two factory premises (the never-signer fact comes from the checkpoint,
+`usdc_neverSigner_pair`).  No hypothesis mentions either token's answers.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -30,7 +30,6 @@ theorem pair_usdc_weth9_history_feeOn_product {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -47,7 +46,7 @@ theorem pair_usdc_weth9_history_feeOn_product {pair usdc weth : Adr}
             after.reserve0.val * after.reserve1.val *
               (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 := by
   exact pair_usdc_weth9_history_feeOn_product_finite trace joint.toF pairFresh usdcFresh
-    wethFresh governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled
+    wethFresh governance (joint.allowQuiet usdcFresh) factoryInstalled
     factoryNotSystem
 
 /-- **C6(b), fee off, the exhibit**: only the factory's fee-off answer stays. -/
@@ -60,7 +59,6 @@ theorem pair_usdc_weth9_history_feeOff_product {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -77,7 +75,7 @@ theorem pair_usdc_weth9_history_feeOff_product {pair usdc weth : Adr}
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
   exact pair_usdc_weth9_history_feeOff_product_finite trace joint.toF pairFresh usdcFresh
-    wethFresh governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled
+    wethFresh governance (joint.allowQuiet usdcFresh) factoryInstalled
     factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

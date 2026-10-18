@@ -8,8 +8,9 @@ import Blanc.Lift.Usdc.FiniteFootprintF
 `checkJoint2F pair usdc weth urows wrows prows base w` is `checkJoint2`
 (`UniswapV2PairUsdcWeth9CheckJoint.lean`) with `checkUsdc` replaced by the support-free
 `checkUsdcF`: the WETH9 side (`checkJoint … .one`), `token0 = usdc`, the Pair's USDC rows
-(`checkUsdcHolder`, reused verbatim), `pair ≠ usdc`, and the no-precompile fact stay exactly as
-they were.  `checkJoint2F_sound` is the soundness theorem, targeting `JointCheckpoint2F`.
+(`checkUsdcHolder`, reused verbatim), `pair ≠ usdc`, and the no-precompile facts (USDC's and the
+Pair's) stay exactly as they were.  `checkJoint2F_sound` is the soundness theorem, targeting
+`JointCheckpoint2F`.
 `checkUsdcHolder_soundW` (`UniswapV2PairUsdcWeth9CheckJoint.lean`) is the holder-rows fact
 under the weakened word-only premise: without support there is no `RowsSound`, but the proof of
 `checkUsdcHolder_sound` reads only its `word` field, so the same walk closes over
@@ -35,7 +36,8 @@ def checkJoint2F (pair usdc weth : Adr) (urows : List (Usdc.Key × B256))
   checkJoint pair weth wrows prows base .one w && Usdc.checkUsdcF usdc urows w &&
     decide (base.token0 = usdc) &&
     checkUsdcHolder urows (w.getStor usdc) pair base.reserve0.val && decide (pair ≠ usdc) &&
-    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp usdc)
+    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp usdc) &&
+    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp pair)
 
 /-- **Soundness of the support-free two-token joint checkpoint checker.** -/
 theorem checkJoint2F_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B256)}
@@ -44,7 +46,7 @@ theorem checkJoint2F_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B25
     JointCheckpoint2F pair usdc weth (rowKeys urows) (rowKeys wrows) (pairKeys prows)
       (rowsState base prows) w := by
   simp only [checkJoint2F, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨⟨hjoint, husdc⟩, htoken0⟩, hholder⟩, hapart⟩, hprecomp⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨hjoint, husdc⟩, htoken0⟩, hholder⟩, hapart⟩, hprecomp⟩, hpairPrecomp⟩ := h
   obtain ⟨installed, foot⟩ := Usdc.checkUsdcF_sound husdc
   obtain ⟨tracked, notFrozen, reserve, noAllowance⟩ :=
     checkUsdcHolder_soundW (Usdc.checkUsdcF_word husdc) hholder
@@ -58,7 +60,8 @@ theorem checkJoint2F_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B25
       noAllowance := noAllowance
       reserve := reserve
       apart := hapart
-      usdcNotPrecompile := fun s hfork => hprecomp s.fork hfork }
+      usdcNotPrecompile := fun s hfork => hprecomp s.fork hfork
+      pairNotPrecompile := fun s hfork => hpairPrecomp s.fork hfork }
 
 /-! ## Controls -/
 

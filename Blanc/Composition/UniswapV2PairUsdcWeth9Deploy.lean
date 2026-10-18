@@ -14,8 +14,8 @@ The WETH9 side and the Pair's storage are the predecessor's theorem.  USDC's sid
 the `initialize` frame touches only the Pair's storage (`initialize_run_frame`), and `usdcApart`
 puts USDC's account outside it, so USDC's three codes, its implementation slot, its footprint and
 the new address's rows are those of the `initialize` world, which agrees with the deployment world
-on USDC's storage.  The never-signer premise does not appear: it belongs to the headlines that need
-the holder laws (decision `usdc-neversigner-premise-form`).
+on USDC's storage.  The new address is no precompile (`pairNotPrecompile`, amendment A10): the
+checkpoint carries it so that the headlines derive the never-signer fact (`usdc_neverSigner_pair`).
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -27,7 +27,7 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.
 with `initialize` naming USDC as `token0` and WETH9 as `token1`, and USDC's checkpoint facts at the
 `initialize` world (installed codes, footprint invariant, storage agreeing with the deployment
 world's, the new address's balance row tracked, unflagged, with no tracked allowance row, USDC no
-precompile). -/
+precompile, the new address no precompile). -/
 theorem pair_usdc_weth9_create2_jointCheckpoint2 {usdc weth : Adr} {KU : Usdc.Key → Prop}
     {KW : Weth9.Key → Prop}
     {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {i sz salt : B256}
@@ -55,7 +55,10 @@ theorem pair_usdc_weth9_create2_jointCheckpoint2 {usdc weth : Adr} {KU : Usdc.Ke
         (Usdc.allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
     (usdcNotFrozen : Usdc.frozenBit ((b.state.getStor usdc).get
         (Usdc.balSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))) = false)
-    (usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) :
+    (usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc)
+    (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork →
+      ¬ s.rules.isPrecomp
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)) :
     ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
         (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
       post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
@@ -106,7 +109,7 @@ theorem pair_usdc_weth9_create2_jointCheckpoint2 {usdc weth : Adr} {KU : Usdc.Ke
     exact fun h => usdcApart h.symm
   have ipostStor : ipost.state.getStor usdc = ib.state.getStor usdc := stors usdc usdcNe
   have usdcStor' : ipost.state.getStor usdc = b.state.getStor usdc := ipostStor.trans usdcStor
-  rw [← htarget] at usdcTracked usdcNoAllowance usdcNotFrozen
+  rw [← htarget] at usdcTracked usdcNoAllowance usdcNotFrozen pairNotPrecompile
   exact
     { weth9 := joint
       usdcInstalled :=
@@ -140,6 +143,7 @@ theorem pair_usdc_weth9_create2_jointCheckpoint2 {usdc weth : Adr} {KU : Usdc.Ke
         exact usdcNoAllowance g row
       reserve := Nat.zero_le _
       apart := usdcNe
-      usdcNotPrecompile := usdcNotPrecompile }
+      usdcNotPrecompile := usdcNotPrecompile
+      pairNotPrecompile := pairNotPrecompile }
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

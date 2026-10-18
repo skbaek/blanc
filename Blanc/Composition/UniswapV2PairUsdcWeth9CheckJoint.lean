@@ -11,8 +11,9 @@ codes, the Pair's storage representation, WETH9's footprint, the Pair's WETH9 ro
 balance sum, the address facts), USDC's checkpoint checker (`checkUsdc`: the three runtimes, the
 implementation slot, USDC's footprint over `urows`, the ledger's fixed words), `token0 = usdc`, the
 Pair's USDC rows (`checkUsdcHolder`: its balance row listed, unflagged and covering `reserve0`, its
-listed allowance rows zero), `pair ≠ usdc`, and USDC's address no precompile of any covered fork.
-`checkJoint2_sound` is the soundness theorem.
+listed allowance rows zero), `pair ≠ usdc`, and neither USDC's nor the Pair's address a precompile
+of any covered fork (the Pair's half discharges `usdc_neverSigner_pair`'s `pairNotPrecompile`,
+amendment A10). `checkJoint2_sound` is the soundness theorem.
 
 **C7 controls.** `checkJoint2_allowance_control` and `checkJoint2_frozen_control` compose the
 statement controls `JointCheckpoint2.allowance_control`/`frozen_control` with soundness: on any
@@ -95,7 +96,8 @@ def checkJoint2 (pair usdc weth : Adr) (urows : List (Usdc.Key × B256))
   checkJoint pair weth wrows prows base .one w && Usdc.checkUsdc usdc urows w &&
     decide (base.token0 = usdc) &&
     checkUsdcHolder urows (w.getStor usdc) pair base.reserve0.val && decide (pair ≠ usdc) &&
-    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp usdc)
+    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp usdc) &&
+    decide (∀ f ∈ coveredForks, ¬ (Fork.ruleSet f).isPrecomp pair)
 
 /-- **Soundness of the two-token joint checkpoint checker.** -/
 theorem checkJoint2_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B256)}
@@ -104,7 +106,7 @@ theorem checkJoint2_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B256
     JointCheckpoint2 pair usdc weth (rowKeys urows) (rowKeys wrows) (pairKeys prows)
       (rowsState base prows) w := by
   simp only [checkJoint2, Bool.and_eq_true, decide_eq_true_eq] at h
-  obtain ⟨⟨⟨⟨⟨hjoint, husdc⟩, htoken0⟩, hholder⟩, hapart⟩, hprecomp⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨hjoint, husdc⟩, htoken0⟩, hholder⟩, hapart⟩, hprecomp⟩, hpairPrecomp⟩ := h
   obtain ⟨installed, foot⟩ := Usdc.checkUsdc_sound husdc
   obtain ⟨tracked, notFrozen, reserve, noAllowance⟩ :=
     checkUsdcHolder_sound (checkUsdc_rows husdc) hholder
@@ -118,7 +120,8 @@ theorem checkJoint2_sound {pair usdc weth : Adr} {urows : List (Usdc.Key × B256
       noAllowance := noAllowance
       reserve := reserve
       apart := hapart
-      usdcNotPrecompile := fun s hfork => hprecomp s.fork hfork }
+      usdcNotPrecompile := fun s hfork => hprecomp s.fork hfork
+      pairNotPrecompile := fun s hfork => hpairPrecomp s.fork hfork }
 
 /-! ## C7 controls -/
 
