@@ -220,7 +220,7 @@ theorem rx_oc_p1 {sevm : Sevm} {b : Devm} {σ : Stor} {M : Mem} {img : Bytes} {G
     rw [hR.read, show (0x31c : B256).toNat = 0x31c by decide, show (0x44 : B256).toNat = 0x44 by decide]
     exact oc_burn_input _ _ _
   obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hburn b8 [] M g9 hL.w (by omega) (by omega) hin
+    hburn b8 [] M g9 hL.w (by omega) (by omega) hin (by hrs)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x31c : B256).toNat = 0x31c by decide, show (0x44 : B256).toNat = 0x44 by decide,

@@ -114,19 +114,21 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
     (by rw [hcost] at hG; omega) hG256 (fun D' h _ => ⟨D', rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the frame's first child is the supply call the forward run made: it answered `T`
-  obtain ⟨r1, hr1, b1, S1, M1, g1, rfl, hW1, hU1, hg1, hin1⟩ := rx_rli_toSupply (pre := pre)
+  obtain ⟨r1, hr1, b1, S1, M1, g1, rfl, hW1, hU1, hg1, hin1, hS1⟩ := rx_rli_toSupply (pre := pre)
     (U := U) (G := G) hfork hstatic hlen hcd hsel hid hWc hWb hck.unlocked hval hkill
     (by rw [hcost] at hG; omega) (by omega)
   have hx : XAt sevm D 0 (St pre [] Mem.empty G) (Exec.childFrames exc) :=
     XAt.of_exec exc (by omega)
-  obtain ⟨pc1, m1, a1, -, μ1, hx1, hchk1, -⟩ := xa_cutAt_start checkedM
-    (Cert.jumpsOkM_of_jumpsOkM cert_jumpsOkM) hcode hfork rfl rfl rfl rfl
-    rfl (SFunc.cutAt_of_cutPathOk _ _ rliSupplyPath_ok) hr1 hx
+  obtain ⟨m1, pc1, a1, μ1, hw1⟩ := xa_cutAt_start checkedM
+    (Cert.jumpsOkM_of_jumpsOkM cert_jumpsOkM) hcode hfork (E := []) rfl rfl rfl rfl rfl rfl rfl
+    (SFunc.cutCall_of_cutPathOk _ _ rliSupplyPath_ok) hr1 hx
+  have hx1 := hw1.xat
+  have hchk1 := hw1.check
   obtain ⟨X, hX⟩ : ∃ X, SFunc.subAt cert.prog rliSupplyPath t_0000_c0 =
       .next (.exec .staticcall) X := ⟨_, rfl⟩
   rw [hX] at hchk1
   obtain ⟨c, L', hL, -, -, -, hcT⟩ := xa_staticWordOkAt hfork (checkNodeM_next_at hcode hchk1) hx1
-    hsup hW1 hU1 hg1 hin1 htok
+    hsup hW1 hU1 hg1 hin1 htok hS1
   -- the safety result for that execution
   obtain ⟨hkp, hidk⟩ := hkeep D exc
   obtain ⟨T', o', hstep', hraw, c', L'', hL', hc'⟩ := removeLiquidityImbalance_rawE exc hcode hfork

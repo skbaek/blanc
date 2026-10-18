@@ -135,7 +135,7 @@ theorem rx_cw_a2 {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem} 
     rw [hR.read, show (0x2bc : B256).toNat = 0x2bc by decide, show (4 : B256).toNat = 4 by decide,
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
     decide
-  refine rxe_staticWord (o := 0x300) (s := 0x320) hL hW'c hsup (by omega) (by omega) hin hR hW rfl
+  refine rxe_staticWord (o := 0x300) (s := 0x320) hL hW'c hsup (by omega) (by omega) (by hrs) hin hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; decide) (by decide) ?_
   intro d M' out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2
   clear hR hW hsz hin

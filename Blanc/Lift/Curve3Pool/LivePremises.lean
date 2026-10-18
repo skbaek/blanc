@@ -23,6 +23,10 @@ Two choices make the premises satisfiable by real callees:
   (e.g. "the pool holds enough of each coin, the coins' code is as deployed") and proves these
   facts for concrete callees.
 
+Each premise also asks the stack below the call's operands to leave room for the result flag
+(`S.length < 1024`, the identity and code-call steps' own condition): without it a long `S`
+admits no successor state and no callee could satisfy the premise.
+
 The premises are stated per call window (`StaticWordOkAt`, `MutCallOkAt`; the call-site
 world `W`, the world left `W'`): `SupplyOkAt` (`totalSupply()`), `CoinBalOkAt` (`balanceOf(self)`,
 the fee coin's balance-difference path), `CoinPushOkAt` (`transfer`), `CoinPullOkAt`
@@ -61,7 +65,7 @@ leaves (equal for every call except where a later reply must differ, as `exchang
 def StaticWordOkAt (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes) (A : B256)
     (U : Nat) (ii is oi : B256) : Prop :=
   ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
-    (M.read ii.toNat is.toNat).1 = data →
+    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
     ∃ d out, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .staticcall) d ∧
       StaticCallPost b d S M ii is oi 0x20 1 out ∧ 32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
@@ -73,7 +77,7 @@ passes `ok`, the pool's storage is kept. -/
 def MutCallOkAt (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes)
     (ok : Bytes → Prop) (U : Nat) (ii is oi : B256) : Prop :=
   ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
-    (M.read ii.toNat is.toNat).1 = data →
+    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
     ∃ d, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: 0 :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .call) d ∧
       MutableCallPost b d S M ii is oi 0x20 1 ∧ ok d.returnData ∧
@@ -134,6 +138,7 @@ own definition: it is `BurnOkAt` at `(0x61c, 0x6a0)` without the `IdReady` conju
 def BurnOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
   ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
     (M.read 0x61c 0x44).1 = burnFromSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes →
+    S.length < 1024 →
     ∃ d, Ninst.RunCompiled sevm
         (St b (Nat.toB256 G :: t :: 0 :: 0x61c :: 0x44 :: 0x6a0 :: 0x20 :: S) M G) (.exec .call) d ∧
       MutableCallPost b d S M 0x61c 0x44 0x6a0 0x20 1 ∧ 32 ≤ d.returnData.length ∧
@@ -143,8 +148,8 @@ def BurnOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
 /-- The generalized burn premise at `remove_liquidity`'s window gives `BurnOk`. -/
 theorem BurnOkAt.burnOk {sevm : Sevm} {W : Devm → Prop} {t amt : B256} {U : Nat}
     (h : BurnOkAt sevm W W t amt U 0x61c 0x6a0) : BurnOk sevm W t amt U := by
-  intro b S M G hW hU hG hin
-  obtain ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd, -⟩ := h b S M G hW hU hG hin
+  intro b S M G hW hU hG hin hS
+  obtain ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd, -⟩ := h b S M G hW hU hG hin hS
   exact ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd⟩
 
 end Blanc.Lift.Curve3Pool
