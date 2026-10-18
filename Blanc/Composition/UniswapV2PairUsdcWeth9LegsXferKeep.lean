@@ -157,3 +157,17 @@ theorem usdcTransferCall_tokenStor (cg : Nat) {k : B256} (wf : Mem.Wf M) (lower 
 end Keep
 
 end Blanc.Composition.UsdcLive
+
+namespace Blanc.Composition.UniswapV2PairUsdcWeth9
+
+open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Composition.UniswapV2PairWeth9Joint
+
+/-- WETH9's `transfer` post: its world is the transfer tail's (shared by the swap and burn rows). -/
+theorem weth9TransferPost_state (s : Sevm) (b : Devm) (G : Nat) :
+    (weth9TransferPost s b G).state = (xferTailPost s (Weth9.pB1 s b s.caller) s.caller
+      (Sevm.dataWord s 4).toAdr (Sevm.dataWord s 36)).state := by
+  unfold weth9TransferPost transferWrapperPost
+  rw [Devm.withOutput_state, Devm.memRead_state]
+  exact St_state _ _ _ _
+
+end Blanc.Composition.UniswapV2PairUsdcWeth9

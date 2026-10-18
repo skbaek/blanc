@@ -336,13 +336,6 @@ theorem burnWethFinal1_withGasLeft (sevm : Sevm) (M : Mem) (p0 : B256) (w : Burn
 USDC's facts cross WETH9's `transfer` (an explicit post writing storage at WETH9 only), and its
 installation crosses any world change that keeps the nonempty codes and the implementation slot. -/
 
-theorem weth9TransferPost_state' (s : Sevm) (b : Devm) (G : Nat) :
-    (weth9TransferPost s b G).state = (xferTailPost s (Weth9.pB1 s b s.caller) s.caller
-      (Sevm.dataWord s 4).toAdr (Sevm.dataWord s 36)).state := by
-  unfold weth9TransferPost transferWrapperPost
-  rw [Devm.withOutput_state, Devm.memRead_state]
-  exact St_state _ _ _ _
-
 /-- **WETH9's `transfer` CALL writes storage at the token only.** -/
 theorem wethTransferCall_storOff (sevm : Sevm) (W : Devm) (L : List B256) (M : Mem)
     (p amount toWord token rho : B256) (cg : Nat) {a : Adr} (ha : a ≠ (tokenMask token).toAdr) :
@@ -361,7 +354,7 @@ theorem wethTransferCall_storOff (sevm : Sevm) (W : Devm) (L : List B256) (M : M
     rw [callSpawnParent_state, addAccessedAddress_setMach_state]
   have ne : s.currentTarget ≠ a := by rw [ht]; exact Ne.symm ha
   unfold wethTransferCall wethTransferCallAt
-  rw [hs, (callChildPost_facts_zero _ _ _ (B256.toNat 0) rfl).2.2.2.1, weth9TransferPost_state', ← hb]
+  rw [hs, (callChildPost_facts_zero _ _ _ (B256.toNat 0) rfl).2.2.2.1, weth9TransferPost_state, ← hb]
   change Devm.getStor (xferTailPost s (Weth9.pB1 s _ s.caller) s.caller (Sevm.dataWord s 4).toAdr
     (Sevm.dataWord s 36)) a = Devm.getStor _ a
   unfold xferTailPost

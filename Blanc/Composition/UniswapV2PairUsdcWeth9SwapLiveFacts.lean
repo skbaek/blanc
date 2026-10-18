@@ -23,13 +23,6 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Composition.UniswapV2
 
 /-! ## WETH9's `transfer` keeps the other accounts' storage -/
 
-theorem weth9TransferPost_state (s : Sevm) (b : Devm) (G : Nat) :
-    (weth9TransferPost s b G).state = (xferTailPost s (Weth9.pB1 s b s.caller) s.caller
-      (Sevm.dataWord s 4).toAdr (Sevm.dataWord s 36)).state := by
-  unfold weth9TransferPost transferWrapperPost
-  rw [Devm.withOutput_state, Devm.memRead_state]
-  exact St_state _ _ _ _
-
 section WethKeep
 
 variable (sevm : Sevm) (W : Devm) (L : List B256) (M : Mem) (p amount toWord token rho : B256)
