@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.NeverSigner
 import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.StaticSilent
 
 /-!
 # The Pair never signs a USDC entry (unit N, amendment A10)
@@ -24,5 +25,6 @@ theorem usdc_neverSigner_pair {P pair : Adr} {K₀ : Key → Prop} {cfg : ChainC
     (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) :
     NeverSigner P (usdcBookS P) tr pair :=
   usdc_neverSigner_pairCode tr hist.toUsdcHistF rfl installed pairNotPrecompile
+    not_staticAnswered_pair
 
 end Blanc.Composition.UsdcToken

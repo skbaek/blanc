@@ -32,14 +32,16 @@ def LibRejects (pair : Adr) : Prop :=
 
 namespace LibSeam
 
-/-- U7a's library lemma, in the seam's shape. -/
-theorem lib_rejects_pair {pair : Adr} : LibRejects pair := by
+/-- U7a's library lemma, in the seam's shape (amendment A11: the Pair-silence
+hypothesis `hsilent`, discharged in composition). -/
+theorem lib_rejects_pair {pair : Adr}
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) : LibRejects pair := by
   intro sevm pre post run code fork hmem hstack hword hpair notPre
   have hdw : (Sevm.dataWord sevm 4).toAdr = pair := by
     rw [Sevm.dataWord, show (4 : B256).toNat = 4 from rfl, hword, toAdr_toB256]
   rw [St.self hstack hmem] at run
   obtain ⟨hlen, htake⟩ := Usdc.lib_rejects_pair run code fork
-    (by rw [hdw]; exact hpair) (by rw [hdw]; exact notPre)
+    (by rw [hdw]; exact hpair) (by rw [hdw]; exact notPre) hsilent
   refine ⟨hlen, ?_⟩
   rw [List.takeD_eq_take _ hlen, htake]
   decide

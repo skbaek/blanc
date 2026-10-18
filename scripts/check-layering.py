@@ -241,6 +241,12 @@ SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
 
 SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
 
+# The Pair's deployed runtime bytes as shared data (emitted by the registered
+# certificate generator, amendment A11) and the contract-neutral one-selector
+# silence predicate (amendment A11): both strata name the same bytes and the
+# same predicate, and no contract module imports another contract's.
+SHARED += ["Lift.PairCode", "Lift.StaticSilent"]
+
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 
 # The positional frame ladder, root-frame caller facts, the generic token core over a settled
@@ -609,6 +615,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairLockedEntries",
         "Lift.UniswapV2Pair.LockedSupply",
         "Lift.UniswapV2Pair.StaticViewClassify",
+        "Lift.UniswapV2Pair.StaticSilent",
         "Lift.UniswapV2Pair.StaticViewSource",
         "Lift.UniswapV2Pair.StaticViewTurns",
         "Lift.UniswapV2Pair.UpdateWalk",

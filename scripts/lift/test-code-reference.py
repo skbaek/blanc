@@ -50,6 +50,20 @@ with tempfile.TemporaryDirectory(prefix="lift-code-reference-") as directory:
     require(literal in legacy.read_text() and referenced.read_text() == expected,
             "only import and code owner differ from legacy output")
 
+    trio = [*pair, "--code-out", str(scratch / "Code.lean"),
+            "--code-header", "GENERATED trio control", "--omit-code-def"]
+    result = invoke([*common, "--cert-out", str(scratch / "split.lean"), *trio])
+    require(result.returncode == 0, "split data-module emission", result)
+    split_cert = (scratch / "split.lean").read_text()
+    split_data = (scratch / "Code.lean").read_text()
+    require("def code" not in split_cert and "codeChunk" not in split_cert
+            and "import Blanc.SystemContracts" in split_cert,
+            "certificate carries no byte literal", result)
+    require(literal in split_data
+            and "namespace Blanc.Lift.ReferenceControl" in split_data
+            and split_data.endswith("end Blanc.Lift.ReferenceControl\n"),
+            "data module owns the literal bytes", result)
+
     malformed = [
         (["--code-import", "Blanc.SystemContracts"], "must be supplied together"),
         (["--code-ref", "Blanc.withdrawalRequestCode"], "must be supplied together"),
@@ -61,6 +75,11 @@ with tempfile.TemporaryDirectory(prefix="lift-code-reference-") as directory:
         (["--code-import", "Blanc.SystemContracts", "--code-ref", "Blanc.«code»"], "--code-ref must be"),
         (["--code-import", "Blanc.SystemContracts", "--code-ref", "Blanc._"], "--code-ref must be"),
         (["--code-import", "", "--code-ref", "Blanc.code"], "--code-import must be"),
+        (["--omit-code-def"], "--omit-code-def needs --code-import and --code-ref"),
+        ([*pair, "--code-out", "Code.lean", "--omit-code-def"],
+         "--code-out needs --code-header and --omit-code-def"),
+        ([*pair, "--code-out", "Code.lean", "--code-header", "x"],
+         "--code-out needs --code-header and --omit-code-def"),
     ]
     for index, (options, diagnostic) in enumerate(malformed):
         output = scratch / f"bad-{index}.lean"
@@ -113,5 +132,24 @@ with tempfile.TemporaryDirectory(prefix="lift-code-reference-") as directory:
     result = invoke([*registry_args, "--verify"])
     require(result.returncode == 0 and (registry_root / "Cert.lean").read_bytes() == baseline,
             "removing malformed option restores byte-identical green registry")
+
+    trio_options = dict(valid_options, code_out="Code.lean",
+                        code_header="GENERATED trio control", omit_code_def=True)
+    save(trio_options)
+    result = invoke([*registry_args, "--write"])
+    require(result.returncode == 0, "registry writes the data module", result)
+    trio_cert = (registry_root / "Cert.lean").read_text()
+    trio_data = (registry_root / "Code.lean").read_text()
+    require("def code" not in trio_cert and literal in trio_data,
+            "registry certificate references the data module", result)
+    result = invoke([*registry_args, "--verify"])
+    require(result.returncode == 0, "registry data-module regeneration", result)
+    save({"code_import": "Blanc.SystemContracts", "code_ref": "Blanc.withdrawalRequestCode",
+          "code_out": "Code.lean"})
+    result = invoke([*registry_args, "--write"])
+    require(result.returncode == 1 and "must be supplied together" in result.stdout
+            and (registry_root / "Cert.lean").read_text() == trio_cert
+            and (registry_root / "Code.lean").read_text() == trio_data,
+            "malformed registry trio rejected without output rewrite", result)
 
 print(f"OK — code-reference emission: {COUNT} focused controls; malformed options reject before output changes; no Lean invoked")

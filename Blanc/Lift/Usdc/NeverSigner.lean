@@ -44,7 +44,8 @@ theorem usdc_neverSigner_pairCode {P pair : Adr} {K₀ : Key → Prop} {cfg : Ch
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHistF P K₀ tr) {sem : CodeSem} (image : sem.image = some UniswapV2Pair.code.toList)
     (installed : some (checkpoint.state.getCode pair).toList = sem.image)
-    (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) :
+    (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) :
     NeverSigner P (usdcBookS P) tr pair := by
   refine ⟨fun g member entry _ signed => ?_⟩
   change usdcSigner g.sevm = some pair at signed
@@ -87,6 +88,6 @@ theorem usdc_neverSigner_pairCode {P pair : Adr} {K₀ : Key → Prop} {cfg : Ch
     cfacts
   intro sevm' pre' post' run' _ cfacts ct ccode fresh gas pairCode csigned
   exact impl_signed_not_ok run' ccode cfacts.fork cfacts.fork.rules_stateGas_none ct fresh.2 fresh.1
-    gas cfacts.codes.2.2 pairCode (pairNotPrecompile _ cfacts.fork) LibSeam.lib_rejects_pair csigned
+    gas cfacts.codes.2.2 pairCode (pairNotPrecompile _ cfacts.fork) (LibSeam.lib_rejects_pair hsilent) csigned
 
 end Blanc.Lift.Usdc
