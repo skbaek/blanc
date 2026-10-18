@@ -428,6 +428,7 @@ def wsNode (es : List Entry) (ann : List WAnn) (R : WRet) :
     match a, σ.kv, es[k]?, ann[k]? with
     | .const _ :: a', _ :: kv, some e, some A =>
       let cw := kv.take e.frame.length
+      decide (e.frame.length ≤ kv.length) &&
       A.entry == WSt.param e.frame.length && decide (A.ret.prov.length = e.rets) &&
         (!R.keeps || A.ret.keeps) &&
         A.ret.sites.all (fun s => R.sites.any (·.covers (instSite (cw.map σ.provOf) σ.guards s))) &&
