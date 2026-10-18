@@ -126,6 +126,22 @@ import Blanc.Composition.UniswapV2PairWeth9Deploy
 import Blanc.Composition.UniswapV2PairWeth9Capstone
 import Blanc.Composition.UniswapV2PairWeth9CheckJoint
 import Blanc.Lift.UniswapV2Factory.CallShape
+import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
+import Blanc.Composition.UniswapV2PairUsdcWeth9ShareValue
+import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLive
+import Blanc.Composition.UniswapV2PairUsdcWeth9MintLive
+import Blanc.Composition.UniswapV2PairUsdcWeth9BurnLive
+import Blanc.Composition.UniswapV2PairUsdcWeth9SkimLive
+import Blanc.Composition.UniswapV2PairUsdcWeth9SwapLive
+import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
+import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJoint
+import Blanc.Composition.UsdcToken
+import Blanc.Lift.Usdc.ProxyOk
+import Blanc.Lift.Usdc.Book
+import Blanc.Lift.Usdc.HistoryEndFoot
+import Blanc.Lift.Usdc.Governance
+import Blanc.Lift.Usdc.HistoryReplay
+import Blanc.Lift.Token.Signed
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -14369,4 +14385,571 @@ example : ClosedSwapOutcome W0 :=
   uniswap_weth9_closed_instance
 
 end Blanc.Composition.UniswapV2PairWeth9Capstone
+
+
+-- usdc-weth9-pair-composition-v1: the USDC x WETH9 Pair joint invariant, share rows, liveness rows and checkpoint
+namespace Blanc.Composition.UniswapV2PairUsdcWeth9
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
+  Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
+  Blanc.Composition.UsdcToken Blanc.Composition.UsdcLive Blanc.Composition.PairTwoToken
+  Blanc.Composition.Weth9Token
+
+example : ∀ {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {w : Jaune.State},
+    JointCheckpoint pair weth KW KP st₀ .one w →
+    Usdc.UsdcInstalled usdc w →
+    Usdc.FootInv KU (w.getStor usdc) →
+    st₀.token0 = usdc →
+    KU (.bal pair) →
+    Usdc.frozenBit ((w.getStor usdc).get (Usdc.balSlot pair)) = false →
+    (∀ g, KU (.allow pair g) → (w.getStor usdc).get (Usdc.allowSlot pair g) = 0) →
+    st₀.reserve0.val ≤ Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pair)) →
+    pair ≠ usdc →
+    (∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) →
+    JointCheckpoint2 pair usdc weth KU KW KP st₀ w :=
+  @JointCheckpoint2.mk
+
+example {pair usdc weth : Adr}
+    {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
+    {KW : Weth9.Key → Prop} {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress) :
+    (∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      trace.settledFrames = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
+      ¬ Usdc.UsdcShadowed usdc trace before f →
+      ∃ (st : UniswapV2Pair.State) (K : WriterKey → Prop),
+        WriterRep K (f.pre.state.getStor pair) st ∧ st.unlocked = 1 ∧ st.token0 = usdc ∧
+          st.token1 = weth ∧
+          st.reserve0.val ≤
+            (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (f.pre.state.getStor usdc)).bal pair ∧
+          (∀ g, (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU)
+            (f.pre.state.getStor usdc)).allow pair g = 0) ∧
+          st.reserve1.val ≤
+            ((Weth9.ledger (Weth9.historyKeyUniverse weth trace KW) (f.pre.state.getStor weth)).bal
+              pair).toNat ∧
+          ∀ g, (Weth9.ledger (Weth9.historyKeyUniverse weth trace KW)
+            (f.pre.state.getStor weth)).allow pair g = 0) ∧
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+        finish.reserve0.val ≤ Usdc.balanceBits ((future.state.getStor usdc).get (Usdc.balSlot pair)) ∧
+        (∀ g, Usdc.historyKeyUniverse usdc trace KU (.allow pair g) →
+          (future.state.getStor usdc).get (Usdc.allowSlot pair g) = 0) ∧
+        finish.reserve1.val ≤ ((future.state.getStor weth).get (Weth9.balSlot pair)).toNat ∧
+        ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
+          (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 :=
+  pair_usdc_weth9_joint trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+
+example {pair usdc weth : Adr}
+    {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
+    {KW : Weth9.Key → Prop} {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st₀ (steps.map PairStep.source) →
+          0 < before.totalSupply.toNat →
+          before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+            after.reserve0.val * after.reserve1.val *
+              (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 :=
+  pair_usdc_weth9_history_feeOn_product trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+
+example {pair usdc weth : Adr}
+    {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
+    {KW : Weth9.Key → Prop} {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayFeeOff st₀ (steps.map PairStep.source) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
+  pair_usdc_weth9_history_feeOff_product trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+
+example {pair usdc weth : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress)
+    {sevm : Sevm} {pre : Devm}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = UniswapV2Pair.code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm)
+    (depth : 2 ≤ sevm.depth)
+    (notAdmin : pair ≠ Usdc.adminOf pre.state usdc)
+    (recipientFresh : swapAmount0Out sevm ≠ 0 →
+      Usdc.KeysFresh (Usdc.historyKeyUniverse usdc trace KU) [.bal (swapRecipient sevm)])
+    (usdcLive : swapAmount0Out sevm ≠ 0 →
+      UsdcTransferOk (Usdc.ledger (SlotFootprint.extendBy (Usdc.historyKeyUniverse usdc trace KU)
+        [.bal (swapRecipient sevm)]) (pre.state.getStor usdc))
+        pair (swapRecipient sevm) (swapAmount0Out sevm).toNat) :
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+      ∀ {dC : Devm} {cgC g : Nat}
+        (callee : SwapBackCalleeEnvUW sevm
+          (swapFrontCutWorld sevm pre (usdcLeg0Skel sevm pre finish)
+            (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC)
+          (swapFrontCutMem sevm (usdcLeg0Skel sevm pre finish)
+            (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC)
+          (swapFrontCutMem sevm (usdcLeg0Skel sevm pre finish)
+            (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC).size
+          (swapFrontPtr sevm (usdcLeg0Skel sevm pre finish)
+            (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)))
+          (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        {d0 d1 : Devm} {cg0 cg1 : Nat}
+        (_leg1 : (d1, cg1) = swapWethLeg1 sevm pre finish (usdcLeg0Skel sevm pre finish) cgC callee.gas)
+        (_leg0 : (d0, cg0) = swapUsdcLeg0 sevm pre finish cg1 cgC callee.gas)
+        (_front : SwapFrontEnvUW sevm pre finish d0 d1 dC cg0 cg1 cgC callee.gas)
+        (_frameGas : swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+          swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166 < 2 ^ 256)
+        (_callbackRoom : 3200 ≤ swapFrontCallbackGas sevm pre d0 d1 cgC callee.gas)
+        (_readGas : callee.callGas0 < 2 ^ 256 ∧ callee.callGas1 < 2 ^ 256)
+        (_transferGas : cg0 < 2 ^ 256 ∧ cg1 < 2 ^ 256)
+        (_leg0Room : swapAmount0Out sevm ≠ 0 → usdcLeg0Budget sevm pre finish ≤
+          except64th (usdcLeg0Need sevm pre finish cg1 cgC callee.gas + usdcLeg0Used sevm pre finish))
+        (_callbackGovernance : swapDataLength sevm ≠ 0 →
+          ((swapFrontCutWorld sevm pre d0 d1 dC).state.getStor usdc).get Usdc.implSlot =
+              Usdc.usdcImpl.toB256 ∧
+            pair ≠ Usdc.adminOf (swapFrontCutWorld sevm pre d0 d1 dC).state usdc),
+        SwapContextConditions (writerContext sevm []) →
+        SwapModelConditions finish (swapAmount0Out sevm) (swapAmount1Out sevm) (swapRecipient sevm)
+          (swapBalanceWord callee.d0.returnData) (swapBalanceWord callee.d1.returnData) →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty
+            (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+              swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166))
+            (.ok (St callee.post [0x022c0d9f] callee.memory g)),
+          (WriterFreshKeys (pairHistoryUniverse pair trace KP)
+              (pairDerivKeys ⟨0, sevm, _, .ok _, run⟩) →
+            PairAdmittedOutcome
+              (WriterExtend (pairHistoryUniverse pair trace KP)
+                (pairDerivKeys ⟨0, sevm, _, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, _, .ok _, run⟩
+              (St callee.post [0x022c0d9f] callee.memory g)) :=
+  pair_usdc_weth9_history_swap_live trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector guards depth notAdmin recipientFresh usdcLive
+
+example {pair usdc weth : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress)
+    {sevm : Sevm} {pre d0 d1 : Devm} {callGas0 callGas1 G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = UniswapV2Pair.code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9) (static : sevm.isStatic = false)
+    (depth : 2 ≤ sevm.depth)
+    (notAdmin : pair ≠ Usdc.adminOf pre.state usdc)
+    (sentry : gCallStipend <
+      (callGas0 + 5 + 22 + temporalAccountAccessCost (syncFirstWorld sevm pre)
+        (syncFirstToken sevm pre).toAdr) + sloadCost sevm (syncLockedWorld sevm pre) 6 + 119 +
+      sstoreCost sevm (afterSload sevm pre 12) 12 0)
+    (_read1 : (d1, callGas1) = syncWethRead1 sevm (syncUsdcRead0Skel sevm pre) G)
+    (_read0 : (d0, callGas0) = syncUsdcRead0 sevm pre callGas1)
+    (fits0 : callGas0 < 2 ^ 256) (fits1 : callGas1 < 2 ^ 256)
+    (room0 : usdcBalNeed sevm (syncFirstWorld sevm pre) syncTail getterInitMemory 128
+        (syncFirstToken sevm pre) ≤
+      except64th (syncRead0Need sevm callGas1 (syncUsdcRead0Skel sevm pre) +
+        usdcBalUsed sevm (syncFirstWorld sevm pre) syncTail getterInitMemory 128
+          (syncFirstToken sevm pre)))
+    (room1 : balUsed sevm (afterSload sevm d0 7) (syncTail1 d0)
+        (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData) 128 (syncToken1 sevm d0) ≤
+      except64th (syncRead1Need sevm d0 G (wethBalanceSkel sevm (afterSload sevm d0 7) (syncTail1 d0)
+          (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData) 128
+          (syncToken1 sevm d0)) +
+        balUsed sevm (afterSload sevm d0 7) (syncTail1 d0)
+          (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData) 128
+          (syncToken1 sevm d0))) :
+    SyncLiveOutcome pair trace KP st₀ sevm pre d0 d1 callGas0 G :=
+  pair_usdc_weth9_history_sync_live trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector static depth notAdmin sentry _read1 _read0 fits0 fits1 room0 room1
+
+example {pair usdc weth : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress)
+    {sevm : Sevm} {pre : Devm} {G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = UniswapV2Pair.code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842) (depth : 2 ≤ sevm.depth)
+    (notAdmin : pair ≠ Usdc.adminOf pre.state usdc)
+    (callee : MintCalleeRest sevm pre [0x6a627842] getterInitMemory
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43))
+    (_read1 : (callee.d1, callee.callGas1) = mintWethRead1 sevm
+      (mintUsdcRead0Skel sevm (mintCacheWorld sevm pre) [0x6a627842] getterInitMemory
+        (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256 0x039b)
+      [0x6a627842] getterInitMemory (mintR1 sevm pre) (mintR0 sevm pre)
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b callee.factoryGas)
+    (_read0 : (callee.d0, callee.callGas0) = mintUsdcRead0 sevm (mintCacheWorld sevm pre)
+      [0x6a627842] getterInitMemory (mintR1 sevm pre) (mintR0 sevm pre)
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b callee.callGas1)
+    (fits0 : callee.callGas0 < 2 ^ 256) (fits1 : callee.callGas1 < 2 ^ 256)
+    (room0 : usdcBalNeed sevm (afterSload sevm (mintCacheWorld sevm pre) 6)
+        (mintTail0 [0x6a627842] (mintR1 sevm pre) (mintR0 sevm pre)
+          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b) getterInitMemory 128
+        (mintToken0 sevm (mintCacheWorld sevm pre)) ≤
+      except64th (mintRead0Need sevm callee.callGas1
+          (mintUsdcRead0Skel sevm (mintCacheWorld sevm pre) [0x6a627842] getterInitMemory
+            (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256 0x039b) +
+        usdcBalUsed sevm (afterSload sevm (mintCacheWorld sevm pre) 6)
+          (mintTail0 [0x6a627842] (mintR1 sevm pre) (mintR0 sevm pre)
+            (Sevm.dataWord sevm 4).toAdr.toB256 0x039b) getterInitMemory 128
+          (mintToken0 sevm (mintCacheWorld sevm pre))))
+    (room1 : balUsed sevm (afterSload sevm callee.d0 7)
+        (mintTail1 callee.d0 [0x6a627842] (mintR1 sevm pre) (mintR0 sevm pre)
+          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b)
+        (balanceReplyMemory getterInitMemory sevm.currentTarget callee.d0.returnData) 128
+        (syncToken1 sevm callee.d0) ≤
+      except64th (mintRead1Need sevm callee.factoryGas (wethBalanceSkel sevm
+          (afterSload sevm callee.d0 7)
+          (mintTail1 callee.d0 [0x6a627842] (mintR1 sevm pre) (mintR0 sevm pre)
+            (Sevm.dataWord sevm 4).toAdr.toB256 0x039b)
+          (balanceReplyMemory getterInitMemory sevm.currentTarget callee.d0.returnData) 128
+          (syncToken1 sevm callee.d0)) +
+        balUsed sevm (afterSload sevm callee.d0 7)
+          (mintTail1 callee.d0 [0x6a627842] (mintR1 sevm pre) (mintR0 sevm pre)
+            (Sevm.dataWord sevm 4).toAdr.toB256 0x039b)
+          (balanceReplyMemory getterInitMemory sevm.currentTarget callee.d0.returnData) 128
+          (syncToken1 sevm callee.d0)))
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace KP)
+      (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
+        lpMintTouched callee.feeTo)) :
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        (runTyped finish (writerContext sevm []) (.mint (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ (liquidity : B256)
+          (run : Exec 0 sevm (St pre [] Mem.empty (callee.gas + 228))
+            (.ok (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))),
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).gasLeft = G ∧
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).output =
+            liquidity.toBytes ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace KP)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩) →
+            PairAdmittedOutcome
+              (WriterExtend (pairHistoryUniverse pair trace KP)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
+              (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G)) :=
+  pair_usdc_weth9_history_mint_live trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem target state codeEq fork output representable value size guard selector depth notAdmin callee _read1 _read0 fits0 fits1 room0 room1 rowsFresh
+
+example {pair usdc weth : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress)
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = UniswapV2Pair.code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44) (depth : 2 ≤ sevm.depth)
+    (notAdmin : pair ≠ Usdc.adminOf pre.state usdc)
+    (callee : BurnEnvUW sevm pre g) (usdcSentries : callee.UsdcSentries)
+    (wethSentries : callee.WethSentries)
+    (recipientFresh : Usdc.KeysFresh (Usdc.historyKeyUniverse usdc trace KU)
+      [.bal (Sevm.dataWord sevm 4).toAdr])
+    (usdcLive : UsdcTransferOk
+      (Usdc.ledger (SlotFootprint.extendBy (Usdc.historyKeyUniverse usdc trace KU)
+        [.bal (Sevm.dataWord sevm 4).toAdr]) (pre.state.getStor usdc))
+      pair (Sevm.dataWord sevm 4).toAdr callee.words.amount0.toNat)
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace KP)
+      (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo)) :
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final0 →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final1 →
+        (runTyped finish (writerContext sevm []) (.burn (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace KP)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairAdmittedOutcome
+              (WriterExtend (pairHistoryUniverse pair trace KP)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
+  pair_usdc_weth9_history_burn_live trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem target state codeEq fork output representable value size guard selector depth notAdmin callee usdcSentries wethSentries recipientFresh usdcLive rowsFresh
+
+example {pair usdc weth : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
+    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
+    (pairFresh : WriterFreshKeys KP (pairHistoryTouchedKeys pair trace))
+    (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
+    (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
+    (governance : Usdc.UsdcGovernance usdc trace)
+    (factoryInstalled :
+      some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
+    (factoryNotSystem : st₀.factory ≠ systemAddress)
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = UniswapV2Pair.code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (static : sevm.isStatic = false) (depth : 2 ≤ sevm.depth)
+    (notAdmin : pair ≠ Usdc.adminOf pre.state usdc)
+    (callee : SkimCalleeUW sevm pre g) (usdcSentries : callee.UsdcSentries)
+    (wethSentries : callee.WethSentries)
+    (recipientFresh : Usdc.KeysFresh (Usdc.historyKeyUniverse usdc trace KU)
+      [.bal (Sevm.dataWord sevm 4).toAdr])
+    (usdcLive : UsdcTransferOk
+      (Usdc.ledger (SlotFootprint.extendBy (Usdc.historyKeyUniverse usdc trace KU)
+        [.bal (Sevm.dataWord sevm 4).toAdr]) (pre.state.getStor usdc))
+      pair (Sevm.dataWord sevm 4).toAdr (callee.balance0 - skimReserve0 sevm pre).toNat) :
+    ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
+      PairHistoryReplayed pair trace KP st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 →
+        transcript.ownTail.ownTail.firstWord = callee.balance1 →
+        (runTyped finish (writerContext sevm []) (.skim (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace KP)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairAdmittedOutcome
+              (WriterExtend (pairHistoryUniverse pair trace KP)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
+  pair_usdc_weth9_history_skim_live trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem target state codeEq fork output representable value size abi selector static depth notAdmin callee usdcSentries wethSentries recipientFresh usdcLive
+
+end Blanc.Composition.UniswapV2PairUsdcWeth9
+
+-- usdc-weth9-pair-composition-v1: the two-token joint checkpoint by deployment and its checker
+namespace Blanc.Composition.UniswapV2PairUsdcWeth9
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Lift.Weth9
+  Blanc.Composition.UniswapV2PairWeth9Joint Blanc.Lift.FiniteCheckpoint
+
+example {usdc weth : Adr} {KU : Usdc.Key → Prop}
+    {KW : Weth9.Key → Prop}
+    {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = UniswapV2Pair.Creation.code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024)
+    (wethApart : weth ≠ create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)
+    (usdcApart : usdc ≠ create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)
+    (pairNonzero : create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ 0)
+    (notSystem :
+      create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList ≠ systemAddress)
+    (wethTracked : KW (.bal (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)))
+    (wethNoAllowance : ∀ g, KW (.allow (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) →
+      (b.state.getStor weth).get
+        (Weth9.allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
+    (wethNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp weth)
+    (usdcTracked : KU (.bal (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)))
+    (usdcNoAllowance : ∀ g, KU (.allow (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) →
+      (b.state.getStor usdc).get
+        (Usdc.allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
+    (usdcNotFrozen : Usdc.frozenBit ((b.state.getStor usdc).get
+        (Usdc.balSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))) = false)
+    (usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
+      ∀ {isevm : Sevm} {ib : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) →
+        ib.state.getCode isevm.currentTarget = post.state.getCode isevm.currentTarget →
+        isevm.caller = sevm.currentTarget → isevm.value = 0 → isevm.isStatic = false →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        (4 : B256) ≤ isevm.data.length.toB256 → (64 : B256) ≤ isevm.data.length.toB256 - 4 →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        gCallStipend < iG + initializeStore0Charge isevm ib +
+          initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39 →
+        gCallStipend < iG + initializeStore1Charge isevm ib + 9 →
+        initializeToken1 isevm = weth →
+        initializeToken0 isevm = usdc →
+        usdc ≠ weth →
+        some (ib.state.getCode weth).toList = weth9Sem.image →
+        Weth9.FootInv KW (ib.state.getStor weth) (ib.state.bal weth) →
+        ib.state.getStor weth = b.state.getStor weth →
+        SumNof ib.state.bal →
+        Usdc.UsdcInstalled usdc ib.state →
+        Usdc.FootInv KU (ib.state.getStor usdc) →
+        ib.state.getStor usdc = b.state.getStor usdc →
+        ∃ ipost, Nonempty (Exec 0 isevm
+            (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+          JointCheckpoint2 isevm.currentTarget usdc weth KU KW (fun _ => False)
+            (initializedState sevm.currentTarget
+              (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
+              usdc weth) ipost.state :=
+  pair_usdc_weth9_create2_jointCheckpoint2 hfork hstatic hinit hnonce hdepth hfresh hgas hroom wethApart usdcApart pairNonzero notSystem wethTracked wethNoAllowance wethNotPrecompile usdcTracked usdcNoAllowance usdcNotFrozen usdcNotPrecompile
+
+example {pair usdc weth : Adr} {urows : List (Usdc.Key × B256)}
+    {wrows : List (Weth9.Key × B256)} {prows : List PairRow} {base : UniswapV2Pair.State}
+    {w : Jaune.State} (h : checkJoint2 pair usdc weth urows wrows prows base w = true) :
+    JointCheckpoint2 pair usdc weth (rowKeys urows) (rowKeys wrows) (pairKeys prows)
+      (rowsState base prows) w :=
+  checkJoint2_sound h
+
+end Blanc.Composition.UniswapV2PairUsdcWeth9
+
+-- usdc-weth9-pair-composition-v1: USDC is an instance of the writer-shadowed token core
+namespace Blanc.Composition.UsdcToken
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Usdc
+
+example (P : Adr) (K₀ : Key → Prop) : Nonempty (CoreW P (usdcBookS P).toBook) :=
+  ⟨usdcCore P K₀⟩
+
+end Blanc.Composition.UsdcToken
+
+-- usdc-weth9-pair-composition-v1: the USDC proxy frame, signature-book laws, history end and the definitions the headlines are stated through
+namespace Blanc.Lift.Usdc
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.Lift.Token
+
+example {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec 0 sevm pre out)
+    (codeEq : sevm.code = Proxy.code) (fork : CoveredFork sevm.benvStat.fork)
+    {I : Adr} (slot : (pre.state.getStor sevm.currentTarget).get implSlot = I.toB256)
+    (notAdmin : sevm.caller ≠ adminOf pre.state sevm.currentTarget)
+    (undelegated : getDelegatedCodeAddress (pre.state.getCode I) = none)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp I)
+    (dataBound : sevm.data.length < 2 ^ 256) :
+    (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .delegatecall) ∧
+    (∀ c ∈ Exec.childFrames run, c.sevm.currentTarget = sevm.currentTarget ∧
+      c.sevm.codeAddress = some I ∧ c.sevm.caller = sevm.caller ∧ c.sevm.value = sevm.value ∧
+      c.sevm.data = sevm.data ∧ c.sevm.isStatic = sevm.isStatic ∧
+      c.sevm.code = pre.state.getCode I) ∧
+    (∀ post, out = .ok post → ∃ c ∈ Exec.childFrames run,
+      post.output = c.post.output ∧ post.state = c.post.state) :=
+  proxy_forwards run codeEq fork slot notAdmin undelegated notPrecompile dataBound
+
+example (P : Adr) : BookLawsS (usdcBookS P) :=
+  usdcBook_lawsS P
+
+example {P : Adr} {K₀ : Usdc.Key → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
+    (hist : Usdc.UsdcHist P K₀ tr) :
+    Usdc.UsdcInstalled P future.state ∧
+      Usdc.FootInv (Usdc.historyKeyUniverse P tr K₀) (future.state.getStor P) ∧
+      Usdc.adminOf future.state P = Usdc.adminOf checkpoint.state P :=
+  usdc_history_end tr hist
+
+example {cfg : ChainConfig} {checkpoint future : BlockChain} (P : Adr)
+    (tr : ConfiguredHistoryTrace cfg checkpoint future) :
+    UsdcGovernance P tr = (
+      ∀ G ∈ tr.settledFrames, IsEntry P G → G.sevm.caller = adminOf checkpoint.state P →
+        Blanc.Sevm.selector G.sevm ∉ [0x3659cfe6, 0x4f1ef286, 0x8f283970]
+    ) := by
+  unfold UsdcGovernance
+  rfl
+
+example (P : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (tr : ConfiguredHistoryTrace cfg checkpoint future) (before : List Exec.Frame)
+    (f : Exec.Frame) :
+    UsdcShadowed P tr before f = (
+      (f.sevm.currentTarget = P ∧ ¬ IsEntry P f) ∨
+        ∃ (b : List Exec.Frame) (A : Exec.Frame) (m n : List Exec.Frame), before = b ++ A :: m ∧
+          A.sevm.currentTarget = P ∧ A.sevm.codeAddress = some usdcLib ∧
+          Exec.descendantFrames A.run = m ++ f :: n
+    ) := by
+  unfold UsdcShadowed
+  rfl
+
+end Blanc.Lift.Usdc
+
+-- usdc-weth9-pair-composition-v1: the never-signer premise
+namespace Blanc.Lift.Token
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {T : Adr} {S : BookS} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {tr : ConfiguredHistoryTrace cfg checkpoint future} {p : Adr},
+    (∀ g ∈ tr.settledFrames, IsEntry T g → g.sevm.isStatic = false → S.signer g.sevm ≠ some p) →
+    NeverSigner T S tr p :=
+  @NeverSigner.mk
+
+end Blanc.Lift.Token
 
