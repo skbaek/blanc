@@ -41,7 +41,7 @@ theorem rx_ex_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : Outco
   xr (rx_gas (by hr) ·)
   rw [show Bytes.toB256 [3, 0xdc] = (0x3dc : B256) by decide, show Bytes.toB256 [0x24] = (0x24 : B256) by decide,
     show Bytes.toB256 [4, 0x40] = (0x440 : B256) by decide, show Bytes.toB256 [0x20] = (0x20 : B256) by decide]
-  refine rxe_staticWord (o := 0x440) (s := 0x460) hL hW'c hbal (by omega) (by omega) (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
+  refine rxe_staticWord (o := 0x440) (s := 0x460) hL hW'c hbal (by omega) (by omega) (by hr)
     (by rw [hR.read]; exact bal_input _ _ 0x3c0) hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; decide) (by decide) ?_
   intro d M' out hLd hR' hW' hsz' hlen hlt hA hrd hg1 hg2
@@ -101,7 +101,7 @@ theorem rx_ex_bal2 {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : Outco
   xr (rx_gas (by hr) ·)
   rw [show Bytes.toB256 [7, 0x1c] = (0x71c : B256) by decide, show Bytes.toB256 [0x24] = (0x24 : B256) by decide,
     show Bytes.toB256 [7, 0x80] = (0x780 : B256) by decide, show Bytes.toB256 [0x20] = (0x20 : B256) by decide]
-  refine rxe_staticWord (o := 0x780) (s := 0x7a0) hL hW'c hbal (by omega) (by omega) (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
+  refine rxe_staticWord (o := 0x780) (s := 0x7a0) hL hW'c hbal (by omega) (by omega) (by hr)
     (by rw [hR.read]; exact bal_input _ _ 0x700) hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; decide) (by decide) ?_
   intro d M' out hLd hR' hW' hsz' hlen hlt hA hrd hg1 hg2

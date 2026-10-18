@@ -279,7 +279,7 @@ theorem rx_al_pre {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp : 
     rw [hR.read, show (0x27c : B256).toNat = 0x27c by decide, show (4 : B256).toNat = 4 by decide,
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
     decide
-  refine rxe_staticWord (o := 0x2c0) (s := 0x2e0) hL hWc hsup (by omega) (by omega) (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega) hin hR hW rfl
+  refine rxe_staticWord (o := 0x2c0) (s := 0x2e0) hL hWc hsup (by omega) (by omega) (by hrs) hin hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; decide) (by decide) ?_
   intro d M' out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2
   clear hR hW hsz hin hL

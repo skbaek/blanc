@@ -81,7 +81,7 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
     rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
     exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
   obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hpush b2 [] M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
+    hpush b2 [] M g3 hL.w (by omega) (by omega) hin (by hrs)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0xb60 : B256).toNat = 0xb60 by decide, show (0x44 : B256).toNat = 0x44 by decide,

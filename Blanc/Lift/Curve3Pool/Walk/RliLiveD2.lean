@@ -326,7 +326,7 @@ theorem rx_rli_d2 {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
       show (0x44 : B256).toNat = 0x44 by decide]
     exact rli_burn_input _ _ _
   obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hburn b2 S M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
+    hburn b2 S M g3 hL.w (by omega) (by omega) hin (by hrs)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x85c : B256).toNat = 0x85c by decide, show (0x44 : B256).toNat = 0x44 by decide,

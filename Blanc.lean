@@ -1278,3 +1278,5 @@ import Blanc.Lift.Curve3Pool.Walk.AlLiveD0
 import Blanc.Lift.Curve3Pool.Walk.AlLiveHead
 import Blanc.Lift.Curve3Pool.Walk.AlLiveCredit
 import Blanc.Lift.Curve3Pool.Walk.AlLivePull
+import Blanc.Lift.Curve3Pool.Walk.AlLiveBal
+import Blanc.Lift.Curve3Pool.Walk.AlLiveLoop
