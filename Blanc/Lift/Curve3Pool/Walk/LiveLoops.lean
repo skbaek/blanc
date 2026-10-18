@@ -17,14 +17,18 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-/-- The save's body at counter `[c1, c2]`, exit `[x1, x2]`, ending in the branch `br`. -/
-def svIt (c1 c2 x1 x2 : UInt8) (br : SFunc) : SFunc :=
+/-- The save's body at counter `[c1, c2]` up to the limit `[l1, l2]`, exit `[x1, x2]`, ending in
+the branch `br`. -/
+def svItL (c1 c2 l1 l2 x1 x2 : UInt8) (br : SFunc) : SFunc :=
   .dest (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl)) (.next (.reg .mload) (.next (.reg .mload)
   (.next (.push [0x20] (by decide)) (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl)) (.next (.reg .mload)
   (.next (.reg .add) (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl)) (.next (.reg .mstore)
-  (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl)) (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl))
+  (.next (.push [l1, l2] (Nat.le_of_ble_eq_true rfl)) (.next (.push [c1, c2] (Nat.le_of_ble_eq_true rfl))
   (.next (.reg .mload) (.next (.reg .lt) (.next (.reg .iszero)
   (.next (.push [x1, x2] (Nat.le_of_ble_eq_true rfl)) br)))))))))))))))
+
+/-- The save's body at counter `[c1, c2]`, which is also its limit. -/
+abbrev svIt (c1 c2 x1 x2 : UInt8) (br : SFunc) : SFunc := svItL c1 c2 c1 c2 x1 x2 br
 
 /-- Iteration `n`'s branch of a loop with `N + 1` iterations: back to the head `[h1, h2]` at the
 next entry `idx[n]`, or out to `ex`. -/
@@ -43,7 +47,7 @@ def rsIt (c1 c2 x1 x2 : UInt8) (br : SFunc) : SFunc :=
 
 section Fwd
 
-variable {sevm : Sevm} {b : Devm} {Q : Outcome → Prop} {c1 c2 x1 x2 : UInt8} {C sz : Nat}
+variable {sevm : Sevm} {b : Devm} {Q : Outcome → Prop} {c1 c2 l1 l2 x1 x2 : UInt8} {C Lm sz : Nat}
 
 /-- One pass of the save's body: the word at the counter `p` pushed, the counter bumped. -/
 theorem rx_svBody {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G p : Nat}
@@ -54,12 +58,12 @@ theorem rx_svBody {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G p : Na
     (k : ∀ M', Mem.Reads M' (Bytes.writeAt img C (Nat.toB256 (p + 32)).toBytes) →
       Mem.Wf M' → M'.size = sz →
       SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [x1, x2] ::
-        B256.eqCheck (B256.ltCheck (Nat.toB256 (p + 32)) (Bytes.toB256 [c1, c2])) 0 ::
+        B256.eqCheck (B256.ltCheck (Nat.toB256 (p + 32)) (Bytes.toB256 [l1, l2])) 0 ::
         v :: S) M' G) br Q) :
-    SFunc.RunEx cert.prog sevm (St b S M (G + 46)) (svIt c1 c2 x1 x2 br) Q := by
+    SFunc.RunEx cert.prog sevm (St b S M (G + 46)) (svItL c1 c2 l1 l2 x1 x2 br) Q := by
   have hCl : C < 2 ^ 256 := hC ▸ B256.toNat_lt _
   have hp' : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
-  unfold svIt
+  unfold svItL
   xr (rx_dest ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mloadW (o := C) hR hsz hC ⟨by omega, hs⟩ hctr (by hr) ·)
@@ -82,13 +86,13 @@ theorem rx_svBody {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G p : Na
   xr (rx_push rfl (by hr) ·)
   exact k M' hR' hW' hsz'
 
-/-- **A frame save, forward**, from iteration `n` with `k` iterations after it: the words `w`
+/-- **A frame save, forward**, up to the limit `Lm` (the counter `C` at or above it), from iteration `n` with `k` iterations after it: the words `w`
 at `0x140 + 32 n, …, C - 32` pushed (`exSaved`), then on to `ex`. -/
-theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
-    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hN : C = 0x140 + 32 * (N + 1)) (hCs : C + 32 ≤ sz)
-    (hs : sz % 32 = 0)
+theorem rx_svFromL (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
+    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hL : (Bytes.toB256 [l1, l2]).toNat = Lm)
+    (hN : Lm = 0x140 + 32 * (N + 1)) (hLC : Lm ≤ C) (hCs : C + 32 ≤ sz) (hs : sz % 32 = 0)
     (hchain : ∀ n, n < N →
-      cert.prog[idx.getD n 0]? = some (svIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex (n + 1)))) :
+      cert.prog[idx.getD n 0]? = some (svItL c1 c2 l1 l2 x1 x2 (lpBr N idx h1 h2 ex (n + 1)))) :
     ∀ (k : Nat) {n : Nat} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat}, n + k = N → Mem.Reads M img → Mem.Wf M → M.size = sz →
     WordAt img C (Nat.toB256 (0x140 + 32 * n)) →
@@ -96,10 +100,10 @@ theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} 
     S.length + k + 8 < 1024 →
     (∀ (M' : Mem) (img' : Bytes), Mem.Reads M' img' → Mem.Wf M' → M'.size = sz →
       (∀ o v, WordAt img o v → o + 32 ≤ C ∨ C + 32 ≤ o → WordAt img' o v) →
-      WordAt img' C (Nat.toB256 C) →
+      WordAt img' C (Nat.toB256 Lm) →
       SFunc.RunEx cert.prog sevm (St b (exSaved w (0x140 + 32 * n) (k + 1) ++ S) M' G) ex Q) →
     SFunc.RunEx cert.prog sevm (St b S M (G + 67 * k + 56))
-      (svIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex n)) Q := by
+      (svItL c1 c2 l1 l2 x1 x2 (lpBr N idx h1 h2 ex n)) Q := by
   have hCl : C < 2 ^ 256 := hC ▸ B256.toNat_lt _
   intro k
   induction k with
@@ -112,12 +116,12 @@ theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} 
     intro M' hR' hW' hsz'
     unfold lpBr
     simp only [↓reduceIte]
-    have hge : B256.ltCheck (Nat.toB256 (0x140 + 32 * N + 32)) (Bytes.toB256 [c1, c2]) = 0 :=
-      ltCheck_eq_zero_of_le (by rw [hC, B256.toNat_toB256_of_lt (by omega)]; omega)
+    have hge : B256.ltCheck (Nat.toB256 (0x140 + 32 * N + 32)) (Bytes.toB256 [l1, l2]) = 0 :=
+      ltCheck_eq_zero_of_le (by rw [hL, B256.toNat_toB256_of_lt (by omega)]; omega)
     xr (rx_branch_succ (by rw [hge]; decide) ·)
     refine kk M' _ hR' hW' hsz' (fun o v h ho => h.write_other (by
       simp only [B256.length_toBytes]; omega)) ?_
-    rw [show 0x140 + 32 * N + 32 = C by omega]
+    rw [show 0x140 + 32 * N + 32 = Lm by omega]
     exact WordAt.write_self _ _ _
   | succ k ih =>
     intro n S M img G hn hR hW hsz hctr hw hroom kk
@@ -127,9 +131,9 @@ theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} 
     intro M' hR' hW' hsz'
     unfold lpBr
     simp only [show n ≠ N by omega, ↓reduceIte]
-    have hlt : B256.ltCheck (Nat.toB256 (0x140 + 32 * n + 32)) (Bytes.toB256 [c1, c2]) = 1 :=
+    have hlt : B256.ltCheck (Nat.toB256 (0x140 + 32 * n + 32)) (Bytes.toB256 [l1, l2]) = 1 :=
       if_pos (by
-        rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega), hC]
+        rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega), hL]
         omega)
     xr (rx_branch_zero' (by rw [hlt]; decide) ·)
     xr (rx_push rfl (by hr) ·)
@@ -148,6 +152,26 @@ theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} 
     rw [e]
     exact kk M'' img'' hR'' hW'' hsz'' (fun o v h ho =>
       hk'' o v (h.write_other (by simp only [B256.length_toBytes]; omega)) ho) hc''
+
+/-- **A frame save, forward**, from iteration `n` with `k` iterations after it, the counter
+being its own limit (`rx_svFromL`). -/
+theorem rx_svFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
+    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hN : C = 0x140 + 32 * (N + 1)) (hCs : C + 32 ≤ sz)
+    (hs : sz % 32 = 0)
+    (hchain : ∀ n, n < N →
+      cert.prog[idx.getD n 0]? = some (svIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex (n + 1)))) :
+    ∀ (k : Nat) {n : Nat} {S : List B256} {M : Mem}
+    {img : Bytes} {G : Nat}, n + k = N → Mem.Reads M img → Mem.Wf M → M.size = sz →
+    WordAt img C (Nat.toB256 (0x140 + 32 * n)) →
+    (∀ m, n ≤ m → m ≤ N → WordAt img (0x140 + 32 * m) (w (0x140 + 32 * m))) →
+    S.length + k + 8 < 1024 →
+    (∀ (M' : Mem) (img' : Bytes), Mem.Reads M' img' → Mem.Wf M' → M'.size = sz →
+      (∀ o v, WordAt img o v → o + 32 ≤ C ∨ C + 32 ≤ o → WordAt img' o v) →
+      WordAt img' C (Nat.toB256 C) →
+      SFunc.RunEx cert.prog sevm (St b (exSaved w (0x140 + 32 * n) (k + 1) ++ S) M' G) ex Q) →
+    SFunc.RunEx cert.prog sevm (St b S M (G + 67 * k + 56))
+      (svIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex n)) Q :=
+  rx_svFromL w hC hC hN (le_refl _) hCs hs hchain
 
 /-- One pass of the restore's body: the stack's top word written at the counter `q`, the
 counter moved to `q - 32`. -/
@@ -193,12 +217,12 @@ theorem rx_rsBody {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G q : Na
   xr (rx_push rfl (by hr) ·)
   exact k M2 hR2 hW2 hsz2
 
-/-- **A frame restore, forward**, at iteration `n` with `k` iterations after it: the saved
+/-- **A frame restore, forward** (counter at or above the saved words), at iteration `n` with `k` iterations after it: the saved
 words `exSaved w 0x140 (k + 1)` popped back to `0x140, …, 0x140 + 32 k`, memory otherwise kept
 below `0x140`, between the restored words and the counter, and above the counter; then on to
 `ex`. -/
-theorem rx_rsFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
-    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hN : C = 0x140 + 32 * (N + 1)) (hCs : C + 32 ≤ sz)
+theorem rx_rsFromL (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
+    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hN : 0x140 + 32 * (N + 1) ≤ C) (hCs : C + 32 ≤ sz)
     (hs : sz % 32 = 0)
     (hchain : ∀ n, n < N →
       cert.prog[idx.getD n 0]? = some (rsIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex (n + 1)))) :
@@ -259,6 +283,26 @@ theorem rx_rsFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} 
       · exact hm'' m (by omega)
     · exact hk'' o v ((h.write_other (by simp only [B256.length_toBytes]; omega)).write_other
         (by simp only [B256.length_toBytes]; omega)) (by omega)
+
+/-- **A frame restore, forward** with the counter right above the saved words
+(`rx_rsFromL`). -/
+theorem rx_rsFrom (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8} {ex : SFunc}
+    (hC : (Bytes.toB256 [c1, c2]).toNat = C) (hN : C = 0x140 + 32 * (N + 1)) (hCs : C + 32 ≤ sz)
+    (hs : sz % 32 = 0)
+    (hchain : ∀ n, n < N →
+      cert.prog[idx.getD n 0]? = some (rsIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex (n + 1)))) :
+    ∀ (k : Nat) {n : Nat} {S : List B256} {M : Mem}
+    {img : Bytes} {G : Nat}, n + k = N → Mem.Reads M img → Mem.Wf M → M.size = sz →
+    WordAt img C (Nat.toB256 (0x140 + 32 * k)) → S.length + k + 9 < 1024 →
+    (∀ (M' : Mem) (img' : Bytes), Mem.Reads M' img' → Mem.Wf M' → M'.size = sz →
+      (∀ m, m ≤ k → WordAt img' (0x140 + 32 * m) (w (0x140 + 32 * m))) →
+      (∀ o v, WordAt img o v →
+        o + 32 ≤ 0x140 ∨ (0x140 + 32 * (k + 1) ≤ o ∧ o + 32 ≤ C) ∨ C + 32 ≤ o →
+        WordAt img' o v) →
+      SFunc.RunEx cert.prog sevm (St b S M' G) ex Q) →
+    SFunc.RunEx cert.prog sevm (St b (exSaved w 0x140 (k + 1) ++ S) M (G + 70 * k + 59))
+      (rsIt c1 c2 x1 x2 (lpBr N idx h1 h2 ex n)) Q :=
+  rx_rsFromL w hC (le_of_eq hN.symm) hCs hs hchain
 
 end Fwd
 

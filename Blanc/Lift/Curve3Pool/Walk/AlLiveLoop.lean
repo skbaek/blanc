@@ -23,12 +23,13 @@ theorem al_prog_66 : cert.prog[66]? = some t_105d_c66 := rfl
 section Fin
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G i : Nat} {Q : Outcome → Prop}
+  {d c : B256}
 
 /-- The loop test jumps back to the next head. -/
 theorem rx_al_finBack {X nxt : SFunc} {k : Nat} (hk : cert.prog[k]? = some nxt) (hi : i + 1 < 3)
-    (K : SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) nxt Q) :
-    SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [0x10, 0x5d] ::
-      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M (G + 10))
+    (K : SFunc.RunEx cert.prog sevm (St b (3 :: c :: S) M G) nxt Q) :
+    SFunc.RunEx cert.prog sevm (St b (d ::
+      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: c :: S) M (G + 10))
       (.branchTo X k) Q := by
   have hne : B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 ≠ 0 := by
     obtain rfl | rfl : i = 0 ∨ i = 1 := by omega
@@ -39,9 +40,9 @@ theorem rx_al_finBack {X nxt : SFunc} {k : Nat} (hk : cert.prog[k]? = some nxt) 
 
 /-- The loop test falls out of the loop (a `JUMPI` to an entry). -/
 theorem rx_al_finExitTo {X : SFunc} {k : Nat} (hi : i + 1 = 3)
-    (K : SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) X Q) :
-    SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [0x10, 0x5d] ::
-      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M (G + 10))
+    (K : SFunc.RunEx cert.prog sevm (St b (3 :: c :: S) M G) X Q) :
+    SFunc.RunEx cert.prog sevm (St b (d ::
+      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: c :: S) M (G + 10))
       (.branchTo X k) Q := by
   rw [hi]
   xr (rx_branchTo_zero' (by decide) ·)
@@ -49,9 +50,9 @@ theorem rx_al_finExitTo {X : SFunc} {k : Nat} (hi : i + 1 = 3)
 
 /-- The loop test falls out of the loop (an inline `JUMPI`). -/
 theorem rx_al_finExitBr {X Y : SFunc} (hi : i + 1 = 3)
-    (K : SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) X Q) :
-    SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [0x10, 0x5d] ::
-      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M (G + 10))
+    (K : SFunc.RunEx cert.prog sevm (St b (3 :: c :: S) M G) X Q) :
+    SFunc.RunEx cert.prog sevm (St b (d ::
+      B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: c :: S) M (G + 10))
       (.branch X Y) Q := by
   rw [hi]
   xr (rx_branch_zero' (by decide) ·)
