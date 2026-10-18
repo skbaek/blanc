@@ -135,7 +135,7 @@ theorem rx_rli_feeLoop {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
 
 section Frame
 
-variable {sevm : Sevm} {pre : Devm} {s : State} {W W' : Devm → Prop} {U G amp v0 v1 v2 : Nat}
+variable {sevm : Sevm} {pre : Devm} {s : State} {W : Nat → Devm → Prop} {U G amp v0 v1 v2 : Nat}
   {Q : Outcome → Prop} {T f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xa xb xc : V3}
 
 /-- The storage the fee loop leaves: the lock set and the three stored balances. -/
@@ -150,16 +150,19 @@ theorem rliStor_get {σ : Stor} {s0 s1 s2 x : B256} (hx : x ≠ lockSlot)
   rw [Stor.get_set_ne _ (Ne.symm h2), Stor.get_set_ne _ (Ne.symm h1), Stor.get_set_ne _ (Ne.symm h0),
     Stor.get_set_ne _ (by rw [lockSlot_lit]; exact Ne.symm hx)]
 
-/-- **The `remove_liquidity_imbalance` frame, forward.** -/
+/-- **The `remove_liquidity_imbalance` frame, forward**, along a world chain: the supply read in
+`W 0`, the burn from `W 0` to `W 1`, coin `j`'s transfer (when its amount is nonzero) from
+`W (j + 1)` to `W (j + 2)`, a skipped transfer staying inside `W (j + 2)`. -/
 theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance) (hid : IdReady sevm pre)
-    (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre)
+    (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)
     (ha : Abstracts (pre.getStor sevm.currentTarget) s)
     (hlock : (pre.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
     (hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
-    (hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U 0x17c 0x1c0)
+    (hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+      0x17c 0x1c0)
     (hT0 : T ≠ 0)
     (hmf : (pre.getStor sevm.currentTarget).get feeSlot * Bytes.toB256 [0x03] /
         (pre.getStor sevm.currentTarget).get feeSlot = Bytes.toB256 [0x03] ∨
@@ -195,17 +198,18 @@ theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
       (Nat.toB256 v0 - Nat.toB256 v2) * T / Nat.toB256 v0)
     (hslip : ¬ Sevm.dataWord sevm (Bytes.toB256 [0x64]) < rliBurnW (Nat.toB256 v0) (Nat.toB256 v2) T)
     (hTX : ¬ T < rliBurnW (Nat.toB256 v0) (Nat.toB256 v2) T)
-    (hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot)
+    (hburn : BurnOkAt sevm (W 0) (W 1) ((pre.getStor sevm.currentTarget).get tokenSlot)
       (rliBurnW (Nat.toB256 v0) (Nat.toB256 v2) T) U 0x85c 0x8e0)
-    (hp0 : rliAmt sevm 0 ≠ 0 → CoinPushOkAt sevm W' W'
+    (hp0 : rliAmt sevm 0 ≠ 0 → CoinPushOkAt sevm (W 1) (W 2)
       ((pre.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 0)) (rliAmt sevm 0) U 0xaa0 0xb40)
-    (hp1 : rliAmt sevm 1 ≠ 0 → CoinPushOkAt sevm W' W'
+    (hp1 : rliAmt sevm 1 ≠ 0 → CoinPushOkAt sevm (W 2) (W 3)
       ((pre.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 1)) (rliAmt sevm 1) U 0xaa0 0xb40)
-    (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm W' W'
+    (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (W 3) (W 4)
       ((pre.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 2)) (rliAmt sevm 2) U 0xaa0 0xb40)
+    (hskip : ∀ j, j < 3 → rliAmt sevm j = 0 → ∀ b, W (j + 1) b → W (j + 2) b)
     (hG : costGetDMem xa amp + costGetDMem xb amp + costGetDMem xc amp + 240000 + 5 * U ≤ G)
     (hGb : G + 3000 < 2 ^ 256)
-    (k : ∀ D : Devm, ExLive sevm W' D ((rliStor (pre.getStor sevm.currentTarget) s0 s1 s2).set
+    (k : ∀ D : Devm, ExLive sevm (W 4) D ((rliStor (pre.getStor sevm.currentTarget) s0 s1 s2).set
         (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
@@ -217,7 +221,8 @@ theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
   set σ := pre.getStor sevm.currentTarget with hσ
   obtain ⟨g0, rfl⟩ : ∃ g, G = g + 480 := ⟨G - 480, by omega⟩
   refine rx_dispatch_rli hlen hcd hsel ?_
-  refine rx_rli_pre (R := g0 - 60000 - U) hfork hstatic ⟨fun _ => rfl, hid, hWc, hWb⟩ ha hlock hval
+  refine rx_rli_pre (R := g0 - 60000 - U) hfork hstatic ⟨fun _ => rfl, hid, hWc 0 (by decide), hWb⟩
+    ha hlock hval
     hkill hA (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyMem_wf Mem.wf_empty _)
     (vyMem_empty_size _) hsup hT0 hmf (by omega) (by omega) ?_
   intro b1 M1 img1 g1 Aw hAw hL1 hR1 hW1 hsz1 wT wF wAF wAw wb0 wb1 wb2 wc0 wc1 wc2 wctr hg1 hg1'
@@ -238,7 +243,7 @@ theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
   -- `D2`, the burn
   have e_tok : (rliStor σ s0 s1 s2).get tokenSlot = σ.get tokenSlot :=
     rliStor_get (by decide) (by decide) (by decide) (by decide)
-  refine rx_rli_d2 (R := g4 - costGetDMem xc Aw.toNat - 13000 - U) hfork hstatic hL4 hW'c hX2 hD2
+  refine rx_rli_d2 (R := g4 - costGetDMem xc Aw.toNat - 13000 - U) hfork hstatic hL4 (hWc 1 (by decide)) hX2 hD2
     hD02 hmT h0.2.1 hbn hb1 hslip (by rw [e_tok]; exact hburn) hR4 hW4 hsz4 tT tF tAF tAw tx0 tx1 tx2
     tD0 tD1 tf0 tf1 tf2 (by omega) (by omega) (by simp only [List.length_nil, List.length_cons]; omega) ?_
   intro b5 M5 img5 g5 hL5 hR5 hW5 hsz5 pT pD1 pf0 pf1 pf2 pB pctr hg5 hg5'
@@ -248,8 +253,9 @@ theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
     intro j hj
     obtain rfl | rfl | rfl : j = 0 ∨ j = 1 ∨ j = 2 := by omega
     all_goals exact rliStor_get (by decide) (by decide) (by decide) (by decide)
-  exact rx_rli_tail0 hfork hstatic hdepth hL5 hR5 hW5 hsz5
+  exact rx_rli_tail0 (V := fun j => W (j + 1)) hfork hstatic hdepth hL5 hR5 hW5 hsz5
     (by rw [show Nat.toB256 0 = Bytes.toB256 [0] by decide]; exact pctr) pT pD1 pf0 pf1 pf2 pB hTX
+    (fun j hj => hWc (j + 1) (by omega)) hskip
     (by rw [e_coin 0 (by decide)]; exact hp0) (by rw [e_coin 1 (by decide)]; exact hp1)
     (by rw [e_coin 2 (by decide)]; exact hp2) (by omega) (by omega)
     (by simp only [List.length_nil, List.length_cons]; omega) k

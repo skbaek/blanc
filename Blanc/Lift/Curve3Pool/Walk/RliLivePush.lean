@@ -63,21 +63,22 @@ theorem rli_end_48 : t_3908_c48 = rliEnd := rfl
 
 
 /-- Transfer iteration 0 at `t_3769_c1368`, forward. -/
-theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 0))
-    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W (σ.get (coinsBase + Nat.toB256 0))
+    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 0))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) U 0xaa0 0xb40)
+    (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
-    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 1) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c1037 Q)
-    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (0xe0 ≤ o ∧ o + 32 ≤ 0x900) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 1) → R ≤ g → g ≤ G →
@@ -122,7 +123,7 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c1037) rli_prog_1037 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
+    exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -306,8 +307,8 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
-    have hLd : ExLive sevm W d σ :=
-      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hL.wc, hWd⟩
+    have hLd : ExLive sevm W' d σ :=
+      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
     refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
       hdepth (by decide) rli_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
       ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega)
@@ -374,21 +375,22 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
       (by omega) (by omega)
 
 /-- Transfer iteration 1 at `t_3769_c1037`, forward. -/
-theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 1))
-    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W (σ.get (coinsBase + Nat.toB256 1))
+    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) U 0xaa0 0xb40)
+    (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
-    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c1045 Q)
-    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (0xe0 ≤ o ∧ o + 32 ≤ 0x900) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
@@ -433,7 +435,7 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c1045) rli_prog_1045 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
+    exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -617,8 +619,8 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
-    have hLd : ExLive sevm W d σ :=
-      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hL.wc, hWd⟩
+    have hLd : ExLive sevm W' d σ :=
+      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
     refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
       hdepth (by decide) rli_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
       ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega)
@@ -685,21 +687,22 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       (by omega) (by omega)
 
 /-- Transfer iteration 1 at `t_3769_c48`, forward. -/
-theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 1))
-    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W (σ.get (coinsBase + Nat.toB256 1))
+    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) U 0xaa0 0xb40)
+    (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
-    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c48 Q)
-    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (0xe0 ≤ o ∧ o + 32 ≤ 0x900) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
@@ -744,7 +747,7 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c48) rli_prog_48 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
+    exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 682 := ⟨G - 682, by omega⟩
     xr (rx_dest ·)
@@ -928,8 +931,8 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
-    have hLd : ExLive sevm W d σ :=
-      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hL.wc, hWd⟩
+    have hLd : ExLive sevm W' d σ :=
+      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
     refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
       hdepth (by decide) rli_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
       ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega)
@@ -996,21 +999,22 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       (by omega) (by omega)
 
 /-- Transfer iteration 2 at `t_3769_c1045`, forward. -/
-theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 2))
-    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W (σ.get (coinsBase + Nat.toB256 2))
+    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) U 0xaa0 0xb40)
+    (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
-    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q)
-    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (0xe0 ≤ o ∧ o + 32 ≤ 0x900) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
@@ -1056,7 +1060,7 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branch_zero' (by decide) ·)
     rw [rli_end_1045]
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
+    exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -1240,8 +1244,8 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
-    have hLd : ExLive sevm W d σ :=
-      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hL.wc, hWd⟩
+    have hLd : ExLive sevm W' d σ :=
+      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
     refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
       hdepth (by decide) rli_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
       ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega)
@@ -1308,21 +1312,22 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       (by omega) (by omega)
 
 /-- Transfer iteration 2 at `t_3769_c48`, forward. -/
-theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 2))
-    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W (σ.get (coinsBase + Nat.toB256 2))
+    (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) U 0xaa0 0xb40)
+    (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
-    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q)
-    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+    (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (0xe0 ≤ o ∧ o + 32 ≤ 0x900) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
@@ -1368,7 +1373,7 @@ theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
     rw [rli_end_48]
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
+    exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 682 := ⟨G - 682, by omega⟩
     xr (rx_dest ·)
@@ -1552,8 +1557,8 @@ theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
-    have hLd : ExLive sevm W d σ :=
-      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hL.wc, hWd⟩
+    have hLd : ExLive sevm W' d σ :=
+      ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
     refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
       hdepth (by decide) rli_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
       ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega)

@@ -12,7 +12,8 @@ import Blanc.CodeDelegation
 
 `Curve3Pool/LivePremises.lean` states what each pool call into 3Crv must do: `totalSupply()`
 answers (`SupplyOkAt`, `remove_liquidity`'s `SupplyOk`), `mint(msg.sender, amt)` succeeds
-(`MintOkAt`) and `burnFrom(msg.sender, amt)` succeeds (`BurnOkAt`, `remove_liquidity`'s `BurnOk`).
+(`MintOkAt`) and `burnFrom(msg.sender, amt)` succeeds (`BurnOkAt`; `remove_liquidity`'s window as
+`BurnOkAt.burnOkTo`).
 This module proves them for the deployed 3Crv runtime, at every call window, with the uniform
 bound `U ≥ 70000` gas, from facts about the call-site world only:
 
@@ -37,7 +38,7 @@ because every frame below a 3Crv frame is a static call frame (`Exec.staticOnly_
 with `c3crv_cert_staticOnly`).
 
 * `c3crv_supplyOkAt`, `c3crv_mintOkAt`, `c3crv_burnOkAt` — the windowed premises;
-* `c3crv_supplyOk`, `c3crv_burnOk` — `remove_liquidity`'s.
+* `c3crv_supplyOk` — `remove_liquidity`'s supply window.
 -/
 
 namespace Blanc.Composition.Curve3PoolCalleeLive
@@ -669,19 +670,6 @@ theorem c3crv_supplyOk {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
       (∀ a, d.getCode a = b.getCode a) → W d) :
     SupplyOk sevm W t T U :=
   c3crv_supplyOkAt hfork hdepth hprec hU (by decide) (by decide) hW hW'
-
-/-- `remove_liquidity`'s `burnFrom(msg.sender, amt)` window. -/
-theorem c3crv_burnOk {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
-    (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
-    (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧ t.toAdr ≠ sevm.currentTarget ∧
-      BurnFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller.toB256 amt)
-    (hW' : ∀ b d, W b → (∀ a, a ≠ t.toAdr → Devm.getStor d a = Devm.getStor b a) →
-      Devm.getStor d t.toAdr = burnStor (b.getStor t.toAdr) sevm.caller.toB256 amt →
-      (∀ a, d.getCode a = b.getCode a) → W d) :
-    BurnOk sevm W t amt U :=
-  (c3crv_burnOkAt (ii := 0x61c) (oi := 0x6a0) hfork hstatic hdepth hprec hU (by decide)
-    (by decide) hW hW').burnOk
 
 end Premises
 

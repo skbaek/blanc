@@ -18,7 +18,7 @@ theorem cw_prog_36 : cert.prog[36]? = some t_3cca_c36 := by decide +kernel
 
 section Frame
 
-variable {sevm : Sevm} {pre : Devm} {s : State} {W W' : Devm → Prop} {U G amp : Nat}
+variable {sevm : Sevm} {pre : Devm} {s : State} {W W' W'' : Devm → Prop} {U G amp : Nat}
   {Q : Outcome → Prop} {T x0 x1 x2 D0 y r0 r1 r2 y2 : B256}
 
 /-- **The `remove_liquidity_one_coin` frame, forward.** -/
@@ -67,13 +67,14 @@ theorem rx_oc_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
         (pre.getStor sevm.currentTarget).get adminFeeSlot / ocDen)
     (hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot) (ocAmt sevm) U
       0x31c 0x3a0)
-    (hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinsBase + ocI sevm))
+    (hW''c : WClosed sevm W'')
+    (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinsBase + ocI sevm))
       (cwDy (ocI sevm) r0 r1 r2 y2) U 0x540 0x5e0)
     (hG : costGetD x0.toNat x1.toNat x2.toNat amp +
       costGetYD amp (ocI sevm).toNat x0.toNat x1.toNat x2.toNat (D0 - ocAmt sevm * D0 / T).toNat +
       costGetYD amp (ocI sevm).toNat r0.toNat r1.toNat r2.toNat (D0 - ocAmt sevm * D0 / T).toNat +
       131000 + 3 * U ≤ G) (hGb : G + 2000 < 2 ^ 256)
-    (k : ∀ D' : Devm, ExLive sevm W' D'
+    (k : ∀ D' : Devm, ExLive sevm W'' D'
       ((((pre.getStor sevm.currentTarget).set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])).set
         (balancesBase + ocI sevm) (ocBal ((pre.getStor sevm.currentTarget).set
           (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])) (ocI sevm)
@@ -126,7 +127,7 @@ theorem rx_oc_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
       (coinsBase + ocI sevm) = σ.get (coinsBase + ocI sevm) := by
     rw [Stor.get_set_ne _ (by rw [hIw]; exact bal_ne_coin hi3 hi3) _]
     exact hne _ (by rw [hIw]; exact (coin_ne_lock hi3).symm)
-  exact rx_oc_p2 hfork hstatic hdepth hL4 hW'c hi3 hR4 hW4 hsz4 hdy4 (by rw [e_coin]; exact hpush)
+  exact rx_oc_p2 hfork hstatic hdepth hL4 hW''c hi3 hR4 hW4 hsz4 hdy4 (by rw [e_coin]; exact hpush)
     (by omega) (by omega) k
 
 end Frame

@@ -14,10 +14,10 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-/-- **`BurnOk` with a separate world after the burn.** `remove_liquidity`'s burn is its last call
-and its walk (`rx_rl_postW`) uses nothing of the world the burn leaves, so the world after the burn
-(`W'`) need not be the call-site world `W`: a call-site world fixing 3Crv's storage is then
-admissible although the burn changes that storage. -/
+/-- **`remove_liquidity`'s `burnFrom(msg.sender, amt)` succeeds** (window `0x61c`/`0x6a0`) from
+the call-site world `W` into `W'`, with at least 32 bytes back and the pool's storage kept. The
+burn is the frame's last call and its walk (`rx_rl_postW`) uses nothing of the world it leaves,
+so this is `BurnOkAt` without the `IdReady` conjunct (`BurnOkAt.burnOkTo`). -/
 def BurnOkTo (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
   ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
     (M.read 0x61c 0x44).1 = burnFromSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes →
@@ -27,10 +27,6 @@ def BurnOkTo (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) : Pro
       MutableCallPost b d S M 0x61c 0x44 0x6a0 0x20 1 ∧ 32 ≤ d.returnData.length ∧
       d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
       d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W' d
-
-/-- `BurnOk` is `BurnOkTo` with the same world before and after. -/
-theorem BurnOk.burnOkTo {sevm : Sevm} {W : Devm → Prop} {t amt : B256} {U : Nat}
-    (h : BurnOk sevm W t amt U) : BurnOkTo sevm W W t amt U := h
 
 /-- The generalized burn premise at `remove_liquidity`'s window gives `BurnOkTo`. -/
 theorem BurnOkAt.burnOkTo {sevm : Sevm} {W W' : Devm → Prop} {t amt : B256} {U : Nat}
@@ -1016,19 +1012,20 @@ def rlS3Cost (sevm : Sevm) (b : Devm) (i : Nat) : Nat :=
 def rlNext (i : Nat) : SFunc := if i + 1 = 3 then t_2f7b_c15 else t_2cdb_c46
 
 /-- **The transfer call and its tail, forward** (`0x2ea7` → the loop's next tree): `coins[i]`,
-the `CALL` answered by `CoinPushOk`, the `raw_call` success test (`rxc_vyRawCallTail`), and
+the `CALL` answered by `CoinPushOkAt`, the `raw_call` success test (`rxc_vyRawCallTail`), and
 `i += 1`. -/
 theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
-    {s i : Nat} {T V C : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+    {s i : Nat} {T V C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
-    (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
+    (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s) (hs : s = 0x580 ∨ s = 0x5e0)
     (hL : LoopImg img i T a)
     (hdata : Region img 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
       Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++ V.toBytes)))
     (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
-    (hpush : CoinPushOk sevm W C V U) (hGx : U + 2000 ≤ Gx) (hGb : Gx + 1000 < 2 ^ 256)
-    (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
+    (hpush : CoinPushOkAt sevm W W' C V U 0x520 0x5c0) (hGx : U + 2000 ≤ Gx)
+    (hGb : Gx + 1000 < 2 ^ 256)
+    (k : ∀ b' M' img' G', W' b' → IdReady sevm b' →
       (∀ x, (b'.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 → LoopImg img' (i + 1) T a →
       Gx ≤ G' + U + 600 → G' ≤ Gx →
@@ -1162,7 +1159,7 @@ theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M :
   xr (rx_eq rfl (by hr) ·)
   xr (rx_iszero rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  have hWb' : W b' := hWc.sha _ _ _ hsha hWd
+  have hWb' : W' b' := hW'c.sha _ _ _ hsha hWd
   have hidb' : IdReady sevm b' := (hidd (hid.afterSload _)).of_rel
     ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
   have hstb' : ∀ x, (b'.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x := by
@@ -1365,12 +1362,13 @@ theorem rlS1CostA_le (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) :
   omega
 
 /-- **One loop iteration, forward** (variant A: head `t_2cdb_c0`, memory `0x2c0`): `balances[i]` debited
-by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOk`, `i += 1`. At most
+by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOkAt`, `i += 1`. At most
 `U + 35000` gas is used. -/
 theorem rx_rl_iterA {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
-    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
+    (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -1378,9 +1376,9 @@ theorem rx_rl_iterA {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M
     (hminw : B256.eqCheck (B256.ltCheck (B * rlAmt sevm / T) (rlMin sevm i)) 0 ≠ 0)
     (hlew : B256.eqCheck (B256.ltCheck B (B * rlAmt sevm / T)) 0 ≠ 0)
     (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
-    (hpush : CoinPushOk sevm W C (B * rlAmt sevm / T) U)
+    (hpush : CoinPushOkAt sevm W W' C (B * rlAmt sevm / T) U 0x520 0x5c0)
     (hG : U + 35000 ≤ G) (hGb : G < 2 ^ 256)
-    (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
+    (k : ∀ b' M' img' G', W' b' → IdReady sevm b' →
       (∀ x, (b'.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
         (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
@@ -1416,7 +1414,7 @@ theorem rx_rl_iterA {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M
   have hS3' : 108 ≤ rlS3Cost sevm b2 i := by unfold rlS3Cost; omega
   obtain ⟨Gx, hGx⟩ : ∃ Gx, G2 = Gx + rlS3Cost sevm b2 i := ⟨G2 - rlS3Cost sevm b2 i, by omega⟩
   rw [hGx]
-  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hR2 hW2 hsz2 (Or.inl rfl) hL2 hdata hC2 hpush
+  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hW'c hR2 hW2 hsz2 (Or.inl rfl) hL2 hdata hC2 hpush
     (by omega) (by omega) ?_ x y
   intro b' M' img' G' hWb' hid' hst' hR' hW' hsz' hL' hg1 hg2
   exact k b' M' img' G' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL'
@@ -1436,12 +1434,13 @@ theorem rlS1CostB_le (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) :
   omega
 
 /-- **One loop iteration, forward** (variant B: head `t_2cdb_c46`, memory `0x5e0`): `balances[i]` debited
-by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOk`, `i += 1`. At most
+by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOkAt`, `i += 1`. At most
 `U + 35000` gas is used. -/
 theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
-    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W : Devm → Prop} {U : Nat}
+    {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
+    (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -1449,9 +1448,9 @@ theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M
     (hminw : B256.eqCheck (B256.ltCheck (B * rlAmt sevm / T) (rlMin sevm i)) 0 ≠ 0)
     (hlew : B256.eqCheck (B256.ltCheck B (B * rlAmt sevm / T)) 0 ≠ 0)
     (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
-    (hpush : CoinPushOk sevm W C (B * rlAmt sevm / T) U)
+    (hpush : CoinPushOkAt sevm W W' C (B * rlAmt sevm / T) U 0x520 0x5c0)
     (hG : U + 35000 ≤ G) (hGb : G < 2 ^ 256)
-    (k : ∀ b' M' img' G', W b' → IdReady sevm b' →
+    (k : ∀ b' M' img' G', W' b' → IdReady sevm b' →
       (∀ x, (b'.getStor sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set
         (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T)).get x) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
@@ -1487,7 +1486,7 @@ theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M
   have hS3' : 108 ≤ rlS3Cost sevm b2 i := by unfold rlS3Cost; omega
   obtain ⟨Gx, hGx⟩ : ∃ Gx, G2 = Gx + rlS3Cost sevm b2 i := ⟨G2 - rlS3Cost sevm b2 i, by omega⟩
   rw [hGx]
-  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hR2 hW2 hsz2 (Or.inr rfl) hL2 hdata hC2 hpush
+  refine rx_rl_s3 hfork hi hdepth hid2 hWc hWb2 hW'c hR2 hW2 hsz2 (Or.inr rfl) hL2 hdata hC2 hpush
     (by omega) (by omega) ?_ x y
   intro b' M' img' G' hWb' hid' hst' hR' hW' hsz' hL' hg1 hg2
   exact k b' M' img' G' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL'
@@ -1507,20 +1506,22 @@ theorem rlPreCost_le (sevm : Sevm) (b : Devm) : rlPreCost sevm b ≤ 26389 := by
 
 /-- **`remove_liquidity`, the whole frame forward.** From the frame's entry (empty stack and
 memory) with the `remove_liquidity` selector, the lock clear, no value, every check of the
-model passing on the entry storage `σ` and the supply `T`, and the callees answering
-(`SupplyOk`, `CoinPushOk` for each coin with its amount, `BurnOkTo` into any world `W'`: the
-burn is the last call, so nothing after it reads `W'`), every gas
+model passing on the entry storage `σ` and the supply `T`, and the callees answering along a
+world chain `W 0 → W 1 → W 2 → W 3 → W 4` (`SupplyOk` in `W 0`, coin `i`'s transfer with its
+amount from `W i` to `W (i + 1)`, the burn from `W 3` to `W 4`: the burn is the last call, so
+nothing after it reads `W 4`), every gas
 `G ≥ 167000 + 5 U` runs the frame to `STOP`, whose last log carries `T - _amount`. -/
 theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome → Prop}
-    {W W' : Devm → Prop} {U : Nat} {T : B256}
+    {W : Nat → Devm → Prop} {U : Nat} {T : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity) (hid : IdReady sevm b)
     (hσ : b.getStor sevm.currentTarget = σ) (hlock : σ.get lockSlot = 0) (hval : sevm.value = 0)
-    (hWc : WClosed sevm W) (hWb : W b)
-    (hsup : SupplyOk sevm W (σ.get tokenSlot) T U)
-    (hpush : ∀ i, i < 3 → CoinPushOk sevm W (coinAt σ i) (balAt σ i * rlAmt sevm / T) U)
-    (hburn : BurnOkTo sevm W W' (σ.get tokenSlot) (rlAmt sevm) U)
+    (hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (hWb : W 0 b)
+    (hsup : SupplyOk sevm (W 0) (σ.get tokenSlot) T U)
+    (hpush : ∀ i, i < 3 → CoinPushOkAt sevm (W i) (W (i + 1)) (coinAt σ i)
+      (balAt σ i * rlAmt sevm / T) U 0x520 0x5c0)
+    (hburn : BurnOkTo sevm (W 3) (W 4) (σ.get tokenSlot) (rlAmt sevm) U)
     (hmulw : ∀ i, i < 3 →
       (B256.eqCheck (balAt σ i * rlAmt sevm / balAt σ i) (rlAmt sevm) ||| B256.eqCheck (balAt σ i) 0)
         ≠ 0)
@@ -1538,7 +1539,7 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
   refine rx_dispatch_rl hlen hcd hsel ?_
   have hpc := rlPreCost_le sevm b
   obtain ⟨Gs, rfl⟩ : ∃ Gs, G0 = Gs + rlPreCost sevm b := ⟨G0 - rlPreCost sevm b, by omega⟩
-  refine rx_rl_pre (T := T) hfork hstatic hcd hlock hval hWc hWb hsup (by omega) (by omega)
+  refine rx_rl_pre (T := T) hfork hstatic hcd hlock hval (hWc 0 (by decide)) hWb hsup (by omega) (by omega)
     (by omega) ?_
   intro b1 M1 img1 G1 hWb1 hid1 hst1 _ _ hR1 hW1 hsz1 hL1 hg1 hg1'
   have hs1 : ∀ x, lockSlot ≠ x →
@@ -1546,8 +1547,8 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     fun x hx => by rw [hst1, Stor.get_set_ne _ hx]
   -- iteration 0
   refine rx_rl_iterA (i := 0) (B := balAt (b.getStor sevm.currentTarget) 0)
-    (C := coinAt (b.getStor sevm.currentTarget) 0) hfork hstatic (by decide) hdepth (hid1 hid) hWc
-    hWb1 hR1 hW1 hsz1 hL1 (hs1 _ (by decide)) (hmulw 0 (by decide)) hT0 (hminw 0 (by decide))
+    (C := coinAt (b.getStor sevm.currentTarget) 0) hfork hstatic (by decide) hdepth (hid1 hid)
+    (hWc 0 (by decide)) hWb1 (hWc 1 (by decide)) hR1 hW1 hsz1 hL1 (hs1 _ (by decide)) (hmulw 0 (by decide)) hT0 (hminw 0 (by decide))
     (hlew 0 (by decide)) (hs1 _ (by decide)) (hpush 0 (by decide)) (by omega) (by omega) ?_
   intro b2 M2 img2 G2 hWb2 hid2 hst2 hR2 hW2 hsz2 hL2 hg2 hg2'
   rw [show rlNext 0 = t_2cdb_c46 by unfold rlNext; rfl]
@@ -1556,8 +1557,8 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     fun x hx hx0 => by rw [hst2, Stor.get_set_ne _ hx0, hs1 _ hx]
   -- iteration 1
   refine rx_rl_iterB (i := 1) (B := balAt (b.getStor sevm.currentTarget) 1)
-    (C := coinAt (b.getStor sevm.currentTarget) 1) hfork hstatic (by decide) hdepth hid2 hWc
-    hWb2 hR2 hW2 hsz2 hL2 (hs2 _ (by decide) (by decide)) (hmulw 1 (by decide)) hT0
+    (C := coinAt (b.getStor sevm.currentTarget) 1) hfork hstatic (by decide) hdepth hid2
+    (hWc 1 (by decide)) hWb2 (hWc 2 (by decide)) hR2 hW2 hsz2 hL2 (hs2 _ (by decide) (by decide)) (hmulw 1 (by decide)) hT0
     (hminw 1 (by decide)) (hlew 1 (by decide)) (hs2 _ (by decide) (by decide))
     (hpush 1 (by decide)) (by omega) (by omega) ?_
   intro b3 M3 img3 G3 hWb3 hid3 hst3 hR3 hW3 hsz3 hL3 hg3 hg3'
@@ -1567,8 +1568,8 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     fun x hx hx0 hx1 => by rw [hst3, Stor.get_set_ne _ hx1, hs2 _ hx hx0]
   -- iteration 2
   refine rx_rl_iterB (i := 2) (B := balAt (b.getStor sevm.currentTarget) 2)
-    (C := coinAt (b.getStor sevm.currentTarget) 2) hfork hstatic (by decide) hdepth hid3 hWc
-    hWb3 hR3 hW3 hsz3 hL3 (hs3 _ (by decide) (by decide) (by decide)) (hmulw 2 (by decide)) hT0
+    (C := coinAt (b.getStor sevm.currentTarget) 2) hfork hstatic (by decide) hdepth hid3
+    (hWc 2 (by decide)) hWb3 (hWc 3 (by decide)) hR3 hW3 hsz3 hL3 (hs3 _ (by decide) (by decide) (by decide)) (hmulw 2 (by decide)) hT0
     (hminw 2 (by decide)) (hlew 2 (by decide)) (hs3 _ (by decide) (by decide) (by decide))
     (hpush 2 (by decide)) (by omega) (by omega) ?_
   intro b4 M4 img4 G4 hWb4 hid4 hst4 hR4 hW4 hsz4 hL4 hg4 hg4'
@@ -1581,7 +1582,7 @@ theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome 
     have e : gasColdSload = 2100 := rfl
     omega
   obtain ⟨Gx, rfl⟩ : ∃ Gx, G4 = Gx + rlPostCost sevm b4 := ⟨G4 - rlPostCost sevm b4, by omega⟩
-  exact rx_rl_postW hfork hstatic hWc hWb4 hR4 hW4 hsz4 hL4 hTa (by rw [htok]; exact hburn)
+  exact rx_rl_postW hfork hstatic (hWc 3 (by decide)) hWb4 hR4 hW4 hsz4 hL4 hTa (by rw [htok]; exact hburn)
     (by omega) (by omega) hQ
 
 end Blanc.Lift.Curve3Pool

@@ -16,12 +16,16 @@ Two choices make the premises satisfiable by real callees:
   cannot leave a fixed amount above what the caller still needs for the next call. Each
   premise bounds the gas the call *uses*: from `G ≥ U` it leaves at least `G - U` (and at most
   `G`).
-* **The world is an invariant `W`, not a fixed state.** Each later call runs over the world the
-  earlier calls left, which only their premises describe. A premise holds at every call-site
-  world satisfying `W` and re-establishes `W`; `WClosed` asks `W` to survive the pool's own steps
-  (storage reads and writes, logs, identity copies, stack/memory/gas changes). A user picks `W`
-  (e.g. "the pool holds enough of each coin, the coins' code is as deployed") and proves these
-  facts for concrete callees.
+* **The world is a chain of invariants, not a fixed state.** Each later call runs over the world
+  the earlier calls left, which only their premises describe. A premise holds at every call-site
+  world satisfying `W` and lands in `W'`; `WClosed` asks each invariant to survive the pool's own
+  steps (storage reads and writes, logs, identity copies, stack/memory/gas changes). A
+  state-changing call with a positive amount (a transfer, a pull, a mint, a burn) must land in a
+  fresh invariant: one `W` closed under a positive transfer out of the pool would need unbounded
+  balance, so no honest token satisfies `…OkAt W W` there. The liveness theorems therefore take a
+  world chain `W 0 → W 1 → …`, one step per state-changing call; static calls stay put. A user
+  picks the chain (e.g. "the coins' code is as deployed and the pool's ledger entry in coin `k`
+  is at least what is still to be pushed") and proves these facts for concrete callees.
 
 Each premise also asks the stack below the call's operands to leave room for the result flag
 (`S.length < 1024`, the identity and code-call steps' own condition): without it a long `S`
@@ -31,14 +35,9 @@ The premises are stated per call window (`StaticWordOkAt`, `MutCallOkAt`; the ca
 world `W`, the world left `W'`): `SupplyOkAt` (`totalSupply()`), `CoinBalOkAt` (`balanceOf(self)`,
 the fee coin's balance-difference path), `CoinPushOkAt` (`transfer`), `CoinPullOkAt`
 (`transferFrom`), `BurnOkAt` (`burnFrom`) and `MintOkAt` (`mint`, the input and reply test of
-`xa_al_mintCall`). `remove_liquidity`'s windows keep their names:
-
-* `SupplyOk sevm W t T U`: `token.totalSupply()` (`STATICCALL`, input at `0x17c`, output at
-  `0x1c0`) answers the word `T` in at least 32 bytes;
-* `CoinPushOk sevm W t amt U`: `coins[i].transfer(msg.sender, amt)` (`CALL`, input at `0x520`,
-  output window `0x5c0`) succeeds, its reply passes `RawCallOk`, and the pool's storage is kept;
-* `BurnOk sevm W t amt U`: `token.burnFrom(msg.sender, amt)` (`CALL`, input at `0x61c`, output
-  at `0x6a0`) succeeds with at least 32 bytes and the pool's storage kept.
+`xa_al_mintCall`). `SupplyOk sevm W t T U` is `remove_liquidity`'s `token.totalSupply()` window
+(`STATICCALL`, input at `0x17c`, output at `0x1c0`); its burn window is `BurnOkTo`
+(`Walk/RemoveLiquidityLive.lean`).
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -127,29 +126,5 @@ abbrev MintOkAt (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) (i
 /-- **3Crv's `totalSupply()` answers `T`** (`remove_liquidity`'s window). -/
 abbrev SupplyOk (sevm : Sevm) (W : Devm → Prop) (t T : B256) (U : Nat) : Prop :=
   SupplyOkAt sevm W W t T U 0x17c 0x1c0
-
-/-- **`coins[i].transfer(msg.sender, amt)` succeeds** (`remove_liquidity`'s window). -/
-abbrev CoinPushOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
-  CoinPushOkAt sevm W W t amt U 0x520 0x5c0
-
-/-- **`token.burnFrom(msg.sender, amt)` succeeds** (`remove_liquidity`'s window). Kept as its
-own definition: it is `BurnOkAt` at `(0x61c, 0x6a0)` without the `IdReady` conjunct, which
-`remove_liquidity` (the burn is its last call) does not need (`BurnOkAt.burnOk`). -/
-def BurnOk (sevm : Sevm) (W : Devm → Prop) (t amt : B256) (U : Nat) : Prop :=
-  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
-    (M.read 0x61c 0x44).1 = burnFromSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes →
-    S.length < 1024 →
-    ∃ d, Ninst.RunCompiled sevm
-        (St b (Nat.toB256 G :: t :: 0 :: 0x61c :: 0x44 :: 0x6a0 :: 0x20 :: S) M G) (.exec .call) d ∧
-      MutableCallPost b d S M 0x61c 0x44 0x6a0 0x20 1 ∧ 32 ≤ d.returnData.length ∧
-      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
-      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W d
-
-/-- The generalized burn premise at `remove_liquidity`'s window gives `BurnOk`. -/
-theorem BurnOkAt.burnOk {sevm : Sevm} {W : Devm → Prop} {t amt : B256} {U : Nat}
-    (h : BurnOkAt sevm W W t amt U 0x61c 0x6a0) : BurnOk sevm W t amt U := by
-  intro b S M G hW hU hG hin hS
-  obtain ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd, -⟩ := h b S M G hW hU hG hin hS
-  exact ⟨d, hr, hp, hok, hl, h1, h2, hs, hWd⟩
 
 end Blanc.Lift.Curve3Pool

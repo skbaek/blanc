@@ -13,10 +13,13 @@ import Blanc.Lift.Curve3Pool.Walk.LiveLink
 answers `T`; the burn and each nonzero transfer accepted) and the callees answer as
 `LivePremises` describes — `totalSupply()` (`SupplyOkAt`, window `0x17c`/`0x1c0`), `burnFrom` of
 the model's burn amount (`BurnOkAt`, `0x85c`/`0x8e0`) and `transfer` of each nonzero amount
-(`CoinPushOkAt`, `0xaa0`/`0xb40`), each within `U` gas, over world invariants `W` (before the burn)
-and `W'` (after it) — then every frame gas `G ≥ costImbalance … + 5 U` yields an actual successful
+(`CoinPushOkAt`, `0xaa0`/`0xb40`), each within `U` gas, along a world chain `W 0 → … → W 4`
+(the supply read in `W 0`, the burn from `W 0` to `W 1`, coin `k`'s transfer from `W (k + 1)` to
+`W (k + 2)`, a coin with amount `0` skipped with `W (k + 1) ⊆ W (k + 2)`: each state-changing call
+lands in a fresh invariant, since one closed under a positive burn or transfer would admit no
+honest callee) — then every frame gas `G ≥ costImbalance … + 5 U` yields an actual successful
 execution of the pool's runtime whose effect is the model's step at `o`: its `RawEffect` in
-`rliEnvW sevm T`, and `Checkpoint post o.state`. `costImbalance` is a closed sufficient-gas bound,
+`rliEnvW sevm T`, `Checkpoint post o.state`, and `W 4` at the post. `costImbalance` is a closed sufficient-gas bound,
 not the exact gas.
 
 The supply reply the safety theorem observes is `T`: the produced execution's first direct child
@@ -65,7 +68,7 @@ theorem removeLiquidityImbalance_none_of_push {s : State} {e : Env} {amounts : V
 
 /-- **`remove_liquidity_imbalance` is live** (see the module note). -/
 theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256}
-    {W W' : Devm → Prop} {U G : Nat}
+    {W : Nat → Devm → Prop} {U G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -80,17 +83,19 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
     (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
       PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
         ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-    (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre)
-    (hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U 0x17c 0x1c0)
-    (hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot)
+    (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)
+    (hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+      0x17c 0x1c0)
+    (hburn : BurnOkAt sevm (W 0) (W 1) ((pre.getStor sevm.currentTarget).get tokenSlot)
       (Nat.toB256 (rliBurnAmt o)) U 0x85c 0x8e0)
-    (hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm W' W'
+    (hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm (W (k + 1)) (W (k + 2))
       ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
+    (hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b)
     (hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
     (hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256) :
     ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
       RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o ∧
-      Checkpoint (post.getStor sevm.currentTarget) o.state := by
+      Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W 4 post := by
   have hG256 : G + 3000 < 2 ^ 256 := by
     have e : (St pre [] Mem.empty G).gasMeasure =
       G + pre.mach.stateGas.spilled + pre.mach.stateGas.committedSpill := rfl
@@ -106,16 +111,16 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
   have hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     rw [hck.abs.isKilled, hk]; rfl
   -- the forward run
-  obtain ⟨r, hr, D, rfl, -⟩ := rx_rli_frame (pre := pre) (s := s)
-    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm W' D' _)
-    hfork hstatic hdepth hlen hcd hsel hid hWc hW'c hWb hck.abs hck.unlocked hval
+  obtain ⟨r, hr, D, rfl, hLD⟩ := rx_rli_frame (pre := pre) (s := s)
+    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm (W 4) D' _)
+    hfork hstatic hdepth hlen hcd hsel hid hWc hWb hck.abs hck.unlocked hval
     hkill hA hsup hT0 hmf hX0 hD0 hu0 hu1 hu2 hX1 hD1 h0 h1 h2 hX2 hD2
-    hD02 hmT hbn hb1 hslip hTX hburn (hpush 0) (hpush 1) (hpush 2)
+    hD02 hmT hbn hb1 hslip hTX hburn (hpush 0) (hpush 1) (hpush 2) (fun j hj => hskip ⟨j, hj⟩)
     (by rw [hcost] at hG; omega) hG256 (fun D' h _ => ⟨D', rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the frame's first child is the supply call the forward run made: it answered `T`
   obtain ⟨r1, hr1, b1, S1, M1, g1, rfl, hW1, hU1, hg1, hin1, hS1⟩ := rx_rli_toSupply (pre := pre)
-    (U := U) (G := G) hfork hstatic hlen hcd hsel hid hWc hWb hck.unlocked hval hkill
+    (U := U) (G := G) hfork hstatic hlen hcd hsel hid (hWc 0 (by decide)) hWb hck.unlocked hval hkill
     (by rw [hcost] at hG; omega) (by omega)
   have hx : XAt sevm D 0 (St pre [] Mem.empty G) (Exec.childFrames exc) :=
     XAt.of_exec exc (by omega)
@@ -140,7 +145,7 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
   subst hTT
   have hoo : o' = o := Option.some.inj (hstep'.symm.trans hstep)
   subst hoo
-  refine ⟨D, exc, hraw, ?_⟩
+  refine ⟨D, exc, hraw, ?_, hLD.w⟩
   exact (rawEffect_refines (D := ⟨0, sevm, St pre [] Mem.empty G, .ok D, exc⟩) hck hstep' hraw).1
 
 end Blanc.Lift.Curve3Pool

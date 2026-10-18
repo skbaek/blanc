@@ -12,7 +12,8 @@ import Blanc.Lift.Curve3Pool.OneCoinLive
 the checkpoint of the model state `s` reached by replaying the committed invocations.  The five
 frame liveness theorems (`exchange_live`, `addLiquidity_live`, `removeLiquidity_live`,
 `removeLiquidityImbalance_live`, `removeLiquidityOneCoin_live`) run a model-accepted call from a
-frame whose pre-state's pool storage is a checkpoint of the model state.  Composing them, the
+frame whose pre-state's pool storage is a checkpoint of the model state, with each state-changing
+callee call moving the world along a chain of fresh invariants.  Composing them, the
 `c3crv_history_live` shape (`Curve3Crv/Liveness.lean`): at any frame of the pool whose pre-state is
 the future state of a configured history, every call the model accepts at the replayed state
 executes, under the frame liveness theorem's own callee premises.
@@ -122,7 +123,7 @@ theorem pool_history_addLiquidity_live (trace : ConfiguredHistoryTrace cfg check
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool s₀ s ∧
-      ∀ {o : Out} {T B1 B2 : B256} {W W' Wm : Devm → Prop} {U G : Nat}
+      ∀ {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -136,23 +137,22 @@ theorem pool_history_addLiquidity_live (trace : ConfiguredHistoryTrace cfg check
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
             ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWmc : WClosed sevm Wm)
-        (_hWb : W pre)
-        (_hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+        (_hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (_hWb : W 0 pre)
+        (_hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
           0x27c 0x2c0)
         (_hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
-          CoinPullOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot k))
+          CoinPullOkAt sevm (W k) (W (k + 1)) ((pre.getStor sevm.currentTarget).get (coinSlot k))
             (alAmt sevm k.val) U 0x760 0x820)
+        (_hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b)
         (_hfee : alAmt sevm 2 ≠ 0 →
-          CoinBalOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
+          CoinBalOkAt sevm (W 2) (W 2) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
             0x53c 0x5a0 ∧
-          CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+          CoinPullOkAt sevm (W 2) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2))
             (alAmt sevm 2) U 0x760 0x820 ∧
-          CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
+          CoinBalOkAt sevm (W 3) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
             0x87c 0x8e0)
-        (_hmint : MintOkAt sevm (if alAmt sevm 2 = 0 then W else W') Wm
-          ((pre.getStor sevm.currentTarget).get tokenSlot) (Nat.toB256 (alMintAmt o)) U
-          0xc7c 0xd00)
+        (_hmint : MintOkAt sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00)
         (_hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
           G)
         (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
@@ -162,8 +162,8 @@ theorem pool_history_addLiquidity_live (trace : ConfiguredHistoryTrace cfg check
           Checkpoint (post.getStor sevm.currentTarget) o.state := by
   obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace installed initial env target state
   exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hWc
-    hW'c hWmc hWb hsup hpull hfee hmint hG hGm => addLiquidity_live hcode hfork hstatic hdepth hlen
-    hcd hsel hck hstep htok hcoin hpc hid hkeep hWc hW'c hWmc hWb hsup hpull hfee hmint hG hGm⟩
+    hWb hsup hpull hskip hfee hmint hG hGm => addLiquidity_live hcode hfork hstatic hdepth hlen
+    hcd hsel hck hstep htok hcoin hpc hid hkeep hWc hWb hsup hpull hskip hfee hmint hG hGm⟩
 
 /-- **`remove_liquidity` is live at every reachable state** (`removeLiquidity_live` after any
 configured history). -/
@@ -174,7 +174,7 @@ theorem pool_history_removeLiquidity_live (trace : ConfiguredHistoryTrace cfg ch
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool s₀ s ∧
-      ∀ {o : Out} {T : B256} {W : Devm → Prop} {U G : Nat}
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -189,12 +189,13 @@ theorem pool_history_removeLiquidity_live (trace : ConfiguredHistoryTrace cfg ch
           CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
         (_hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
         (_htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-        (_hWc : WClosed sevm W) (_hWb : W pre)
-        (_hsup : SupplyOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
-        (_hpush : ∀ k : Fin 3, CoinPushOk sevm W
+        (_hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (_hWb : W 0 pre)
+        (_hsup : SupplyOk sevm (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
+        (_hpush : ∀ k : Fin 3, CoinPushOkAt sevm (W k) (W (k + 1))
           ((pre.getStor sevm.currentTarget).get (coinSlot k))
-          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U)
-        (_hburn : BurnOk sevm W ((pre.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) U)
+          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U 0x520 0x5c0)
+        (_hburn : BurnOkTo sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (rlAmt sevm) U)
         (_hG : 167000 + 5 * U ≤ G) (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
@@ -214,7 +215,7 @@ theorem pool_history_removeLiquidityImbalance_live
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool s₀ s ∧
-      ∀ {o : Out} {T : B256} {W W' : Devm → Prop} {U G : Nat}
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -228,23 +229,24 @@ theorem pool_history_removeLiquidityImbalance_live
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
             ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWb : W pre)
-        (_hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+        (_hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (_hWb : W 0 pre)
+        (_hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
           0x17c 0x1c0)
-        (_hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot)
+        (_hburn : BurnOkAt sevm (W 0) (W 1) ((pre.getStor sevm.currentTarget).get tokenSlot)
           (Nat.toB256 (rliBurnAmt o)) U 0x85c 0x8e0)
-        (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm W' W'
+        (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm (W (k + 1)) (W (k + 2))
           ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
+        (_hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b)
         (_hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
         (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat)
             o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W 4 post := by
   obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace installed initial env target state
   exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hWc
-    hW'c hWb hsup hburn hpush hG hGm => removeLiquidityImbalance_live hcode hfork hstatic hdepth
-    hlen hcd hsel hck hstep htok hcoin hpc hid hkeep hWc hW'c hWb hsup hburn hpush hG hGm⟩
+    hWb hsup hburn hpush hskip hG hGm => removeLiquidityImbalance_live hcode hfork hstatic hdepth
+    hlen hcd hsel hck hstep htok hcoin hpc hid hkeep hWc hWb hsup hburn hpush hskip hG hGm⟩
 
 /-- **`remove_liquidity_one_coin` is live at every reachable state**
 (`removeLiquidityOneCoin_live` after any configured history). -/
@@ -256,7 +258,7 @@ theorem pool_history_removeLiquidityOneCoin_live
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool s₀ s ∧
-      ∀ {o : Out} {i : Fin 3} {T : B256} {W W' : Devm → Prop} {U G : Nat}
+      ∀ {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -276,17 +278,18 @@ theorem pool_history_removeLiquidityOneCoin_live
           0x2bc 0x300)
         (_hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot)
           (ocAmt sevm) U 0x31c 0x3a0)
-        (_hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+        (_hW''c : WClosed sevm W'')
+        (_hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot i))
           (Nat.toB256 (ocPushAmt o)) U 0x540 0x5e0)
         (_hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
         (_hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post := by
   obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace installed initial env target state
   exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hi hstep htok hcoin hpc hid hkeep hWc
-    hW'c hWb hsup hburn hpush hG hGm => removeLiquidityOneCoin_live hcode hfork hstatic hdepth hlen
-    hcd hsel hi hck hstep htok hcoin hpc hid hkeep hWc hW'c hWb hsup hburn hpush hG hGm⟩
+    hW'c hWb hsup hburn hW''c hpush hG hGm => removeLiquidityOneCoin_live hcode hfork hstatic hdepth
+    hlen hcd hsel hi hck hstep htok hcoin hpc hid hkeep hWc hW'c hWb hsup hburn hW''c hpush hG hGm⟩
 
 end Wrappers
 

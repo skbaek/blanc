@@ -8,22 +8,17 @@ import Blanc.Lift.Curve3Pool.HistoryLive
 Over one configured history from a joint checkpoint (`JointCheckpoint`: the pool's checkpoint,
 3Crv's layout invariant, the pool's token is 3Crv, 3Crv's minter is the pool):
 
-* **Composed U6** — `pool_3crv_addLiquidity_live`, `pool_3crv_removeLiquidity_live`,
-  `pool_3crv_removeLiquidityImbalance_live`, `pool_3crv_removeLiquidityOneCoin_live`: the history
-  liveness wrappers of `HistoryLive.lean` with every 3Crv callee premise (`SupplyOkAt`,
-  `MintOkAt`, `BurnOkAt`, `SupplyOk`, `BurnOk`) discharged by the deployed 3Crv
-  (`Curve3PoolCalleeLive.lean`).  What remains of 3Crv is a fact about the call-site worlds `W`
-  already describes for the coins: 3Crv's code at 3Crv, its supply word `T`, and 3Crv's acceptance
-  of the amount (`MintFits` / `BurnFits`), with `W` closed under the 3Crv call.  The history
-  supplies those facts at the frame's pre-state (`C3Ready`: 3Crv's code, the pool is 3Crv's
-  minter, the pool's token is 3Crv).  `exchange` calls no 3Crv function; its history wrapper
-  `pool_history_exchange_live` is already the composed statement.  Coin premises remain, per
-  coin, with their own environment.
-* **Composed U6, entry form** — `pool_3crv_{addLiquidity,removeLiquidity,removeLiquidityImbalance,
-  removeLiquidityOneCoin}_live_entry`: the call-site worlds fixed to `C3At c3 (pre.getStor c3)`
-  (and its post-mint / post-burn storage), `WClosed` proved (`c3At_wClosed`), so 3Crv's state is
-  stated once on `pre` (supply `T`, `MintFits` / `BurnFits`) and only the per-coin premises
-  remain, over worlds that keep 3Crv's storage and code.
+* **Composed U6** — `pool_3crv_{addLiquidity,removeLiquidity,removeLiquidityImbalance,
+  removeLiquidityOneCoin}_live_entry`: the history liveness wrappers of `HistoryLive.lean` with
+  every 3Crv callee premise (`SupplyOkAt`, `MintOkAt`, `BurnOkAt`, `SupplyOk`, `BurnOkTo`)
+  discharged by the deployed 3Crv (`Curve3PoolCalleeLive.lean`) over worlds whose 3Crv part is
+  fixed (`C3At c3 (pre.getStor c3)` and its post-mint / post-burn storage, `WClosed` proved by
+  `c3At_wClosed`), so 3Crv's state is stated once on `pre` (supply `T`, `MintFits` /
+  `BurnFits`).  The history supplies the rest at the frame's pre-state (`C3Ready`: 3Crv's code,
+  the pool is 3Crv's minter, the pool's token is 3Crv).  The per-coin premises remain, over the
+  caller's coin world chain `V 0 → V 1 → …` (`C3With`): each state-changing coin call moves to the
+  next world.  `exchange` calls no 3Crv function; its history wrapper `pool_history_exchange_live`
+  is already the composed statement.
 * **Composed U3** — `pool_3crv_u3` (`Curve3Pool3CrvU3.lean`) at 3Crv's ledger supplies, and
   `pool_3crv_u3_deployed`: from the recorded deployment state the admin-fee side condition of
   `U3Ledger` holds at every replayed state (`feeBounded_of_poolRun_init`).
@@ -83,280 +78,25 @@ theorem c3Ready_of_history (trace : ConfiguredHistoryTrace cfg checkpoint future
           UInt32.toNat_toUInt64, Nat.zero_or, Adr.toNat]))
     rw [hw, toAdr_toB256]
 
-/-- **Composed U6: `remove_liquidity` is live at every reachable state of the joint history**, its
-3Crv `totalSupply()` and `burnFrom` calls discharged by the deployed 3Crv. -/
-theorem pool_3crv_removeLiquidity_live (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
-    (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image)
-    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
-    (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace))
-    (env : PoolTraceEnv trace pool ps₀.coins ps₀.token)
-    (notSystem : pool ≠ systemAddress)
-    {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
-    (state : pre.state = future.state) :
-    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T : B256} {W : Devm → Prop} {U G : Nat}
-        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
-        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
-        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
-        (_hsel : Sevm.selector sevm = selRemoveLiquidity)
-        (_hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o)
-        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
-        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
-          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hckeep : ∀ k : Fin 3,
-          CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-        (_hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-        (_htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-        (_hWc : WClosed sevm W) (_hWb : W pre) (_hU : 70000 ≤ U)
-        (_hc3 : ∀ b, W b → b.getCode c3 = Curve3Crv.code ∧
-          (Devm.getStor b c3).get Curve3Crv.vySupplySlot = T ∧
-          BurnFits (Devm.getStor b c3) pool sevm.caller.toB256 (rlAmt sevm))
-        (_hWs : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
-          (∀ a, d.getCode a = b.getCode a) → W d)
-        (_hWx : ∀ b d, W b → (∀ a, a ≠ c3 → Devm.getStor d a = Devm.getStor b a) →
-          Devm.getStor d c3 = burnStor (Devm.getStor b c3) sevm.caller.toB256 (rlAmt sevm) →
-          (∀ a, d.getCode a = b.getCode a) → W d)
-        (_hpush : ∀ k : Fin 3, CoinPushOk sevm W
-          ((pre.getStor sevm.currentTarget).get (coinSlot k))
-          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U)
-        (_hG : 167000 + 5 * U ≤ G) (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
-        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
-          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
-  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidity_live trace poolInstalled joint.poolCk env
-    target state
-  refine ⟨s, hs, ready, ?_⟩
-  intro o T W U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hckeep hsk htk
-    hWc hWb hU hc3 hWs hWx hpush hG hGm
-  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
-    rw [target]; exact ready.2.2
-  refine hlive hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok) hcoin hpc
-    hid hckeep hsk htk hWc hWb ?_ hpush ?_ hG hGm
-  · exact c3crv_supplyOk hfork hdepth (by rw [ht]; exact precomp_false htok) hU
-      (fun b hb => by rw [ht]; exact ⟨(hc3 b hb).1, (hc3 b hb).2.1⟩) hWs
-  · exact c3crv_burnOk hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
-      (fun b hb => by
-        rw [ht, target]
-        exact ⟨(hc3 b hb).1, fun h => joint.apart h.symm, (hc3 b hb).2.2⟩)
-      (by rw [ht]; exact hWx)
-
-/-- **Composed U6: `add_liquidity` is live at every reachable state of the joint history**, its
-3Crv `totalSupply()` and `mint` calls discharged by the deployed 3Crv. -/
-theorem pool_3crv_addLiquidity_live (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
-    (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image)
-    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
-    (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace))
-    (env : PoolTraceEnv trace pool ps₀.coins ps₀.token)
-    (notSystem : pool ≠ systemAddress)
-    {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
-    (state : pre.state = future.state) :
-    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T B1 B2 : B256} {W W' Wm : Devm → Prop} {U G : Nat}
-        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
-        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
-        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
-        (_hsel : Sevm.selector sevm = selAddLiquidity)
-        (_hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o)
-        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
-        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
-          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
-          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
-            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWmc : WClosed sevm Wm)
-        (_hWb : W pre) (_hU : 70000 ≤ U)
-        (_hc3 : ∀ b, W b → b.getCode c3 = Curve3Crv.code ∧
-          (Devm.getStor b c3).get Curve3Crv.vySupplySlot = T)
-        (_hWs : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
-          (∀ a, d.getCode a = b.getCode a) → W d)
-        (_hm3 : ∀ b, (if alAmt sevm 2 = 0 then W else W') b → b.getCode c3 = Curve3Crv.code ∧
-          MintFits (Devm.getStor b c3) pool sevm.caller.toB256 (Nat.toB256 (alMintAmt o)))
-        (_hWm : ∀ b d, (if alAmt sevm 2 = 0 then W else W') b →
-          (∀ a, a ≠ c3 → Devm.getStor d a = Devm.getStor b a) →
-          Devm.getStor d c3 =
-            mintStor (Devm.getStor b c3) sevm.caller.toB256 (Nat.toB256 (alMintAmt o)) →
-          (∀ a, d.getCode a = b.getCode a) → Wm d)
-        (_hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
-          CoinPullOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot k))
-            (alAmt sevm k.val) U 0x760 0x820)
-        (_hfee : alAmt sevm 2 ≠ 0 →
-          CoinBalOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
-            0x53c 0x5a0 ∧
-          CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot 2))
-            (alAmt sevm 2) U 0x760 0x820 ∧
-          CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
-            0x87c 0x8e0)
-        (_hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
-          G)
-        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
-        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ e : Env,
-          e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
-          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post e o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
-  obtain ⟨s, hs, hlive⟩ := pool_history_addLiquidity_live trace poolInstalled joint.poolCk env
-    target state
-  refine ⟨s, hs, ready, ?_⟩
-  intro o T B1 B2 W W' Wm U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid
-    hkeep hWc hW'c hWmc hWb hU hc3 hWs hm3 hWm hpull hfee hG hGm
-  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
-    rw [target]; exact ready.2.2
-  refine hlive hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok) hcoin hpc
-    hid hkeep hWc hW'c hWmc hWb ?_ hpull hfee ?_ hG hGm
-  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
-      (by decide) (fun b hb => by rw [ht]; exact hc3 b hb) hWs
-  · exact c3crv_mintOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
-      (by decide) (by decide)
-      (fun b hb => by
-        rw [ht, target]
-        exact ⟨(hm3 b hb).1, fun h => joint.apart h.symm, (hm3 b hb).2⟩)
-      (by rw [ht]; exact hWm)
-
-/-- **Composed U6: `remove_liquidity_imbalance` is live at every reachable state of the joint
-history**, its 3Crv `totalSupply()` and `burnFrom` calls discharged by the deployed 3Crv. -/
-theorem pool_3crv_removeLiquidityImbalance_live (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
-    (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image)
-    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
-    (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace))
-    (env : PoolTraceEnv trace pool ps₀.coins ps₀.token)
-    (notSystem : pool ≠ systemAddress)
-    {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
-    (state : pre.state = future.state) :
-    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T : B256} {W W' : Devm → Prop} {U G : Nat}
-        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
-        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
-        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
-        (_hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
-        (_hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o)
-        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
-        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
-          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
-          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
-            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWb : W pre) (_hU : 70000 ≤ U)
-        (_hc3 : ∀ b, W b → b.getCode c3 = Curve3Crv.code ∧
-          (Devm.getStor b c3).get Curve3Crv.vySupplySlot = T ∧
-          BurnFits (Devm.getStor b c3) pool sevm.caller.toB256 (Nat.toB256 (rliBurnAmt o)))
-        (_hWs : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
-          (∀ a, d.getCode a = b.getCode a) → W d)
-        (_hWx : ∀ b d, W b → (∀ a, a ≠ c3 → Devm.getStor d a = Devm.getStor b a) →
-          Devm.getStor d c3 =
-            burnStor (Devm.getStor b c3) sevm.caller.toB256 (Nat.toB256 (rliBurnAmt o)) →
-          (∀ a, d.getCode a = b.getCode a) → W' d)
-        (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm W' W'
-          ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
-        (_hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
-        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
-        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
-          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat)
-            o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
-  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidityImbalance_live trace poolInstalled joint.poolCk env
-    target state
-  refine ⟨s, hs, ready, ?_⟩
-  intro o T W W' U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hWc
-    hW'c hWb hU hc3 hWs hWx hpush hG hGm
-  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
-    rw [target]; exact ready.2.2
-  refine hlive hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok) hcoin hpc
-    hid hkeep hWc hW'c hWb ?_ ?_ hpush hG hGm
-  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
-      (by decide) (fun b hb => by rw [ht]; exact ⟨(hc3 b hb).1, (hc3 b hb).2.1⟩) hWs
-  · exact c3crv_burnOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
-      (by decide) (by decide)
-      (fun b hb => by
-        rw [ht, target]
-        exact ⟨(hc3 b hb).1, fun h => joint.apart h.symm, (hc3 b hb).2.2⟩)
-      (by rw [ht]; exact hWx)
-
-/-- **Composed U6: `remove_liquidity_one_coin` is live at every reachable state of the joint
-history**, its 3Crv `totalSupply()` and `burnFrom` calls discharged by the deployed 3Crv. -/
-theorem pool_3crv_removeLiquidityOneCoin_live (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
-    (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image)
-    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
-    (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace))
-    (env : PoolTraceEnv trace pool ps₀.coins ps₀.token)
-    (notSystem : pool ≠ systemAddress)
-    {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
-    (state : pre.state = future.state) :
-    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {i : Fin 3} {T : B256} {W W' : Devm → Prop} {U G : Nat}
-        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
-        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
-        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
-        (_hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
-        (_hi : i.val = (ocI sevm).toNat)
-        (_hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o)
-        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
-        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
-          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
-          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
-            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWb : W pre) (_hU : 70000 ≤ U)
-        (_hc3 : ∀ b, W b → b.getCode c3 = Curve3Crv.code ∧
-          (Devm.getStor b c3).get Curve3Crv.vySupplySlot = T ∧
-          BurnFits (Devm.getStor b c3) pool sevm.caller.toB256 (ocAmt sevm))
-        (_hWs : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
-          (∀ a, d.getCode a = b.getCode a) → W d)
-        (_hWx : ∀ b d, W b → (∀ a, a ≠ c3 → Devm.getStor d a = Devm.getStor b a) →
-          Devm.getStor d c3 = burnStor (Devm.getStor b c3) sevm.caller.toB256 (ocAmt sevm) →
-          (∀ a, d.getCode a = b.getCode a) → W' d)
-        (_hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
-          (Nat.toB256 (ocPushAmt o)) U 0x540 0x5e0)
-        (_hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
-        (_hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
-        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
-          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
-  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidityOneCoin_live trace poolInstalled joint.poolCk env
-    target state
-  refine ⟨s, hs, ready, ?_⟩
-  intro o i T W W' U G hcode hfork hstatic hdepth hlen hcd hsel hi hstep htok hcoin hpc hid hkeep
-    hWc hW'c hWb hU hc3 hWs hWx hpush hG hGm
-  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
-    rw [target]; exact ready.2.2
-  refine hlive hcode hfork hstatic hdepth hlen hcd hsel hi hstep (by rw [ht]; exact htok) hcoin
-    hpc hid hkeep hWc hW'c hWb ?_ ?_ hpush hG hGm
-  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
-      (by decide) (fun b hb => by rw [ht]; exact ⟨(hc3 b hb).1, (hc3 b hb).2.1⟩) hWs
-  · exact c3crv_burnOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
-      (by decide) (by decide)
-      (fun b hb => by
-        rw [ht, target]
-        exact ⟨(hc3 b hb).1, fun h => joint.apart h.symm, (hc3 b hb).2.2⟩)
-      (by rw [ht]; exact hWx)
-
 /-! ## Composed U6 with 3Crv's state stated once, at the frame's entry
 
-The wrappers above ask the caller for world predicates `W`, `W'`, `Wm` describing 3Crv at each
-call site.  Here they are fixed: `C3At c3 σ` is the set of worlds whose 3Crv code is 3Crv's and
-whose 3Crv storage is `σ`.  The call-site world is `C3At c3 (pre.getStor c3)`, the frame entry's
-3Crv storage; after the mint or burn it is `C3At c3 (mintStor …)` / `C3At c3 (burnStor …)` of that
-storage.  This is sound because the frame reads 3Crv's supply first (`SupplyFirst`: no
-state-changing child precedes the `totalSupply()` read), the pool's own steps write only the
-pool's storage (`c3At_wClosed`), and the coin children keep 3Crv's storage and code (the per-coin
-premises are stated over these worlds, so a coin call must leave `C3At c3 σ` in `C3At c3 σ`: the
-R1 per-coin environment premise).  So 3Crv's storage at each 3Crv call site is its storage at
-frame entry, and 3Crv's acceptance of the call (supply `T`, `MintFits`, `BurnFits`) is a fact
-about `pre` alone.  `remove_liquidity` goes through `removeLiquidity_liveW`: its single world `W`
-serves the supply read, the pushes and the burn, and no `W` fixing 3Crv's storage contains the
-burn's result, so the burn's result world is separate (`BurnOkTo`); the walk reads nothing of it.
-(`pool_3crv_removeLiquidity_live` itself is satisfiable only with a zero burn: its `_hWx` puts
-the burned world in `W`, where `_hc3` then asks the supply to be both `T` and `T - _amount`.) -/
+The history wrappers of `HistoryLive.lean` ask the caller for a world chain `W 0 → W 1 → …`
+describing 3Crv and the coins at each call site.  Here the 3Crv part is fixed: `C3At c3 σ` is the
+set of worlds whose 3Crv code is 3Crv's and whose 3Crv storage is `σ`; `σ` is the frame entry's
+3Crv storage `pre.getStor c3` up to the 3Crv call and `mintStor …` / `burnStor …` of it after.
+This is sound because the frame reads 3Crv's supply first (`SupplyFirst`: no state-changing child
+precedes the `totalSupply()` read), the pool's own steps write only the pool's storage
+(`c3At_wClosed`), and the coin children keep 3Crv's storage and code (the per-coin premises are
+stated over these worlds, so a coin call must leave 3Crv as it found it: the R1 per-coin
+environment premise).  So 3Crv's acceptance of the call (supply `T`, `MintFits`, `BurnFits`) is a
+fact about `pre` alone.
+
+The coin part is the caller's own chain `V 0 → V 1 → …` (`C3With c3 σ (V k)`): coin `k`'s
+state-changing call moves `V k` to `V (k + 1)`, a skipped call stays (`V k ⊆ V (k + 1)`), and `V`
+must not read 3Crv's storage (`C3Blind`), so 3Crv's own calls keep it.  A positive transfer
+changes a coin's ledger, so no single coin world closed under it is satisfiable by an honest coin
+(`removeLiquidity_premises_satisfiable` and its siblings in `Curve3Pool3CrvLiveWitness.lean`
+instantiate these chains with `Token20` coins and the deployed 3Crv). -/
 
 /-- **The worlds whose 3Crv is as given**: 3Crv's code at `c3` and 3Crv's storage `σ`. -/
 def C3At (c3 : Adr) (σ : Stor) (b : Devm) : Prop :=
@@ -392,8 +132,33 @@ theorem c3At_burn {c3 : Adr} {σ : Stor} {x v : B256} {b d : Devm} (h : C3At c3 
     (hc : ∀ a, d.getCode a = b.getCode a) : C3At c3 (burnStor σ x v) d :=
   ⟨(hc c3).trans h.1, hs.trans (by rw [h.2])⟩
 
+/-- **A world with 3Crv as given and the caller's coin facts `V`.** -/
+def C3With (c3 : Adr) (σ : Stor) (V : Devm → Prop) (b : Devm) : Prop :=
+  C3At c3 σ b ∧ V b
+
+/-- **`V` does not read 3Crv's storage**: it survives a step that keeps every account's code and
+every account's storage but 3Crv's (what a 3Crv call does). -/
+def C3Blind (c3 : Adr) (V : Devm → Prop) : Prop :=
+  ∀ b d, V b → (∀ a, a ≠ c3 → Devm.getStor d a = Devm.getStor b a) →
+    (∀ a, d.getCode a = b.getCode a) → V d
+
+theorem c3With_wClosed {sevm : Sevm} {c3 : Adr} {σ : Stor} {V : Devm → Prop}
+    (hne : sevm.currentTarget ≠ c3) (hV : WClosed sevm V) : WClosed sevm (C3With c3 σ V) where
+  st b S M G h := ⟨(c3At_wClosed hne).st b S M G h.1, hV.st b S M G h.2⟩
+  sload b k h := ⟨(c3At_wClosed hne).sload b k h.1, hV.sload b k h.2⟩
+  sstore b k v h := ⟨(c3At_wClosed hne).sstore b k v h.1, hV.sstore b k v h.2⟩
+  sha b b' rd hp h := ⟨(c3At_wClosed hne).sha b b' rd hp h.1, hV.sha b b' rd hp h.2⟩
+  log b l h := ⟨(c3At_wClosed hne).log b l h.1, hV.log b l h.2⟩
+
+/-- A static 3Crv call keeps `C3With c3 σ V`. -/
+theorem c3With_keep {c3 : Adr} {σ : Stor} {V : Devm → Prop} {b d : Devm} (hV : C3Blind c3 V)
+    (h : C3With c3 σ V b) (hs : ∀ a, Devm.getStor d a = Devm.getStor b a)
+    (hc : ∀ a, d.getCode a = b.getCode a) : C3With c3 σ V d :=
+  ⟨c3At_keep h.1 hs hc, hV b d h.2 (fun a _ => hs a) hc⟩
+
 /-- **Composed U6, entry form: `remove_liquidity`.** 3Crv's state is stated once on `pre` (supply
-`T`, `BurnFits`); the coin pushes run over `C3At c3 (pre.getStor c3)`. -/
+`T`, `BurnFits`); coin `k`'s push moves the coin chain from `V k` to `V (k + 1)` over 3Crv's entry
+storage. -/
 theorem pool_3crv_removeLiquidity_live_entry
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -405,7 +170,7 @@ theorem pool_3crv_removeLiquidity_live_entry
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T : B256} {U G : Nat}
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -422,37 +187,53 @@ theorem pool_3crv_removeLiquidity_live_entry
         (_hU : 70000 ≤ U)
         (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
         (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (rlAmt sevm))
-        (_hpush : ∀ k : Fin 3, CoinPushOk sevm (C3At c3 (Devm.getStor pre c3))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hpush : ∀ k : Fin 3, CoinPushOkAt sevm (C3With c3 (Devm.getStor pre c3) (V k))
+          (C3With c3 (Devm.getStor pre c3) (V (k + 1)))
           ((pre.getStor sevm.currentTarget).get (coinSlot k))
-          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U)
+          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U 0x520 0x5c0)
         (_hG : 167000 + 5 * U ≤ G) (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
           Checkpoint (post.getStor sevm.currentTarget) o.state := by
   have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
-  obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace poolInstalled joint.poolCk env target state
+  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidity_live trace poolInstalled joint.poolCk env
+    target state
   refine ⟨s, hs, ready, ?_⟩
-  intro o T U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hckeep hsk htk
-    hU hT hburn hpush hG hGm
+  intro o T V U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hckeep hsk htk
+    hU hT hburn hVc hVb hVs hpush hG hGm
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
   have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
-  refine removeLiquidity_liveW (W' := C3At c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
-      (rlAmt sevm))) hcode hfork hstatic hdepth hlen hcd hsel hck hstep (by rw [ht]; exact htok)
-    hcoin hpc hid hckeep hsk htk (c3At_wClosed hne) ⟨ready.1, rfl⟩ ?_ hpush ?_ hG hGm
+  let σ := Devm.getStor pre c3
+  let σb := burnStor σ sevm.caller.toB256 (rlAmt sevm)
+  let W : Nat → Devm → Prop := fun j => match j with
+    | 4 => C3With c3 σb (V 3)
+    | j => C3With c3 σ (V j)
+  refine hlive (W := W) hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok)
+    hcoin hpc hid hckeep hsk htk ?_ ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ ?_ hG hGm
+  · intro k hk
+    rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3) with rfl | rfl | rfl | rfl
+    all_goals exact c3With_wClosed hne (hVc _ (by decide))
   · exact c3crv_supplyOk hfork hdepth (by rw [ht]; exact precomp_false htok) hU
-      (fun b hb => by rw [ht, hb.2]; exact ⟨hb.1, hT⟩) (fun b d hb hs hc => c3At_keep hb hs hc)
+      (fun b hb => by rw [ht, hb.1.2]; exact ⟨hb.1.1, hT⟩)
+      (fun b d hb hs hc => c3With_keep (hVs 0) hb hs hc)
+  · intro k
+    match k with
+    | ⟨0, _⟩ => exact hpush 0
+    | ⟨1, _⟩ => exact hpush 1
+    | ⟨2, _⟩ => exact hpush 2
   · refine (c3crv_burnOkAt (ii := 0x61c) (oi := 0x6a0) hfork hstatic hdepth
       (by rw [ht]; exact precomp_false htok) hU (by decide) (by decide) ?_ ?_).burnOkTo
     · intro b hb
-      rw [ht, target, hb.2]
-      exact ⟨hb.1, fun h => joint.apart h.symm, hburn⟩
+      rw [ht, target, hb.1.2]
+      exact ⟨hb.1.1, fun h => joint.apart h.symm, hburn⟩
     · rw [ht]
-      exact fun b d hb _ hs hc => c3At_burn hb hs hc
+      exact fun b d hb ho hs hc => ⟨c3At_burn hb.1 hs hc, hVs 3 b d hb.2 ho hc⟩
 
 /-- **Composed U6, entry form: `add_liquidity`.** 3Crv's state is stated once on `pre` (supply
-`T`, `MintFits` for the minted amount); the coin pulls and the fee coin's balance reads run over
-`C3At c3 (pre.getStor c3)`. -/
+`T`, `MintFits` for the minted amount); coin `k`'s pull moves the coin chain from `V k` to
+`V (k + 1)` over 3Crv's entry storage, the fee coin's two balance reads in `V 2` and `V 3`. -/
 theorem pool_3crv_addLiquidity_live_entry
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -464,7 +245,7 @@ theorem pool_3crv_addLiquidity_live_entry
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T B1 B2 : B256} {U G : Nat}
+      ∀ {o : Out} {T B1 B2 : B256} {V : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -481,15 +262,21 @@ theorem pool_3crv_addLiquidity_live_entry
         (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
         (_hmint : MintFits (Devm.getStor pre c3) pool sevm.caller.toB256
           (Nat.toB256 (alMintAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
         (_hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
-          CoinPullOkAt sevm (C3At c3 (Devm.getStor pre c3)) (C3At c3 (Devm.getStor pre c3))
+          CoinPullOkAt sevm (C3With c3 (Devm.getStor pre c3) (V k))
+            (C3With c3 (Devm.getStor pre c3) (V (k + 1)))
             ((pre.getStor sevm.currentTarget).get (coinSlot k)) (alAmt sevm k.val) U 0x760 0x820)
+        (_hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, V k b → V (k + 1) b)
         (_hfee : alAmt sevm 2 ≠ 0 →
-          CoinBalOkAt sevm (C3At c3 (Devm.getStor pre c3)) (C3At c3 (Devm.getStor pre c3))
+          CoinBalOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 2))
+            (C3With c3 (Devm.getStor pre c3) (V 2))
             ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U 0x53c 0x5a0 ∧
-          CoinPullOkAt sevm (C3At c3 (Devm.getStor pre c3)) (C3At c3 (Devm.getStor pre c3))
+          CoinPullOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 2))
+            (C3With c3 (Devm.getStor pre c3) (V 3))
             ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) U 0x760 0x820 ∧
-          CoinBalOkAt sevm (C3At c3 (Devm.getStor pre c3)) (C3At c3 (Devm.getStor pre c3))
+          CoinBalOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 3))
+            (C3With c3 (Devm.getStor pre c3) (V 3))
             ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U 0x87c 0x8e0)
         (_hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
           G)
@@ -498,23 +285,50 @@ theorem pool_3crv_addLiquidity_live_entry
           e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post e o ∧
           Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
-  obtain ⟨s, hs, ready, hlive⟩ := pool_3crv_addLiquidity_live trace poolInstalled c3Installed
-    joint fresh env notSystem target state
+  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
+  obtain ⟨s, hs, hlive⟩ := pool_history_addLiquidity_live trace poolInstalled joint.poolCk env
+    target state
   refine ⟨s, hs, ready, ?_⟩
-  intro o T B1 B2 U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hU
-    hT hmint hpull hfee hG hGm
-  refine hlive (W := C3At c3 (Devm.getStor pre c3)) (W' := C3At c3 (Devm.getStor pre c3))
-    (Wm := C3At c3 (mintStor (Devm.getStor pre c3) sevm.caller.toB256 (Nat.toB256 (alMintAmt o))))
-    hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep (c3At_wClosed hne)
-    (c3At_wClosed hne) (c3At_wClosed hne) ⟨ready.1, rfl⟩ hU
-    (fun b hb => ⟨hb.1, by rw [hb.2]; exact hT⟩) (fun b d hb hs hc => c3At_keep hb hs hc)
-    (fun b hb => by rw [ite_self] at hb; exact ⟨hb.1, by rw [hb.2]; exact hmint⟩)
-    (fun b d hb _ hs hc => by rw [ite_self] at hb; exact c3At_mint hb hs hc) hpull hfee hG hGm
+  intro o T B1 B2 V U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hU
+    hT hmint hVc hVb hVs hpull hskip hfee hG hGm
+  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
+    rw [target]; exact ready.2.2
+  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
+  let σ := Devm.getStor pre c3
+  let σm := mintStor σ sevm.caller.toB256 (Nat.toB256 (alMintAmt o))
+  let W : Nat → Devm → Prop := fun j => match j with
+    | 4 => C3With c3 σm (V 3)
+    | j => C3With c3 σ (V j)
+  refine hlive (W := W) hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok)
+    hcoin hpc hid hkeep ?_ ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ ?_ hfee ?_ hG hGm
+  · intro k hk
+    rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
+    all_goals exact c3With_wClosed hne (hVc _ (by decide))
+  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
+      (by decide) (fun b hb => by rw [ht, hb.1.2]; exact ⟨hb.1.1, hT⟩)
+      (fun b d hb hs hc => c3With_keep (hVs 0) hb hs hc)
+  · intro k
+    match k with
+    | ⟨0, _⟩ => exact hpull 0
+    | ⟨1, _⟩ => exact hpull 1
+    | ⟨2, _⟩ => exact hpull 2
+  · intro k hz b hb
+    match k, hz, hb with
+    | ⟨0, _⟩, hz, hb => exact ⟨hb.1, hskip 0 hz b hb.2⟩
+    | ⟨1, _⟩, hz, hb => exact ⟨hb.1, hskip 1 hz b hb.2⟩
+    | ⟨2, _⟩, hz, hb => exact ⟨hb.1, hskip 2 hz b hb.2⟩
+  · refine c3crv_mintOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
+      (by decide) (by decide) ?_ ?_
+    · intro b hb
+      rw [ht, target, hb.1.2]
+      exact ⟨hb.1.1, fun h => joint.apart h.symm, hmint⟩
+    · rw [ht]
+      exact fun b d hb ho hs hc => ⟨c3At_mint hb.1 hs hc, hVs 3 b d hb.2 ho hc⟩
 
 /-- **Composed U6, entry form: `remove_liquidity_imbalance`.** 3Crv's state is stated once on `pre`
-(supply `T`, `BurnFits` for the burned amount); the coin pushes run over the burned 3Crv storage
-`C3At c3 (burnStor (pre.getStor c3) …)`. -/
+(supply `T`, `BurnFits` for the burned amount); coin `k`'s push (when its amount is nonzero) moves
+the coin chain from `V k` to `V (k + 1)` over the burned 3Crv storage; the frame ends in
+`V 3`. -/
 theorem pool_3crv_removeLiquidityImbalance_live_entry
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -526,7 +340,7 @@ theorem pool_3crv_removeLiquidityImbalance_live_entry
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {T : B256} {U G : Nat}
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -543,34 +357,57 @@ theorem pool_3crv_removeLiquidityImbalance_live_entry
         (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
         (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256
           (Nat.toB256 (rliBurnAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
         (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 →
           CoinPushOkAt sevm
-            (C3At c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
-              (Nat.toB256 (rliBurnAmt o))))
-            (C3At c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
-              (Nat.toB256 (rliBurnAmt o))))
+            (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V k))
+            (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V (k + 1)))
             ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
+        (_hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, V k b → V (k + 1) b)
         (_hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
         (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat)
             o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
-  obtain ⟨s, hs, ready, hlive⟩ := pool_3crv_removeLiquidityImbalance_live trace poolInstalled
-    c3Installed joint fresh env notSystem target state
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧
+          C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+            (Nat.toB256 (rliBurnAmt o))) (V 3) post := by
+  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
+  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidityImbalance_live trace poolInstalled
+    joint.poolCk env target state
   refine ⟨s, hs, ready, ?_⟩
-  intro o T U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hU hT
-    hburn hpush hG hGm
-  exact hlive (W := C3At c3 (Devm.getStor pre c3))
-    hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep (c3At_wClosed hne)
-    (c3At_wClosed hne) ⟨ready.1, rfl⟩ hU
-    (fun b hb => ⟨hb.1, by rw [hb.2]; exact hT, by rw [hb.2]; exact hburn⟩)
-    (fun b d hb hs hc => c3At_keep hb hs hc) (fun b d hb _ hs hc => c3At_burn hb hs hc) hpush
-    hG hGm
+  intro o T V U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hU hT
+    hburn hVc hVb hVs hpush hskip hG hGm
+  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
+    rw [target]; exact ready.2.2
+  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
+  let σ := Devm.getStor pre c3
+  let σb := burnStor σ sevm.caller.toB256 (Nat.toB256 (rliBurnAmt o))
+  let W : Nat → Devm → Prop := fun j => match j with
+    | 0 => C3With c3 σ (V 0)
+    | j + 1 => C3With c3 σb (V j)
+  refine hlive (W := W) hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok)
+    hcoin hpc hid hkeep ?_ ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ hpush
+    (fun k hz b hb => ⟨hb.1, hskip k hz b hb.2⟩) hG hGm
+  · intro k hk
+    rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
+    all_goals exact c3With_wClosed hne (hVc _ (by decide))
+  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
+      (by decide) (fun b hb => by rw [ht, hb.1.2]; exact ⟨hb.1.1, hT⟩)
+      (fun b d hb hs hc => c3With_keep (hVs 0) hb hs hc)
+  · refine c3crv_burnOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
+      (by decide) (by decide) ?_ ?_
+    · intro b hb
+      rw [ht, target, hb.1.2]
+      exact ⟨hb.1.1, fun h => joint.apart h.symm, hburn⟩
+    · rw [ht]
+      exact fun b d hb ho hs hc => ⟨c3At_burn hb.1 hs hc, hVs 0 b d hb.2 ho hc⟩
 
 /-- **Composed U6, entry form: `remove_liquidity_one_coin`.** 3Crv's state is stated once on `pre`
-(supply `T`, `BurnFits` for `_token_amount`); the coin push runs over the burned 3Crv storage. -/
+(supply `T`, `BurnFits` for `_token_amount`); the coin push moves the coin chain from `V 0` to
+`V 1` over the burned 3Crv storage; the frame ends in `V 1`. -/
 theorem pool_3crv_removeLiquidityOneCoin_live_entry
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -582,7 +419,7 @@ theorem pool_3crv_removeLiquidityOneCoin_live_entry
     {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
     (state : pre.state = future.state) :
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
-      ∀ {o : Out} {i : Fin 3} {T : B256} {U G : Nat}
+      ∀ {o : Out} {i : Fin 3} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
         (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
         (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
         (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
@@ -599,28 +436,42 @@ theorem pool_3crv_removeLiquidityOneCoin_live_entry
         (_hU : 70000 ≤ U)
         (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
         (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (ocAmt sevm))
+        (_hVc : ∀ k, k ≤ 1 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : C3Blind c3 (V 0))
         (_hpush : CoinPushOkAt sevm
-          (C3At c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)))
-          (C3At c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)))
+          (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 0))
+          (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 1))
           ((pre.getStor sevm.currentTarget).get (coinSlot i)) (Nat.toB256 (ocPushAmt o)) U
           0x540 0x5e0)
         (_hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
         (_hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
         ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
-          Checkpoint (post.getStor sevm.currentTarget) o.state := by
-  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
-  obtain ⟨s, hs, ready, hlive⟩ := pool_3crv_removeLiquidityOneCoin_live trace poolInstalled
-    c3Installed joint fresh env notSystem target state
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧
+          C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 1)
+            post := by
+  have ready := c3Ready_of_history trace poolInstalled c3Installed joint fresh env notSystem state
+  obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidityOneCoin_live trace poolInstalled
+    joint.poolCk env target state
   refine ⟨s, hs, ready, ?_⟩
-  intro o i T U G hcode hfork hstatic hdepth hlen hcd hsel hi hstep htok hcoin hpc hid hkeep hU hT
-    hburn hpush hG hGm
-  exact hlive (W := C3At c3 (Devm.getStor pre c3))
-    hcode hfork hstatic hdepth hlen hcd hsel hi hstep htok hcoin hpc hid hkeep (c3At_wClosed hne)
-    (c3At_wClosed hne) ⟨ready.1, rfl⟩ hU
-    (fun b hb => ⟨hb.1, by rw [hb.2]; exact hT, by rw [hb.2]; exact hburn⟩)
-    (fun b d hb hs hc => c3At_keep hb hs hc) (fun b d hb _ hs hc => c3At_burn hb hs hc) hpush
-    hG hGm
+  intro o i T V U G hcode hfork hstatic hdepth hlen hcd hsel hi hstep htok hcoin hpc hid hkeep hU hT
+    hburn hVc hVb hVs hpush hG hGm
+  have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
+    rw [target]; exact ready.2.2
+  have hne : sevm.currentTarget ≠ c3 := by rw [target]; exact joint.apart
+  refine hlive (W := C3With c3 (Devm.getStor pre c3) (V 0)) hcode hfork hstatic hdepth hlen hcd
+    hsel hi hstep (by rw [ht]; exact htok) hcoin hpc hid hkeep
+    (c3With_wClosed hne (hVc 0 (by decide))) (c3With_wClosed hne (hVc 0 (by decide)))
+    ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ (c3With_wClosed hne (hVc 1 (by decide))) hpush hG hGm
+  · exact c3crv_supplyOkAt hfork hdepth (by rw [ht]; exact precomp_false htok) hU (by decide)
+      (by decide) (fun b hb => by rw [ht, hb.1.2]; exact ⟨hb.1.1, hT⟩)
+      (fun b d hb hs hc => c3With_keep hVs hb hs hc)
+  · refine c3crv_burnOkAt hfork hstatic hdepth (by rw [ht]; exact precomp_false htok) hU
+      (by decide) (by decide) ?_ ?_
+    · intro b hb
+      rw [ht, target, hb.1.2]
+      exact ⟨hb.1.1, fun h => joint.apart h.symm, hburn⟩
+    · rw [ht]
+      exact fun b d hb ho hs hc => ⟨c3At_burn hb.1 hs hc, hVs b d hb.2 ho hc⟩
 
 /-- **Composed U3 from the deployment.**  `pool_3crv_u3` over a joint history whose pool checkpoint
 state is the recorded deployment state `Creation.poolInitState t₀`: the admin-fee side condition of

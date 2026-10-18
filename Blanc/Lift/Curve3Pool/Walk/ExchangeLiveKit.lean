@@ -187,6 +187,11 @@ theorem st (h : ExLive sevm W b σ) (S : List B256) (M : Mem) (G : Nat) :
 theorem addLogE (h : ExLive sevm W b σ) (l : Log) : ExLive sevm W (b.addLog l) σ :=
   ⟨fun x => h.stor x, ⟨h.id.nodeleg, h.id.warm, h.id.pre, h.id.fork⟩, h.wc, h.wc.log _ _ h.w⟩
 
+/-- Move the base to a world invariant containing the current one (a skipped call's next world). -/
+theorem mono {W' : Devm → Prop} (h : ExLive sevm W b σ) (hc : WClosed sevm W')
+    (hw : ∀ b, W b → W' b) : ExLive sevm W' b σ :=
+  ⟨h.stor, h.id, hc, hw _ h.w⟩
+
 end ExLive
 
 /-- **A one-word `STATICCALL` answered by its premise, forward**: the call at `(ii, is, oi)`

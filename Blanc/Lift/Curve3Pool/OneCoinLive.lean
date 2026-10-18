@@ -10,11 +10,13 @@ import Blanc.Lift.Curve3Pool.Walk.OneCoinLiveWords
 `remove_liquidity_one_coin` succeeds in the environment `ocEnv sevm i T` (3Crv's `totalSupply()`
 answers `T`, the burn and the push accepted) and the callees answer as `LivePremises` describes
 — `totalSupply()` (`SupplyOkAt`, inside `_calc_withdraw_one_coin`), `burnFrom` (`BurnOkAt`) and
-the output coin's `transfer` of the model's `dy` (`CoinPushOkAt`), each within `U` gas, over
-world invariants `W` (before the burn) and `W'` (after it) — then every frame gas
-`G ≥ costOneCoin … + 3 U` yields an actual successful execution of the pool's runtime whose
-effect is the model's step: its `RawEffect` (in the environment the frame observed, which differs
-from the premised one at most in the supply reply) and `Checkpoint post o.state`. `costOneCoin`
+the output coin's `transfer` of the model's `dy` (`CoinPushOkAt`), each within `U` gas, along a
+world chain: `W` (before the burn), `W'` (after it) and `W''` (after the push; each state-changing
+call lands in a fresh invariant, since one closed under a positive burn or transfer would admit
+no honest callee) — then every frame gas `G ≥ costOneCoin … + 3 U` yields an actual successful
+execution of the pool's runtime whose effect is the model's step: its `RawEffect` (in the
+environment the frame observed, which differs from the premised one at most in the supply
+reply), `Checkpoint post o.state`, and `W''` at the post. `costOneCoin`
 is a closed sufficient-gas bound, not the exact gas.
 
 The route is `removeLiquidity_live`'s: the forward run `rx_oc_frame`, `lift_exactM`, the safety
@@ -68,7 +70,7 @@ theorem removeLiquidityOneCoin_none_of_push {s : State} {e : Env} {amount : Nat}
 
 /-- **`remove_liquidity_one_coin` is live** (see the module note). -/
 theorem removeLiquidityOneCoin_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i : Fin 3}
-    {T : B256} {W W' : Devm → Prop} {U G : Nat}
+    {T : B256} {W W' W'' : Devm → Prop} {U G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -88,13 +90,14 @@ theorem removeLiquidityOneCoin_live {sevm : Sevm} {pre : Devm} {s : State} {o : 
     (hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U 0x2bc 0x300)
     (hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot) (ocAmt sevm) U
       0x31c 0x3a0)
-    (hpush : CoinPushOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+    (hW''c : WClosed sevm W'')
+    (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot i))
       (Nat.toB256 (ocPushAmt o)) U 0x540 0x5e0)
     (hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
     (hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256) :
     ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
       RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
-        Checkpoint (post.getStor sevm.currentTarget) o.state := by
+        Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post := by
   have hG256 : G + 2000 < 2 ^ 256 := by
     have e : (St pre [] Mem.empty G).gasMeasure =
       G + pre.mach.stateGas.spilled + pre.mach.stateGas.committedSpill := rfl
@@ -112,12 +115,12 @@ theorem removeLiquidityOneCoin_live {sevm : Sevm} {pre : Devm} {s : State} {o : 
   rw [hci, hpa, toB256_toNat] at hpush
   -- the forward run
   obtain ⟨r, hr, D, rfl, hL, L, ts, data, hlogs, hdata⟩ := rx_oc_frame (pre := pre) (s := s)
-    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm W' D' _ ∧
+    (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm W'' D' _ ∧
       ∃ L ts data, D'.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x20 32 0) = cwDy (ocI sevm) r0 r1 r2 y2)
     hfork hstatic hdepth hlen hcd hsel hid hWc hW'c hWb hck.abs hck.unlocked hval
     (by rw [hck.abs.isKilled, hk]; rfl) hi3 hA hsup hmf hX hD0 hm hT0 hle hy hyl h0 h1 h2 hy2 hs0
-    hs1 hs2 hmin hma hadd hsub hburn hpush (by rw [hcost] at hG; omega) hG256
+    hs1 hs2 hmin hma hadd hsub hburn hW''c hpush (by rw [hcost] at hG; omega) hG256
     (fun D' h hl => ⟨D', rfl, h, hl⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety result for that execution
@@ -169,7 +172,7 @@ theorem removeLiquidityOneCoin_live {sevm : Sevm} {pre : Devm} {s : State} {o : 
     rw [ho', ho, hdyeq, ← hw]
     rfl
   subst hoo
-  refine ⟨D, exc, T', hraw, ?_⟩
+  refine ⟨D, exc, T', hraw, ?_, hL.w⟩
   exact (rawEffect_refines (D := ⟨0, sevm, St pre [] Mem.empty G, .ok D, exc⟩) hck hstep' hraw).1
 
 end Blanc.Lift.Curve3Pool

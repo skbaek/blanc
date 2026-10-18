@@ -16,8 +16,10 @@ accepted) and the callees answer as `LivePremises` describes — `totalSupply()`
 window `0x27c`/`0x2c0`), each nonzero amount's `transferFrom` (`CoinPullOkAt`, `0x760`/`0x820`),
 for a nonzero fee-coin amount its two `balanceOf(self)` reads (`CoinBalOkAt`, `0x53c`/`0x5a0` and
 `0x87c`/`0x8e0`), and `mint` of the model's amount (`MintOkAt`, `0xc7c`/`0xd00`), each within `U`
-gas, over world invariants `W` (before the fee coin's pull), `W'` (after it) and `Wm` (after the
-mint) — then every frame gas `G ≥ costAddLiquidity … + 7 U` yields an actual successful execution
+gas, along a world chain `W 0 → … → W 4` (the supply read in `W 0`; coin `k`'s pull from `W k` to
+`W (k + 1)`, a coin with amount `0` skipped with `W k ⊆ W (k + 1)`; the fee coin's balance reads in
+`W 2` and `W 3`; the mint from `W 3` to `W 4`: each state-changing call lands in a fresh
+invariant, since one closed under a positive transfer or mint would admit no honest callee) — then every frame gas `G ≥ costAddLiquidity … + 7 U` yields an actual successful execution
 of the pool's runtime whose effect is the model's step at the premised `o`: `RawEffect` in the
 environment `e` the frame observed (`e.supply = T`; `step s e … = some o` too) and
 `Checkpoint post o.state`. Both branches: the first deposit (`T = 0`) and the fee path.
@@ -126,26 +128,28 @@ theorem alMintAmt_eq {st : State} {r : Option Nat} {ev : List Event} {cs : List 
 
 open Jaune Blanc.Lift in
 /-- The deposit loop's premises from the frame's: the windows at the stored coins, the words. -/
-theorem al_loopOk {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {T B1 B2 : B256} {U : Nat}
+theorem al_loopOk {sevm : Sevm} {W : Nat → Devm → Prop} {σ : Stor} {T B1 B2 : B256} {U : Nat}
     (ht0 : T = 0 → alAmt sevm 0 ≠ 0 ∧ alAmt sevm 1 ≠ 0 ∧ alAmt sevm 2 ≠ 0)
     (hnz : ¬ (alAmt sevm 0 = 0 ∧ alAmt sevm 1 = 0 ∧ alAmt sevm 2 = 0))
+    (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j))
     (hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
-      CoinPullOkAt sevm W W (σ.get (coinSlot k)) (alAmt sevm k.val) U 0x760 0x820)
+      CoinPullOkAt sevm (W k) (W (k + 1)) (σ.get (coinSlot k)) (alAmt sevm k.val) U 0x760 0x820)
+    (hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b)
     (hfee : alAmt sevm 2 ≠ 0 →
-      CoinBalOkAt sevm W W (σ.get (coinSlot 2)) B1 U 0x53c 0x5a0 ∧
-      CoinPullOkAt sevm W W' (σ.get (coinSlot 2)) (alAmt sevm 2) U 0x760 0x820 ∧
-      CoinBalOkAt sevm W' W' (σ.get (coinSlot 2)) B2 U 0x87c 0x8e0)
+      CoinBalOkAt sevm (W 2) (W 2) (σ.get (coinSlot 2)) B1 U 0x53c 0x5a0 ∧
+      CoinPullOkAt sevm (W 2) (W 3) (σ.get (coinSlot 2)) (alAmt sevm 2) U 0x760 0x820 ∧
+      CoinBalOkAt sevm (W 3) (W 3) (σ.get (coinSlot 2)) B2 U 0x87c 0x8e0)
     (hsub : alAmt sevm 2 ≠ 0 → ¬ B2 < B1)
     (ha0 : ¬ balAt σ 0 + alAmt sevm 0 < balAt σ 0) (ha1 : ¬ balAt σ 1 + alAmt sevm 1 < balAt σ 1)
     (ha2 : ¬ balAt σ 2 + alCr2 sevm B1 B2 < balAt σ 2) :
-    AlLoopOk sevm W W' (alLocked1 σ) T B1 B2 (alOld σ) U := by
+    AlLoopOk sevm W (alLocked1 σ) T B1 B2 (alOld σ) U := by
   have hc : ∀ k : Fin 3, coinAt (alLocked1 σ) k.val = σ.get (coinSlot k) := fun k =>
     Stor.get_set_ne _ (coin_ne_lock k.isLt) _
   have hc0 : coinAt (alLocked1 σ) 0 = σ.get (coinSlot 0) := hc 0
   have hc1 : coinAt (alLocked1 σ) 1 = σ.get (coinSlot 1) := hc 1
   have hc2 : coinAt (alLocked1 σ) 2 = σ.get (coinSlot 2) := hc 2
-  refine ⟨ht0, hnz, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, hsub, ha0, ha1,
-    ha2⟩
+  refine ⟨ht0, hnz, fun j hj => hWc j (by omega), hskip 0, hskip 1, hskip 2, fun h => ?_,
+    fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, hsub, ha0, ha1, ha2⟩
   · rw [hc0]; exact hpull 0 (by decide) h
   · rw [hc1]; exact hpull 1 (by decide) h
   · rw [hc2]; exact (hfee h).1
@@ -155,7 +159,7 @@ theorem al_loopOk {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {T B1 B2 : B2
 open Jaune Blanc.Lift Blanc.StableSwapNewton in
 /-- **`add_liquidity` is live** (see the module note). -/
 theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1 B2 : B256}
-    {W W' Wm : Devm → Prop} {U G : Nat}
+    {W : Nat → Devm → Prop} {U G : Nat}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -170,18 +174,22 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
     (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
       PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
         ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
-    (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWmc : WClosed sevm Wm) (hWb : W pre)
-    (hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U 0x27c 0x2c0)
+    (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)
+    (hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+      0x27c 0x2c0)
     (hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
-      CoinPullOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot k)) (alAmt sevm k.val)
-        U 0x760 0x820)
+      CoinPullOkAt sevm (W k) (W (k + 1)) ((pre.getStor sevm.currentTarget).get (coinSlot k))
+        (alAmt sevm k.val) U 0x760 0x820)
+    (hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b)
     (hfee : alAmt sevm 2 ≠ 0 →
-      CoinBalOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U 0x53c 0x5a0 ∧
-      CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) U
-        0x760 0x820 ∧
-      CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U 0x87c 0x8e0)
-    (hmint : MintOkAt sevm (if alAmt sevm 2 = 0 then W else W') Wm
-      ((pre.getStor sevm.currentTarget).get tokenSlot) (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00)
+      CoinBalOkAt sevm (W 2) (W 2) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
+        0x53c 0x5a0 ∧
+      CoinPullOkAt sevm (W 2) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+        (alAmt sevm 2) U 0x760 0x820 ∧
+      CoinBalOkAt sevm (W 3) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
+        0x87c 0x8e0)
+    (hmint : MintOkAt sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+      (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00)
     (hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤ G)
     (hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256) :
     ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ e : Env,
@@ -201,12 +209,6 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
   have hkill : σ.get isKilledSlot = 0 := by rw [hck.abs.isKilled, hk]; rfl
   have hbal : s.balances = ⟨(balAt σ 0).toNat, (balAt σ 1).toNat, (balAt σ 2).toNat⟩ :=
     (V3.ext_get fun k => by rw [← ex_w3_nat]; exact ex_bal_nat hck.abs k).symm
-  have hmintA : alAmt sevm 2 = 0 → MintOkAt sevm W Wm (σ.get tokenSlot) (Nat.toB256 (alMintAmt o))
-      U 0xc7c 0xd00 := fun h => by
-    have hm := hmint; rw [ite_eq_left_of_eq_true _ _ (eq_true h)] at hm; exact hm
-  have hmintB : alAmt sevm 2 ≠ 0 → MintOkAt sevm W' Wm (σ.get tokenSlot)
-      (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00 := fun h => by
-    have hm := hmint; rw [ite_eq_right_of_eq_false _ _ (eq_false h)] at hm; exact hm
   have hdec : decodeCall sevm = .addLiquidity (argV3 sevm 0) (arg sevm 3) :=
     decodeCall_at (k := 3) rfl hsel hlen
   rcases hbr with ⟨rfl, hpos, rfl, ho⟩ | ⟨hT0, D0, fees, stored, after, D2, x, y, hD0, hlt, hfl, hD2,
@@ -215,14 +217,15 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
     obtain ⟨hlt1, hslip, hadd, rfl, hv1e⟩ := al_words0 hD1 hpos hmin hT'
     have hcost := al_cost0 hamp hnew hxb
     have hma : alMintAmt o = mint := by rw [ho]; exact alMintAmt_eq
-    rw [hma] at hmintA hmintB
-    have hok := al_loopOk (σ := σ) (W' := W') (T := 0) (U := U) t0
-      (fun h => (t0 rfl).1 h.1) hpull hfee sub a0 a1 a2
-    obtain ⟨r, hr, D, rfl, hDst, -⟩ := rx_al_frame0 (Wm := Wm) (G := G) hfork hstatic hdepth hlen hcd hsel
-      hid hWc hW'c hWmc hWb hck.abs hck.unlocked hval hkill hamp hsup hmf hok hxb hD1 hlt1 hslip
-      hadd hmintA hmintB (by rw [hcost] at hG; omega) hG256
+    rw [hma] at hmint
+    have hok := al_loopOk (σ := σ) (W := W) (T := 0) (U := U) t0
+      (fun h => (t0 rfl).1 h.1) hWc hpull hskip hfee sub a0 a1 a2
+    obtain ⟨r, hr, D, rfl, hDst, -⟩ := rx_al_frame0 (Wm := W 4) (G := G) hfork hstatic hdepth hlen
+      hcd hsel hid (hWc 4 (by decide)) hWb hck.abs hck.unlocked hval hkill hamp hsup hmf hok hxb
+      hD1 hlt1 hslip hadd hmint (by rw [hcost] at hG; omega) hG256
     obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
-    obtain ⟨c, L, hL, hcT⟩ := al_supplyChild hcode hfork hstatic hlen hcd hsel hid hWc hWb hck.abs
+    obtain ⟨c, L, hL, hcT⟩ := al_supplyChild hcode hfork hstatic hlen hcd hsel hid
+      (hWc 0 (by decide)) hWb hck.abs
       hck.unlocked hval hkill hamp hmf hsup htok (by rw [hcost] at hG; omega) (by omega) exc
     obtain ⟨hkp, hidk⟩ := hkeep D exc
     obtain ⟨T₂, L0, L1, L2, o', hstep', hraw, c', L', hL', hc'⟩ := addLiquidity_rawE exc hcode
@@ -258,7 +261,7 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
     have hcost := al_cost1 hT0 hamp hfeeN hnew hxb (by rw [hbal]; exact hxa) hD0' hD1 hfl' hxc0
     have hma : Nat.toB256 (alMintAmt o) = alMintW T (Nat.toB256 D0) (Nat.toB256 v2) := by
       rw [ho, alMintAmt_eq]; exact toB256_toNat _
-    rw [hma] at hmintA hmintB
+    rw [hma] at hmint
     have hnz : ¬ (alAmt sevm 0 = 0 ∧ alAmt sevm 1 = 0 ∧ alAmt sevm 2 = 0) := by
       rintro ⟨z0, z1, z2⟩
       have hsame : alNewW sevm σ B1 B2 = s.balances := by
@@ -276,13 +279,15 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
       obtain rfl := Option.some.inj hxb
       obtain rfl := Option.some.inj (hD0'.symm.trans hD1)
       exact Nat.lt_irrefl _ hlt
-    have hok := al_loopOk (σ := σ) (W' := W') (T := T) (U := U) t0 hnz hpull hfee sub a0 a1 a2
-    obtain ⟨r, hr, D, rfl, hDst, hDlog⟩ := rx_al_frame1 (Wm := Wm) (G := G) hfork hstatic hdepth hlen hcd
-      hsel hid hWc hW'c hWmc hWb hck.abs hck.unlocked hval hkill hamp hsup hmf hT0 hxa hD0' hok hxb
-      hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd hmintA hmintB
+    have hok := al_loopOk (σ := σ) (W := W) (T := T) (U := U) t0 hnz hWc hpull hskip hfee sub a0
+      a1 a2
+    obtain ⟨r, hr, D, rfl, hDst, hDlog⟩ := rx_al_frame1 (Wm := W 4) (G := G) hfork hstatic hdepth
+      hlen hcd hsel hid (hWc 4 (by decide)) hWb hck.abs hck.unlocked hval hkill hamp hsup hmf hT0
+      hxa hD0' hok hxb hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd hmint
       (by rw [hcost] at hG; omega) hG256
     obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
-    obtain ⟨c, L, hL, hcT⟩ := al_supplyChild hcode hfork hstatic hlen hcd hsel hid hWc hWb hck.abs
+    obtain ⟨c, L, hL, hcT⟩ := al_supplyChild hcode hfork hstatic hlen hcd hsel hid
+      (hWc 0 (by decide)) hWb hck.abs
       hck.unlocked hval hkill hamp hmf hsup htok (by rw [hcost] at hG; omega) (by omega) exc
     obtain ⟨hkp, hidk⟩ := hkeep D exc
     obtain ⟨T₂, L0, L1, L2, o', hstep', hraw, c', L', hL', hc'⟩ := addLiquidity_rawE exc hcode
