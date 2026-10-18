@@ -819,6 +819,8 @@ inductive SFunc.CutCall (fs : List SFunc) (E : List Nat) (tgt : SFunc) : SFunc �
     SFunc.CutCall fs E tgt (.branchTo f k) (.branch .undefined g')
   | call {f f' : SFunc} {k : Nat} :
     k ∈ E → SFunc.CutCall fs E tgt f f' → SFunc.CutCall fs E tgt (.callNext k f) (.callNext k f')
+  | pcAt {f f' : SFunc} {p : Nat} :
+    SFunc.CutCall fs E tgt f f' → SFunc.CutCall fs E tgt (.pcAt p f) (.pcAt p f')
 
 section Cut
 
@@ -894,6 +896,10 @@ theorem xa_cutAt (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms 
         xa_retExact hc hj hcode hfork hE hrun rfl (ExecFreeSet.lookup hE hk hget) hw
       obtain ⟨a'', hw'', -⟩ := hcont hret hx hst hlen
       exact ih rest hw''
+  | pcAt _ ih =>
+    intro d s run post L ρ base m pc a μ h
+    cases run with
+    | pcAt hstep rest => exact ih rest (WalkAt.pcAt hcode h hstep)
 
 /-- **The cut walk from a frame's start**: a frame whose first entry is checked at pc `0`, walked
 from its start in `pre` with remaining children `L`, reaches the cut subtree `tgt` in the cut
@@ -920,10 +926,10 @@ end Cut
 /-! ## Cuts along explicit steps -/
 
 /-- One step of a cut path: an instruction, a jumpdest, the fall-through or the taken arm of a
-`.branch`, the fall-through or the taken goto of a `.branchTo`, or an internal call crossed to
-its continuation. -/
+`.branch`, the fall-through or the taken goto of a `.branchTo`, an internal call crossed to
+its continuation, or a `PC` push (an internal call's return address). -/
 inductive CutStep where
-  | nx | ds | z | s | tz | ts | cl
+  | nx | ds | z | s | tz | ts | cl | pc
   deriving DecidableEq, Repr
 
 /-- The tree `f` cut along the steps `p` (`SFunc.CutCall`'s shape). -/
@@ -939,6 +945,7 @@ def SFunc.cutPath (fs : List SFunc) : List CutStep → SFunc → SFunc
     | some g => .branch .undefined (SFunc.cutPath fs p g)
     | none => .undefined
   | .cl :: p, .callNext k f => .callNext k (SFunc.cutPath fs p f)
+  | .pc :: p, .pcAt q f => .pcAt q (SFunc.cutPath fs p f)
   | _ :: _, _ => .undefined
 
 /-- The subtree the steps `p` reach in `f`. -/
@@ -954,6 +961,7 @@ def SFunc.subAt (fs : List SFunc) : List CutStep → SFunc → SFunc
     | some g => SFunc.subAt fs p g
     | none => .undefined
   | .cl :: p, .callNext _ f => SFunc.subAt fs p f
+  | .pc :: p, .pcAt _ f => SFunc.subAt fs p f
   | _ :: _, _ => .undefined
 
 /-- The steps `p` follow `f`'s shape, through no external instruction, crossing calls only into
@@ -973,6 +981,7 @@ def SFunc.cutPathOk (fs : List SFunc) (E : List Nat) : List CutStep → SFunc �
     | some g => SFunc.cutPathOk fs E p g
     | none => false
   | .cl :: p, .callNext k f => decide (k ∈ E) && SFunc.cutPathOk fs E p f
+  | .pc :: p, .pcAt _ f => SFunc.cutPathOk fs E p f
   | _ :: _, _ => false
 
 theorem SFunc.cutCall_of_cutPathOk {fs : List SFunc} {E : List Nat} :
@@ -1001,6 +1010,7 @@ theorem SFunc.cutCall_of_cutPathOk {fs : List SFunc} {E : List Nat} :
   | .cl :: p, .callNext k f, h => by
     simp only [SFunc.cutPathOk, Bool.and_eq_true, decide_eq_true_eq] at h
     exact .call h.1 (SFunc.cutCall_of_cutPathOk p f h.2)
+  | .pc :: p, .pcAt _ f, h => .pcAt (SFunc.cutCall_of_cutPathOk p f h)
 
 /-! ## A walked call step that a compiled step also runs -/
 

@@ -4867,7 +4867,7 @@ contract-neutral.
   `SFunc.RunExact` run of a cut of its tree, `SFunc.CutCall`, halting in `s` put the walk at the
   cut subtree in state `s`, same remaining children; the cut may cross internal calls into an
   `ExecFreeSet` that is also a `NoHaltSet`), the cut-by-steps helpers `CutStep` (`.cl` crosses a
-  call), `SFunc.cutPath`, `SFunc.subAt`, `SFunc.cutPathOk`, `SFunc.cutCall_of_cutPathOk`, the
+  call, `.pc` a return-address `PC` push), `SFunc.cutPath`, `SFunc.subAt`, `SFunc.cutPathOk`, `SFunc.cutCall_of_cutPathOk`, the
   checked-step invariant `checkNodeM_next_step` / `checkNodeM_next_at`, `NoHaltSet.lookup`, and
   `xa_staticcall_runCompiled` (a compiled `STATICCALL` from a walked state is the frame's step;
   the head child's output is its return data), in
