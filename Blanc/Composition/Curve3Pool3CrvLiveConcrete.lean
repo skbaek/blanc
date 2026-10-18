@@ -4,11 +4,13 @@ import Blanc.Composition.Curve3Pool3CrvWorld
 /-!
 # The liveness premises at a concrete entry machine
 
-`Curve3Pool3CrvLiveWitness`'s `<entry>_premises_satisfiable` theorems are conditional. Here each is
-instantiated at one concrete entry machine (built from `P0`, the U9(b) synthetic world, with the
-trader's `600` 3Crv LP tokens and coins 1 and 2 funded for the pulls) at positive amounts: the plain
-facts are discharged by kernel evaluation, and the callee premises follow from the conditional
-theorem.
+`Curve3Pool3CrvLiveWitness`'s `<entry>_premises_satisfiable` theorems are conditional. Here each
+theorem's callee premises — and only the callee premises — are instantiated at one concrete entry
+machine (built from `P0`, the U9(b) synthetic world, with the trader's `600` 3Crv LP tokens and
+coins 1 and 2 funded for the pulls) at chosen positive amounts: the plain facts are discharged by
+kernel evaluation, and the callee premises follow from the conditional theorem. The model step
+(`hstep`) at the concrete entry is not discharged here, so agreement of the chosen amounts with
+the model's outputs is not proved, and the composed `_live_entry` forms are not instantiated.
 -/
 
 namespace Blanc.Composition.Curve3Pool3CrvInstance
@@ -192,7 +194,9 @@ theorem rli_amts : rliAmt rliSevm 0 = 100 ∧ rliAmt rliSevm 1 = 200 ∧ rliAmt 
 theorem oc_amt : ocAmt ocSevm = 600 := by decide +kernel
 
 /-- **`remove_liquidity`'s callee premises hold at the concrete entry** (`T = 6000`, burn
-`600`, pushes `100, 200, 300`): the conditional theorem, its plain facts kernel-checked. -/
+`600`, pushes `100, 200, 300`): the conditional theorem, its plain facts kernel-checked. Only
+the callee premises; the model step is not discharged and the `_live_entry` form is not
+instantiated. -/
 theorem removeLiquidity_premises_satisfiable_concrete :
     0 < (rlAmt rlSevm).toNat ∧
     (∀ k, k ≤ 3 → WClosed rlSevm (rlWorld rlSevm rlPre k)) ∧ rlWorld rlSevm rlPre 0 rlPre ∧
@@ -212,7 +216,8 @@ theorem removeLiquidity_premises_satisfiable_concrete :
 
 
 /-- **`add_liquidity`'s callee premises hold at the concrete entry** (`T = 6000`, mint `1000`,
-pulls `100, 200, 300`): the conditional theorem, its plain facts kernel-checked. -/
+pulls `100, 200, 300`): the conditional theorem, its plain facts kernel-checked. Only the callee
+premises; the model step is not discharged and the `_live_entry` form is not instantiated. -/
 theorem addLiquidity_premises_satisfiable_concrete :
     0 < (alAmt alSevm 0).toNat ∧ 0 < (alAmt alSevm 1).toNat ∧ 0 < (alAmt alSevm 2).toNat ∧
     (∀ k, k ≤ 4 → WClosed alSevm (alWorld alSevm alPre 1000 k)) ∧ alWorld alSevm alPre 1000 0 alPre ∧
@@ -247,7 +252,9 @@ theorem addLiquidity_premises_satisfiable_concrete :
 
 
 /-- **`remove_liquidity_imbalance`'s callee premises hold at the concrete entry** (`T = 6000`,
-burn `600`, pushes `100, 200, 300`): the conditional theorem, its plain facts kernel-checked. -/
+burn `600`, pushes `100, 200, 300`): the conditional theorem, its plain facts kernel-checked.
+Only the callee premises; the model step is not discharged and the `_live_entry` form is not
+instantiated. -/
 theorem removeLiquidityImbalance_premises_satisfiable_concrete :
     0 < (rliAmt rliSevm 0).toNat ∧ 0 < (rliAmt rliSevm 1).toNat ∧ 0 < (rliAmt rliSevm 2).toNat ∧
     (∀ j, j ≤ 4 → WClosed rliSevm (rliWorld rliSevm rliPre 600 j)) ∧ rliWorld rliSevm rliPre 600 0 rliPre ∧
@@ -271,7 +278,9 @@ theorem removeLiquidityImbalance_premises_satisfiable_concrete :
 
 
 /-- **`remove_liquidity_one_coin`'s callee premises hold at the concrete entry** (`T = 6000`,
-burn `600`, coin `0` pushes `100`): the conditional theorem, its plain facts kernel-checked. -/
+burn `600`, coin `0` pushes `100`): the conditional theorem, its plain facts kernel-checked. Only
+the callee premises; the model step is not discharged and the `_live_entry` form is not
+instantiated. -/
 theorem removeLiquidityOneCoin_premises_satisfiable_concrete :
     0 < (ocAmt ocSevm).toNat ∧
     WClosed ocSevm (ocWorld ocSevm ocPre (Devm.getStor ocPre (tokOf ocSevm ocPre)) 0) ∧

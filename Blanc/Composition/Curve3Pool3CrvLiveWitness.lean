@@ -17,10 +17,12 @@ coin call fits the coin's ledger (`T20MoveFits`, `T20PullFits`, any amounts, pos
 included), 3Crv holds its code with supply `T` and accepts the burn/mint (`BurnFits`,
 `MintFits`), and the accounts involved are distinct, non-precompile and not the pool, there are
 world chains `W` with `W 0 pre` satisfying every callee premise of the entry's liveness theorem
-at `U = 80000`.  The chains pin, at each call, 3Crv's storage (the entry storage before its
-state-changing call, the model's result after) and the storage of every coin not yet called (its
-entry storage), so each coin call's acceptance is a fact about the entry state.  (`exchange`'s
-end-to-end instance is `ex_frame_live`.)
+at `U = 80000`.  Only the callee premises are proved here: the model step (`hstep`) at the entry
+is not discharged, agreement of the chosen amounts with the model's outputs is not proved, and
+the composed `_live_entry` forms are not instantiated.  The chains pin, at each call, 3Crv's
+storage (the entry storage before its state-changing call, the model's result after) and the
+storage of every coin not yet called (its entry storage), so each coin call's acceptance is a
+fact about the entry state.  (`exchange`'s end-to-end instance is `ex_frame_live`.)
 
 * `WClosed.of_foreign`: an invariant reading only code and storage outside the pool survives the
   pool's own steps;
