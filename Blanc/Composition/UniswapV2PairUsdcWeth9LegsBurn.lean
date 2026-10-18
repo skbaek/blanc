@@ -274,10 +274,6 @@ theorem usdcBalUsed_withGasLeft :
     usdcBalUsed sevm (B.withGasLeft x) S M p t = usdcBalUsed sevm B S M p t := by
   simp only [usdcBalUsed, bChildS, bChildB, balMsg_withGasLeft]
 
-theorem usdcBalNeed_withGasLeft :
-    usdcBalNeed sevm (B.withGasLeft x) S M p t = usdcBalNeed sevm B S M p t := by
-  simp only [usdcBalNeed, bChildS, bChildB, balMsg_withGasLeft]
-
 theorem usdcBalanceSkel_withGasLeft :
     usdcBalanceSkel sevm (B.withGasLeft x) S M p t = usdcBalanceSkel sevm B S M p t := by
   simp only [usdcBalanceSkel, bChildS, bChildB, balParent_withGasLeft, balMsg_withGasLeft]
@@ -324,10 +320,6 @@ theorem burnWethLeg1_withGasLeft (sevm : Sevm) (d0 : Devm) (M : Mem) (p0 : B256)
     (w : BurnSuffixWords) (R : List B256) (balanceGas0 x : Nat) :
     burnWethLeg1 sevm (d0.withGasLeft x) M p0 w R balanceGas0 =
       burnWethLeg1 sevm d0 M p0 w R balanceGas0 := rfl
-
-theorem burnLeg1Skel_withGasLeft (sevm : Sevm) (d0 : Devm) (M : Mem) (p0 : B256)
-    (w : BurnSuffixWords) (R : List B256) (x : Nat) :
-    burnLeg1Skel sevm (d0.withGasLeft x) M p0 w R = burnLeg1Skel sevm d0 M p0 w R := rfl
 
 theorem burnWethFinal1_withGasLeft (sevm : Sevm) (M : Mem) (p0 : B256) (w : BurnSuffixWords)
     (R : List B256) (d0 d1 e0 : Devm) (G x y z : Nat) :
