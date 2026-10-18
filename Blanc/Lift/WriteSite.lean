@@ -180,8 +180,8 @@ def closeLive (fs : List Fact) (L : List Nat) : List Nat :=
     | .orr r x y => if L.contains r then [x, y] else []
     | _ => []
 
-/-- Drop what speaks of dead symbols (comparison chains closed twice, as `refineFacts` learns in
-two rounds). -/
+/-- Drop what speaks of dead symbols (comparison chains closed twice; `refineFacts` learns in
+three rounds, and a fact dropped here is only forgotten). -/
 def WSt.prune (σ : WSt) : WSt :=
   let L := closeLive σ.facts (closeLive σ.facts σ.liveSyms)
   { σ with

@@ -181,12 +181,21 @@ theorem compat_length {σ A : FSt} (h : compat σ A = true) : σ.kv.length = A.k
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   exact h.1.1.1
 
+/-- An annotation's return-data fact is one the incoming state holds. -/
+theorem compat_rds {σ A : FSt} (hc : compat σ A = true) {h : Nat}
+    (hm : Fact.rdsLe h ∈ A.facts) : Fact.rdsLe h ∈ σ.facts := by
+  unfold compat at hc
+  simp only [Bool.and_eq_true, List.all_eq_true] at hc
+  have := hc.2 _ hm
+  simp only [Fact.rename, entails, List.contains_iff_mem] at this
+  exact this
+
 /-- An accepted join carries the invariant to the annotation, under the renamed valuation. -/
 theorem FpInv.compat {ν : Nat → B256} {σ A : FSt} {d : Devm} {rest : List B256}
     (hc : compat σ A = true) (inv : FpInv ν σ d rest) : FpInv (ν ∘ symMap A σ) A d rest := by
-  obtain ⟨S, hst, hS, hf, hw⟩ := inv
+  obtain ⟨S, hst, hS, hf, hw, hrd⟩ := inv
   obtain ⟨hA, hAf, hfp⟩ := compat_sound hc hS hf
-  refine ⟨S, hst, hA, hAf, fun a ha => ?_⟩
+  refine ⟨S, hst, hA, hAf, fun a ha => ?_, fun h hm => hrd h (compat_rds hc hm)⟩
   obtain ⟨s, hs, he⟩ := hfp a ha
   rw [he]
   exact hw s hs
@@ -200,29 +209,39 @@ private theorem forall₂_split {ν : Nat → B256} :
     obtain ⟨S1, S2, e, h1, h2⟩ := forall₂_split h
     exact ⟨_ :: S1, S2, by rw [e]; rfl, .cons h0 h1, h2⟩
 
+/-- A call continuation starts with no return-data fact: the callee may have changed it. -/
+theorem resume_rds {σ R : FSt} {below : List Nat} {h : Nat} :
+    Fact.rdsLe h ∉ (resume σ below R).facts := by
+  intro hm
+  have := (List.mem_filter.mp (closeLive_sub hm)).2
+  simp only [Fact.isRds, Bool.not_true, Bool.false_eq_true] at this
+
 /-- Popping words the checker frame names: the popped words are the named ones, and the rest of
 the frame names the words above the base. -/
 theorem FpInv.pop_raw {ν : Nat → B256} {σ : FSt} {d d' : Devm} {rest : List B256}
     {xs : List B256} {ks kv : List Nat} (hkv : σ.kv = ks ++ kv) (hlen : ks.length = xs.length)
     (pop : Devm.PopBurn xs d d') (inv : FpInv ν σ d rest) :
     List.Forall₂ (fun s w => ν s = w) ks xs ∧ ∃ S2, d'.stack = S2 ++ rest ∧
-      List.Forall₂ (fun s w => ν s = w) kv S2 ∧ AllHold ν σ.facts ∧ FpWord ν σ.fp d'.memory := by
-  obtain ⟨S, hst, hS, hf, hw⟩ := inv
+      List.Forall₂ (fun s w => ν s = w) kv S2 ∧ AllHold ν σ.facts ∧ FpWord ν σ.fp d'.memory ∧
+      ∀ h, Fact.rdsLe h ∈ σ.facts → d'.returnData.length ≤ h := by
+  obtain ⟨S, hst, hS, hf, hw, hrd⟩ := inv
   rw [hkv] at hS
   obtain ⟨S1, S2, rfl, hS1, hS2⟩ := forall₂_split hS
   have hl1 : S1.length = xs.length := (List.Forall₂.length_eq hS1).symm.trans hlen
   have hps : d.stack = xs ++ d'.stack := pop.stack
   rw [hst, List.append_assoc] at hps
   obtain ⟨rfl, hd'⟩ := List.append_inj hps hl1
-  refine ⟨hS1, S2, hd'.symm, hS2, hf, ?_⟩
-  rw [← pop.memory]
-  exact hw
+  refine ⟨hS1, S2, hd'.symm, hS2, hf, ?_, ?_⟩
+  · rw [← pop.memory]
+    exact hw
+  · rw [← pop.returnData]
+    exact hrd
 
 theorem FpInv.pop {ν : Nat → B256} {σ : FSt} {d d' : Devm} {rest : List B256} {x' : Nat}
     {kv : List Nat} {dw : B256} (hkv : σ.kv = x' :: kv) (pop : Devm.PopBurn [dw] d d')
     (inv : FpInv ν σ d rest) : FpInv ν (popped σ kv) d' rest := by
-  obtain ⟨-, S2, hst, hS, hf, hw⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
-  exact ⟨S2, hst, hS, AllHold.closeLive _ _ hf, hw⟩
+  obtain ⟨-, S2, hst, hS, hf, hw, hrd⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
+  exact ⟨S2, hst, hS, AllHold.closeLive _ _ hf, hw, fun h hm => hrd h (closeLive_sub hm)⟩
 
 theorem FpWord.shift {ν' μ : Nat → B256} {base : Nat} {x fp : Option Nat} {m : Mem}
     (hx : x = fp.map (base + ·)) (hhigh : ∀ s, ν' (base + s) = μ s) (hw : FpWord μ fp m) :
@@ -235,23 +254,25 @@ theorem FpWord.shift {ν' μ : Nat → B256} {base : Nat} {x fp : Option Nat} {m
 
 theorem FpInv.burn {ν : Nat → B256} {σ : FSt} {d d' : Devm} {rest : List B256}
     (burn : Devm.Burn d d') (inv : FpInv ν σ d rest) : FpInv ν σ d' rest := by
-  obtain ⟨S, hst, hS, hf, hw⟩ := inv
-  refine ⟨S, ?_, hS, hf, ?_⟩
+  obtain ⟨S, hst, hS, hf, hw, hrd⟩ := inv
+  refine ⟨S, ?_, hS, hf, ?_, ?_⟩
   · rw [← burn.stack]; exact hst
   · rw [← burn.memory]; exact hw
+  · rw [← burn.returnData]; exact hrd
 
 /-- A branch arm: the popped condition word decides what the arm learns. -/
 theorem FpInv.refine {ν : Nat → B256} {σ : FSt} {d d' : Devm} {rest : List B256}
     {x c : Nat} {kv : List Nat} {dw w : B256} {zero : Bool} (hkv : σ.kv = x :: c :: kv)
     (pop : Devm.PopBurn [dw, w] d d') (hz : zero = true → w = 0) (hnz : zero = false → w ≠ 0)
     (inv : FpInv ν σ d rest) : FpInv ν (FreePtr.refine σ c kv zero) d' rest := by
-  obtain ⟨hk, S2, hst, hS, hf, hw⟩ := inv.pop_raw (ks := [x, c]) (by rw [hkv]; rfl) rfl pop
+  obtain ⟨hk, S2, hst, hS, hf, hw, hrd⟩ := inv.pop_raw (ks := [x, c]) (by rw [hkv]; rfl) rfl pop
   have hc : ν c = w := by
     cases hk with
     | cons _ h => cases h with
       | cons h _ => exact h
   exact ⟨S2, hst, hS, AllHold.closeLive _ _ (refineFacts_sound hf (fun h => hc.trans (hz h))
-    (fun h => hc ▸ hnz h)), hw⟩
+    (fun h => hc ▸ hnz h)), hw,
+    fun h hm => hrd h (rdsLe_mem_refineFacts (closeLive_sub hm))⟩
 
 /-! ## The big-step induction -/
 
@@ -345,11 +366,12 @@ theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨A', hA', hnode⟩ := fpCert_at hf (cert_at he hk)
     rw [hA] at hA'
     cases hA'
-    obtain ⟨-, S2, hst, hS, hfa, hw⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
+    obtain ⟨-, S2, hst, hS, hfa, hw, hrd⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
     have invC : FpInv ν (popped σ (kv.take e.frame.length)) _
         (S2.drop e.frame.length ++ rest) :=
       ⟨S2.take e.frame.length, by rw [hst, ← List.append_assoc, List.take_append_drop],
-        List.forall₂_take _ hS, AllHold.closeLive _ _ hfa, hw⟩
+        List.forall₂_take _ hS, AllHold.closeLive _ _ hfa, hw,
+        fun h hm => hrd h (closeLive_sub hm)⟩
     have hl : A.entry.kv.length ≤ e.frame.length := by
       rw [← compat_length hcA]
       exact List.length_take_le _ _
@@ -361,16 +383,17 @@ theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨A', hA', hnode⟩ := fpCert_at hf (cert_at he hk)
     rw [hA] at hA'
     cases hA'
-    obtain ⟨-, S2, hst, hS, hfa, hw⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
+    obtain ⟨-, S2, hst, hS, hfa, hw, hrd⟩ := inv.pop_raw (ks := [x']) (by rw [hkv]; rfl) rfl pop
     have invC : FpInv ν (popped σ (kv.take e.frame.length)) _
         (S2.drop e.frame.length ++ rest) :=
       ⟨S2.take e.frame.length, by rw [hst, ← List.append_assoc, List.take_append_drop],
-        List.forall₂_take _ hS, AllHold.closeLive _ _ hfa, hw⟩
+        List.forall₂_take _ hS, AllHold.closeLive _ _ hfa, hw,
+        fun h hm => hrd h (closeLive_sub hm)⟩
     have hl : A.entry.kv.length ≤ e.frame.length := by
       rw [← compat_length hcA]
       exact List.length_take_le _ _
     obtain ⟨r1, r2⟩ := ihC hnode hl (invC.compat hcA)
-    obtain ⟨μ, Sr, hstr, hSr, hfr, hwr⟩ := r2 _ rfl
+    obtain ⟨μ, Sr, hstr, hSr, hfr, hwr, -⟩ := r2 _ rfl
     cases hidx : e.frame.findIdx? (· == .ret) with
     | none => exact (runC.not_returned_of_noRet (fpNode_retClosed hf) he hk hidx).elim
     | some i =>
@@ -385,7 +408,7 @@ theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
         omega
       obtain ⟨r3, r4⟩ := ihK (hcont i hidx) hl'
         ⟨Sr ++ S2.drop e.frame.length, by rw [hstr, List.append_assoc], hkv', hf',
-          FpWord.shift hfp' hhigh hwr⟩
+          FpWord.shift hfp' hhigh hwr, fun _ hm => absurd hm resume_rds⟩
       exact ⟨.callRet dw hk pop r1 r3, r4⟩
   | pcAt _ _ _ _ =>
     intro a σ R ν rest hn _ _
@@ -423,7 +446,8 @@ theorem fpRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
     exact Option.some.inj h
   rw [hinit] at hnode
   have inv : FpInv (fun _ => 0) FSt.init pre pre.stack :=
-    ⟨[], rfl, .nil, fun _ h => by simp only [FSt.init, List.not_mem_nil] at h, FpWord.none _ _⟩
+    ⟨[], rfl, .nil, fun _ h => by simp only [FSt.init, List.not_mem_nil] at h, FpWord.none _ _,
+      fun _ h => by simp only [FSt.init, List.not_mem_nil] at h⟩
   exact ⟨f, hf0, (fp_run hP hf hfork r hnode (Nat.zero_le _) inv).1⟩
 
 /-- **The walk-facing lifting theorem**: a successful frame of certified bytes, entered fresh

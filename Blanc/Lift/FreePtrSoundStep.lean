@@ -1,4 +1,5 @@
 import Blanc.Lift.FreePtrMem
+import Blanc.Lift.ReturnDataKeep
 
 /-!
 # One step of the free-pointer walk is sound (F3c, step half)
@@ -33,10 +34,11 @@ def FpObs (d : Devm) (n : Ninst) : Prop :=
 def FpStep (P : Sevm → Devm → Ninst → Devm → Prop) : Sevm → Devm → Ninst → Devm → Prop :=
   fun s d n d' => P s d n d' ∧ FpObs d n
 
-/-- The checker state `σ` describes the machine `d` under `ν`, above the untouched `rest`. -/
+/-- The checker state `σ` describes the machine `d` under `ν`, above the untouched `rest`; a
+return-data fact bounds the current return-data buffer. -/
 def FpInv (ν : Nat → B256) (σ : FSt) (d : Devm) (rest : List B256) : Prop :=
   ∃ S, d.stack = S ++ rest ∧ List.Forall₂ (fun s w => ν s = w) σ.kv S ∧ AllHold ν σ.facts ∧
-    FpWord ν σ.fp d.memory
+    FpWord ν σ.fp d.memory ∧ ∀ h, Fact.rdsLe h ∈ σ.facts → d.returnData.length ≤ h
 
 theorem FpWord.congr {ν ν' : Nat → B256} {fp : Option Nat} {μ : Mem}
     (h : ∀ s, fp = some s → ν' s = ν s) (hw : FpWord ν fp μ) : FpWord ν' fp μ := by
@@ -104,8 +106,8 @@ theorem fstep_nonpush {n : Ninst} {σ σ' : FSt}
       (r' = freshSym σ.kv σ.facts σ.fp ∨
         (n = .reg .mload ∧ ∃ x kt, σ.kv = x :: kt ∧ constOf σ.facts x = some 64 ∧
           r' = fp'.getD (freshSym σ.kv σ.facts σ.fp))) ∧
-      σ' = ⟨kv', closeLive kv' fp' (opFacts σ.facts n σ.kv (freshSym σ.kv σ.facts σ.fp) ++ gas ++
-        σ.facts), fp'⟩ := by
+      σ' = ⟨kv', closeLive kv' fp' (opFacts σ.facts n σ.kv (freshSym σ.kv σ.facts σ.fp) ++
+        rdsEff σ.facts n (freshSym σ.kv σ.facts σ.fp) ++ gas ++ rdsKeep n σ.facts), fp'⟩ := by
   have e : fstep n σ = (do
       let out ← ninstTransfer n (indexPattern σ.kv.length)
       guard (out.count none ≤ 1)
@@ -117,7 +119,8 @@ theorem fstep_nonpush {n : Ninst} {σ σ' : FSt}
       let kv' ← out.mapM (fun l => match l with
         | none => some r'
         | some j => σ.kv[j.toNat]?)
-      some (⟨kv', closeLive kv' fp' (opFacts σ.facts n σ.kv r ++ gas ++ σ.facts), fp'⟩ : FSt)) := by
+      some (⟨kv', closeLive kv' fp'
+        (opFacts σ.facts n σ.kv r ++ rdsEff σ.facts n r ++ gas ++ rdsKeep n σ.facts), fp'⟩ : FSt)) := by
     cases n with
     | push bs fits => exact (hn bs fits rfl).elim
     | _ => rfl
@@ -191,6 +194,11 @@ theorem mload_out_head {p out : Pattern} (hout : ninstTransfer (.reg .mload) p =
   simp only [ninstTransfer, liftRegularTransfer, regularTransfer] at hout
   exact unary_head hout
 
+theorem rds_out_head {p out : Pattern}
+    (hout : ninstTransfer (.reg .returndatasize) p = some out) : ∃ o, out = none :: o := by
+  simp only [ninstTransfer, liftRegularTransfer, Option.some.injEq] at hout
+  exact ⟨_, hout.symm⟩
+
 /-- Relabelling the computed result: a list named through the fresh label `r` is named through
 `r'` too when the two name the same word. -/
 private theorem mapM_relabel {kv : List Nat} {r r' : Nat} {ν : Nat → B256} (hrr : ν r' = ν r) :
@@ -250,6 +258,82 @@ private theorem mapM_fresh_exists {kv : List Nat} {r r' : Nat} :
             reduceCtorEq] at h
         | some s => exact ⟨s :: k2, by rw [List.mapM_cons, h2]; simp only [hs]; rfl⟩
 
+/-! ## The return-data facts -/
+
+theorem rdsLe_not_mem_opFacts {fs : List Fact} {n : Ninst} {xs : List Nat} {r h : Nat} :
+    Fact.rdsLe h ∉ opFacts fs n xs r := by
+  intro hm
+  unfold opFacts at hm
+  split at hm <;> (try split at hm) <;>
+    simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at hm
+
+theorem rdsLe_not_mem_rdsEff {fs : List Fact} {n : Ninst} {r h : Nat} :
+    Fact.rdsLe h ∉ rdsEff fs n r := by
+  intro hm
+  unfold rdsEff at hm
+  split at hm <;> simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_false] at hm
+
+theorem rdsLe_not_mem_touched {fs : List Fact} {a len h : Nat} :
+    Fact.rdsLe h ∉ touched fs a len := by
+  intro hm
+  obtain ⟨t, -, ht⟩ := List.mem_map.mp hm
+  cases ht
+
+private theorem gas_shape {fs : List Fact} {fp fp' : Option Nat} {n : Ninst} {kv : List Nat}
+    {gas : List Fact} (he : memEff fs fp n kv = some (fp', gas)) :
+    gas = [] ∨ ∃ a len, gas = touched fs a len := by
+  unfold memEff at he
+  split at he <;> (repeat' split at he) <;> (try cases he) <;>
+    first
+      | exact Or.inl rfl
+      | exact Or.inr ⟨_, _, rfl⟩
+
+theorem rdsLe_not_mem_gas {fs : List Fact} {fp fp' : Option Nat} {n : Ninst} {kv : List Nat}
+    {gas : List Fact} {h : Nat} (he : memEff fs fp n kv = some (fp', gas)) :
+    Fact.rdsLe h ∉ gas := by
+  rcases gas_shape he with rfl | ⟨a, len, rfl⟩
+  · exact fun hm => nomatch hm
+  · exact rdsLe_not_mem_touched
+
+private theorem rdsLe_not_mem_filter {fs : List Fact} {h : Nat} :
+    Fact.rdsLe h ∉ fs.filter (! ·.isRds) := by
+  intro hm
+  have := (List.mem_filter.mp hm).2
+  simp only [Fact.isRds, Bool.not_true, Bool.false_eq_true] at this
+
+theorem rdsOf_mem {fs : List Fact} {h : Nat} (hr : rdsOf fs = some h) : Fact.rdsLe h ∈ fs := by
+  obtain ⟨f, hf, hfh⟩ := List.exists_of_findSome?_eq_some hr
+  cases f <;> simp only [reduceCtorEq, Option.some.injEq] at hfh
+  subst hfh
+  exact hf
+
+/-- The return-data fact a step keeps or installs bounds the return data after the step: a
+regular step keeps the buffer, a `CALL` leaves it below `2 ^ 160` (Jaune
+`call_returnData_length_lt_two_pow_160`, under the memory potential `Pot`). -/
+theorem rdsKeep_sound {fs : List Fact} {n : Ninst} {p out : Pattern} {sevm : Sevm} {d d' : Devm}
+    {h : Nat} (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+    (run : Ninst.Run sevm d n d') (pot : Pot d)
+    (hrd : ∀ h, Fact.rdsLe h ∈ fs → d.returnData.length ≤ h) (hm : Fact.rdsLe h ∈ rdsKeep n fs) :
+    d'.returnData.length ≤ h := by
+  cases n with
+  | push _ _ => cases ho
+  | dupn _ => cases ho
+  | swapn _ => cases ho
+  | exchange _ => cases ho
+  | reg r =>
+    rw [ReturnDataKeep.Ninst.Run.reg_returnData hfork.rules_stateGas_none run]
+    exact hrd h hm
+  | exec x =>
+    cases x
+    case call =>
+      rcases List.mem_cons.mp hm with hm | hm
+      · cases hm
+        have := call_returnData_length_lt_two_pow_160 run hfork.rules_stateGas_none pot
+        unfold memCap
+        omega
+      · exact absurd hm rdsLe_not_mem_filter
+    all_goals exact absurd hm rdsLe_not_mem_filter
+
 /-! ## One step -/
 
 /-- **One accepted step of the free-pointer walk is sound.**  If `σ` describes `d` under `ν`
@@ -262,7 +346,7 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
     (hs : fstep n σ = some σ') (ha : absNinst n a = some a') (hlen : σ.kv.length ≤ a.length)
     (inv : FpInv ν σ d rest) (run : Ninst.Run sevm d n d') (pot : Pot d) (pot' : Pot d') :
     FpObs d n ∧ σ'.kv.length ≤ a'.length ∧ ∃ ν', FpInv ν' σ' d' rest := by
-  obtain ⟨S, hst, hS, hf, hw⟩ := inv
+  obtain ⟨S, hst, hS, hf, hw, hrd⟩ := inv
   by_cases hpush : ∃ (bs : Bytes) (fits : bs.length ≤ 32), n = .push bs fits
   · obtain ⟨bs, fits, rfl⟩ := hpush
     simp only [fstep, Option.some.injEq] at hs
@@ -276,7 +360,7 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
     let r := freshSym σ.kv σ.facts σ.fp
     have hr : r ∉ σ.kv := fun h => Nat.lt_irrefl _ (lt_freshSym_kv h)
     refine ⟨(fun h => by cases h), (by simp only [List.length_cons]; omega),
-      Function.update ν r (Bytes.toB256 bs), Bytes.toB256 bs :: S, ?_, ?_, ?_, ?_⟩
+      Function.update ν r (Bytes.toB256 bs), Bytes.toB256 bs :: S, ?_, ?_, ?_, ?_, ?_⟩
     · rw [hst', hst]; rfl
     · exact .cons (Function.update_self _ _ _) (forall₂_update_of_not_mem hr hS)
     · intro f hm
@@ -286,6 +370,11 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
       · exact AllHold.update freshSym_not_mem_syms hf f hm
     · rw [hmem]
       exact hw.congr fun s hs' => upd_ne (Nat.ne_of_lt (lt_freshSym_fp hs'))
+    · intro hh hm
+      rcases List.mem_cons.mp hm with hm | hm
+      · cases hm
+      · rw [← hp.returnData]
+        exact hrd hh hm
   · have hn : ∀ (bs : Bytes) (fits : bs.length ≤ 32), n ≠ .push bs fits :=
       fun bs fits he => hpush ⟨bs, fits, he⟩
     obtain ⟨hlenA, outA, a0, hA, hr0, rfl⟩ := absNinst_nonpush_spec hn ha
@@ -333,20 +422,54 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
         show ν' s = ν' r
         rw [Option.some.inj h1]
         exact (Function.update_self r w ν).symm
-    refine ⟨?_, ?_, ν', S', hst', mapM_relabel hrr hm hm'' hS'', ?_, ?_⟩
+    refine ⟨?_, ?_, ν', S', hst', mapM_relabel hrr hm hm'' hS'', ?_, ?_, ?_⟩
     · intro hmload h64
       subst hmload
       exact memEff_obs he hf hS hst hw h64
     · rw [mapM_length hm, foldTop_length, mapM_length hr0]
       exact transfer_length_mono ho hA hlen
-    · refine AllHold.closeLive _ _ (AllHold.append (AllHold.append ?_ ?_) hνf)
+    · refine AllHold.closeLive _ _
+        (AllHold.append (AllHold.append (AllHold.append ?_ ?_) ?_) ?_)
       · by_cases hne : opFacts σ.facts n σ.kv r = []
         · rw [hne]
           exact fun _ h => nomatch h
         · obtain ⟨o, ho'⟩ := opFacts_out_head hne ho
           exact opFacts_sound hf hr hS hst run (htop o ho')
             (fun _ => Nat.le_of_lt pot.size_lt)
+      · unfold rdsEff
+        split
+        · rename_i hh hrds
+          intro f hmf
+          simp only [List.mem_singleton] at hmf
+          subst hmf
+          obtain ⟨o, ho'⟩ := rds_out_head ho
+          have hv := htop o ho'
+          have hst2 : d'.stack = d.returnData.length.toB256 :: d.stack := by
+            simpa only [Stack.Push, Split, List.singleton_append] using
+              (of_run_returndatasize_val run).stack
+          rw [hst2] at hv
+          simp only [List.head?_cons, Option.some.injEq] at hv
+          show _ ≤ (ν' r).toNat ∧ (ν' r).toNat ≤ hh
+          rw [show ν' r = w from Function.update_self _ _ _, ← hv, B256.toNat_toB256, Nat.lo_eq]
+          exact ⟨Nat.zero_le _, Nat.le_trans (Nat.mod_le _ _) (hrd hh (rdsOf_mem hrds))⟩
+        · exact fun _ h => nomatch h
       · exact memEff_touched ho he hνf hνS hst run pot'
+      · intro f hmf
+        unfold rdsKeep at hmf
+        split at hmf
+        · rcases List.mem_cons.mp hmf with rfl | hmf
+          · trivial
+          · exact hνf f (List.mem_of_mem_filter hmf)
+        · exact hνf f (List.mem_of_mem_filter hmf)
+        · exact hνf f hmf
     · exact memEff_fpWord hfork ho he hνf hνS hst hνw run
+    · intro hh hmf
+      rcases List.mem_append.mp (closeLive_sub hmf) with hmf | hmf
+      · rcases List.mem_append.mp hmf with hmf | hmf
+        · rcases List.mem_append.mp hmf with hmf | hmf
+          · exact absurd hmf rdsLe_not_mem_opFacts
+          · exact absurd hmf rdsLe_not_mem_rdsEff
+        · exact absurd hmf (rdsLe_not_mem_gas he)
+      · exact rdsKeep_sound hfork ho run pot hrd hmf
 
 end Blanc.Lift.FreePtr

@@ -22,6 +22,9 @@ inductive Fact : Type
   | isz (r s : Nat)
   /-- `r = OR(x, y)`. -/
   | orr (r x y : Nat)
+  /-- The current return-data buffer has at most `h` bytes (no symbols; meaning in the frame
+  relation, not in `Fact.Holds`). -/
+  | rdsLe (h : Nat)
 deriving DecidableEq
 
 def Fact.syms : Fact → List Nat
@@ -31,6 +34,7 @@ def Fact.syms : Fact → List Nat
   | .ltr r x y => [r, x, y]
   | .isz r s => [r, s]
   | .orr r x y => [r, x, y]
+  | .rdsLe _ => []
 
 def Fact.rename (m : Nat → Nat) : Fact → Fact
   | .bnd s lo hi => .bnd (m s) lo hi
@@ -39,6 +43,7 @@ def Fact.rename (m : Nat → Nat) : Fact → Fact
   | .ltr r x y => .ltr (m r) (m x) (m y)
   | .isz r s => .isz (m r) (m s)
   | .orr r x y => .orr (m r) (m x) (m y)
+  | .rdsLe h => .rdsLe h
 
 /-- An abstract frame state: a symbol per frame word (top first), facts, and the symbol of the
 free-pointer word `memWord 0x40` (`none`: not known, before the prologue or after a write the
@@ -112,26 +117,29 @@ def freshSym (kv : List Nat) (fs : List Fact) (fp : Option Nat) : Nat :=
 def live (kv : List Nat) (fp : Option Nat) (f : Fact) : Bool :=
   f.syms.all fun s => kv.contains s || fp == some s
 
-/-- Keep the facts live in `kv`/`fp`, closed twice through comparison results
-(decision `ns-pf1-accept`): a fact about a comparison result (`isz`, `ltr`, `orr`)
-stays live while the compared symbols are live, even after the result itself is
-consumed. The second round lets symbols named by first-round comparison facts
-keep further comparison facts. -/
+/-- A comparison-result fact (`isz`, `ltr`, `orr`). -/
+def Fact.isCmp : Fact → Bool
+  | .isz .. => true
+  | .ltr .. => true
+  | .orr .. => true
+  | _ => false
+
+/-- A comparison fact is live when its result is, or all its operands are. -/
+def cmpLive (alive : List Nat) : Fact → Bool
+  | .isz r s => alive.contains r || alive.contains s
+  | .ltr r x y => alive.contains r || (alive.contains x && alive.contains y)
+  | .orr r x y => alive.contains r || (alive.contains x && alive.contains y)
+  | _ => false
+
+/-- One closure round: the symbols of live comparison facts become alive. -/
+def growLive (fs : List Fact) (alive : List Nat) : List Nat :=
+  alive ++ fs.flatMap fun f => if f.isCmp && cmpLive alive f then f.syms else []
+
+/-- Keep the facts live in `kv`/`fp`, closed three times through comparison facts (decision
+`ns-r1-domain`: a live result keeps its operands alive, live operands keep the result). -/
 def closeLive (kv : List Nat) (fp : Option Nat) (fs : List Fact) : List Fact :=
-  let alive0 : Nat → Bool := fun s => kv.contains s || fp == some s
-  let live1 : Fact → Bool
-    | .isz _ s => alive0 s
-    | .ltr _ x y => alive0 x && alive0 y
-    | .orr _ x y => alive0 x && alive0 y
-    | f => f.syms.all alive0
-  let k1 := fs.filter live1
-  let alive1 : Nat → Bool := fun s => alive0 s || k1.any (fun f => f.syms.contains s)
-  let live2 : Fact → Bool
-    | .isz _ s => alive1 s
-    | .ltr _ x y => alive1 x && alive1 y
-    | .orr _ x y => alive1 x && alive1 y
-    | f => f.syms.all alive1
-  fs.filter live2
+  let a3 := growLive fs (growLive fs (growLive fs (fp.toList ++ kv)))
+  fs.filter fun f => if f.isCmp then cmpLive a3 f else f.syms.all a3.contains
 
 /-- The facts about the fresh result `r` of `n` over the input symbols `xs` (top first). -/
 def opFacts (fs : List Fact) (n : Ninst) (xs : List Nat) (r : Nat) : List Fact :=
@@ -204,6 +212,31 @@ def memEff (fs : List Fact) (fp : Option Nat) (n : Ninst) (xs : List Nat) :
   | .reg .mload, [] => none
   | _, _ => some (fp, [])
 
+def Fact.isRds : Fact → Bool
+  | .rdsLe _ => true
+  | _ => false
+
+/-- The return-data bound the facts record, if any. -/
+def rdsOf (fs : List Fact) : Option Nat :=
+  fs.findSome? fun f => match f with
+    | .rdsLe h => some h
+    | _ => none
+
+/-- What `RETURNDATASIZE` learns about its result `r`. -/
+def rdsEff (fs : List Fact) (n : Ninst) (r : Nat) : List Fact :=
+  match n, rdsOf fs with
+  | .reg .returndatasize, some h => [.bnd r 0 h]
+  | _, _ => []
+
+/-- The return-data facts after `n`: a `CALL` leaves full return data below `2 ^ 160`
+(Jaune `call_returnData_length_lt_two_pow_160`, under the memory potential); any other
+`exec` instruction forgets the bound; other instructions keep the buffer. -/
+def rdsKeep (n : Ninst) (fs : List Fact) : List Fact :=
+  match n with
+  | .exec .call => .rdsLe (memCap - 1) :: fs.filter (! ·.isRds)
+  | .exec _ => fs.filter (! ·.isRds)
+  | _ => fs
+
 /-- One non-jump instruction on the abstract state; `none` rejects. -/
 def fstep (n : Ninst) (σ : FSt) : Option FSt :=
   match n with
@@ -223,15 +256,19 @@ def fstep (n : Ninst) (σ : FSt) : Option FSt :=
     let kv' ← out.mapM (fun l => match l with
       | none => some r'
       | some j => σ.kv[j.toNat]?)
-    some ⟨kv', closeLive kv' fp' (opFacts σ.facts n σ.kv r ++ gas ++ σ.facts), fp'⟩
+    some ⟨kv', closeLive kv' fp'
+      (opFacts σ.facts n σ.kv r ++ rdsEff σ.facts n r ++ gas ++ rdsKeep n σ.facts), fp'⟩
 
-/-- The facts a `JUMPI` on condition symbol `c` learns on its zero / nonzero arm (two rounds
+/-- The facts a `JUMPI` on condition symbol `c` learns on its zero / nonzero arm (three rounds
 through `isz`, `ltr`, `orr`). -/
 def learn1 (fs : List Fact) (z : List Nat) (nz : List Nat) : List Fact :=
   fs.flatMap fun f => match f with
     | .isz r s => if z.contains r then [.bnd s 1 maxW] else if nz.contains r then [.bnd s 0 0]
         else []
-    | .ltr r x y => if z.contains r then [.le y x] else if nz.contains r then [.lt x y] else []
+    | .ltr r x y =>
+      if z.contains r then [.le y x, .bnd y 0 (hi fs x), .bnd x (lo fs y) maxW]
+      else if nz.contains r then [.lt x y, .bnd x 0 (hi fs y - 1), .bnd y (lo fs x + 1) maxW]
+      else []
     | .orr r x y => if z.contains r then [.bnd x 0 0, .bnd y 0 0] else []
     | _ => []
 
@@ -240,14 +277,19 @@ def zeros (fs : List Fact) : List Nat :=
     | .bnd s _ 0 => some s
     | _ => none
 
+def ones (fs : List Fact) : List Nat :=
+  fs.filterMap fun f => match f with
+    | .bnd s 1 _ => some s
+    | _ => none
+
 def refineFacts (fs : List Fact) (c : Nat) (zero : Bool) : List Fact :=
   let f1 := (if zero then [Fact.bnd c 0 0] else [Fact.bnd c 1 maxW]) ++ fs
   let r1 := learn1 f1 (if zero then [c] else []) (if zero then [] else [c])
   let f2 := r1 ++ f1
-  let r2 := learn1 f2 (zeros r1) ((r1.filterMap fun f => match f with
-    | .bnd s 1 _ => some s
-    | _ => none))
-  r2 ++ f2
+  let r2 := learn1 f2 (zeros r1) (ones r1)
+  let f3 := r2 ++ f2
+  let r3 := learn1 f3 (zeros r2) (ones r2)
+  r3 ++ f3
 
 def refine (σ : FSt) (c : Nat) (kv : List Nat) (zero : Bool) : FSt :=
   ⟨kv, closeLive kv σ.fp (refineFacts σ.facts c zero), σ.fp⟩
@@ -274,7 +316,7 @@ def resume (σ : FSt) (below : List Nat) (R : FSt) : FSt :=
   let m := fun s => base + s
   let kv := R.kv.map m ++ below
   let fp := R.fp.map m
-  ⟨kv, closeLive kv fp (R.facts.map (Fact.rename m) ++ σ.facts), fp⟩
+  ⟨kv, closeLive kv fp ((R.facts.map (Fact.rename m) ++ σ.facts).filter (! ·.isRds)), fp⟩
 
 /-- The free-pointer walk over one tree, under the current function's return summary `R`. -/
 def fpNode (es : List Entry) (ann : List Ann) (R : FSt) :
