@@ -1286,3 +1286,5 @@ import Blanc.Lift.Curve3Pool.Walk.AlLiveD2
 import Blanc.Lift.Curve3Pool.Walk.AlLiveD2Get
 import Blanc.Lift.Curve3Pool.Walk.AlLiveMint
 import Blanc.Lift.Curve3Pool.Walk.AlLiveBack
+import Blanc.Lift.Curve3Pool.Walk.AlLiveMid
+import Blanc.Lift.Curve3Pool.Walk.AlLiveFrame

@@ -59,7 +59,7 @@ theorem rx_al_d1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes
     (hm : AlPullImg img 3 F AF A T D0 old nv)
     (hX : xpChk ⟨(nv 0).toNat, (nv 1).toNat, (nv 2).toNat⟩ = some x)
     (hres : getDChk x.get A.toNat 1 = some v) (hlt : D0 < Nat.toB256 v)
-    (hG : costGetDMem x A.toNat + 12000 + R ≤ G) (hroom : S.length + 140 < 1024)
+    (hG : R + costGetDMem x A.toNat + 12000 ≤ G) (hroom : S.length + 140 < 1024)
     (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
       M'.size = 0xa20 → AlPullImg img' 3 F AF A T D0 old nv →
       WordAt img' 0x900 (Nat.toB256 v) → R ≤ g → g ≤ G →

@@ -398,7 +398,7 @@ theorem rx_al_loop (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W') (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = if T = 0 then 0x360 else 0x520) (hm : AlMem0 img F AF A T D0 old)
     (hok : AlLoopOk sevm W W' σ T B1 B2 old U)
-    (hG : 40000 + 5 * U + R ≤ G) (hGb : G + 2000 < 2 ^ 256) (hroom : S.length + 20 < 1024)
+    (hG : R + 5 * U + 40000 ≤ G) (hGb : G + 2000 < 2 ^ 256) (hroom : S.length + 20 < 1024)
     (kA : alAmt sevm 2 = 0 → ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
       ExLive sevm W b' σ → Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x840 →
       AlPullImg img' 3 F AF A T D0 old (alLiveNew sevm old B1 B2) →
