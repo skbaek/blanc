@@ -20,6 +20,17 @@ variable {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem} {img : B
 /-- A halt. -/
 abbrev AlHalts : Outcome → Prop := fun r => ∃ D, r = .halted D
 
+/-- The lock released. -/
+abbrev alUnlock (σ : Stor) : Stor := σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])
+
+/-- A halt with the pool's storage `σ` and a last event whose data words 3–5 are `f0, f1, f2`
+(`AddLiquidity`'s fees). -/
+def AlEnd (sevm : Sevm) (σ : Stor) (f0 f1 f2 : B256) : Outcome → Prop := fun r =>
+  ∃ D, r = .halted D ∧ (∀ x, (D.getStor sevm.currentTarget).get x = σ.get x) ∧
+    ∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+      Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
+      Bytes.toB256 (data.sliceD 0xa0 32 0) = f2
+
 /-- **After `D1` on a positive supply, forward.** -/
 theorem rx_al_back1 {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xc : V3} {v2 : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -38,7 +49,8 @@ theorem rx_al_back1 {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xc : V3} {v2 : Nat}
       (alMintW T D0 (Nat.toB256 v2)) U 0xc7c 0xd00)
     (hG : U + costGetDMem xc A.toNat + 200000 ≤ G) (hGb : G < 2 ^ 256)
     (hroom : S.length + 150 < 1024) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273
+      (AlEnd sevm (alUnlock (alStor3 σ s0 s1 s2)) f0 f1 f2) := by
   generalize hc : costGetDMem xc A.toNat = c at hG
   refine rx_al_feePre (R := U + c + 190000) hR hW hsz hm hD1 (by omega) (by omega)
     (fun h => absurd h hT) ?_
@@ -58,7 +70,7 @@ theorem rx_al_back1 {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xc : V3} {v2 : Nat}
       · exact P1 _ _ hm.n1 (by omega)
       · exact P1 _ _ hm.n2 (by omega))
     h0 h1 h2 (by omega) (by omega) ?_
-  intro X b2 M2 img2 g2 hX hL2 hR2 hW2 hsz2 hk2 _ _ _ hx0 hx1 hx2 hg2 hg2'
+  intro X b2 M2 img2 g2 hX hL2 hR2 hW2 hsz2 hk2 hf0 hf1 hf2 hx0 hx1 hx2 hg2 hg2'
   subst hc
   refine rx_al_d2 (R := U + 62000) hX hR2 hW2 hsz2
     (hk2 _ _ (P1 _ _ hm.m0.amp (by omega)) (.inr (.inr (.inl ⟨by omega, by omega⟩))))
@@ -72,8 +84,10 @@ theorem rx_al_back1 {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xc : V3} {v2 : Nat}
     (by omega) ?_
   intro M4 img4 g4 hR4 hW4 hsz4 hk4 hmw hg4 hg4'
   rw [t_177d_c1339_eq]
-  exact rx_al_tail hfork hstatic hL2 hWmc hR4 hW4 hsz4 (hk4 _ _ hT3 (by omega)) hmw hslip hadd
-    hmint (by omega) (by omega) (by omega) fun D _ => ⟨D, rfl⟩
+  exact rx_al_tail hfork hstatic hL2 hWmc hR4 hW4 hsz4 (hk4 _ _ hT3 (by omega)) hmw
+    (hk4 _ _ (hk3 0 (by omega) _ hf0) (by omega)) (hk4 _ _ (hk3 1 (by omega) _ hf1) (by omega))
+    (hk4 _ _ (hk3 2 (by omega) _ hf2) (by omega)) hslip hadd
+    hmint (by omega) (by omega) (by omega) fun D hD hlog => ⟨D, rfl, hD.stor, hlog⟩
 
 /-- **After `D1` on a first deposit, forward.** -/
 theorem rx_al_back0 (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -84,7 +98,8 @@ theorem rx_al_back0 (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
     (hmint : MintOkAt sevm Wx Wm ((alStor3 σ (nv 0) (nv 1) (nv 2)).get tokenSlot) D1 U 0xc7c
       0xd00)
     (hG : U + 200000 ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 150 < 1024) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273
+      (AlEnd sevm (alUnlock (alStor3 σ (nv 0) (nv 1) (nv 2))) 0 0 0) := by
   refine rx_al_feePre (R := U + 190000) hR hW hsz hm hD1 (by omega) (by omega) ?_
     (fun h => absurd rfl h)
   intro _ M1 img1 g1 hR1 hW1 hsz1 hk1 _ hg1 hg1'
@@ -99,8 +114,11 @@ theorem rx_al_back0 (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
   intro M3 img3 g3 hR3 hW3 hsz3 hk3 hmw hg3 hg3'
   rw [t_177d_c8_eq]
   exact rx_al_tail hfork hstatic hL2 hWmc hR3 hW3 hsz3
-    (hk3 _ _ (P2 _ _ hm.m0.supply (by omega) (by omega)) (by omega)) hmw hslip hadd
-    hmint (by omega) (by omega) (by omega) fun D _ => ⟨D, rfl⟩
+    (hk3 _ _ (P2 _ _ hm.m0.supply (by omega) (by omega)) (by omega)) hmw
+    (hk3 _ _ (P2 _ _ hm.m0.f0 (by omega) (by omega)) (by omega))
+    (hk3 _ _ (P2 _ _ hm.m0.f1 (by omega) (by omega)) (by omega))
+    (hk3 _ _ (P2 _ _ hm.m0.f2 (by omega) (by omega)) (by omega)) hslip hadd
+    hmint (by omega) (by omega) (by omega) fun D hD hlog => ⟨D, rfl, hD.stor, hlog⟩
 
 end Back
 

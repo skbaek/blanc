@@ -78,7 +78,9 @@ theorem rx_al_frame1 {xa xb xc : V3} {v0 v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x0 x1 x
       (alMintW T (Nat.toB256 v0) (Nat.toB256 v2)) U 0xc7c 0xd00)
     (hG : U * 7 + costGetDMem xa amp + costGetDMem xb amp + costGetDMem xc amp + 400000 ≤ G)
     (hGb : G + 3000 < 2 ^ 256) :
-    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty G) t_0000_c0 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty G) t_0000_c0
+      (AlEnd sevm (alUnlock (alStor3 (alLocked1 (pre.getStor sevm.currentTarget)) s0 s1 s2))
+        f0 f1 f2) := by
   set σ := pre.getStor sevm.currentTarget with hσ
   generalize hca : costGetDMem xa amp = ca at hG
   generalize hcb : costGetDMem xb amp = cb at hG
@@ -131,7 +133,11 @@ theorem rx_al_frame0 {xb : V3} {v1 : Nat}
       ((pre.getStor sevm.currentTarget).get tokenSlot) (Nat.toB256 v1) U 0xc7c 0xd00)
     (hG : U * 7 + costGetDMem xb amp + 400000 ≤ G)
     (hGb : G + 3000 < 2 ^ 256) :
-    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty G) t_0000_c0 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty G) t_0000_c0
+      (AlEnd sevm (alUnlock (alStor3 (alLocked1 (pre.getStor sevm.currentTarget))
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0)
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1)
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2))) 0 0 0) := by
   set σ := pre.getStor sevm.currentTarget with hσ
   generalize hcb : costGetDMem xb amp = cb at hG
   obtain ⟨g0, rfl⟩ : ∃ g, G = g + 315 := ⟨G - 315, by omega⟩

@@ -145,17 +145,20 @@ theorem rx_al_mint1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : By
 /-- **The tail, forward** (`alTail`, memory `0xbc0`): the slippage test, `mint`, the event (the
 new supply checked), the lock released, `STOP`. -/
 theorem rx_al_tail {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256}
-    {M : Mem} {img : Bytes} {G U : Nat} {Q : Outcome → Prop} {T mint : B256}
+    {M : Mem} {img : Bytes} {G U : Nat} {Q : Outcome → Prop} {T mint f0 f1 f2 : B256}
     {a1 a2 a3 a4 : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
-    (hT : WordAt img 0x240 T) (hm : WordAt img 0xba0 mint)
+    (hT : WordAt img 0x240 T) (hm : WordAt img 0xba0 mint) (hf0 : WordAt img 0x140 f0)
+    (hf1 : WordAt img 0x160 f1) (hf2 : WordAt img 0x180 f2)
     (hslip : ¬ mint < Sevm.dataWord sevm (Bytes.toB256 [0x64])) (hadd : ¬ T + mint < T)
     (hmint : MintOkAt sevm W W' (σ.get tokenSlot) mint U 0xc7c 0xd00)
     (hG : U + 60000 ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 20 < 1024)
     (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
-      Q (.halted D)) :
+      (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+        Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
+        Bytes.toB256 (data.sliceD 0xa0 32 0) = f2) → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b S M G) (alTail a1 a2 a3 a4) Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 200 := ⟨G - 200, by omega⟩
   unfold alTail
@@ -268,15 +271,15 @@ theorem rx_al_tail {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstore (o := 0xd60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xd60 0xd60 32 = 0xd80 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
-  xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hrs) ·)
+  xr (rxm_mloadW (o := 0x140) (v := f0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hf0) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstore (o := 0xd80) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xd80 0xd80 32 = 0xda0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
-  xr (rxm_mload (o := 0x160) hR hsz rfl (by decide) (by hrs) ·)
+  xr (rxm_mloadW (o := 0x160) (v := f1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hf1) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstore (o := 0xda0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xda0 0xda0 32 = 0xdc0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
-  xr (rxm_mload (o := 0x180) hR hsz rfl (by decide) (by hrs) ·)
+  xr (rxm_mloadW (o := 0x180) (v := f2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hf2) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstore (o := 0xdc0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xdc0 0xdc0 32 = 0xde0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
@@ -314,6 +317,13 @@ theorem rx_al_tail {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {
   xr (rx_push rfl (by hrs) ·)
   refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22
   have hL2 := (hLd.addLogE _).sstoreE hb2
-  exact ⟨_, .last rfl, k _ (hL2.st _ _ _)⟩
+  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_⟩⟩
+  all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
+  · rw [show (Bytes.toB256 [0x0d, 0x20]).toNat + 0x60 = 0xd80 by decide]
+    exact (show WordAt _ 0xd80 f0 by wauto).read
+  · rw [show (Bytes.toB256 [0x0d, 0x20]).toNat + 0x80 = 0xda0 by decide]
+    exact (show WordAt _ 0xda0 f1 by wauto).read
+  · rw [show (Bytes.toB256 [0x0d, 0x20]).toNat + 0xa0 = 0xdc0 by decide]
+    exact (show WordAt _ 0xdc0 f2 by wauto).read
 
 end Blanc.Lift.Curve3Pool

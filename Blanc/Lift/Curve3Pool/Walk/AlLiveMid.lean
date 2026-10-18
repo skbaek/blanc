@@ -47,7 +47,8 @@ theorem rx_al_mid1 {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xb xc : V3} {v1 v2 : Nat
       (alMintW T D0 (Nat.toB256 v2)) U 0xc7c 0xd00)
     (hG : U * 6 + costGetDMem xb A.toNat + costGetDMem xc A.toNat + 300000 ≤ G)
     (hGb : G + 2000 < 2 ^ 256) (hroom : S.length + 150 < 1024) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_1031_c4 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St b S M G) t_1031_c4
+      (AlEnd sevm (alUnlock (alStor3 σ s0 s1 s2)) f0 f1 f2) := by
   generalize hcb : costGetDMem xb A.toNat = cb at hG
   generalize hcc : costGetDMem xc A.toNat = cc at hG
   have hsz' : M.size = if T = 0 then 0x360 else 0x520 := by
@@ -89,7 +90,9 @@ theorem rx_al_mid0 {xb : V3} {v1 : Nat}
       0xd00)
     (hG : U * 6 + costGetDMem xb A.toNat + 300000 ≤ G)
     (hGb : G + 2000 < 2 ^ 256) (hroom : S.length + 150 < 1024) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_1031_c4 AlHalts := by
+    SFunc.RunEx cert.prog sevm (St b S M G) t_1031_c4
+      (AlEnd sevm (alUnlock (alStor3 σ (alLiveNew sevm old B1 B2 0) (alLiveNew sevm old B1 B2 1)
+        (alLiveNew sevm old B1 B2 2))) 0 0 0) := by
   generalize hcb : costGetDMem xb A.toNat = cb at hG
   have hsz' : M.size = if (0 : B256) = 0 then 0x360 else 0x520 := by
     rw [hsz, ite_eq_left_of_eq_true _ _ (eq_true rfl)]
