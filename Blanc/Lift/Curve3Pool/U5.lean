@@ -216,4 +216,34 @@ theorem dMonoInA : DMonoInA := by
   have h2 := floorRoot_le_getD hx (Nat.le_trans hamp hle) 1
   exact ⟨h1, by omega⟩
 
+/-! ## The parent-timestamp negative control -/
+
+/-- A concrete accepted ramp state: `initial_A = 100`, `future_A = 1000`, ramp window exactly
+`MIN_RAMP_TIME`, factor `10 = MAX_A_CHANGE`. -/
+def u5ControlState : State :=
+  { coins := V3.zero, balances := V3.zero, fee := 4000000, adminFee := 0, owner := 0,
+    token := 0, initialA := 100, futureA := 1000, initialATime := 1000000,
+    futureATime := 1000000 + 86400, adminActionsDeadline := 0, transferOwnershipDeadline := 0,
+    futureFee := 0, futureAdminFee := 0, futureOwner := 0, isKilled := false, killDeadline := 0 }
+
+/-- **U5 negative control.** At the header time `1043200` the stored interpolation is `550`
+while at the parent timestamp `1043199` it is `549`: taking the timestamp from anywhere but
+the header (the parent block) gives a different `A`, refuting the parent-time variant of
+`pool_history_amp`'s `A` clause (`aChk s th = some (aInterp s tp)`). -/
+theorem u5_parent_time_control :
+    u5ControlState.initialA = 100 ∧ u5ControlState.futureA = 1000 ∧
+    u5ControlState.initialATime + minRampTime ≤ u5ControlState.futureATime ∧
+    0 < u5ControlState.futureA ∧ u5ControlState.futureA < maxA ∧
+    u5ControlState.futureA ≤ u5ControlState.initialA * maxAChange ∧
+    u5ControlState.initialA ≤ u5ControlState.futureA * maxAChange ∧
+    aInterp u5ControlState 1043200 = 550 ∧ aInterp u5ControlState 1043199 = 549 ∧
+    ¬ aChk u5ControlState 1043200 = some (aInterp u5ControlState 1043199) := by
+  have h1 : aInterp u5ControlState 1043200 = 550 := by decide +kernel
+  have h2 : aInterp u5ControlState 1043199 = 549 := by decide +kernel
+  have h3 : aChk u5ControlState 1043200 = some 550 := by decide +kernel
+  refine ⟨rfl, rfl, by decide +kernel, by decide +kernel, by decide +kernel, by decide +kernel,
+    by decide +kernel, h1, h2, ?_⟩
+  rw [h2, h3]
+  exact by decide
+
 end Blanc.Lift.Curve3Pool
