@@ -974,6 +974,7 @@ CONTRACTS = {
         "Lift.Usdc.Book",
         "Lift.Usdc.ImplFp",
         "Lift.Usdc.ImplFp.Ann",
+        "Lift.Usdc.ImplWs.Ann",
         "Lift.Usdc.ImplFp.Check",
         "Lift.Usdc.ImplFp.Check0",
         "Lift.Usdc.ImplFp.Check1",
