@@ -875,6 +875,11 @@ import Blanc.Composition.Curve3PoolSupplyCalls
 import Blanc.Composition.Curve3PoolSupplyStep
 import Blanc.Composition.Curve3PoolSupply
 import Blanc.Composition.Curve3Pool3CrvU3
+import Blanc.Composition.Curve3Pool3CrvWorld
+import Blanc.Composition.Curve3Pool3CrvTxData
+import Blanc.Composition.Curve3Pool3CrvSigningEncoding
+import Blanc.Composition.Curve3Pool3CrvSigningHash
+import Blanc.Composition.Curve3Pool3CrvSigningRecover
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
