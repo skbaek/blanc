@@ -186,7 +186,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
            "Lift.WriteSiteSound"]
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
-SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep"]
+SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", "Lift.SilentCallP"]
 # Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
 # Lift.FreePtr; no statement names a contract.
 SHARED += ["Lift.FreePtrChain"]

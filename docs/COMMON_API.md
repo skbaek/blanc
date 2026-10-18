@@ -4521,6 +4521,14 @@ contract-neutral.
 - For the return-data buffer across one lifted step, use
   [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
   `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
+- For a `DELEGATECALL` whose child must be inspected, use
+  [`Blanc/Lift/DelegateCallChild.lean`](../Blanc/Lift/DelegateCallChild.lean): `ri_delegatecall_child`
+  (after a lifted `DELEGATECALL` step: the success flag, and when set a successful child `Exec 0` that runs
+  the target's code on the input window from an empty machine with the parent's code and `benvStat`, its
+  output written into the output window), `delegatecall_generic` and `Frame.ofCall_enter_not_done`.
+- For crossing a silent internal call under any step relation, use
+  [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
+  of `ric_call_silent`, with a no-halt set so the callee must return.
 - For a callee that cannot return, use
   [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
   predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
