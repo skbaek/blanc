@@ -55,6 +55,26 @@ theorem pool_code_ne : (Curve3Pool.code).toList ≠ [] := by
   rw [h] at this
   cases this
 
+/-- **A coin child keeps the storage of every other address with code at the frame's entry, and
+the code of every other address.** -/
+theorem exRoot_coinChild_keepsAt (hcode : sevm.code = Curve3Pool.code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm b (.ok post)) {t a : Adr}
+    (htc : b.getCode t = VyperNonreentrantDeployed.Token20.code) (hta : t ≠ a) :
+    ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = t →
+      ((b.getCode a).toList ≠ [] →
+        ∀ x, (c.post.getStor a).get x = (c.pre.getStor a).get x) ∧
+        c.post.getCode a = c.pre.getCode a := by
+  intro c hc ht
+  obtain ⟨cfork, cpre, ccode⟩ := Exec.childFrames_code exc hfork (exRoot_callKinds hcode exc) c hc
+  have hcc : c.sevm.code = VyperNonreentrantDeployed.Token20.code := by
+    rw [ccode t (by rw [htc]; exact token20_code_ne) (by rw [htc]; exact token20_not_delegation)
+      ht, htc]
+  have hsf : SpawnFreeReach c.sevm.code := by
+    rw [hcc]; exact VyperNonreentrantDeployed.Token20.spawnFreeReach
+  obtain ⟨hst, hcd⟩ := Exec.Frame.keeps_of_spawnFree c (Exec.childFrames_pc exc c hc) cfork hsf
+    (a := a) (by rw [ht]; exact hta.symm)
+  exact ⟨fun hne => hst (by rw [cpre a hne]; exact hne), hcd⟩
+
 /-- **A coin child keeps the pool's storage and the code at `4`.** -/
 theorem exRoot_coinChild_keeps (hcode : sevm.code = Curve3Pool.code)
     (hfork : CoveredFork sevm.benvStat.fork) (hpool : b.getCode sevm.currentTarget = Curve3Pool.code)
@@ -65,21 +85,8 @@ theorem exRoot_coinChild_keeps (hcode : sevm.code = Curve3Pool.code)
       (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
         c.post.getCode 4 = c.pre.getCode 4 := by
   intro c hc ht
-  have htc' := htc
-  have hpool' := hpool
-  obtain ⟨cfork, cpre, ccode⟩ := Exec.childFrames_code exc hfork (exRoot_callKinds hcode exc) c hc
-  have hcc : c.sevm.code = VyperNonreentrantDeployed.Token20.code := by
-    rw [ccode t (by rw [htc']; exact token20_code_ne) (by rw [htc']; exact token20_not_delegation)
-      ht, htc']
-  have hsf : SpawnFreeReach c.sevm.code := by
-    rw [hcc]; exact VyperNonreentrantDeployed.Token20.spawnFreeReach
-  have hpc := Exec.childFrames_pc exc c hc
-  obtain ⟨hst, -⟩ := Exec.Frame.keeps_of_spawnFree c hpc cfork hsf (a := sevm.currentTarget)
-    (by rw [ht]; exact htp.symm)
-  obtain ⟨-, h4⟩ := Exec.Frame.keeps_of_spawnFree c hpc cfork hsf (a := 4)
-    (by rw [ht]; exact fun h => ht4 h.symm)
-  refine ⟨hst (by rw [cpre _ (by rw [hpool']; exact pool_code_ne), hpool']; exact pool_code_ne),
-    h4⟩
+  refine ⟨(exRoot_coinChild_keepsAt hcode hfork exc htc htp c hc ht).1
+    (by rw [hpool]; exact pool_code_ne), (exRoot_coinChild_keepsAt hcode hfork exc htc ht4 c hc ht).2⟩
 
 /-- The pool's coin `k` as its storage names it at the frame's entry base. -/
 abbrev exCoin (sevm : Sevm) (b : Devm) (k : Fin 3) : Adr :=

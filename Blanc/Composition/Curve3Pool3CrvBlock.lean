@@ -189,6 +189,8 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
       (t1 : TransactionTrace (input st) BlockOutput.init tx 0 s1 bout1)
       (sysRaw sysRaw' : List Exec.Deriv),
       trace.rawFrames = sysRaw ++ t1.rawFrames ++ sysRaw' ∧
+      trace.systemRawFrames = sysRaw ++ sysRaw' ∧
+      (tx.auths = [] → ∀ a, trace.NoAuthorityAt a) ∧
       ∀ root ∈ sysRaw ++ sysRaw', root.sevm.currentTarget ∈ systemAddresses := by
   have body := oneTx_body beforeCodes afterCodes run requests
   have gas' : (requestsOutput bout1 [] []).blockGasUsed ≤ 1000000 := gas
@@ -265,11 +267,19 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
     (by change tr.requests.withdrawalState.getCode _ = _
         rw [withdrawalState]
         exact requestCode _ (by decide +kernel))
-  refine ⟨t1, tr.beacon.rawFrames ++ tr.history.rawFrames, tr.requests.rawFrames, ?_, ?_⟩
+  refine ⟨t1, tr.beacon.rawFrames ++ tr.history.rawFrames, tr.requests.rawFrames, ?_, ?_,
+    fun hauth a => ⟨trivial, fun p hp auth hauthm => ?_⟩, ?_⟩
   · change [] ++ (tr.beacon.rawFrames ++ tr.history.rawFrames ++ tr.transactions.rawFrames ++
       tr.requests.rawFrames) = _
     rw [raw]
     simp only [List.nil_append]
+  · change [] ++ (tr.beacon.rawFrames ++ tr.history.rawFrames ++ tr.requests.rawFrames) = _
+    simp only [List.nil_append]
+  · change p ∈ tr.decodedTxs.putIndex at hp
+    rw [decoded, List.mem_singleton] at hp
+    subst hp
+    rw [hauth] at hauthm
+    cases hauthm
   · intro root member
     simp only [RequestsTrace.rawFrames, List.mem_append] at member
     rcases member with (member | member) | member | member

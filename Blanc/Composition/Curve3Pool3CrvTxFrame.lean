@@ -46,6 +46,7 @@ structure ExTxContext (benv : Benv) : Prop where
   coin0Code : benv.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code
   coin1Code : benv.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code
   coin2Code : benv.state.getCode coin2Addr = VyperNonreentrantDeployed.Token20.code
+  c3crvCode : benv.state.getCode c3crvAddr = Curve3Crv.code
   coin0Stor : benv.state.getStor coin0Addr = coin0Stor
   coin1Stor : benv.state.getStor coin1Addr = coin1Stor
   code4 : benv.state.getCode 4 = .empty
@@ -72,6 +73,7 @@ structure ExFrame (sevm : Sevm) (b : Devm) : Prop where
   coin0Code : b.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code
   coin1Code : b.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code
   coin2Code : b.state.getCode coin2Addr = VyperNonreentrantDeployed.Token20.code
+  c3crvCode : b.state.getCode c3crvAddr = Curve3Crv.code
   coin0Stor : b.state.getStor coin0Addr = coin0Stor
   coin1Stor : b.state.getStor coin1Addr = coin1Stor
   code4 : b.state.getCode 4 = .empty
@@ -148,8 +150,9 @@ theorem ex_prepared_frame {benv : Benv} (ctx : ExTxContext benv)
   have h1 := exDebitState_get_ne benv.state (a := coin1Addr) (by decide +kernel)
   have h2 := exDebitState_get_ne benv.state (a := coin2Addr) (by decide +kernel)
   have h4 := exDebitState_get_ne benv.state (a := 4) (by decide +kernel)
+  have h3 := exDebitState_get_ne benv.state (a := c3crvAddr) (by decide +kernel)
   refine ⟨⟨?code, ctx.fork, rfl, rfl, rfl, rfl, rfl, rfl, ctx.time, rfl, rfl, ?gas, ?pstor,
-    ?pcode, ?c0, ?c1, ?c2, ?s0, ?s1, ?k4, ?w4, ctx.createdPool, ctx.createdCoin0,
+    ?pcode, ?c0, ?c1, ?c2, ?c3, ?s0, ?s1, ?k4, ?w4, ctx.createdPool, ctx.createdCoin0,
     ctx.createdCoin1, ⟨rfl, rfl⟩⟩, rfl⟩
   case code =>
     change ((exDebitState benv.state).get poolAddr).code = _
@@ -179,6 +182,10 @@ theorem ex_prepared_frame {benv : Benv} (ctx : ExTxContext benv)
     change ((exDebitState benv.state).get coin2Addr).code = _
     rw [h2.2]
     exact ctx.coin2Code
+  case c3 =>
+    change ((exDebitState benv.state).get c3crvAddr).code = _
+    rw [h3.2]
+    exact ctx.c3crvCode
   case s0 =>
     change ((exDebitState benv.state).get coin0Addr).stor = _
     rw [h0.1]

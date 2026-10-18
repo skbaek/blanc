@@ -15,10 +15,11 @@ is discharged from the trace (design §1.3, §2.2):
 * calldata and gas words in range — `calldata_bound`, `gas_bound` (R2, `< 2 ^ 64`);
 * identity precompile ready at `4` — warm by the transaction pre-warm and undelegated by empty code
   (`ConfiguredHistoryTrace.precompileReady`), under the trace-local premises that `4` holds no code
-  at the checkpoint, no authorization recovers to it, and no CREATE frame targets it; system frames
-  never target the pool, whose 21199-byte runtime has no canonical system code's size
-  (`ConfiguredHistoryTrace.system_ne_of_size`), under the canonical system code installed at the
-  checkpoint and the matching trace-local system exclusions;
+  at the checkpoint, no authorization recovers to it, and no CREATE frame targets it; no system
+  frame targets the pool (`sysNe`) — `pool_sysNe_of_installed` derives it when the canonical system
+  code is installed at the checkpoint and protected along the history (the 21199-byte runtime has
+  no canonical system code's size, `ConfiguredHistoryTrace.system_ne_of_size`), and a history whose
+  system messages run other fixtures supplies it directly;
 * children keep the code at `4` — `ConfiguredHistoryTrace.childFrames_codeAt_keep`, from the same
   "no CREATE frame targets `4`";
 * coins and token not precompiles — a trace-local premise over the *fixed* addresses of the
@@ -54,6 +55,19 @@ theorem pool_code_size_ne_system : ∀ p ∈ systemContracts, p.2.size ≠ code.
   simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl | rfl <;> decide +kernel
 
+/-- **No system frame targets the pool** when the canonical system code is installed at the
+checkpoint and protected along the history: the pool's runtime has no system code's size. -/
+theorem pool_sysNe_of_installed {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pool).toList = poolSem.image)
+    (sysInstalled : SystemCodeInstalled checkpoint.state)
+    (sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1) :
+    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool :=
+  trace.system_ne_of_size sysInstalled sysNoAuthority sysNoFrame
+    (code_eq_of_toList installed) pool_code_size_ne_system
+
 /-- **Every pool frame of the history is admitted by `poolEntryAt`** at the checkpoint's coins and
 token, from the callback premise and trace-local premises. -/
 theorem pool_trace_admitted {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -69,15 +83,11 @@ theorem pool_trace_admitted {pool : Adr} {cfg : ChainConfig} {checkpoint future 
     (idNoAuthority : trace.NoAuthorityAt 4)
     (idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ 4)
-    (sysInstalled : SystemCodeInstalled checkpoint.state)
-    (sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1) :
+    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool) :
     trace.FrameAdmitted pool (poolEntryAt cs tok) := by
   have fresh := trace.freshFrameAdmitted pool
   rw [trace.frameAdmitted_iff_rawFrames] at callbacks fresh ⊢
-  have system := trace.system_ne_of_size sysInstalled sysNoAuthority sysNoFrame
-    (code_eq_of_toList installed) pool_code_size_ne_system
+  have system := sysNe
   have ready := trace.precompileReady (fun _ hf => pool_four_mem_precompiles hf) idEmpty
     idNoAuthority idNoFrame
   have keep4 := trace.childFrames_codeAt_keep idNoFrame
@@ -114,9 +124,9 @@ the coins and the token unchanged (`pool_history_committed_with`'s conclusion).
 Premises: CODE `installed`; INIT `initial`; the per-frame ENV premise `callbacks`; and trace-local
 ENV premises — `parties` (the checkpoint's coins and token are not precompiles under any pool
 frame's rules), `idEmpty`/`idNoAuthority`/`idNoFrame` (the identity precompile's account holds no
-code at the checkpoint, no authorization recovers to it, no CREATE frame targets it), and
-`sysInstalled`/`sysNoAuthority`/`sysNoFrame` (the canonical system code is installed at the
-checkpoint and likewise protected). -/
+code at the checkpoint, no authorization recovers to it, no CREATE frame targets it), and `sysNe`
+(no system frame targets the pool; `pool_sysNe_of_installed` gives it from the canonical system
+code). -/
 theorem pool_history_committed_derived {pool : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {s₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -131,10 +141,7 @@ theorem pool_history_committed_derived {pool : Adr} {cfg : ChainConfig}
     (idNoAuthority : trace.NoAuthorityAt 4)
     (idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ 4)
-    (sysInstalled : SystemCodeInstalled checkpoint.state)
-    (sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1) :
+    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool) :
     some (future.state.getCode pool).toList = poolSem.image ∧
     ∃ invs : List PoolInvocation,
       invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
@@ -145,7 +152,7 @@ theorem pool_history_committed_derived {pool : Adr} {cfg : ChainConfig}
     pool_history_committed_in (poolParties_keeps s₀.coins s₀.token)
       (pool_frame_refines_at s₀.coins s₀.token) trace installed initial ⟨rfl, rfl⟩
       (pool_trace_admitted trace installed callbacks parties idEmpty idNoAuthority idNoFrame
-        sysInstalled sysNoAuthority sysNoFrame)
+        sysNe)
   exact ⟨code, invs, obs, auth, s, run, fold, hc, hcoins, htoken⟩
 
 /-- **The committed history from the deployment.**  `pool_history_committed_derived` at a
@@ -168,10 +175,7 @@ theorem pool_history_initialized {pool : Adr} {cfg : ChainConfig}
     (idNoAuthority : trace.NoAuthorityAt 4)
     (idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ 4)
-    (sysInstalled : SystemCodeInstalled checkpoint.state)
-    (sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1) :
+    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool) :
     some (future.state.getCode pool).toList = poolSem.image ∧
     ∃ invs : List PoolInvocation,
       invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
@@ -186,7 +190,7 @@ theorem pool_history_initialized {pool : Adr} {cfg : ChainConfig}
     rw [deployedStorage]
     exact Creation.deployedStor_checkpoint (by decide)
   exact pool_history_committed_derived trace (by rw [deployedCode]; rfl) initial callbacks parties
-    idEmpty idNoAuthority idNoFrame sysInstalled sysNoAuthority sysNoFrame
+    idEmpty idNoAuthority idNoFrame sysNe
 
 /-! ## The premises as one bundle
 
@@ -207,10 +211,7 @@ structure PoolTraceEnv {cfg : ChainConfig} {checkpoint future : BlockChain}
   idNoAuthority : trace.NoAuthorityAt 4
   idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
     root.sevm.currentTarget ≠ 4
-  sysInstalled : SystemCodeInstalled checkpoint.state
-  sysNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1
-  sysNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1
+  sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool
 
 /-- `pool_history_committed_derived` over the bundle. -/
 theorem pool_history_committed_env {pool : Adr} {cfg : ChainConfig}
@@ -226,6 +227,6 @@ theorem pool_history_committed_env {pool : Adr} {cfg : ChainConfig}
       ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
         Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token :=
   pool_history_committed_derived trace installed initial env.callbacks env.parties env.idEmpty
-    env.idNoAuthority env.idNoFrame env.sysInstalled env.sysNoAuthority env.sysNoFrame
+    env.idNoAuthority env.idNoFrame env.sysNe
 
 end Blanc.Lift.Curve3Pool
