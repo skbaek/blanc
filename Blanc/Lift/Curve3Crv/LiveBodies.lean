@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Crv.ViewBodies
 import Blanc.Lift.Curve3Crv.Refine
 import Blanc.Lift.StaticCall
+import Blanc.StorageAccessGas
 
 /-!
 # Liveness: the bodies, forward with exact gas
@@ -784,7 +785,8 @@ theorem live_approve (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
 private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawMint sevm stor₀ = some r)
     (M0 : Mem) (hM : M0.size = 192) (hwf0 : Mem.Wf M0)
-    (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) : BodyLive sevm b t_056e_c0 r := by
+    (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) :
+    BodyLiveLe sevm b t_056e_c0 r (2119 + 3 * 2100 + 2 * 22100) := by
   unfold rawMint at hr
   dsimp only at hr
   split_ifs at hr with hg
@@ -811,7 +813,14 @@ private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
   have hwf1 : Mem.Wf M1 := ((hwf0.write _ _).write _ _)
   set M3 := M1.write 320 v.toBytes
   have hM3 : M3.size = 352 := by simp only [M3, Mem.size_write_word_at, hM1]; decide
-  refine ⟨3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19, fun G hG => ?_⟩
+  have hcost0 := sstoreCost_le sevm (afterSload sevm b2 s2) s2 (y + v)
+  have hcost1 := Blanc.sloadCost_le sevm b2 s2
+  have hcost2 := sstoreCost_le sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup + v)
+  have hcost3 := Blanc.sloadCost_le sevm b1 vySupplySlot
+  have hcost4 := Blanc.sloadCost_le sevm b vyMinterSlot
+  have hcs : gasColdSload = 2100 := rfl
+  have hss : gasStorageSet = 20000 := rfl
+  refine ⟨3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup + v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19, by omega, fun G hG => ?_⟩
   have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
   have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
   have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
@@ -900,18 +909,24 @@ private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 
+/-- `mint` costs at most `2119 + 3 * 2100 + 2 * 22100`. -/
+theorem live_mint_le (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    {r : Raw} (hr : rawMint sevm stor₀ = some r) :
+    BodyLiveLe sevm b t_056e_c0 r (2119 + 3 * 2100 + 2 * 22100) :=
+  live_mint_mem hfork hstatic hr _ (vyMem_empty_size _) (vyMem_wf Mem.wf_empty _) rfl
+
 /-- `mint` and `burnFrom`: forwards of `safeMintBurn`. -/
 theorem live_mint (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    {r : Raw} (hr : rawMint sevm stor₀ = some r) : BodyLive sevm b t_056e_c0 r := by
-  exact live_mint_mem hfork hstatic hr _
-    (vyMem_empty_size _) (vyMem_wf Mem.wf_empty _) rfl
+    {r : Raw} (hr : rawMint sevm stor₀ = some r) : BodyLive sevm b t_056e_c0 r :=
+  (live_mint_le hfork hstatic hr).live
 
 -- SEGMENT: liveMintBurn (see `live_mint`)
 /- Keep the body memory abstract after the nonpayable prefix. -/
 private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r)
     (M0 : Mem) (hM : M0.size = 192) (hwf0 : Mem.Wf M0)
-    (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) : BodyLive sevm b t_0644_c0 r := by
+    (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) :
+    BodyLiveLe sevm b t_0644_c0 r (2107 + 3 * 2100 + 2 * 22100) := by
   simp only [rawBurnFrom] at hr
   split_ifs at hr with hg
   obtain ⟨hv, hd, hmin, hnz, hsup, hbal⟩ := hg
@@ -938,7 +953,14 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
   have hwf1 : Mem.Wf M1 := ((hwf0.write _ _).write _ _)
   set M3 := M1.write 320 v.toBytes
   have hM3 : M3.size = 352 := by simp only [M3, Mem.size_write_word_at, hM1]; decide
-  refine ⟨3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19, fun G hG => ?_⟩
+  have hcost0 := sstoreCost_le sevm (afterSload sevm b2 s2) s2 (y - v)
+  have hcost1 := Blanc.sloadCost_le sevm b2 s2
+  have hcost2 := sstoreCost_le sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup - v)
+  have hcost3 := Blanc.sloadCost_le sevm b1 vySupplySlot
+  have hcost4 := Blanc.sloadCost_le sevm b vyMinterSlot
+  have hcs : gasColdSload = 2100 := rfl
+  have hss : gasStorageSet = 20000 := rfl
+  refine ⟨3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19, by omega, fun G hG => ?_⟩
   have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
   have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
   have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
@@ -1027,10 +1049,15 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 
+/-- `burnFrom` costs at most `2107 + 3 * 2100 + 2 * 22100`. -/
+theorem live_burnFrom_le (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) :
+    BodyLiveLe sevm b t_0644_c0 r (2107 + 3 * 2100 + 2 * 22100) :=
+  live_burnFrom_mem hfork hstatic hr _ (vyMem_empty_size _) (vyMem_wf Mem.wf_empty _) rfl
+
 theorem live_burnFrom (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) : BodyLive sevm b t_0644_c0 r := by
-  exact live_burnFrom_mem hfork hstatic hr _
-    (vyMem_empty_size _) (vyMem_wf Mem.wf_empty _) rfl
+    {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) : BodyLive sevm b t_0644_c0 r :=
+  (live_burnFrom_le hfork hstatic hr).live
 
 /-! ### The string views' shared pieces -/
 
