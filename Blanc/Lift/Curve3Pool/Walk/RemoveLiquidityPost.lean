@@ -46,7 +46,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hamt : ∀ j, j < 6 → WordAt img (0x1e0 + 32 * j) (a j))
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hTK : CallKeeps sevm tw ∨ RlKeep sevm L)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hTK : RlKeepAt sevm tw L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2f7b (St b [3, 0x2a0] M G) L) :
     ¬ T < rlAmt sevm ∧ ∃ c d, L = [c] ∧
       ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++ (rlAmt sevm).toBytes) 0
@@ -104,9 +104,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x := by
     intro x
     rcases hTK with hTK | hTK
-    · rw [(hTK _ _ _ _ _ _ _ _ _ rfl hrun).1]
-      show ((afterSload sevm _ _).getStor _).get x = _
-      rw [afterSload_getStor]
+    · rw [hc'.storPost _ hpc x, (hTK.head hc'.target).1 x, hc'.storPre _ hpc]
     · rw [hc'.storPost _ hpc x, hTK.head.1 x, hc'.storPre _ hpc]
   xjd 0x2fad
   xs 0x2faf (.push [0x1f] (by decide)) ri_push

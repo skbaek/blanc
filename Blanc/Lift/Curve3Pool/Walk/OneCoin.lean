@@ -51,6 +51,110 @@ theorem xa_vd_removeLiquidityOneCoin (hcode : sevm.code = code)
 abbrev ocBal (σ : Stor) (iw dy fee : B256) : B256 :=
   σ.get (balancesBase + iw) - (dy + fee * σ.get adminFeeSlot / ocDen)
 
+/-- **`xa_oneCoin2` under the conditional keep**: the same conclusion when only the children at
+neither the pool nor `4` are known to keep the pool (`RlKeepC`, which every frame at depth `1`
+satisfies), given that 3Crv and coin `i` are neither. -/
+theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+    (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
+    (hcoin : (exJ sevm).toNat < 3 →
+      ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (htokne : (σ.get tokenSlot).toAdr ≠ sevm.currentTarget ∧ (σ.get tokenSlot).toAdr ≠ 4)
+    (hcoinne : (σ.get (coinsBase + exJ sevm)).toAdr ≠ sevm.currentTarget ∧
+      (σ.get (coinsBase + exJ sevm)).toAdr ≠ 4)
+    (hK : RlKeepC sevm L)
+    (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
+    σ.get lockSlot = 0 ∧ sevm.value = 0 ∧ σ.get isKilledSlot = 0 ∧
+    ∃ (cs cb cp : Exec.Frame) (hi : (exJ sevm).toNat < 3) (dy fee : B256),
+      L = [cs, cb, cp] ∧
+      StaticWordChild (σ.get tokenSlot).toAdr totalSupplyData cs ∧
+      (∀ e : Env, e.time = sevm.benvStat.time.toNat → e.supply = some (vSupply cs).toNat →
+        calcWithdrawOne s e (ocAmt sevm).toNat ⟨(exJ sevm).toNat, hi⟩ =
+          some (dy.toNat, fee.toNat)) ∧
+      ¬ dy < Sevm.dataWord sevm (Bytes.toB256 [0x44]) ∧ fee.Nofm (σ.get adminFeeSlot) ∧
+      ¬ dy + fee * σ.get adminFeeSlot / ocDen < dy ∧
+      ¬ σ.get (balancesBase + exJ sevm) < dy + fee * σ.get adminFeeSlot / ocDen ∧
+      cb.sevm.currentTarget = (σ.get tokenSlot).toAdr ∧
+      cb.sevm.data = burnFromSel ++ sevm.caller.toB256.toBytes ++ (ocAmt sevm).toBytes ∧
+      cb.sevm.value = 0 ∧ cb.sevm.isStatic = sevm.isStatic ∧ 32 ≤ cb.post.output.length ∧
+      cp.sevm.currentTarget = (σ.get (coinsBase + exJ sevm)).toAdr ∧
+      cp.sevm.data = exPushData sevm dy ∧ cp.sevm.value = 0 ∧ cp.sevm.isStatic = sevm.isStatic ∧
+      RawCallOk cp.post.output ∧
+      (∀ x, (post.getStor sevm.currentTarget).get x =
+        (σ.set (balancesBase + exJ sevm) (ocBal σ (exJ sevm) dy fee)).get x) ∧
+      post.logs = b.logs ++ [cs, cb, cp].flatMap (fun c => c.post.logs) ++
+        [⟨sevm.currentTarget, [ocTopic, sevm.caller.toB256],
+          (ocAmt sevm).toBytes ++ dy.toBytes⟩] ∧
+      post.output = b.output ∧
+      CwFirstGetYD s sevm.benvStat.time.toNat (ocAmt sevm).toNat ⟨(exJ sevm).toNat, hi⟩
+        (vSupply cs).toNat ∧
+      CwSecondGetYD s sevm.benvStat.time.toNat (ocAmt sevm).toNat ⟨(exJ sevm).toNat, hi⟩
+        (vSupply cs).toNat := by
+  subst hσ
+  obtain ⟨_, h⟩ := xa_vd_removeLiquidityOneCoin hcode hlen hcd hsel h
+  obtain ⟨hlock, hval, hkill, cs, L1, hi, dy, fee, b1, M1, G1, rfl, hsw, hmod, hs1, hl1, ho1,
+    hc1, hid1, h, hV, hfirst, hsec⟩ := xa_oc_a2 hc hcode hfork ha htok h
+  refine ⟨hlock, hval, hkill, ?_⟩
+  have hB1 : ExBase sevm b b1 ((b.getStor sevm.currentTarget).set lockSlot 1) :=
+    ⟨hs1, hc1 _ hpc, ho1, hid1 hid (hK cs List.mem_cons_self (by rw [hsw.target]; exact htokne.1)
+      (by rw [hsw.target]; exact htokne.2)).2⟩
+  have hK1 : RlKeepC sevm L1 := hK.tail
+  clear hK
+  obtain ⟨hmin, hmf, hadd, hsub, b2, M2, G2, hB2, hl2, h, hV⟩ := xa_oc_b hcode hfork hB1 hV h
+  have hiN : balancesBase + exJ sevm = balancesBase + Nat.toB256 (exJ sevm).toNat := by
+    rw [toB256_toNat]
+  have hcJ : coinsBase + exJ sevm = coinsBase + Nat.toB256 (exJ sevm).toNat := by
+    rw [toB256_toNat]
+  have htw : (b2.getStor sevm.currentTarget).get tokenSlot =
+      (b.getStor sevm.currentTarget).get tokenSlot := by
+    rw [hB2.stor, Stor.get_set_ne _ (by rw [hiN]; exact bal_ne_token hi),
+      Stor.get_set_ne _ lock_ne_token]
+  have hadm : ((b.getStor sevm.currentTarget).set lockSlot 1).get adminFeeSlot =
+      (b.getStor sevm.currentTarget).get adminFeeSlot :=
+    Stor.get_set_ne _ (show lockSlot ≠ adminFeeSlot by decide) _
+  have hbK : ((b.getStor sevm.currentTarget).set lockSlot 1).get (balancesBase + exJ sevm) =
+      (b.getStor sevm.currentTarget).get (balancesBase + exJ sevm) :=
+    Stor.get_set_ne _ (show lockSlot ≠ balancesBase + exJ sevm by rw [hiN]; exact bal_ne_lock hi) _
+  rw [hadm] at hmf hadd hsub hB2
+  rw [hbK] at hsub hB2
+  -- the burn
+  obtain ⟨cb, L2, d3, M3, img3, G3, rfl, hcb, hlen3, hdepth, hR3, hW3, hv3, h⟩ :=
+    xa_oc_burn hcode hfork hV htw htok h
+  have hkb := hK1 cb List.mem_cons_self (by rw [hcb.target]; exact htokne.1)
+    (by rw [hcb.target]; exact htokne.2)
+  have hB3 := hB2.child hcb hpc hkb.1 hkb.2
+  have hcw : (d3.getStor sevm.currentTarget).get (coinsBase + exJ sevm) =
+      (b.getStor sevm.currentTarget).get (coinsBase + exJ sevm) := by
+    rw [hB3.stor, Stor.get_set_ne _ (by rw [hiN, hcJ]; exact bal_ne_coin hi hi),
+      Stor.get_set_ne _ (by rw [hcJ]; exact coin_ne_lock hi)]
+  -- the push and its `raw_call` test
+  obtain ⟨bq, cp, L3, dq, img9, G9, hbq, rfl, hcp, hv9, hR9, hW9, hrd9, h⟩ :=
+    xa_oc_push hcode hfork hR3 hW3 hv3 hB3.id hdepth hcw (hcoin hi) h
+  have hkp := hK1 cp (by simp only [List.mem_cons, true_or, or_true])
+    (by rw [hcp.target]; exact hcoinne.1) (by rw [hcp.target]; exact hcoinne.2)
+  have hBq := (hB3.rel hbq).child hcp hpc hkp.1 hkp.2
+  obtain ⟨hok2, b10, M10, img10, G10, hb10, hR10, hW10, hk10, h⟩ :=
+    xa_oc_tail hcode hBq.id hR9 hW9 hrd9 h
+  -- the event and the lock
+  obtain ⟨rfl, hsP, hlP, hoP⟩ := xa_oc_log hcode hfork hR10 hW10
+    (hk10 _ _ hv9 (by omega) (by omega)) h
+  refine ⟨cs, cb, cp, hi, dy, fee, rfl, hsw, hmod, hmin, hmf, hadd, hsub, hcb.target, hcb.data,
+    hcb.value, hcb.isStatic, hlen3, hcp.target, hcp.data, hcp.value, hcp.isStatic,
+    hcp.output ▸ hok2, fun x => ?_, ?_, ?_, hfirst, hsec⟩
+  · rw [hsP, Stor.get_set_ite, hb10.stor, hBq.stor]
+    by_cases hx : lockSlot = x
+    · subst hx
+      rw [ite_eq_left rfl, Stor.get_set_ne _ (by rw [hiN]; exact (bal_ne_lock hi).symm), hlock]
+    · rw [ite_eq_right hx, Stor.get_set_ite, Stor.get_set_ite, Stor.get_set_ite, ite_eq_right hx]
+  · rw [hlP, hb10.logs, hcp.logs, hbq.logs, hcb.logs, hl2, hl1]
+    simp only [hsw.logs, List.flatMap_cons, List.flatMap_nil, List.append_nil, List.nil_append,
+      List.append_assoc]
+  · rw [hoP, hb10.output, hcp.outputKeep, hbq.output, hcb.outputKeep, hB2.output]
+
 /-- **The `remove_liquidity_one_coin` frame.** From the frame's entry with the
 `remove_liquidity_one_coin` selector over the entry storage `σ` (abstracting `s`), a successful
 frame found the lock clear, no value and the pool alive; `i < 3`; its children are the static

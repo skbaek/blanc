@@ -24,7 +24,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hcd : sevm.data.length < 2 ^ 256)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hSK : StaticKeeps sevm ((b.getStor sevm.currentTarget).get tokenSlot) ∨ RlKeep sevm L)
+    (hSK : RlKeepAt sevm ((b.getStor sevm.currentTarget).get tokenSlot) L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2c68 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
@@ -94,9 +94,9 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   · exact absurd hpre htok
   have h4 : d1.getCode 4 = b.getCode 4 := by
     rcases hSK with hSK | hSK
-    · rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
-      show (afterSload sevm _ _).getCode 4 = _
-      rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+    · rw [hcpost, (hSK.2.2 c (by rw [hL]; exact List.mem_cons_self) (by rw [htgt]; exact hSK.1)
+        (by rw [htgt]; exact hSK.2.1)).2, hcpre, afterSload_getCode, afterSstore_getCode,
+        afterSload_getCode]
     · rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSload_getCode,
         afterSstore_getCode, afterSload_getCode]
   clear hk

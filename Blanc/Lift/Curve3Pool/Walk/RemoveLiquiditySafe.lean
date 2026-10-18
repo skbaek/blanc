@@ -4,8 +4,8 @@ import Blanc.Lift.Curve3Pool.Spec
 /-!
 # `remove_liquidity`: the raw effect
 
-`removeLiquidity_raw`: a successful frame of the pool on the `remove_liquidity` selector, from a
-`Checkpoint` at entry and the frame premises, has the model's step on the decoded call and the
+`removeLiquidity_rawT_of`: a successful frame of the pool on the `remove_liquidity` selector, from
+a `Checkpoint` at entry and the frame premises, has the model's step on the decoded call and the
 `RawEffect` Spec states, with the environment read off its children (`totalSupply`'s reply, the
 three `transfer`s' `RawCallOk`, `burnFrom`'s word). `Refine.rawEffect_refines` takes it from
 there.
@@ -77,9 +77,10 @@ theorem RLPush.nat {sevm : Sevm} {B C T : B256} {i : Nat} {c : Exec.Frame}
   · rw [← hv]; exact toNat_le_of_not_lt h.min
   · rw [← hv]; exact toNat_le_of_not_lt h.le
 
-/-- **Safety of `remove_liquidity`, either keep form.** As `removeLiquidity_rawT`, with the keep
-premises given either target-level (`CallKeeps`/`StaticKeeps` for the coins and 3Crv) or per
-child (`RlKeep` on the frame's children: each keeps the pool's storage and address 4's code). -/
+/-- **Safety of `remove_liquidity`, either keep form.** The model's step and the raw effect of a
+successful frame, with the keep premises given per child: either every child keeps the pool's
+storage and address 4's code (`RlKeep`), or every child at neither the pool nor `4` does
+(`RlKeepC`) and the coins and 3Crv are neither. -/
 theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
@@ -92,10 +93,12 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
     (hcoin : ∀ k : Fin 3,
       ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
-    (hK : ((∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k))) ∧
-      StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot) ∧
-      CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot)) ∨
-      RlKeep sevm (Exec.childFrames exc)) :
+    (hK : ((∀ k : Fin 3,
+        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ sevm.currentTarget ∧
+        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ 4) ∧
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr ≠ sevm.currentTarget ∧
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr ≠ 4 ∧
+      RlKeepC sevm (Exec.childFrames exc)) ∨ RlKeep sevm (Exec.childFrames exc)) :
     ∃ T o, step s (rlEnv sevm T) (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rlEnv sevm T) o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
@@ -103,7 +106,7 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
   obtain ⟨hlock, hval, c0, c1, c2, c3, c4, hL, h0t, h0d, h0s, h0l, h0g, hp0, hp1, hp2, hTa, h4t,
     h4d, h4v, h4s, h4l, hstorF, hlogsF, houtF⟩ :=
     xa_removeLiquidity hcode hfork hlen hcd hsel htok (fun i hi => hcoin ⟨i, hi⟩) hpc hid
-      (hK.imp (fun k => ⟨fun i hi => k.1 ⟨i, hi⟩, k.2.1, k.2.2⟩) id) hx
+      (hK.imp (fun k => ⟨fun i hi => k.1 ⟨i, hi⟩, k.2⟩) id) hx
   replace hL : children ⟨0, sevm, pre, .ok post, exc⟩ = [c0, c1, c2, c3, c4] := hL
   have hdec : decodeCall sevm = .removeLiquidity (arg sevm 0) (argV3 sevm 1) :=
     decodeCall_at (k := 7) rfl hsel hlen
@@ -278,55 +281,5 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
         h4t, hp0.data, hp1.data, hp2.data, h4d, hp0.value, hp1.value, hp2.value, h4v, hw0, hw1,
         hw2, hwA, hwC]
       rfl
-
-
-/-- **Safety of `remove_liquidity`.** A successful frame of the pool's runtime on the
-`remove_liquidity` selector, entered at a `Checkpoint` with empty stack and memory, under the
-frame premises (the coins and 3Crv are not precompiles; the pool's code is nonempty; the identity
-precompile is ready; every call to a coin or 3Crv keeps the pool's storage and address 4's
-code, `CallKeeps`/`StaticKeeps`), computed the
-model's step on the decoded call in the environment `rlEnv` it observed, with the raw effect
-Spec states. -/
-theorem removeLiquidity_rawT {sevm : Sevm} {pre post : Devm} {s : State}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
-    (hsel : Sevm.selector sevm = selRemoveLiquidity)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
-    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp
-      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hcoin : ∀ k : Fin 3,
-      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
-    (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-    (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-    (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot)) :
-    ∃ T o, step s (rlEnv sevm T) (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rlEnv sevm T) o :=
-  removeLiquidity_rawT_of exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok hcoin hpc hid
-    (.inl ⟨hckeep, hsk, htk⟩)
-
-/-- **Safety of `remove_liquidity`**, with the observed environment left abstract. -/
-theorem removeLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
-    (hsel : Sevm.selector sevm = selRemoveLiquidity)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
-    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
-    (htok : ¬ sevm.benvStat.rules.isPrecomp
-      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hcoin : ∀ k : Fin 3,
-      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
-    (hckeep : ∀ k : Fin 3, CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-    (hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-    (htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot)) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
-  obtain ⟨T, o, h1, h2⟩ := removeLiquidity_rawT exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
-    hcoin hpc hid hckeep hsk htk
-  exact ⟨_, o, h1, h2⟩
 
 end Blanc.Lift.Curve3Pool

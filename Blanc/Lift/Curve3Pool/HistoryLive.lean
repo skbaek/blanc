@@ -185,10 +185,9 @@ theorem pool_history_removeLiquidity_live (trace : ConfiguredHistoryTrace cfg ch
         (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
           ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
         (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hckeep : ∀ k : Fin 3,
-          CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-        (_hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-        (_htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
         (_hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (_hWb : W 0 pre)
         (_hsup : SupplyOk sevm (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
         (_hpush : ∀ k : Fin 3, CoinPushOkAt sevm (W k) (W (k + 1))
@@ -201,9 +200,9 @@ theorem pool_history_removeLiquidity_live (trace : ConfiguredHistoryTrace cfg ch
           RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
           Checkpoint (post.getStor sevm.currentTarget) o.state := by
   obtain ⟨-, s, hs, hck⟩ := pool_history_reached trace installed initial env target state
-  exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hckeep hsk
-    htk hWc hWb hsup hpush hburn hG hGm => removeLiquidity_live hcode hfork hstatic hdepth hlen hcd
-    hsel hck hstep htok hcoin hpc hid hckeep hsk htk hWc hWb hsup hpush hburn hG hGm⟩
+  exact ⟨s, hs, fun hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep hWc
+    hWb hsup hpush hburn hG hGm => removeLiquidity_live hcode hfork hstatic hdepth hlen hcd hsel
+    hck hstep htok hcoin hpc hid hkeep hWc hWb hsup hpush hburn hG hGm⟩
 
 /-- **`remove_liquidity_imbalance` is live at every reachable state**
 (`removeLiquidityImbalance_live` after any configured history). -/

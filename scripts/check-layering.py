@@ -220,6 +220,7 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 SHARED += ["Lift.SpawnKindsM"]
 SHARED += ["Lift.GuardedCalls"]
 SHARED += ["Lift.ChildFrameCode"]
+SHARED += ["Lift.ChildFrameDepth"]
 SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
@@ -1483,6 +1484,12 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvCapstone",
     "Composition.Curve3Pool3CrvLiveWitness",
     "Composition.Curve3Pool3CrvLiveConcrete",
+    "Composition.Curve3Pool3CrvLiveEndEntry",
+    "Composition.Curve3Pool3CrvLiveEndRL",
+    "Composition.Curve3Pool3CrvLiveEndOC",
+    "Composition.Curve3Pool3CrvLiveEndKeep",
+    "Composition.Curve3Pool3CrvLiveEndRLI",
+    "Composition.Curve3Pool3CrvLiveEndAL",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",

@@ -536,31 +536,4 @@ theorem XAt.of_eq {sevm : Sevm} {post : Devm} {pc : Nat} {d d' : Devm} {L : List
 
 theorem zero_lit : Bytes.toB256 [0] = 0 := by decide
 
-/-! ## Calls that keep the caller's storage -/
-
-/-- **Every `CALL` from the frame to `t` keeps the frame's own storage and address 4's code**: a
-per-target, step-level form of "the callee makes no state-changing callback". -/
-def CallKeeps (sevm : Sevm) (t : B256) : Prop :=
-  ∀ (X d : Devm) (g v ii is oi os : B256) (S : List B256),
-    X.stack = g :: t :: v :: ii :: is :: oi :: os :: S → Ninst.Run sevm X (.exec .call) d →
-      d.getStor sevm.currentTarget = X.getStor sevm.currentTarget ∧ d.getCode 4 = X.getCode 4
-
-/-- **Every `STATICCALL` from the frame to `t` keeps address 4's code.** -/
-def StaticKeeps (sevm : Sevm) (t : B256) : Prop :=
-  ∀ (X d : Devm) (g ii is oi os : B256) (S : List B256),
-    X.stack = g :: t :: ii :: is :: oi :: os :: S → Ninst.Run sevm X (.exec .staticcall) d →
-      d.getCode 4 = X.getCode 4
-
-/-- A child of a call that kept the caller's storage and address 4's code left both as it found
-them. -/
-theorem ChildOf.keeps {sevm : Sevm} {X d : Devm} {t : Adr} {input : Bytes} {v : B256} {st : Bool}
-    {c : Exec.Frame} (h : ChildOf X d t input v st c) (hX : X.getCode sevm.currentTarget ≠ .empty)
-    (hs : d.getStor sevm.currentTarget = X.getStor sevm.currentTarget)
-    (h4 : d.getCode 4 = X.getCode 4) :
-    (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
-      c.post.getCode 4 = c.pre.getCode 4 := by
-  refine ⟨fun x => ?_, ?_⟩
-  · rw [← h.storPost _ hX x, hs, h.storPre _ hX]
-  · rw [← h.codePost, h4, h.codePre]
-
 end Blanc.Lift

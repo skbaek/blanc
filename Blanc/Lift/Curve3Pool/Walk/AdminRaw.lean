@@ -10,7 +10,7 @@ import Blanc.Lift.FrameWalkNode
 # Raw effects of the quiet admin/getter entries
 
 For each admin entry and getter, `<entry>_raw` has the shape of
-`removeLiquidity_raw`: dispatcher (`DispatchQuiet.lean`) hands the arm's body
+`removeLiquidity_rawK`: dispatcher (`DispatchQuiet.lean`) hands the arm's body
 pc with the exact `quietSt` state, `xa_node_span` crosses the checked
 exec-free arm tree (the halted branch leaves no children; the returned branch
 is impossible by `admRawRun_halted`), the existing `safe_*` proof gives the

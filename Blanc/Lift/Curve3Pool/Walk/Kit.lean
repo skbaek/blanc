@@ -165,6 +165,30 @@ theorem RlKeep.head {sevm : Sevm} {c : Exec.Frame} {L : List Exec.Frame}
       c.post.getCode 4 = c.pre.getCode 4 :=
   h c List.mem_cons_self
 
+/-- **Every remaining child at neither the pool nor `4` keeps the pool**: the conditional form of
+`RlKeep`, which a frame at depth `1` satisfies whatever code its callees run
+(`Exec.childFrames_keeps_of_depth_one`). -/
+def RlKeepC (sevm : Sevm) (L : List Exec.Frame) : Prop :=
+  ∀ c ∈ L, c.sevm.currentTarget ≠ sevm.currentTarget → c.sevm.currentTarget ≠ 4 →
+    (∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x) ∧ c.post.getCode 4 = c.pre.getCode 4
+
+theorem RlKeepC.tail {sevm : Sevm} {c : Exec.Frame} {L : List Exec.Frame}
+    (h : RlKeepC sevm (c :: L)) : RlKeepC sevm L :=
+  fun c' hc' => h c' (List.mem_cons_of_mem _ hc')
+
+/-- **The keep a call to the word `t` needs**: `t` names neither the pool nor `4`, and the
+remaining children keep the pool when they are at neither. -/
+def RlKeepAt (sevm : Sevm) (t : B256) (L : List Exec.Frame) : Prop :=
+  t.toAdr ≠ sevm.currentTarget ∧ t.toAdr ≠ 4 ∧ RlKeepC sevm L
+
+/-- The keep of the head child, at its target `t`. -/
+theorem RlKeepAt.head {sevm : Sevm} {t : B256} {c : Exec.Frame} {L : List Exec.Frame}
+    (h : RlKeepAt sevm t (c :: L)) (ht : c.sevm.currentTarget = t.toAdr) :
+    (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
+      c.post.getCode 4 = c.pre.getCode 4 :=
+  h.2.2 c List.mem_cons_self (by rw [ht]; exact h.1) (by rw [ht]; exact h.2.1)
+
 /-- The per-child premises of a frame give `RlKeep` on its children. -/
 theorem RlKeep.of_pool {sevm : Sevm} {L : List Exec.Frame}
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =

@@ -181,10 +181,9 @@ theorem pool_3crv_removeLiquidity_live_entry
         (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
           ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
         (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
-        (_hckeep : ∀ k : Fin 3,
-          CallKeeps sevm ((pre.getStor sevm.currentTarget).get (coinSlot k)))
-        (_hsk : StaticKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
-        (_htk : CallKeeps sevm ((pre.getStor sevm.currentTarget).get tokenSlot))
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
         (_hU : 70000 ≤ U)
         (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
         (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (rlAmt sevm))
@@ -201,7 +200,7 @@ theorem pool_3crv_removeLiquidity_live_entry
   obtain ⟨s, hs, hlive⟩ := pool_history_removeLiquidity_live trace poolInstalled joint.poolCk env
     target state
   refine ⟨s, hs, ready, ?_⟩
-  intro o T V U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hckeep hsk htk
+  intro o T V U G hcode hfork hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hkeep
     hU hT hburn hVc hVb hVs hpush hG hGm
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
@@ -212,7 +211,7 @@ theorem pool_3crv_removeLiquidity_live_entry
     | 4 => C3With c3 σb (V 3)
     | j => C3With c3 σ (V j)
   refine hlive (W := W) hcode hfork hstatic hdepth hlen hcd hsel hstep (by rw [ht]; exact htok)
-    hcoin hpc hid hckeep hsk htk ?_ ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ ?_ hG hGm
+    hcoin hpc hid hkeep ?_ ⟨⟨ready.1, rfl⟩, hVb⟩ ?_ ?_ ?_ hG hGm
   · intro k hk
     rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3) with rfl | rfl | rfl | rfl
     all_goals exact c3With_wClosed hne (hVc _ (by decide))

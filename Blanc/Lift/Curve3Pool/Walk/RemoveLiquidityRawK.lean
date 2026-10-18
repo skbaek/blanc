@@ -3,10 +3,10 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
 /-!
 # `remove_liquidity` under the per-child keep premises
 
-`removeLiquidity_rawK` restates `removeLiquidity_raw` with the frame premises the other entries
-take (`exchange_raw`, `addLiquidity_raw`): every direct child keeps the pool's storage
-(`PoolCallsKeep`) and the code at `4`, in place of the target-level `CallKeeps`/`StaticKeeps`.
-Both forms run through `removeLiquidity_rawT_of`.
+`removeLiquidity_rawTK`/`removeLiquidity_rawK`: safety of `remove_liquidity` under the frame
+premises the other entries take (`exchange_raw`, `addLiquidity_raw`): every direct child keeps the
+pool's storage (`PoolCallsKeep`) and the code at `4`.  They run through
+`removeLiquidity_rawT_of`'s unconditional branch (`RlKeep`).
 -/
 
 namespace Blanc.Lift.Curve3Pool
