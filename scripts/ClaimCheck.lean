@@ -14416,6 +14416,7 @@ example : ∀ {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key �
     st₀.reserve0.val ≤ Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pair)) →
     pair ≠ usdc →
     (∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) →
+    (∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) →
     JointCheckpoint2 pair usdc weth KU KW KP st₀ w :=
   @JointCheckpoint2.mk
 
@@ -14428,7 +14429,6 @@ example {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -14456,7 +14456,7 @@ example {pair usdc weth : Adr}
         finish.reserve1.val ≤ ((future.state.getStor weth).get (Weth9.balSlot pair)).toNat ∧
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 :=
-  pair_usdc_weth9_joint trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_joint trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr}
     {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
@@ -14467,7 +14467,6 @@ example {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -14483,7 +14482,7 @@ example {pair usdc weth : Adr}
           before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
             after.reserve0.val * after.reserve1.val *
               (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 :=
-  pair_usdc_weth9_history_feeOn_product trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_history_feeOn_product trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr}
     {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
@@ -14494,7 +14493,6 @@ example {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -14510,7 +14508,7 @@ example {pair usdc weth : Adr}
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
-  pair_usdc_weth9_history_feeOff_product trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_history_feeOff_product trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
@@ -14521,7 +14519,6 @@ example {pair usdc weth : Adr} {cfg : ChainConfig}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress)
@@ -14582,7 +14579,7 @@ example {pair usdc weth : Adr} {cfg : ChainConfig}
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, _, .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) :=
-  pair_usdc_weth9_history_swap_live trace joint pairFresh usdcFresh wethFresh governance neverSigner factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector guards depth notAdmin recipientFresh usdcLive
+  pair_usdc_weth9_history_swap_live trace joint pairFresh usdcFresh wethFresh governance factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector guards depth notAdmin recipientFresh usdcLive
 
 example {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
@@ -14842,7 +14839,10 @@ example {usdc weth : Adr} {KU : Usdc.Key → Prop}
         (Usdc.allowSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList) g) = 0)
     (usdcNotFrozen : Usdc.frozenBit ((b.state.getStor usdc).get
         (Usdc.balSlot (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList))) = false)
-    (usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) :
+    (usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc)
+    (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork →
+      ¬ s.rules.isPrecomp
+        (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList)) :
     ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
         (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
       post.stack = (create2NewAddress sevm.currentTarget salt UniswapV2Pair.Creation.code.toList).toB256 :: S ∧
@@ -14875,7 +14875,7 @@ example {usdc weth : Adr} {KU : Usdc.Key → Prop}
             (initializedState sevm.currentTarget
               (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256 isevm.currentTarget)
               usdc weth) ipost.state :=
-  pair_usdc_weth9_create2_jointCheckpoint2 hfork hstatic hinit hnonce hdepth hfresh hgas hroom wethApart usdcApart pairNonzero notSystem wethTracked wethNoAllowance wethNotPrecompile usdcTracked usdcNoAllowance usdcNotFrozen usdcNotPrecompile
+  pair_usdc_weth9_create2_jointCheckpoint2 hfork hstatic hinit hnonce hdepth hfresh hgas hroom wethApart usdcApart pairNonzero notSystem wethTracked wethNoAllowance wethNotPrecompile usdcTracked usdcNoAllowance usdcNotFrozen usdcNotPrecompile pairNotPrecompile
 
 example {pair usdc weth : Adr} {urows : List (Usdc.Key × B256)}
     {wrows : List (Weth9.Key × B256)} {prows : List PairRow} {base : UniswapV2Pair.State}
@@ -14905,6 +14905,7 @@ example : ∀ {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key �
     st₀.reserve0.val ≤ Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pair)) →
     pair ≠ usdc →
     (∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc) →
+    (∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) →
     JointCheckpoint2F pair usdc weth KU KW KP st₀ w :=
   @JointCheckpoint2F.mk
 
@@ -14925,7 +14926,6 @@ example {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -14953,7 +14953,7 @@ example {pair usdc weth : Adr}
         finish.reserve1.val ≤ ((future.state.getStor weth).get (Weth9.balSlot pair)).toNat ∧
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 :=
-  pair_usdc_weth9_joint_finite trace joint pairFresh usdcFresh wethFresh governance quiet neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_joint_finite trace joint pairFresh usdcFresh wethFresh governance quiet factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr}
     {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
@@ -14965,7 +14965,6 @@ example {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -14981,7 +14980,7 @@ example {pair usdc weth : Adr}
           before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
             after.reserve0.val * after.reserve1.val *
               (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 :=
-  pair_usdc_weth9_history_feeOn_product_finite trace joint pairFresh usdcFresh wethFresh governance quiet neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_history_feeOn_product_finite trace joint pairFresh usdcFresh wethFresh governance quiet factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr}
     {cfg : ChainConfig} {checkpoint future : BlockChain} {KU : Usdc.Key → Prop}
@@ -14993,7 +14992,6 @@ example {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -15009,7 +15007,7 @@ example {pair usdc weth : Adr}
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
-  pair_usdc_weth9_history_feeOff_product_finite trace joint pairFresh usdcFresh wethFresh governance quiet neverSigner factoryInstalled factoryNotSystem
+  pair_usdc_weth9_history_feeOff_product_finite trace joint pairFresh usdcFresh wethFresh governance quiet factoryInstalled factoryNotSystem
 
 example {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
@@ -15021,7 +15019,6 @@ example {pair usdc weth : Adr} {cfg : ChainConfig}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress)
@@ -15082,7 +15079,7 @@ example {pair usdc weth : Adr} {cfg : ChainConfig}
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, _, .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) :=
-  pair_usdc_weth9_history_swap_live_finite trace joint pairFresh usdcFresh wethFresh governance quiet neverSigner factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector guards depth notAdmin recipientFresh usdcLive
+  pair_usdc_weth9_history_swap_live_finite trace joint pairFresh usdcFresh wethFresh governance quiet factoryInstalled factoryNotSystem target state codeEq fork output representable value size selector guards depth notAdmin recipientFresh usdcLive
 
 example {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
@@ -15386,7 +15383,7 @@ example (P : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
 
 end Blanc.Lift.Usdc
 
--- usdc-weth9-pair-composition-v1: the never-signer premise
+-- usdc-weth9-pair-composition-v1: the never-signer predicate (derived for the Pair by usdc_neverSigner_pair)
 namespace Blanc.Lift.Token
 open Jaune Blanc Blanc.ExecutionTrace
 
