@@ -1,5 +1,6 @@
 import Blanc.Lift.IdentityCall
 import Blanc.ForwardStorageAccess
+import Blanc.Lift.VyperCallee
 
 /-!
 # A failed identity copy that forwarded all gas leaves none
@@ -200,5 +201,12 @@ theorem IdReady.afterSstore {b : Devm} (h : IdReady sevm b) (k v : B256) :
     IdReady sevm (afterSstore sevm b k v) :=
   ⟨by rw [afterSstore_getCode]; exact h.nodeleg,
     by rw [afterSstore_accessedAddresses]; exact h.warm, h.pre, h.fork⟩
+
+/-- Load-only bases keep the identity precompile ready (`IdReady.afterSload` per load). -/
+theorem SloadsOnly.idReady {sevm : Sevm} {b B : Devm} (h : SloadsOnly sevm b B)
+    (hid : IdReady sevm b) : IdReady sevm B := by
+  induction h with
+  | refl => exact hid
+  | sload _ k ih => exact ih.afterSload k
 
 end Blanc.Lift

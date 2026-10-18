@@ -18,8 +18,8 @@ concrete memory terms:
   words `L`.  `ric_mloadT` / `ric_mstoreT` / `ric_mstoreO` / `ric_keccakT` step it through
   `MLOAD`, `MSTORE` (fresh or overwriting) and `KECCAK256` of carried words.
 * `SloadsOnly sevm b B`: the base `B` is `b` after selected storage loads (`afterSload`), so
-  state, storage, logs and output are `b`'s (`SloadsOnly.state`, `.getStor`, `.logs`,
-  `.output`).
+  state, storage, logs, output and code are `b`'s (`SloadsOnly.state`, `.getStor`, `.logs`,
+  `.output`, `.getCode`, and `.idReady` in `Blanc/Lift/IdentityCallGas.lean`).
 * The checked-arithmetic guards, read back as the checked operations on naturals of
   `Blanc/Lift/StableSwapNewton/Defs.lean`: `vyChkSub` (`ISZERO (LT x y)`), `vyChkAdd`
   (`ISZERO (LT (x + y) x)`), `vyChkMul` (`ISZERO x OR (x * y) / x == y`) and `vyChkDiv`
@@ -343,6 +343,11 @@ theorem output (h : SloadsOnly sevm b B) : B.output = b.output := by
   induction h with
   | refl => rfl
   | sload _ k ih => rw [afterSload_output, ih]
+
+theorem getCode (h : SloadsOnly sevm b B) (a : Adr) : B.getCode a = b.getCode a := by
+  induction h with
+  | refl => rfl
+  | sload _ k ih => rw [afterSload_getCode, ih]
 
 theorem trans {B' : Devm} (h : SloadsOnly sevm b B) (h' : SloadsOnly sevm B B') :
     SloadsOnly sevm b B' := by

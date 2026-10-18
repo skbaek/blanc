@@ -354,14 +354,14 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   · rw [afterSload_output, afterSload_output, afterSload_output, hb2.output, afterSload_output,
       afterSload_output, hout, afterSload_output, afterSload_output, afterSstore_output,
       afterSload_output]
-  · rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, cw_sloads_getCode hb2,
+  · rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, hb2.getCode,
       afterSload_getCode, afterSload_getCode, hcodeK x (by
         rwa [afterSload_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]),
       afterSload_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
   · have hb0 := hB0 hb
     have hdI : IdReady sevm d :=
       ⟨by rw [hcpost, h4, hcpre]; exact hb0.nodeleg, hacc _ hb0.warm, hb.pre, hb.fork⟩
-    exact ((cw_sloads_idReady hb2 ((hdI.afterSload _).afterSload _)).afterSload _).afterSload _
+    exact ((hb2.idReady ((hdI.afterSload _).afterSload _)).afterSload _).afterSload _
       |>.afterSload _
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 

@@ -65,20 +65,6 @@ theorem xa_vGetYD (hc : Cert.CheckedM code cert mems true)
 abbrev cwP1 : B256 := Bytes.toB256 [0x01]
 abbrev cwPm : B256 := Bytes.toB256 [0xe8, 0xd4, 0xa5, 0x10, 0x00]
 
-/-- Storage loads keep every account's code. -/
-theorem cw_sloads_getCode {b' : Devm} (h : SloadsOnly sevm b b') (a : Adr) :
-    b'.getCode a = b.getCode a := by
-  induction h with
-  | refl => rfl
-  | sload _ k ih => rw [afterSload_getCode, ih]
-
-/-- Storage loads keep the identity precompile ready. -/
-theorem cw_sloads_idReady {b' : Devm} (h : SloadsOnly sevm b b') (hid : IdReady sevm b) :
-    IdReady sevm b' := by
-  induction h with
-  | refl => exact hid
-  | sload _ k ih => exact ih.afterSload k
-
 -- SEGMENT: cwA
 /-- **The prologue** (`0x3cca` to `0x3d9a`): the arguments and return address stored, `amp =
 _A()`, the adjusted fee, `PRECISION_MUL`, and `totalSupply()` read from the token (the next
@@ -262,10 +248,10 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
   · rw [hout, afterSload_output, afterSload_output, hb1.output]
   · intro x hx
-    rw [hcodeK x (by rw [afterSload_getCode, afterSload_getCode, cw_sloads_getCode hb1]; exact hx),
-      afterSload_getCode, afterSload_getCode, cw_sloads_getCode hb1]
+    rw [hcodeK x (by rw [afterSload_getCode, afterSload_getCode, hb1.getCode]; exact hx),
+      afterSload_getCode, afterSload_getCode, hb1.getCode]
   · intro hid h4
-    have hB := ((cw_sloads_idReady hb1 hid).afterSload (Bytes.toB256 [2])).afterSload
+    have hB := ((hb1.idReady hid).afterSload (Bytes.toB256 [2])).afterSload
       (Bytes.toB256 [5])
     exact ⟨by rw [hcpost, h4, hcpre]; exact hB.nodeleg, hacc _ hB.warm, hid.pre, hid.fork⟩
 

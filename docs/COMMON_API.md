@@ -4946,7 +4946,8 @@ contract-neutral.
   steps `ric_mloadT`/`ric_mstoreT`/`ric_mstoreO` (overwrite, `wordsOff`)/`ric_keccakT` (tactics
   `imload`/`imstore`/`imstoreO`/`ikeccak`, `wmem`, `iassert`) and the
   node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
-  `.getStor`, `.logs`, `.output`); the checked-arithmetic guards read back as
+  `.getStor`, `.logs`, `.output`, `.getCode` in `VyperCallee.lean`; `.idReady` in
+  `IdentityCallGas.lean`); the checked-arithmetic guards read back as
   `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the
   `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; forward twins over a covered memory with the
   final memory named at the return (`∃ M', RunExactCut … ∧ facts`): `xlift`, `rxc_mloadT`,
@@ -4965,7 +4966,7 @@ contract-neutral.
   [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean); an unchecked identity
   copy that forwarded `gas()` and failed at a nonzero depth leaves no gas
   (`ri_call_identity_gas_fail`, `gasLeft_of_run_pop`), and `IdReady` survives `SLOAD`/`SSTORE`
-  bases (`IdReady.afterSload`/`afterSstore`), in
+  bases (`IdReady.afterSload`/`afterSstore`; `SloadsOnly.idReady` across a load-only base), in
   [`Blanc/Lift/IdentityCallGas.lean`](../Blanc/Lift/IdentityCallGas.lean);
   a one-word `STATICCALL` reply with its `RETURNDATASIZE > 31` check (`vyReplyWord`,
   `ric_vyStaticReply` / `rxc_vyStaticReply`) and a checked subtraction from a saved word

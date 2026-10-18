@@ -198,8 +198,8 @@ theorem xa_cw2 (hc : Cert.CheckedM code cert mems true)
     ⟨A, x0, x1, x2, D0, _, r0, r1, r2, y2, hamp, hxp, hD0, hD1c, hy2⟩,
     fun x => by rw [hb1.getStor, hdst],
     by rw [hb1.logs, hdlg], h, hV, by rw [hb1.output, hdo],
-    fun x hx => by rw [cw_sloads_getCode hb1, hdc x hx],
-    fun hid h4 => cw_sloads_idReady hb1 (hdi hid h4)⟩
+    fun x hx => by rw [hb1.getCode, hdc x hx],
+    fun hid h4 => hb1.idReady (hdi hid h4)⟩
   · rw [← ht] at hamp
     exact calcWithdrawOne_eq hi hamp hfee hT hxp hD0 hm hT0 hle hy hyl hp h0 h1 h2 hy2 hs0 hs1 hs2
 
