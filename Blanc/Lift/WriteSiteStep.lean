@@ -492,6 +492,166 @@ theorem provEff_sound {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S
     · intro hk; exact absurd hk Bool.false_ne_true
   · intro hk; exact absurd hk Bool.false_ne_true
 
+/-! ## The one fresh result sits on top -/
+
+/-- The regular instructions whose recorded result the checker names: each pushes one computed
+word on top. -/
+def pushesTop (r : Rinst) : Bool :=
+  r matches .add | .sub | .mul | .div | .and | .or | .shl | .shr | .exp | .lt | .gt | .eq
+    | .iszero | .caller | .address | .calldataload | .not | .keccak256 | .sload
+
+theorem pushesTop_head {r : Rinst} {p out : Pattern} (hr : pushesTop r = true)
+    (hout : ninstTransfer (.reg r) p = some out) : ∃ o, out = none :: o := by
+  cases r <;> simp only [pushesTop, Bool.false_eq_true] at hr <;>
+    simp only [ninstTransfer, liftRegularTransfer, regularTransfer, binaryTransfer,
+      unaryTransfer] at hout
+  all_goals first
+    | exact ⟨_, (Option.some.inj hout).symm⟩
+    | (split at hout <;> simp only [Option.some.injEq, reduceCtorEq] at hout
+       exact ⟨_, hout.symm⟩)
+
+theorem opFacts_pushesTop {fs : List Fact} {kv : List Nat} {n : Ninst} {r : Nat}
+    (hne : FreePtr.opFacts fs n kv r ≠ []) :
+    ∃ q, n = .reg q ∧ (pushesTop q = true ∨ q = .msize) := by
+  cases n with
+  | reg q =>
+    refine ⟨q, rfl, ?_⟩
+    cases q <;> first | exact .inl rfl | exact .inr rfl |
+      exact (hne (by simp only [FreePtr.opFacts])).elim
+  | _ => exact (hne (by simp only [FreePtr.opFacts])).elim
+
+theorem provEff_pushesTop {σ : WSt} {n : Ninst} (hk : (provEff σ n).known = true) :
+    ∃ q, n = .reg q ∧ pushesTop q = true := by
+  unfold provEff at hk
+  split at hk
+  · exact ⟨_, rfl, rfl⟩
+  · exact ⟨_, rfl, rfl⟩
+  · exact ⟨_, rfl, rfl⟩
+  · exact ⟨_, rfl, rfl⟩
+  · exact ⟨_, rfl, rfl⟩
+  · rename_i q _ _ _ _ _ _ _ _ _
+    split at hk
+    · rename_i o ho
+      refine ⟨q, rfl, ?_⟩
+      cases q <;> simp only [Op2.ofRinst, reduceCtorEq] at ho <;> rfl
+    · exact absurd hk Bool.false_ne_true
+  · exact absurd hk Bool.false_ne_true
+
+/-- The word under the fresh symbol of a transfer whose output starts with the fresh result is
+the top word after the step. -/
+theorem fresh_top {ν : Nat → B256} {r : Nat} {w : B256} {o : Pattern} {kv kv' : List Nat}
+    {S' rest : List B256} {d' : Devm}
+    (hm : (none :: o).mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) =
+      some kv')
+    (hf : List.Forall₂ (fun s x => Function.update ν r w s = x) kv' S')
+    (hst : d'.stack = S' ++ rest) : ∃ rs, d'.stack = w :: rs := by
+  rw [List.mapM_cons] at hm
+  simp only [Option.pure_def, Option.bind_eq_bind, Option.bind_some] at hm
+  cases ht : o.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
+  | none => simp only [ht, Option.bind_none, reduceCtorEq] at hm
+  | some kt =>
+    simp only [ht, Option.bind_some, Option.some.injEq] at hm
+    subst hm
+    cases hf with
+    | cons h0 _ =>
+      rw [Function.update_self] at h0
+      subst h0
+      exact ⟨_, by rw [hst]; rfl⟩
+
+theorem B256.toNat_sub_of_le {x y : B256} (h : y.toNat ≤ x.toNat) :
+    (x - y).toNat = x.toNat - y.toNat := by
+  rw [B256.toNat_sub, Nat.lo, Nat.add_sub_mod_eq_sub (B256.toNat_lt x) h]
+
+/-- Two readings of one transfer that differ only in the fresh symbol. -/
+theorem mapM_swap {kv : List Nat} {r s : Nat} :
+    ∀ {out : Pattern} {b : List Nat},
+      out.mapM (fun l => match l with | none => some s | some j => kv[j.toNat]?) = some b →
+      ∃ a, out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some a ∧
+        List.Forall₂ (fun x y => x = y ∨ (x = r ∧ y = s)) a b
+  | [], b, hb => by
+    simp only [List.mapM_nil, Option.pure_def, Option.some.injEq] at hb
+    exact ⟨[], rfl, by rw [← hb]; exact .nil⟩
+  | l :: out, b, hb => by
+    rw [List.mapM_cons] at hb ⊢
+    simp only [Option.pure_def, Option.bind_eq_bind] at hb ⊢
+    cases ht : out.mapM (fun l => match l with | none => some s | some j => kv[j.toNat]?) with
+    | none => cases l <;> simp only [ht, Option.bind_none, Option.bind_fun_none,
+        reduceCtorEq] at hb
+    | some bt =>
+      obtain ⟨at', ha, hab⟩ := mapM_swap ht
+      cases l with
+      | none =>
+        simp only [ht, Option.bind_some, Option.some.injEq] at hb
+        subst hb
+        exact ⟨r :: at', by simp only [ha, Option.bind_some], .cons (.inr ⟨rfl, rfl⟩) hab⟩
+      | some j =>
+        cases hj : kv[j.toNat]? with
+        | none => simp only [hj, Option.bind_none, reduceCtorEq] at hb
+        | some y =>
+          simp only [hj, ht, Option.bind_some, Option.some.injEq] at hb
+          subst hb
+          exact ⟨y :: at', by simp only [hj, ha, Option.bind_some], .cons (.inl rfl) hab⟩
+
+theorem sloadName_some {σ : WSt} {n : Ninst} {s : Nat} (h : sloadName σ n = some s) :
+    n = .reg .sload ∧ ∃ k t, σ.kv = k :: t ∧ (σ.provOf k).known = true ∧
+      (s, σ.provOf k) ∈ σ.cur := by
+  unfold sloadName at h
+  split at h
+  · rename_i k t hkv
+    dsimp only at h
+    split at h
+    · rename_i hk
+      obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.mp h
+      have hm := List.mem_of_find?_eq_some hp
+      have he := List.find?_some hp
+      simp only [beq_iff_eq] at he
+      refine ⟨rfl, k, t, hkv, hk, ?_⟩
+      rw [← he]
+      exact hm
+    · cases h
+  · cases h
+
+/-- A step that keeps memory and the executing account's storage keeps a state's meaning. -/
+theorem WSt.Holds.of_keep {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S : List B256}
+    {d d' : Devm} (h : σ.Holds ε sevm ν S d) (hk : MemKeep d d')
+    (hst : Devm.getStor d' sevm.currentTarget = Devm.getStor d sevm.currentTarget) :
+    σ.Holds ε sevm ν S d' where
+  kv := h.kv
+  args := h.args
+  facts := h.facts
+  prov := h.prov
+  mem := MemHolds.keep h.mem hk
+  cur := fun p hp => by
+    show (Devm.getStor d' _).get _ = _
+    rw [hst]
+    exact h.cur p hp
+  ub := fun p hp => by
+    show _ ≤ ((Devm.getStor d' _).get _).toNat
+    rw [hst]
+    exact h.ub p hp
+  eqs := h.eqs
+  guards := h.guards
+
+/-- A step `wstep` accepts that does not write storage keeps it. -/
+theorem getStor_of_writesStor {sevm : Sevm} {d d' : Devm} {n : Ninst} {p out : Pattern}
+    (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+    (hn : n.writesStor = false) (run : Ninst.Run sevm d n d') :
+    Devm.getStor d' = Devm.getStor d := by
+  cases n with
+  | reg q =>
+    refine Ninst.Run.getStor_of_storKeep hfork (.inl ⟨q, rfl, fun hq => ?_⟩) run
+    subst hq
+    cases hn
+  | exec x =>
+    have : x = .staticcall := by
+      simpa only [Ninst.writesStor, bne_eq_false_iff_eq] using hn
+    subst this
+    exact Ninst.Run.getStor_of_storKeep hfork (.inr rfl) run
+  | push bs fits => simp only [ninstTransfer, reduceCtorEq] at ho
+  | dupn _ => simp only [ninstTransfer, reduceCtorEq] at ho
+  | swapn _ => simp only [ninstTransfer, reduceCtorEq] at ho
+  | exchange _ => simp only [ninstTransfer, reduceCtorEq] at ho
+
 private theorem list_shape {α : Type} (l : List α) :
     l = [] ∨ (∃ k, l = [k]) ∨ ∃ k v t, l = k :: v :: t := by
   rcases l with _ | ⟨k, _ | ⟨v, t⟩⟩
@@ -688,5 +848,214 @@ theorem wstep_nonpush {R : WRet} {n : Ninst} {σ σ' : WSt}
     exact ⟨out, kv', _, _, _, _, ho, of_guard hg1,
       (by simpa only [Bool.not_eq_true'] using of_guard hg2), fun _ _ _ hN => (by cases hN), hm,
       (Option.some.inj h).symm, .inl rfl, .inl rfl, .inl rfl, .inl rfl⟩
+
+theorem forall₂_swap {ρ : Nat → B256} {r s : Nat} (hs : ρ s = ρ r) :
+    ∀ {a b : List Nat} {S : List B256}, List.Forall₂ (fun x w => ρ x = w) a S →
+      List.Forall₂ (fun x y => x = y ∨ (x = r ∧ y = s)) a b →
+      List.Forall₂ (fun x w => ρ x = w) b S
+  | [], [], [], _, _ => .nil
+  | _ :: _, _ :: _, _ :: _, .cons h0 hr, .cons e hab => by
+    refine .cons ?_ (forall₂_swap hs hr hab)
+    rcases e with rfl | ⟨rfl, rfl⟩
+    · exact h0
+    · rw [hs]; exact h0
+
+/-! ## One step -/
+
+/-- **One accepted non-jump step is sound.**  If the abstract state `σ` holds of the machine
+state `d` (frame words `S` above `rest`) and `wstep R n σ` accepts with `σ'`, then after the
+step `d → d'` the state `σ'` holds of `d'` above the same `rest`; an `SSTORE` meets a site of the
+current function's summary `R` (`Site.Obs`, read in `ε` before the step: the frozen `WsObs`
+body); and a keeping summary's step writes no storage. -/
+theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sevm}
+    {ν : Nat → B256} {S rest : List B256} {d d' : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork) (hε : ε.Frame sevm)
+    (h : σ.Holds ε sevm ν S d) (hS : d.stack = S ++ rest) (hlen : σ.kv.length ≤ 1024)
+    (hw : wstep R n σ = some σ') (run : Ninst.Run sevm d n d') :
+    σ'.Sat ε sevm d' rest ∧
+      (n = .reg .sstore → ∀ x v rs, d.stack = x :: v :: rs →
+        ∃ s ∈ R.sites, s.Obs ε sevm d x v) ∧
+      (R.keeps = true → n.writesStor = false) := by
+  have hfr : ∀ s, s < σ.fresh → s ≠ σ.fresh := fun s hs he => Nat.lt_irrefl _ (he ▸ hs)
+  have hagree : ∀ {w : B256} s, s < σ.fresh → Function.update ν σ.fresh w s = ν s :=
+    fun s hs => Function.update_of_ne (hfr s hs) _ _
+  by_cases hpush : ∃ bs fits, n = .push bs fits
+  · obtain ⟨bs, fits, rfl⟩ := hpush
+    simp only [wstep, Option.some.injEq] at hw
+    subst hw
+    have hA := (h.agree (ν' := Function.update ν σ.fresh (Bytes.toB256 bs)) hagree).of_keep
+      (ninstMemKeeps_run rfl run) (by rw [Ninst.Run.getStor_push run])
+    refine ⟨⟨Function.update ν σ.fresh (Bytes.toB256 bs), Bytes.toB256 bs :: S,
+      by rw [push_run_stack run, hS]; rfl, WSt.Holds.prune ?_⟩,
+      fun he => (by cases he), fun _ => rfl⟩
+    refine ⟨.cons (Function.update_self _ _ _) hA.kv, hA.args, ?_, ?_, hA.mem, hA.cur, hA.ub,
+      hA.eqs, hA.guards⟩
+    · intro f hf
+      rcases List.mem_cons.mp hf with rfl | hf
+      · show _ ≤ (Function.update ν _ _ _).toNat ∧ (Function.update ν _ _ _).toNat ≤ _
+        rw [Function.update_self]
+        exact ⟨Nat.le_refl _, Nat.le_refl _⟩
+      · exact hA.facts f hf
+    · intro p hp
+      rcases List.mem_cons.mp hp with rfl | hp
+      · intro _
+        exact Function.update_self _ _ _
+      · exact hA.prov p hp
+  have hn : ∀ bs fits, n ≠ .push bs fits := fun bs fits he => hpush ⟨bs, fits, he⟩
+  obtain ⟨out, kv', sl, cl, ul, el, ho, hc, hkeep, hcov, hm, rfl, hsl, hcl, hul, hel⟩ :=
+    wstep_nonpush hn hw
+  have hst : d.stack = σ.kv.map ν ++ rest := by rw [hS, forall₂_eq_map h.kv]
+  have hr : σ.fresh ∉ σ.kv := fun hm => Nat.lt_irrefl _ (WSt.lt_fresh (by
+    simp only [WSt.syms, List.mem_append]; exact .inl (.inl (.inl (.inl (.inl (.inl (.inl hm))))))))
+  obtain ⟨kv'', hm'', hswap⟩ := mapM_swap (r := σ.fresh) hm
+  obtain ⟨S', w, hst', hf⟩ := transfer_val hfork ho hlen hc hm'' hr h.kv hS run
+  -- the fresh result is the top word whenever the transfer pushes it
+  have htop : ∀ q, n = .reg q → pushesTop q = true → ∃ rs, d'.stack = w :: rs := by
+    intro q hq hpq
+    subst hq
+    obtain ⟨o, rfl⟩ := pushesTop_head hpq ho
+    exact fresh_top hm'' hf hst'
+  have hA : σ.Holds ε sevm (Function.update ν σ.fresh w) S d := h.agree hagree
+  have hkeepS : n.writesStor = false →
+      Devm.getStor d' sevm.currentTarget = Devm.getStor d sevm.currentTarget := fun hws => by
+    rw [getStor_of_writesStor hfork ho hws run]
+  have hcc : n ≠ .exec .callcode := fun he => by subst he; simp only [ninstTransfer, reduceCtorEq] at ho
+  refine ⟨⟨Function.update ν σ.fresh w, S', hst', WSt.Holds.prune ?_⟩, ?_, ?_⟩
+  rotate_left
+  · intro hss x v rs hs
+    subst hss
+    rcases list_shape σ.kv with hkv | ⟨k, hkv⟩ | ⟨k, v', t, hkv⟩
+    · rw [hkv] at ho; cases ho
+    · rw [hkv] at ho; cases ho
+    · exact Site.Obs.of_any (hcov k v' t rfl hkv) (siteOf_obs h hkv hS hs)
+  · intro hk
+    rw [hk, Bool.true_and] at hkeep
+    exact hkeep
+  -- the state after the step
+  clear hw hpush hn hcov hkeep
+  have hsv : ∀ s, sloadName σ n = some s → ν s = w := by
+    intro s hs
+    obtain ⟨rfl, k, t, hkv, hk, hmem⟩ := sloadName_some hs
+    obtain ⟨rs, hrs⟩ := htop _ rfl rfl
+    have hsl : d.stack = ν k :: (t.map ν ++ rest) := by rw [hst, hkv]; rfl
+    rw [run_sload_top run hsl, List.cons.injEq] at hrs
+    rw [← hrs.1, h.provOf k hk, h.cur _ hmem]
+  have hfresh : ∀ s, s ∈ σ.syms → Function.update ν σ.fresh w s = ν s :=
+    fun s hs => hagree s (WSt.lt_fresh hs)
+  have hkvs : ∀ s ∈ σ.kv, s ∈ σ.syms := fun s hs => by
+    simp only [WSt.syms, List.mem_append]
+    exact .inl (.inl (.inl (.inl (.inl (.inl (.inl hs))))))
+  refine ⟨?_, hA.args, ?_, ?_, ?_, ?_, ?_, ?_, h.guards⟩
+  · -- frame words
+    refine forall₂_swap ?_ hf hswap
+    cases hs : sloadName σ n with
+    | none => rfl
+    | some s =>
+      rw [Function.update_self, Option.getD_some]
+      obtain ⟨-, k, t, -, -, hmem⟩ := sloadName_some hs
+      have hsy : s ∈ σ.syms := by
+        simp only [WSt.syms, List.mem_append, List.mem_map]
+        exact .inl (.inl (.inr ⟨_, hmem, rfl⟩))
+      rw [hfresh s hsy, hsv s hs]
+  · -- facts
+    refine FreePtr.AllHold.append (FreePtr.AllHold.append ?_ ?_) hA.facts
+    · rcases hsl with rfl | ⟨x, y, t, rfl, hkv, he, rfl⟩
+      · intro f hf; cases hf
+      · intro f hf
+        rw [List.mem_singleton] at hf
+        subst hf
+        have hs2 : d.stack = ν x :: ν y :: (t.map ν ++ rest) := by rw [hst, hkv]; rfl
+        obtain ⟨rs, hrs⟩ := htop _ rfl rfl
+        rw [run_sub_top run hs2, List.cons.injEq] at hrs
+        have hyx : (ν y).toNat ≤ (ν x).toNat := FreePtr.entails_sound h.facts he
+        show (Function.update ν σ.fresh w σ.fresh).toNat ≤ (Function.update ν σ.fresh w x).toNat
+        rw [Function.update_self, hfresh x (hkvs x (by rw [hkv]; exact List.mem_cons_self)),
+          ← hrs.1, B256.toNat_sub_of_le hyx]
+        exact Nat.sub_le _ _
+    · by_cases hne : FreePtr.opFacts σ.facts n σ.kv σ.fresh = []
+      · rw [hne]; intro f hf; cases hf
+      · obtain ⟨q, rfl, hq⟩ := opFacts_pushesTop hne
+        rcases hq with hq | rfl
+        · obtain ⟨rs, hrs⟩ := htop q rfl hq
+          exact FreePtr.opFacts_sound h.facts hr h.kv hS run (by rw [hrs]; rfl)
+            (fun he => by cases he; exact absurd hq (by decide))
+        · simp only [ninstTransfer, liftRegularTransfer, regularTransfer, reduceCtorEq] at ho
+  · -- provenance
+    intro p hp
+    rcases List.mem_append.mp hp with hp | hp
+    · split at hp
+      · rename_i hcond
+        rw [List.mem_singleton] at hp
+        subst hp
+        obtain ⟨hk, -⟩ := Bool.and_eq_true_iff.mp hcond
+        obtain ⟨q, rfl, hq⟩ := provEff_pushesTop hk
+        obtain ⟨rs, hrs⟩ := htop q rfl hq
+        show (provEff σ _).Den ε (Function.update ν σ.fresh w σ.fresh)
+        rw [Function.update_self]
+        exact provEff_sound hε h hS run hrs
+      · cases hp
+    · exact hA.prov p hp
+  · -- memory
+    exact memEff_sound hfork hA hS run hcc
+  · -- current slot values
+    intro p hp
+    rcases List.mem_append.mp hp with hp1 | hp2
+    · rcases hcl with rfl | ⟨k, t, rfl, hkv, hk, -, rfl⟩
+      · cases hp1
+      · rw [List.mem_singleton] at hp1
+        subst hp1
+        obtain ⟨rs, hrs⟩ := htop _ rfl rfl
+        have hs1 : d.stack = ν k :: (t.map ν ++ rest) := by rw [hst, hkv]; rfl
+        rw [run_sload_top run hs1, List.cons.injEq] at hrs
+        show (Devm.getStor d' _).get _ = Function.update ν σ.fresh w σ.fresh
+        rw [hkeepS rfl, Function.update_self, ← hrs.1, h.provOf k hk]
+        rfl
+    · split at hp2
+      · rename_i hws
+        show (Devm.getStor d' _).get _ = _
+        rw [hkeepS (by simpa only [Bool.not_eq_true'] using hws)]
+        exact hA.cur p hp2
+      · cases hp2
+  · -- slot upper bounds
+    intro p hp
+    rcases List.mem_append.mp hp with hp1 | hp2
+    · rcases hul with rfl | ⟨x, y, t, rfl, hkv, he, rfl⟩
+      · cases hp1
+      · obtain ⟨q', hq', hpq⟩ := List.mem_filterMap.mp hp1
+        split at hpq
+        · rename_i hx
+          cases hpq
+          have hs2 : d.stack = ν x :: ν y :: (t.map ν ++ rest) := by rw [hst, hkv]; rfl
+          obtain ⟨rs, hrs⟩ := htop _ rfl rfl
+          rw [run_sub_top run hs2, List.cons.injEq] at hrs
+          have hyx : (ν y).toNat ≤ (ν x).toNat := FreePtr.entails_sound h.facts he
+          have hxs : (ν x).toNat ≤ (d.getStorVal sevm.currentTarget (q'.2.eval ε)).toNat := by
+            rw [← hx]
+            rcases List.mem_append.mp hq' with hc | hu
+            · rw [← h.cur q' hc]
+            · exact h.ub q' hu
+          show (Function.update ν σ.fresh w σ.fresh).toNat ≤ ((Devm.getStor d' _).get _).toNat
+          rw [hkeepS rfl, Function.update_self, ← hrs.1, B256.toNat_sub_of_le hyx]
+          exact le_trans (Nat.sub_le _ _) hxs
+        · cases hpq
+    · split at hp2
+      · rename_i hws
+        show _ ≤ ((Devm.getStor d' _).get _).toNat
+        rw [hkeepS (by simpa only [Bool.not_eq_true'] using hws)]
+        exact hA.ub p hp2
+      · cases hp2
+  · -- equality results
+    intro e he
+    rcases List.mem_append.mp he with he1 | he2
+    · rcases hel with rfl | ⟨x, y, t, rfl, hkv, rfl⟩
+      · cases he1
+      · rw [List.mem_singleton] at he1
+        subst he1
+        have hs2 : d.stack = ν x :: ν y :: (t.map ν ++ rest) := by rw [hst, hkv]; rfl
+        obtain ⟨rs, hrs⟩ := htop _ rfl rfl
+        rw [run_eq_top run hs2, List.cons.injEq] at hrs
+        exact ⟨ν x, ν y, by rw [Function.update_self, ← hrs.1], h.provOf x, h.provOf y⟩
+    · exact hA.eqs e he2
+
 
 end Blanc.Lift.WriteSite
