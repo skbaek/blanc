@@ -77,7 +77,7 @@ theorem permit_tail {C : List Nat} {r : Seg} {g ii is oi os y0 y1 y2 y3 y4 y5 y6
         (Devm.getStor b sevm.currentTarget).set (allowSlot y8.toAdr y7.toAdr) y6 := by
   obtain ⟨b1, x, M1, G1, hs1, -, h⟩ := skip_libCall fork hcode run
   clear run
-  obtain ⟨b2, M2, G2, hs2, h⟩ := ric_seg_e9call fork h
+  obtain ⟨b2, M2, G2, hs2, h⟩ := ric_seg_e9call id fork h
   icall h hc 81 t_3e18_c81
   obtain ⟨d1, d2, b3, M3, G3, e, s3⟩ := e81_inv fork hc
   cases e
@@ -130,11 +130,11 @@ theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : CoveredFork sevm
   swap
   · exact absurd rfl (nh D)
   iterate 27 istep h
-  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e8digest fork h
+  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e8digest id fork h
   rcases skip_e79 fork h with ⟨b3, z, M3, G3, hs3, h⟩ | ⟨D, rfl⟩
   swap
   · exact absurd rfl (nh D)
-  obtain ⟨b4, v0, v1, v2, v3, v4, v5, v6, v7, M4, G4, hs4, h⟩ := ric_seg_e8encode fork h
+  obtain ⟨b4, v0, v1, v2, v3, v4, v5, v6, v7, M4, G4, hs4, h⟩ := ric_seg_e8encode id fork h
   rw [libWord_lit] at h
   have code4 : b4.getCode usdcLib = Lib.code := by
     rw [getCode_of_state hs4, getCode_of_state hs3, getCode_of_state hs2, afterSstore_getCode,
@@ -152,10 +152,10 @@ theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : CoveredFork sevm
         (fun r q => ?_) (fun i M G r h => ?_) h
       · obtain ⟨-, -, b', M', G', e, -⟩ := q
         exact ⟨_, e⟩
-      · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e80exit fork (by decide) h
+      · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e80exit id fork (by decide) h
         obtain ⟨d1, d2, b6, M6, G6, e, s6⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
         exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5]⟩
-    · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e8exit fork (by decide) h
+    · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e8exit id fork (by decide) h
       obtain ⟨d1, d2, b6, M6, G6, e, s6⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
       exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5]⟩
   obtain ⟨d1, d2, b', M', G', e, s'⟩ := key
@@ -320,7 +320,7 @@ theorem e89_inv {z0 z1 z2 ret : B256} {o : Outcome}
   cases e
   clear hc
   replace hs1 : b1.state = b.state := hs1
-  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e89 fork h
+  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e89 id fork h
   rcases skip_requireValidSignature fork (by rw [getCode_of_state hs2, getCode_of_state hs1]; exact hcode)
       h with ⟨b3, M3, G3, hs3, -, h⟩ | ⟨D, -, -, e⟩
   · obtain ⟨b4, M4, G4, e, s4⟩ := k89_cancel_inv fork h

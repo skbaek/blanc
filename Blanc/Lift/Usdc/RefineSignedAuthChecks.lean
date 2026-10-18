@@ -65,15 +65,16 @@ theorem seg_e87_check : shuffle cert.prog cert.entries [] (.callNext 90 t_2d6f_c
 /-- **Walk step over entry 87 (`transferWithAuthorization(…, v, r, s)`): `abi.encodePacked(r, s,
 v)`, to the call of entry 90.** -/
 theorem ric_seg_e87 {sevm : Sevm} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCut cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
         :: R) M G) t_4c3f_c87 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
-      SFunc.RunCut cert.prog sevm C (St b' (Nat.toB256 0x4b49 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
+      SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4b49 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
         :: x8 :: Nat.toB256 0x2d6f :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: R) M' G')
         (.callNext 90 t_2d6f_c87) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
     (fun _ hk => absurd hk List.not_mem_nil) seg_e87_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -87,15 +88,16 @@ theorem seg_e84_check : shuffle cert.prog cert.entries [] (.callNext 95 t_2d6f_c
 /-- **Walk step over entry 84 (`receiveWithAuthorization(…, v, r, s)`): `abi.encodePacked(r, s,
 v)`, to the call of entry 95.** -/
 theorem ric_seg_e84 {sevm : Sevm} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCut cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
         :: R) M G) t_4c83_c84 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
-      SFunc.RunCut cert.prog sevm C (St b' (Nat.toB256 0x4571 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
+      SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4571 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
         :: x8 :: Nat.toB256 0x2d6f :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: R) M' G')
         (.callNext 95 t_2d6f_c84) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
     (fun _ hk => absurd hk List.not_mem_nil) seg_e84_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -107,13 +109,14 @@ theorem seg_w138_check : shuffle cert.prog cert.entries [] (.callNext 30 t_0489_
 /-- **Walk step over wrapper 138 (`transferWithAuthorization(…, bytes)`): the `bytes` decoding,
 to the call of the body (entry 30).** -/
 theorem ric_seg_w138 {sevm : Sevm} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCut cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0f01_c138 r) :
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0f01_c138 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
-      SFunc.RunCut cert.prog sevm C (St b' (Nat.toB256 0x3549 :: u0 :: R) M' G')
+      SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x3549 :: u0 :: R) M' G')
         (.callNext 30 t_0489_c138) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle (X := [x0, x1, x2, x3]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3]) fork
     (fun _ hk => absurd hk List.not_mem_nil) seg_w138_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -125,13 +128,14 @@ theorem seg_w151_check : shuffle cert.prog cert.entries [] (.callNext 43 t_0489_
 /-- **Walk step over wrapper 151 (`receiveWithAuthorization(…, bytes)`): the `bytes` decoding,
 to the call of the body (entry 43).** -/
 theorem ric_seg_w151 {sevm : Sevm} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCut cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0ad4_c151 r) :
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0ad4_c151 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
-      SFunc.RunCut cert.prog sevm C (St b' (Nat.toB256 0x2c16 :: u0 :: R) M' G')
+      SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x2c16 :: u0 :: R) M' G')
         (.callNext 43 t_0489_c151) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle (X := [x0, x1, x2, x3]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3]) fork
     (fun _ hk => absurd hk List.not_mem_nil) seg_w151_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩

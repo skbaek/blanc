@@ -107,7 +107,7 @@ theorem frame_twa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = I
   ibranch h c2
   repeat istep h
   ibranch h c3
-  obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w138 fork h
+  obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w138 id fork h
   icallA h hc 30 t_3549_c30
   obtain ⟨p0, f1, f2, b1, M1, G1, e, post1⟩ := e30_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
   cases e
@@ -137,7 +137,7 @@ theorem frame_rwa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = I
   ibranch h c2
   repeat istep h
   ibranch h c3
-  obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w151 fork h
+  obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w151 id fork h
   icallA h hc 43 t_2c16_c43
   obtain ⟨p0, f1, f2, cl, b1, M1, G1, e, post1⟩ := e43_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
   cases e
