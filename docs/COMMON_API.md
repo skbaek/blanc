@@ -60,7 +60,8 @@ registry has identified the likely vocabulary.
   `scripts/check-extraction-ownership.sh` fails if Blanc redeclares a
   relocated declaration. Blanc's own list
   prefix/split algebra (`Split`, `Pref`, `Frel`) lives in
-  [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
+  [`Blanc/Basic.lean`](../Blanc/Basic.lean), which also holds
+  `Blanc.getElem?_append_mid` (an element of a middle block at `A.length + j`). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
 - Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
@@ -569,7 +570,8 @@ entry and exit, warm growth) unless the target is an undelegated precompile.
 [`Blanc/Lift/FrameWalkKit.lean`](../Blanc/Lift/FrameWalkKit.lean) carries memory as a byte
 image (`ri_*_img`, `xa_call_img`, `xa_staticcall_img`, `xa_identity_img`), normalizes the next
 pc (`xa_nextAt`, `xa_jumpiAt`, …), and states image facts as `WordAt`/`Region` with the
-`Mem.Reads.forget` cut and the `wchain` tactic; it also holds the branch-condition lemmas,
+`Mem.Reads.forget` cut and the `wchain` tactic (a memory word read off its image is
+`WordAt.of_memWord`); it also holds the branch-condition lemmas,
 Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`. The 3pool's
 `remove_liquidity` walk (`Blanc/Lift/Curve3Pool/Walk/RemoveLiquidity*.lean`) is the worked
 example.

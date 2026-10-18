@@ -79,13 +79,6 @@ def alEnv (sevm : Sevm) (T : B256) (L0 L1 L2 : List Exec.Frame) : Env :=
     fun k => alObs (if k.val = 0 then L0 else if k.val = 1 then L1 else L2),
     some T.toNat, true, false⟩
 
-theorem al_getElem_mid {A L B : List Exec.Frame} {j : Nat} {c : Exec.Frame}
-    (h : L[j]? = some c) : (A ++ L ++ B)[A.length + j]? = some c := by
-  have hj : j < L.length := (List.getElem?_eq_some_iff.mp h).1
-  rw [List.append_assoc, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left,
-    List.getElem?_append_left hj]
-  exact h
-
 theorem al_take_tf {X Y Z : Bytes} : (transferFromSel ++ X ++ Y ++ Z).take 4 = transferFromSel := by
   rw [List.append_assoc, List.append_assoc]; exact List.take_left' rfl
 
@@ -105,12 +98,12 @@ theorem al_coinObs {D : Exec.Deriv} {k : Fin 3} {C amt cr : B256} {A Lc B : List
   · refine ⟨fun w hw => Or.inr ?_, fun w hw => Or.inr ?_, fun _ => Or.inr ?_,
       fun h => (by cases h)⟩
     · cases hw
-      exact ⟨A.length + 0, c0, by rw [hL]; exact al_getElem_mid rfl, by rw [hb0.target, hC],
+      exact ⟨A.length + 0, c0, by rw [hL]; exact Blanc.getElem?_append_mid rfl, by rw [hb0.target, hC],
         hb0.data, hb0.len, rfl⟩
     · cases hw
       exact ⟨(alWord c0).toNat, A.length + 0, A.length + 2, rfl, by omega,
-        ⟨c0, by rw [hL]; exact al_getElem_mid rfl, by rw [hb0.target, hC], hb0.data, hb0.len, rfl⟩,
-        ⟨c1, by rw [hL]; exact al_getElem_mid rfl, by rw [hb1.target, hC], hb1.data, hb1.len, rfl⟩⟩
+        ⟨c0, by rw [hL]; exact Blanc.getElem?_append_mid rfl, by rw [hb0.target, hC], hb0.data, hb0.len, rfl⟩,
+        ⟨c1, by rw [hL]; exact Blanc.getElem?_append_mid rfl, by rw [hb1.target, hC], hb1.data, hb1.len, rfl⟩⟩
     · exact ⟨c, hmem c (List.mem_cons_of_mem _ List.mem_cons_self), by rw [hp.target, hC],
         by rw [hp.data]; exact al_take_tf, hp.ok⟩
 

@@ -67,7 +67,7 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hR := Mem.reads_data M
   have hW := hV.wf
   have hI : RliImg M.data.toList X D1 T f0 f1 f2 := by
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> refine oc_wordAt hR (hV.words.memWord ?_) <;>
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> refine WordAt.of_memWord hR (hV.words.memWord ?_) <;>
       simp only [List.mem_cons, true_or, or_true]
   clear hV
   xjd 0x371a

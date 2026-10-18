@@ -120,4 +120,12 @@ def Lean.Expr.apply (x : Lean.Expr) : Lean.Elab.Tactic.TacticM Unit := do
     replaceMainGoal mvarIds'
 
 
+/-- An element at index `j` of a middle block sits at `A.length + j` of `A ++ L ++ B`. -/
+theorem getElem?_append_mid {α : Type} {A L B : List α} {j : Nat} {c : α}
+    (h : L[j]? = some c) : (A ++ L ++ B)[A.length + j]? = some c := by
+  have hj : j < L.length := (List.getElem?_eq_some_iff.mp h).1
+  rw [List.append_assoc, List.getElem?_append_right (by omega), Nat.add_sub_cancel_left,
+    List.getElem?_append_left hj]
+  exact h
+
 end Blanc

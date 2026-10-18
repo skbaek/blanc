@@ -272,6 +272,13 @@ theorem write_other (h : WordAt img o w) (hd : o + 32 ≤ n ∨ n + xs.length �
   · rw [Bytes.sliceD_writeAt_before _ _ _ _ _ hd, h]
   · rw [Bytes.sliceD_writeAt_after _ _ _ _ _ hd, h]
 
+/-- A word of the memory, read off a byte image of it (`Mem.Reads`), is the image's word. -/
+theorem of_memWord {M : Mem} {img : Bytes} {o : Nat} {v : B256} (hR : Mem.Reads M img)
+    (hw : memWord M o = v) : WordAt img o v := by
+  unfold WordAt
+  rw [← hw, memWord, Mem.Reads.read hR,
+    Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)]
+
 end WordAt
 
 /-- The image's bytes at `o` are `xs`. -/

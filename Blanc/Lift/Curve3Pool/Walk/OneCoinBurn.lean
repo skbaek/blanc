@@ -14,13 +14,6 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-/-- A carried word read off a byte image of the memory. -/
-theorem oc_wordAt {M : Mem} {img : Bytes} {o : Nat} {v : B256} (hR : Mem.Reads M img)
-    (hw : memWord M o = v) : WordAt img o v := by
-  unfold WordAt
-  rw [← hw, memWord, Mem.Reads.read hR,
-    Bytes.toBytes_toB256_of_length (List.length_sliceD _ _ _ _)]
-
 /-- The `burnFrom` calldata the three writes leave at `0x31c`. -/
 theorem oc_burn_input (img : Bytes) (C A : B256) :
     (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img 0x300
@@ -57,7 +50,7 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hR := Mem.reads_data M
   have hW := hV.wf
   have hv : WordAt M.data.toList 0x140 dy :=
-    oc_wordAt hR (hV.words.memWord List.mem_cons_self)
+    WordAt.of_memWord hR (hV.words.memWord List.mem_cons_self)
   clear hV
   xs 0x4590 (.push [0x20] (by decide)) ri_push
   xs 0x4593 (.push [0x03, 0xa0] (by decide)) ri_push
