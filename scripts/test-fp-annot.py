@@ -142,4 +142,16 @@ require(fp_annot.compat(FSt((4,), frozenset({('bnd', 4, 5, 9)}), 4), A) is None,
 require(fp_annot.compat(FSt((4,), frozenset({('bnd', 4, 5, 9)}), None), A)
         == "free pointer unknown", "missing incoming fp")
 
+# -- a store of a value not known good forgets the pointer (Lean: no rejection) --
+fs0 = frozenset({('bnd', 1, 64, 64)})
+require(fp_annot.mem_eff(fs0, 3, ('reg', 'mstore'), [1, 2], 0)[0] is None,
+        "unbounded free-pointer store forgets fp")
+
+# -- canonical annotations never alias the free pointer with a frame word --
+st = FSt((4, 7), frozenset({('bnd', 4, 128, 256)}), 4)
+cst = Checker.canon(st)
+require(cst.fp is not None and cst.fp not in cst.kv
+        and fp_annot.bnd2(cst.facts, cst.fp) == (128, 256),
+        "canon gives fp its own symbol with its bounds")
+
 print(f"fp_annot checks: {COUNT} passed")

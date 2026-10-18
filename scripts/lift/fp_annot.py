@@ -84,6 +84,14 @@ class FSt:
 
 INIT = FSt((), frozenset(), None)  # FreePtr.FSt.init
 
+# Producer widening (untrusted; only shapes the annotations): after
+# WIDEN_AFTER changes of an entry's hull, a still-changing bound jumps to the
+# next threshold instead of being dropped (a dropped loop-index bound loses
+# the copy loop's no-wrap fact, and with it the free pointer).
+WIDEN_AFTER = 40
+WIDEN_HI = (MEMCAP - 32, MEMCAP, 2 ** 255 + 2 ** 160, FPCAP, MAXW)
+WIDEN_LO = (FPLO, 0x60, 0x20, 0)
+
 
 def bnd_of(fs, s):
     lo, hi = 0, MAXW
@@ -289,10 +297,9 @@ def mem_eff(fs, fp, kind, xs, pc: int):
             return fp, set()
         a, v = xs[0], xs[1]
         if const_of(fs, a) == 64:
-            if not good(fs, v):
-                raise Reject(f"MSTORE at {pc:#x}: stores {v} with bounds "
-                             f"{bnd2(fs, v)} to 0x40, outside [0x80, 2^256-2^32]")
-            return v, touched(fs, a, 32)
+            # Lean: a store of a value not known good forgets the pointer
+            # (fp := none); it does not reject.
+            return (v if good(fs, v) else None), touched(fs, a, 32)
         return (fp if apart_w(fs, a, 32) else None), touched(fs, a, 32)
     if kind == ('reg', 'mstore8'):
         if len(xs) < 2:
@@ -723,19 +730,26 @@ class Checker:
             if s not in ren:
                 ren[s] = len(ren)
         kv = tuple(ren[s] for s in st.kv)
-        if st.fp is not None and st.fp not in ren:
-            ren[st.fp] = len(ren)
-        fp = None if st.fp is None else ren[st.fp]
+        # compat requires the annotation's fp symbol to differ from every
+        # frame symbol: give it its own index even when the pointer is also on
+        # the stack (the equality is forgotten; both keep their bounds).
+        fp = None if st.fp is None else len(ren)
         out = set()
         for f in st.facts:
             if f[0] == 'bnd':
                 continue
             if all(s in ren for s in syms(f)):
                 out.add(rename(f, lambda s: ren[s]))
+            elif st.fp is not None and all(s in ren or s == st.fp for s in syms(f)):
+                out.add(rename(f, lambda s: ren[s] if s in ren else fp))
         for s, j in ren.items():
             lo, hi = bnd2(st.facts, s)
             if (lo, hi) != (0, MAXW):
                 out.add(('bnd', j, lo, hi))
+        if st.fp is not None:
+            lo, hi = bnd2(st.facts, st.fp)
+            if (lo, hi) != (0, MAXW):
+                out.add(('bnd', fp, lo, hi))
         return FSt(kv, out, fp)
 
     def join(self, a: Optional[FSt], b: FSt, k: int, widen: Dict[int, int]) -> FSt:
@@ -778,8 +792,11 @@ class Checker:
             la, ha = bnd_of(fa, s)
             lb, hb = bnd_of(fb, s)
             lo, hi = min(la, lb), max(ha, hb)
-            if widen.get(k, 0) > 8 and (lo, hi) != (la, ha):
-                continue
+            if widen.get(k, 0) > WIDEN_AFTER and (lo, hi) != (la, ha):
+                if hi != ha:
+                    hi = next(c for c in WIDEN_HI if c >= hi)
+                if lo != la:
+                    lo = next(c for c in WIDEN_LO if c <= lo)
             if (lo, hi) != (0, MAXW):
                 facts.add(('bnd', s, lo, hi))
         return FSt(kv, facts, fp)
@@ -787,7 +804,11 @@ class Checker:
     def default_ret(self, c: int) -> FSt:
         n = self.comp_rets(c)
         if self.comp_has_ret.get(c, True):
-            return FSt(tuple(range(n)), frozenset(), None)
+            # Optimistic walk-time placeholder until the component's returns
+            # are observed: a know-nothing placeholder (fp unknown) poisons
+            # every caller's continuation, and entry annotations accumulate,
+            # so the loss would never be undone.
+            return FSt(tuple(range(n)), frozenset({('bnd', n, FPLO, FPLO)}), n)
         # A component with no `.ret` never returns, so every caller's
         # continuation is dead code. Seed a known-good free pointer so the
         # dead continuation walks accept; nothing live ever observes it
