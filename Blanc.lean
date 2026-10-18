@@ -886,6 +886,7 @@ import Blanc.Composition.Curve3Pool3CrvSigningRecover
 import Blanc.Composition.Curve3Pool3CrvBlock
 import Blanc.Composition.Curve3Pool3CrvCoinCalls
 import Blanc.Composition.Curve3Pool3CrvExRoot
+import Blanc.Composition.Curve3Pool3CrvTxFrame
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
