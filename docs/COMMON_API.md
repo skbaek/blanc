@@ -2078,6 +2078,9 @@ For the converse direction, a comparison flag discharged from values,
 [`Blanc/B256CheckFacts.lean`](../Blanc/B256CheckFacts.lean) has
 `B256.gtCheck_eq_zero_of_toNat_le` (`GT` is `0` when the left operand's
 value is at most the right's), the step a walk needs at a solc range check.
+For a logical shift right that never grows its shifted operand, use
+`B256.shr_toNat_le` in
+[`Blanc/Lift/FreePtrFacts.lean`](../Blanc/Lift/FreePtrFacts.lean).
 
 Use the fixed-width arithmetic declarations in
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
@@ -2691,6 +2694,10 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
 - For calldata copies with all three operands already known on the stack,
   `prefix_of_calldatacopy_val` consumes that prefix and exposes the exact
   `Sevm.data.sliceD` memory write.
+- For stack operations that preserve memory and a size bound on memory growth,
+  use [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean).
+  `Devm.popToNat_memory` says `popToNat` leaves `memory` unchanged, and
+  `Mem.write_size_le_ext` bounds a write's size by the charged extension.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly
@@ -2933,6 +2940,13 @@ frame occurrences plus returned execution gas by the message grant plus one
 on covered forks. Its `ProcessMessageTrace` and `ProcessCreateMessageTrace`
 companions use the settled machine's gas measure. The call wrapper follows
 delegation and the create wrapper includes code-deposit settlement.
+For the memory/gas potential along synthetic runs, use
+[`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean): `Pot`
+(the gas measure plus the memory cost already paid is below one word) and
+`memCap` (the word-size allowance); `Exec.pot_le` (a complete derivation
+never raises it), `Ninst.Run.pot` (one lifted step never raises it), and
+`Pot.step`/`SFunc.RunP.withPot` (a run from a bounded-potential state
+records it at every step).
 
 ### T2a. I need a frame invariant under trace-local entry premises
 
@@ -3902,6 +3916,12 @@ and no fork is hard-coded anywhere:
 - Whole histories: `ExecutionTrace.ConfiguredHistoryTrace.stateInv` carries an
   arbitrary preserved `ContractSpec` invariant from a checkpoint to every
   configured continuation, over `ConfiguredHistoryTrace.toReachUsing`.
+- For the gas measure of every frame a configured history enters, use
+  [`Blanc/Lift/HistoryGas.lean`](../Blanc/Lift/HistoryGas.lean):
+  `MessageCallTrace.rawFrames_gasMeasure_le` (every entered frame starts at
+  or below the message's grant), with the transaction, body, and history
+  companions (`TransactionTrace`, `ApplyTransactionsTrace`,
+  `SystemMessageTrace`, `RequestsTrace`, and `AppliedBodyTrace` forms).
 
 For schedule-parametric block/history state boundaries and replay, use
 `ExecutionTrace.ConfiguredBlockStateChronology` and
@@ -4420,6 +4440,31 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- For the static code an instruction reads, use
+  [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
+  `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),
+  `codeAt`/`codeAt_at`/`codeAt_size` (the code that decodes to one
+  instruction at `pc` and to the implicit `STOP` after it),
+  `getInst_of_size_le` (past the end of the code the decoder yields that
+  `STOP`), and `Evm.step_stop_of_size_le` (the implicit `STOP` halts with
+  the machine unchanged).
+- For the free-pointer checker's facts and their soundness, use
+  [`Blanc/Lift/FreePtr.lean`](../Blanc/Lift/FreePtr.lean),
+  [`Blanc/Lift/SymTransfer.lean`](../Blanc/Lift/SymTransfer.lean), and
+  [`Blanc/Lift/FreePtrFacts.lean`](../Blanc/Lift/FreePtrFacts.lean):
+  `Fact.Holds`/`AllHold` (the meaning of facts under a symbol valuation),
+  `bnd2_sound`/`entails_sound` (the interval reading and entailment),
+  `opFacts_sound` (the facts about an instruction's fresh result),
+  `learn1_sound` (what a `JUMPI` arm learns), and `transfer_val` (symbols
+  through an instruction's stack transfer).
+- For write-site provenance terms and the generic locality corollary, use
+  [`Blanc/Lift/WriteSite.lean`](../Blanc/Lift/WriteSite.lean),
+  [`Blanc/Lift/WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean),
+  [`Blanc/Lift/WriteSiteObs.lean`](../Blanc/Lift/WriteSiteObs.lean), and
+  [`Blanc/Lift/WriteSiteLocality.lean`](../Blanc/Lift/WriteSiteLocality.lean):
+  `Term.den_subst` (instantiating a callee's term at a call site is sound)
+  and `ws_locality_keys` (every `SSTORE` at a protected slot is
+  non-increasing or happens in an allowed frame).
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
