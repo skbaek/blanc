@@ -152,6 +152,46 @@ import Blanc.Lift.Usdc.HistoryEndFoot
 import Blanc.Lift.Usdc.Governance
 import Blanc.Lift.Usdc.HistoryReplay
 import Blanc.Lift.Token.Signed
+import Blanc.Lift.Curve3Pool.Safe
+import Blanc.Lift.Curve3Pool.Refine
+import Blanc.Lift.Curve3Pool.Walk.Fallback
+import Blanc.Lift.Curve3Pool.History
+import Blanc.Lift.Curve3Pool.Ladder
+import Blanc.Lift.Curve3Pool.ExchangeLive
+import Blanc.Lift.Curve3Pool.AddLiquidityLive
+import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
+import Blanc.Lift.Curve3Pool.RemoveImbalanceLive
+import Blanc.Lift.Curve3Pool.OneCoinLive
+import Blanc.Lift.Curve3Pool.HistoryLive
+import Blanc.Composition.Curve3Pool3CrvHeadlines
+import Blanc.Composition.Curve3Pool3CrvLiveWitness
+import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
+import Blanc.Composition.Curve3Pool3CrvLiveEndKeep
+import Blanc.Composition.Curve3Pool3CrvLiveEndKeepAL
+import Blanc.Composition.Curve3Pool3CrvLiveEndKeepRLI
+import Blanc.Composition.Curve3Pool3CrvCheckpoint
+import Blanc.Composition.Curve3Pool3CrvWorld
+import Blanc.Composition.Curve3Pool3CrvCapstone
+import Blanc.Composition.Curve3Pool3CrvCapstoneTx
+import Blanc.Composition.Curve3Pool3CrvSigningRecover
+import Blanc.Composition.Curve3Pool3CrvCoinAnswers
+import Blanc.Lift.StableSwapNewton.D
+import Blanc.Lift.StableSwapNewton.Y
+import Blanc.Lift.Curve3Pool.U4Frames
+import Blanc.Lift.Curve3Pool.U4ExactnessRefute
+import Blanc.Lift.Curve3Pool.U4GetYRefute
+import Blanc.Lift.Curve3Pool.U3Refute
+import Blanc.Lift.Curve3Pool.U3History
+import Blanc.Lift.Curve3Pool.U3Ledger
+import Blanc.Lift.Curve3Pool.U3Bounds
+import Blanc.Composition.Curve3Pool3CrvU3
+import Blanc.Lift.Curve3Pool.AmpHistory
+import Blanc.Lift.Curve3Pool.U5
+import Blanc.Composition.Curve3PoolSupply
+import Blanc.Lift.Token.Supply
+import Blanc.Composition.Curve3CrvTokenCore
+import Blanc.Composition.Curve3CrvPositional
+import Blanc.Lift.Curve3Pool.Creation.Deploy
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -15398,3 +15438,1312 @@ example : ∀ {T : Adr} {S : BookS} {cfg : ChainConfig} {checkpoint future : Blo
 
 end Blanc.Lift.Token
 
+-- curve-3pool-stableswap-v1: Curve 3pool frame, history, liveness (with the end-to-end
+-- concrete instances), Newton-loop, U3, amplification, composition and deployment headlines.
+-- Each binder is named as in its source; the names need not be referenced.
+set_option linter.unusedVariables false
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.Lift
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  @Blanc.Lift.Curve3Pool.pool_frame_refines_env
+
+example : PoolFrameRefines poolEntry :=
+  @Blanc.Lift.Curve3Pool.pool_frame_refines
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune
+
+example : ∀ {D : Exec.Deriv} {post : Devm} {s : State} {e : Env} {o : Out} (hc : Checkpoint (entryStor D) s) (hstep : step s e (decodeCall D.sevm) = some o) (hraw : RawEffect D post e o),
+    Checkpoint (post.getStor D.sevm.currentTarget) o.state ∧
+      post.logs = D.devm.logs ++ (children D).flatMap (fun c => c.post.logs) ++
+        o.events.map (eventLog D.sevm.currentTarget) ∧
+      post.output = retOut D.devm.output o.ret ∧
+      (D.sevm.isStatic = false → CallsOf D =
+        (o.calls.map (encodeCall D.sevm.currentTarget (fun k => adrOf (s.coins.get k))
+          (adrOf s.token))).filter fun r => framed D r.target) ∧
+      o.state.coins = s.coins ∧ o.state.token = s.token :=
+  @Blanc.Lift.Curve3Pool.rawEffect_refines
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift
+
+example : ∀ {sevm : Sevm} {pre post : Devm} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256),
+    decodeCall sevm ≠ .other :=
+  @Blanc.Lift.Curve3Pool.pool_other_fails
+
+example : ∀ {sevm : Sevm} {pre post : Devm} (exc : Exec 0 sevm pre (.ok post)) (hs : sevm.isStatic = true) (hfork : CoveredFork sevm.benvStat.fork) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hcommit : post.error = none),
+    post.logs = pre.logs ∧ ∀ a, post.getStor a = pre.getStor a :=
+  @Blanc.Lift.Curve3Pool.pool_static_noEffect
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (callbacks : trace.FrameAdmitted pool
+      (Exec.derivEntry fun D => PoolCallsKeep D ∧ PoolCoinCallsKeepToken D)) (parties : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = pool →
+      (∀ k : Fin 3, ¬ root.sevm.benvStat.rules.isPrecomp (adrOf (s₀.coins.get k))) ∧
+        ¬ root.sevm.benvStat.rules.isPrecomp (adrOf s₀.token)) (idEmpty : checkpoint.state.getCode 4 = ByteArray.empty) (idNoAuthority : trace.NoAuthorityAt 4) (idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 4) (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool),
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token :=
+  @Blanc.Lift.Curve3Pool.pool_history_committed_derived
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token),
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token :=
+  @Blanc.Lift.Curve3Pool.pool_history_committed_env
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+example : ∀ {E : Sevm → Devm → Prop} (refines : PoolFrameRefines E) {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (admitted : trace.FrameAdmitted pool E),
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token :=
+  @Blanc.Lift.Curve3Pool.pool_history_committed_with
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) (deployedCode : (checkpoint.state.getCode pool).toList = code.toList) (deployedStorage : checkpoint.state.getStor pool = Creation.deployedStor Creation.deployTime) (callbacks : trace.FrameAdmitted pool
+      (Exec.derivEntry fun D => PoolCallsKeep D ∧ PoolCoinCallsKeepToken D)) (parties : ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = pool →
+      (∀ k : Fin 3, ¬ root.sevm.benvStat.rules.isPrecomp
+        (adrOf ((Creation.poolInitState Creation.deployTime.toNat).coins.get k))) ∧
+        ¬ root.sevm.benvStat.rules.isPrecomp
+          (adrOf (Creation.poolInitState Creation.deployTime.toNat).token)) (idEmpty : checkpoint.state.getCode 4 = ByteArray.empty) (idNoAuthority : trace.NoAuthorityAt 4) (idNoFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 4) (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ pool),
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun (Creation.poolInitState Creation.deployTime.toNat) invs s ∧
+        runPool (Creation.poolInitState Creation.deployTime.toNat) invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧
+        s.coins = (Creation.poolInitState Creation.deployTime.toNat).coins ∧
+        s.token = (Creation.poolInitState Creation.deployTime.toNat).token :=
+  @Blanc.Lift.Curve3Pool.pool_history_initialized
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.StableSwapNewton
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selExchange) (hi : i.val = (exI sevm).toNat) (hj : j.val = (exJ sevm).toNat) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) (decodeCall sevm) = some o) (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre) (hbal : i = feeIndex →
+      CoinBalOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot i)) B1 U 0x3dc 0x440 ∧
+      CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i)) B2 U 0x71c 0x780) (hpull : CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+      (exDx sevm) U 0x600 0x6c0) (hW''c : WClosed sevm W'') (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot j))
+      (Nat.toB256 (exPushAmt o)) U 0xb60 0xc00) (hG : costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
+      (exDx sevm).toNat + 4 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ bp bq,
+      pullIn (exEnv sevm i j bp bq) i (exDx sevm).toNat =
+        pullIn (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i (exDx sevm).toNat ∧
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (exEnv sevm i j bp bq) o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.exchange_live
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+
+open Jaune Blanc.Lift Blanc.StableSwapNewton in
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selAddLiquidity) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre) (hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+      0x27c 0x2c0) (hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
+      CoinPullOkAt sevm (W k) (W (k + 1)) ((pre.getStor sevm.currentTarget).get (coinSlot k))
+        (alAmt sevm k.val) U 0x760 0x820) (hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b) (hfee : alAmt sevm 2 ≠ 0 →
+      CoinBalOkAt sevm (W 2) (W 2) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
+        0x53c 0x5a0 ∧
+      CoinPullOkAt sevm (W 2) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+        (alAmt sevm 2) U 0x760 0x820 ∧
+      CoinBalOkAt sevm (W 3) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
+        0x87c 0x8e0) (hmint : MintOkAt sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+      (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00) (hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ e : Env,
+      e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post e o ∧
+      Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.addLiquidity_live
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.StableSwapNewton
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidity) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) (hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (hWb : W 0 pre) (hsup : SupplyOk sevm (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U) (hpush : ∀ k : Fin 3, CoinPushOkAt sevm (W k) (W (k + 1))
+      ((pre.getStor sevm.currentTarget).get (coinSlot k))
+      (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U 0x520 0x5c0) (hburn : BurnOkTo sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+      (rlAmt sevm) U) (hG : 167000 + 5 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.removeLiquidity_live
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre) (hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+      0x17c 0x1c0) (hburn : BurnOkAt sevm (W 0) (W 1) ((pre.getStor sevm.currentTarget).get tokenSlot)
+      (Nat.toB256 (rliBurnAmt o)) U 0x85c 0x8e0) (hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm (W (k + 1)) (W (k + 2))
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40) (hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b) (hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat) o ∧
+      Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W 4 post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin) (hi : i.val = (ocI sevm).toNat) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3,
+      ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre) (hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U 0x2bc 0x300) (hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot) (ocAmt sevm) U
+      0x31c 0x3a0) (hW''c : WClosed sevm W'') (hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+      (Nat.toB256 (ocPushAmt o)) U 0x540 0x5e0) (hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G) (hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
+    ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
+      RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.ExecutionTrace
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selExchange)
+        (_hi : i.val = (exI sevm).toNat) (_hj : j.val = (exJ sevm).toNat)
+        (_hstep : step s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) (decodeCall sevm) =
+          some o)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWb : W pre)
+        (_hbal : i = feeIndex →
+          CoinBalOkAt sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot i)) B1 U
+            0x3dc 0x440 ∧
+          CoinBalOkAt sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i)) B2 U
+            0x71c 0x780)
+        (_hpull : CoinPullOkAt sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+          (exDx sevm) U 0x600 0x6c0)
+        (_hW''c : WClosed sevm W'')
+        (_hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot j))
+          (Nat.toB256 (exPushAmt o)) U 0xb60 0xc00)
+        (_hG : costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
+          (exDx sevm).toNat + 4 * U ≤ G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ bp bq,
+          pullIn (exEnv sevm i j bp bq) i (exDx sevm).toNat =
+            pullIn (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i (exDx sevm).toNat ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (exEnv sevm i j bp bq)
+            o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.pool_history_exchange_live
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selAddLiquidity)
+        (_hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (_hWb : W 0 pre)
+        (_hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+          0x27c 0x2c0)
+        (_hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
+          CoinPullOkAt sevm (W k) (W (k + 1)) ((pre.getStor sevm.currentTarget).get (coinSlot k))
+            (alAmt sevm k.val) U 0x760 0x820)
+        (_hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b)
+        (_hfee : alAmt sevm 2 ≠ 0 →
+          CoinBalOkAt sevm (W 2) (W 2) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U
+            0x53c 0x5a0 ∧
+          CoinPullOkAt sevm (W 2) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+            (alAmt sevm 2) U 0x760 0x820 ∧
+          CoinBalOkAt sevm (W 3) (W 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U
+            0x87c 0x8e0)
+        (_hmint : MintOkAt sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (Nat.toB256 (alMintAmt o)) U 0xc7c 0xd00)
+        (_hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
+          G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ e : Env,
+          e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post e o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidity)
+        (_hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (_hWb : W 0 pre)
+        (_hsup : SupplyOk sevm (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U)
+        (_hpush : ∀ k : Fin 3, CoinPushOkAt sevm (W k) (W (k + 1))
+          ((pre.getStor sevm.currentTarget).get (coinSlot k))
+          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U 0x520 0x5c0)
+        (_hburn : BurnOkTo sevm (W 3) (W 4) ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (rlAmt sevm) U)
+        (_hG : 167000 + 5 * U ≤ G) (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
+        (_hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (_hWb : W 0 pre)
+        (_hsup : SupplyOkAt sevm (W 0) (W 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+          0x17c 0x1c0)
+        (_hburn : BurnOkAt sevm (W 0) (W 1) ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (Nat.toB256 (rliBurnAmt o)) U 0x85c 0x8e0)
+        (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → CoinPushOkAt sevm (W (k + 1)) (W (k + 2))
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
+        (_hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b)
+        (_hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat)
+            o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W 4 post :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+        (_hi : i.val = (ocI sevm).toNat)
+        (_hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hWc : WClosed sevm W) (_hW'c : WClosed sevm W') (_hWb : W pre)
+        (_hsup : SupplyOkAt sevm W W ((pre.getStor sevm.currentTarget).get tokenSlot) T U
+          0x2bc 0x300)
+        (_hburn : BurnOkAt sevm W W' ((pre.getStor sevm.currentTarget).get tokenSlot)
+          (ocAmt sevm) U 0x31c 0x3a0)
+        (_hW''c : WClosed sevm W'')
+        (_hpush : CoinPushOkAt sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot i))
+          (Nat.toB256 (ocPushAmt o)) U 0x540 0x5e0)
+        (_hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Composition.Curve3Pool3CrvHeadlines
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ExecutionTrace
+open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+open Blanc.Composition.Curve3PoolCalleeLive
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidity)
+        (_hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (rlAmt sevm))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hpush : ∀ k : Fin 3, CoinPushOkAt sevm (C3With c3 (Devm.getStor pre c3) (V k))
+          (C3With c3 (Devm.getStor pre c3) (V (k + 1)))
+          ((pre.getStor sevm.currentTarget).get (coinSlot k))
+          (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) U 0x520 0x5c0)
+        (_hG : 167000 + 5 * U ≤ G) (_hGm : (St pre [] Mem.empty G).gasMeasure < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rlEnv sevm T) o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidity_live_entry
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
+      ∀ {o : Out} {T B1 B2 : B256} {V : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selAddLiquidity)
+        (_hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
+        (_hmint : MintFits (Devm.getStor pre c3) pool sevm.caller.toB256
+          (Nat.toB256 (alMintAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hpull : ∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
+          CoinPullOkAt sevm (C3With c3 (Devm.getStor pre c3) (V k))
+            (C3With c3 (Devm.getStor pre c3) (V (k + 1)))
+            ((pre.getStor sevm.currentTarget).get (coinSlot k)) (alAmt sevm k.val) U 0x760 0x820)
+        (_hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, V k b → V (k + 1) b)
+        (_hfee : alAmt sevm 2 ≠ 0 →
+          CoinBalOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 2))
+            (C3With c3 (Devm.getStor pre c3) (V 2))
+            ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B1 U 0x53c 0x5a0 ∧
+          CoinPullOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 2))
+            (C3With c3 (Devm.getStor pre c3) (V 3))
+            ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) U 0x760 0x820 ∧
+          CoinBalOkAt sevm (C3With c3 (Devm.getStor pre c3) (V 3))
+            (C3With c3 (Devm.getStor pre c3) (V 3))
+            ((pre.getStor sevm.currentTarget).get (coinSlot 2)) B2 U 0x87c 0x8e0)
+        (_hG : costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
+          G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ e : Env,
+          e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post e o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_addLiquidity_live_entry
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
+        (_hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256
+          (Nat.toB256 (rliBurnAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hpush : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 →
+          CoinPushOkAt sevm
+            (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V k))
+            (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V (k + 1)))
+            ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) U 0xaa0 0xb40)
+        (_hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, V k b → V (k + 1) b)
+        (_hG : costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤ G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 3000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post),
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (rliEnvW sevm T.toNat)
+            o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧
+          C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256
+            (Nat.toB256 (rliBurnAmt o))) (V 3) post :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityImbalance_live_entry
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool) (state : pre.state = future.state),
+    ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
+      ∀ {o : Out} {i : Fin 3} {T : B256} {V : Nat → Devm → Prop} {U G : Nat}
+        (_hcode : sevm.code = code) (_hfork : CoveredFork sevm.benvStat.fork)
+        (_hstatic : sevm.isStatic = false) (_hdepth : sevm.depth ≠ 0)
+        (_hlen : 4 ≤ sevm.data.length) (_hcd : sevm.data.length < 2 ^ 256)
+        (_hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+        (_hi : i.val = (ocI sevm).toNat)
+        (_hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o)
+        (_htok : ¬ sevm.benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : pre.getCode sevm.currentTarget ≠ .empty) (_hid : IdReady sevm pre)
+        (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (ocAmt sevm))
+        (_hVc : ∀ k, k ≤ 1 → WClosed sevm (V k)) (_hVb : V 0 pre) (_hVs : C3Blind c3 (V 0))
+        (_hpush : CoinPushOkAt sevm
+          (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 0))
+          (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 1))
+          ((pre.getStor sevm.currentTarget).get (coinSlot i)) (Nat.toB256 (ocPushAmt o)) U
+          0x540 0x5e0)
+        (_hG : costOneCoin s (ocEnv sevm i T.toNat) (ocAmt sevm).toNat i + 3 * U ≤ G)
+        (_hGm : (St pre [] Mem.empty G).gasMeasure + 2000 < 2 ^ 256),
+        ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post), ∃ T' : Nat,
+          RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (ocEnv sevm i T') o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧
+          C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (V 1)
+            post :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityOneCoin_live_entry
+
+end Blanc.Composition.Curve3Pool3CrvHeadlines
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
+open Blanc.Composition.Curve3PoolCalleeLive
+open Blanc.Composition.Curve3Pool3CrvHeadlines (C3At c3At_burn c3At_mint precomp_false)
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder balanceOf_runExact cert_check cert_jumpsOk)
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
+      (rlAmt sevm)) (hfits : ∀ k : Fin 3, T20MoveFits (pre.getStor (coinOf sevm pre k)) sevm.currentTarget
+      sevm.caller (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T)),
+    (∀ k, k ≤ 3 → WClosed sevm (rlWorld sevm pre k)) ∧ rlWorld sevm pre 0 pre ∧
+      SupplyOk sevm (rlWorld sevm pre 0) ((pre.getStor sevm.currentTarget).get tokenSlot) T
+        80000 ∧
+      (∀ k : Fin 3, CoinPushOkAt sevm (rlWorld sevm pre k) (rlWorld sevm pre (k + 1))
+        ((pre.getStor sevm.currentTarget).get (coinSlot k))
+        (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T) 80000 0x520 0x5c0) ∧
+      BurnOkTo sevm (rlWorld sevm pre 3) (rlWorld sevm pre 4)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) (rlAmt sevm) 80000 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_premises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hmint : MintFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 m) (hfits : ∀ k : Fin 3, alAmt sevm k.val ≠ 0 → T20PullFits (pre.getStor (coinOf sevm pre k))
+      sevm.caller sevm.currentTarget sevm.currentTarget (alAmt sevm k.val)),
+    (∀ k, k ≤ 4 → WClosed sevm (alWorld sevm pre m k)) ∧ alWorld sevm pre m 0 pre ∧
+      SupplyOkAt sevm (alWorld sevm pre m 0) (alWorld sevm pre m 0)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) T 80000 0x27c 0x2c0 ∧
+      (∀ k : Fin 3, k ≠ feeIndex → alAmt sevm k.val ≠ 0 →
+        CoinPullOkAt sevm (alWorld sevm pre m k) (alWorld sevm pre m (k + 1))
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)) (alAmt sevm k.val) 80000 0x760
+          0x820) ∧
+      (∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, alWorld sevm pre m k b →
+        alWorld sevm pre m (k + 1) b) ∧
+      (alAmt sevm 2 ≠ 0 →
+        CoinBalOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 2)
+          ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+          ((pre.getStor (coinOf sevm pre 2)).get
+            (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 ∧
+        CoinPullOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 3)
+          ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) 80000 0x760 0x820 ∧
+        CoinBalOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 3)
+          ((pre.getStor sevm.currentTarget).get (coinSlot 2))
+          ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+          80000 0x87c 0x8e0) ∧
+      MintOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 4)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) m 80000 0xc7c 0xd00 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_premises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 m) (hfits : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → T20MoveFits (pre.getStor (coinOf sevm pre k))
+      sevm.currentTarget sevm.caller (rliAmt sevm k.val)),
+    (∀ j, j ≤ 4 → WClosed sevm (rliWorld sevm pre m j)) ∧ rliWorld sevm pre m 0 pre ∧
+      SupplyOkAt sevm (rliWorld sevm pre m 0) (rliWorld sevm pre m 0)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) T 80000 0x17c 0x1c0 ∧
+      BurnOkAt sevm (rliWorld sevm pre m 0) (rliWorld sevm pre m 1)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) m 80000 0x85c 0x8e0 ∧
+      (∀ k : Fin 3, rliAmt sevm k.val ≠ 0 →
+        CoinPushOkAt sevm (rliWorld sevm pre m (k + 1)) (rliWorld sevm pre m (k + 2))
+          ((pre.getStor sevm.currentTarget).get (coinSlot k)) (rliAmt sevm k.val) 80000 0xaa0
+          0xb40) ∧
+      (∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, rliWorld sevm pre m (k + 1) b →
+        rliWorld sevm pre m (k + 2) b) :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_premises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
+      (ocAmt sevm)) (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller v),
+    WClosed sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i) ∧
+      WClosed sevm (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre))
+        sevm.caller.toB256 (ocAmt sevm)) i) ∧
+      ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i pre ∧
+      SupplyOkAt sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i)
+        (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) T 80000 0x2bc 0x300 ∧
+      BurnOkAt sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i)
+        (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre)) sevm.caller.toB256
+          (ocAmt sevm)) i)
+        ((pre.getStor sevm.currentTarget).get tokenSlot) (ocAmt sevm) 80000 0x31c 0x3a0 ∧
+      WClosed sevm (fun _ => True) ∧
+      CoinPushOkAt sevm (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre))
+          sevm.caller.toB256 (ocAmt sevm)) i) (fun _ => True)
+        ((pre.getStor sevm.currentTarget).get (coinSlot i)) v 80000 0x540 0x5e0 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_premises_satisfiable
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.StableSwapNewton
+open Blanc.Composition.Curve3Pool3CrvJoint
+
+example : ∀ {sevm : Sevm} {b : Devm} (hf : Curve3Pool3CrvInstance.ExFrame sevm b),
+    ∃ post, ∃ exc : Exec 0 sevm b (.ok post), ∃ bp bq,
+      pullIn (exEnv sevm 0 1 bp bq) 0 100 =
+        pullIn (exEnv sevm 0 1 (exBalOpt 0 0) (exBalOpt 0 0)) 0 100 ∧
+      RawEffect ⟨0, sevm, b, .ok post, exc⟩ post (exEnv sevm 0 1 bp bq) exOut ∧
+        Checkpoint (post.getStor sevm.currentTarget) exOut.state ∧
+        post.error = none ∧ 0 ≤ post.refundCounter :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.ex_frame_live
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
+open Blanc.Composition.Curve3Pool3CrvJoint
+
+example : ∃ post, ∃ exc : Exec 0 (cSevm rlwData) (St (wPre rlwData) [] Mem.empty 878400) (.ok post),
+      RawEffect ⟨0, cSevm rlwData, St (wPre rlwData) [] Mem.empty 878400, .ok post, exc⟩ post
+          (rlEnv (cSevm rlwData) 6000) rlOut ∧
+        Checkpoint (post.getStor poolAddr) rlOut.state :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.rl_frame_live
+
+example : ∃ post, ∃ exc : Exec 0 (cSevm ocwData) (St (wPre ocwData) [] Mem.empty 878400) (.ok post),
+      ∃ T' : Nat,
+      RawEffect ⟨0, cSevm ocwData, St (wPre ocwData) [] Mem.empty 878400, .ok post, exc⟩ post
+          (ocEnv (cSevm ocwData) 1 T') ocOut ∧
+        Checkpoint (post.getStor poolAddr) ocOut.state :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.oc_frame_live
+
+example : ∃ post, ∃ exc : Exec 0 (cSevm alDataW) (St (wPre alDataW) [] Mem.empty 1110000) (.ok post),
+      ∃ e : Env,
+      e.supply = some (6000 : B256).toNat ∧
+        step poolState e (decodeCall (cSevm alDataW)) = some alOutW ∧
+        RawEffect ⟨0, cSevm alDataW, St (wPre alDataW) [] Mem.empty 1110000, .ok post, exc⟩ post
+          e alOutW ∧
+        Checkpoint (post.getStor poolAddr) alOutW.state :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.al_frame_live
+
+example : ∃ post, ∃ exc : Exec 0 (cSevm rliDataW) (St (wPre rliDataW) [] Mem.empty 878400) (.ok post),
+      RawEffect ⟨0, cSevm rliDataW, St (wPre rliDataW) [] Mem.empty 878400, .ok post, exc⟩ post
+          (rliEnvW (cSevm rliDataW) (6000 : B256).toNat) rliOutW ∧
+        Checkpoint (post.getStor poolAddr) rliOutW.state ∧
+        rliWorld (cSevm rliDataW) (wPre rliDataW) (Nat.toB256 (rliBurnAmt rliOutW)) 4 post :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.rli_frame_live
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvJoint
+open Jaune Blanc Blanc.Lift.FiniteCheckpoint
+
+example : ∀ {pool c3crv : Adr} {ps : Lift.Curve3Pool.State} {rows : List C3Row} {base : C3Base} {w : Jaune.State} (h : checkJoint pool c3crv ps rows base w = true),
+    JointCheckpoint pool c3crv ps (rowsState base rows) (c3Keys rows) w :=
+  @Blanc.Composition.Curve3Pool3CrvJoint.checkJoint_sound
+
+example : JointCheckpoint poolAddr c3crvAddr poolState (rowsState c3Base c3Rows)
+      (c3Keys c3Rows) world :=
+  @Blanc.Composition.Curve3Pool3CrvJoint.world_joint
+
+end Blanc.Composition.Curve3Pool3CrvJoint
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift
+open Blanc.Composition.Curve3Pool3CrvJoint
+
+example : JointCheckpoint poolAddr c3crvAddr poolState (rowsState c3Base c3Rows) (c3Keys c3Rows) P0 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.p0_joint
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward
+open Blanc.Composition.Curve3Pool3CrvJoint
+open Blanc.Composition.Curve3PoolSupply (supplyAt pool_3crv_u3)
+open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun poolSubtreeFrames)
+open Blanc.Lift.Weth9.ClosedInstance (config checkpoint input systemAddresses SystemCodes systemCode)
+
+example : ∀ {st : Jaune.State} (canonical : st.Canonical) (bound : SumNof st.bal) (ag : AgreesP0 st),
+    ClosedExchangeOutcome st :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_agreeing
+
+example : ClosedExchangeOutcome P0 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_instance
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+open Blanc.Composition.Curve3Pool3CrvJoint
+
+example : ∀ {benv : Benv} (ctx : ExTxContext benv),
+    ∃ (s1 : Jaune.State) (bout : BlockOutput),
+      processTransaction benv BlockOutput.init signedExchangeTx 0 = .ok (s1, bout) ∧
+      parseDepositRequests bout = .ok [] ∧ bout.blockGasUsed ≤ 1000000 :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.ex_transaction
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift
+
+example : recoverSender 1 signedExchangeTx = .ok trader :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.exchange_recoveredSender
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.Composition.Curve3Pool3CrvJoint
+open Blanc.Composition.UniswapV2PairWeth9Joint (vcsm_benvStat vcsm_caller vcsm_currentTarget vcsm_value vcsm_isStatic vcsm_code vcsm_state vcsm_gasLeft vcsm_stack vcsm_memory vcsm_error mem_read_fst callSpawnParent_memory_data addAccessedAddress_setMach_memory)
+open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+
+example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+      T20PullFits (b.getStor c) sevm.caller sevm.currentTarget sevm.currentTarget amt) (hW' : ∀ b d, W b → CoinLeaves c (t20Move (t20Allow (b.getStor c) sevm.caller
+        sevm.currentTarget amt) sevm.caller sevm.currentTarget amt)
+      ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.caller ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.currentTarget ∧
+        balSlot sevm.caller ≠ balSlot sevm.currentTarget) b d → W' d),
+    Curve3Pool.CoinPullOkAt sevm W W' t amt U ii oi :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.token20_coinPullOkAt
+
+example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+      T20MoveFits (b.getStor c) sevm.currentTarget sevm.caller amt) (hW' : ∀ b d, W b → CoinLeaves c (t20Move (b.getStor c) sevm.currentTarget sevm.caller amt)
+      ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
+        balSlot sevm.currentTarget ≠ balSlot sevm.caller) b d → W' d),
+    Curve3Pool.CoinPushOkAt sevm W W' t amt U ii oi :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.token20_coinPushOkAt
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.StableSwapNewton
+
+example : ∀ {x : Fin 3 → Nat} {amp tol v : Nat} (h : getDChk x amp tol = some v) (hx : ∀ i, 0 < x i) (hamp : 1 ≤ amp),
+    aboveRoot x (amp * 3) (v + 1) :=
+  @Blanc.StableSwapNewton.getDChk_lower
+
+example : ¬ aboveRoot ceilW 600 (getDCeil ceilW 200 1 + 1) ∧
+    getDCeil ceilW 200 1 = 14615550493253435060542 ∧
+    floorRoot ceilW 600 = 14615550493253435060544 ∧
+    getD ceilW 200 1 = 14615550493253435060546 :=
+  @Blanc.StableSwapNewton.getDCeil_breaks_lower
+
+example : (∀ i, monoPre i ≤ monoPost i) ∧
+    getD monoPost 1 1 < getD monoPre 1 1 ∧ getD monoPost 1 2 < getD monoPre 1 2 :=
+  @Blanc.StableSwapNewton.getD_not_mono
+
+example : runsOut capW 6000 1 255 (sum3 capW) = true ∧
+    getD capW 2000 1 = (bodyD capW 6000)^[255] (sum3 capW) ∧
+    getD capW 2000 1 = 680031527231617479170632831 ∧
+    bodyD capW 6000 680031527231617479170632831 = 680031527231617479170632834 ∧
+    bodyD capW 6000 680031527231617479170632834 = 680031527231617479170632831 ∧
+    floorRoot capW 6000 + 2 = 680031527231617479170632831 :=
+  @Blanc.StableSwapNewton.getD_cap_cycle
+
+example : ∀ {amp : Nat} {i : Fin 3} {xp : Fin 3 → Nat} {D v : Nat} (h : getYDChk amp i xp D = some v),
+    rootOrSucc (cOf (xp (others i).1) (xp (others i).2) D (amp * 3))
+      (bOf (xp (others i).1) (xp (others i).2) D (amp * 3)) D v :=
+  @Blanc.StableSwapNewton.getYDChk_rootOrSucc
+
+example : ∀ {amp : Nat} {i j : Fin 3} {x : Nat} {xp : Fin 3 → Nat} {v : Nat} (h : getYChk amp i j x xp = some v),
+    rootOrSucc (cOf (withAt xp i x (others j).1) (withAt xp i x (others j).2)
+      (getD xp amp 1) (amp * 3)) (bOf (withAt xp i x (others j).1)
+      (withAt xp i x (others j).2) (getD xp amp 1) (amp * 3)) (getD xp amp 1) v :=
+  @Blanc.StableSwapNewton.getYChk_rootOrSucc
+
+example : ∀ {c b D v : Nat} (h : loopYChk c b D 1 255 D = some v) (hc : c ≤ D ^ 4),
+    rootOrSucc c b D v :=
+  @Blanc.StableSwapNewton.loopYChk_rootOrSucc
+
+end Blanc.StableSwapNewton
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.Lift Blanc.StableSwapNewton
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwFirstGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T :=
+  @Blanc.Lift.Curve3Pool.pool_getYD_rootOrSucc_cwo
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwFirstGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T :=
+  @Blanc.Lift.Curve3Pool.pool_getYD_rootOrSucc_oneCoin
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T :=
+  @Blanc.Lift.Curve3Pool.pool_getYD2_rootOrSucc_cwo
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T :=
+  @Blanc.Lift.Curve3Pool.pool_getYD2_rootOrSucc_oneCoin
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selExchange) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (i j : Fin 3) (dx md : Nat), decodeCall sevm = .exchange i.val j.val dx md ∧
+      ∃ (amp : Nat) (x0 x1 x2 x y : B256), aChk s e.time = some amp ∧
+        xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp i j x.toNat (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat ∧
+        rootOrSucc
+          (cOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get i x.toNat (others j).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get i x.toNat (others j).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (bOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get i x.toNat (others j).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get i x.toNat (others j).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat :=
+  @Blanc.Lift.Curve3Pool.pool_getY_rootOrSucc_exchange
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selGetDy) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hck : Checkpoint (pre.getStor sevm.currentTarget) s),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3) (amp : Nat)
+        (x0 x1 x2 y : B256),
+        aChk s e.time = some amp ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp ⟨(dyI sevm).toNat, hi⟩ ⟨(dyJ sevm).toNat, hj⟩ (dyX sevm x0 x1 x2).toNat
+          (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat ∧
+        rootOrSucc
+          (cOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (bOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat :=
+  @Blanc.Lift.Curve3Pool.pool_getY_rootOrSucc_dy
+
+example : ∀ {sevm : Sevm} {pre post : Devm} {s : State} (exc : Exec 0 sevm pre (.ok post)) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selGetDyUnderlying) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256) (hck : Checkpoint (pre.getStor sevm.currentTarget) s),
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3) (amp : Nat)
+        (x0 x1 x2 y : B256),
+        aChk s e.time = some amp ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+        getYChk amp ⟨(dyI sevm).toNat, hi⟩ ⟨(dyJ sevm).toNat, hj⟩ (dyuX sevm x0 x1 x2).toNat
+          (V3.mk x0.toNat x1.toNat x2.toNat).get = some y.toNat ∧
+        rootOrSucc
+          (cOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (bOf (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).1)
+            (withAt (V3.mk x0.toNat x1.toNat x2.toNat).get ⟨(dyI sevm).toNat, hi⟩
+              (dyuX sevm x0 x1 x2).toNat (others ⟨(dyJ sevm).toNat, hj⟩).2)
+            (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
+          (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat :=
+  @Blanc.Lift.Curve3Pool.pool_getY_rootOrSucc_dyu
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool.U4Exactness
+open Blanc.StableSwapNewton
+
+example : getYDChk 873512 0 scaled.get 2682365305673 = some 1 ∧
+    1 ≠ rootQ
+      (cOf (scaled.get (others 0).1) (scaled.get (others 0).2) 2682365305673 (873512 * 3))
+      (bOf (scaled.get (others 0).1) (scaled.get (others 0).2) 2682365305673 (873512 * 3))
+      2682365305673 :=
+  @Blanc.Lift.Curve3Pool.U4Exactness.callee_not_floor
+
+end Blanc.Lift.Curve3Pool.U4Exactness
+
+namespace Blanc.Lift.Curve3Pool.U4GetY
+open Blanc.StableSwapNewton
+
+example : getYChk 100 0 1 6108135850388754573 scaled.get = some 1 ∧
+    1 ≠ rootQ
+      (cOf (withAt scaled.get 0 6108135850388754573 (others 1).1)
+        (withAt scaled.get 0 6108135850388754573 (others 1).2) 129202949715990 (100 * 3))
+      (bOf (withAt scaled.get 0 6108135850388754573 (others 1).1)
+        (withAt scaled.get 0 6108135850388754573 (others 1).2) 129202949715990 (100 * 3))
+      129202949715990 :=
+  @Blanc.Lift.Curve3Pool.U4GetY.callee_not_floor
+
+end Blanc.Lift.Curve3Pool.U4GetY
+
+namespace Blanc.Lift.Curve3Pool.U4GetY.Primary
+open Blanc.StableSwapNewton
+
+example : getYChk 1000 0 2 58490115785954294677660391985888334 scaled.get = some 27029 ∧
+    27029 ≠ rootQ
+      (cOf (withAt scaled.get 0 58490115785954294677660391985888334 (others 2).1)
+        (withAt scaled.get 0 58490115785954294677660391985888334 (others 2).2)
+        135660340458536610005534075 (1000 * 3))
+      (bOf (withAt scaled.get 0 58490115785954294677660391985888334 (others 2).1)
+        (withAt scaled.get 0 58490115785954294677660391985888334 (others 2).2)
+        135660340458536610005534075 (1000 * 3))
+      135660340458536610005534075 :=
+  @Blanc.Lift.Curve3Pool.U4GetY.Primary.callee_not_floor
+
+end Blanc.Lift.Curve3Pool.U4GetY.Primary
+
+namespace Blanc.Lift.Curve3Pool
+open Blanc.StableSwapNewton
+
+example : ∃ w w' r, reach 1 1000000 10000000000 exchangePre = some w ∧
+      worldRun w t0 1 (.exchange 1 0 1512569520375 0) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_exchange
+
+example : ∃ w w' r, reach 1 544575293 0 addLiquidityPre = some w ∧
+      worldRun w t0 1 (.addLiquidity ⟨3, 0, 0⟩ 0) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_add_liquidity
+
+example : ∃ w w' r, reach 10 0 10000000000 removeLiquidityPre = some w ∧
+      worldRun w t0 1 (.removeLiquidity 2 ⟨0, 0, 0⟩) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity
+
+example : ∃ w w' r, reach 1 402788378 0 removeLiquidityImbalancePre = some w ∧
+      worldRun w t0 1 (.removeLiquidityImbalance ⟨100000, 0, 0⟩ (2 ^ 256 - 1)) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_imbalance
+
+example : ∃ w w' r, reach 200 1000000 5000000000 removeLiquidityOneCoinDeployedPre = some w ∧
+      worldRun w t0 1 (.removeLiquidityOneCoin 1000 0 0) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_one_coin_deployed
+
+example : ∃ w w' r, reach 1 5000000000 10000000000 donateAdminFeesPre = some w ∧
+      worldRun w t0 1 (.donateAdminFees) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_donate_admin_fees
+
+example : ∃ w w' r, reach 100 1000000 5000000000 exchangeDeployedPre = some w ∧
+      worldRun w t0 1 (.exchange 1 0 0 0) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_exchange_deployed
+
+example : ∃ w w' r, reach 2000 1000000 5000000000 removeLiquidityDeployedPre = some w ∧
+      worldRun w t0 1 (.removeLiquidity 1 ⟨0, 0, 0⟩) = some (w', r) ∧
+      VpFalls w w' t0 :=
+  @Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_deployed
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace Blanc.StableSwapNewton
+
+example : ∀ {s : State} {e : Env} {c : Call} {o : Out} (h : step s e c = some o),
+    U3Step s e c o :=
+  @Blanc.Lift.Curve3Pool.u3Step_of_step
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Blanc.StableSwapNewton
+
+example : ∀ {s : State} {e : Env} {c : Call} {o : Out} {T T' : Nat} (h : step s e c = some o) (hT : ∀ T₀, e.supply = some T₀ → T₀ = T) (hT' : supplyAfter T o.calls = T'),
+    U3Ledger s e c o T T' :=
+  @Blanc.Lift.Curve3Pool.u3Ledger_of_step
+
+example : ∀ {s : State} {e : Env} {i j : Fin 3} {dx md : Nat} {o : Out} {T amp D D' : Nat} (h : exchange s e i j dx md = some o) (hA : aChk s e.time = some amp) (hadm : s.adminFee ≤ feeDen) (hD : getDMem s.balances amp = some D) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧ supplyAfter T o.calls = T ∧
+      D ≤ D' + yGap (xpOf s.balances) i j (xpOf o.state.balances i) D (amp * 3) :=
+  @Blanc.Lift.Curve3Pool.u3_bound_exchange
+
+example : ∀ {s : State} {e : Env} {a : Nat} {mins : V3} {o : Out} {T amp D D' : Nat} (h : removeLiquidity s e a mins = some o) (hT : e.supply = some T) (hT0 : 0 < T) (hD : getDMem s.balances amp = some D) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧
+    D * supplyAfter T o.calls ≤
+      (D' + 1) * T + (D - floorRoot (xpOf s.balances) (amp * 3)) * supplyAfter T o.calls :=
+  @Blanc.Lift.Curve3Pool.u3_bound_remove_liquidity
+
+example : ∀ {s : State} {e : Env} {a : Nat} {i : Fin 3} {mn : Nat} {o : Out} {T amp D D' : Nat} (h : removeLiquidityOneCoin s e a i mn = some o) (hA : aChk s e.time = some amp) (hT : e.supply = some T) (hadm : s.adminFee ≤ feeDen) (hD : getDMem s.balances amp = some D) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧
+    D * supplyAfter T o.calls ≤
+      (D' + oneGap (xpOf s.balances) i (D - a * D / T) (amp * 3)) * T :=
+  @Blanc.Lift.Curve3Pool.u3_bound_remove_liquidity_one_coin
+
+example : ∀ {s : State} {e : Env} {am : V3} {mb : Nat} {o : Out} {T amp D D' : Nat} (h : removeLiquidityImbalance s e am mb = some o) (hA : aChk s e.time = some amp) (hT : e.supply = some T) (hadm : s.adminFee ≤ feeDen) (hD : getDMem s.balances amp = some D) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧ ∃ mid D2, getDMem mid amp = some D2 ∧
+      (∀ k, mid.get k ≤ o.state.balances.get k) ∧
+      D * supplyAfter T o.calls ≤ (D' + (D2 - floorRoot (xpOf mid) (amp * 3))) * T :=
+  @Blanc.Lift.Curve3Pool.u3_bound_remove_liquidity_imbalance
+
+example : ∀ {s : State} {e : Env} {am : V3} {mm : Nat} {o : Out} {T amp D D' : Nat} (h : addLiquidity s e am mm = some o) (hA : aChk s e.time = some amp) (hT : e.supply = some T) (hT0 : 0 < T) (hadm : s.adminFee ≤ feeDen) (hD : getDMem s.balances amp = some D) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧ ∃ mid D2, getDMem mid amp = some D2 ∧
+      (∀ k, mid.get k ≤ o.state.balances.get k) ∧
+      D * supplyAfter T o.calls ≤ (D' + (D2 - floorRoot (xpOf mid) (amp * 3))) * T :=
+  @Blanc.Lift.Curve3Pool.u3_bound_add_liquidity
+
+example : ∀ {s : State} {e : Env} {o : Out} {T amp D D' : Nat} (h : donateAdminFees s e = some o) (hcoin : ∀ k v, (e.coin k).balPre = some v → s.balances.get k ≤ v) (hD' : getDMem o.state.balances amp = some D'),
+    (∀ t, aChk o.state t = aChk s t) ∧ supplyAfter T o.calls = T ∧ floorRoot (xpOf s.balances) (amp * 3) ≤ D' ∧
+      D ≤ D' + (D - floorRoot (xpOf s.balances) (amp * 3)) :=
+  @Blanc.Lift.Curve3Pool.u3_bound_donate_admin_fees
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace Blanc.StableSwapNewton
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token),
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      (∃ s, PoolRun s₀ invs s ∧ Checkpoint (future.state.getStor pool) s) ∧
+      ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
+        (sᵢ : State), invs = pre ++ i :: post → PoolRun s₀ pre sᵢ →
+        (∃ blk : Block, (blk, i.frame) ∈ trace.blockFrames ∧
+          i.env.time = blk.header.timestamp.toB256.toNat) ∧
+        ∃ o, step sᵢ i.env (decodeCall i.frame.sevm) = some o ∧
+          RawEffect (Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
+          U3Step sᵢ i.env (decodeCall i.frame.sevm) o :=
+  @Blanc.Lift.Curve3Pool.pool_history_u3
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Composition.Curve3PoolSupply
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Crv Blanc.ExecutionTrace
+open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun poolSubtreeFrames)
+
+open Blanc.Composition.Curve3Pool3CrvJoint in
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = Curve3Pool.poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : FreshKeys K₀ (historyTouchedKeys c3 trace)) (env : Curve3Pool.PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress),
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) =
+        Curve3Pool.committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      (∃ s, PoolRun ps₀ invs s ∧ Curve3Pool.Checkpoint (future.state.getStor pool) s) ∧
+      ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
+        (sᵢ : Curve3Pool.State), invs = pre ++ i :: post → PoolRun ps₀ pre sᵢ →
+        (∃ blk : Block, (blk, i.frame) ∈ trace.blockFrames ∧
+          i.env.time = blk.header.timestamp.toB256.toNat) ∧
+        (Curve3Pool.FeeBounded ps₀ → Curve3Pool.FeeBounded sᵢ) ∧
+        ∃ o, Curve3Pool.step sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) = some o ∧
+          Curve3Pool.RawEffect (Blanc.Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
+          SupplyObserved c3 i ∧
+          Curve3Pool.supplyAfter (supplyAt c3 i.frame.pre.state) o.calls =
+            supplyAt c3 i.frame.post.state ∧
+          Curve3Pool.U3Ledger sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) o
+            (supplyAt c3 i.frame.pre.state) (supplyAt c3 i.frame.post.state) :=
+  @Blanc.Composition.Curve3PoolSupply.pool_3crv_u3
+
+end Blanc.Composition.Curve3PoolSupply
+
+namespace Blanc.Composition.Curve3Pool3CrvHeadlines
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ExecutionTrace
+open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+open Blanc.Composition.Curve3PoolCalleeLive
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} {t₀ : Nat} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 (Creation.poolInitState t₀) cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool (Creation.poolInitState t₀).coins
+      (Creation.poolInitState t₀).token) (notSystem : pool ≠ systemAddress),
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      (∃ s, PoolRun (Creation.poolInitState t₀) invs s ∧
+        Checkpoint (future.state.getStor pool) s) ∧
+      ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
+        (sᵢ : Curve3Pool.State), invs = pre ++ i :: post →
+        PoolRun (Creation.poolInitState t₀) pre sᵢ →
+        (∃ blk : Block, (blk, i.frame) ∈ trace.blockFrames ∧
+          i.env.time = blk.header.timestamp.toB256.toNat) ∧
+        sᵢ.adminFee ≤ feeDen ∧
+        ∃ o, step sᵢ i.env (decodeCall i.frame.sevm) = some o ∧
+          RawEffect (Blanc.Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
+          Curve3PoolSupply.SupplyObserved c3 i ∧
+          supplyAfter (Curve3PoolSupply.supplyAt c3 i.frame.pre.state) o.calls =
+            Curve3PoolSupply.supplyAt c3 i.frame.post.state ∧
+          U3Ledger sᵢ i.env (decodeCall i.frame.sevm) o
+            (Curve3PoolSupply.supplyAt c3 i.frame.pre.state)
+            (Curve3PoolSupply.supplyAt c3 i.frame.post.state) :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_u3_deployed
+
+end Blanc.Composition.Curve3Pool3CrvHeadlines
+
+namespace Blanc.Lift.Curve3Pool
+open Blanc.StableSwapNewton
+
+example : ∀ {t : Nat} {invs : List PoolInvocation} {s : State} (h : PoolRun (Creation.poolInitState t) invs s),
+    FeeBounded s :=
+  @Blanc.Lift.Curve3Pool.feeBounded_of_poolRun_init
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token),
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      (∃ s, PoolRun s₀ invs s ∧ Checkpoint (future.state.getStor pool) s) ∧
+      ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
+        (sᵢ : State), invs = pre ++ i :: post → PoolRun s₀ pre sᵢ →
+        ∃ blk : Block, (blk, i.frame) ∈ trace.blockFrames ∧
+          i.env.time = blk.header.timestamp.toB256.toNat ∧
+          (sᵢ.initialATime ≤ i.env.time → sᵢ.futureA < StableSwapNewton.wordSize →
+            (max sᵢ.futureA sᵢ.initialA - min sᵢ.futureA sᵢ.initialA) *
+              (i.env.time - sᵢ.initialATime) < StableSwapNewton.wordSize →
+            aChk sᵢ i.env.time = some (aInterp sᵢ i.env.time)) ∧
+          (sᵢ.futureATime ≤ i.env.time → aChk sᵢ i.env.time = some sᵢ.futureA) ∧
+          ∀ fA fT, decodeCall i.frame.sevm = .rampA fA fT → ∃ o,
+            step sᵢ i.env (decodeCall i.frame.sevm) = some o ∧
+            o.state.initialATime + minRampTime ≤ o.state.futureATime ∧ 0 < o.state.futureA ∧
+            o.state.futureA < maxA ∧ aChk sᵢ i.env.time = some o.state.initialA ∧
+            o.state.futureA ≤ o.state.initialA * maxAChange ∧
+            o.state.initialA ≤ o.state.futureA * maxAChange :=
+  @Blanc.Lift.Curve3Pool.pool_history_amp
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Blanc.StableSwapNewton
+
+example : ∀ {s : State} {t : Nat} (ht : s.initialATime ≤ t) (hA1 : s.futureA < wordSize) (hmul : (max s.futureA s.initialA - min s.futureA s.initialA) * (t - s.initialATime) <
+      wordSize),
+    aChk s t = some (aInterp s t) :=
+  @Blanc.Lift.Curve3Pool.aChk_eq_aInterp
+
+example : ∀ {s : State} {t : Nat} (h : s.futureATime ≤ t),
+    aChk s t = some s.futureA :=
+  @Blanc.Lift.Curve3Pool.aChk_of_le
+
+example : ∀ {s : State} {e : Env} {fA fT : Nat} {o : Out} (h : rampA s e fA fT = some o),
+    o.state.initialATime + minRampTime ≤ o.state.futureATime ∧ 0 < o.state.futureA ∧
+      o.state.futureA < maxA ∧ aChk s e.time = some o.state.initialA ∧
+      o.state.futureA ≤ o.state.initialA * maxAChange ∧
+      o.state.initialA ≤ o.state.futureA * maxAChange :=
+  @Blanc.Lift.Curve3Pool.rampA_guards
+
+example : ∀ {s : State} {e : Env} {o : Out} (h : stopRampA s e = some o) {t : Nat} (ht : e.time ≤ t),
+    aChk o.state t = aChk s e.time :=
+  @Blanc.Lift.Curve3Pool.stopRampA_const
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {cfg : ChainConfig} {pre post : BlockChain} (block : ConfiguredBlockTrace cfg pre post) {parent : Block} (head : pre.blocks.getLast? = some parent) (bound : block.block.header.timestamp < 2 ^ 256) {frame : Exec.Frame} (member : frame ∈ block.settledFrames) {e : Env} (henv : EnvOf (Exec.Frame.rootDeriv frame) e),
+    e.time ≠ parent.header.timestamp.toB256.toNat :=
+  @Blanc.Lift.Curve3Pool.pool_invocation_time_ne_parent
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Blanc.StableSwapNewton
+
+example : u5ControlState.initialA = 100 ∧ u5ControlState.futureA = 1000 ∧
+    u5ControlState.initialATime + minRampTime ≤ u5ControlState.futureATime ∧
+    0 < u5ControlState.futureA ∧ u5ControlState.futureA < maxA ∧
+    u5ControlState.futureA ≤ u5ControlState.initialA * maxAChange ∧
+    u5ControlState.initialA ≤ u5ControlState.futureA * maxAChange ∧
+    aInterp u5ControlState 1043200 = 550 ∧ aInterp u5ControlState 1043199 = 549 ∧
+    ¬ aChk u5ControlState 1043200 = some (aInterp u5ControlState 1043199) :=
+  @Blanc.Lift.Curve3Pool.u5_parent_time_control
+
+example : DMonoInA :=
+  @Blanc.Lift.Curve3Pool.dMonoInA
+
+example : (rampWorld.bind fun w => do some (← aDT w (rampT0 + 86400), ← aDT w (rampT0 + 2 * 86400))) =
+      some ((2000, 200044801219456106169, 200044801219456106169),
+            (200, 192793226260180884069, 200044801219456106169)) :=
+  @Blanc.Lift.Curve3Pool.u5_ramp_control
+
+example : 192793226260180884069 * 200044801219456106169 <
+      200044801219456106169 * 200044801219456106169 :=
+  @Blanc.Lift.Curve3Pool.u5_ramp_control_falls
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Composition.Curve3PoolSupply
+open Jaune Blanc Blanc.Lift Blanc.Lift.Token Blanc.Lift.Curve3Crv Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay Blanc.Composition.Curve3CrvToken
+open Blanc.Curve3Crv (Call)
+open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun PoolEntries poolFrameObs poolSubtreeFrames)
+
+open Blanc.Composition.Curve3Pool3CrvJoint in
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = Curve3Pool.poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : FreshKeys K₀ (historyTouchedKeys c3 trace)) (env : Curve3Pool.PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress),
+    some (future.state.getCode pool).toList = Curve3Pool.poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) =
+        Curve3Pool.committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      ∃ s, PoolRun ps₀ invs s ∧ Curve3Pool.runPool ps₀ invs = some s ∧
+        Curve3Pool.Checkpoint (future.state.getStor pool) s ∧ s.coins = ps₀.coins ∧
+        s.token = ps₀.token ∧
+      ∃ cs, runInvocations cs₀ (committedInvocations c3 trace) = some cs ∧
+        VyInv (future.state.getStor c3) cs
+          (Key.extend K₀ (invocationKeys (committedInvocations c3 trace))) ∧
+        cs.minter = pool ∧
+        cs.totalSupply.toNat + poolBurned ps₀ invs = cs₀.totalSupply.toNat + poolMinted ps₀ invs ∧
+        ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
+          (sᵢ : Curve3Pool.State), invs = pre ++ i :: post → PoolRun ps₀ pre sᵢ →
+          ∃ o, Curve3Pool.step sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) = some o ∧
+            Curve3Pool.RawEffect (Blanc.Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
+            supplyAt c3 i.frame.post.state + callsBurned o.calls =
+              supplyAt c3 i.frame.pre.state + callsMinted o.calls ∧
+            SupplyObserved c3 i :=
+  @Blanc.Composition.Curve3PoolSupply.pool_3crv_history
+
+end Blanc.Composition.Curve3PoolSupply
+
+namespace Blanc.Lift.Token.SupplyFacet
+open Jaune Blanc
+
+example : ∀ {B : Book} (F : SupplyFacet B),
+    ∀ {as : List Sevm} {l l' : B.Ledger}, B.run l as = some l' →
+      (∀ a ∈ as, a.caller = F.minter l → F.KeepsMinter a) →
+      F.minter l' = F.minter l ∧ F.supply l' + F.burned as = F.supply l + F.minted as :=
+  @Blanc.Lift.Token.SupplyFacet.run_supply
+
+end Blanc.Lift.Token.SupplyFacet
+
+namespace Blanc.Composition.Curve3CrvToken
+open Jaune Blanc Blanc.Lift Blanc.Lift.Token Blanc.Lift.Curve3Crv
+open Blanc.Curve3Crv (Call)
+
+example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) (keeps : ∀ inv ∈ committedInvocations ca trace, inv.sevm.caller = initial.minter →
+      c3crvSupply.KeepsMinter inv.sevm),
+    ∃ s, runInvocations initial (committedInvocations ca trace) = some s ∧
+      VyInv (future.state.getStor ca) s
+        (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
+      s.minter = initial.minter ∧
+      s.totalSupply.toNat + c3crvSupply.burned (invMessages (committedInvocations ca trace)) =
+        initial.totalSupply.toNat + c3crvSupply.minted (invMessages (committedInvocations ca trace)) :=
+  @Blanc.Composition.Curve3CrvToken.c3crv_history_supply
+
+end Blanc.Composition.Curve3CrvToken
+
+namespace Blanc.Composition.Curve3CrvToken
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Crv Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image) (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys) (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)),
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      trace.settledFrames = before ++ f :: after →
+      (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false)) →
+      ∃ s, InvRun initial (before.flatMap (viewFrameObs ca)) s ∧
+        VyInv (f.pre.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (before.flatMap (viewFrameObs ca)))) :=
+  @Blanc.Composition.Curve3CrvToken.c3crv_history_at
+
+end Blanc.Composition.Curve3CrvToken
+
+namespace Blanc.Composition.Curve3CrvToken
+open Jaune Blanc Blanc.Lift Blanc.Lift.Token Blanc.Lift.Curve3Crv
+open Blanc.Curve3Crv (Call)
+
+example : ¬ ∃ F : SupplyFacet mutantBook, F.minter = (·.minter) ∧ F.mintOf = c3crvMintOf :=
+  @Blanc.Composition.Curve3CrvToken.control_mutant_no_supplyFacet
+
+end Blanc.Composition.Curve3CrvToken
+
+namespace Blanc.Composition.Curve3Pool3CrvHeadlines
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ExecutionTrace
+open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+open Blanc.Composition.Curve3PoolCalleeLive
+
+example : ¬ ∃ F : Token.SupplyFacet Curve3CrvToken.mutantBook,
+      F.minter = (·.minter) ∧ F.mintOf = Curve3CrvToken.c3crvMintOf :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlines.u8_control
+
+end Blanc.Composition.Curve3Pool3CrvHeadlines
+
+namespace Blanc.Lift.Curve3Pool.Creation
+open Jaune Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ForkUniform Blanc.StableSwapNewton
+
+example : ∀ (f : Fork) (hf : CoveredFork f),
+    poolAddress = computeContractAddress deployer 43 ∧
+    init ownerN coinsN tokenN 100 4000000 0 deployTime.toNat 0 =
+      some (poolInitState deployTime.toNat) ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode poolAddress).toList = Blanc.Lift.Curve3Pool.code.toList ∧
+      Devm.getStor post poolAddress = deployedStor deployTime ∧
+      Checkpoint (Devm.getStor post poolAddress) (poolInitState deployTime.toNat) ∧
+      (∀ x, x ∉ poolSlots → (Devm.getStor post poolAddress).get x = 0) :=
+  @Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered
+
+example : ∀ (msg : Msg) (hvalue : msg.value = 0) (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code) (hgas : 4500000 ≤ msg.gas) (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false) (hmax : 0x52cf ≤ msg.benv.stat.rules.code.maxCodeSize) (ht : msg.benv.stat.time.toNat + killDeadlineDt < 2 ^ 256),
+    ∃ post, processCreateMessage msg = .ok post ∧
+      (post.getCode msg.currentTarget).toList = Blanc.Lift.Curve3Pool.code.toList ∧
+      Devm.getStor post msg.currentTarget = deployedStor msg.benv.stat.time ∧
+      post.error = .none :=
+  @Blanc.Lift.Curve3Pool.Creation.pool_create
+
+example : ∀ {t fee' : Nat} {s : State} (hfee : fee' ≠ 4000000) (u : B256) (hs : init ownerN coinsN tokenN 100 fee' 0 t 0 = some s),
+    ¬ Abstracts (deployedStor u) s :=
+  @Blanc.Lift.Curve3Pool.Creation.deployedStor_wrong_fee
+
+end Blanc.Lift.Curve3Pool.Creation
