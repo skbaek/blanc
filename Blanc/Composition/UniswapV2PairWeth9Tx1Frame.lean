@@ -49,7 +49,6 @@ def tx1FrameWrites (st : Jaune.State) (xT xP : B256) : Jaune.State :=
 
 theorem trader_ne_tokenX : trader ≠ tokenX := by decide +kernel
 theorem trader_ne_pair : trader ≠ pair := by decide +kernel
-theorem tokenX_ne_pair : tokenX ≠ pair := by decide +kernel
 
 theorem balSlot_trader_ne_pair : balSlot trader ≠ balSlot pair := by decide +kernel
 

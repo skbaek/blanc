@@ -4,13 +4,14 @@ import Blanc.Lift.PrefixTransfer
 import Blanc.Lift.CallSiteChildren
 import Blanc.CallSpawnExact
 import Blanc.ExecutionSettledOwnCode
+import Blanc.Lift.CallRestriction
 
 /-!
 # What the factory runtime spawns
 
 `factory_children_fresh`: every direct child of a frame running the factory code from pc `0` is static,
 or targets an address that had no code when the frame began, or targets `0`.  The certificate spawns only
-by `CALL`, `STATICCALL` and `CREATE2` (`CursorOK.exec_spawn`).  A `CREATE2` child targets an address the
+by `CALL`, `STATICCALL` and `CREATE2` (`CursorOK.exec_spawn_undelegated`).  A `CREATE2` child targets an address the
 collision check found unprotected.  The only `CALL` nodes are the `initialize` call sites of the two clones
 of `createPair` (`cert_windowOk`), and the window walk from the `CREATE2` node (`window_track`, with the
 exact-word prefix transfer) shows that the `CALL`'s target operand is the `CREATE2` result masked to 160
@@ -343,8 +344,9 @@ theorem factory_children_fresh {sevm : Sevm} {pre : Devm} {out : Execution}
       change (N.devm.getCode a).toList ≠ []
       rw [keep]
       exact nonempty))
-  obtain ⟨κ₀, -, ok₀⟩ := cursor_of_parentPrefix cert_check rfl codeEq fork chain
-  rcases ok₀.exec_spawn hat with rfl | rfl | rfl
+  obtain ⟨κ₀, reach, ok₀⟩ := cursor_of_parentPrefix cert_check rfl codeEq fork chain
+  rcases ok₀.exec_spawn_undelegated (Cursor.execsSatisfy_of_reachable (by decide +kernel) reach) hat
+    with rfl | rfl | rfl
   · obtain ⟨g, t, rest, hstack, fresh⟩ := factory_call_target (R := ⟨0, sevm, pre, out, run⟩) rfl
       codeEq fork chain hat
     obtain ⟨g', c', v', ii, is, oi, os, rest', hs7⟩ := Xinst.step_call_spawn_stack nodeFork hx

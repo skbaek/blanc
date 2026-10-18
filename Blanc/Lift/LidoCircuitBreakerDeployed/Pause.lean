@@ -410,74 +410,74 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
       (.returned D)) :
     RegInv (Devm.getStor D sevm.currentTarget) := by
   unfold t_05ac_c13 at run
-  obtain ⟨G1, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G1, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_tload (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  rcases rp_branch run with ⟨-, G2, run⟩ | ⟨-, G2, run⟩
+  rcases rpw_branch run with ⟨-, G2, run⟩ | ⟨-, G2, run⟩
   · exact (SFunc.RunCutP.false_of_noOk (SFunc.runP_iff_runCutP_nil.mp run) (by decide)).elim
   unfold t_05e8_c13 at run
-  obtain ⟨G3, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G3, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_tload (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_or (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_tstore hfork (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
   rw [ff20_and_canonical ht] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
   try dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_keccak (StepIn.toRun s1)
   simp only [show (Bytes.toB256 [] : B256) = 0 from rfl,
     show (Bytes.toB256 [32] : B256) = 32 from rfl,
@@ -488,41 +488,41 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
     show (64 : B256).toNat = 64 from rfl] at run
   have hscr := scratch_mapSlot hmem.1 hmem.2 t 3
   rw [hscr.1, hscr.2.1] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_sload hfork (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_caller (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_eq (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  rcases rp_branch run with ⟨-, G4, run⟩ | ⟨-, G4, run⟩
+  rcases rpw_branch run with ⟨-, G4, run⟩ | ⟨-, G4, run⟩
   · exact (SFunc.RunCutP.false_of_noOk (SFunc.runP_iff_runCutP_nil.mp run) (by decide)).elim
   unfold t_0673_c13 at run
-  obtain ⟨G5, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G5, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_caller (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_keccak (StepIn.toRun s1)
   simp only [show (Bytes.toB256 [] : B256) = 0 from rfl,
     show (Bytes.toB256 [32] : B256) = 32 from rfl,
@@ -533,46 +533,46 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
     show (64 : B256).toNat = 64 from rfl] at run
   have hscr2 := scratch_mapSlot hscr.2.2.1 hscr.2.2.2 sevm.caller.toB256 2
   rw [hscr2.1, hscr2.2.1] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_sload hfork (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_timestamp (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  rcases rp_branch run with ⟨-, G6, run⟩ | ⟨-, G6, run⟩
+  rcases rpw_branch run with ⟨-, G6, run⟩ | ⟨-, G6, run⟩
   · exact (SFunc.RunCutP.false_of_noOk (SFunc.runP_iff_runCutP_nil.mp run) (by decide)).elim
   unfold t_06ba_c13 at run
-  obtain ⟨G7, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G7, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_sload hfork (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
   try dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨G8, hcall⟩ := rp_call (g := t_0934_c32) rfl run
+  obtain ⟨G8, hcall⟩ := rpw_call (g := t_0934_c32) rfl run
   rcases hcall with ⟨D32, r32, run⟩ | ⟨D32, -, hh⟩
   swap
   · cases hh
@@ -583,86 +583,86 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
       (by simp only [afterSload_getStor, getStor_setTransVal]; exact hw) ht hkeys
       (r32.mono StepIn.toRun)
   unfold t_06ce_c13 at run
-  obtain ⟨G10, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G10, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mload (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun s1)
   try dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_mload (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨⟨v, hv⟩, hst⟩ := extcodesize_step hfork (StepIn.toRun s1)
   rw [St.self (d := d1) hv rfl] at run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  rcases rp_branch run with ⟨-, G11, run⟩ | ⟨-, G11, run⟩
+  rcases rpw_branch run with ⟨-, G11, run⟩ | ⟨-, G11, run⟩
   · exact (SFunc.RunCutP.false_of_noOk (SFunc.runP_iff_runCutP_nil.mp run) (by decide)).elim
   unfold t_0733_c13 at run
-  obtain ⟨G12, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G12, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun s1)
-  obtain ⟨d1', s1, run⟩ := rp_next run
+  obtain ⟨d1', s1, run⟩ := rpw_next run
   obtain ⟨gw, _, rfl⟩ := ri_gas (StepIn.toRun s1)
-  obtain ⟨sf, hcall, run⟩ := rp_next run
+  obtain ⟨sf, hcall, run⟩ := rpw_next run
   -- the `CALL`: the child is admitted, the caller's state satisfies `Pre`'s pieces
   have hpost : lidoSpec.Post sevm.currentTarget sevm sf := by
     refine ContractSpecSem.post_of_call_self_with (c := lidoSpec) (Q := InRoots R)
@@ -713,18 +713,18 @@ theorem pause_wrapper_post {R : Exec.Deriv} {sevm : Sevm} {d : Devm}
   have hAe := hA entries hwit
   rw [St.self (d := d) rfl rfl] at run
   unfold t_0208_c49 at run
-  obtain ⟨G1, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G1, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_calldatasize (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨G2, hcall⟩ := rp_call (g := t_0fec_c7) rfl run
+  obtain ⟨G2, hcall⟩ := rpw_call (g := t_0fec_c7) rfl run
   rcases hcall with ⟨D7, r7, run⟩ | ⟨D7, r7, -⟩
   swap
   · exact (SFunc.RunP.not_halted_entry writerNoHalt_set (k := 7) (by decide) rfl r7 rfl).elim
@@ -732,10 +732,10 @@ theorem pause_wrapper_post {R : Exec.Deriv} {sevm : Sevm} {d : Devm}
   rw [show (Bytes.toB256 [0x04] : B256) = 4 from rfl] at r7
   obtain ⟨ht, G3, rfl⟩ := entry7_ret r7
   unfold t_0216_c49 at run
-  obtain ⟨G4, run⟩ := rp_dest run
-  obtain ⟨d1, s1, run⟩ := rp_next run
+  obtain ⟨G4, run⟩ := rpw_dest run
+  obtain ⟨d1, s1, run⟩ := rpw_next run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
-  obtain ⟨G5, hcall⟩ := rp_call (g := t_05ac_c13) rfl run
+  obtain ⟨G5, hcall⟩ := rpw_call (g := t_05ac_c13) rfl run
   rcases hcall with ⟨D13, r13, run⟩ | ⟨D13, r13, -⟩
   swap
   · exact (SFunc.RunP.not_halted_entry writerNoHalt_set (k := 13) (by decide) rfl r13 rfl).elim

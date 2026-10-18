@@ -39,11 +39,6 @@ theorem get_insert_ne (w : Jaune.State) {a b : Adr} (h : a ≠ b) (ac : Acct) :
 
 theorem W0_trader : W0.get trader = { Acct.nil with bal := 10000000 } := get_insert_self _ _ _
 
-theorem W0_factory : W0.get factory =
-    { nonce := 2, bal := 0, stor := .empty, code := UniswapV2Factory.factoryCode } := by
-  unfold W0
-  rw [get_insert_ne _ (by decide +kernel), get_insert_self]
-
 theorem W0_tokenX : W0.get tokenX =
     { nonce := 1, bal := 0, stor := w0TokenStor, code := VyperNonreentrantDeployed.Token20.code } := by
   unfold W0

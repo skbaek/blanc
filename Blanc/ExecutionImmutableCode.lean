@@ -10,7 +10,8 @@ namespace Blanc.ExecutionTrace
 
 open Jaune
 
-private theorem bytes_eq_of_image {actual code : ByteArray}
+/-- A code image `some actual.toList` that equals `some code.toList` pins the bytes: `actual = code`. -/
+theorem bytes_eq_of_image {actual code : ByteArray}
     (image : some actual.toList = some code.toList) : actual = code := by
   apply ByteArray.ext
   apply Array.toList_inj.mp

@@ -27,9 +27,6 @@ def tx2Acc0 : B256 :=
 /-- The packed reserves after `_update`: `1001000`, `999004`, timestamp `1`. -/
 def tx2Packed1 : B256 := updatePackedWord tx2Packed0 1001000 999004 (updateTimestampWord 1)
 
-theorem tx2Packed1_eq : tx2Packed1 = Nat.toB256 (1001000 + 999004 * 2 ^ 112 + 1 * 2 ^ 224) := by
-  decide +kernel
-
 /-- The frame's final world. -/
 def tx2PostState (b : Devm) : Jaune.State :=
   ((((tx2SD b).setStorVal pair 9 tx2Acc0).setStorVal pair 10 tx2Acc0).setStorVal pair 8

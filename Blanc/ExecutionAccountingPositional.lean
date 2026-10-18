@@ -8,15 +8,17 @@ boundary.  A consumer that reads one contract's ledger at an arbitrary frame of 
 of a token by a foreign contract, a foreign frame between two target steps) needs the boundary at that
 frame's *entry* as a replay prefix.  This module adds, contract-neutrally:
 
-* `Jaune.Exec.Frame.Encloses` and `PositionalLadder` (an `AccountingLadderAdmitted` with an `Opaque`
-  frame predicate and the frame-level positional root law `rootAt`);
+* `Jaune.Exec.Frame.Encloses`, the positional exclusion `Exec.NoOpaqueAbove` (no opaque frame whose
+  block covers the position; frame values need not be unique, so the position decides), and
+  `PositionalLadder` (an `AccountingLadderAdmitted` with an `Opaque` frame predicate and the
+  frame-level positional root law `rootAt`);
 * `Exec.PositionalAccounting`, the descent invariant at every derivation node, proved for every
   admitted derivation by `Exec.positionalAccounting` (depth induction through `lift_core_sem`);
 * the producers `modelPositionalLadder` (`Opaque := False`) and `wholeFramePositionalLadder`
   (`Opaque` = non-static target frames).
 
 **The descent invariant.**  At a node of any pc, every split of the node's committed frames
-`before ++ f :: after` whose `before` holds no opaque frame enclosing `f` gives a replay from the
+`before ++ f :: after` whose `before` holds no opaque frame whose block covers `f`'s position gives a replay from the
 node's boundary to `f`'s entry boundary that observes exactly `before`.  At a pc ≠ 0 node the head of
 the committed frames is the pseudo-frame of the sub-run; only foreign nodes reach pc ≠ 0 (`CodeSem.At`
 forces pc = 0 at the target), so that pseudo-frame observes nothing and is never opaque.
@@ -37,6 +39,46 @@ namespace Blanc
 open Jaune
 open ExecutionAccountingReplay
 
+/-- **No opaque frame above a position**: no frame of `before` whose block of descendants covers
+the position right after `before` (with `f` there) is opaque.  Positional: settled frame values need
+not be unique, so enclosure is judged by the position in the list, not by `f`'s value. -/
+def Exec.NoOpaqueAbove (Opaque : Exec.Frame → Prop) (before : List Exec.Frame) (f : Exec.Frame) :
+    Prop :=
+  ∀ (b : List Exec.Frame) (A : Exec.Frame) (m n : List Exec.Frame), before = b ++ A :: m →
+    Exec.descendantFrames A.run = m ++ f :: n → ¬ Opaque A
+
+/-- Value-level exclusion implies the positional one. -/
+theorem Exec.NoOpaqueAbove.of_encloses {Opaque : Exec.Frame → Prop} {before : List Exec.Frame}
+    {f : Exec.Frame} (h : ∀ A ∈ before, A.Encloses f → ¬ Opaque A) :
+    Exec.NoOpaqueAbove Opaque before f := by
+  intro b A m n split desc
+  refine h A (by rw [split]; exact List.mem_append_right _ List.mem_cons_self) ?_
+  show f ∈ Exec.descendantFrames A.run
+  rw [desc]
+  exact List.mem_append_right _ List.mem_cons_self
+
+theorem Exec.NoOpaqueAbove.drop {Opaque : Exec.Frame → Prop} {xs ys : List Exec.Frame}
+    {f : Exec.Frame} (h : Exec.NoOpaqueAbove Opaque (xs ++ ys) f) :
+    Exec.NoOpaqueAbove Opaque ys f := fun b A m n split desc =>
+  h (xs ++ b) A m n (by rw [split, List.append_assoc]) desc
+
+theorem Exec.NoOpaqueAbove.tail {Opaque : Exec.Frame → Prop} {P : Exec.Frame}
+    {rest : List Exec.Frame} {f : Exec.Frame} (h : Exec.NoOpaqueAbove Opaque (P :: rest) f) :
+    Exec.NoOpaqueAbove Opaque rest f :=
+  Exec.NoOpaqueAbove.drop (xs := [P]) h
+
+theorem Exec.NoOpaqueAbove.cons {Opaque : Exec.Frame → Prop} {Q : Exec.Frame}
+    {rest : List Exec.Frame} {f : Exec.Frame} (hQ : ¬ Opaque Q)
+    (h : Exec.NoOpaqueAbove Opaque rest f) : Exec.NoOpaqueAbove Opaque (Q :: rest) f := by
+  intro b A m n split desc
+  cases b with
+  | nil =>
+    obtain ⟨rfl, -⟩ := List.cons.inj split
+    exact hQ
+  | cons x b =>
+    obtain ⟨-, split⟩ := List.cons.inj split
+    exact h b A m n split desc
+
 /-- **The positional descent invariant** at one derivation node: at every split of the node's
 committed frames whose earlier part has no opaque frame enclosing the selected frame, the node's
 boundary replays to the selected frame's entry boundary, observing exactly the earlier frames. -/
@@ -48,7 +90,7 @@ def Exec.PositionalAccounting (ca : Adr) (sem : CodeSem) (entry : Sevm → Devm 
     sum pre.state.bal < 2 ^ 256 →
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       Exec.committedFrames run = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      (Exec.NoOpaqueAbove Opaque before f) →
       ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
         V.obs steps = before.flatMap V.frameObs
 
@@ -172,21 +214,18 @@ private theorem shift
     {P f : Exec.Frame} {rest after : List Exec.Frame}
     (hP : Exec.Frame.ofRun run committed = P)
     (hdesc : Exec.descendantFrames next = rest ++ f :: after)
-    (noOpaque : ∀ A ∈ P :: rest, A.Encloses f → ¬ Opaque A)
+    (noOpaque : Exec.NoOpaqueAbove Opaque (P :: rest) f)
     (ih : ∀ (before : List Exec.Frame),
       Exec.committedFrames next = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      (Exec.NoOpaqueAbove Opaque before f) →
       ∃ steps, C.Replay (C.ofState inter.state) steps (C.ofState f.pre.state) ∧
         V.obs steps = before.flatMap V.frameObs) :
     ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
       V.obs steps = (P :: rest).flatMap V.frameObs := by
   obtain ⟨steps, replay, observed⟩ := ih (Exec.Frame.ofRun next committed :: rest)
     (by rw [Exec.committedFrames, dite_eq_left committed, hdesc, List.cons_append])
-    (by
-      intro A member
-      rcases List.mem_cons.mp member with rfl | member
-      · exact fun _ op => targetNe (opaqueTarget _ op)
-      · exact noOpaque A (List.mem_cons_of_mem _ member))
+    (Exec.NoOpaqueAbove.cons (fun op => targetNe (opaqueTarget _ op))
+      (Exec.NoOpaqueAbove.tail noOpaque))
   have e : C.ofState pre.state = C.ofState inter.state :=
     ofStateGet fun k => congrArg (fun t => Stor.get t k) storEq.symm
   refine ⟨steps, by rw [e]; exact replay, ?_⟩
@@ -312,23 +351,24 @@ private theorem spawnSplit
     {pre inter : State} {P f : Exec.Frame} {X D rest after : List Exec.Frame}
     (hP : P.sevm.currentTarget ≠ ca)
     (hdesc : X ++ D = rest ++ f :: after)
-    (noOpaque : ∀ A ∈ P :: rest, A.Encloses f → ¬ Opaque A)
-    (childPos : ∀ b m, X = b ++ f :: m → (∀ A ∈ b, A.Encloses f → ¬ Opaque A) →
+    (noOpaque : Exec.NoOpaqueAbove Opaque (P :: rest) f)
+    (childPos : ∀ b m, X = b ++ f :: m → (Exec.NoOpaqueAbove Opaque b f) →
       ∃ steps, C.Replay (C.ofState pre) steps (C.ofState f.pre.state) ∧
         V.obs steps = b.flatMap V.frameObs)
     (childWhole : ∃ steps, C.Replay (C.ofState pre) steps (C.ofState inter) ∧
       V.obs steps = X.flatMap V.frameObs)
-    (nextPos : ∀ b, D = b ++ f :: after → (∀ A ∈ b, A.Encloses f → ¬ Opaque A) →
+    (nextPos : ∀ b, D = b ++ f :: after → (Exec.NoOpaqueAbove Opaque b f) →
       ∃ steps, C.Replay (C.ofState inter) steps (C.ofState f.pre.state) ∧
         V.obs steps = b.flatMap V.frameObs) :
     ∃ steps, C.Replay (C.ofState pre) steps (C.ofState f.pre.state) ∧
       V.obs steps = (P :: rest).flatMap V.frameObs := by
   rw [List.flatMap_cons, obsForeign P hP, List.nil_append]
   rcases List.split_append_cons hdesc with ⟨m, hX, -⟩ | ⟨n, hrest, hD⟩
-  · exact childPos rest m hX fun A member => noOpaque A (List.mem_cons_of_mem _ member)
+  · exact childPos rest m hX (Exec.NoOpaqueAbove.tail noOpaque)
   · obtain ⟨heads, headReplay, headObs⟩ := childWhole
-    obtain ⟨tails, tailReplay, tailObs⟩ := nextPos n hD fun A member =>
-      noOpaque A (List.mem_cons_of_mem _ (by rw [hrest]; exact List.mem_append_right _ member))
+    have noOpaque' := Exec.NoOpaqueAbove.tail noOpaque
+    rw [hrest] at noOpaque'
+    obtain ⟨tails, tailReplay, tailObs⟩ := nextPos n hD (Exec.NoOpaqueAbove.drop noOpaque')
     refine ⟨heads ++ tails, append headReplay tailReplay, ?_⟩
     rw [V.obs_append, headObs, tailObs, hrest, List.flatMap_append]
 
@@ -398,18 +438,14 @@ theorem nextSome
     ofStateGet fun k => congrArg (fun t => Stor.get t k)
       (Evm.step_spawn_enter_getStor hfork hroot enter ca protection).symm
   have nextPos : ∀ b, Exec.descendantFrames next = b ++ f :: after →
-      (∀ A ∈ b, A.Encloses f → ¬ Opaque A) →
+      (Exec.NoOpaqueAbove Opaque b f) →
       ∃ steps, C.Replay (C.ofState inter.state) steps (C.ofState f.pre.state) ∧
         V.obs steps = b.flatMap V.frameObs := by
     intro b hD noOpaque'
     obtain ⟨steps, replay, observed⟩ := ihNext next committed hfork interAt nextAdmitted
       (Nat.lt_of_le_of_lt balLe bound) (Exec.Frame.ofRun next committed :: b) f after
       (by rw [Exec.committedFrames, dite_eq_left committed, hD, List.cons_append])
-      (by
-        intro A member
-        rcases List.mem_cons.mp member with rfl | member
-        · exact fun _ op => targetNe (opaqueTarget _ op)
-        · exact noOpaque' A member)
+      (Exec.NoOpaqueAbove.cons (fun op => targetNe (opaqueTarget _ op)) noOpaque')
     refine ⟨steps, replay, ?_⟩
     rw [observed, List.flatMap_cons, obsForeign (Exec.Frame.ofRun next committed) targetNe,
       List.nil_append]
@@ -512,34 +548,60 @@ private theorem spawnChildAt (kinds : SpawnKinds ca sem)
     · exact Or.inl rfl
     · exact Or.inr (Or.inl member)
 
-/-- **The model target handler.**  A non-static target frame's own steps reach its first external
-node, whose settled child holds every later frame; a static target frame replays nothing. -/
-theorem modelTarget
-    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+/-- **The settled children of a frame's spawning nodes are positional** (a child provider): at
+every `runOk` node of the frame's own chain, a committed child entered under the world word bound
+replays, from its entry storage, to the entry of each of its committed frames not enclosed by an
+earlier opaque one.  The single-code handler supplies it from the lower-depth hypothesis; a code
+family supplies it per spawn kind. -/
+def ChildPositional (C : ReplayCarrier ca) (V : ReplayObservation C)
+    (Opaque : Exec.Frame → Prop) {sevm₀ : Sevm} {pre₀ post₀ : Devm}
+    (root : Exec 0 sevm₀ pre₀ (.ok post₀)) : Prop :=
+  ∀ {nodePc : Nat} {nodeSevm : Sevm} {nodePre : Devm} {out : Execution} {frame : Jaune.Frame}
+    {rsm : Resume} {nextPc : Nat} {cevm : Evm} {raw : Execution} {inter : Devm}
+    (step : Evm.step ⟨nodePc, nodeSevm, nodePre⟩ = .spawn frame rsm nextPc)
+    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (resume : rsm.run (frame.settle raw) = .ok inter) (next : Exec nextPc nodeSevm inter out),
+    Exec.Deriv.ParentPrefix ⟨0, sevm₀, pre₀, .ok post₀, root⟩
+      ⟨nodePc, nodeSevm, nodePre, out, .runOk step enter child resume next⟩ →
+    Execution.commits raw = true → sum cevm.dyna.state.bal < 2 ^ 256 →
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      Exec.committedFrames child = before ++ f :: after →
+      (Exec.NoOpaqueAbove Opaque before f) →
+      ∃ steps, C.Replay (C.ofState cevm.dyna.state) steps (C.ofState f.pre.state) ∧
+        V.obs steps = before.flatMap V.frameObs
+
+/-- **The positional replay of a model frame from its own steps and its children's positional
+replays.**  If `own` contributes the frame's own observation and takes the entry boundary to the
+boundary of every node that decodes an external instruction, after which no later node decodes one,
+then every committed frame of the frame lies in its single settled child, and the frame is
+positional. -/
+theorem modelFrameAt
     (ofStateGet : ∀ {s s' : State},
       (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
     (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
-    (kinds : SpawnKinds ca sem) (spawn : Exec.CoreAccounting.SpawnReplay ca sem entry C V)
-    (core : Exec.Fa (Exec.WknSem ca sem
-      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)))
-    {sevm : Sevm} {pre post : Devm} (hrun : sem.Run sevm pre post)
-    (target : sevm.currentTarget = ca)
-    (deeper : ForallDeeperAtSem sevm.depth ca sem
-      (fun pc s d e _ => Exec.PositionalAccounting ca sem entry C V Opaque pc s d e)) :
-    Exec.PositionalAccounting ca sem entry C V Opaque 0 sevm pre (.ok post) := by
-  by_cases hs : sevm.isStatic = true
-  · exact static ofStateGet core hs
-  intro run committed fork installed admitted bound before f after split noOpaque
-  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
+    {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (committed : Execution.commits (.ok post) = true) (fork : CoveredFork sevm.benvStat.fork)
+    (rootNonempty : (pre.getCode ca).toList ≠ []) (bound : sum pre.state.bal < 2 ^ 256)
+    (children : ChildPositional C V Opaque run) (own : List C.Step)
+    (hown : V.obs own = V.frameObs (Exec.Frame.ofRun run committed))
+    (c12 : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
+        C.Replay (C.ofState pre.state) own (C.ofState N.devm.state) ∧
+        ∀ N', Exec.Deriv.ParentStep N' N →
+          C.Replay (C.ofState N'.devm.state) [] (C.ofState post.state) ∧
+          ∀ M, Exec.Deriv.ParentPrefix N' M → ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y)) :
+    ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
+      Exec.committedFrames run = before ++ f :: after →
+      (Exec.NoOpaqueAbove Opaque before f) →
+      ∃ steps, C.Replay (C.ofState pre.state) steps (C.ofState f.pre.state) ∧
+        V.obs steps = before.flatMap V.frameObs := by
+  intro before f after split noOpaque
   rw [Exec.committedFrames, dite_eq_left committed] at split
   cases before with
   | nil => exact head split
   | cons P rest =>
   rw [List.cons_append] at split
   obtain ⟨hP, hdesc⟩ := List.cons.inj split
-  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
-    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
-  obtain ⟨own, hown, -, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
   rcases Exec.Deriv.exists_firstExec_or_none run with none | ⟨Vn, hV⟩
   · rw [Exec.descendantFrames_eq_nil_of_noExec run none] at hdesc
     exact absurd hdesc.symm (List.append_ne_nil_of_right_ne_nil _ (List.cons_ne_nil _ _))
@@ -572,11 +634,11 @@ theorem modelTarget
       rename_i frame rsm pc' cevm raw inter
       have hdf := Exec.descendantFrames_eq_nil_of_noExec next
         ((c12 _ hpV x hx).2 _ (.runOk step enter child resume next)).2
-      obtain ⟨-, -, nodeFork, nodeCodeNe, balLe, childFork, -, -⟩ :=
-        Exec.CoreAccounting.spawnChild kinds run hrun target fork installed admitted
-          (fun pc s d e ex _ hat => core pc s d e ex hat) step enter child resume next hpV
-      obtain ⟨childDepth, childAt, childAdmitted⟩ :=
-        spawnChildAt kinds run hrun target fork installed admitted step enter child resume next hpV
+      have nodeFork : CoveredFork vsevm.benvStat.fork := by
+        rw [show vsevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq hpV]
+        exact fork
+      have nodeCodeNe : vd.getCode ca ≠ .empty := fun empty =>
+        nodeNonempty (by rw [empty]; simp only [ByteArray.toList_empty])
       by_cases settles : Frame.settlementCommits frame raw = true
       · have hraw := Frame.raw_commits_of_settlementCommits settles
         have cf : Exec.committedFrames child =
@@ -586,21 +648,54 @@ theorem modelTarget
           hdf, List.append_nil, ← cf] at hdesc
         have childBound : sum cevm.dyna.state.bal < 2 ^ 256 :=
           Nat.lt_of_le_of_lt
-            ((Evm.step_spawn_child_world nodeFork step enter nodeCodeNe).2.trans balLe) bound
-        obtain ⟨steps, replay, observed⟩ := deeper _ _ _ _ child childDepth childAt child hraw
-          childFork childAt childAdmitted childBound rest f after hdesc
-          fun A member => noOpaque A (List.mem_cons_of_mem _ member)
+            ((Evm.step_spawn_child_world nodeFork step enter nodeCodeNe).2.trans
+              (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode hpV).1) bound
+        obtain ⟨steps, replay, observed⟩ := children step enter child resume next hpV hraw
+          childBound rest f after hdesc (Exec.NoOpaqueAbove.tail noOpaque)
         have c1 := (c12 _ hpV x hx).1
         have e1 : C.ofState vd.state = C.ofState cevm.dyna.state :=
           ofStateGet fun k => congrArg (fun t => Stor.get t k)
             (Evm.step_spawn_enter_getStor nodeFork step enter ca
               (State.Protected.of_code_ne_nil nodeNonempty)).symm
-        rw [entryOfState, e1] at c1
+        rw [e1] at c1
         refine ⟨own ++ steps, append c1 replay, ?_⟩
         rw [V.obs_append, hown, observed, ← hP, List.flatMap_cons]
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits step enter child resume next
           settles, hdf] at hdesc
         exact absurd hdesc.symm (List.append_ne_nil_of_right_ne_nil _ (List.cons_ne_nil _ _))
+
+/-- **The model target handler.**  A non-static target frame's own steps reach its first external
+node, whose settled child holds every later frame; a static target frame replays nothing. -/
+theorem modelTarget
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
+    (kinds : SpawnKinds ca sem) (spawn : Exec.CoreAccounting.SpawnReplay ca sem entry C V)
+    (core : Exec.Fa (Exec.WknSem ca sem
+      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)))
+    {sevm : Sevm} {pre post : Devm} (hrun : sem.Run sevm pre post)
+    (target : sevm.currentTarget = ca)
+    (deeper : ForallDeeperAtSem sevm.depth ca sem
+      (fun pc s d e _ => Exec.PositionalAccounting ca sem entry C V Opaque pc s d e)) :
+    Exec.PositionalAccounting ca sem entry C V Opaque 0 sevm pre (.ok post) := by
+  by_cases hs : sevm.isStatic = true
+  · exact static ofStateGet core hs
+  intro run committed fork installed admitted bound
+  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
+  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
+    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
+  obtain ⟨own, hown, -, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
+  rw [entryOfState] at c12
+  refine modelFrameAt ofStateGet append run committed fork rootNonempty bound ?_ own hown c12
+  intro _ nodeSevm _ _ _ _ _ _ _ _ step enter child resume next chain childCommitted childBound
+  have nodeFork : CoveredFork nodeSevm.benvStat.fork := by
+    rw [show nodeSevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
+    exact fork
+  obtain ⟨childDepth, childAt, childAdmitted⟩ :=
+    spawnChildAt kinds run hrun target fork installed admitted step enter child resume next chain
+  exact deeper _ _ _ _ child childDepth childAt child childCommitted
+    (Evm.step_spawn_child_fork step enter nodeFork) childAt childAdmitted childBound
 
 /-- **The whole-frame target handler.**  A non-static target frame is opaque, so only its own
 entry is selected; a static target frame replays nothing. -/
@@ -623,10 +718,7 @@ theorem wholeFrameTarget
   obtain ⟨hP, hdesc⟩ := List.cons.inj split
   subst hP
   have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
-  refine (noOpaque _ (List.mem_cons_self ..) ?_ ⟨target, hs'⟩).elim
-  change f ∈ Exec.descendantFrames run
-  rw [hdesc]
-  exact List.mem_append_right _ (List.mem_cons_self ..)
+  exact (noOpaque [] _ rest after rfl hdesc ⟨target, hs'⟩).elim
 
 end Exec.PositionalAccounting
 
@@ -702,7 +794,7 @@ structure PositionalLadder (c : ContractSpecSem) (ca : Adr) (entry : Sevm → De
     sum msg.benv.state.bal < 2 ^ 256 →
     ∀ (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       Exec.committedFrames run = before ++ f :: after →
-      (∀ A ∈ before, A.Encloses f → ¬ Opaque A) →
+      (Exec.NoOpaqueAbove Opaque before f) →
       ∃ steps, carrier.Replay (carrier.frameEntry sevm pre.state) steps
           (carrier.frameEntry f.sevm f.pre.state) ∧
         view.obs steps = before.flatMap view.frameObs

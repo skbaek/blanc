@@ -111,7 +111,7 @@ theorem weth9_spawnKinds (ca : Adr) : SpawnKinds ca weth9Sem := by
   intro sevm pre post run hrun _ fork _ node chain x hat
   obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun.1 fork chain
-  exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach) hat
 
 /-- One decoded call's storage effect is the replay of its invocation, at the tracked keys. -/
 theorem replay_one {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {pre post : Devm} {c : Call}

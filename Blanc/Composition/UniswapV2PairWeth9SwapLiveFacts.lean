@@ -209,10 +209,6 @@ environment is built over may be taken on the leg's gas-free skeleton.  The post
 
 theorem withGasLeft_self (d : Devm) : d.withGasLeft d.gasLeft = d := rfl
 
-/-- The request staging charge reads the world only off its warm set. -/
-theorem swapRequestCharge_withGasLeft (b : Devm) (x n : Nat) (p t : B256) (fixed : Nat) :
-    swapRequestCharge (b.withGasLeft x) n p t fixed = swapRequestCharge b n p t fixed := rfl
-
 /-- Account warming commutes with a gas shift. -/
 theorem temporalAccountAccessBase_withGasLeft (b : Devm) (x : Nat) (a : Adr) :
     temporalAccountAccessBase (b.withGasLeft x) a = (temporalAccountAccessBase b a).withGasLeft x := by

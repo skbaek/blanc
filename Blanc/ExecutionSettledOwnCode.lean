@@ -3,6 +3,7 @@ import Blanc.ExecutionDirectCode
 import Blanc.ExecutionTraceAdmission
 import Blanc.StorageOnlySpec
 import Blanc.ExecutionTraceRootCallers
+import Blanc.ExecutionImmutableCode
 
 /-!
 # Installed code at every settled frame, and own code at every own frame
@@ -12,7 +13,7 @@ For an address `ca` whose code `C` at the checkpoint is nonempty and not an EIP-
 * `ConfiguredHistoryTrace.settled_ownCode`: every settled frame of a configured history finds `C`
   installed at `ca` when it starts, and every settled frame at `ca` runs `C` from pc `0`, provided
   frames running `C` at `ca` spawn only by `CALL`, `STATICCALL` or `CREATE2` (`OwnSpawns`; for a
-  certified runtime, `CursorOK.exec_spawn`).  No `DELEGATECALL`/`CALLCODE` from `C` means no frame
+  certified runtime, `CursorOK.exec_spawn_undelegated`).  No `DELEGATECALL`/`CALLCODE` from `C` means no frame
   at `ca` runs foreign code: a `CALL`/`STATICCALL` into `ca` runs the installed code, and a create
   never targets an address with code.
 * `ConfiguredHistoryTrace.settledRoots_caller_ne_of_code`: `ca ≠ systemAddress` originates no settled
@@ -149,12 +150,6 @@ theorem Exec.descendantFrames_ownCode {ca : Adr} {C : ByteArray} (nonempty : C.t
 
 /-! ## The trivial specification of an installed code -/
 
-private theorem bytes_eq_of_image {actual code : ByteArray}
-    (image : some actual.toList = some code.toList) : actual = code := by
-  apply ByteArray.ext
-  apply Array.toList_inj.mp
-  simpa only [ByteArray.toList_eq_toList_data] using Option.some.inj image
-
 /-- The code semantics of an installed code with no run content. -/
 private def ownSem (C : ByteArray) (nonempty : C.toList ≠ [])
     (nondelegating : ¬ isValidDelegation C) : CodeSem where
@@ -166,7 +161,7 @@ private def ownSem (C : ByteArray) (nonempty : C.toList ≠ [])
     exact (Option.some.inj image) ▸ nonempty
   not_delegation := by
     intro actual image
-    exact bytes_eq_of_image image ▸ nondelegating
+    exact ExecutionTrace.bytes_eq_of_image image ▸ nondelegating
 
 private def ownSpec (C : ByteArray) (nonempty : C.toList ≠ [])
     (nondelegating : ¬ isValidDelegation C) : ContractSpecSem :=
@@ -215,9 +210,9 @@ private def ownLadder {ca : Adr} {C : ByteArray} (nonempty : C.toList ≠ [])
     have pcZero : pc = 0 := by
       have := congrArg Evm.pc evmEq
       simpa only [initEvm] using this
-    have code : pre.getCode ca = C := bytes_eq_of_image installed.1
+    have code : pre.getCode ca = C := ExecutionTrace.bytes_eq_of_image installed.1
     have own : sevm.currentTarget = ca → sevm.code = C := fun target =>
-      bytes_eq_of_image (installed.2 target).1
+      ExecutionTrace.bytes_eq_of_image (installed.2 target).1
     refine ⟨Exec.committedFrames run, ?_, by
       change Exec.committedFrames run = (Exec.committedFrames run).flatMap fun f => [f]
       rw [List.flatMap_singleton']⟩

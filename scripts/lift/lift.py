@@ -200,6 +200,7 @@ LEAN_REG: Dict[int, str] = {
     0xa0: ".reg (.log 0)", 0xa1: ".reg (.log 1)", 0xa2: ".reg (.log 2)",
     0xa3: ".reg (.log 3)", 0xa4: ".reg (.log 4)",
     0xf1: ".exec .call", 0xfa: ".exec .staticcall", 0xf5: ".exec .create2",
+    0xf4: ".exec .delegatecall",
 }
 
 # Opcodes the certificate grammar expresses directly: halts (`.last`), jumps
@@ -240,7 +241,7 @@ def _arm_shape(rhs: str, source: str) -> Optional[Tuple[int, int]]:
     m = re.fullmatch(r"dropTransfer (\d+) words", rhs)
     if m:
         return (int(m.group(1)), 0)
-    m = re.fullmatch(r"(callTransfer|staticcallTransfer|create2Transfer) words", rhs)
+    m = re.fullmatch(r"(callTransfer|staticcallTransfer|create2Transfer|delegatecallTransfer) words", rhs)
     if m:
         dm = re.search(rf"def {m.group(1)} : Pattern → Option Pattern\n\s*\| ((?:_ :: )+)words => some \(none :: words\)", source)
         if dm:
@@ -368,11 +369,13 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-parts", str(check["parts"])]
                 if check.get("literal_tries") is True:
                     argv.append("--check-literal-tries")
-                if check.get("assembly") in ("seven", "two"):
+                if check.get("assembly") in ("seven", "two", "chain"):
                     argv += ["--check-assembly", check["assembly"]]
             jumps = row.get("jumps")
             if jumps:
                 argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
+                if jumps.get("assembly") == "chain":
+                    argv += ["--jumps-assembly", "chain"]
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -451,14 +454,16 @@ parser.add_argument("--check-header", type=str, default=DEFAULT_HEADER, help="Ch
 parser.add_argument("--jumps-out", type=Path, default=None,
                     help="optional regular Cert.jumpsOk per-entry proof module (requires --check-out)")
 parser.add_argument("--jumps-header", type=str, default=DEFAULT_HEADER, help="Jumps.lean generator comment")
+parser.add_argument("--jumps-assembly", choices=("chain",), default=None,
+                    help="assemble jumps_ok as a chain over the certificate's tails (Cert.jumpsAll_drop, Blanc.Lift.CheckChain) instead of one membership case split (registry jumps.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
 parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
-parser.add_argument("--check-assembly", choices=("seven", "two"), default=None,
-                    help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) or two-entry assembler Cert.check_two (Blanc.Lift.CheckAssemblyPair) instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
+parser.add_argument("--check-assembly", choices=("seven", "two", "chain"), default=None,
+                    help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) or two-entry assembler Cert.check_two (Blanc.Lift.CheckAssemblyPair), or (chain) as a chain over the certificate's tails (Cert.checkAll_drop, Blanc.Lift.CheckChain) for certificates too long for the membership case split, instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -2439,6 +2444,24 @@ def qualify_refs(text: str) -> str:
     return "\n".join(out)
 
 
+def chain_assembly(n: int, rest: str, step: str, carrier: str, drop: str, end: str,
+                   tail: List[str]) -> List[str]:
+    """`{rest}_k : {carrier} code (Cert.entries cert) (cert.drop k) = true` from `{rest}_n` (the
+    empty tail) down to `{rest}_0`, each step consuming the per-entry decision `{step}_k`."""
+    lines = [
+        f"theorem {rest}_{n} : {carrier} code (Cert.entries cert) (cert.drop {n}) = true :=",
+        f"  {end} cert",
+        "",
+    ]
+    for i in reversed(range(n)):
+        lines.extend([
+            f"theorem {rest}_{i} : {carrier} code (Cert.entries cert) (cert.drop {i}) = true :=",
+            f"  {drop} cert {i} (by decide +kernel) {step}_{i} {rest}_{i + 1}",
+            "",
+        ])
+    return lines + tail
+
+
 def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
@@ -2570,6 +2593,14 @@ def check_source() -> Any:
             "theorem cert_check : Cert.check code cert = true :=",
             "  Cert.check_two entry_0 entry_1 (by decide +kernel)",
         ]
+    elif args.check_assembly == "chain":
+        # A chain over the tails `cert.drop k`, one entry per step, for certificates whose
+        # membership case split exceeds the recursion depth; opt-in per certificate.
+        assembly = chain_assembly(n, "rest", "entry", "Cert.checkAll", "Cert.checkAll_drop",
+                                  "Cert.checkAll_drop_length", [
+            "theorem cert_check : Cert.check code cert = true :=",
+            "  Cert.check_of_checkAll (by decide +kernel) rest_0",
+        ])
     elif n == 1:
         # Share the checker/list assembly; the actual node decision stays local.
         assembly = [
@@ -2594,6 +2625,8 @@ def check_source() -> Any:
         files["Check"] = "import Blanc.Lift.CheckAssembly\n" + files["Check"]
     elif args.check_assembly == "two":
         files["Check"] = "import Blanc.Lift.CheckAssemblyPair\n" + files["Check"]
+    elif args.check_assembly == "chain":
+        files["Check"] = "import Blanc.Lift.CheckChain\n" + files["Check"]
     return files if args.check_parts >= 2 else files["Check"]
 
 
@@ -2810,6 +2843,15 @@ def jumps_source() -> str:
             "",
         ])
     n = len(cert_entries_lines)
+    if args.jumps_assembly == "chain":
+        lines[0:1] = [lines[0], "import Blanc.Lift.CheckChain"]
+        lines.extend(chain_assembly(n, "jrest", "jumps", "Cert.jumpsAll", "Cert.jumpsAll_drop",
+                                    "Cert.jumpsAll_drop_length", [
+            "theorem jumps_ok : Cert.jumpsOk code cert = true :=",
+            "  Cert.jumpsOk_of_jumpsAll jrest_0",
+        ]))
+        lines.extend(["", f"end {ns}", ""])
+        return "\n".join(lines)
     lines.extend([
         "theorem jumps_ok : Cert.jumpsOk code cert = true := by",
         "  unfold Cert.jumpsOk",

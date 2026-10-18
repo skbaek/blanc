@@ -511,6 +511,16 @@ spawn/resume equations at the consumer:
   body-frame occurrence by case-splitting `Ninst.step` on the accepted node and
   feeding the `.spawn` arm here.  Import `Blanc.CallSpawnExact` (it imports
   only `Blanc.Ladder`).
+- `Xinst.step_delegatecall_spawn_exact` in [`Blanc/Lift/SpawnExact.lean`](../Blanc/Lift/SpawnExact.lean): the
+  `DELEGATECALL` counterpart. A spawning `DELEGATECALL` step on a covered fork whose code-address
+  operand `w` names an undelegated account enters a child at the parent's storage owner with code
+  address `w`, the parent's caller, value and static flag, `w`'s code, and the calldata the input
+  window of the parent's extended memory holds. `Xinst.step_delegatecall_spawn_meta` is the
+  operand-free projection (nonzero depth, one level deeper, resumes as a call),
+  `Xinst.step_delegatecall_done_flag` the failure flag `0` of a call that completes without a
+  child, and `Resume.call_run_inv` the resumed parent (flag `1`, the child's output and world on a
+  clean success; flag `0` otherwise). Worked uses: `Blanc/Lift/QuietDelegateSkip.lean`,
+  `Blanc/Lift/Usdc/ProxyForward.lean`, `Blanc/Lift/Usdc/ImplSpawns.lean`.
 - `AcceptedCallerPayout` in the same module: the entered, clean, success-consumed value
   `CALL` to `sevm.caller` (gas word, 7-operand stack, `PopBurn [1]` guard, exact
   `ProcessMessage (callMsg …)` child, `Resume.call` and post projections) — the shape
@@ -683,6 +693,33 @@ is not `systemAddress`. The per-wrapper forms (`ProcessMessageTrace`,
 `MessageCallTrace`, `SystemMessageTrace`, `RequestsTrace`, `TransactionTrace`,
 `ApplyTransactionsTrace`, `AppliedBodyTrace` `.settledRoots_caller[_ne]`) are
 the same fact at each layer.
+For an address whose checkpoint code `C` is nonempty and not an EIP-7702
+designator, with no contract invariant to carry, use
+[`Blanc/ExecutionSettledOwnCode.lean`](../Blanc/ExecutionSettledOwnCode.lean):
+`ConfiguredHistoryTrace.settled_ownCode` says every settled frame finds `C`
+installed at `ca` when it starts and every settled frame at `ca` runs `C` from
+pc `0` (`OwnCodeAt`), provided frames running `C` at `ca` spawn only by `CALL`,
+`STATICCALL` or `CREATE2` (`OwnSpawns`; for a certified runtime whose cursor carries no
+`DELEGATECALL`, `CursorOK.exec_spawn_undelegated` with `Xinst.notDelegatecall` in
+`Blanc/Lift/CallRestriction.lean`, since `CursorOK.exec_spawn` itself admits `DELEGATECALL` as a
+fourth arm); `Exec.descendantFrames_ownCode` is the per-derivation
+form and `Xinst.step_create2_spawn_unprotected` says a `CREATE2` child targets
+an address with no code. `ConfiguredHistoryTrace.settledRoots_caller_ne_of_code`
+is the root-caller fact above for such an address. A code image equal to
+`some C.toList` pins the bytes by `ExecutionTrace.bytes_eq_of_image`
+([`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean)).
+Worked uses: `Blanc/Lift/UniswapV2Factory/CallShape.lean`,
+`Blanc/Composition/UniswapV2FactoryQuiet.lean`.
+When the address's frames may run other code (a proxy's `DELEGATECALL` children) and only the
+installed image matters, use [`Blanc/ExecutionSettledCodeImage.lean`](../Blanc/ExecutionSettledCodeImage.lean):
+`ConfiguredHistoryTrace.settled_codeImage` says every settled frame of a configured history finds
+the certified image `sem` installed at `a` when it starts, with no spawn restriction
+(`Exec.descendantFrames_codeImage` is the per-derivation form; nonempty code is never replaced).
+For every *raw* frame, rolled back or not, [`Blanc/ExecutionRawFramesCodeImage.lean`](../Blanc/ExecutionRawFramesCodeImage.lean):
+`ConfiguredHistoryTrace.rawFrames_codeImage` (and `_of_installed`) carries a `ContractSpecSem`'s
+image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the `*.stateInv_admitted_sem`
+message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
+(`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its
@@ -723,6 +760,14 @@ For a contract address that must originate no settled message root, use
 `ConfiguredHistoryTrace.settledRoots_caller_ne` derives the caller exclusion from
 an admitted preserved contract invariant at the checkpoint and `ca ≠ systemAddress`.
 The transaction case uses EIP-3607; the system-root cases retain the system caller.
+To prove a property of every committed descendant of a run from the spawns of the run's own chain,
+use [`Blanc/ExecutionSpawnFrames.lean`](../Blanc/ExecutionSpawnFrames.lean): `Exec.descendantFrames_of_spawns` reduces it to each
+spawning node of the chain whose child settles, for that child and its committed descendants, with
+the spawning step (`Ninst.StepRun.spawnParts`), the child's entry (`Evm.step_spawn_entry`) and its
+membership among the root's direct children supplied, so entry facts come off the spawn
+(`Evm.step_spawn_child`, `Evm.step_spawn_enter_getStor`) or off a child-classification theorem over
+`Exec.childFrames`; `Exec.FrameAdmitted.of_mem_descendantFrames` reads admission off membership.
+Worked use: `Blanc/Lift/Usdc/HistorySlotsCore.lean`.
 
 ### E4. I need a common terminal walk
 
@@ -1739,6 +1784,17 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   address), `Xinst.step_directCall_spawn_code` (`CALL`/`STATICCALL`, including
   a call back into the current account), `Xinst.step_create_spawn_fresh`
   (`CREATE*` only enters a codeless account) and `Jinst.runCore_ok_pc`.
+- Storage-owner discipline for a code family closed under delegation, any number of levels
+  deep: [`Blanc/OwnerClosure.lean`](../Blanc/OwnerClosure.lean). `Exec.DelegationClosed S` says every committed frame
+  owning `P`'s storage that runs a code of `S` decodes no `CALLCODE` and `DELEGATECALL`s only
+  undelegated accounts holding a code of `S`; `Exec.ownerCode_of_closed` then says every committed
+  frame owning `P`'s storage runs a code of `S`, given that `P` holds one, the root runs one when it
+  owns `P`, and the codes of `S` are nonempty and no EIP-7702 designators. The induction is over
+  committed frames (`Exec.descendantFrames`), so a reverted subtree is never entered;
+  `Xinst.step_delegatecall_spawn_stack` is the stack a spawning `DELEGATECALL` leaves.
+  [`Blanc/OwnerClosureControl.lean`](../Blanc/OwnerClosureControl.lean) shows the closure is not vacuous on a two-code toy family
+  (`toy_ownerCode`: an EIP-1167 forwarder and a one-byte `STOP` leaf). Worked use:
+  `Blanc/ExecutionOwnerFamily.lean` (the multi-code owner ladder, T2c).
 - Write-freedom across cycles:
   [`Blanc/CycleWriteFree.lean`](../Blanc/CycleWriteFree.lean).
   Its public `Func.callsIn_mem_iff` reflects the shared internal-call checker.
@@ -2100,6 +2156,10 @@ wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
 comparison flag into the negated strict comparison. The latter does not
 assert that arithmetic producing either operand was overflow-free. Import
 this owner directly; CommonProofs and Ladder do not reexport it.
+For the converse direction, a comparison flag discharged from values,
+[`Blanc/B256CheckFacts.lean`](../Blanc/B256CheckFacts.lean) has
+`B256.gtCheck_eq_zero_of_toNat_le` (`GT` is `0` when the left operand's
+value is at most the right's), the step a walk needs at a solc range check.
 
 Use the fixed-width arithmetic declarations in
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
@@ -2291,6 +2351,13 @@ slots against those same explicit observations. These require neither a
 `Support` premise nor zero values for keys outside the observation list.
 WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer (with `tracked`/`trackedSum` over
 `sum`); Curve's `Layout.lean` keeps its own copy of the same notions.
+To read a footprint ledger off raw storage words, use [`Blanc/SlotFootprintWord.lean`](../Blanc/SlotFootprintWord.lean):
+`trackedWord slot K s k` is the word at a tracked key's slot and `0` at an untracked key
+(`trackedWord_of_mem`, `trackedWord_of_not`); a write at a tracked key's slot is that key's row
+update under `Inj` (`trackedWord_set`), a write at a slot no tracked key uses leaves every row alone
+(`trackedWord_set_off`), touching fresh keys leaves the rows alone (`trackedWord_extend`), and
+`Support.set_fixed` is `Support.set` for a write at a fixed slot. Worked use: USDC's footprint
+(`Blanc/Lift/Usdc/Footprint.lean`).
 
 To establish such a footprint at a concrete checkpoint world, decide it with
 [`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
@@ -2323,6 +2390,44 @@ and the final supply plus `burned` equals the initial supply plus `minted`; `Sup
 says that a run none of whose messages the minter sends keeps supply and minter. Worked instance: 3Crv
 (`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`), composed with
 the Curve 3pool over one history in `Blanc/Composition/Curve3PoolSupply.lean` (`pool_3crv_history`).
+The Uniswap V2 pair's composition with any token given by such a core is generic:
+`pair_token_joint` and `pair_token_noShrinkSide` (`Blanc/Composition/PairTokenJoint.lean`) and the
+share-value rows `pair_token_feeOff_product`/`pair_token_feeOn_product`
+(`Blanc/Composition/PairTokenShareValue.lean`) take `Core T B` and `BookLaws B` as arguments;
+`Blanc/Composition/UniswapV2PairWeth9Joint.lean` instantiates them at WETH9.
+
+When the token's positional replay law holds only at settled positions outside its own writers (a
+proxy token observed at the entry of a frame inside a `DELEGATECALL` chain), use the
+writer-shadowed core `CoreW` in [`Blanc/Lift/Token/CoreW.lean`](../Blanc/Lift/Token/CoreW.lean): `Core` with the replay law
+required only at positions that are not `Shadowed` (a judgment on the position, the settled frames
+before it and its frame, not on a frame value) plus the two shadow laws the generic walk needs;
+`WholeBlocks` places a direct child at the end of a run of whole committed blocks; `Core.weak` and
+`SelfCaller.weak` keep every `Core` a `CoreW` (`SelfCallerW`); `CoreW.good_along` and
+`CoreW.run_holder_segment` are the `Along.lean` facts over it. The walk consumes the
+holder-indexed laws of [`Blanc/Lift/Token/HolderLaws.lean`](../Blanc/Lift/Token/HolderLaws.lean) (`AskLaws B h a`, the per-message
+laws of one holder, `AskLaws.run_holder`, the trace-local `HolderLaws T B`, and
+`BookLaws.holderLaws` from the universal laws) rather than `BookLaws` directly, so a token whose
+book admits a third authorizer fits: [`Blanc/Lift/Token/Signed.lean`](../Blanc/Lift/Token/Signed.lean) gives `BookS` (a book
+with a signer), `BookLawsS` (a holder's balance or allowance may also move on the holder's own
+signature), the trace-local facet `NeverSigner T S` (the holder never signs a booked entry) and the
+bridge `BookLawsS.holderLaws`; `Book.unsigned`, `BookLaws.unsigned` and `neverSigner_unsigned` read
+a plain book as a signature book with no signer (`weth9Book_lawsS`,
+`Blanc/Composition/Weth9TokenSigned.lean`). [`Blanc/Lift/Token/SignedControl.lean`](../Blanc/Lift/Token/SignedControl.lean) is the
+kernel counterexample showing that `NeverSigner` is needed (`control_signer_breaks_holder`). The
+transfer-liveness facet conditioned on a gas budget rather than on the consumed cost plus the
+stipend (a proxy forwards only 63/64 of its gas) is `TransferLiveBudget` in
+[`Blanc/Lift/Token/TransferLiveBudget.lean`](../Blanc/Lift/Token/TransferLiveBudget.lean), with `TransferLive.toBudget` (worked use:
+`Blanc/Composition/UsdcTokenLive.lean`).
+
+The generic Pair headlines over these: `pair_token_joint_signed` and
+`pair_token_noShrinkSide_signed` ([`Blanc/Composition/PairTokenSigned.lean`](../Blanc/Composition/PairTokenSigned.lean)) take `BookLawsS`
+and `NeverSigner`; `pair_two_token_joint` ([`Blanc/Composition/PairTwoToken.lean`](../Blanc/Composition/PairTwoToken.lean)) runs the
+walk once per core over the same Pair steps for a Pair whose `token0` and `token1` are `CoreW`
+instances with holder laws for the Pair, so one Pair witness carries both joint relations and the
+two sides combine through `sourceReplayNoShrink_iff_sides`; `pair_two_token_feeOn_product` and
+`pair_two_token_feeOff_product` ([`Blanc/Composition/PairTwoTokenShareValue.lean`](../Blanc/Composition/PairTwoTokenShareValue.lean)) are the
+share-value rows with no token antecedent (the fee-off row keeps only the factory's fee-off answer
+`sourceReplayFeeOff`).
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 
@@ -3522,6 +3627,13 @@ below a frame of such static-only certified code has a code address
 (`Exec.staticOnly_rawFrameDescendants`), which is `Exec.codeAt_avoid`'s premise for every
 address. Worked use: the 3Crv callee crossing in
 `Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`).
+Its node-level companions are in [`Blanc/Lift/StaticOnlyPrefix.lean`](../Blanc/Lift/StaticOnlyPrefix.lean):
+`Exec.Deriv.ParentStep.getStor_of_quiet` and `Exec.Deriv.ParentPrefix.getStor_of_quiet` (every
+node of the chain of a frame that never decodes `SSTORE` and spawns only by `STATICCALL` carries the
+root's storage maps), `Exec.descendantFrames_isStatic_of_staticOnly` (every retained descendant of
+such a frame is static), and the byte facts `UInt8.toRinst_sstore`/`ByteArray.sstore_mem_of_getInst`
+(no `0x55` byte, no `SSTORE`). Worked uses: `Blanc/Lift/Usdc/RefineSigned.lean`,
+`HistorySlotsCore.lean`.
 
 A target frame whose children may be non-static and may re-enter the contract
 (Lido `pause`'s `CALL`, WETH9 `withdraw`'s ETH send) uses the entry carrier of
@@ -3607,6 +3719,55 @@ every split `before ++ f :: after` of a configured history's settled frames give
 checkpoint to `f`'s entry that observes exactly `before`. Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairPositionalState.lean`, `PairHistoryShape.lean`).
 
+When the owner's frames run a *family* of codes (a proxy's `DELEGATECALL` children run the
+implementation at the proxy's storage), use [`Blanc/ExecutionOwnerFamily.lean`](../Blanc/ExecutionOwnerFamily.lean):
+`CodeFamily ca root` lists the delegates (`FamilyMember`, tagged by code address) under the root
+code's `CodeSem`, with `CodeFamily.Runs`, `MemberAt` and `DelegatesInstalled`;
+`CodeFamily.descend` is the strong induction on depth that handles delegate frames from the root
+ladder's lower-depth hypothesis; the target handler `CodeFamily.frameAccounting` observes nothing
+in a static frame, replays an unguarded frame by `CodeFamily.Unguarded`, and replays a guarded frame
+as a whole or as a model frame (`CodeFamily.SpawnReplay`) whose children `CodeFamily.SpawnKinds`
+classifies (`CodeFamily.childReplays`: a `CALL`/`STATICCALL` child is located by the root, a
+`DELEGATECALL` child is a member frame); `CodeFamily.ladder` is the resulting
+`AccountingLadderAdmitted`. `Xinst.step_delegatecall_spawn_owner` (a `DELEGATECALL` child keeps the
+storage owner), `Exec.descendantFrames_getStor_of_quiet` and `Exec.descendant_getStor_spawnNode`
+(every committed descendant enters with the owner's storage at one of the frame's own spawning
+nodes) are the storage facts positions inside a quiet frame need. Its positional law is
+[`Blanc/ExecutionOwnerFamilyPositional.lean`](../Blanc/ExecutionOwnerFamilyPositional.lean): `CodeFamily.Opaque` (an earlier non-static whole
+frame at the owner), the handler `CodeFamily.framePositional` (`CodeFamily.childCases` locates a
+model frame's single settled child by the root's `CodeSem.At` or as a member frame),
+`CodeFamily.positionalLadder`, and the history laws `CodeFamily.configuredHistory_at` and
+`configuredHistory_atPos`. The carrier such a family replays over when its boundary depends on
+storage the family rewrites (an implementation slot) is the guarded book carrier of
+[`Blanc/Lift/Token/FamilyReplay.lean`](../Blanc/Lift/Token/FamilyReplay.lean): it reads a book ledger off the owner's storage together
+with a guard's verdict (`guardedBook_run`; `guardedBookCarrier_unguarded`: it says nothing at an
+unguarded boundary), and `ObserverChain` pairs each non-static entry with its observer so that
+`ObserverChain.run_eq` turns the book run over observer asks into the run over entry asks
+(`ObserverChain.prefix`, `observerView_flatMap`; `ObserverChain.of_local` in
+`Blanc/Lift/SettledFramePositions.lean` builds a chain from its two local conditions). Worked use:
+USDC (`Blanc/Lift/Usdc/HistoryFamily.lean`, `HistoryReplay.lean`).
+
+For a list induction over settled positions, use
+[`Blanc/ExecutionTraceSettledForest.lean`](../Blanc/ExecutionTraceSettledForest.lean): the settled
+frames are a pre-order forest, with no uniqueness of frames assumed.
+`ConfiguredHistoryTrace.settledFrames_contig` (from `Exec.descendantFrames_contig` and
+`rootFrames_forest`) says that at every split `before ++ F :: after` the list `after` begins with
+`F`'s descendants; `ConfiguredHistoryTrace.settledFrames_parent` says a settled frame is a message
+root or an earlier frame `G` spawned it as a direct child (`Exec.SpawnedBy`) at a position inside
+`G`'s block of descendants; `Exec.Frame.committedFrames_self` places a committed frame in its own
+expansion. Worked use: `Blanc/Composition/PairTokenStepFrames.lean`.
+Further positional facts over that forest are in [`Blanc/Lift/SettledFramePositions.lean`](../Blanc/Lift/SettledFramePositions.lean):
+`ConfiguredHistoryTrace.settledFrames_parent_of_codeAddress` (a settled frame at `ca` whose code
+address is not `ca` has a positional parent, an earlier settled frame that spawned it and whose block
+of descendants covers its position; `PositionalParents` with the one-rung `parentCarrier`/
+`parentObservation` carries the order-local property), `Exec.descendantFrames_eq_flatMap` with
+`List.flatMap_committed_split`, `Exec.Frame.not_mem_own_descendantFrames`,
+`Exec.single_child_of_silentAfter` (a run that decodes no external instruction after its first one
+has at most one child, which heads its descendants), and
+`ConfiguredHistoryTrace.settled_mem_rawFrames` (a settled frame's root derivation is a raw frame;
+the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`). Worked
+use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -3673,8 +3834,9 @@ interpreter run `hexec` (a success with no frame error and a non-negative refund
 state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
 block's gas counters (`txGasUsed`); `processTransaction_call_value_of_exec_receipts` is the same
 envelope that also returns the appended receipt key and the receipt at it (`makeReceipt tx none`, the
-cumulative gas, the frame's logs), and `processTransaction_of_stages_receipts` is the stage form behind
-it. Its funds premise covers `tx.gas * maxFee + tx.value`;
+cumulative gas, the frame's logs) and that every other receipt key reads back as before (a later
+transaction of the block carries the earlier receipts), and `processTransaction_of_stages_receipts` is the
+stage form behind it. Its funds premise covers `tx.gas * maxFee + tx.value`;
 it derives affordability after the gas debit and splits zero from nonzero value.
 `Msg.benvAfterTransfer_of_value_zero` supplies the zero-value entry;
 `Msg.benvAfterTransfer_of_affordable` constructs the nonzero transfer.
@@ -4343,9 +4505,14 @@ contract-neutral.
   the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
   in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean) (it accepts `XOR`,
   Vyper's `!=`, and the `SLT`, `EXTCODESIZE`, `TLOAD`, and `TSTORE` steps needed
-  by deployed Lido bytecode, and `CREATE2` through `create2Transfer`, which pops
-  endowment, offset, size and salt and pushes the new address or zero; these
-  success-only lifted transfers do not extend native `regularTransfer_safe`). Decide
+  by deployed Lido bytecode, `CREATE2` through `create2Transfer`, which pops
+  endowment, offset, size and salt and pushes the new address or zero, and
+  `DELEGATECALL` through `delegatecallTransfer`, which pops gas, target, input
+  offset and size, output offset and size and pushes the flag; these
+  success-only lifted transfers do not extend native `regularTransfer_safe`).
+  The checker reads each node's bytes from the code, so a certificate cannot
+  claim `CALL` where the code holds `DELEGATECALL`
+  (`checkNode_call_at_delegatecall`, [`Blanc/Lift/DelegatecallControl.lean`](../Blanc/Lift/DelegatecallControl.lean)). Decide
   `Cert.check` per entry with `decide +kernel`; one decision over the whole
   certificate does not fit in memory for a real contract, and read bytes with
   `code.data.toList` (`ByteArray.toList` is quadratic in the kernel). For a
@@ -4374,6 +4541,13 @@ contract-neutral.
   the startup Boolean) in [`Blanc/Lift/CheckAssemblyPair.lean`](../Blanc/Lift/CheckAssemblyPair.lean),
   emitted by the registered producer in its opt-in `two` assembly mode (`check.assembly`); its own
   module, so adding it rebuilt no existing certificate.
+- Assemble a long non-memory certificate (180 entries, the USDC implementation) without
+  unfolding its entry list: `Cert.checkAll`/`Cert.jumpsAll` over the tails `c.drop k`, the chain
+  steps `Cert.checkAll_drop`/`Cert.jumpsAll_drop`, the ends `Cert.checkAll_drop_length`/
+  `Cert.jumpsAll_drop_length` and the assemblies `Cert.check_of_checkAll`/`Cert.jumpsOk_of_jumpsAll`
+  in [`Blanc/Lift/CheckChain.lean`](../Blanc/Lift/CheckChain.lean), emitted by the registered producer in its opt-in `chain`
+  assembly mode (`check.assembly`/`jumps.assembly`); the non-memory counterparts of
+  `Cert.checkEntriesM_drop`/`Cert.jumpsEntriesM_drop`. Worked use: `Blanc/Lift/Usdc/Impl/Check.lean`.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
@@ -4409,8 +4583,8 @@ contract-neutral.
   synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
   including a `CALL` over a child of any outcome, is one `SStep`) and
   `cursor_of_parentPrefix`, with `CursorOK.exec_spawn` (a reached node spawns
-  only by `CALL`, `STATICCALL` or `CREATE2`) and, for a certificate with
-  `Cert.noCreate2`, `Cursor.noCreate2_of_reach` and
+  only by `CALL`, `STATICCALL`, `CREATE2` or `DELEGATECALL`) and, for a certificate with
+  `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
   `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
 - To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
@@ -4439,6 +4613,34 @@ contract-neutral.
   post log is an entry log or was emitted at the current target of one of the execution's raw
   frames), e.g. to show no log comes from the deposit contract when the raw frames' targets are
   known, in [`Blanc/Lift/LogAddresses.lean`](../Blanc/Lift/LogAddresses.lean).
+- A frame predicate at every reachable cursor node: [`Blanc/Lift/CursorFrames.lean`](../Blanc/Lift/CursorFrames.lean).
+  `SFunc.framesSat es P` walks a tree with the abstract frames the checker computes and checks
+  `P n a` at every straight-line node; `Cert.framesSat` over every entry gives
+  `Cursor.framesSat_of_reachable` (through `SStep.framesSat`), `CursorOK.framesSat_exec` applies `P`
+  to a cursor-placed node's actual instruction and abstract frame, and `CursorOK.stack_const` with
+  `FrameMatches.getElem?_const` reads a `.const` frame position as the actual stack word. Worked
+  uses: `Blanc/Lift/QuietDelegateSkip.lean`, `Blanc/Lift/Usdc/ImplFrames.lean`.
+- Sharpening a checked certificate's declared entry frames without re-deciding every entry:
+  [`Blanc/Lift/CertRefine.lean`](../Blanc/Lift/CertRefine.lean). `Cert.refine c k i v` replaces position `i` of entry `k`'s
+  frame and keeps every tree (`Cert.refine_prog`, `Cert.refine_getElem?_ne`);
+  `Cert.check_of_agree` reduces the refined certificate's `Cert.check` to the entries of a list `T`
+  (re-decided through `Cert.entryOk`, trie form `Cert.entryOkT` with `Cert.entryOkT_eq`) when every
+  other entry is unchanged and references no refined entry (`checkNode_congr`). Worked use:
+  `Blanc/Lift/Usdc/ImplFrames.lean`.
+- To carry an exact fact forward from one certificate node to a later one along a frame's chain
+  (for example, that a `CALL`'s target operand is the result of an earlier `CREATE2`), use a
+  *window* in [`Blanc/Lift/CursorWindow.lean`](../Blanc/Lift/CursorWindow.lean): a finite list of
+  trees, each with its one predecessor and an index (`WindowEntry`); `Cert.windowOk E sites` checks
+  over the whole certificate that a window tree occurs only as a child of its predecessor and that
+  every `CALL` node is one of `sites`; along a checked chain (`Cursor.Checked`, `.step`,
+  `.entrance`, `.callSite`) `window_track` carries a property `Track j` one window edge at a time,
+  with no backward walk. Decide `Cert.windowOk` in its own module. The exact stack words the window
+  edges carry come from [`Blanc/Lift/PrefixTransfer.lean`](../Blanc/Lift/PrefixTransfer.lean):
+  `prefixTransfer` runs `ninstTransfer` on a prefix pattern of the stack, keeping `PUSH` literals
+  and `AND`s of known words (`padPattern` extends a short prefix for `DUP`/`SWAP`), with
+  success-only soundness `prefixTransfer_run`; `create2_run_result` and `genericCreate_result` give
+  the word a successful `CREATE2` leaves (the new address or zero). Worked use:
+  `Blanc/Lift/UniswapV2Factory/Window.lean` and `CallShape.lean` (`factory_call_target`).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
@@ -4605,6 +4807,26 @@ contract-neutral.
   [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
   `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
+  and the instruction inversions `ri_address`/`ri_dup_any` in
+  [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region
+  (`SFunc.preIn`, `PreSet`, `Reach.firstExec`: the reach keeps the world up to the instruction;
+  `CursorOK.state_post_of_silent`) in [`Blanc/Lift/ReachFirstExec.lean`](../Blanc/Lift/ReachFirstExec.lean), with its big-step
+  companion `SFunc.RunP.stor_of_preIn` (a protected account's storage across a whole run of the
+  region, to its halt or its return) in [`Blanc/Lift/RegionStor.lean`](../Blanc/Lift/RegionStor.lean); the world at the first
+  external instruction of a reach from a tree whose paths run silent code, silent closures and at
+  most one external instruction (`SFunc.preExec`, `PreExecSet`, `Reach.preExec_state`) in
+  [`Blanc/Lift/ReachPreExec.lean`](../Blanc/Lift/ReachPreExec.lean); a silent tail after an external instruction
+  (`silent_after_exec`: the frame's post state is the state right after the instruction and no
+  later node decodes another, from the decidable checks `ExecSilent`/`SFunc.nodesSatisfy` and
+  `SFunc.contsIn`; `Reach.conts_silent`) in [`Blanc/Lift/ReachSilentTail.lean`](../Blanc/Lift/ReachSilentTail.lean); the route
+  of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
+  kernel for a concrete selector; `Reach.selWalk_inl`, `SFunc.RunCut.selWalk_inl`/`_inr`,
+  `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
+  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean); and the
+  reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
+  [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
+  `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
 - Preserve an actual external-instruction target while routing a literal
   comparison dispatcher: [`Blanc/Lift/ReachDispatch.lean`](../Blanc/Lift/ReachDispatch.lean)
   provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
@@ -4639,6 +4861,9 @@ contract-neutral.
   `CursorOK.execsSatisfy` turns actual instruction decoding into `allowed x = true`.
   This constrains same-frame instruction families, not child commitment or
   effects, and requires the check on every certificate function.
+  `Xinst.notDelegatecall` with `CursorOK.exec_spawn_undelegated` is the restriction the
+  `OwnSpawns` producers use: a cursor whose `ExecsSatisfy Xinst.notDelegatecall` decodes only
+  `CALL`, `STATICCALL` or `CREATE2`.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in
@@ -4732,6 +4957,49 @@ contract-neutral.
   final segment. Use it when an existing instruction inverse consumes a line
   while the remaining cut must retain provenance. Split a line itself with the
   existing `Blanc.of_run_append`; no second cut relation is needed.
+- Big-step node inversions under an arbitrary step relation, for a run
+  `SFunc.RunP P fs sevm d f o` over the walk state `St b S M G` (`rpw_next`, `rpw_dest`,
+  `rpw_branch`, `rpw_branchTo`, `rpw_jump`, `rpw_call`, `rpw_callOver` for a `NoHaltSet` callee,
+  `rpw_callRet` in a returning run, `rpw_ret`, `rpw_revert`; `SFunc.haltsOnly` with
+  `SFunc.RunP.not_returned_of_haltsOnly`; `St.self'`) in [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean).
+  Worked uses: Lido `pause` under `StepIn R` (`Blanc/Lift/LidoCircuitBreakerDeployed/Pause.lean`),
+  the USDC proxy (`Blanc/Lift/Usdc/ProxyWalk.lean`, `ProxyHalt.lean`).
+- One-lemma straight-line steps and the inversion helpers of solc walks:
+  [`Blanc/Lift/InvWalkStep.lean`](../Blanc/Lift/InvWalkStep.lean). `stepX` computes the successor walk state of the
+  straight-line instructions a walk crosses and `ri_stepX` inverts any of them at once; the
+  `istep h` tactic runs one such step (or a `JUMPDEST`) of a cut run, so a straight segment is
+  `repeat istep h`; `ibranch h c` crosses a conditional jump whose other arm only reverts;
+  `ric_callR` enters a callee that cannot halt; `SFunc.noExit`/`NoExitSet` with
+  `SFunc.RunP.false_of_noExit` close an arm that can only revert through loops and gotos;
+  `ret_named` names a returned state by its storage; `keccak_scratch` is solc's fresh mapping hash;
+  the word facts read solc's comparison flags, address masks and SafeMath guards
+  (`toNat_lt_of_shr_ne_one`, `add_nof_of_ltCheck`, `le_of_gt_check`, `word_ff20`, `sub_word`,
+  `add_word`, `adr_ne_zero_of_mask`). The cut-run kit of [`Blanc/Lift/WalkCutKit.lean`](../Blanc/Lift/WalkCutKit.lean) adds
+  the terminals `ric_stop`/`ric_return`, `ric_callRet` into a `NoHaltSet` callee, a solc
+  dispatcher's comparison rows decided by a closed comparison (`ric_gt_le`/`ric_gt_gt`/
+  `ric_eq_miss`/`ric_eq_hit` and the `rr_*` reach forms), the storage projections of the walk
+  bases, and solc's reuse of the previous hash's key word (`keccak_scratch2`, from
+  `Mem.read_after_right_write`). Worked uses: USDC (`Blanc/Lift/Usdc/RefineTransferCallees.lean`,
+  `RefineAdminBits.lean`), the USDC leg of the Pair (`Blanc/Composition/UniswapV2PairUsdcWeth9LegsKit.lean`).
+- Crossing code without walking it, the route-C skip theorems. A checked synthetic run never
+  touches the stack below its frame, [`Blanc/Lift/FrameSkip.lean`](../Blanc/Lift/FrameSkip.lean): `FrameAt`,
+  `SFunc.RunP.stack_below`, `SFunc.RunCutP.stack_below` (every stop satisfies `CutStop`),
+  `SFunc.RunP.entry_stack_below`, and `ric_call_silent`, which crosses any state-silent internal
+  call (hashing, ABI encoding, view-like helpers) with the continuation's stack
+  `Y ++ S.drop e.frame.length`, `Y.length = e.rets` (worked example:
+  `Blanc/Lift/UniswapV2Pair/FrameSkipExample.lean`, the Pair's `kLast()` getter). A silent
+  stack-shuffling segment crossed by one kernel decision, [`Blanc/Lift/ShuffleSkip.lean`](../Blanc/Lift/ShuffleSkip.lean):
+  the abstract words `SVal` (`arg i`, `lit w`, `unk`), `Carried`, the checker `shuffle` (every
+  instruction state-silent, its stack effect the lift's own `ninstTransfer` on index labels,
+  literal `JUMPI`s followed, reverting arms pruned, gotos into an entry list `Fw` disjoint from the
+  cut list) and `ric_shuffle`. A `DELEGATECALL` into quiet code,
+  [`Blanc/Lift/QuietDelegateSkip.lean`](../Blanc/Lift/QuietDelegateSkip.lean): `ProcessMessage.getStor_of_quietCode` (a call
+  message running `QuietCode` with no value transfer keeps its storage owner's storage),
+  `Ninst.delegatecall_getStor_of_quiet`, `Ninst.Run.getCode_eq`, `ric_delegatecall_quiet`,
+  framed runs (`SFunc.RunP.framed` over `Cert.framesSat`), `SFunc.RunP.qdKeep` over a
+  `QuietDelegateSet` closure whose every `DELEGATECALL` names one constant word (`QDKeep`), and
+  `ric_call_quietDelegate`. Worked uses: USDC (`Blanc/Lift/Usdc/ShuffleSegments.lean`,
+  `SignedSkip.lean`, `RefineSignedPermitNodes.lean`).
 - An `EXTCODESIZE` step with the actual warm/cold account access is in
   [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
   `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected

@@ -3,7 +3,11 @@
 What Blanc proves about bytecode that is already on Ethereum mainnet: WETH9, the
 Beacon deposit contract, the Curve 3Crv LP token, Lido's CircuitBreaker, the
 Vyper nonreentrancy pair (the fixed pool implementation "V+" and the vulnerable
-one "V−"), the EIP-7002 withdrawal-request predeploy, and the Uniswap V2 Pair.
+one "V−"), the EIP-7002 withdrawal-request predeploy, the Uniswap V2 Pair and
+the Uniswap V2 Factory, USDC (its proxy, implementation and signature library), and
+two compositions over one configured history: the Uniswap V2 Pair with WETH9 as one
+of its tokens (Section 5.9), and the Pair with USDC and WETH9 as its two tokens
+(Section 5.10).
 Every headline below names the theorem that carries it, the
 premises it needs, and what it does not say. The companion page for Blanc's own
 ports is [`PORTING.md`](../PORTING.md); this page is about the exogenous
@@ -56,10 +60,16 @@ forwarder to the implementation above it.
 | Vyper pool implementation, vulnerable (V−) | 0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e | 17,535 | 0xba0284a6a8a86734c1c777e3c6b5b56f2c8ba95dc0f7eba481c6d09da7885ebc | 0xd27491757b3a4bc9287ed44ce5c43de9f32131264548ce139f0a702c3d5f389e | 12,904,329 |
 | Pool proxy to the V− implementation | 0x9848482da3ee3076165ce6497eda906e66bb85c5 | 45 | 0xbed04db3507e08e5220f6eadf98d5df05bdbc74df129c73fcbab7c441e86b124 | not recorded | not recorded |
 | Uniswap V2 Pair (exhibit: the USDC/WETH pair) | 0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc | 11,293 | 0x5b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5 | not recorded (runtime read at a finalized block, below) | not recorded |
+| Uniswap V2 Factory | 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f | 13,859 | 0xbab145d02e7005f0d84c6c1639d39b799b0ea16df99ebbdaf5a14d9da820b4e0 | not recorded (runtime read at a finalized block, below) | not recorded |
+| USDC FiatTokenProxy | 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 | 2,186 | 0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505 | not recorded (runtime read at a finalized block, below) | not recorded |
+| USDC FiatTokenV2_2 implementation | 0x43506849D7C04F9138D1A2050bbF3A0c054402dd | 23,464 | 0xcdfb7d322961af3acae7a8f7ee8b69c205b36f576cc5b077f170c7eb8ecbe3ea | not recorded (runtime read at a finalized block, below) | not recorded |
+| USDC SignatureChecker library | 0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172 | 1,741 | 0x76cfc2ce63b1f05cb58ae553090665c2aabf2e13cf8a0e6da755c096fc5295dd | not recorded (runtime read at a finalized block, below) | not recorded |
 
 Compilers, from the certificate provenance: 3Crv Vyper 0.2.4; the
 CircuitBreaker solc 0.8.34; V− Vyper 0.2.15; V+ Vyper 0.3.7; the Uniswap V2 Pair
-solc 0.5.16.
+solc 0.5.16; USDC proxy solc 0.4.24; implementation solc 0.6.12; library solc 0.6.12.
+The Uniswap V2 Factory's certificate provenance names no compiler; the compiler
+metadata at the end of its lifted runtime encodes solc 0.5.16.
 
 **The Uniswap V2 Pair row.** One runtime serves every V2 pair, so the row is the
 exhibit instance's code. It was read by `eth_getCode` at finalized block 26,098,569
@@ -72,6 +82,28 @@ its Keccak-256 is the factory's init-code hash
 0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f, and bytes
 261 to 11,553 of it are the lifted runtime. Nothing was recompiled: the
 refinement of Section 5.8 is what ties the bytes to the v1.0.1 source.
+
+**The Uniswap V2 Factory row.** The factory's runtime was read by `eth_getCode` at
+finalized block 26,209,011 (block hash 0x9df55d378356653a65256646c23abda202319a66be5b2d1699c9f05cf1a6dc92)
+and is equal across three separately operated providers; its creation transaction is
+not recorded, and the lifted input is `scripts/lift/inputs/uniswap-v2-factory-runtime.hex`.
+Bytes 2,171 to 13,806 of it are the Pair creation code, byte for byte; bytes 0 to 2,170
+are the factory's own logic and the last 52 bytes its compiler metadata. The certificate
+covers the logic and the metadata, and the Pair creation code inside the runtime is data
+to the factory: it is copied for `CREATE2`, and the certificate's walk of the factory's
+code never enters it.
+
+**The USDC rows.** The USDC proxy, implementation and library runtimes were read
+by `eth_getCode` at finalized block 26,213,219 (block hash 0xa79841b4ef0d00bcd0b0c8dc6b405efd4ab1ac3182b1a9a4877f873673e24b6c)
+and are equal byte for byte across six separately operated providers: Allnodes PublicNode,
+dRPC, Bware BlastAPI, Tenderly, Nodies and bloXroute; no creation transaction of these
+instances is recorded, and the lifted inputs are `scripts/lift/inputs/usdc-proxy-runtime.hex`,
+`scripts/lift/inputs/usdc-impl-runtime.hex` and `scripts/lift/inputs/usdc-lib-runtime.hex`.
+The proxy holds the implementation address in its implementation slot
+0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3
+(`keccak256("org.zeppelinos.proxy.implementation")`), agreed across all six providers.
+The library address is linked into the implementation runtime at two
+PUSH20 sites (bytes 18,390 and 20,105), each reaching a DELEGATECALL. No Solidity recompilation.
 
 **Canonical system contracts.** The Beacon `_sys` headlines assume the four
 canonical system contracts are installed at their protocol addresses. Their
@@ -111,7 +143,7 @@ recorded in the certificate provenance; that is not historical inclusion.
 | Lean toolchain `v4.35.0` | Kernel soundness | For every constant of every Blanc module, and therefore for every theorem this map cites, the reachable axioms are within `propext`, `Classical.choice`, `Quot.sound`; one from-scratch union walk (Section 8), not `#print axioms` or `collectAxioms` |
 | Jaune revision `05696652` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **4,968/4,968** supported fixture files and **34,449/34,449** cases of the execution-specs mainnet corpus (`tests@v21.0.1`), Prague through BPO2 including configured fork transitions |
 | Lift certificates | Nothing | The Python producers are untrusted. Each certificate is accepted only by its Lean `cert_check`, a kernel decision, against the literal bytes |
-| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across separately operated public providers (two for WETH9, five for 3Crv, three for the Uniswap V2 Pair, at one finalized block); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records; the Uniswap V2 Pair creation code taken from the publisher artifact of `@uniswap/v2-core` 1.0.1, its Keccak-256 equal to the factory's init-code hash and its embedded runtime equal to the lifted runtime. The codehashes in Section 2 are recomputed from the lifted files by the checker |
+| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across separately operated public providers (two for WETH9, five for 3Crv, three each for the Uniswap V2 Pair and the Uniswap V2 Factory, each at one finalized block); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records; the Uniswap V2 Pair creation code taken from the publisher artifact of `@uniswap/v2-core` 1.0.1, its Keccak-256 equal to the factory's init-code hash and its embedded runtime equal to the lifted runtime; the lifted factory runtime embeds that creation code byte for byte. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
 | Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery: `Blanc.Drip.concreteCreateRecoveredSender` (`Blanc/DripConcreteHistory/Deployment.lean:197`), `Blanc.Drip.concreteExitRecoveredSender` (`Blanc/DripConcreteHistory/AccrualExit.lean:1225`), `Blanc.Lift.WithdrawalRequest.FloodTx.txB_recoveredSender` (`Blanc/Lift/WithdrawalRequest/FloodTxRecover.lean:149`) and, for V−, `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`) |
@@ -125,7 +157,7 @@ whether a class is acceptable and whether deployment establishes INIT.
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |
 |---|---|---|---|
 | CODE | Installed code and fork identity | Yes | — |
-| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:151`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:300`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:210`)]. **Uniswap V2 Pair** `InitializedCheckpoint`: yes, no hash premise, by a `CREATE2` deployment followed by the factory's `initialize`, whose successful run is constructed [`Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`), `Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:246`)]. **V±**: the exclusion (V+) and violation (V−) statements take no INIT premise; the reachable witnesses execute deployment, initialization and liquidity as messages from a creator-only world [`Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean:35`), `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:30`)], message level only (Section 7 item 25); the older witnesses and the V− transaction row start from synthetic prestates |
+| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:151`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:300`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:210`)]. **Uniswap V2 Pair** `InitializedCheckpoint`: yes, no hash premise, by a `CREATE2` deployment followed by the factory's `initialize`, whose successful run is constructed [`Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`), `Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:246`)]. **V±**: the exclusion (V+) and violation (V−) statements take no INIT premise; the reachable witnesses execute deployment, initialization and liquidity as messages from a creator-only world [`Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean:35`), `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:30`)], message level only (Section 7 item 25); the older witnesses and the V− transaction row start from synthetic prestates. **Uniswap V2 Pair × WETH9** `JointCheckpoint`: by the Pair's `CREATE2` deployment and an `initialize` naming WETH9 as either token, from a world whose WETH9 satisfies its footprint INIT with the new address's balance row tracked and its allowance rows zero, no hash premise [`Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint_side` (`Blanc/Composition/UniswapV2PairWeth9Deploy.lean:56`)]; for one synthetic world, by a checker evaluated in the kernel (Section 5.9); **Uniswap V2 Pair × USDC × WETH9** `JointCheckpoint2`: by the Pair's `CREATE2` deployment and `initialize` naming USDC as `token0` and WETH9 as `token1`, from an initialize world carrying both tokens' checkpoint facts, no hash premise [`Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_create2_jointCheckpoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9Deploy.lean:31`)]; for one synthetic world `U0`, by a checker evaluated in the kernel (Section 5.10) |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
 | HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved. The Lido finite tier (Section 5.4) states its instances as decidable checks on explicit key lists, so a concrete instance is closed by kernel evaluation | — |
 | HASH-U | Exact separation quantified over all 2^160 addresses or indices | Needs justification; not established here. The finite domain does not make proof impossible. Under a random-function model of Keccak the estimated failure probability is about q·2^-94 per frame (q = written slots): **heuristic only, with no reduction or bound proved** | — |
@@ -351,7 +383,7 @@ faithful at bound 2^160).
 |---|---|---|---|---|
 | After any configured history there is a registry witness of the future storage: assignment and index agree with membership, counts equal assignments, pauser 0 has count 0, and live counts sum to the length word | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3` (`Blanc/Lift/LidoCircuitBreakerDeployed/History.lean:56`) | History / safety | CODE; INIT `RegistryZeroRaw`; ENTRY plus **HASH-U** `FrameAdmitted ca (lidoEntry lidoA)` | selector-insensitive |
 | `registerPauser(t, 0)` from a real pc-0 entry removes `t` with the correct swap-and-pop repair (`L2Post`) | `Blanc.Lift.LidoCircuitBreakerDeployed.l2_registerPauser_zero` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2Frame.lean:249`) | Frame / safety | CODE; fresh entry; **HASH-U** `EntryAt lidoA`; INIT-shaped `RegistryWitness` of the pre-storage | |
-| **The pre-storage witness is derived:** every settlement-committed non-static `registerPauser(t, 0)` frame (including one re-entered from inside `pause`'s CALL) has a witness of its entry storage and `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean:62`) | History / safety | CODE via `StateInv` INIT; `FrameAdmitted ca (lidoEntry lidoA)` (HASH-U); per-frame call shape only. Uses the generic `Blanc.ExecutionTrace.ConfiguredHistoryTrace.entryGood_settled` (`Blanc/ExecutionEntryAccounting.lean:494`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_spawnEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean:445`) and `Blanc.Lift.reach_of_parentPrefix` (`Blanc/Lift/Cursor.lean:718`) | static committed frames and frames under a rolled-back ancestor are **not claimed** |
+| **The pre-storage witness is derived:** every settlement-committed non-static `registerPauser(t, 0)` frame (including one re-entered from inside `pause`'s CALL) has a witness of its entry storage and `L2Post` | `Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean:62`) | History / safety | CODE via `StateInv` INIT; `FrameAdmitted ca (lidoEntry lidoA)` (HASH-U); per-frame call shape only. Uses the generic `Blanc.ExecutionTrace.ConfiguredHistoryTrace.entryGood_settled` (`Blanc/ExecutionEntryAccounting.lean:494`), `Blanc.Lift.LidoCircuitBreakerDeployed.lido_spawnEntry` (`Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean:445`) and `Blanc.Lift.reach_of_parentPrefix` (`Blanc/Lift/Cursor.lean:797`) | static committed frames and frames under a rolled-back ancestor are **not claimed** |
 
 **Liveness.** None. There is **no Lido liveness claim of any level**, at
 either tier.
@@ -483,8 +515,11 @@ pair can observe only what `balanceOf` and the factory's `feeTo` answer: those
 answers are **inputs** of the statements, never assumptions folded into a
 definition. Results about the bytes and about replay, the LP ledger and the oracle
 need no token or factory premise. The share-value statements take a named premise
-about the callee answers of the history's own steps. The factory's bytecode is not
-lifted. The functional model is transcribed from the v1.0.1 sources and carries a
+about the callee answers of the history's own steps. The theorems of this section do
+not use the factory's bytecode: its `feeTo` answers and its `initialize` call stay
+premise-level here. The factory runtime is lifted separately (Section 2), and Section
+5.9 uses it only to show that the factory makes no non-static call into a pair
+installed at the checkpoint. The functional model is transcribed from the v1.0.1 sources and carries a
 line-by-line correspondence table with an independent source-versus-model review
 ([`docs/registers/UNISWAP_V2_MODEL_REVIEW.md`](registers/UNISWAP_V2_MODEL_REVIEW.md),
 which reviewed an earlier snapshot of the model and states what has changed since).
@@ -499,8 +534,8 @@ which reviewed an earlier snapshot of the model and states what has changed sinc
 | **Oracle (U5):** the two price accumulators after the history are the checkpoint's plus the sum of the increments of every committed update receipt of the replay (nested committed updates included), modulo 2^256; every receipt satisfies the per-update law, the receipts chain `last` from the checkpoint's stored timestamp to the future one, and each receipt's `ts` is the block timestamp of its step's frame | `Blanc.Lift.UniswapV2Pair.pair_history_oracle` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:724`), through the replay lemma `Blanc.Lift.UniswapV2Pair.SourceReplay.oracle_receipts` (`Blanc/Lift/UniswapV2Pair/SourceReplayOracle.lean:351`) and the timestamp provenance `Blanc.Lift.UniswapV2Pair.runTyped_stamped` (`Blanc/Lift/UniswapV2Pair/SourceReplayOracle.lean:324`); the per-update law `Blanc.Lift.UniswapV2Pair.OracleUpdate.Lawful` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean:8`): `Δt = (ts mod 2^32 − last) mod 2^32` and an increment of `⌊r1·2^112/r0⌋·Δt` (symmetrically for price 1) when `Δt` and both reserves are nonzero, established for every update `Blanc.Lift.UniswapV2Pair.State.update_oracle_lawful` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean:20`) and carried through the typed driver by `runTyped_oracle_law` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean`) | History (sum) and model (law) / safety | as `pair_history_committed` | Both wraparounds, of the `uint32` timestamp and of the accumulator, are part of the statements. The history theorem states the modular sum of the recorded increments and, for each recorded increment, the floor formula over the wrapped `Δt` with `ts` the step frame's block timestamp (re-entered frames inherit it) (Section 7 item 22) |
 | **Share value never decreases, protocol fee off (U3):** for every committed state change of the replay with positive incoming supply `T`, `r0·r1·T'² ≤ r0'·r1'·T²`; when the outgoing supply `T'` is positive too, this says `√(r0·r1)/T` does not decrease (from an arbitrary represented checkpoint `T'` can be 0, for example a burn of the whole supply, and then no ratio is defined; from the deployment checkpoint the `MINIMUM_LIQUIDITY` row below gives `T' ≥ 1000` and the ratio form over the rationals). The bound holds between consecutive committed steps of the replay, not at intermediate states inside a frame. It covers mint (minimum of two floors), burn (floors), swap (fee-adjusted check), sync and skim | `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_product` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:765`); consumed `Blanc.Lift.UniswapV2Pair.SourceReplay` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:35`); frame-level `Blanc.Lift.UniswapV2Pair.runTyped_product` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2680`) | History / safety | as `pair_history_committed`, and for the history's own steps `sourceReplayAnswers`: at each step `EntryFeeOff` (the factory's `feeTo` answer of a mint or burn is zero) and `EntryNoShrink` (the token-answer premise **NoShrink**, below) | **Token and factory premises, stated over the history's own steps only**, not over all tokens. Nonvacuous: any history whose tokens answer at least the stored reserves where the premise says so, and whose factory answers `feeTo = 0`, satisfies it. Mint and swap need no token premise: the bytecode's own checks (the checked balance subtractions, the fee-adjusted check) give the inequality |
 | **Share value with the protocol fee on:** every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²`, where `F = entryFeeAmount` is the exact fee mint of that step, `⌊T·(√k − √kLast)/(5·√k + √kLast)⌋` at the step's actual `feeTo` answer (floored roots, `feeTo ≠ 0`, `kLast ≠ 0`, `√kLast < √k`), else 0; dilution is bounded by the fee mint alone | `Blanc.Lift.UniswapV2Pair.pair_history_feeOn_product` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:796`) | History / safety | as `pair_history_committed`, and `sourceReplayNoShrink` over the history's own steps | As above without the fee-off condition |
-| **`MINIMUM_LIQUIDITY` keeps the supply positive (U3 floor):** from any represented checkpoint satisfying `State.Ledger` and `State.SupplyFloor`, at the final state and at both ends of every committed step of the replay, the supply is zero or address 0 holds at least 1000 LP, and address 0 has granted no allowance; every step entered with positive supply leaves at least 1000. With the fee-off share-value premises this gives the ratio form `r0·r1/T² ≤ r0'·r1'/T'²` over the rationals, with both supplies positive | `Blanc.Lift.UniswapV2Pair.pair_history_minimum_liquidity_from_checkpoint` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:125`), `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_ratio_from_checkpoint` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:154`); initialized corollaries `Blanc.Lift.UniswapV2Pair.pair_history_minimum_liquidity` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:192`), `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_ratio` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:224`); the invariant `Blanc.Lift.UniswapV2Pair.State.SupplyFloor` (`Blanc/Lift/UniswapV2Pair/PropertiesMinLiquidity.lean:40`) | History / safety | CODE; represented checkpoint `WriterRep` with complete support; `State.Ledger` and `State.SupplyFloor` at that checkpoint; HASH-T freshness over the history's touched keys; the pair not at address 0, and, over the history's own steps, `Blanc.Lift.UniswapV2Pair.SourceInvocation.CallersNonzero` (`Blanc/Lift/UniswapV2Pair/PropertiesMinLiquidity.lean:603`): no step and no re-entered pair child consumed inside a step has caller 0 (ENV: a caller-0 frame needs code or a signing key at address 0); the ratio form adds `sourceReplayAnswers` | The caller premise is load-bearing: a `transfer` or `approve` called by address 0 could move the locked LP. A `permit` cannot, since its recovered owner is nonzero. The floor concerns the model state the replay represents (Section 7 item 19) |
-| **NoShrink, exactly.** For `sync`: both answers of `balanceOf(pair)` are at least the stored reserves. For `burn`: both first answers are at least the stored reserves, and each first answer is at most its final answer plus that token's payout (a transfer debits at most its payout). For every other entry: none | `Blanc.Lift.UniswapV2Pair.EntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2643`) with `Blanc.Lift.UniswapV2Pair.SyncEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1994`) and `Blanc.Lift.UniswapV2Pair.BurnEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1490`); fee-off `Blanc.Lift.UniswapV2Pair.EntryFeeOff` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2657`); over a replay `Blanc.Lift.UniswapV2Pair.sourceReplayAnswers` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:105`), `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | Premise definitions (ENV: callee behaviour) | — | The burn form is weaker than "every answer is at least the stored reserve", which would exclude every ordinary burn (an honest token answers below the reserve after paying out). NoShrink constrains only the pair's own balance answers, not what a recipient receives: a token that takes its transfer fee from the recipient's proceeds (the pair is debited exactly the payout), or whose balances only grow (positive rebases, donations), can satisfy it, while extra debits of the pair or downward rebases can violate it. No theorem claims that a recipient is credited, or that any token satisfies it: the premise concerns the actual answers of the history's selected steps (Section 7 items 17 and 26) |
+| **`MINIMUM_LIQUIDITY` keeps the supply positive (U3 floor):** from any represented checkpoint satisfying `State.Ledger` and `State.SupplyFloor`, at the final state and at both ends of every committed step of the replay, the supply is zero or address 0 holds at least 1000 LP, and address 0 has granted no allowance; every step entered with positive supply leaves at least 1000. With the fee-off share-value premises this gives the ratio form `r0·r1/T² ≤ r0'·r1'/T'²` over the rationals, with both supplies positive | `Blanc.Lift.UniswapV2Pair.pair_history_minimum_liquidity_from_checkpoint` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:125`), `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_ratio_from_checkpoint` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:154`); initialized corollaries `Blanc.Lift.UniswapV2Pair.pair_history_minimum_liquidity` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:192`), `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_ratio` (`Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean:224`); the invariant `Blanc.Lift.UniswapV2Pair.State.SupplyFloor` (`Blanc/Lift/UniswapV2Pair/PropertiesMinLiquidity.lean:40`) | History / safety | CODE; represented checkpoint `WriterRep` with complete support; `State.Ledger` and `State.SupplyFloor` at that checkpoint; HASH-T freshness over the history's touched keys; the pair not at address 0, and, over the history's own steps, `Blanc.Lift.UniswapV2Pair.SourceInvocation.CallersNonzero` (`Blanc/Lift/UniswapV2Pair/PropertiesMinLiquidity.lean:601`): no step and no re-entered pair child consumed inside a step has caller 0 (ENV: a caller-0 frame needs code or a signing key at address 0); the ratio form adds `sourceReplayAnswers` | The caller premise is load-bearing: a `transfer` or `approve` called by address 0 could move the locked LP. A `permit` cannot, since its recovered owner is nonzero. The floor concerns the model state the replay represents (Section 7 item 19) |
+| **NoShrink, exactly.** For `sync`: both answers of `balanceOf(pair)` are at least the stored reserves. For `burn`: both first answers are at least the stored reserves, and each first answer is at most its final answer plus that token's payout (a transfer debits at most its payout). For every other entry: none | `Blanc.Lift.UniswapV2Pair.EntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2643`) with `Blanc.Lift.UniswapV2Pair.SyncEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1994`) and `Blanc.Lift.UniswapV2Pair.BurnEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1490`); fee-off `Blanc.Lift.UniswapV2Pair.EntryFeeOff` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2657`); over a replay `Blanc.Lift.UniswapV2Pair.sourceReplayAnswers` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:105`), `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | Premise definitions (ENV: callee behaviour) | — | The burn form is weaker than "every answer is at least the stored reserve", which would exclude every ordinary burn (an honest token answers below the reserve after paying out). NoShrink constrains only the pair's own balance answers, not what a recipient receives: a token that takes its transfer fee from the recipient's proceeds (the pair is debited exactly the payout), or whose balances only grow (positive rebases, donations), can satisfy it, while extra debits of the pair or downward rebases can violate it. No theorem claims that a recipient is credited, or that any token satisfies it outside Section 5.9, where the WETH9 half (`EntryNoShrinkSide` on WETH9's side) is a theorem from a joint checkpoint: the premise concerns the actual answers of the history's selected steps (Section 7 items 17 and 26) |
 | Frame refinement of every selector: a successful pc-0 run of the certified runtime consumes the typed source entry exactly over the observations of its own derivation (the token and factory answers; nested turns derived from the run's actual children), with exact storage, logs and return bytes. For `mint`, `swap`, `skim` and `burn` the original-name statements return one admitted canonical result of the run: a positional consumption (the actual position of each external call, its reply, the entered bit and the full nested queues, mutable ones included) that is recursively admitted, with the actual output, the storage representation and the correspondence of the pending source logs with the raw logs; the `mint` direct and own forms carry that canonical result with the full pending and raw log image, and `swap_bytecode_exact_consumes` and its `_own` form return one `SwapPositionalCanonicalResult`. Writers: sync, mint, swap (in all six successful shapes: each optimistic transfer present iff its amount is nonzero, the callback present iff `data` is nonempty), skim, burn, transfer, approve, transferFrom, initialize (the factory is the caller) and permit; **views**: every successful static frame is one of the views, with value zero | `Blanc.Lift.UniswapV2Pair.sync_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SyncGasCanonical.lean:749`), `Blanc.Lift.UniswapV2Pair.mint_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/MintPositionalRefinement.lean:19`), `Blanc.Lift.UniswapV2Pair.swap_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SwapPositionalRefinement.lean:8`), `Blanc.Lift.UniswapV2Pair.skim_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SkimPositionalRefinement.lean:8`), `Blanc.Lift.UniswapV2Pair.burnRaw_source_authentic` (`Blanc/Lift/UniswapV2Pair/BurnPositionalRefinement.lean:8`), `Blanc.Lift.UniswapV2Pair.transfer_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/TransferSource.lean:467`), `Blanc.Lift.UniswapV2Pair.approve_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/ApproveSource.lean:254`), `Blanc.Lift.UniswapV2Pair.transferFrom_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/TransferFromSource.lean:590`), `Blanc.Lift.UniswapV2Pair.initialize_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/InitializeSource.lean:190`), `Blanc.Lift.UniswapV2Pair.permit_bytecode_admitted_consumes` (`Blanc/Lift/UniswapV2Pair/PermitSourceOccurrence.lean:127`), `Blanc.Lift.UniswapV2Pair.staticView_bytecode_inv` (`Blanc/Lift/UniswapV2Pair/StaticViewClassify.lean:1256`) | Frame / refinement | CODE; covered fork; fresh pc-0 entry; INIT-shaped `WriterRep` of the entry storage; HASH-T over the run's own key universe (transfer, approve, transferFrom and permit: freshness of their own touched rows); `burnRaw_source_authentic` also takes the pair's own balance key as tracked and requires every nested frame at the pair to decode only keys of that universe (`LockedGood`, with the keys of its static views in `staticViewDecodedKeys`) | The frame theorems are the ground the history rows are built on. `permit` uses the **result** of the modeled ECRECOVER precompile as an input: value zero, at least 228 calldata bytes, non-static, before the deadline, and a successful recovery call whose copied word is the nonzero owner; unforgeability of signatures is not claimed. The admitted `permit` route additionally requires a separated universe, the installed runtime identity and descendant-view coverage; the admitted suppliers use it with `LockedAuth`. A successful `mint` frame also leaves every other account's storage unchanged [`Blanc.Lift.UniswapV2Pair.mint_bytecode_exact_consumes_own` (`Blanc/Lift/UniswapV2Pair/MintPositionalRefinement.lean:48`)] |
 | Model laws of the typed source model (the functional model the replay folds over): the first mint prices `⌊√(a0·a1)⌋ − 1000`, locks 1000 at address 0 and credits the recipient the rest, with the Babylonian loop equal to `Nat.sqrt` over the full domain; a later mint issues `min(⌊a0·T/r0⌋, ⌊a1·T/r1⌋)` (with `T` the supply after the fee mint); a burn pays and returns `⌊L·b_i/T⌋` of each token by exactly the two transfer requests; a swap succeeds only if (and, on the canonical transcript, whenever) some output is positive, the outputs are below the reserves, `to` is neither token, the post-callback balances fit `uint112`, some input is positive and the fee-adjusted check holds, and then stores exactly those balances as reserves; the callback request is present iff `data` is nonempty, with exact calldata | `Blanc.Lift.UniswapV2Pair.runTyped_mint_initial` (`Blanc/Lift/UniswapV2Pair/Properties.lean:3196`), `Blanc.Lift.UniswapV2Pair.runTyped_mint_initial_floor` (`Blanc/Lift/UniswapV2Pair/Properties.lean:3209`), `Blanc.Lift.UniswapV2Pair.mintAmount_initial_spec` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2762`), `Blanc.BabylonianSqrt.sourceResult_eq_sqrt` (`Blanc/Lift/BabylonianSqrt.lean:106`), `Blanc.Lift.UniswapV2Pair.runTyped_mint_later` (`Blanc/Lift/UniswapV2Pair/PropertiesMintBurn.lean:310`), `Blanc.Lift.UniswapV2Pair.runTyped_burn_payout` (`Blanc/Lift/UniswapV2Pair/PropertiesMintBurn.lean:924`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_success_reserves` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:561`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_canonical_success` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1042`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_callback_request` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1664`) | Model / safety | the model only (the swap and burn statements are conditioned on the successful run's own answers) | Bridged to the bytes by the frame refinement and history rows above. The bytecode's own Babylonian loop is walked exactly [`Blanc.Lift.UniswapV2Pair.sqrt_of_run` (`Blanc/Lift/UniswapV2Pair/SqrtWalk.lean:589`)]. These are model facts: that real tokens give the answers a premise names is not proved |
 
@@ -581,16 +616,232 @@ address of the factory, that salt and the creation code
 **Fork coverage.** The history, replay and liveness theorems assume or derive
 `CoveredFork`; the deployment theorems quantify over covered forks.
 
-**Non-claims.** That real tokens satisfy NoShrink or that a factory answers
-`feeTo = 0`; that any price, the TWAP or the economics of the pool are fair or
-safe; the factory's bytecode (it is a premise-level message source, and the
-fact that the factory issues the `initialize` call is a premise of the
-deployment theorems, its frame environment, not a consequence of lifted factory
-code); historical inclusion of the deployment;
-unforgeability of `permit` signatures; the composition of the pair with WETH9
-(the WETH9 token of the exhibit pair is not discharged from Blanc's WETH9
-results); transaction-level liveness; frames that were rolled back; the real
-transaction history of the exhibit pair.
+**Non-claims.** That real tokens satisfy NoShrink (the WETH9 half is a theorem only
+under the premises of Section 5.9) or that a factory answers `feeTo = 0`; that any
+price, the TWAP or the economics of the pool are fair or safe; any use of the
+factory's bytecode by the theorems of this section (the factory is a premise-level
+message source here, and the fact that the factory issues the `initialize` call is a
+premise of the deployment theorems, its frame environment, not a consequence of the
+lifted factory code); historical inclusion of the deployment; unforgeability of
+`permit` signatures; that the exhibit pair's current mainnet state satisfies the
+joint checkpoint of Section 5.9, so its WETH9 side is not discharged for the live
+pool; transaction-level liveness; frames that were rolled back; the real transaction
+history of the exhibit pair.
+
+### 5.9 Uniswap V2 Pair × WETH9: two deployed runtimes in one history
+
+Sections 5.1 and 5.8 each describe one contract; in Section 5.8 a pair's token
+answers enter as premises (NoShrink and the liveness callee records). This section
+composes the two certified runtimes over **one** configured history. When one of a
+pair's two tokens is WETH9 (an address holding the certified WETH9 runtime), WETH9's
+half of those premises becomes a theorem, and the other token's half stays a named
+premise (when that other token is USDC, Section 5.10 discharges it from USDC's certified runtimes, under the premises stated there). The statements cover every pair that runs the certified Pair runtime, with
+WETH9 as `token0` or `token1` (`TokenSide`), whose stored `factory` address holds the
+certified Uniswap V2 Factory runtime at the checkpoint, over any configured history
+that starts from a world satisfying `JointCheckpoint`. The joint invariant is proved
+once against a contract-neutral token interface, and WETH9 is its first instance; the
+WETH9 statements are that proof instantiated.
+
+**Token interface and WETH9 as its instance**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| The laws a token's pure book (an abstract ledger, its step on one entered frame's message, the decoded operation, balances, allowances, and a well-formedness predicate `Good`) must satisfy: a step from a good ledger lowers a holder's balance only if its caller is the holder or a spender to which the holder had granted a positive allowance; only the owner raises its own allowances; a holder's own `balanceOf`, `transfer` or credit-only call debits it at most by the declared amount and raises none of its allowances; a step decoded as `transfer` to someone else debits the caller exactly; a good ledger's balances are below 2^256 | `Blanc.Lift.Token.BookLaws` (`Blanc/Lift/Token/Core.lean:62`) over `Blanc.Lift.Token.Book` (`Blanc/Lift/Token/Core.lean:48`) | Interface / definition | — | No storage layout appears |
+| The token core, what a token's **address** answers along a configured history: under a trace-local premise `Hist` the instance chooses, at the entry of every settled frame the booked ledger is the book run over exactly the non-static entry frames at the token before it, and at the end over all of them; the ledger is good at the checkpoint and at every settled frame's entry; a settled `balanceOf(h)` entry frame, static or not, answers the booked balance for every holder the instance vouches for; a settled `transfer` entry frame answers empty output or a nonzero first word; a settled frame at the token that is not an entry frame (`IsEntry`: storage owner and code address both the token) is a child only of settled frames at the token | `Blanc.Lift.Token.Core` (`Blanc/Lift/Token/Core.lean:98`); entry frames `Blanc.Lift.Token.IsEntry` (`Blanc/Lift/Token/Core.lean:85`) | History / interface | the instance's own `Hist` | Further facts are separate structures over the book or the core, added without editing it: `Blanc.Lift.Token.Erc20Abi` (`Blanc/Lift/Token/Abi.lean:17`) (the standard `transfer` and `balanceOf` selectors decode as those operations for every calldata of at least 68 and 36 bytes respectively and below 2^256), `SelfCaller` and `TransferLive` below. The non-entry clause admits a proxy's delegated implementation frames |
+| Facet: every entry-frame child of a settled non-static frame at the token has the token itself as caller | `Blanc.Lift.Token.SelfCaller` (`Blanc/Lift/Token/SelfCaller.lean:18`) | History / interface | the core's `Hist` | No forwarded caller reaches a booked entry |
+| Facet: at any world the instance accepts, a fresh entry frame (value 0, non-static, covered fork, the token's code) decoding a `transfer` of at most the caller's booked balance runs to success at an exact instance-given cost, answers the word 1, leaves an accepted world, and, when the recipient is not the caller, debits the caller exactly | `Blanc.Lift.Token.TransferLive` (`Blanc/Lift/Token/Core.lean:145`) | Frame / interface | the instance's world and frame conditions; ENV: gas at least the cost plus the 2,300-gas stipend | |
+| WETH9's book (its pure ledger model read through the deployed dispatcher's own decoder, as natural numbers; good while the total fits a word) satisfies the laws | `Blanc.Composition.Weth9Token.weth9Book_laws` (`Blanc/Composition/Weth9Token.lean:337`), the book `Blanc.Composition.Weth9Token.weth9Book` (`Blanc/Composition/Weth9Token.lean:33`); the ABI facet `Blanc.Composition.UniswapV2PairWeth9Joint.weth9Book_erc20Abi` (`Blanc/Composition/UniswapV2PairWeth9Joint.lean:33`) | Model / safety | none | A zero-value `deposit` is read as credit-only, any other `deposit` as an unclassified operation |
+| WETH9 at any address is an instance of the core: `Hist` is `Weth9Hist`, exactly the four premises of `weth9_history_committed`; the booked ledger is the footprint ledger over the history's key universe; the holders vouched for are its tracked balance rows | `Blanc.Composition.Weth9Token.weth9Core` (`Blanc/Composition/Weth9TokenCore.lean:253`) | History / instance | CODE; ARITH `SumNof`; INIT `FootInv K₀`; HASH-T `KeysFresh K₀ (historyTouchedKeys ca trace)` | Built from the WETH9 history theorems of Section 5.1 and the deployed code's `balanceOf` and `transfer` outputs, static frames included |
+| WETH9 discharges the `SelfCaller` facet: its code spawns only by `CALL` and `STATICCALL`, so every child of a settled non-static WETH9 frame has WETH9 as caller | `Blanc.Composition.Weth9Token.weth9SelfCaller` (`Blanc/Composition/Weth9TokenCore.lean:269`) | History / instance | as `weth9Core` | |
+| WETH9's transfer facet: the accepted worlds hold WETH9's code and `FootInv U`; the frame's five `frameKeys` lie in `U` and its calldata is below 2^256; the cost is `transferGas` | `Blanc.Composition.Weth9Token.weth9TransferLive` (`Blanc/Composition/Weth9Token.lean:453`) | Frame / instance | INIT `FootInv U` at the world; HASH-T `frameKeys sevm ⊆ U`; ENV gas | From the deployed code's frame-level `transfer` run |
+
+**The factory lift**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| The certificate of the 13,859-byte factory runtime is accepted | `Blanc.Lift.UniswapV2Factory.cert_check` (`Blanc/Lift/UniswapV2Factory/Check.lean:121`), the runtime `Blanc.Lift.UniswapV2Factory.factoryCode` (`Blanc/Lift/UniswapV2Factory/Input.lean:163`) as the code image `Blanc.Lift.UniswapV2Factory.factorySem` (`Blanc/Lift/UniswapV2Factory/CallShape.lean:385`) | Bytes / certificate | none | Kernel decision against the literal bytes (Section 2) |
+| Every direct child of a frame running the factory code from pc 0 on a covered fork is static, or targets address 0, or targets an address that had no code when the frame began; the target operand of each of its `CALL`s, after the 160-bit mask, is 0 or such an address | `Blanc.Lift.UniswapV2Factory.factory_children_fresh` (`Blanc/Lift/UniswapV2Factory/CallShape.lean:326`), `Blanc.Lift.UniswapV2Factory.factory_call_target` (`Blanc/Lift/UniswapV2Factory/CallShape.lean:291`) | Frame / safety | CODE; covered fork | The only `CALL` sites are the `initialize` calls of the factory's pair-creation entry point; the certificate's walk tracks their target operand to the result of the preceding `CREATE2` |
+| Over any configured history whose checkpoint has the Pair runtime at `pair ≠ 0` and the factory runtime at the address a Pair model state names as `factory`, that address not being the system address: no settled non-static frame at `pair` has the factory as caller | `Blanc.Composition.UniswapV2FactoryQuiet.pair_history_factoryQuiet` (`Blanc/Composition/UniswapV2FactoryQuiet.lean:40`) | History / safety | CODE (both runtimes at the checkpoint); ENV: `pair ≠ 0`, the factory is not the system address | The Pair's `initialize` has no one-shot guard, so a factory call could replace its stored tokens; this theorem is why the composed statements need no premise about the factory's behaviour. The factory's `feeTo` answers are not discharged from the lift |
+
+**The joint invariant**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| For any token core with `BookLaws`, the ABI facet and `SelfCaller`: over any configured history from a checkpoint where the Pair runtime is at `pair` and its storage represents an unlocked model state whose token on `side` is `T`, and where `JointAt` holds (the side's stored reserve is at most `T`'s booked balance of the pair, and the pair has granted no booked allowance): at the entry of every settled frame not enclosed by a settled non-static frame at the pair (the committed points at which the pair is unlocked), the pair's storage represents an unlocked model state with that token and `JointAt` holds there; at the history's end, over the pair's full replay, `JointAt` holds at the final state | `Blanc.Composition.PairTokenJoint.pair_token_joint` (`Blanc/Composition/PairTokenJoint.lean:126`), the relation `Blanc.Composition.PairTokenJoint.JointAt` (`Blanc/Composition/PairTokenJointAt.lean:20`) | History / safety | CODE (the Pair runtime); INIT `WriterRep`, unlocked, `JointAt`, `token0 ≠ token1`; ENV: `pair ≠ T`, the pair is not the system address and is a holder the core vouches for; HASH-T `WriterFreshKeys` over the pair's touched rows; the core's `Hist`; ENV (trace-local): no settled non-static pair frame has the factory as caller, and at every execution step of every settled non-static pair frame `T`'s code is no EIP-7702 designator and `T` is not a precompile | No token storage layout appears. Reentrant callbacks during `swap` lie inside the pair's frames and are consumed by its positional replay. The factory and token-entry premises are discharged in the WETH9 form below |
+| Under the same premises, every outer pair step of the history satisfies the token's half of NoShrink, over the replay of `pair_history_committed` | `Blanc.Composition.PairTokenJoint.pair_token_noShrinkSide` (`Blanc/Composition/PairTokenJoint.lean:165`), the half `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrinkSide` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:128`) | History / safety | as `pair_token_joint` | NoShrink is exactly the conjunction of its two halves [`Blanc.Lift.UniswapV2Pair.entryNoShrink_iff_sides` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:117`), `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink_iff_sides` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:142`)]; the Section 5.8 statements are unchanged |
+| **The joint invariant for WETH9**, either side: from `JointCheckpoint` at the checkpoint, at every such committed point the pair is unlocked with WETH9 on `side`, its reserve on that side is at most WETH9's booked balance of the pair, and the pair has granted no booked WETH9 allowance; at the history's end the reserve is at most the pair's stored WETH9 balance word and every tracked WETH9 allowance row of the pair is zero | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_joint` (`Blanc/Composition/UniswapV2PairWeth9Joint.lean:127`); the checkpoint `Blanc.Composition.UniswapV2PairWeth9Joint.JointCheckpoint` (`Blanc/Composition/UniswapV2PairWeth9Checkpoint.lean:29`) | History / safety | INIT `JointCheckpoint`; HASH-T `WriterFreshKeys` over the pair's touched rows and `KeysFresh` over WETH9's touched keys; CODE: the factory runtime at the checkpoint model state's `factory`; ENV: that address is not the system address | **No premise about WETH9's answers.** The generic form's factory premise comes from `pair_history_factoryQuiet`, its token-entry premise from WETH9's installed code and the checkpoint's no-precompile field |
+
+**WETH9's half of NoShrink discharged: share value**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| For every pair with WETH9 on `side`: the replay of `pair_history_committed` exists, and if the fee-off condition and **the other token's** half of NoShrink hold along it (`sourceReplayAnswersSide side.other`), then every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·T²` | `Blanc.Composition.UniswapV2PairWeth9ShareValue.pair_weth9_history_feeOff_product` (`Blanc/Composition/UniswapV2PairWeth9ShareValue.lean:27`); generic `Blanc.Composition.PairTokenShareValue.pair_token_feeOff_product` (`Blanc/Composition/PairTokenShareValue.lean:108`) | History / safety | as `pair_weth9_joint` | Compared with `pair_history_feeOff_product`, WETH9's half of the antecedent is gone; only the fee-off condition and the other token's half remain |
+| The same with the protocol fee on: with the other token's half (`sourceReplayNoShrinkSide side.other`) as the only antecedent, every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²`, `F` the step's exact fee mint | `Blanc.Composition.UniswapV2PairWeth9ShareValue.pair_weth9_history_feeOn_product` (`Blanc/Composition/UniswapV2PairWeth9ShareValue.lean:58`); generic `Blanc.Composition.PairTokenShareValue.pair_token_feeOn_product` (`Blanc/Composition/PairTokenShareValue.lean:145`) | History / safety | as `pair_weth9_joint` | |
+
+**WETH9's callee records discharged: liveness.** Each row restates the Section 5.8
+row named in its first column from the premises of `pair_weth9_joint`, for a fresh
+frame at the history's future state, and concludes what that row concludes (a run at
+a closed gas expression and `PairAdmittedOutcome`). WETH9's callee records are not
+premises: each is fixed to the run that WETH9's certified code performs at that point
+(its result and call gas are defined from values bound earlier in the statement), and
+its own premises are discharged from the history: WETH9's code at the token address
+the pair loads, WETH9 not a precompile, and, for a transfer, the pair's WETH9 balance
+covering the amount, by the joint invariant. **No remaining premise mentions WETH9's
+answers.** What remains is listed per row. Every `sync`, `mint`, `burn` and `skim` row
+also takes the frame's call depth `≠ 0` and, for each WETH9 call, that its call gas is a
+word and leaves the 63/64 room WETH9's run needs (ENV: gas); the `swap` rows derive the
+depth and state their gas premises in their own rows.
+
+| Section 5.8 row | WETH9 side | Theorem | Level / kind | What remains beyond the common premises |
+|---|---|---|---|---|
+| `sync` | token0 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_sync_live_zero` (`Blanc/Composition/UniswapV2PairWeth9SyncLive.lean:102`) | History / live | ENV: the other token's `balanceOf(pair)` record; the pair's residual sentry |
+| `sync` | token1 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_sync_live_one` (`Blanc/Composition/UniswapV2PairWeth9SyncLive.lean:176`) | History / live | as above |
+| `mint` | token0 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_mint_live_zero` (`Blanc/Composition/UniswapV2PairWeth9MintLive.lean:157`) | History / live | ENV: the other token's record, the factory's `feeTo` record and the pair's charges; HASH-T: the LP rows' freshness |
+| `mint` | token1 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_mint_live_one` (`Blanc/Composition/UniswapV2PairWeth9MintLive.lean:253`) | History / live | as above |
+| `burn` | token0 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_burn_live_zero` (`Blanc/Composition/UniswapV2PairWeth9BurnLive.lean:91`) | History / live | WETH9's initial query, transfer and final query discharged. ENV: the other token's three records, the factory record, the pair's charges and sentries; HASH-T: the LP rows' freshness |
+| `burn` | token1 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_burn_live_one` (`Blanc/Composition/UniswapV2PairWeth9BurnLiveOne.lean:117`) | History / live | as the token0 row, and **HASH-T over child frames**: over WETH9's keys of the two `STATICCALL` children before the other token's transfer (its initial query and the factory query), and over the keys the other token's transfer child touches, against WETH9's key universe and against the pair's rows |
+| `skim` | token0 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_skim_live_zero` (`Blanc/Composition/UniswapV2PairWeth9SkimLive.lean:222`) | History / live | ENV: the other token's query and transfer records, the lock sentries, the frame non-static; HASH-T: `FirstCallFresh` |
+| `skim` | token1 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_skim_live_one` (`Blanc/Composition/UniswapV2PairWeth9SkimLiveOne.lean:83`) | History / live | as the token0 row, and **HASH-T over child frames**: over WETH9's keys of the other token's query child and transfer child, and over the pair's rows of that transfer child. That the other token's transfer leaves the locked pair's `reserve1` unchanged is derived, under `FirstCallFresh` |
+| `swap` | token0 | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_zero` (`Blanc/Composition/UniswapV2PairWeth9SwapLiveZero.lean:159`) | History / live | Both outputs allowed; WETH9's `transfer` and post-callback `balanceOf` records discharged. ENV: the other token's `transfer` and `balanceOf` records, the callback, the pair's gas sentries; the frame's gas is a word, at least 3,200 gas remain after WETH9's transfer when it is taken, and the first query's `GAS` word is a word |
+| `swap` | token1, only WETH9 paid out (`amount0Out = 0`) | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_one` (`Blanc/Composition/UniswapV2PairWeth9SwapLive.lean:431`) | History / live | ENV: the other token's `balanceOf` record, the callback, the pair's gas sentries; the frame's gas is a word, the callback branch has at least 3,200 gas, the second query's `GAS` word is a word |
+| `swap` | token1, both outputs allowed | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_one_both` (`Blanc/Composition/UniswapV2PairWeth9SwapLive.lean:173`) | History / live | as the previous row, and the other token's `transfer` record when it is paid; HASH-T over the keys that transfer child touches, against WETH9's key universe and against the pair's rows; the WETH9 `CALL`'s gas word after it |
+
+In every row each WETH9 record is fixed by equations whose right sides read only the
+row's free values and records fixed before it. For the three `swap` rows, the token1
+`burn` row and the token1 `skim` row, the four lemmas in the controls table below show
+that these equations never constrain the free values; for the other rows (`sync`,
+`mint`, and the token0 `burn` and `skim` rows) no such lemma is stated.
+
+**Deployment**
+
+| Claim | Theorem | Kind | Premises | Notes |
+|---|---|---|---|---|
+| For every covered fork: the Pair's `CREATE2` step (as `pair_create2_initialize_live`) runs and pushes the new address; and for every `initialize` frame the creator sends to that address naming WETH9 as one of its tokens and a different other token, at a world that keeps the deployment's WETH9 storage and holds WETH9's code, its footprint INIT with the new address's balance row tracked, and representable total ether, a successful run exists at its closed gas and ends in a world satisfying `JointCheckpoint` (WETH9 on the side `initialize` names it) with the initialized model state and no tracked pair row | `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint_side` (`Blanc/Composition/UniswapV2PairWeth9Deploy.lean:56`); for WETH9 as `token1` `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint` (`Blanc/Composition/UniswapV2PairWeth9Deploy.lean:163`), as `token0` `Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint_zero` (`Blanc/Composition/UniswapV2PairWeth9Deploy.lean:223`) | deploy / INIT | CODE and ENV as `pair_create2_initialize_live`; INIT at the `initialize` world: the pair's code as the `CREATE2` step left it, WETH9's code, `FootInv K₀`, `SumNof`; ENV (trace-local): the new address's tracked WETH9 allowance rows are zero in the deployment's world (it has not acted as a WETH9 sender); the new address is neither WETH9, nor 0, nor the system address; WETH9 is no precompile under any covered fork. No hash premise | Both token orderings. The predicate is about the resulting state, not how it was produced. Not chained into a history; the factory issuing the `initialize` call is a premise, and the factory CODE premise of the rows above is separate |
+
+**Closed instance**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| A computable checker decides `JointCheckpoint` from a finite description (WETH9's tracked rows, the pair's tracked rows and a base model state): both codes byte for byte, the pair's storage representation with a complete-support check, the token and lock fields, WETH9's footprint invariant, the world's ether sum over its actual accounts, the pair's WETH9 balance row against the reserve and its allowance rows, `pair ≠ WETH9`, `token0 ≠ token1`, the pair neither 0 nor the system address, and WETH9 no precompile of any covered fork; a second check decides that an address holds the factory runtime. Both are sound | `Blanc.Composition.UniswapV2PairWeth9Joint.checkJoint_sound` (`Blanc/Composition/UniswapV2PairWeth9CheckJoint.lean:51`) of `Blanc.Composition.UniswapV2PairWeth9Joint.checkJoint` (`Blanc/Composition/UniswapV2PairWeth9CheckJoint.lean:39`); `Blanc.Composition.UniswapV2PairWeth9Joint.checkFactory_sound` (`Blanc/Composition/UniswapV2PairWeth9CheckJoint.lean:83`) | Checker / soundness | none | Linear in the rows, the storage entries and the world's accounts; rows must be listed in ascending slot order (unsorted input is rejected) |
+| The synthetic world `W0` satisfies `JointCheckpoint` with WETH9 as `token1`, and its pair's `factory` holds the factory runtime, both by running the checkers in the kernel | `Blanc.Composition.UniswapV2PairWeth9Instance.w0_jointCheckpoint` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:98`) from `Blanc.Composition.UniswapV2PairWeth9Instance.w0_checkJoint` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:94`); `Blanc.Composition.UniswapV2PairWeth9Instance.w0_factoryInstalled` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:108`); the world `Blanc.Composition.UniswapV2PairWeth9Instance.W0` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:83`) | Satisfiability / kernel evaluation | none | `W0` is synthetic: the system-contract fixture of Section 5.1's closed instance, WETH9's runtime at 0x3333…3333 with the pair's balance row (10^6, backed by WETH9's ether) and a zero pair allowance row, the Pair runtime with reserves 10^6 and 10^6 and supply 10^6 (1,000 locked at address 0, the rest held by the trader), `token0` the synthetic 299-byte Token20 runtime (Section 2), `token1` WETH9, the factory runtime at 0x4444…4444 with empty storage, and a funded code-free trader |
+| For every world that is canonical (Jaune's `State.Canonical`: it stores no empty account and no zero storage word), whose total ether is representable (`SumNof`), and that agrees with `W0` on the ten accounts the block touches (`AgreesW0`): the configured BPO2 block with two signed type-2 transactions, `X.transfer(pair, 1000)` then `pair.swap(0, 996, trader, "")`, is a valid state transition from the checkpoint at that world, and on a configured history of it the trader's WETH9 balance word rises by 996 and the pair's falls by 996 (to 996 and 999,004); the pair's stored reserves equal its new `X` and WETH9 balances (1,001,000 and 999,004); the conclusion of `pair_weth9_joint` holds; and the conclusion of `pair_weth9_history_feeOff_product` holds with its antecedent discharged, share value rising strictly from `W0`'s pair state to the history's end at equal supply (`10^6·10^6 < 1,001,000·999,004`) | `Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_agreeing` (`Blanc/Composition/UniswapV2PairWeth9CapstoneUniversal.lean:97`); the outcome `Blanc.Composition.UniswapV2PairWeth9Capstone.ClosedSwapOutcome` (`Blanc/Composition/UniswapV2PairWeth9CapstoneUniversal.lean:45`); the agreement `Blanc.Composition.UniswapV2PairWeth9Capstone.AgreesW0` (`Blanc/Composition/UniswapV2PairWeth9CapstoneWorld.lean:27`) | History and transaction / closed witness, universal over agreeing worlds | `State.Canonical`; ARITH `SumNof`; `AgreesW0` | Inside, every premise of the two headlines is discharged for this history: signature recovery of both transactions by kernel evaluation, the joint checkpoint transported from `W0`, the factory premises, and both HASH-T premises. Agreement with `W0` takes the place of a `JointCheckpoint` premise (Section 7 item 30) |
+| The same at `W0` itself, with **no hypothesis** | `Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_instance` (`Blanc/Composition/UniswapV2PairWeth9Capstone.lean:22`) | History and transaction / closed witness | none (closed) | `b = 996 > 0` and WETH9 leaves the pair, so the discharged WETH9 side is exercised; the swap is run at frame level inside the block (Section 7 item 29). Satisfiability in the model, not a statement about the chain |
+
+**Statement controls**
+
+| What it shows | Control | Altitude |
+|---|---|---|
+| The interface rejects a WETH9 model whose `transferFrom` skips the allowance check: that book violates `BookLaws` | `Blanc.Composition.Weth9Token.control_mutant_not_laws` (`Blanc/Composition/Weth9Token.lean:589`) on `Blanc.Composition.Weth9Token.mutantBook` (`Blanc/Composition/Weth9Token.lean:546`) | pure model, kernel evaluation |
+| The no-allowance half of the joint relation is needed: on WETH9's ledger model, from a ledger in which address 1 holds one unit against a reserve of one and has granted nothing, a spender's `transferFrom` of that unit fails; after one `approve` by address 1, the same `transferFrom` succeeds and leaves its booked balance below the reserve | `Blanc.Composition.PairTokenJoint.control_pair_approve_breaks_joint` (`Blanc/Composition/PairTokenJointControl.lean:22`) | WETH9's pure ledger model; no pair model or bytecode is mutated |
+| A world where the pair already holds a nonzero tracked WETH9 allowance row fails `JointCheckpoint`; the checker rejects `W0` with a stray nonzero pair slot and with a nonzero pair WETH9 allowance | `Blanc.Composition.UniswapV2PairWeth9Joint.JointCheckpoint.allowance_control` (`Blanc/Composition/UniswapV2PairWeth9Checkpoint.lean:49`); `Blanc.Composition.UniswapV2PairWeth9Instance.w0StrayPair_rejected` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:118`), `Blanc.Composition.UniswapV2PairWeth9Instance.w0PairAllowance_rejected` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:128`) | definitional; kernel evaluation of the checker |
+| Each half of NoShrink is load-bearing: on states the production driver reaches, a `sync` whose token1 answer shrinks, and a `burn` whose token1 final answer falls below its initial answer minus the payout, each succeed with the token0 half holding and the token1 half failing, and the share-value inequality then fails (the token0 `sync` half is `noShrink_required` of Section 5.8) | `Blanc.Lift.UniswapV2Pair.ModelControlsSides.noShrinkSide_one_required` (`Blanc/Lift/UniswapV2Pair/ModelControlsSides.lean:22`), `Blanc.Lift.UniswapV2Pair.ModelControlsSides.burnNoShrinkSide_one_required` (`Blanc/Lift/UniswapV2Pair/ModelControlsSides.lean:50`) | typed model, kernel evaluation of the production driver |
+| The pinned WETH9 records of the swap rows, the token1 `burn` row and the token1 `skim` row never constrain the free values: each pin reads only free values and earlier pins, so every choice of the free values extends to values meeting every pin | `Blanc.Composition.UniswapV2PairWeth9Joint.swapW0_pins_nonvacuous` (`Blanc/Composition/UniswapV2PairWeth9SwapLiveZero.lean:124`), `Blanc.Composition.UniswapV2PairWeth9Joint.swapW1_pins_nonvacuous` (`Blanc/Composition/UniswapV2PairWeth9SwapLive.lean:135`), `Blanc.Composition.UniswapV2PairWeth9Joint.burnEnvW1_pins_solvable` (`Blanc/Composition/UniswapV2PairWeth9BurnLiveOne.lean:479`), `Blanc.Composition.UniswapV2PairWeth9Joint.skimCalleeW1_pins_solvable` (`Blanc/Composition/UniswapV2PairWeth9SkimLiveOne.lean:262`) | definitional |
+
+**Fork coverage.** The history rows assume or derive `CoveredFork`; the deployment
+theorem quantifies over covered forks; the closed instance runs one BPO2 block.
+
+**Non-claims.** The other token's behaviour (its half of NoShrink and its callee
+records stay premises here; Section 5.10 discharges them for USDC, under its own
+premises); that
+mainnet's current state of any pair or of WETH9 satisfies `JointCheckpoint`; any pair
+whose stored factory does not hold the factory runtime, or that reaches WETH9 through a
+wrapper or router; the factory's `feeTo` answers; deployment of WETH9, deposits, the
+pair's deployment, `initialize`, liquidity and the swap as **one** execution; historical
+inclusion of either deployment; that any price, fee or LP outcome is fair or safe
+(Section 7 items 20 and 27 to 34).
+
+### 5.10 Uniswap V2 Pair × USDC × WETH9: three deployed runtimes in one history
+
+Section 5.9 composes the Pair with WETH9 and keeps the other token's half as a named
+premise. This section composes the Pair with **both** of its exhibit tokens over **one**
+configured history, USDC as `token0` and WETH9 as `token1` (the exhibit pair's
+assignment), and discharges both tokens' halves from deployed bytecode. USDC is three
+certified runtimes (Section 2): the FiatTokenProxy, which forwards every non-admin call
+by `DELEGATECALL` to the implementation its implementation slot names; the
+FiatTokenV2_2 implementation, which runs over the proxy's storage; and the
+SignatureChecker library the implementation reaches by `DELEGATECALL` for
+authorizer-signed messages (`permit`, transferWithAuthorization,
+receiveWithAuthorization, cancelAuthorization). The statements cover every pair
+that runs the certified Pair runtime with USDC's proxy address as `token0` and WETH9 as
+`token1`, whose stored factory holds the certified factory runtime, over any configured
+history that starts from a world satisfying `JointCheckpoint2`, under two trace-local
+premises on USDC's own messages: the governance premise `UsdcGovernance` and the
+never-signer premise `NeverSigner` (Section 7 items 35 and 36).
+
+**The proxy and the `DELEGATECALL` lift**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| A certificate node claiming `CALL` where the code holds `DELEGATECALL` (`0xf4`) is rejected by the checker | `Blanc.Lift.checkNode_call_at_delegatecall` (`Blanc/Lift/DelegatecallControl.lean:16`) | Control / certificate | the byte at the node is `0xf4` | `DELEGATECALL` keeps the caller and the storage owner, so a certificate cannot pass it off as `CALL` |
+| The proxy certificate with `CALL` claimed at the proxy's `DELEGATECALL` site (byte 1,680) fails `Cert.check` | `Blanc.Lift.Usdc.Proxy.proxy_cert_call_mutant_rejected` (`Blanc/Lift/Usdc/Proxy/Control.lean:24`) | Control / certificate | none | Kernel evaluation on the lifted proxy bytes |
+| A frame running the proxy code from pc 0 whose caller is not the admin word: every external instruction it executes is `DELEGATECALL`; every child runs at the proxy with the implementation address `I` the slot names as code address, the frame's caller, value, calldata and static flag, and `I`'s code; on success the frame's output and world are a child's | `Blanc.Lift.Usdc.proxy_forwards` (`Blanc/Lift/Usdc/ProxyOk.lean:275`) | Frame / safety | CODE; covered fork; the implementation slot holds `I`; caller not the admin word; `I` carries no EIP-7702 designator and is no precompile; calldata below 2^256 bytes | `CALLDATASIZE` pushes the length modulo 2^256, hence the calldata bound |
+| With the slot naming `J ≠ I`, no child runs with code address `I` | `Blanc.Lift.Usdc.proxy_forwards_control` (`Blanc/Lift/Usdc/ProxyForward.lean:126`) | Control / frame | as `proxy_forwards`, for `J` | The slot premise is load-bearing |
+| A frame running the proxy code whose caller is the admin word: every external instruction is `CALL`, every child runs at the proxy with the proxy as caller, and a selector other than `upgradeTo`, `upgradeToAndCall` and `changeAdmin` spawns no child and leaves the proxy's storage unchanged | `Blanc.Lift.Usdc.proxy_admin_rule` (`Blanc/Lift/Usdc/ProxyForward.lean:227`) | Frame / safety | CODE; covered fork; caller is the admin word | The admin branch never reaches the implementation |
+| The implementation's children are either library frames (at the same storage owner, with the frame's caller, value and static flag, running the library code) or frames whose caller is the storage owner, with value 0 | `Blanc.Lift.Usdc.impl_children` (`Blanc/Lift/Usdc/ImplSpawns.lean:52`) | Frame / safety | CODE; covered fork; the library code installed at its address | The second kind is rescueERC20's token call |
+| The library's children are static, with the storage owner as caller, and a successful library frame leaves its storage owner's storage unchanged | `Blanc.Lift.Usdc.lib_children` (`Blanc/Lift/Usdc/LibSpawns.lean:30`) | Frame / safety | CODE; covered fork | The ERC-1271 isValidSignature call and the `ecrecover` call |
+
+**USDC's model, its history and the signature laws**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| USDC's pure book (its ledger model read through the implementation's own decoder) satisfies the signature variant of the token laws, `BookLawsS`: as `BookLaws` (Section 5.9), except that a step may also lower a holder's balance, or raise its allowances, by a message the holder signed | `Blanc.Lift.Usdc.usdcBook_lawsS` (`Blanc/Lift/Usdc/Book.lean:140`), the book `Blanc.Lift.Usdc.usdcBookS` (`Blanc/Lift/Usdc/Book.lean:48`) | Model / safety | none | The signer is the third authorizer |
+| Under `NeverSigner T S tr p` (no settled non-static entry of `T` along the history has `p` as signer), `BookLawsS` gives the holder-indexed laws the composition consumes, for `p` | `Blanc.Lift.Token.BookLawsS.holderLaws` (`Blanc/Lift/Token/Signed.lean:59`) | Model / bridge | `NeverSigner` | WETH9's laws are the unsigned case, `Blanc.Composition.Weth9Token.weth9Book_lawsS` (`Blanc/Composition/Weth9TokenSigned.lean:15`) |
+| Under `UsdcHist` (USDC's three runtimes and its implementation slot installed at the checkpoint, the governance premise, the footprint invariant at the checkpoint, HASH-T over the keys the history touches), at every settled position not `UsdcShadowed` the book run over the earlier entry frames at the proxy is the footprint ledger at that frame's entry | `Blanc.Lift.Usdc.usdc_history_replayAt` (`Blanc/Lift/Usdc/HistoryReplay.lean:320`) | History / replay | `UsdcHist` | Positional replay |
+| Under `UsdcHist`, the implementation slot and the admin word are unchanged at every settled frame's entry and at the end | `Blanc.Lift.Usdc.usdc_history_slots` (`Blanc/Lift/Usdc/HistorySlots.lean:168`) | History / safety | `UsdcHist` | This is what the governance premise buys |
+| Under `UsdcHist`, at the history's end USDC's three runtimes and its implementation slot are installed, the footprint invariant holds over the history's key universe, and the admin word is unchanged | `Blanc.Lift.Usdc.usdc_history_end` (`Blanc/Lift/Usdc/HistoryEndFoot.lean:21`) | History / invariant | `UsdcHist` | The USDC analogue of WETH9's footprint standard |
+| USDC at any proxy address is an instance of the writer-shadowed token core `CoreW`: its `Hist` is `UsdcHist`, its booked ledger is the footprint ledger over the history's key universe, its shadowed positions are `UsdcShadowed`, its answerable holders are the history's tracked balance rows | `Blanc.Composition.UsdcToken.usdcCore` (`Blanc/Composition/UsdcToken.lean:225`) | History / instance | `UsdcHist` | `CoreW` is `Core` with shadowed positions excluded |
+| USDC discharges the self-caller facet: no foreign caller is forwarded into USDC's own entry | `Blanc.Composition.UsdcToken.usdcSelfCaller` (`Blanc/Composition/UsdcToken.lean:243`) | History / instance | as `usdcCore` | From the three spawn theorems above |
+| USDC's book decodes `transfer` and `balanceOf` calldata as the ERC-20 ABI does | `Blanc.Composition.UsdcToken.usdcBook_erc20Abi` (`Blanc/Composition/UsdcToken.lean:268`) | Model / ABI | none | |
+| USDC's budgeted transfer facet: at a world holding USDC's runtimes with the footprint core over `U`, a fresh entry frame at the proxy whose keys lie in `U`, whose caller is not the admin word and whose `transfer` meets USDC's state conditions, runs to success through the proxy and the implementation at an exact cost, given a gas budget that covers the proxy's 63/64 cut | `Blanc.Composition.UsdcToken.usdcTransferLive` (`Blanc/Composition/UsdcTokenLive.lean:159`) | Frame / instance | INIT footprint core; HASH-T frame keys in `U`; ENV gas and state conditions | From the proxy-to-implementation exact walk of `transfer` |
+
+**The two-token joint invariant and share value**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| For any two writer-shadowed token cores with the ABI and self-caller facets and the holder laws for the pair: at every settled position not enclosed by a settled non-static pair frame and unshadowed in both cores the pair is unlocked with both joint relations; both hold at the end; and every outer pair step satisfies the whole of NoShrink, with no token antecedent | `Blanc.Composition.PairTwoToken.pair_two_token_joint` (`Blanc/Composition/PairTwoToken.lean:35`) | History / safety | Pair CODE and INIT; both cores' `Hist` and answerable rows; HASH-T over the pair's touched rows; ENV (trace-local): the factory never calls the pair, and neither token's code is an EIP-7702 designator or a precompile at the pair's steps | As `pair_token_joint`, for both sides at once |
+| The same: fee on, every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²`, with no antecedent; fee off, under the fee-off condition alone, `r0·r1·T'² ≤ r0'·r1'·T²` | `Blanc.Composition.PairTwoToken.pair_two_token_feeOn_product` (`Blanc/Composition/PairTwoTokenShareValue.lean:28`), `Blanc.Composition.PairTwoToken.pair_two_token_feeOff_product` (`Blanc/Composition/PairTwoTokenShareValue.lean:77`) | History / safety | as `pair_two_token_joint` | |
+| `JointCheckpoint2`, the governance premise, the never-signer premise for the pair and HASH-T over USDC's touched keys give USDC's `Hist`, the pair's answerable row, the joint relation at the checkpoint and USDC's holder laws for the pair | `Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2.toUsdcCore` (`Blanc/Composition/UniswapV2PairUsdcWeth9Checkpoint.lean:62`) | History / bridge | `JointCheckpoint2`, `UsdcGovernance`, `NeverSigner`, HASH-T | |
+| **The joint invariant for the exhibit tokens**: from `JointCheckpoint2`, at every settled position not enclosed by a settled non-static pair frame and not `UsdcShadowed`, the pair is unlocked with USDC as `token0` and WETH9 as `token1`, `reserve0` is at most USDC's booked balance of the pair and `reserve1` at most WETH9's, and the pair has granted no booked allowance in either token; at the end `reserve0` is at most the balance bits of the pair's USDC balance word, `reserve1` at most its WETH9 balance word, and every tracked allowance row of the pair is zero in both tokens | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint` (`Blanc/Composition/UniswapV2PairUsdcWeth9Joint.lean:60`); the checkpoint `Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9Checkpoint.lean:33`) | History / safety | INIT `JointCheckpoint2`; HASH-T over the pair's, USDC's and WETH9's touched keys; ENV (trace-local): `UsdcGovernance`, `NeverSigner`; CODE: the factory runtime at the model state's `factory`, not the system address | **No premise about either token's answers** |
+| Share value, fee on, for the exhibit tokens: with **no antecedent**, every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOn_product` (`Blanc/Composition/UniswapV2PairUsdcWeth9ShareValue.lean:23`) | History / safety | as `pair_usdc_weth9_joint` | Both halves of NoShrink discharged |
+| Share value, fee off: under the fee-off condition alone, `r0·r1·T'² ≤ r0'·r1'·T²` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOff_product` (`Blanc/Composition/UniswapV2PairUsdcWeth9ShareValue.lean:62`) | History / safety | as `pair_usdc_weth9_joint` | Only the factory's fee-off answer remains, as an antecedent |
+
+**Both tokens' callee records discharged: liveness.** Each row restates the Section
+5.8 row from the premises of `pair_usdc_weth9_joint` other than the never-signer premise
+(which only the `swap` row takes), for a fresh pair frame at the history's end, with
+both tokens' callee records pinned to the legs their codes determine. Every row also
+takes the frame's call depth (at least 2, for USDC's `DELEGATECALL`), that the pair is
+not USDC's admin word, and the legs' 63/64 gas sentries (ENV).
+
+| Section 5.8 row | Theorem | Level / kind | What remains beyond the common premises |
+|---|---|---|---|
+| `sync` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_sync_live` (`Blanc/Composition/UniswapV2PairUsdcWeth9SyncLive.lean:97`) | History / live | ENV: the pair's residual sentry |
+| `mint` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_mint_live` (`Blanc/Composition/UniswapV2PairUsdcWeth9MintLive.lean:31`) | History / live | ENV: the factory's `feeTo` record and the pair's charges; HASH-T: the LP rows' freshness |
+| `burn` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_burn_live` (`Blanc/Composition/UniswapV2PairUsdcWeth9BurnLive.lean:44`) | History / live | Both tokens' initial queries, transfers and final queries discharged. ENV: the factory record, the pair's charges, USDC's state conditions for the payout (not paused, pair and recipient unflagged, the credit within the packed word, both parties nonzero); HASH-T: the LP rows' and the recipient's USDC balance row's freshness |
+| `skim` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live` (`Blanc/Composition/UniswapV2PairUsdcWeth9SkimLive.lean:42`) | History / live | Both queries and transfers discharged; no `FirstCallFresh`: USDC's `transfer` is proved to keep the pair's storage. ENV: the lock sentries, the frame non-static, USDC's state conditions; HASH-T: the recipient's USDC balance row |
+| `swap` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live` (`Blanc/Composition/UniswapV2PairUsdcWeth9SwapLive.lean:102`) | History / live | Both outputs allowed; both tokens' transfer and post-callback query records discharged, with no HASH-T over USDC's child. ENV: `NeverSigner` (C6(a) bounds `reserve0` by the pair's USDC balance, which covers `amount0Out`), the callback, and when the callback runs, that it leaves USDC's implementation slot and does not make the pair USDC's admin; when USDC is paid out, USDC's state conditions and HASH-T for the recipient's USDC row |
+
+**Deployment and the checkpoint checker**
+
+| Claim | Theorem | Kind | Premises | Notes |
+|---|---|---|---|---|
+| For every covered fork: the Pair's `CREATE2` step runs and pushes the new address, and every `initialize` frame the creator sends to it naming USDC as `token0` and WETH9 as `token1`, at a world holding both tokens' checkpoint facts (codes, footprint invariants, storage agreeing with the deployment world's, the new address's balance rows tracked, USDC's unflagged, no tracked allowance row, neither token a precompile), runs to success and leaves `JointCheckpoint2` | `Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_create2_jointCheckpoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9Deploy.lean:31`) | Deployment / INIT | ENV: the creator's frame conditions and gas | Not chained into a configured history; the factory issuing `initialize` is a premise |
+| A computable checker decides `JointCheckpoint2` from finite row lists (USDC's, WETH9's and the pair's tracked rows, a base model state) and is sound | `Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_sound` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:90`), the checker `Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:81`); USDC's part `Blanc.Lift.Usdc.checkUsdc_sound` (`Blanc/Lift/Usdc/FiniteFootprint.lean:47`) | Decidable / sound | `checkJoint2 … = true` | |
+| The synthetic world `U0` satisfies `JointCheckpoint2`, by running the checker in the kernel | `Blanc.Composition.UniswapV2PairUsdcWeth9.u0_jointCheckpoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:211`) | Closed witness | none | The checkpoint is satisfiable; `U0` is synthetic, not mainnet |
+
+**Statement controls**
+
+| What it shows | Control | Altitude |
+|---|---|---|
+| The laws reject USDC models that debit without authority: a mutant whose `transferFrom` skips the allowance, and an implementation whose `transfer` debits a third party | `Blanc.Lift.Usdc.control_usdc_mutant_not_lawsS` (`Blanc/Lift/Usdc/ModelControls.lean:175`), `Blanc.Lift.Usdc.control_usdc_thirdParty_not_lawsS` (`Blanc/Lift/Usdc/ModelControls.lean:194`) | definitional |
+| `NeverSigner` is needed: a toy book satisfies `BookLawsS`, and when the holder may sign, any other caller's message lowers the holder's balance with no allowance | `Blanc.Lift.Token.control_signer_breaks_holder` (`Blanc/Lift/Token/SignedControl.lean:28`) | definitional |
+| A tracked nonzero USDC allowance row of the pair, or a flagged pair balance word, fails `JointCheckpoint2` and the checker; the checker rejects `U0` with the pair's USDC allowance set to 7 and with its balance word flagged, and rejects USDC's synthetic storage with one stray word | `Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_allowance_control` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:115`), `Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_frozen_control` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:125`), `Blanc.Composition.UniswapV2PairUsdcWeth9.u0_allowance_rejected` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:218`), `Blanc.Composition.UniswapV2PairUsdcWeth9.u0_frozen_rejected` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:225`), `Blanc.Lift.Usdc.checkUsdc_rejects_stray` (`Blanc/Lift/Usdc/FiniteFootprint.lean:87`) | definitional (kernel evaluation for the concrete rejections) |
+
+**Fork coverage.** The history rows assume or derive `CoveredFork`; the deployment
+theorem quantifies over covered forks.
+
+**Non-claims.** Anything about live USDC or pool state; the closed single-block USDC
+instance; other USDC versions than FiatTokenV2_2 at the stated implementation address;
+positions inside `UsdcShadowed` (Section 7 items 35 to 40).
 
 ## 6. Summary matrix
 
@@ -611,6 +862,8 @@ applicable.
 | V− | ✓ | — | — | — | ✓ [q] (message level) | ✓ [q] violation at a reachable state | ✓ [l] | ✓ |
 | EIP-7002 | ✓ | ✓ [m] | ✓ | ✓ none | ✓ [b] | ✓ | ✗ | ✓ |
 | Uniswap V2 Pair | ✓ | ✓ | ✓ [n] | ✓ HASH-T | ✓ [b] [o] | ✓ [p] | ✗ | ✓ |
+| Uniswap V2 Pair × WETH9 | ✓ | ✓ [r] | ✓ [s] | ✓ HASH-T [t] | ~ [u] | ✓ [v] | ~ [w] | ✓ [x] |
+| Uniswap V2 Pair × USDC × WETH9 | ✓ | ✓ [y] | ✓ [z] | ✓ HASH-T [aa] | ~ [ab] | ✓ [ac] | ✗ | ✓ [ad] |
 
 [a] Freshness is over the uniform five-key set per raw target frame (Section
 5.1). [b] A modeled deployment message under every covered fork (the
@@ -655,6 +908,43 @@ forwarded to the callees, whose consumption enters through the callee premise
 (§7 item 21). [q] Deployment, initialization and liquidity are executed messages
 from a creator-only world, not admitted transactions (§7 item 3 applies); the
 V− transaction row (M7) starts from a different, synthetic prestate. For both V+ and V−, M5 records the executed setup of the reachable witness; the older witnesses keep their synthetic prestates.
+
+[r] One configured history in which both certified runtimes are installed, from a
+world satisfying `JointCheckpoint`; the joint invariant holds at every committed point
+at which the pair is unlocked and at the end. [s] The remaining per-frame premises
+are the other token's half of NoShrink and its callee records, the factory's `feeTo`
+record, gas sentries and call depth; none concerns WETH9's answers. The factory's
+behaviour is not a premise: the factory CODE premise replaces it (§7 item 31). [t]
+Both contracts' HASH-T premises, over the keys the history touches; the token1
+`burn` and `skim` liveness rows and the token1 both-outputs `swap` row add HASH-T over
+the keys of child frames (§7 item 34). [u] `pair_weth9_create2_jointCheckpoint` establishes `JointCheckpoint` by the
+pair's `CREATE2` deployment and `initialize`, for WETH9 as either token, from WETH9
+world premises at the `initialize` world; it is not chained into a configured history,
+the factory issuing `initialize` is a premise, and WETH9's own deployment is not part
+of it (§7 item 28). [v] `sync`, `mint`, `burn`, `skim` and `swap`, for both sides, with
+WETH9's callee records discharged; the other entry points have no token callee and keep
+their Section 5.8 rows. [w] The universal rows are history level. The closed instance
+runs one configured block with two signed type-2 transactions, transaction level but for
+two fixed transactions from worlds agreeing with one synthetic world, and it runs the swap
+at frame level inside that block (§7 item 29). [x] The history and liveness rows assume or
+derive `CoveredFork`; the deployment theorem quantifies over covered forks; the closed
+instance is BPO2 only. [y] One configured history in which the Pair, the factory, USDC's three runtimes and
+WETH9 are installed, from a world satisfying `JointCheckpoint2`, under the governance
+and never-signer premises; the joint invariant holds at the committed positions outside
+`UsdcShadowed` at which the pair is unlocked, and at the end (§7 items 35 to 37).
+[z] Environmental premises only: the call depth, the pair not USDC's admin word, gas
+sentries, the factory's `feeTo` record, USDC's state conditions for a payout, and on
+`swap` the callback and its governance; both tokens' callee records are discharged
+(§7 item 38). [aa] HASH-T over the touched keys of all three contracts, the LP rows of
+`mint` and `burn`, and the recipient's USDC balance row of `burn`, `skim` and a `swap`
+that pays USDC; no HASH-T over child frames (§7 items 38 and 39). [ab]
+`pair_usdc_weth9_create2_jointCheckpoint2` establishes `JointCheckpoint2` by the
+pair's `CREATE2` deployment and `initialize` from a world carrying both tokens'
+checkpoint facts; it is not chained into a configured history, and the factory issuing
+`initialize` is a premise. [ac] `sync`, `mint`, `burn`, `skim` and `swap` at a fresh
+pair frame after the history, with both tokens' callee records discharged. [ad] The
+history rows assume or derive `CoveredFork`; the deployment theorem quantifies over
+covered forks.
 
 ## 7. Disclosures and limits
 
@@ -749,7 +1039,7 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     **WETH9 frame keys are a uniform five-key set** (Section 5.1).
 13. **Liveness frames are fresh frames** (empty stack and memory) at a state,
     not transactions, except `weth9_tx_withdraw`, its history form and its
-    mid-block form (Section 5.1).
+    mid-block form (Section 5.1), and the closed Pair × WETH9 instance (Section 5.9).
 14. **`SystemCodeInstalled`.** The canonical system bytes come from a Jaune test fixture
     (Section 2). For EIP-7002 the 504-byte runtime is provider-corroborated: three separately operated RPC services
     returned bytes equal to `Blanc.withdrawalRequestCode` (recorded evidence, not re-fetched). For the other system
@@ -779,8 +1069,8 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     recipient receives: a token that takes its transfer fee from the recipient's
     proceeds, or whose balances only grow (positive rebases, donations), can
     satisfy it, while extra debits of the pair or downward rebases can violate
-    it. No theorem claims that a real token satisfies it or that a recipient is
-    credited; positional authentication of the answers of the history's selected
+    it. No theorem claims that a recipient is credited, or that a real token
+    satisfies it, except WETH9's half under the premises of Section 5.9 (item 27); positional authentication of the answers of the history's selected
     steps (item 26) does not prove that any token meets the premise. The burn form is deliberately weaker
     than "every answer is at least the stored reserve", which no ordinary burn
     satisfies.
@@ -801,14 +1091,21 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     `pair_history_committed` places every committed pair frame in exactly one
     step's subtree. Rolled-back frames are not in the replay, and static frames
     observe nothing.
-20. **Not claimed for the Uniswap V2 Pair:** composition with WETH9 is not claimed
-    (the exhibit pair's WETH9 token is not discharged from Blanc's WETH9 results,
-    and USDC is a premise-level callee); transaction-level liveness; permit
+20. **Not claimed for the Uniswap V2 Pair.** Section 5.9 composes the pair with
+    WETH9 over one configured history from a world satisfying `JointCheckpoint`, for
+    pairs whose stored factory holds the factory runtime. Outside that scope,
+    composition with WETH9 is not claimed: not for the live exhibit pool (item 28),
+    not for a pair whose factory holds other code, not for a pair that reaches WETH9
+    through a wrapper or router, and not for any other token than WETH9 and USDC
+    (Section 5.10 composes the pair with both, USDC as `token0`). Also not claimed:
+    transaction-level liveness beyond the closed instance of Section 5.9; permit
     signature unforgeability is not claimed (only the result of the modeled
-    ECRECOVER precompile is an input); the factory's bytecode is not lifted (its
-    `feeTo` answers and its `initialize` call are premise-level messages); the real
-    transaction history of the exhibit pair; and any statement that a price, the
-    TWAP or the economics of the pool are fair or safe.
+    ECRECOVER precompile is an input); that the factory's code issues the `initialize`
+    call of the deployment theorems, and the factory's feeTo answers are not
+    discharged from the lift (both stay premise-level messages, although the factory's
+    runtime is lifted and used in Section 5.9); the router, whose bytecode is not
+    lifted; the real transaction history of the exhibit pair; and any statement that
+    a price, the TWAP or the economics of the pool are fair or safe.
 21. **Uniswap liveness scope.** The history-level liveness rows cover `transfer`,
     `approve`, `transferFrom`, `sync`, `mint`, `swap`, `burn`, `skim`, `permit`
     and `initialize`; for `permit` the `ECRECOVER` precompile's answer is a callee
@@ -871,6 +1168,113 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     token behavior, the hash and initialization assumptions and the caller and
     deployment assumptions remain premises as stated in the rows; and no
     composition of the pair with token or factory economics is claimed.
+27. **Pair × WETH9: the other token's half stays a named premise.** The composition
+    removes WETH9's half of NoShrink and WETH9's callee records, and nothing else: the
+    share-value rows keep the other token's half of NoShrink (and, fee off, the
+    fee-off condition) as an antecedent, and the liveness rows keep the other token's
+    callee records, the factory's `feeTo` record, the callback and the gas sentries
+    (ENV). Outside Section 5.10, which discharges USDC's half under its own premises
+    (items 35 to 39), no theorem says that another token meets its half.
+28. **Pair × WETH9: what is not done.** The live state is not checked: no theorem or
+    gate says that mainnet's WETH9 or any mainnet pair, the exhibit pair included,
+    satisfies `JointCheckpoint` at any block, and no storage was fetched. USDC's
+    runtimes were not lifted for this section (Section 5.10 lifts them). The full deployment sequence is not
+    executed: deploying WETH9, depositing, deploying the pair, `initialize`, adding
+    liquidity and swapping as one execution is not modeled; the deployment theorem
+    starts from WETH9 world premises, and the closed instance starts from a synthetic
+    world. The first and the last were deliberately left for later work, not overlooked.
+29. **The closed instance exercises the discharged WETH9 side at frame level.** Its
+    swap is the second transaction of its block, not a frame after a configured
+    history, so the history-level liveness rows of Section 5.9 are not applied to it.
+    The swap frame is instead run inside the block by the Pair's certified frame-level
+    walk of `swap`, with WETH9's `transfer` and `balanceOf` runs taken from the same
+    leg facts those rows use and `X`'s `balanceOf` from `X`'s code; it succeeds with
+    exact gas and the `Transfer`, `Sync` and `Swap` logs. The joint invariant and the fee-off
+    share-value row are applied to the configured history from the checkpoint to the
+    end of the block.
+30. **The universal closed-instance form takes `Canonical` and `SumNof`.**
+    `uniswap_weth9_closed_agreeing` holds for every world that is canonical (no empty
+    account and no zero storage word stored), whose total ether is below 2^256, and
+    that agrees with `W0` on the ten touched accounts. It takes no `JointCheckpoint`
+    premise: the checkpoint is transported from `W0` through the agreement. Its
+    strict share-value increase is stated from `W0`'s pair state to the end at equal
+    supply, not between arbitrary steps.
+31. **The factory CODE premise.** The Section 5.9 headlines take that the pair's
+    stored `factory` address holds the certified factory runtime at the checkpoint,
+    and that it is not the system address. They therefore cover pairs whose factory is
+    the canonical factory code; for those, the factory's behaviour is not a premise
+    (`pair_history_factoryQuiet`). The pair's `initialize` has no one-shot guard, and
+    without this premise a factory call could replace the stored tokens.
+32. **The joint checkpoint's INIT facts.** Besides both codes, the pair's
+    representation, WETH9's footprint and the reserve bound, `JointCheckpoint` requires
+    `token0 ≠ token1`, the pair neither 0 nor the system address, the pair not WETH9,
+    and WETH9 no precompile under any covered fork; for `W0` all of them, and the
+    factory CODE premise, are checked by the kernel-evaluated checker. The deployment
+    theorem takes the corresponding facts about the new address and the other token as
+    premises, for either token ordering.
+33. **For `swap`, NoShrink's WETH9 half is trivially true.** `EntryNoShrinkSide` is
+    `True` for every entry other than `sync` and `burn`, so the share-value rows
+    discharge real content only at `sync` and `burn` steps; for `swap`, the WETH9
+    premises the composition removes are the liveness callee records. In the closed
+    instance the other token's antecedent is discharged the same way: the history's
+    only pair step is the swap. It is not derived from `X`'s code.
+34. **Three token1 rows take HASH-T over child frames.** With WETH9 as
+    `token1`, the other token is called first, so these rows take exact freshness of
+    WETH9's keys touched inside the `STATICCALL` children that precede WETH9's
+    transfer (`burn`: the other token's initial query and the factory query; `skim`:
+    the other token's query), and of the keys the other token's transfer child
+    touches, against WETH9's key universe and against the pair's rows. These are
+    HASH-T premises of the same kind as the history's, trace-local and about keys
+    only; none concerns WETH9's answers. A theorem that static calls preserve WETH9's
+    balances would remove the static-child ones; it is not proved. The token1
+    both-outputs `swap` row takes the same freshness over the keys of the other token's
+    transfer child, when that token is paid out.
+35. **Pair × USDC × WETH9: the governance premise.** `UsdcGovernance`: no settled
+    entry frame at USDC's proxy whose caller is the checkpoint's admin word calls
+    `upgradeTo`, `upgradeToAndCall` or `changeAdmin`. It names an actor and three entry
+    points, not an outcome; from it the implementation slot and the admin word are
+    proved unchanged along the history. Every Section 5.10 history row takes it.
+36. **Pair × USDC × WETH9: the never-signer premise.** The joint invariant, both
+    share-value rows, `JointCheckpoint2.toUsdcCore` and the `swap` liveness row take
+    `NeverSigner usdc (usdcBookS usdc) trace pair`: no settled non-static USDC entry
+    frame along the history (a `permit`, transferWithAuthorization,
+    receiveWithAuthorization or cancelAuthorization) has the pair as its signer.
+    The `sync`, `mint`, `burn` and `skim` rows do not take it. It is a premise, not a
+    theorem: the expected argument is that the pair answers no ERC-1271
+    isValidSignature call and that an `ecrecover` result is never the pair's
+    address, and proving the first from the bytecode needs solc's free-memory-pointer
+    invariant at USDC's two library call sites, which no certified walk carries yet.
+    Removing the premise is left for later work, not overlooked.
+37. **Pair × USDC × WETH9: excluded positions.** The joint invariant is stated only at
+    settled positions that are not `UsdcShadowed`: a frame at the proxy that is not an
+    entry frame (an implementation or library frame running over the proxy's storage,
+    static or not), and a position inside the block of an earlier library frame at the
+    proxy (the ERC-1271 and `ecrecover` static calls a signed message makes, at which
+    part of its effect, such as `permit`'s nonce increment, may already be written).
+    Settled frame values need not be unique, so the exclusion is by position.
+38. **Pair × USDC × WETH9: the liveness premises.** Beyond the history premises, every
+    Section 5.10 liveness row takes: call depth at least 2 at the pair frame (USDC's
+    `DELEGATECALL` adds a level); the pair is not USDC's admin word at the frame; and
+    explicit 63/64 gas sentries for each token leg. The rows that pay USDC out (`burn`,
+    `skim`, and `swap` when `amount0Out ≠ 0`) also take USDC's state conditions at the
+    frame (not paused, the pair and the recipient unflagged, the credit within the
+    packed word, both parties nonzero) and HASH-T for the recipient's USDC balance row.
+    `swap` takes the never-signer premise, and when the callback runs, that it leaves
+    USDC's implementation slot and does not make the pair USDC's admin (the governance
+    premise at frame level). `skim` takes no `FirstCallFresh`: USDC's `transfer` is
+    proved to keep the pair's storage. `mint` and `burn` keep the factory's `feeTo`
+    record as in Section 5.9.
+39. **Pair × USDC × WETH9: the key universe.** As for WETH9, USDC's history key
+    universe is the checkpoint's tracked keys extended by the keys every frame at the
+    proxy may touch, read from its calldata and caller, whether or not the frame
+    commits; HASH-T is stated over that universe. In the general statements the
+    checkpoint's tracked set is any predicate; a checkpoint the checker accepts tracks
+    exactly its finite rows.
+40. **Pair × USDC × WETH9: not claimed.** Anything about the live state of USDC or of
+    any pool, the exhibit pair included (no storage was fetched); the closed
+    single-block USDC instance, which is not built; USDC versions other than
+    FiatTokenV2_2 at the stated implementation address; and anything at the positions
+    item 37 excludes.
 
 ## 8. Axiom guarantee
 
@@ -927,7 +1331,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), each covered
 by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1105 leaf results (1097 public, 8 private).
+the sites. At this commit it is 1131 leaf results (1123 public, 8 private).
 The review ledger separately records the last review; the audit reports new
 or changed leaves. The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
@@ -982,7 +1386,7 @@ Names that the tables above write unqualified.
 | `VplusExcludes` | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`) | the statement form of the V+ exclusion |
 | `InitializedCheckpoint` | `Blanc.Lift.UniswapV2Pair.InitializedCheckpoint` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:34`) | the Pair's INIT after deployment and `initialize`: the pair storage represents `initializedState` over the empty tracked footprint |
 | `initializedState` | `Blanc.Lift.UniswapV2Pair.initializedState` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:29`) | the model state after a factory deploys a pair with a given domain separator and initializes it with two tokens: zero supply, reserves, accumulators and `kLast`, `unlocked = 1`, no ledger row |
-| `WriterRep` | `Blanc.Lift.UniswapV2Pair.WriterRep` (`Blanc/Lift/UniswapV2Pair/WriterStorage.lean:58`) | the Pair's storage abstraction over a finite tracked set of balance, allowance and nonce rows: slots 0 to 12 match the model, each tracked row matches, every other nonzero word is at a tracked row, and untracked rows are zero in the model |
+| `WriterRep` | `Blanc.Lift.UniswapV2Pair.WriterRep` (`Blanc/Lift/UniswapV2Pair/WriterStorage.lean:72`) | the Pair's storage abstraction over a finite tracked set of balance, allowance and nonce rows: slots 0 to 12 match the model, each tracked row matches, every other nonzero word is at a tracked row, and untracked rows are zero in the model |
 | `WriterFreshKeys` | `Blanc.Lift.UniswapV2Pair.WriterFreshKeys` (`Blanc/Lift/UniswapV2Pair/WriterStorage.lean:36`) | HASH-T for the Pair: each touched row is tracked or on a slot that is neither fixed nor a tracked row's, and rows sharing a slot are one row |
 | `pairHistoryTouchedKeys` | `Blanc.Lift.UniswapV2Pair.pairHistoryTouchedKeys` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:374`) | the rows the Pair's frames select, over every raw Pair frame root of a history, rolled-back frames included |
 | `PairStep.AuthenticWith` | `Blanc.Lift.UniswapV2Pair.PairStep.AuthenticWith` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:218`) | a step's frame is a pc-0, committed, non-static frame at the pair, and a given relation `Auth` holds of the frame's root derivation, entry and transcript; the headlines use `PairEntryAuth` |
@@ -996,6 +1400,33 @@ Names that the tables above write unqualified.
 | `sourceReplayNoShrink` | `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | at every step of a replay, `EntryNoShrink` at the carried model state |
 | `prefixTouchedKeys` | `Blanc.Lift.Weth9.prefixTouchedKeys` (`Blanc/Lift/Weth9/FootPrefix.lean:13`) | the keys a WETH9 mid-block result ranges over: the prior history's touched keys followed by the uniform five-key `frameKeys` of every raw frame at the contract in both opening system calls and the transaction prefix, rolled-back frames included |
 | `FirstCallFresh` | `Blanc.Lift.UniswapV2Pair.SkimForwardEnv.FirstCallFresh` (`Blanc/Lift/UniswapV2Pair/SkimForwardKeep.lean:65`) | the hash premise of `skim`'s first transfer: the mapping rows decoded by the pair's own frames inside that `CALL` are fresh against the history's universe (HASH-T, trace-local) |
+| `Book` | `Blanc.Lift.Token.Book` (`Blanc/Lift/Token/Core.lean:48`) | a token's pure book: an abstract ledger, the step of one entered frame's message, the decoded operation, balances, allowances and a well-formedness predicate; no storage layout |
+| `BookLaws` | `Blanc.Lift.Token.BookLaws` (`Blanc/Lift/Token/Core.lean:62`) | the laws of a book that the composition consumes (Section 5.9) |
+| `Core` | `Blanc.Lift.Token.Core` (`Blanc/Lift/Token/Core.lean:98`) | what a token's address answers along a configured history, under an instance-chosen trace-local premise |
+| `IsEntry` | `Blanc.Lift.Token.IsEntry` (`Blanc/Lift/Token/Core.lean:85`) | a frame entered at the token: storage owner and code address are both the token |
+| `Erc20Abi` | `Blanc.Lift.Token.Erc20Abi` (`Blanc/Lift/Token/Abi.lean:17`) | the book reads the standard `transfer` and `balanceOf` selectors as those operations, for every calldata of at least 68 (`transfer`) or 36 (`balanceOf`) bytes and below 2^256 |
+| `SelfCaller` | `Blanc.Lift.Token.SelfCaller` (`Blanc/Lift/Token/SelfCaller.lean:18`) | every entry-frame child of a settled non-static frame at the token has the token as caller |
+| `TransferLive` | `Blanc.Lift.Token.TransferLive` (`Blanc/Lift/Token/Core.lean:145`) | frame-level `transfer` liveness at an exact cost, at the worlds an instance accepts |
+| `Weth9Hist` | `Blanc.Composition.Weth9Token.Weth9Hist` (`Blanc/Composition/Weth9Token.lean:44`) | WETH9's trace-local premises as a token core: CODE, `SumNof`, `FootInv K₀` and `KeysFresh` over the history's touched keys |
+| `TokenSide` | `Blanc.Lift.UniswapV2Pair.TokenSide` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:15`) | which of a pair's two tokens: `token0` or `token1` |
+| `EntryNoShrinkSide` | `Blanc.Lift.UniswapV2Pair.EntryNoShrinkSide` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:74`) | one token's half of `EntryNoShrink`; `True` for every entry other than `sync` and `burn` |
+| `sourceReplayNoShrinkSide` | `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrinkSide` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:128`) | `EntryNoShrinkSide` for one side at every step of a replay |
+| `sourceReplayAnswersSide` | `Blanc.Lift.UniswapV2Pair.sourceReplayAnswersSide` (`Blanc/Lift/UniswapV2Pair/PropertiesSides.lean:135`) | `EntryFeeOff` and one side's `EntryNoShrinkSide` at every step of a replay |
+| `JointAt` | `Blanc.Composition.PairTokenJoint.JointAt` (`Blanc/Composition/PairTokenJointAt.lean:20`) | the joint relation at a world: the side's stored reserve is at most the token's booked balance of the pair, and the pair has granted no booked allowance |
+| `JointCheckpoint` | `Blanc.Composition.UniswapV2PairWeth9Joint.JointCheckpoint` (`Blanc/Composition/UniswapV2PairWeth9Checkpoint.lean:29`) | the joint checkpoint of the Pair and WETH9 on one world state: both codes, the pair's representation of an unlocked state with WETH9 on the side, WETH9's footprint with the pair's balance row tracked and its allowance rows zero, `SumNof`, the reserve bound, and the INIT facts of Section 7 item 32 |
+| `checkJoint` | `Blanc.Composition.UniswapV2PairWeth9Joint.checkJoint` (`Blanc/Composition/UniswapV2PairWeth9CheckJoint.lean:39`) | the computable decision of `JointCheckpoint` over a finite description |
+| `W0` | `Blanc.Composition.UniswapV2PairWeth9Instance.W0` (`Blanc/Composition/UniswapV2PairWeth9W0.lean:83`) | the synthetic world of the closed Pair × WETH9 instance |
+| `AgreesW0` | `Blanc.Composition.UniswapV2PairWeth9Capstone.AgreesW0` (`Blanc/Composition/UniswapV2PairWeth9CapstoneWorld.lean:27`) | a world holds the same account as `W0` at each of the ten accounts the closed block touches |
+| `ClosedSwapOutcome` | `Blanc.Composition.UniswapV2PairWeth9Capstone.ClosedSwapOutcome` (`Blanc/Composition/UniswapV2PairWeth9CapstoneUniversal.lean:45`) | what the closed block does on a world: a valid transition, the WETH9 ledger move, the reserves, the joint invariant and the fee-off share-value row with its strict increase |
+| `UsdcGovernance` | `Blanc.Lift.Usdc.UsdcGovernance` (`Blanc/Lift/Usdc/Governance.lean:21`) | USDC's governance premise: no settled entry frame at the proxy from the admin word calls upgradeTo, upgradeToAndCall or changeAdmin |
+| `NeverSigner` | `Blanc.Lift.Token.NeverSigner` (`Blanc/Lift/Token/Signed.lean:41`) | no settled non-static entry of the token along a history has the given account as signer |
+| `UsdcShadowed` | `Blanc.Lift.Usdc.UsdcShadowed` (`Blanc/Lift/Usdc/HistoryReplay.lean:39`) | a non-entry frame at the proxy (implementation or library), or a position inside the block of an earlier library frame |
+| `JointCheckpoint2` | `Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9Checkpoint.lean:33`) | the two-token joint checkpoint of the Pair, USDC (`token0`) and WETH9 (`token1`) on one world state |
+| `checkJoint2` | `Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2` (`Blanc/Composition/UniswapV2PairUsdcWeth9CheckJoint.lean:81`) | the computable decision of `JointCheckpoint2` over finite row lists |
+| `checkUsdc` | `Blanc.Lift.Usdc.checkUsdc` (`Blanc/Lift/Usdc/FiniteFootprint.lean:37`) | USDC's checkpoint checker on fetched rows: codes, implementation slot, layout and fixed words |
+| `BookS` | `Blanc.Lift.Token.BookS` (`Blanc/Lift/Token/Signed.lean:20`) | a pure book with an authorizer function (`signer`) |
+| `BookLawsS` | `Blanc.Lift.Token.BookLawsS` (`Blanc/Lift/Token/Signed.lean:25`) | the signature-variant laws of a book, admitting the holder's signature as a third authorizer |
+| `usdcBookS` | `Blanc.Lift.Usdc.usdcBookS` (`Blanc/Lift/Usdc/Book.lean:48`) | the pure book of USDC at a given proxy address |
 
 ## 10. Checking this document
 
@@ -1022,7 +1453,9 @@ toolchain is installed. It requires that:
   digests equal the bytes written in `Blanc/SystemContracts.lean`; the Uniswap V2 Pair
   row's code-read block and block hash appear in its certificate provenance, its
   creation code hashes to the factory's init-code hash, and the lifted runtime is
-  embedded in that creation code at bytes 261 to 11,553;
+  embedded in that creation code at bytes 261 to 11,553; the Uniswap V2 Factory row's
+  code-read block and block hash appear in its certificate provenance, and its lifted
+  runtime embeds that creation code at bytes 2,171 to 13,806;
 - the page keeps its section structure, its required headline theorems and its
   load-bearing disclosures, and carries no process vocabulary.
 
@@ -1051,7 +1484,18 @@ and `PositionalTurns.staticViews`; and by their record constructors,
 `swap_bytecode_exact_consumes`, the exhibit address `pairAddress_eq` and most, not all,
 of the statement controls of Section 5.8 (the burn-rounding control
 `burn_witness_disagrees`, the update-walk controls and `footprintSum_dup_breaks_ledger`
-are not pinned). The remaining rows, among them the WETH9 liveness rows, are held here
+are not pinned). The composition headlines of Section 5.9 are pinned there too, among
+them the token interface and WETH9's instance, the factory certificate check, `pair_history_factoryQuiet`,
+`pair_token_joint`, `pair_weth9_joint`, both WETH9 share-value rows, every WETH9
+liveness row, `pair_weth9_create2_jointCheckpoint`, `uniswap_weth9_closed_agreeing`
+and `uniswap_weth9_closed_instance`, with the statement controls of that section
+other than the two checker rejections; `factory_children_fresh`, `w0_jointCheckpoint`,
+the checker soundness theorems and the two checker rejections are not. Of Section 5.10,
+the pins cover `pair_usdc_weth9_joint`, both share-value rows, the five liveness rows,
+`JointCheckpoint2` field by field, `pair_usdc_weth9_create2_jointCheckpoint2`,
+`checkJoint2_sound`, `proxy_forwards`, `usdcBook_lawsS`, `usdc_history_end`, the type
+of `usdcCore`, and the definitions `UsdcGovernance`, `UsdcShadowed` and `NeverSigner`;
+the other Section 5.10 rows and its controls are not pinned. The remaining rows, among them the WETH9 liveness rows of Section 5.1, are held here
 by name and line only.
 
 Every run also executes in-memory falsifiers, each of which must be rejected: a
@@ -1059,7 +1503,12 @@ misspelled declaration, a stale line, a wrong file, an orphan line reference, a
 missing cited file, a stale bare name, a wrong leaf count, an extra, a missing and a wrong stricter
 axiom claim, a wrong codehash, size, creation transaction and system-contract
 digest, a wrong Jaune revision and Lido timestamp, process vocabulary, a
-deleted headline and a dropped disclosure.
+deleted headline and a dropped disclosure, and for the Uniswap rows a wrong codehash,
+code-read block, init-code hash and embedded runtime window, a wrong factory code-read
+block and embedded creation-code window, and a deleted headline and a dropped
+disclosure of Sections 5.8 and 5.9; and for the USDC rows a wrong code-read block,
+library link site and implementation slot, and a deleted headline and a dropped
+disclosure of Section 5.10.
 
 What the check does **not** do: it does not elaborate Lean or re-derive any
 axiom set (its authority over axioms is `scripts/AxiomCheck.lean`, verified by

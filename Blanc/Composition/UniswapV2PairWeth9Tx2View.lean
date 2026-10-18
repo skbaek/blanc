@@ -59,10 +59,6 @@ theorem tx2_size : (4 : B256) ≤ sevm.data.length.toB256 := by
   rw [hdata]
   decide +kernel
 
-theorem tx2_representable : sevm.data.length < 2 ^ 256 := by
-  rw [hdata]
-  decide +kernel
-
 end Decode
 
 /-! ## The frame entry -/
@@ -127,9 +123,6 @@ theorem getStorVal_eq' (d : Devm) (a : Adr) (k : B256) : d.getStorVal a k = (d.g
   rfl
 
 theorem getStor_eq' (d : Devm) (a : Adr) : d.getStor a = d.state.getStor a := rfl
-
-theorem getOrigStorVal_eq' (sevm : Sevm) (a : Adr) (k : B256) :
-    Jaune.getOrigStorVal sevm a k = (sevm.benvStat.origState.getStor a).get k := rfl
 
 theorem State.setStorVal_getStor_self (S : Jaune.State) (a : Adr) (k v : B256) :
     (S.setStorVal a k v).getStor a = (S.getStor a).set k v := by
@@ -208,9 +201,6 @@ theorem DView.withGasLeft (h : DView b d K A S rc L) (g : Nat) :
 
 theorem DView.memRead (h : DView b d K A S rc L) (i n : Nat) :
     DView b (d.memRead i n).2 K A S rc L := h.setMach _
-
-theorem DView.memWrite (h : DView b d K A S rc L) (i : Nat) (v : Bytes) :
-    DView b (d.memWrite i v) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem DView.memExtends (h : DView b d K A S rc L) (ps : List (Nat × Nat)) :
     DView b (d.memExtends ps) K A S rc L := h.congr rfl rfl rfl rfl rfl rfl rfl rfl

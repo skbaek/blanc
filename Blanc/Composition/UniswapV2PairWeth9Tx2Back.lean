@@ -33,9 +33,6 @@ theorem balMsg_devm_view (h : DView b B K A S rc Lg) (hsg : sevm.benvStat.rules.
 theorem balMsg_sevm_target (g k f : Nat) :
     (initSevm (balMsg sevm B T M p t g k f)).currentTarget = balTok t := rfl
 
-theorem balMsg_sevm_benvStat (g k f : Nat) :
-    (initSevm (balMsg sevm B T M p t g k f)).benvStat = sevm.benvStat := rfl
-
 theorem balMsg_holder (g k f : Nat) (wf : Mem.Wf M) (width : p.toNat + 260 < 2 ^ 256) :
     (Sevm.dataWord (initSevm (balMsg sevm B T M p t g k f)) 4).toAdr = sevm.currentTarget := by
   rw [(dataWord_oneWord (e := initSevm (balMsg sevm B T M p t g k f))
@@ -82,10 +79,7 @@ abbrev tx2S0 : List B256 := tx2W.token1 :: tx2W.token0 :: 0 :: 0 :: swapCutTail 
 theorem tx2M_wf : Mem.Wf tx2M := by unfold Mem.Wf; decide +kernel
 theorem tx2M_size : tx2M.size = 416 := by decide +kernel
 theorem tx2P_width : tx2P.toNat + 260 < 2 ^ 256 := by decide +kernel
-theorem tx2P_eq : tx2P = 356 := by decide +kernel
 
-theorem balTok_tokenX : balTok tokenX.toB256 = tokenX := by decide +kernel
-theorem balTok_weth : balTok weth.toB256 = weth := by decide +kernel
 theorem balTok_tx2W0 : balTok tx2W.token0 = tokenX := by decide +kernel
 theorem balTok_tx2W1 : balTok tx2W.token1 = weth := by decide +kernel
 

@@ -47,7 +47,6 @@ def Weth9Hist (ca : Adr) (K₀ : Key → Prop) {cfg : ChainConfig} {checkpoint f
     FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca) ∧
     KeysFresh K₀ (historyTouchedKeys ca tr)
 
-
 /-! ## The book laws -/
 
 /-- The message sender of a model call. -/
@@ -159,8 +158,6 @@ theorem transferFrom_cases {l l' : Weth9.Ledger} {who src dst : Adr} {wad : B256
       by_cases hs : src = who
       · exact Or.inl hs
       · exact Or.inr (Classical.byContradiction fun hm => hc ⟨hs, hm⟩)
-
-theorem toNat_pos_of_lt {x y : B256} (h : x.toNat < y.toNat) : 0 < y.toNat := by omega
 
 /-- **Holder law of the model.** -/
 theorem step_holder_only {l l' : Weth9.Ledger} {c : Call} {h : Adr} (fit : l.total < 2 ^ 256)
@@ -405,7 +402,6 @@ theorem weth9Book_laws : BookLaws weth9Book where
   bal_lt := by
     intro l h good
     exact Nat.lt_of_le_of_lt le_sum good
-
 
 /-! ## The transfer liveness facet -/
 

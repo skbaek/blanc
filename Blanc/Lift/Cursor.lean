@@ -695,12 +695,12 @@ theorem CursorOK.tree_of_exec {code : ByteArray} {c : Cert} {n : Exec.Deriv}
     cases hi
 
 /-- A cursor-placed node decodes only the frame-spawning instructions the
-checker admits: `CALL`, `STATICCALL` and `CREATE2` (never `DELEGATECALL`,
+checker admits: `CALL`, `STATICCALL`, `CREATE2` and `DELEGATECALL` (never
 `CALLCODE` or `CREATE`). -/
 theorem CursorOK.exec_spawn {code : ByteArray} {c : Cert} {n : Exec.Deriv}
     {κ : Cursor} (ok : CursorOK code c n κ) {x : Xinst}
     (hat : Ninst.At n.sevm.code n.pc (.exec x)) :
-    x = .call ∨ x = .staticcall ∨ x = .create2 := by
+    x = .call ∨ x = .staticcall ∨ x = .create2 ∨ x = .delegatecall := by
   obtain ⟨g, hf, hcheck⟩ := ok.tree_of_exec hat
   rw [hf] at hcheck
   simp only [checkNode, Bool.and_eq_true] at hcheck
@@ -711,42 +711,44 @@ theorem CursorOK.exec_spawn {code : ByteArray} {c : Cert} {n : Exec.Deriv}
     obtain ⟨_, out, _, htrans, _⟩ := absNinst_nonpush_spec (fun _ _ h => by cases h) habs
     cases x <;> simp only [ninstTransfer, reduceCtorEq, or_false, or_true] at htrans ⊢
 
-/-- The instruction is not `CREATE2`. -/
-def ninstNotCreate2 : Ninst → Bool
+/-- The instruction spawns no frame by `CREATE2` or `DELEGATECALL` (replaces `ninstCallOnly`). -/
+def ninstCallOnly : Ninst → Bool
   | .exec .create2 => false
+  | .exec .delegatecall => false
   | _ => true
 
-/-- The tree has no `CREATE2` node. -/
-def SFunc.noCreate2 : SFunc → Bool
-  | .next n f => ninstNotCreate2 n && f.noCreate2
+/-- The tree has no `CREATE2` or `DELEGATECALL` node. -/
+def SFunc.callOnly : SFunc → Bool
+  | .next n f => ninstCallOnly n && f.callOnly
   | .last _ => true
-  | .dest f => f.noCreate2
-  | .branch f g => f.noCreate2 && g.noCreate2
-  | .branchTo f _ => f.noCreate2
+  | .dest f => f.callOnly
+  | .branch f g => f.callOnly && g.callOnly
+  | .branchTo f _ => f.callOnly
   | .jump _ => true
-  | .callNext _ f => f.noCreate2
+  | .callNext _ f => f.callOnly
   | .ret => true
-  | .pcAt _ f => f.noCreate2
+  | .pcAt _ f => f.callOnly
   | .undefined => true
 
-/-- No tree of the certificate has a `CREATE2` node: the certificate's transfer set excludes
-`CREATE2`.  A decided property of a concrete certificate. -/
-def Cert.noCreate2 (c : Cert) : Bool := c.all fun p => p.2.noCreate2
+/-- No tree of the certificate has a `CREATE2` or `DELEGATECALL` node: the certificate's transfer
+set excludes both.  A decided property of a concrete certificate. -/
+def Cert.callOnly (c : Cert) : Bool := c.all fun p => p.2.callOnly
 
-/-- The cursor's tree and every pending continuation's tree have no `CREATE2` node. -/
-def Cursor.NoCreate2 (κ : Cursor) : Prop :=
-  κ.f.noCreate2 = true ∧ ∀ k ∈ κ.K, k.f.noCreate2 = true
+/-- The cursor's tree and every pending continuation's tree have no `CREATE2` or `DELEGATECALL`
+node. -/
+def Cursor.CallOnly (κ : Cursor) : Prop :=
+  κ.f.callOnly = true ∧ ∀ k ∈ κ.K, k.f.callOnly = true
 
-private theorem Cert.noCreate2_prog {c : Cert} (hc : c.noCreate2 = true) {k : Nat}
-    {g : SFunc} (hg : c.prog[k]? = some g) : g.noCreate2 = true := by
+private theorem Cert.callOnly_prog {c : Cert} (hc : c.callOnly = true) {k : Nat}
+    {g : SFunc} (hg : c.prog[k]? = some g) : g.callOnly = true := by
   have hmem : g ∈ c.prog := List.mem_of_getElem? hg
   simp only [Cert.prog, List.mem_map] at hmem
   obtain ⟨p, hp, rfl⟩ := hmem
-  simp only [Cert.noCreate2, List.all_eq_true] at hc
+  simp only [Cert.callOnly, List.all_eq_true] at hc
   exact hc p hp
 
-private theorem Cursor.NoCreate2.step {c : Cert} (hc : c.noCreate2 = true) {κ κ' : Cursor}
-    (h : κ.NoCreate2) (step : SStep c κ κ') : κ'.NoCreate2 := by
+private theorem Cursor.CallOnly.step {c : Cert} (hc : c.callOnly = true) {κ κ' : Cursor}
+    (h : κ.CallOnly) (step : SStep c κ κ') : κ'.CallOnly := by
   obtain ⟨hf, hK⟩ := h
   cases step with
   | next => exact ⟨(Bool.and_eq_true _ _ ▸ hf).2, hK⟩
@@ -754,41 +756,43 @@ private theorem Cursor.NoCreate2.step {c : Cert} (hc : c.noCreate2 = true) {κ �
   | zero => exact ⟨(Bool.and_eq_true _ _ ▸ hf).1, hK⟩
   | succ => exact ⟨(Bool.and_eq_true _ _ ▸ hf).2, hK⟩
   | toZero => exact ⟨hf, hK⟩
-  | toSucc _ hg => exact ⟨Cert.noCreate2_prog hc hg, hK⟩
-  | jump _ hg => exact ⟨Cert.noCreate2_prog hc hg, hK⟩
+  | toSucc _ hg => exact ⟨Cert.callOnly_prog hc hg, hK⟩
+  | jump _ hg => exact ⟨Cert.callOnly_prog hc hg, hK⟩
   | call κc _ hg hcf =>
-    refine ⟨Cert.noCreate2_prog hc hg, fun k hk => ?_⟩
+    refine ⟨Cert.callOnly_prog hc hg, fun k hk => ?_⟩
     rcases List.mem_cons.mp hk with rfl | hk
     · rw [hcf]; exact hf
     · exact hK k hk
   | ret => exact ⟨hK _ List.mem_cons_self, fun k hk => hK k (List.mem_cons_of_mem _ hk)⟩
   | pcAt => exact ⟨hf, hK⟩
 
-/-- Every cursor reached from entry `0` of a certificate without `CREATE2` nodes has none. -/
-theorem Cursor.noCreate2_of_reach {c : Cert} (hc : c.noCreate2 = true) {κ : Cursor}
-    (reach : Relation.ReflTransGen (SStep c) (Cursor.start c) κ) : κ.NoCreate2 := by
+/-- Every cursor reached from entry `0` of a certificate without `CREATE2` or `DELEGATECALL`
+nodes has none. -/
+theorem Cursor.callOnly_of_reach {c : Cert} (hc : c.callOnly = true) {κ : Cursor}
+    (reach : Relation.ReflTransGen (SStep c) (Cursor.start c) κ) : κ.CallOnly := by
   induction reach with
   | refl =>
     cases c with
     | nil => exact ⟨rfl, fun _ h => by cases h⟩
     | cons p c =>
       refine ⟨?_, fun _ h => by cases h⟩
-      simp only [Cert.noCreate2, List.all_cons, Bool.and_eq_true] at hc
+      simp only [Cert.callOnly, List.all_cons, Bool.and_eq_true] at hc
       exact hc.1
   | tail _ step ih => exact ih.step hc step
 
-/-- A cursor-placed node whose cursor has no `CREATE2` node decodes only `CALL` or
-`STATICCALL`. -/
+/-- A cursor-placed node whose cursor has no `CREATE2` or `DELEGATECALL` node decodes only
+`CALL` or `STATICCALL`. -/
 theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec.Deriv}
-    {κ : Cursor} (ok : CursorOK code c n κ) (hno : κ.NoCreate2) {x : Xinst}
+    {κ : Cursor} (ok : CursorOK code c n κ) (hno : κ.CallOnly) {x : Xinst}
     (hat : Ninst.At n.sevm.code n.pc (.exec x)) : x = .call ∨ x = .staticcall := by
-  rcases ok.exec_spawn hat with h | h | rfl
+  rcases ok.exec_spawn hat with h | h | rfl | rfl
   · exact Or.inl h
   · exact Or.inr h
-  · obtain ⟨g, hf, -⟩ := ok.tree_of_exec hat
+  all_goals
+    obtain ⟨g, hf, -⟩ := ok.tree_of_exec hat
     have h := hno.1
     rw [hf] at h
-    simp only [SFunc.noCreate2, ninstNotCreate2, Bool.false_and, Bool.false_eq_true] at h
+    simp only [SFunc.callOnly, ninstCallOnly, Bool.false_and, Bool.false_eq_true] at h
 
 /-- **The stateful prefix form of the lift.**  Every node `N` of the same-frame
 chain of a frame `R` entered at pc `0` of certified bytes — whatever `R`'s

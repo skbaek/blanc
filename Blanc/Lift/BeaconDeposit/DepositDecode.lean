@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.DepositArgs
 import Blanc.Lift.BeaconDeposit.CountView
 import Blanc.Lift.ExactWalkOps
+import Blanc.B256CheckFacts
 
 namespace Blanc.Lift.BeaconDeposit
 
@@ -45,13 +46,6 @@ lemma toNat_add_of_lt {x y : B256} (h : x.toNat + y.toNat < 2 ^ 256) :
   rw [B256.toNat_add]
   change (x.toNat + y.toNat) % 2 ^ 256 = _
   exact Nat.mod_eq_of_lt h
-
-lemma gtCheck_eq_zero_of_toNat_le {x y : B256} (h : x.toNat ≤ y.toNat) :
-    B256.gtCheck x y = 0 := by
-  rw [B256.gtCheck, ite_eq_right]
-  intro hxy
-  have hxy' := B256.toNat_lt_toNat hxy
-  omega
 
 lemma ltCheck_eq_zero_of_toNat_le {x y : B256} (h : y.toNat ≤ x.toNat) :
     B256.ltCheck x y = 0 := by
@@ -115,9 +109,9 @@ theorem offset0 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     exact hcancel
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hoff : B256.gtCheck (argOff sevm 0) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ho)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ho)
   have hbound : B256.gtCheck ((4 + argOff sevm 0) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using hh)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using hh)
   refine rx_dest ?_
   refine rx_dup2 (S := [0x01b8, sel]) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -232,9 +226,9 @@ theorem len_block0 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 0 + argLen sevm 0) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 0) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
@@ -290,9 +284,9 @@ theorem len_block1 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 1 + argLen sevm 1) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 1) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
@@ -350,9 +344,9 @@ theorem len_block2 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     B256.toNat_toB256_of_lt hcd
   have hmax : (Nat.toB256 (2 ^ 32)).toNat = 2 ^ 32 := by decide
   have hguard1 : B256.gtCheck (argPtr sevm 2 + argLen sevm 2) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.2.2)
   have hguard2 : B256.gtCheck (argLen sevm 2) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.2.2.1)
   refine rx_dest ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
@@ -411,9 +405,9 @@ theorem tail1 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hoff1 : argOff sevm 1 = Sevm.dataWord sevm 36 := by
     unfold argOff; rw [hpos1]
   have hguard1 : B256.gtCheck (argOff sevm 1) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
   have hguard2 : B256.gtCheck ((4 + argOff sevm 1) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
   refine rx_dest ?_
   refine rx_swap2 ?_
   refine rx_swap (n := 3) rfl ?_
@@ -480,9 +474,9 @@ theorem tail2 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
   have hoff2 : argOff sevm 2 = Sevm.dataWord sevm 68 := by
     unfold argOff; rw [hpos2]
   have hguard1 : B256.gtCheck (argOff sevm 2) (Nat.toB256 (2 ^ 32)) = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by rw [hmax]; exact ht.1)
   have hguard2 : B256.gtCheck ((4 + argOff sevm 2) + 32) sevm.data.length.toB256 = 0 :=
-    gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
+    B256.gtCheck_eq_zero_of_toNat_le (by simpa only [hlen] using ht.2.1)
   refine rx_dest ?_
   refine rx_swap2 ?_
   refine rx_swap (n := 3) rfl ?_

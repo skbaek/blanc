@@ -38,9 +38,8 @@ abstract lock state `LSt`:
 needs `setNow`; an `SSTORE` whose key may equal the slot is accepted only if
 the key is the constant slot, `passed` holds, and the pc is a release pc or
 (before any mutating body start) a set pc; `SELFDESTRUCT` and every `PC` node (`SFunc.pcAt`, which no lock-checked
-certificate uses) are rejected (the
-certificate itself admits no `DELEGATECALL`, `CALLCODE`, `CREATE` or
-`CREATE2`).
+certificate uses) are rejected, and so are the `CREATE2` and `DELEGATECALL`
+nodes the certificate admits (it admits no `CALLCODE` or `CREATE`).
 
 **Joins.**  Gotos, loop heads and callee entries carry an annotation `ann[k]`
 (an `LSt` over position symbols) produced by the untrusted producer
@@ -208,6 +207,7 @@ def effSetNow (sp : Spec) (pc : Nat) (n : Ninst) (σ : LSt) : Option Bool :=
     else none
   | .reg .sstore, _ => none
   | .exec .create2, _ => none
+  | .exec .delegatecall, _ => none
   | .exec _, _ => some false
   | _, _ => some σ.setNow
 

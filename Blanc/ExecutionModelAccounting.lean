@@ -25,6 +25,11 @@ The handler composes `own` with the children's replays, using the lower-depth hy
 each settled child and the storage transport of a call (`Xinst.storageReplay_some_of_body`) for its
 opening and resumption; children that do not settle contribute nothing.  Static frames observe nothing and
 keep their storage.  `modelLadder` turns the handler into an `AccountingLadderAdmitted`.
+
+The per-frame bodies are child-provider lemmas, shared with the code-family handler
+(`Blanc/ExecutionOwnerFamily.lean`): `staticFrame` (a static frame, given that nothing below it is
+observed) and `modelFrame` (the model composition, given `ChildReplays`, the replays of the settled
+children of the frame's spawning nodes).
 -/
 
 namespace Blanc
@@ -336,6 +341,181 @@ def SpawnReplay (ca : Adr) (sem : CodeSem) (entry : Sevm → Devm → Prop) (C :
             ∀ M, Exec.Deriv.ParentPrefix N' M →
               ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y))
 
+/-- **The settled children of a frame's spawning nodes replay** (a child provider): at every
+`runOk` node of the frame's own chain, a committed child entered under the world word bound replays,
+from its entry boundary, with the observation of its committed frames.  The single-code handlers
+supply it from the lower-depth hypothesis (`spawnChild`); a code family supplies it per spawn kind. -/
+def ChildReplays (C : ReplayCarrier ca) (V : ReplayObservation C) {sevm₀ : Sevm}
+    {pre₀ post₀ : Devm} (root : Exec 0 sevm₀ pre₀ (.ok post₀)) : Prop :=
+  ∀ {nodePc : Nat} {nodeSevm : Sevm} {nodePre : Devm} {out : Execution} {frame : Jaune.Frame}
+    {rsm : Resume} {nextPc : Nat} {cevm : Evm} {raw : Execution} {inter : Devm}
+    (step : Evm.step ⟨nodePc, nodeSevm, nodePre⟩ = .spawn frame rsm nextPc)
+    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (resume : rsm.run (frame.settle raw) = .ok inter) (next : Exec nextPc nodeSevm inter out),
+    Exec.Deriv.ParentPrefix ⟨0, sevm₀, pre₀, .ok post₀, root⟩
+      ⟨nodePc, nodeSevm, nodePre, out, .runOk step enter child resume next⟩ →
+    ∀ committed : Execution.commits raw = true, sum cevm.dyna.state.bal < 2 ^ 256 → ∃ steps,
+      C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
+        (C.ofState (Execution.committedPost raw committed).state) ∧
+      V.obs steps = (Exec.committedFrames child).flatMap V.frameObs
+
+/-- **A static frame's accounting**, given that nothing below it is observed: it observes nothing and
+keeps the owner's storage, so the empty replay takes its entry boundary to its post boundary. -/
+theorem staticFrame
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (obsStatic : ∀ f : Exec.Frame, f.sevm.isStatic = true → V.frameObs f = [])
+    {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (committed : Execution.commits (.ok post) = true) (fork : CoveredFork sevm.benvStat.fork)
+    (codeNe : (pre.getCode ca).toList ≠ []) (hs : sevm.isStatic = true)
+    (hdf : (Exec.descendantFrames run).flatMap V.frameObs = []) :
+    (sevm.isStatic = true → (Exec.committedFrames run).flatMap V.frameObs = []) ∧
+    (sum pre.state.bal < 2 ^ 256 → ∃ steps,
+      C.Replay (C.frameEntry sevm pre.state) steps
+        (C.ofState (Execution.committedPost (.ok post) committed).state) ∧
+      V.obs steps = (Exec.committedFrames run).flatMap V.frameObs) := by
+  have self : (Exec.committedFrames run).flatMap V.frameObs =
+      V.frameObs (Exec.Frame.ofRun run committed) ++
+        (Exec.descendantFrames run).flatMap V.frameObs := by
+    rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
+  have hself : V.frameObs (Exec.Frame.ofRun run committed) = [] := obsStatic _ hs
+  have hobs : (Exec.committedFrames run).flatMap V.frameObs = [] := by
+    rw [self, hdf, hself]
+    rfl
+  refine ⟨fun _ => hobs, fun _ => ⟨[], ?_, ?_⟩⟩
+  · have hview := Exec.getStor_committedPost_eq_of_static_protected run hs committed fork ca
+      (State.Protected.of_code_ne_nil codeNe)
+    have heq : C.ofState (Execution.committedPost (.ok post) committed).state =
+        C.ofState pre.state := ofStateGet fun k => congrArg (fun stor => stor.get k) hview
+    rw [heq, entryOfState]
+    exact C.nil _
+  · rw [hobs]
+    exact V.obs_nil
+
+/-- **The model replay of a successful frame from its own steps and its children's replays.**  If
+`own` takes the boundary `a` to the post boundary when the frame's chain decodes no external
+instruction, and otherwise to the boundary of every node that decodes one, after which only silent
+steps follow and no external instruction, then `own`, the settled child's replay and the silent steps
+take `a` to the post boundary, observing `own` and then the frame's committed descendants. -/
+theorem modelFrame
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
+    {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rootNonempty : (pre.getCode ca).toList ≠ []) (bound : sum pre.state.bal < 2 ^ 256)
+    (children : ChildReplays C V run) {a : C.Snap} (own : List C.Step)
+    (c3 : (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+        ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) →
+      C.Replay a own (C.ofState post.state))
+    (c12 : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
+        C.Replay a own (C.ofState N.devm.state) ∧
+        ∀ N', Exec.Deriv.ParentStep N' N →
+          C.Replay (C.ofState N'.devm.state) [] (C.ofState post.state) ∧
+          ∀ M, Exec.Deriv.ParentPrefix N' M →
+            ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y)) :
+    ∃ steps, C.Replay a steps (C.ofState post.state) ∧
+      V.obs steps = V.obs own ++ (Exec.descendantFrames run).flatMap V.frameObs := by
+  rcases Exec.Deriv.exists_firstExec_or_none run with none | ⟨Vn, hV⟩
+  · rw [Exec.descendantFrames_eq_nil_of_noExec run none]
+    exact ⟨own, c3 none, by rw [List.flatMap_nil, List.append_nil]⟩
+  · have hpV := hV.parentPrefix
+    have dEq := hV.descendantFrames_eq
+    obtain ⟨x, hx⟩ := hV.exec_at
+    have hexn := Exec.Deriv.ParentPrefix.exn_eq hpV
+    obtain ⟨vpc, vsevm, vd, vout, vrun⟩ := Vn
+    dsimp only at hexn hx dEq
+    subst hexn
+    have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
+      rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
+      exact rootNonempty
+    cases vrun with
+    | halt step =>
+        rw [Evm.step_next hx] at step
+        exact (Ninst.step_ne_halt_ok step).elim
+    | cont step next =>
+        rename_i pc' post'
+        have nstep : Ninst.step ⟨vpc, vsevm, vd⟩ (.exec x) = .cont pc' post' := by
+          rw [← Evm.step_next hx]
+          exact step
+        have nrun : Ninst.StepRun vpc vsevm vd (.exec x) .none (.ok post') := by
+          unfold Ninst.StepRun
+          rw [nstep]
+          exact ⟨rfl, rfl⟩
+        have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
+          Ninst.none_getStor_eq_of_ne_sstore nrun (by intro h; cases h) ca
+            (State.Protected.of_code_ne_nil nodeNonempty)
+        obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
+        obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.cont step next)
+        have hdf : Exec.descendantFrames next = [] :=
+          Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
+        have hE : C.ofState vd.state = C.ofState post'.state :=
+          ofStateGet fun k => by
+            exact (congrArg (fun t => Stor.get t k) hstor).symm
+        rw [dEq]
+        simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
+        refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
+        rw [V.obs_append, V.obs_nil, List.append_nil]
+    | doneOk step enter resume next =>
+        rename_i settled pc' post'
+        have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
+          Evm.step_doneOk_getStor_eq step enter resume ca
+            (State.Protected.of_code_ne_nil nodeNonempty)
+        obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
+        obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.doneOk step enter resume next)
+        have hdf : Exec.descendantFrames next = [] :=
+          Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
+        have hE : C.ofState vd.state = C.ofState post'.state :=
+          ofStateGet fun k => by
+            exact (congrArg (fun t => Stor.get t k) hstor).symm
+        rw [dEq]
+        simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
+        refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
+        rw [V.obs_append, V.obs_nil, List.append_nil]
+    | runOk step enter child resume next =>
+        rename_i frame rsm pc' cevm raw inter
+        have nodeFork : CoveredFork vsevm.benvStat.fork := by
+          rw [show vsevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq hpV]
+          exact fork
+        have nodeCodeNe : vd.getCode ca ≠ .empty := fun empty =>
+          nodeNonempty (by rw [empty]; simp only [ByteArray.toList_empty])
+        obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
+        obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.runOk step enter child resume next)
+        have hdf : Exec.descendantFrames next = [] :=
+          Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
+        obtain ⟨seamA, seamB⟩ := Exec.spawn_seam nodeFork step enter child resume
+        have hentry : Devm.getStor cevm.dyna ca = Devm.getStor vd ca :=
+          Evm.step_spawn_enter_getStor nodeFork step enter ca
+            (State.Protected.of_code_ne_nil nodeNonempty)
+        rw [dEq, Exec.descendantFrames_flatMap_runOk, hdf, List.flatMap_nil, List.append_nil]
+        by_cases settles : Frame.settlementCommits frame raw = true
+        · have hcommit := Frame.raw_commits_of_settlementCommits settles
+          have bound' : sum cevm.dyna.state.bal < 2 ^ 256 := by
+            obtain ⟨-, childBal⟩ := Evm.step_spawn_child_world nodeFork step enter nodeCodeNe
+            exact Nat.lt_of_le_of_lt
+              (childBal.trans (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode hpV).1) bound
+          obtain ⟨csteps, creplay, cobs⟩ := children step enter child resume next hpV hcommit bound'
+          have e1 : C.frameEntry cevm.sta cevm.dyna.state = C.ofState vd.state := by
+            rw [entryOfState]
+            exact ofStateGet fun k => by
+              exact congrArg (fun t => Stor.get t k) hentry
+          have e2 : C.ofState (Execution.committedPost raw hcommit).state =
+              C.ofState inter.state := ofStateGet fun k => (seamA hcommit settles ca k).symm
+          rw [e1, e2] at creplay
+          refine ⟨own ++ csteps ++ [], append (append hc1 creplay) hrep2, ?_⟩
+          rw [V.obs_append, V.obs_append, cobs, V.obs_nil]
+          simp only [settles, ↓reduceIte, List.append_nil]
+        · have e3 : C.ofState vd.state = C.ofState inter.state :=
+            ofStateGet fun k => (seamB settles ca k).symm
+          refine ⟨own ++ [], append (e3 ▸ hc1) hrep2, ?_⟩
+          rw [V.obs_append, V.obs_nil]
+          have hf : Frame.settlementCommits frame raw = false := by simpa only [Bool.not_eq_true] using
+            settles
+          simp only [hf, Bool.false_eq_true, ↓reduceIte, List.append_nil]
+
 /-- **The target handler for a model replay.**  A successful target frame satisfies `CoreAccounting` for
 a carrier whose boundary reads the target's storage only through its words (`ofStateGet`; the entry
 boundary is the ordinary one), given the contract's `SpawnReplay` and that its frames spawn only by
@@ -355,128 +535,21 @@ theorem spawnReplayTarget
   intro run committed fork installed admitted
   have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
     sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
-  have self : (Exec.committedFrames run).flatMap V.frameObs =
-      V.frameObs (Exec.Frame.ofRun run committed) ++
-        (Exec.descendantFrames run).flatMap V.frameObs := by
-    rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   by_cases hs : sevm.isStatic = true
-  · have hdf := staticObservedNil kinds run hrun target fork installed admitted deeper run (.refl _) hs
-    have hself : V.frameObs (Exec.Frame.ofRun run committed) = [] := obsStatic _ hs
-    have hobs : (Exec.committedFrames run).flatMap V.frameObs = [] := by
-      rw [self, hdf, hself]
-      rfl
-    refine ⟨fun _ => hobs, fun _ => ⟨[], ?_, ?_⟩⟩
-    · have hview := Exec.getStor_committedPost_eq_of_static_protected run hs committed fork ca
-        (State.Protected.of_image installed.1)
-      have heq : C.ofState (Execution.committedPost (.ok post) committed).state =
-          C.ofState pre.state := ofStateGet fun k => congrArg (fun stor => stor.get k) hview
-      rw [heq, entryOfState]
-      exact C.nil _
-    · rw [hobs]
-      exact V.obs_nil
+  · exact staticFrame entryOfState ofStateGet obsStatic run committed fork rootNonempty hs
+      (staticObservedNil kinds run hrun target fork installed admitted deeper run (.refl _) hs)
   · have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
     refine ⟨fun h => absurd h hs, fun bound => ?_⟩
     obtain ⟨own, hown, c3, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
-    rw [self]
-    rcases Exec.Deriv.exists_firstExec_or_none run with none | ⟨Vn, hV⟩
-    · rw [Exec.descendantFrames_eq_nil_of_noExec run none]
-      exact ⟨own, c3 none, by rw [hown, List.flatMap_nil, List.append_nil]⟩
-    · have hpV := hV.parentPrefix
-      have dEq := hV.descendantFrames_eq
-      obtain ⟨x, hx⟩ := hV.exec_at
-      have hexn := Exec.Deriv.ParentPrefix.exn_eq hpV
-      obtain ⟨vpc, vsevm, vd, vout, vrun⟩ := Vn
-      dsimp only at hexn hx dEq
-      subst hexn
-      cases vrun with
-      | halt step =>
-          rw [Evm.step_next hx] at step
-          exact (Ninst.step_ne_halt_ok step).elim
-      | cont step next =>
-          rename_i pc' post'
-          have nstep : Ninst.step ⟨vpc, vsevm, vd⟩ (.exec x) = .cont pc' post' := by
-            rw [← Evm.step_next hx]
-            exact step
-          have nrun : Ninst.StepRun vpc vsevm vd (.exec x) .none (.ok post') := by
-            unfold Ninst.StepRun
-            rw [nstep]
-            exact ⟨rfl, rfl⟩
-          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
-            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
-            exact rootNonempty
-          have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
-            Ninst.none_getStor_eq_of_ne_sstore nrun (by intro h; cases h) ca
-              (State.Protected.of_code_ne_nil nodeNonempty)
-          obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
-          obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.cont step next)
-          have hdf : Exec.descendantFrames next = [] :=
-            Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
-          have hE : C.ofState vd.state = C.ofState post'.state :=
-            ofStateGet fun k => by
-              exact (congrArg (fun t => Stor.get t k) hstor).symm
-          rw [dEq]
-          simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
-          refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
-          rw [V.obs_append, V.obs_nil, hown, List.append_nil]
-      | doneOk step enter resume next =>
-          rename_i settled pc' post'
-          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
-            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
-            exact rootNonempty
-          have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
-            Evm.step_doneOk_getStor_eq step enter resume ca
-              (State.Protected.of_code_ne_nil nodeNonempty)
-          obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
-          obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.doneOk step enter resume next)
-          have hdf : Exec.descendantFrames next = [] :=
-            Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
-          have hE : C.ofState vd.state = C.ofState post'.state :=
-            ofStateGet fun k => by
-              exact (congrArg (fun t => Stor.get t k) hstor).symm
-          rw [dEq]
-          simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
-          refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
-          rw [V.obs_append, V.obs_nil, hown, List.append_nil]
-      | runOk step enter child resume next =>
-          rename_i frame rsm pc' cevm raw inter
-          obtain ⟨x', instruction, nodeFork, nodeCodeNe, balLe, childFork, childStaticOf,
-            childCore⟩ := spawnChild kinds run hrun target fork installed admitted deeper step
-              enter child resume next hpV
-          obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
-          obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.runOk step enter child resume next)
-          have hdf : Exec.descendantFrames next = [] :=
-            Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
-          obtain ⟨seamA, seamB⟩ := Exec.spawn_seam nodeFork step enter child resume
-          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
-            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
-            exact rootNonempty
-          have hentry : Devm.getStor cevm.dyna ca = Devm.getStor vd ca :=
-            Evm.step_spawn_enter_getStor nodeFork step enter ca
-              (State.Protected.of_code_ne_nil nodeNonempty)
-          rw [dEq, Exec.descendantFrames_flatMap_runOk, hdf, List.flatMap_nil, List.append_nil]
-          by_cases settles : Frame.settlementCommits frame raw = true
-          · have hcommit := Frame.raw_commits_of_settlementCommits settles
-            have bound' : sum cevm.dyna.state.bal < 2 ^ 256 := by
-              obtain ⟨-, childBal⟩ := Evm.step_spawn_child_world nodeFork step enter nodeCodeNe
-              exact Nat.lt_of_le_of_lt (childBal.trans balLe) bound
-            obtain ⟨csteps, creplay, cobs⟩ := (childCore hcommit).2 bound'
-            have e1 : C.frameEntry cevm.sta cevm.dyna.state = C.ofState vd.state := by
-              rw [entryOfState]
-              exact ofStateGet fun k => by
-                exact congrArg (fun t => Stor.get t k) hentry
-            have e2 : C.ofState (Execution.committedPost raw hcommit).state =
-                C.ofState inter.state := ofStateGet fun k => (seamA hcommit settles ca k).symm
-            rw [e1, e2] at creplay
-            refine ⟨own ++ csteps ++ [], append (append hc1 creplay) hrep2, ?_⟩
-            rw [V.obs_append, V.obs_append, hown, cobs, V.obs_nil]
-            simp only [settles, ↓reduceIte, List.append_nil]
-          · have e3 : C.ofState vd.state = C.ofState inter.state :=
-              ofStateGet fun k => (seamB settles ca k).symm
-            refine ⟨own ++ [], append (e3 ▸ hc1) hrep2, ?_⟩
-            rw [V.obs_append, V.obs_nil, hown]
-            have hf : Frame.settlementCommits frame raw = false := by simpa only [Bool.not_eq_true] using
-              settles
-            simp only [hf, Bool.false_eq_true, ↓reduceIte, List.append_nil]
+    obtain ⟨steps, replay, observed⟩ := modelFrame entryOfState ofStateGet append run fork
+      rootNonempty bound
+      (fun step enter child resume next chain childCommitted childBound => by
+        obtain ⟨-, -, -, -, -, -, -, childCore⟩ := spawnChild kinds run hrun target fork installed
+          admitted deeper step enter child resume next chain
+        exact (childCore childCommitted).2 childBound)
+      own c3 c12
+    refine ⟨steps, replay, ?_⟩
+    rw [observed, hown, Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
 
 end Exec.CoreAccounting
 
