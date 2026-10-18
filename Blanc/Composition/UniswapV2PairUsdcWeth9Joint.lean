@@ -1,20 +1,17 @@
 import Blanc.Composition.PairTwoToken
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
+import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
 import Blanc.Composition.UniswapV2PairWeth9Joint
 import Blanc.MachineDataFacts
 
 /-!
 # C6(a) for the USDC/WETH9 Pair (Appendix A §10, U8b)
 
-The generic two-core headline `pair_two_token_joint` instantiated at the exhibit: `C0 := usdcCore`
-(USDC at `token0`), `C1 := (weth9Core weth KW).weak` (WETH9 at `token1`).  The USDC side's `hist`,
-`answerable`, joint relation and holder laws come from `JointCheckpoint2.toUsdcCore` (under the
-governance and never-signer premises); the WETH9 side's from the predecessor's
-`JointCheckpoint.toCore` and `weth9Book_laws`; `factoryQuiet` from the factory lift; `tokenEntered`
-for USDC from the proxy's code image persisting at every settled frame (`settled_codeImage`) and
-along each frame's same-frame prefix (`ParentPrefix.codePreserve`), the proxy's runtime being no
-delegation designator and USDC no precompile (`JointCheckpoint2.usdcNotPrecompile`); for WETH9 from
-`weth9_tokenEntered`.
+The headline is a corollary of its support-free twin `pair_usdc_weth9_joint_finite`
+(`UniswapV2PairUsdcWeth9JointF.lean`), which instantiates the generic two-core headline
+`pair_two_token_joint` at `C0 := usdcCoreF`, `C1 := (weth9Core weth KW).weak`: the checkpoint gives
+`JointCheckpoint2F` (`JointCheckpoint2.toF`) and the trace-local premise `PairUsdcAllowQuiet`
+(`JointCheckpoint2.allowQuiet`, from the storage-wide support).
 
 The generic `JointAtW` conclusions are read back as the concrete ledger forms at every position and
 as the stored balance words and zero allowance rows at the end.  No hypothesis mentions either
@@ -26,27 +23,6 @@ namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcToken Blanc.Composition.PairTwoToken Blanc.Composition.Weth9Token
-
-/-- At every node of every settled frame, USDC's installed proxy runtime is no delegation
-designator and USDC is not a precompile of the frame's rules. -/
-theorem usdc_tokenEntered {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
-    {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (joint : JointCheckpoint2 pair usdc weth KU KW KP st₀ checkpoint.state)
-    (hist : Usdc.UsdcHist usdc KU trace) :
-    ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →
-      ∀ {node : Exec.Deriv}, Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv G) node →
-        getDelegatedCodeAddress (node.devm.getCode usdc) = none ∧
-          ¬ node.sevm.benvStat.rules.isPrecomp usdc := by
-  intro G member _ _ node chain
-  have nonempty : Usdc.Proxy.code.toList ≠ [] := Usdc.proxySem.ne_nil rfl
-  have entryCode : (Blanc.Exec.Frame.rootDeriv G).devm.getCode usdc = Usdc.Proxy.code :=
-    bytes_eq_of_image (trace.settled_codeImage Usdc.proxySem usdc joint.usdcInstalled.proxy G member)
-  have atNode := Blanc.Exec.Deriv.ParentPrefix.codePreserve chain usdc
-    (by rw [entryCode]; exact nonempty)
-  refine ⟨by rw [atNode, entryCode]; exact Usdc.proxy_undelegated, ?_⟩
-  rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
-  exact joint.usdcNotPrecompile _ (Usdc.usdc_settled_facts trace hist G member).fork
 
 /-- **C6(a), the exhibit composition**: every V2 pair whose `token0` is USDC and `token1` is WETH9,
 from the two-token joint checkpoint, with HASH-T for the Pair, USDC and WETH9, USDC's governance
@@ -94,43 +70,7 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
         finish.reserve1.val ≤ ((future.state.getStor weth).get (Weth9.balSlot pair)).toNat ∧
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
-  obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2.toUsdcCore trace joint governance neverSigner usdcFresh
-  obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
-  obtain ⟨positions, finish, K₁, -, -, -, -, -, rep, ⟨res0, zero0⟩, ⟨res1, zero1⟩, -⟩ :=
-    pair_two_token_joint (usdcCore usdc KU) (weth9Core weth KW).weak (usdcBook_erc20Abi usdc)
-      weth9Book_erc20Abi (usdcSelfCaller usdc KU) (weth9SelfCaller weth KW).weak trace laws0
-      (weth9Book_laws.holderLaws weth trace pair) joint.weth9.pairCode joint.weth9.pairRep
-      pairFresh hist0 hist1 joint.token0 joint.weth9.token joint.weth9.unlocked joint.apart
-      joint.weth9.apart answerable0 answerable1 joint.weth9.distinct joint.weth9.notSystem
-      (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
-        joint.weth9.pairNonzero factoryNotSystem)
-      (usdc_tokenEntered trace joint hist0) (weth9_tokenEntered trace joint.weth9) start0 start1
-  obtain ⟨-, finish', K', replayed⟩ :=
-    pair_history_replayed trace joint.weth9.pairCode joint.weth9.pairRep pairFresh
-  obtain ⟨-, -, -, -, -, -, -, rep'⟩ := id replayed
-  obtain ⟨r0, r1⟩ := WriterFixedMatches.reserves_eq rep'.fixed rep.fixed
-  refine ⟨fun before f after split noOpaque lit => ?_, finish', K', replayed, ?_, ?_, ?_, ?_⟩
-  · obtain ⟨st, K, rep, opened, token0, token1, ⟨reserveAt0, zeroAt0⟩, ⟨reserveAt1, zeroAt1⟩⟩ :=
-      positions before f after split noOpaque lit id
-    exact ⟨st, K, rep, opened, token0, token1, reserveAt0, zeroAt0, reserveAt1,
-      fun g => B256.eq_zero_of_toNat (zeroAt1 g)⟩
-  · change finish.reserve0.val ≤
-      (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (future.state.getStor usdc)).bal pair
-      at res0
-    rwa [Usdc.ledger_bal (Or.inl joint.tracked), ← r0] at res0
-  · intro g row
-    have zeroG : (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU)
-      (future.state.getStor usdc)).allow pair g = 0 := zero0 g
-    rw [Usdc.ledger_allow row] at zeroG
-    exact B256.eq_zero_of_toNat zeroG
-  · change finish.reserve1.val ≤ (Weth9.tracked (Weth9.historyKeyUniverse weth trace KW)
-      (future.state.getStor weth) pair).toNat at res1
-    rwa [Weth9.tracked_self (Or.inl joint.weth9.tracked), ← r1] at res1
-  · intro g row
-    have zeroG := B256.eq_zero_of_toNat (zero1 g)
-    change Weth9.trackedAllow (Weth9.historyKeyUniverse weth trace KW) (future.state.getStor weth)
-      pair g = 0 at zeroG
-    rwa [Weth9.trackedAllow_self row] at zeroG
+  exact pair_usdc_weth9_joint_finite trace joint.toF pairFresh usdcFresh wethFresh
+    governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

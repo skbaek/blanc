@@ -1311,6 +1311,10 @@ CONTRACTS = {
         "Lift.Usdc.Slots",
         "Lift.Usdc.HistoryEnd",
         "Lift.Usdc.HistoryEndFoot",
+        "Lift.Usdc.FiniteFootprintF",
+        "Lift.Usdc.HistFCore",
+        "Lift.Usdc.HistFFacts",
+        "Lift.Usdc.HistFSlots",
     ],
 }
 
@@ -1620,6 +1624,16 @@ COMPOSITION = [
     "Composition.UniswapV2PairUsdcWeth9SwapLive",
     "Composition.UniswapV2PairUsdcWeth9SwapLiveFacts",
     "Composition.UniswapV2PairUsdcWeth9SyncLive",
+    "Composition.UniswapV2PairUsdcWeth9BurnLiveF",
+    "Composition.UniswapV2PairUsdcWeth9CheckJointF",
+    "Composition.UniswapV2PairUsdcWeth9CheckpointF",
+    "Composition.UniswapV2PairUsdcWeth9JointF",
+    "Composition.UniswapV2PairUsdcWeth9MintLiveF",
+    "Composition.UniswapV2PairUsdcWeth9ShareValueF",
+    "Composition.UniswapV2PairUsdcWeth9SkimLiveF",
+    "Composition.UniswapV2PairUsdcWeth9SwapLiveF",
+    "Composition.UniswapV2PairUsdcWeth9SyncLiveF",
+    "Composition.UsdcTokenF",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 

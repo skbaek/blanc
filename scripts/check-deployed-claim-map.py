@@ -189,6 +189,19 @@ REQUIRED_HEADLINES = [
     "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live",
     "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_create2_jointCheckpoint2",
     "Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_sound",
+    # The support-free checkpoint (Section 5.10): the same exhibit rows from
+    # `JointCheckpoint2F` with the trace-local `PairUsdcAllowQuiet`, checked, sound.
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2F",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.PairUsdcAllowQuiet",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOn_product_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOff_product_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_sync_live_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_mint_live_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_burn_live_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live_finite",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.u0F_stray_accepted",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
