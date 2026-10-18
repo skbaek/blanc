@@ -1,5 +1,5 @@
 import Blanc.Lift.SymTransfer
-import Blanc.Lift.LocalStorage
+import Blanc.StaticCallStorage
 
 /-!
 # The concrete top word of more instructions, and storage kept by a step
@@ -132,20 +132,20 @@ theorem run_sload_top (run : Ninst.Run sevm d (.reg .sload) d') (hs : d.stack = 
   rw [hst.1, ← e1]
 
 /-- **A step that is neither `SSTORE` nor a call or creation other than `STATICCALL` keeps the
-executing account's storage** (and every other account's). -/
+executing account's storage** (and every other account's).  `PUSH` is `Ninst.Run.getStor_push`. -/
 theorem Ninst.Run.getStor_of_storKeep {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
-    (hs : n ≠ .reg .sstore) (hx : ∀ x, n = .exec x → x = .staticcall)
+    (hn : (∃ r, n = .reg r ∧ r ≠ .sstore) ∨ n = .exec .staticcall)
     (run : Ninst.Run sevm d n d') : Devm.getStor d' = Devm.getStor d := by
-  cases n with
-  | exec x =>
-    obtain rfl := hx x rfl
-    exact (Ninst.staticcall_inv_getStor_exact hfork run).symm
-  | reg r =>
-    rcases of_run_reg run with ⟨pc, rrun⟩
-    exact (Rinst.preserves_stor (fun h => hs (by rw [h])) rrun).symm
-  | push bytes bound => exact (Ninst.world_of_quiet hfork rfl run).1
-  | dupn imm => exact (Ninst.world_of_quiet hfork rfl run).1
-  | swapn imm => exact (Ninst.world_of_quiet hfork rfl run).1
-  | exchange imm => exact (Ninst.world_of_quiet hfork rfl run).1
+  rcases hn with ⟨r, rfl, hr⟩ | rfl
+  · rcases of_run_reg run with ⟨pc, rrun⟩
+    exact (Rinst.preserves_stor hr rrun).symm
+  · exact (Ninst.staticcall_inv_getStor_exact hfork run).symm
+
+theorem Ninst.Run.getStor_push {bs : Bytes} {fits : bs.length ≤ 32}
+    (run : Ninst.Run sevm d (.push bs fits) d') : Devm.getStor d' = Devm.getStor d := by
+  have h := (Devm.pushBurn_of_run (Ninst.run_push_eq run)).state
+  funext a
+  show (d'.state.get a).stor = (d.state.get a).stor
+  rw [h]
 
 end Blanc.Lift.SymTransfer

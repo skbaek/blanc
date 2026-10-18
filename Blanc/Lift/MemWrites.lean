@@ -33,6 +33,10 @@ theorem Mem.WritesAt.agreeBelow {μ μ' : Mem} {dst : Nat} (h : Mem.WritesAt μ 
   refine ⟨le_trans hs hag.1, fun i hi hlo => ?_⟩
   rw [hag.2 i (by omega) (.inl hlo), hd]
 
+theorem Mem.AgreeBelow.mono {μ μ' : Mem} {b b' : Nat} (h : Mem.AgreeBelow μ μ' b) (hb : b' ≤ b) :
+    Mem.AgreeBelow μ μ' b' :=
+  ⟨h.1, fun i hi hlo => h.2 i hi (by omega)⟩
+
 theorem Mem.WritesAt.write (μ : Mem) (dst : Nat) (ys : Bytes) :
     Mem.WritesAt μ (μ.write dst ys) dst :=
   ⟨μ, ys, rfl, Nat.le_refl _, rfl⟩
@@ -82,32 +86,23 @@ theorem mstore8_run_memory {o v : B256} {rest : List B256}
   rw [← hb.memory, ← hp2.memory, ← hp1.memory]
 
 /-- The three popped operands of a copy, the first one its destination. -/
-private theorem pop3 {d d1 d2 d3 : Devm} {i j k : Nat} {a b c : B256} {rest : List B256}
-    (hs : d.stack = a :: b :: c :: rest)
+private theorem pop3 {d d1 d2 d3 : Devm} {i j k : Nat} {a : B256}
+    (hs : d.stack.head? = some a)
     (h1 : Devm.popToNat d = .ok ⟨i, d1⟩) (h2 : Devm.popToNat d1 = .ok ⟨j, d2⟩)
     (h3 : Devm.popToNat d2 = .ok ⟨k, d3⟩) :
-    i = a.toNat ∧ k = c.toNat ∧ d3.memory = d.memory := by
+    i = a.toNat ∧ d3.memory = d.memory := by
   obtain ⟨x, hp1, hi⟩ := Devm.pop_of_popToNat_val h1
   obtain ⟨y, hp2, _⟩ := Devm.pop_of_popToNat_val h2
-  obtain ⟨z, hp3, hk⟩ := Devm.pop_of_popToNat_val h3
+  obtain ⟨z, hp3, _⟩ := Devm.pop_of_popToNat_val h3
   have hs1 := hp1.stack
-  have hs2 := hp2.stack
-  have hs3 := hp3.stack
-  simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at hs1 hs2 hs3
-  rw [hs] at hs1
-  simp only [List.cons.injEq] at hs1
-  obtain ⟨rfl, hs1⟩ := hs1
-  rw [← hs1] at hs2
-  simp only [List.cons.injEq] at hs2
-  obtain ⟨rfl, hs2⟩ := hs2
-  rw [← hs2] at hs3
-  simp only [List.cons.injEq] at hs3
-  obtain ⟨rfl, _⟩ := hs3
-  exact ⟨hi, hk, by rw [← hp3.memory, ← hp2.memory, ← hp1.memory]⟩
+  simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at hs1
+  rw [hs1, List.head?_cons, Option.some.injEq] at hs
+  subst hs
+  exact ⟨hi, by rw [← hp3.memory, ← hp2.memory, ← hp1.memory]⟩
 
-/-- `CODECOPY` writes at its first operand. -/
-theorem codecopy_run_writesAt {d src z : B256} {rest : List B256}
-    (run : Ninst.Run sevm pre (.reg .codecopy) post) (hs : pre.stack = d :: src :: z :: rest) :
+/-- `CALLDATACOPY` writes at its first operand. -/
+theorem calldatacopy_run_writesAt {d : B256}
+    (run : Ninst.Run sevm pre (.reg .calldatacopy) post) (hs : pre.stack.head? = some d) :
     Mem.WritesAt pre.memory post.memory d.toNat := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
@@ -116,15 +111,14 @@ theorem codecopy_run_writesAt {d src z : B256} {rest : List B256}
   obtain ⟨⟨k, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
   obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
   cases h5
-  obtain ⟨rfl, -, hm⟩ := pop3 hs h1 h2 h3
+  obtain ⟨rfl, hm⟩ := pop3 hs h1 h2 h3
   simp only [Devm.memWrite_memory]
   rw [← (Devm.burn_of_chargeGas h4).memory, hm]
   exact Mem.WritesAt.write _ _ _
 
-/-- `RETURNDATACOPY` writes at its first operand. -/
-theorem returndatacopy_run_writesAt {d src z : B256} {rest : List B256}
-    (run : Ninst.Run sevm pre (.reg .returndatacopy) post)
-    (hs : pre.stack = d :: src :: z :: rest) :
+/-- `CODECOPY` writes at its first operand. -/
+theorem codecopy_run_writesAt {d : B256}
+    (run : Ninst.Run sevm pre (.reg .codecopy) post) (hs : pre.stack.head? = some d) :
     Mem.WritesAt pre.memory post.memory d.toNat := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
@@ -132,7 +126,24 @@ theorem returndatacopy_run_writesAt {d src z : B256} {rest : List B256}
   obtain ⟨⟨j, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
   obtain ⟨⟨k, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
   obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
-  obtain ⟨rfl, -, hm⟩ := pop3 hs h1 h2 h3
+  cases h5
+  obtain ⟨rfl, hm⟩ := pop3 hs h1 h2 h3
+  simp only [Devm.memWrite_memory]
+  rw [← (Devm.burn_of_chargeGas h4).memory, hm]
+  exact Mem.WritesAt.write _ _ _
+
+/-- `RETURNDATACOPY` writes at its first operand. -/
+theorem returndatacopy_run_writesAt {d : B256}
+    (run : Ninst.Run sevm pre (.reg .returndatacopy) post)
+    (hs : pre.stack.head? = some d) :
+    Mem.WritesAt pre.memory post.memory d.toNat := by
+  rcases of_run_reg run with ⟨pc, h⟩
+  simp only [Rinst.run, Rinst.runCore] at h
+  obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨j, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+  obtain ⟨⟨k, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
+  obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
+  obtain ⟨rfl, hm⟩ := pop3 hs h1 h2 h3
   split at h5
   · cases h5
   · cases h5
@@ -141,8 +152,8 @@ theorem returndatacopy_run_writesAt {d src z : B256} {rest : List B256}
     exact Mem.WritesAt.write _ _ _
 
 /-- `MCOPY` writes at its first operand (after expanding over its source window). -/
-theorem mcopy_run_writesAt {d src z : B256} {rest : List B256}
-    (run : Ninst.Run sevm pre (.reg .mcopy) post) (hs : pre.stack = d :: src :: z :: rest) :
+theorem mcopy_run_writesAt {d : B256}
+    (run : Ninst.Run sevm pre (.reg .mcopy) post) (hs : pre.stack.head? = some d) :
     Mem.WritesAt pre.memory post.memory d.toNat := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
@@ -151,7 +162,7 @@ theorem mcopy_run_writesAt {d src z : B256} {rest : List B256}
   obtain ⟨⟨k, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
   obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
   cases h5
-  obtain ⟨rfl, -, hm⟩ := pop3 hs h1 h2 h3
+  obtain ⟨rfl, hm⟩ := pop3 hs h1 h2 h3
   simp only [Devm.memWrite_memory]
   have hk := MemKeep.memRead d4 j k
   refine ⟨(d4.memRead j k).2.memory, _, ?_, ?_, rfl⟩
@@ -159,9 +170,9 @@ theorem mcopy_run_writesAt {d src z : B256} {rest : List B256}
   · rw [← hm, (Devm.burn_of_chargeGas h4).memory]; exact hk.2
 
 /-- `EXTCODECOPY` writes at its second operand. -/
-theorem extcodecopy_run_writesAt {a d src z : B256} {rest : List B256}
+theorem extcodecopy_run_writesAt {d : B256}
     (run : Ninst.Run sevm pre (.reg .extcodecopy) post)
-    (hs : pre.stack = a :: d :: src :: z :: rest) :
+    (hs : pre.stack[1]? = some d) :
     Mem.WritesAt pre.memory post.memory d.toNat := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
@@ -183,10 +194,8 @@ theorem extcodecopy_run_writesAt {a d src z : B256} {rest : List B256}
   rcases Devm.pop_of_popToAdr h0 with ⟨x0, -, hp0⟩
   have hs0 := (Devm.pop_of_pop hp0).stack
   simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at hs0
-  rw [hs] at hs0
-  simp only [List.cons.injEq] at hs0
-  obtain ⟨-, hs0⟩ := hs0
-  obtain ⟨rfl, -, hm⟩ := pop3 hs0.symm h1 h2 h3
+  rw [hs0, List.getElem?_cons_succ, ← List.head?_eq_getElem?] at hs
+  obtain ⟨rfl, hm⟩ := pop3 hs h1 h2 h3
   simp only [Devm.memWrite_memory]
   have hb : ∀ (rl : ForkRules) (x : Adr) (e : Devm), (Devm.balReadAccount rl x e).memory = e.memory :=
     fun _ _ _ => rfl
@@ -210,9 +219,9 @@ private theorem resume_writesAt {μ : Mem} {parent : Devm} {oi os : Nat} {r : Ex
   · exact ⟨_, by rw [Resume.call_memory h, hpar]⟩
 
 /-- `CALL` writes only its output window, at its sixth operand. -/
-theorem call_run_writesAt {g c v ii is oi os : B256} {rest : List B256}
+theorem call_run_writesAt {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .call) post)
-    (hs : pre.stack = g :: c :: v :: ii :: is :: oi :: os :: rest) :
+    (hs : pre.stack[5]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat := by
   rcases run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
@@ -249,9 +258,9 @@ theorem call_run_writesAt {g c v ii is oi os : B256} {rest : List B256}
   have estack : pre.stack = gas1 :: x2 :: value3 :: x4 :: x5 :: x6 :: s6.stack := by
     rw [e1, e2, e3, e4, e5, e6]
   have hoi : oi = x6 := by
-    have := hs.symm.trans estack
-    simp only [List.cons.injEq] at this
-    exact this.2.2.2.2.2.1
+    rw [estack] at hs
+    simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hs
+    exact hs.symm
   subst hoi hk6
   have hm7 : pre.memory = s7.memory :=
     f1.memory.trans (f2.memory.trans (f3.memory.trans (f4.memory.trans
@@ -339,9 +348,9 @@ private theorem genericCall_writesAt {sevm : Sevm} {d post : Devm} {μ : Mem} {x
 
 /-- `DELEGATECALL` and `STATICCALL` write only their output window, at their fifth operand. -/
 private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .staticcall)
-    {g c ii is oi os : B256} {rest : List B256}
+    {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec x) post)
-    (hs : pre.stack = g :: c :: ii :: is :: oi :: os :: rest) :
+    (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat := by
   rcases hx with rfl | rfl
   all_goals
@@ -376,9 +385,9 @@ private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .
     have estack : pre.stack = gas1 :: x2 :: x4 :: x5 :: x6 :: s6.stack := by
       rw [e1, e2, e4, e5, e6]
     have hoi : oi = x6 := by
-      have := hs.symm.trans estack
-      simp only [List.cons.injEq] at this
-      exact this.2.2.2.2.1
+      rw [estack] at hs
+      simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hs
+      exact hs.symm
     subst hoi hk6
     have hm7 : pre.memory = s7.memory :=
       f1.memory.trans (f2.memory.trans (f4.memory.trans
@@ -410,16 +419,16 @@ private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .
       cases heq
 
 /-- `DELEGATECALL` writes only its output window, at its fifth operand. -/
-theorem delegatecall_run_writesAt {g c ii is oi os : B256} {rest : List B256}
+theorem delegatecall_run_writesAt {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .delegatecall) post)
-    (hs : pre.stack = g :: c :: ii :: is :: oi :: os :: rest) :
+    (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat :=
   call6_run_writesAt (.inl rfl) hfork run hs
 
 /-- `STATICCALL` writes only its output window, at its fifth operand. -/
-theorem staticcall_run_writesAt {g c ii is oi os : B256} {rest : List B256}
+theorem staticcall_run_writesAt {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .staticcall) post)
-    (hs : pre.stack = g :: c :: ii :: is :: oi :: os :: rest) :
+    (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat :=
   call6_run_writesAt (.inr rfl) hfork run hs
 
