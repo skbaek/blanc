@@ -902,6 +902,9 @@ import Blanc.Composition.Curve3Pool3CrvCapstoneTx
 import Blanc.Composition.Curve3Pool3CrvCapstone
 import Blanc.Composition.Curve3Pool3CrvLiveWitness
 import Blanc.Composition.Curve3Pool3CrvLiveConcrete
+import Blanc.Composition.Curve3Pool3CrvLiveEndEntry
+import Blanc.Composition.Curve3Pool3CrvLiveEndRLI
+import Blanc.Composition.Curve3Pool3CrvLiveEndAL
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
