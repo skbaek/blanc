@@ -907,6 +907,8 @@ import Blanc.Composition.Curve3Pool3CrvLiveEndEntry
 import Blanc.Composition.Curve3Pool3CrvLiveEndRL
 import Blanc.Composition.Curve3Pool3CrvLiveEndOC
 import Blanc.Composition.Curve3Pool3CrvLiveEndKeep
+import Blanc.Composition.Curve3Pool3CrvLiveEndRLI
+import Blanc.Composition.Curve3Pool3CrvLiveEndAL
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
