@@ -35,30 +35,7 @@ open Blanc.Composition.Curve3Pool3CrvHeadlines (C3At c3At_burn c3At_mint precomp
 open VyperNonreentrantDeployed.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder
   balanceOf_runExact cert_check cert_jumpsOk)
 
-/-- **An invariant of the world outside the frame survives the pool's own steps**: whatever reads
-only the code everywhere and the storage of accounts other than the pool. -/
-theorem WClosed.of_foreign {sevm : Sevm} {P : Devm → Prop}
-    (h : ∀ b d, P b → (∀ a, a ≠ sevm.currentTarget → Devm.getStor d a = Devm.getStor b a) →
-      (∀ a, d.getCode a = b.getCode a) → P d) : WClosed sevm P where
-  st b _ _ _ hb := h b _ hb (fun _ _ => rfl) (fun _ => rfl)
-  sload b k hb := h b _ hb (fun a _ => afterSload_getStor sevm b k a)
-    (fun a => afterSload_getCode sevm b k a)
-  sstore b k v hb := h b _ hb (fun a ha => afterSstore_getStor_ne sevm b k v a (Ne.symm ha))
-    (fun a => afterSstore_getCode sevm b k v a)
-  sha b b' _ hp hb := h b b' hb (fun a _ => hp.stor a) (fun a => hp.code a)
-  log b _ hb := h b _ hb (fun _ _ => rfl) (fun _ => rfl)
-
 /-! ## `balanceOf(self)` from `Token20`'s code -/
-
-/-- The word at calldata offset `4` of a one-argument call. -/
-theorem cc_dataWord_oneWord {e : Sevm} {sel w : B256}
-    (h : e.data = abiSelectorBytes sel ++ w.toBytes) : Sevm.dataWord e 4 = w := by
-  have l4 := UniswapV2PairWeth9Joint.abiSelectorBytes_length sel
-  have hw := B256.length_toBytes w
-  unfold Sevm.dataWord
-  rw [h, show (4 : B256).toNat = 4 from rfl, List.sliceD,
-    List.drop_append_of_le_length (by omega), List.drop_of_length_le (by omega), List.nil_append,
-    List.takeD_eq_take 0 (by omega), List.take_of_length_le (by omega), B256.toB256_toBytes]
 
 section Bal
 

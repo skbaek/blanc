@@ -52,6 +52,20 @@ structure WClosed (sevm : Sevm) (W : Devm → Prop) : Prop where
   sha : ∀ b b' rd, ShaCallPost b b' rd → W b → W b'
   log : ∀ b l, W b → W (b.addLog l)
 
+open Jaune Blanc in
+/-- **An invariant of the world outside the frame survives the pool's own steps**: whatever reads
+only the code everywhere and the storage of accounts other than the pool. -/
+theorem WClosed.of_foreign {sevm : Sevm} {P : Devm → Prop}
+    (h : ∀ b d, P b → (∀ a, a ≠ sevm.currentTarget → Devm.getStor d a = Devm.getStor b a) →
+      (∀ a, d.getCode a = b.getCode a) → P d) : WClosed sevm P where
+  st b _ _ _ hb := h b _ hb (fun _ _ => rfl) (fun _ => rfl)
+  sload b k hb := h b _ hb (fun a _ => afterSload_getStor sevm b k a)
+    (fun a => afterSload_getCode sevm b k a)
+  sstore b k v hb := h b _ hb (fun a ha => afterSstore_getStor_ne sevm b k v a (Ne.symm ha))
+    (fun a => afterSstore_getCode sevm b k v a)
+  sha b b' _ hp hb := h b b' hb (fun a _ => hp.stor a) (fun a => hp.code a)
+  log b _ hb := h b _ hb (fun _ _ => rfl) (fun _ => rfl)
+
 /-! ## Call windows
 
 Every pool call site is a `STATICCALL` or a `CALL` with input window `[ii, ii + is)` and output

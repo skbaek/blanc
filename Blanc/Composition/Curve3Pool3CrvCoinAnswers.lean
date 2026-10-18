@@ -1,4 +1,5 @@
 import Blanc.Composition.Curve3Pool3CrvCoinCalls
+import Blanc.Lift.Curve3Pool.CalldataWords
 import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
 import Blanc.StorageAccessGas
 import Blanc.CodeDelegation
@@ -249,32 +250,6 @@ theorem transferFromSel_abi : Curve3Pool.transferFromSel = abiSelectorBytes 0x23
   decide
 theorem balanceOfSel_abi : Curve3Pool.balanceOfSel = abiSelectorBytes 0x70a08231 := by decide
 
-/-- A three-word call's argument words. -/
-theorem cc_dataWord_threeWords {e : Sevm} {sel w a x : B256}
-    (h : e.data = abiSelectorBytes sel ++ w.toBytes ++ a.toBytes ++ x.toBytes) :
-    Sevm.dataWord e 4 = w ∧ Sevm.dataWord e 36 = a ∧ Sevm.dataWord e 68 = x := by
-  have l4 := UniswapV2PairWeth9Joint.abiSelectorBytes_length sel
-  have hw := B256.length_toBytes w
-  have ha := B256.length_toBytes a
-  have hx := B256.length_toBytes x
-  refine ⟨?_, ?_, ?_⟩
-  · unfold Sevm.dataWord
-    rw [h, show (4 : B256).toNat = 4 from rfl, List.sliceD, List.append_assoc, List.append_assoc,
-      List.drop_append_of_le_length (by omega), List.drop_of_length_le (by omega), List.nil_append,
-      List.takeD_eq_take 0 (by simp only [List.length_append]; omega),
-      List.take_left' hw, B256.toB256_toBytes]
-  · unfold Sevm.dataWord
-    rw [h, show (36 : B256).toNat = 36 from rfl, List.sliceD, List.append_assoc,
-      List.drop_append_of_le_length (by simp only [List.length_append]; omega),
-      List.drop_of_length_le (by simp only [List.length_append]; omega), List.nil_append,
-      List.takeD_eq_take 0 (by simp only [List.length_append]; omega), List.take_left' ha,
-      B256.toB256_toBytes]
-  · unfold Sevm.dataWord
-    rw [h, show (68 : B256).toNat = 68 from rfl, List.sliceD,
-      List.drop_append_of_le_length (by simp only [List.length_append]; omega),
-      List.drop_of_length_le (by simp only [List.length_append]; omega), List.nil_append,
-      List.takeD_eq_take 0 (by omega), List.take_of_length_le (by omega), B256.toB256_toBytes]
-
 /-! ## A coin's `transferFrom(src, pool, v)` from a pool call site -/
 
 section Pull
@@ -338,7 +313,7 @@ theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSt
   have hsel : Sevm.selector (initSevm msg) = 0x23b872dd :=
     selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
       (by rw [hd, List.append_assoc, List.append_assoc])
-  obtain ⟨w4, w36, w68⟩ := cc_dataWord_threeWords hd
+  obtain ⟨w4, w36, w68⟩ := Blanc.Lift.Curve3Pool.cc_dataWord_threeWords hd
   have hfrom : tfFrom (initSevm msg) = src := by unfold tfFrom; rw [w4, toAdr_toB256]
   have hto : tfTo (initSevm msg) = sevm.currentTarget := by unfold tfTo; rw [w36, toAdr_toB256]
   have hval : tfVal (initSevm msg) = v := w68

@@ -799,6 +799,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",
                     "Lift.Curve3Pool.Walk.LiveKit",
                     "Lift.Curve3Pool.LivePremises",
+                    "Lift.Curve3Pool.CalldataWords",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
                     "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.Fallback", "Lift.Curve3Pool.Walk.AdminRaw",
                     "Lift.Curve3Pool.Walk.ExchangeDispatch",
@@ -1324,6 +1325,7 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvCapstoneTx",
     "Composition.Curve3Pool3CrvCapstone",
     "Composition.Curve3Pool3CrvLiveWitness",
+    "Composition.Curve3Pool3CrvLiveConcrete",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",
