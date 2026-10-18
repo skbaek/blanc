@@ -170,15 +170,15 @@ theorem al_mint_input (img : Bytes) (C A : B256) :
   · exact Region.write_self _ _ _
 
 /-- The actual LP token mint child; the returned boolean is discarded but a word is required. -/
-theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {mint tw : B256}
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hmint : WordAt img 0xba0 mint) (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
-      (c.pre.getStor sevm.currentTarget).get x)
+    (hkeep : ∀ c ∈ L, c.sevm.currentTarget = tw.toAdr → ∀ x,
+      (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x)
     (h : XAt sevm post 0x17cf (St b [] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (d : Devm) (img' : Bytes) (G' : Nat), L = c :: L' ∧
       ChildOf b d tw.toAdr (mintSel ++ sevm.caller.toB256.toBytes ++ mint.toBytes) 0 sevm.isStatic c ∧
@@ -226,7 +226,8 @@ theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
   clear hc
   have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
-    fun x => by rw [hc'.storPost _ hpc x, hkeep c List.mem_cons_self x, hc'.storPre _ hpc]
+    fun x => by
+      rw [hc'.storPost _ hpc x, hkeep c List.mem_cons_self hc'.target x, hc'.storPre _ hpc]
   xjd 0x1800
   xs 0x1802 (.push [0x1f] (by decide)) ri_push
   xs 0x1803 (.reg .returndatasize) ri_returndatasize
@@ -245,5 +246,25 @@ theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
   rw [hI]
   wchain
   exact hw
+
+/-- **`xa_al_mintCall`**: `xa_al_mintCallC` with every child keeping the pool. -/
+theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {mint tw : B256}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
+    (hmint : WordAt img 0xba0 mint) (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty)
+    (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
+      (c.pre.getStor sevm.currentTarget).get x)
+    (h : XAt sevm post 0x17cf (St b [] M G) L) :
+    ∃ (c : Exec.Frame) (L' : List Exec.Frame) (d : Devm) (img' : Bytes) (G' : Nat), L = c :: L' ∧
+      ChildOf b d tw.toAdr (mintSel ++ sevm.caller.toB256.toBytes ++ mint.toBytes) 0 sevm.isStatic c ∧
+      32 ≤ c.post.output.length ∧
+      (∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x) ∧
+      Mem.Reads d.memory img' ∧ Mem.Wf d.memory ∧ d.memory.size % 32 = 0 ∧
+      (∀ o w, WordAt img o w → o + 32 ≤ 0xc60 → WordAt img' o w) ∧
+      XAt sevm post 0x180c (St d [] d.memory G') L' :=
+  xa_al_mintCallC hcode hfork hR hW hA hmint htw htok hpc (fun c hc _ => hkeep c hc) h
 
 end Blanc.Lift.Curve3Pool
