@@ -557,3 +557,5 @@ theorem copy_loop_keep {P : Sevm → Devm → Ninst → Devm → Prop}
     | pcAt _ _ _ _ =>
       rcases J_shape hJ with ⟨_, h⟩ | ⟨_, _, h⟩ | ⟨_, _, h⟩ | ⟨_, h⟩ <;> cases h
   exact main run (J.h0 M G i (Mem.AgreeOutside.refl M _ _) hi)
+
+end Blanc.Lift.FreePtr

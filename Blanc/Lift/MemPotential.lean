@@ -1,4 +1,5 @@
 import Blanc.Lift.Basic
+import Blanc.Lift.Silent
 import Jaune.MemoryAccounting
 
 /-!
@@ -286,10 +287,6 @@ theorem Pot.linst {sevm : Sevm} {d d' : Devm} {l : Linst}
   have hl : l.run sevm d = .ok d' := h
   rw [hl] at hacc
   exact Nat.lt_of_le_of_lt hacc.1 pot
-
-def _root_.Blanc.Lift.Outcome.devm : Outcome → Devm
-  | .halted d => d
-  | .returned d => d
 
 /-- **A run from a state of bounded potential records it at every step.** -/
 theorem SFunc.RunP.withPot {P : Sevm → Devm → Ninst → Devm → Prop}
