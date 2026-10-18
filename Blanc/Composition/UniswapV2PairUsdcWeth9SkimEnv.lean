@@ -1,4 +1,5 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsSkim
+import Blanc.Composition.UniswapV2PairUsdcWeth9LegsSync
 
 /-!
 # Skim's callee environment with both tokens pinned (USDC = token0, WETH9 = token1; U9e)
@@ -87,26 +88,6 @@ def SkimCalleeUW.balance0 (env : SkimCalleeUW sevm b g) : B256 :=
 def SkimCalleeUW.balance1 (env : SkimCalleeUW sevm b g) : B256 :=
   Bytes.toB256 (env.qd1.returnData.take 32)
 
-/-- X's transfer `CALL`'s staged state (`SkimForwardEnv.firstCallPre`), as in the W0/W1 envs. -/
-def SkimCalleeUW.firstCallPre (env : SkimCalleeUW sevm b g) : Devm :=
-  St env.qd0 (env.callGasT0.toB256 ::
-      (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      0 :: (128 + 164) :: 68 :: (128 + 164) :: 0 :: (68 + (128 + 164)) ::
-      (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: (Bytes.toB256 (env.qd0.returnData.take 32) - skimReserve0 sevm b) ::
-      skimToWord sevm :: skimToken0 sevm b :: 0x1a2b ::
-      skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
-    (safeTransfer_dynamicCallMemory
-      (balanceReplyMemory getterInitMemory sevm.currentTarget env.qd0.returnData) 128
-      (Bytes.toB256 (env.qd0.returnData.take 32) - skimReserve0 sevm b) (skimToWord sevm))
-    env.callGasT0
-
-/-- Trace-local HASH-T for the first transfer (`SkimForwardEnv.FirstCallFresh`): the generic Pair
-row's own premise, kept as the predecessor's rows keep it (even with the leg pinned). -/
-def SkimCalleeUW.FirstCallFresh (env : SkimCalleeUW sevm b g) (U : WriterKey → Prop) : Prop :=
-  ∃ R : Exec.Deriv, Blanc.Lift.StepIn R sevm env.firstCallPre (.exec .call) env.dt0 ∧
-    WriterFreshKeys U (pairTraceKeys sevm.currentTarget R)
-
 /-- **USDC's gas sentries**: the query's and the transfer's call gases words, room for USDC's runs
 under the 63/64 rule. -/
 structure SkimCalleeUW.UsdcSentries (env : SkimCalleeUW sevm b g) : Prop where
@@ -140,58 +121,6 @@ end SkimEnv
 
 /-! ## WETH9's legs read X's results off their non-gas fields -/
 
-theorem temporalAccountAccessBase_setMach (B : Devm) (a : Adr) (m : Mach) :
-    temporalAccountAccessBase (B.setMach m) a = (temporalAccountAccessBase B a).setMach m := by
-  show (if a ∈ B.accessedAddresses then B.setMach m else addAccessedAddress (B.setMach m) a) =
-    (if a ∈ B.accessedAddresses then B else addAccessedAddress B a).setMach m
-  by_cases h : a ∈ B.accessedAddresses
-  · simp only [h, ite_true]
-  · simp only [h, ite_false]
-    rfl
-
-theorem temporalAccountAccessBase_stateGas (B : Devm) (a : Adr) :
-    (temporalAccountAccessBase B a).stateGas = B.stateGas := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
-
-theorem afterSload_stateGas (sevm : Sevm) (B : Devm) (k : B256) :
-    (afterSload sevm B k).stateGas = B.stateGas := by
-  unfold afterSload
-  split <;> rfl
-
-/-- WETH9's read leg reads its world's machine only off its state-gas meter. -/
-theorem wethReadLeg_setMach (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B256)
-    (need : Devm → Nat) (m : Mach) (h : m.stateGas = B.stateGas) :
-    wethReadLeg sevm (B.setMach m) S M p t need = wethReadLeg sevm B S M p t need := by
-  have hp : ∀ g, balPopped sevm (B.setMach m) S M p t g = balPopped sevm B S M p t g := by
-    intro g
-    unfold balPopped
-    rw [temporalAccountAccessBase_setMach]
-    have e : ((temporalAccountAccessBase B (balTok t)).setMach m).stateGas =
-        (temporalAccountAccessBase B (balTok t)).stateGas := by
-      rw [temporalAccountAccessBase_stateGas]
-      exact h
-    rw [e]
-    rfl
-  have ha : balAcc (B.setMach m) t = balAcc B t := by
-    unfold balAcc
-    rw [temporalAccountAccessBase_setMach]
-    rfl
-  have hm : ∀ g k f, balMsg sevm (B.setMach m) S M p t g k f = balMsg sevm B S M p t g k f := by
-    intro g k f
-    unfold balMsg balParent balWarm
-    rw [hp]
-    rfl
-  have hq : ∀ g k, balParent sevm (B.setMach m) S M p t g k = balParent sevm B S M p t g k := by
-    intro g k
-    unfold balParent balWarm
-    rw [hp]
-  have he : balExt sevm (B.setMach m) S M p t = balExt sevm B S M p t := by
-    unfold balExt
-    rw [hp]
-  unfold wethReadLeg readLegGas wethBalanceCall wethBalanceCallAt wethBalanceSkel balSplit balUsed
-  simp only [hm, hq, he, ha]
-
 theorem skimWethRead1_gasFree (sevm : Sevm) (b qd0 dt0 : Devm) (x y callGasT1 : Nat) :
     skimWethRead1 sevm b (qd0.withGasLeft x) (dt0.withGasLeft y) callGasT1 =
       skimWethRead1 sevm b qd0 dt0 callGasT1 := by
@@ -199,7 +128,8 @@ theorem skimWethRead1_gasFree (sevm : Sevm) (b qd0 dt0 : Devm) (x y callGasT1 : 
       (afterSload sevm dt0 8).setMach { dt0.mach with gasLeft := y } :=
     afterSload_setMach
   unfold skimWethRead1
-  rw [hs, wethReadLeg_setMach _ _ _ _ _ _ _ _ (by rw [afterSload_stateGas]; rfl)]
+  rw [hs, wethReadLeg_setMach sevm (afterSload sevm dt0 8) _ _ _ _ _ { dt0.mach with gasLeft := y }
+    (afterSload_stateGas (sevm := sevm) (base := dt0) (key := 8)).symm]
   rfl
 
 theorem skimWethLeg1_gasFree (sevm : Sevm) (b qd0 dt0 qd1 : Devm) (x y g : Nat) :

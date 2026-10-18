@@ -2,6 +2,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SkimEnv
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairWeth9SkimLiveOne
 import Blanc.Lift.Usdc.HistoryEnd
+import Blanc.Lift.UniswapV2Pair.SkimForwardKept
 
 /-!
 # C6(c): the skim liveness row with both tokens' records discharged (U9e)
@@ -19,6 +20,9 @@ records are pinned in `SkimCalleeUW` and discharged here:
   keeps every other account's storage and every code (`usdcTransferCall_keeps`), so WETH9's code and
   the Pair's reserve1 word and WETH9 balance at the transfer's result are the frame's, where the
   WETH9 joint bounds reserve1 (`pair_weth9_frame`).
+* The same keeps fact gives the forward run's reserve1 re-read after USDC's transfer
+  (`SkimForwardEnv.run_of_kept`), so the generic row's trace-local HASH-T for the first transfer
+  (`FirstCallFresh`) is not needed.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -27,29 +31,12 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcToken Blanc.Composition.UsdcLive
 
-theorem dMsg_state (s : Sevm) (b : Devm) (Y : Nat) : (initDevm (dMsg s b Y)).state = b.state := by
-  show (pBase s b).state = _
-  exact pBase_state s b
-
-/-- USDC's `balanceOf` STATICCALL writes nothing: the resumed parent's world is the staged one. -/
-theorem usdcBalanceCall_state (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B256)
-    (cg : Nat) : (usdcBalanceCall sevm B S M p t cg).state = B.state := by
-  unfold usdcBalanceCall usdcBalanceCallAt
-  rw [callChildPost_state, proxyPost_state]
-  unfold balChild implBalPost
-  rw [Devm.withOutput_state, Devm.memRead_state, St_state, Blanc.Lift.NodeWalk.afterSload_state]
-  rw [dMsg_state]
-  show (balParent sevm B S M p t 0 0).state = _
-  unfold balParent balWarm balPopped
-  rw [callSpawnParent_state, addAccessedAddress_setMach_state,
-    UniswapV2PairWeth9Joint.temporalAccountAccessBase_state]
-
 /-- **C6(c), the skim liveness row with both tokens' records discharged** (USDC = token0, WETH9 =
 token1).  As `pair_history_skim_live`, from the two-token joint checkpoint, with both queries and
 both transfers pinned in `callee`.  USDC's transfer amount is the queried balance less the cached
 reserve0; it does not wrap because the model's acceptance of skim at the replayed state bounds
 reserve0 by the queried balance (decision usdc-u9e-premise-trim: no never-signer premise).  What
-stays is the lock sentries, the first transfer's trace-local HASH-T, the frame's call depth and
+stays is the lock sentries, the frame's call depth and
 mutability, the Pair not USDC's admin word, HASH-T for the recipient's USDC row, USDC's state
 conditions at the frame, and the legs' gas sentries. -/
 theorem pair_usdc_weth9_history_skim_live {pair usdc weth : Adr} {cfg : ChainConfig}
@@ -80,8 +67,7 @@ theorem pair_usdc_weth9_history_skim_live {pair usdc weth : Adr} {cfg : ChainCon
     (usdcLive : UsdcTransferOk
       (Usdc.ledger (SlotFootprint.extendBy (Usdc.historyKeyUniverse usdc trace KU)
         [.bal (Sevm.dataWord sevm 4).toAdr]) (pre.state.getStor usdc))
-      pair (Sevm.dataWord sevm 4).toAdr (callee.balance0 - skimReserve0 sevm pre).toNat)
-    (firstFresh : callee.FirstCallFresh (pairHistoryUniverse pair trace KP)) :
+      pair (Sevm.dataWord sevm 4).toAdr (callee.balance0 - skimReserve0 sevm pre).toNat) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace KP st₀ finish K' ∧
       ∀ (transcript : Transcript) (returndata : Bytes),
@@ -103,9 +89,7 @@ theorem pair_usdc_weth9_history_skim_live {pair usdc weth : Adr} {cfg : ChainCon
   refine ⟨finish, K', replayed, fun transcript returndata answer0 answer1 accepted => ?_⟩
   have conditions := runTyped_skim_conditions accepted
   rw [answer0, answer1] at conditions
-  have hist : WriterRep (pairHistoryUniverse pair trace KP) (checkpoint.state.getStor pair) st₀ :=
-    joint.weth9.pairRep.extend pairFresh
-  obtain ⟨rep, inside⟩ := replayed.at_frame target state
+  obtain ⟨rep, -⟩ := replayed.at_frame target state
   obtain ⟨-, tokens⟩ := replayed.fixed joint.weth9.unlocked
     (UniswapV2FactoryQuiet.pair_history_factoryQuiet trace joint.weth9.pairCode factoryInstalled
       joint.weth9.pairNonzero factoryNotSystem)
@@ -290,9 +274,14 @@ theorem pair_usdc_weth9_history_skim_live {pair usdc weth : Adr} {cfg : ChainCon
     change some (pre.state.getCode pair).toList = pairSem.image
     rw [state, futureCode]
     rfl
-  obtain ⟨run⟩ := env.run_of_model (current := { state := finish, logs := [], updates := [] })
-    [] rep hist.inj hist.apart inside pairSem pairSem_image installedPre output codeEq fork value
-    size selector abi firstFresh conditions
+  have kept : reserve1Read (env.dt0.getStorVal sevm.currentTarget 8) =
+      reserve1Read (env.qd0.getStorVal sevm.currentTarget 8) := by
+    change reserve1Read ((callee.dt0.state.getStor _).get 8) =
+      reserve1Read ((callee.qd0.state.getStor _).get 8)
+    rw [storT _ neU]
+  obtain ⟨run⟩ := env.run_of_kept (current := { state := finish, logs := [], updates := [] })
+    [] rep pairSem pairSem_image installedPre output codeEq fork value size selector abi kept
+    conditions
   exact ⟨run, rfl, fun newFresh => pair_live_outcome joint.weth9.pairRep pairFresh futureCode
     replayed run target state codeEq fork output representable newFresh⟩
 
