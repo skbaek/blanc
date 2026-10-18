@@ -9,6 +9,8 @@ import Blanc.Lift.UniswapV2Pair.SafeTransferWalk
 import Blanc.Lift.UniswapV2Pair.SyncCanonical
 import Blanc.Lift.UniswapV2Pair.TransferFromSource
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
+import Blanc.Lift.Usdc.ImplWs
+import Blanc.Lift.WriteSiteLocality
 import AxiomAudit
 
 #union_axioms_of_modules Blanc

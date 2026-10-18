@@ -48,19 +48,6 @@ private theorem bindPair {α : Type} {d : Devm}
   | error e => exact h
   | ok p => exact Execution.Rel.trans_left rdEq_trans h (hf p.1 p.2)
 
-private theorem bindOutcome {α β : Type} {d : Devm} {get : α → Devm}
-    {result : β → Devm} {out : Except (EvmError × Devm) α}
-    {f : α → Except (EvmError × Devm) β}
-    (h : Outcome.Rel Prod.snd get RdEq d out)
-    (hf : ∀ a, Outcome.Rel Prod.snd result RdEq (get a) (f a)) :
-    Outcome.Rel Prod.snd result RdEq d (out >>= f) := by
-  cases out with
-  | error e => exact h
-  | ok a =>
-      have hk := hf a
-      cases hfa : f a <;> rw [hfa] at hk
-      all_goals simpa only [Except.bind_ok, hfa, Outcome.Rel] using h.trans hk
-
 private theorem mapSnd {α : Type} {d : Devm}
     {out : Except (EvmError × Devm) (α × Devm)}
     (h : Outcome.Rel Prod.snd Prod.snd RdEq d out) :
