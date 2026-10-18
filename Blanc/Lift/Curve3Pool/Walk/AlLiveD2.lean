@@ -22,7 +22,7 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R :
 /-- **The supply test after `D1`, forward.** -/
 theorem rx_al_feePre (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa20)
     (hm : AlPullImg img 3 F AF A T D0 old nv) (hD1 : WordAt img 0x900 D1)
-    (hG : 200 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (hG : R + 200 ≤ G) (hroom : S.length + 20 < 1024)
     (k0 : T = 0 → ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
       M'.size = 0xa40 → (∀ o w, WordAt img o w → o + 32 ≤ 0xa20 → WordAt img' o w) →
       WordAt img' 0xa20 D1 → R ≤ g → g ≤ G →
@@ -72,7 +72,7 @@ theorem rx_al_store0 {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.b
     (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa40)
     (hm : AlPullImg img 3 F AF A T D0 old nv)
-    (hG : 70000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (hG : R + 70000 ≤ G) (hroom : S.length + 20 < 1024)
     (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
       ExLive sevm W b' (alStor3 σ (nv 0) (nv 1) (nv 2)) → Mem.Reads M' img' → Mem.Wf M' →
       M'.size = 0xa40 → (∀ o w, WordAt img o w → o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o → WordAt img' o w) →
