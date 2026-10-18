@@ -1,6 +1,7 @@
 import Blanc.Composition.PairTwoToken
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UniswapV2PairWeth9Joint
+import Blanc.MachineDataFacts
 
 /-!
 # C6(a) for the USDC/WETH9 Pair (Appendix A §10, U8b)
@@ -46,23 +47,6 @@ theorem usdc_tokenEntered {pair usdc weth : Adr} {KU : Usdc.Key → Prop} {KW : 
   refine ⟨by rw [atNode, entryCode]; exact Usdc.proxy_undelegated, ?_⟩
   rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
   exact joint.usdcNotPrecompile _ (Usdc.usdc_settled_facts trace hist G member).fork
-
-/-- A WETH9 word whose value is zero is the zero word. -/
-theorem word_eq_zero {x : B256} (h : x.toNat = 0) : x = 0 :=
-  B256.toNat_inj x 0 (by rw [h]; decide)
-
-/-- Two model states the Pair's storage represents agree on both reserves (the reserves are read
-from the fixed word at slot `8`). -/
-theorem reserves_eq_of_fixed {s : Stor} {st st' : UniswapV2Pair.State}
-    (h : WriterFixedMatches s st) (h' : WriterFixedMatches s st') :
-    st.reserve0.val = st'.reserve0.val ∧ st.reserve1.val = st'.reserve1.val := by
-  have lt : ∀ r : Fin (2 ^ 112), r.val < 2 ^ 256 :=
-    fun r => Nat.lt_trans r.isLt (Nat.pow_lt_pow_right (by decide) (by decide))
-  refine ⟨?_, ?_⟩
-  · have e := h.2.2.2.2.2.1.symm.trans h'.2.2.2.2.2.1
-    rw [← B256.toNat_toB256_of_lt (lt st.reserve0), e, B256.toNat_toB256_of_lt (lt st'.reserve0)]
-  · have e := h.2.2.2.2.2.2.1.symm.trans h'.2.2.2.2.2.2.1
-    rw [← B256.toNat_toB256_of_lt (lt st.reserve1), e, B256.toNat_toB256_of_lt (lt st'.reserve1)]
 
 /-- **C6(a), the exhibit composition**: every V2 pair whose `token0` is USDC and `token1` is WETH9,
 from the two-token joint checkpoint, with HASH-T for the Pair, USDC and WETH9, USDC's governance
@@ -125,12 +109,12 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
   obtain ⟨-, finish', K', replayed⟩ :=
     pair_history_replayed trace joint.weth9.pairCode joint.weth9.pairRep pairFresh
   obtain ⟨-, -, -, -, -, -, -, rep'⟩ := id replayed
-  obtain ⟨r0, r1⟩ := reserves_eq_of_fixed rep'.fixed rep.fixed
+  obtain ⟨r0, r1⟩ := WriterFixedMatches.reserves_eq rep'.fixed rep.fixed
   refine ⟨fun before f after split noOpaque lit => ?_, finish', K', replayed, ?_, ?_, ?_, ?_⟩
   · obtain ⟨st, K, rep, opened, token0, token1, ⟨reserveAt0, zeroAt0⟩, ⟨reserveAt1, zeroAt1⟩⟩ :=
       positions before f after split noOpaque lit id
     exact ⟨st, K, rep, opened, token0, token1, reserveAt0, zeroAt0, reserveAt1,
-      fun g => word_eq_zero (zeroAt1 g)⟩
+      fun g => B256.eq_zero_of_toNat (zeroAt1 g)⟩
   · change finish.reserve0.val ≤
       (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (future.state.getStor usdc)).bal pair
       at res0
@@ -139,12 +123,12 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
     have zeroG : (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU)
       (future.state.getStor usdc)).allow pair g = 0 := zero0 g
     rw [Usdc.ledger_allow row] at zeroG
-    exact word_eq_zero zeroG
+    exact B256.eq_zero_of_toNat zeroG
   · change finish.reserve1.val ≤ (Weth9.tracked (Weth9.historyKeyUniverse weth trace KW)
       (future.state.getStor weth) pair).toNat at res1
     rwa [Weth9.tracked_self (Or.inl joint.weth9.tracked), ← r1] at res1
   · intro g row
-    have zeroG := word_eq_zero (zero1 g)
+    have zeroG := B256.eq_zero_of_toNat (zero1 g)
     change Weth9.trackedAllow (Weth9.historyKeyUniverse weth trace KW) (future.state.getStor weth)
       pair g = 0 at zeroG
     rwa [Weth9.trackedAllow_self row] at zeroG

@@ -55,6 +55,20 @@ def WriterFixedMatches (s : Stor) (st : State) : Prop :=
   s.get 9 = st.price0CumulativeLast ∧ s.get 10 = st.price1CumulativeLast ∧
   s.get 11 = st.kLast ∧ s.get 12 = st.unlocked
 
+/-- Two model states the Pair's storage represents agree on both reserves (the reserves are read
+from the fixed word at slot `8`). -/
+theorem WriterFixedMatches.reserves_eq {s : Stor} {st st' : State}
+    (h : WriterFixedMatches s st) (h' : WriterFixedMatches s st') :
+    st.reserve0.val = st'.reserve0.val ∧ st.reserve1.val = st'.reserve1.val := by
+  have lt : ∀ r : Fin (2 ^ 112), r.val < 2 ^ 256 :=
+    fun r => Nat.lt_trans r.isLt (Nat.pow_lt_pow_right (by decide) (by decide))
+  refine ⟨?_, ?_⟩
+  · have e := h.2.2.2.2.2.1.symm.trans h'.2.2.2.2.2.1
+    rw [← B256.toNat_toB256_of_lt (lt st.reserve0), e, B256.toNat_toB256_of_lt (lt st'.reserve0)]
+  · have e := h.2.2.2.2.2.2.1.symm.trans h'.2.2.2.2.2.2.1
+    rw [← B256.toNat_toB256_of_lt (lt st.reserve1), e, B256.toNat_toB256_of_lt (lt st'.reserve1)]
+
+
 structure WriterRep (K : WriterKey → Prop) (s : Stor) (st : State) : Prop where
   finite : WriterKeysFinite K
   fixed : WriterFixedMatches s st

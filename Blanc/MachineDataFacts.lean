@@ -19,6 +19,11 @@ theorem B256.mul_comm (x y : B256) : x * y = y * x := by
   apply B256.toNat_inj
   rw [B256.toNat_mul, B256.toNat_mul, Nat.mul_comm]
 
+/-- A word whose natural-number value is zero is the zero word. -/
+theorem B256.eq_zero_of_toNat {x : B256} (h : x.toNat = 0) : x = 0 :=
+  B256.toNat_inj _ _ (by rw [h, B256.toNat_zero])
+
+
 /-- A zero unsigned comparison flag rules out the corresponding strict order. -/
 theorem B256.not_lt_of_ltCheck_eq_zero {x y : B256} (h : (x <? y) = 0) :
     ¬ x < y := by
