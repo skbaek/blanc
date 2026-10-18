@@ -9,13 +9,32 @@ of `transfer` (`proxy_xfer_run`): the proxy's prefix, its `DELEGATECALL` into th
 `transfer` frame under the 63/64 rule, and the delegate tail.  `cost` is the frame's exact charge
 `proxyXferCost`; `budget` adds what the child needs past the 63/64 cut.  The post world is the
 child's: its storage at the proxy is `transfer`'s debit and credit (`frame_transfer`), which keeps
-the footprint invariant, and no code changes.
+the footprint facts (`FootCore`), and no code changes.
 -/
 
 namespace Blanc.Composition.UsdcToken
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Lift.Token Blanc.SlotFootprint
   Blanc.Composition.UsdcLive
+
+/-- **The footprint facts a USDC `transfer` frame uses**: the tracked keys' slots injective and
+apart from the fixed slots, and the ledger good.  `FootInv` without its support half; the history
+delivers it at the end (`usdc_history_end_core`), and a transfer keeps it. -/
+structure FootCore (U : Key → Prop) (s : Stor) : Prop where
+  inj : SlotFootprint.Inj Key.slot U
+  apart : SlotFootprint.Apart Key.slot fixedSlots U
+  good : (ledger U s).Good
+
+theorem _root_.Blanc.Lift.Usdc.FootInv.core {U : Key → Prop} {s : Stor} (h : FootInv U s) :
+    FootCore U s :=
+  ⟨h.inj, h.apart, h.good⟩
+
+/-- A write at a tracked key's slot keeps `FootCore`. -/
+theorem FootCore.set_key {U : Key → Prop} {s : Stor} (h : FootCore U s) {k : Key} (hk : U k)
+    (w : B256) : FootCore U (s.set k.slot w) := by
+  have off : ∀ x ∈ fixedSlots, (s.set k.slot w).get x = s.get x := fun x hx =>
+    Stor.get_set_ne _ (fun e => h.apart k hk (by rw [e]; exact hx)) w
+  exact ⟨h.inj, h.apart, ledger_good_congr h.good (off 8 (by decide)) (off 18 (by decide))⟩
 
 /-- The state conditions a USDC `transfer` from `src` to `dst` of `v` needs at a world. -/
 def UsdcTransferOk (l : Usdc.Ledger) (src dst : Adr) (v : Nat) : Prop :=
@@ -46,12 +65,12 @@ theorem usdc_transfer_live {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre : Dev
       UsdcTransferOk (ledger U (pre.state.getStor P)) sevm.caller dst v)
     (fork : CoveredFork sevm.benvStat.fork) (hvalue : sevm.value = 0)
     (hstatic : sevm.isStatic = false) (inst : UsdcInstalled P pre.state)
-    (finv : FootInv U (pre.state.getStor P)) (hop : usdcOp sevm = .transfer dst v)
+    (finv : FootCore U (pre.state.getStor P)) (hop : usdcOp sevm = .transfer dst v)
     (hbal : v ≤ (ledger U (pre.state.getStor P)).bal sevm.caller)
     (hbud : usdcXferBudget sevm pre ≤ G) (hG : G < 2 ^ 256) (depth : sevm.depth ≠ 0) :
     ∃ post, Nonempty (Exec 0 sevm (St pre [] Mem.empty G) (.ok post)) ∧
       post.gasLeft + proxyXferCost sevm pre = G ∧ post.output = (Nat.toB256 1).toBytes ∧
-      (UsdcInstalled P post.state ∧ FootInv U (post.state.getStor P)) ∧
+      (UsdcInstalled P post.state ∧ FootCore U (post.state.getStor P)) ∧
       (dst ≠ sevm.caller → (ledger U (post.state.getStor P)).bal sevm.caller + v =
         (ledger U (pre.state.getStor P)).bal sevm.caller) ∧
       post = proxyXferPost sevm pre (G - proxyXferCost sevm pre) := by
@@ -143,7 +162,7 @@ theorem usdc_transfer_live {P : Adr} {U : Key → Prop} {sevm : Sevm} {pre : Dev
 `transfer`).  `cost` is the frame's exact charge, `budget` adds the child's need past the 63/64 cut. -/
 noncomputable def usdcTransferLive (P : Adr) (U : Key → Prop) :
     TransferLiveBudget P (usdcBookS P).toBook where
-  WorldOk w := UsdcInstalled P w ∧ FootInv U (w.getStor P)
+  WorldOk w := UsdcInstalled P w ∧ FootCore U (w.getStor P)
   FrameOk sevm w := (∀ k ∈ frameKeys sevm, U k) ∧ sevm.data.length < 2 ^ 256 ∧
     sevm.caller ≠ adminOf w P ∧
     ∀ dst v, usdcOp sevm = .transfer dst v → UsdcTransferOk (ledger U (w.getStor P)) sevm.caller dst v
