@@ -78,6 +78,7 @@ H3 = [
     "5.7 EIP-7002 withdrawal requests",
     "5.8 Uniswap V2 Pair",
     "5.9 Uniswap V2 Pair × WETH9",
+    "5.10 Uniswap V2 Pair × USDC × WETH9",
 ]
 
 # The headline results the map exists to carry.  A row deleted from the document fails here.
@@ -165,6 +166,29 @@ REQUIRED_HEADLINES = [
     "Blanc.Composition.UniswapV2PairWeth9Instance.w0_jointCheckpoint",
     "Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_agreeing",
     "Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_instance",
+    # The Pair x USDC x WETH9 composition (Section 5.10).
+    "Blanc.Lift.checkNode_call_at_delegatecall",
+    "Blanc.Lift.Usdc.proxy_forwards",
+    "Blanc.Lift.Usdc.proxy_forwards_control",
+    "Blanc.Lift.Usdc.impl_children",
+    "Blanc.Lift.Usdc.lib_children",
+    "Blanc.Lift.Usdc.usdcBook_lawsS",
+    "Blanc.Lift.Usdc.usdc_history_replayAt",
+    "Blanc.Lift.Usdc.usdc_history_slots",
+    "Blanc.Lift.Usdc.usdc_history_end",
+    "Blanc.Composition.UsdcToken.usdcCore",
+    "Blanc.Composition.PairTwoToken.pair_two_token_joint",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOn_product",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOff_product",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_sync_live",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_mint_live",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_burn_live",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_create2_jointCheckpoint2",
+    "Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_sound",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -215,6 +239,13 @@ NONCLAIM_PHRASES = [
     "checked by the kernel-evaluated checker",
     "noshrink's weth9 half is trivially true",
     "hash-t over child frames",
+    # The Pair x USDC x WETH9 composition (Section 5.10, Section 7 items 35 to 40).
+    "governance premise",
+    "never-signer premise",
+    "excluded positions",
+    "liveness premises",
+    "key universe",
+    "the closed single-block usdc instance",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
@@ -247,6 +278,9 @@ ARTIFACTS = {
     "0x9848482da3ee3076165ce6497eda906e66bb85c5": ("V- proxy", None, [], "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e"),
     "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc": ("Uniswap V2 Pair", "uniswap-v2-pair-runtime.hex", ["uniswap-v2-pair"], None),
     "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f": ("Uniswap V2 Factory", "uniswap-v2-factory-runtime.hex", ["uniswap-v2-factory"], None),
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": ("USDC FiatTokenProxy", "usdc-proxy-runtime.hex", ["usdc-proxy"], None),
+    "0x43506849D7C04F9138D1A2050bbF3A0c054402dd": ("USDC FiatTokenV2_2 implementation", "usdc-impl-runtime.hex", ["usdc-impl"], None),
+    "0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172": ("USDC SignatureChecker library", "usdc-lib-runtime.hex", ["usdc-lib"], None),
 }
 # The Uniswap V2 Pair runtime is one runtime for every pair: its row records the block at which the
 # exhibit instance's code was read, not a creation transaction, and its creation code is a separate
@@ -256,6 +290,17 @@ UNISWAP_CREATION_INPUT = "uniswap-v2-pair-creation.hex"
 # creation code as data.
 UNISWAP_FACTORY_INPUT = "uniswap-v2-factory-runtime.hex"
 UNISWAP_FACTORY_MARKER = "**The Uniswap V2 Factory row.**"
+# The three USDC runtimes, like the Pair's, are code reads at one finalized block; the
+# implementation is the address the proxy's implementation slot holds there, and the library is
+# linked into the implementation by PUSH20.
+USDC_MARKER = "**The USDC rows.**"
+USDC_INPUTS = {
+    "usdc-proxy": "usdc-proxy-runtime.hex",
+    "usdc-impl": "usdc-impl-runtime.hex",
+    "usdc-lib": "usdc-lib-runtime.hex",
+}
+USDC_IMPLEMENTATION = "0x43506849D7C04F9138D1A2050bbF3A0c054402dd"
+USDC_LIBRARY = "0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172"
 SYSTEM_ARTIFACTS = {
     "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02": "beaconRootsCode",
     "0x0000F90827F1C53a10cb7A02335B175320002935": "historyStorageCode",
@@ -816,6 +861,49 @@ def check_factory_record(auth: Authority, body: str, errors: list[str]) -> None:
             errors.append("Uniswap V2 Factory: the stated window of the factory runtime is not the Pair creation code")
 
 
+def check_usdc_record(auth: Authority, body: str, errors: list[str]) -> None:
+    """The USDC rows' code-read record, implementation slot and library links."""
+
+    at = body.find(USDC_MARKER)
+    if at < 0:
+        errors.append("USDC: the USDC rows' record is not stated")
+        return
+    end = body.find("\n\n", at)
+    flat = " ".join(body[at:end if end >= 0 else len(body)].split())
+    read = re.search(r"finalized block (\d[\d,]*) \(block hash (0x[0-9a-fA-F]{64})\)", flat)
+    if read is None:
+        errors.append("USDC: the code-read block and block hash are not stated")
+    for cid, filename in USDC_INPUTS.items():
+        if f"`scripts/lift/inputs/{filename}`" not in flat:
+            errors.append(f"USDC: the lifted input {filename} is not named")
+        if read is None:
+            continue
+        provenance = auth.provenance([cid]).lower()
+        if not re.search(r"\bblock\s+" + str(to_int(read.group(1))) + r"\b", provenance):
+            errors.append(f"USDC: code-read block {read.group(1)} is not in the {cid} certificate provenance")
+        if read.group(2).lower() not in provenance:
+            errors.append(f"USDC: the code-read block hash is not in the {cid} certificate provenance")
+    slot = re.search(r"implementation slot (0x[0-9a-fA-F]{64})", flat)
+    impl_provenance = auth.provenance(["usdc-impl"]).lower()
+    if slot is None:
+        errors.append("USDC: the proxy's implementation slot is not stated")
+    elif slot.group(1).lower() not in impl_provenance or USDC_IMPLEMENTATION[2:].lower() not in impl_provenance:
+        errors.append("USDC: the implementation slot and its value are not in the usdc-impl certificate provenance")
+    elif "0x" + keccak.keccak256(b"org.zeppelinos.proxy.implementation").hex() != slot.group(1).lower():
+        errors.append("USDC: the stated implementation slot is not keccak256(\"org.zeppelinos.proxy.implementation\")")
+    sites = re.search(r"PUSH20 sites \(bytes (\d[\d,]*) and (\d[\d,]*)\)", flat)
+    runtime = auth.runtime.get(USDC_INPUTS["usdc-impl"], b"")
+    if sites is None:
+        errors.append("USDC: the library's PUSH20 sites in the implementation are not stated")
+    elif not runtime:
+        errors.append("USDC: the implementation runtime input is missing")
+    else:
+        library = bytes.fromhex(USDC_LIBRARY[2:])
+        for site in (to_int(sites.group(1)), to_int(sites.group(2))):
+            if runtime[site:site + 21] != b"\x73" + library:
+                errors.append(f"USDC: byte {site} of the implementation runtime is not PUSH20 of the library address")
+
+
 def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
     body = section(text, "2. Artifacts")
     tables = [t for t in re.split(r"\n\s*\n", body) if t.lstrip().startswith("| Contract")]
@@ -865,6 +953,7 @@ def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
         errors.append(f"artifact population drifted: missing {sorted(set(ARTIFACTS) - seen)!r}")
     check_uniswap_record(auth, body, errors)
     check_factory_record(auth, body, errors)
+    check_usdc_record(auth, body, errors)
 
     system_seen = set()
     for row in table_rows(tables[1])[1:]:
@@ -1067,6 +1156,16 @@ def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
          lambda a, t: (a, drop_headline(t, "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_joint"))),
         ("dropped composition disclosure", "load-bearing disclosure vanished",
          lambda a, t: (a, remove_all(t, "the other token's half stays a named premise"))),
+        ("wrong USDC code-read block", "USDC: code-read block",
+         lambda a, t: (a, replace_once(t, "finalized block 26,213,219", "finalized block 26,213,220"))),
+        ("wrong USDC library site", "is not PUSH20 of the library address",
+         lambda a, t: (a, replace_once(t, "PUSH20 sites (bytes 18,390 and 20,105)", "PUSH20 sites (bytes 18,391 and 20,105)"))),
+        ("wrong USDC implementation slot", "implementation slot",
+         lambda a, t: (a, replace_once(t, "0x7050c9e0f4ca769c", "0x7050c9e0f4ca769d"))),
+        ("deleted USDC composition headline", "required headline",
+         lambda a, t: (a, drop_headline(t, "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint"))),
+        ("dropped USDC disclosure", "load-bearing disclosure vanished",
+         lambda a, t: (a, remove_all(t, "never-signer premise"))),
     ]
 
 
