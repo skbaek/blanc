@@ -61,17 +61,8 @@ theorem implXferPost_output (s : Sevm) (b : Devm) (G : Nat) :
   show (B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0).toBytes = _
   decide
 
-theorem afterSload_error (sevm : Sevm) (b : Devm) (k : B256) : (afterSload sevm b k).error = b.error := by
-  unfold afterSload; split <;> rfl
-
-theorem afterSstore_error (sevm : Sevm) (b : Devm) (k v : B256) :
-    (afterSstore sevm b k v).error = b.error := by
-  unfold afterSstore; split <;> rfl
-
 theorem memRead_withOutput_error (d : Devm) (i n : Nat) (o : Bytes) :
     ((d.memRead i n).2.withOutput o).error = d.error := rfl
-
-theorem St_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).error = b.error := rfl
 
 theorem addLog_error (d : Devm) (l : Log) : (d.addLog l).error = d.error := rfl
 

@@ -31,8 +31,6 @@ section Keeps
 theorem callChildPost_state' (P c : Devm) (oi os : Nat) : (callChildPost P c oi os).state = c.state :=
   rfl
 
-theorem withGasLeft_state' (d : Devm) (x : Nat) : (d.withGasLeft x).state = d.state := rfl
-
 variable (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B256)
 
 theorem bChildB_state : (bChildB sevm B S M p t).state = B.state := by
@@ -50,7 +48,7 @@ theorem usdcBalanceSkel_state : (usdcBalanceSkel sevm B S M p t).state = B.state
 (every account's storage, code and balance) as it was. -/
 theorem usdcBalanceCall_state (cg : Nat) : (usdcBalanceCall sevm B S M p t cg).state = B.state := by
   unfold usdcBalanceCall
-  rw [usdcBalanceCallAt_eq, withGasLeft_state']
+  rw [usdcBalanceCallAt_eq, withGasLeft_state]
   exact usdcBalanceSkel_state sevm B S M p t
 
 end Keeps

@@ -67,7 +67,7 @@ theorem add_l255_toNat_le {x w : B256} (hx : x.toNat ≤ 2 ^ 255 - 1)
       SFunc.RunExact cert.prog sevm (St b (x :: y :: ret :: S) M (X + c)) t_4163_c100
         (.returned (St b ((y - x) :: S) M X))} :=
   ⟨_, fun hle room X => by
-    have := gtCheck_zero_of_toNat_le hle
+    have := B256.gtCheck_eq_zero_of_toNat_le hle
     xrun
   ⟩
 
@@ -94,7 +94,7 @@ theorem add_l255_toNat_le {x w : B256} (hx : x.toNat ≤ 2 ^ 255 - 1)
           (sc9 (sc9 M (m20 &&& y)) (y &&& m20)) X))} :=
   ⟨_, fun fork static hM room hx hfz X hX => by
     have := hM.ge
-    have hx' := gtCheck_zero_of_toNat_le (x := x) (y := l255) (by rw [litMask255, toNat_low255]; exact hx)
+    have hx' := B256.gtCheck_eq_zero_of_toNat_le (x := x) (y := l255) (by rw [litMask255, toNat_low255]; exact hx)
     xrun
     xcallM e83W 2 [_] fork (by xfp) (by xroom)
     xrun

@@ -175,7 +175,7 @@ theorem xferFacts_of {sevm : Sevm} {pre : Devm} (value : sevm.value = 0)
   · rw [gsv, kT_eq, l1, ← l1]; exact free_word fd
   · exact adr_toB256_ne_zero c0
   · rw [xTo_toAdr]; exact adr_toB256_ne_zero d0
-  · apply gtCheck_zero_of_toNat_le
+  · apply B256.gtCheck_eq_zero_of_toNat_le
     rw [xVal_eq, gsv, kC_eq, l255_and_toNat]; exact hv
   · rw [xVal_eq, gsv, kC_eq, kT_eq, hD, l255_and_toNat]
     by_cases e : (Sevm.dataWord sevm 4).toAdr = sevm.caller

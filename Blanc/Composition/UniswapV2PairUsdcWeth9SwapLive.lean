@@ -92,11 +92,6 @@ def SwapBackCalleeEnvUW.memory (env : SwapBackCalleeEnvUW sevm d M n p w ρ R G)
 
 end UW
 
-theorem withGasLeft_state (d : Devm) (x : Nat) : (d.withGasLeft x).state = d.state := rfl
-
-theorem withGasLeft_withGasLeft (d : Devm) (x y : Nat) :
-    (d.withGasLeft x).withGasLeft y = d.withGasLeft y := rfl
-
 /-- **C6(c), the swap liveness row with both tokens' records discharged** (USDC = token0, WETH9 =
 token1, both outputs allowed).  §10c amended to U9a's legs: the never-signer premise (C6(a) bounds
 reserve0 by the Pair's USDC balance, which covers `amount0Out`), two levels of call depth, the Pair

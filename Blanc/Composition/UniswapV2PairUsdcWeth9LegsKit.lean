@@ -4,6 +4,7 @@ import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.InvWalkStep
+import Blanc.B256CheckFacts
 
 /-!
 # A cost-accumulating forward walk kit (U9a)
@@ -26,6 +27,11 @@ Nothing here mentions a contract (hoist candidates for `Blanc/Lift/`).
 namespace Blanc.Composition.UsdcLive
 
 open Jaune Blanc Blanc.Lift
+
+theorem withGasLeft_state (d : Devm) (x : Nat) : (d.withGasLeft x).state = d.state := rfl
+
+theorem withGasLeft_withGasLeft (d : Devm) (x y : Nat) :
+    (d.withGasLeft x).withGasLeft y = d.withGasLeft y := rfl
 
 section Acc
 
@@ -54,10 +60,6 @@ theorem rx_branchTo_zero' {d w : B256} {j : Nat} (hw : w = 0)
 end Acc
 
 /-! ## Comparison flags from arithmetic facts -/
-
-theorem gtCheck_zero_of_toNat_le {x y : B256} (h : x.toNat ≤ y.toNat) : B256.gtCheck x y = 0 := by
-  have : ¬ y < x := by rw [B256.lt_iff_toNat_lt_toNat]; omega
-  simp only [B256.gtCheck, gt_iff_lt, this, ↓reduceIte]
 
 theorem ltCheck_add_zero {x y : B256} (h : x.toNat + y.toNat < 2 ^ 256) :
     B256.ltCheck (x + y) y = 0 := by

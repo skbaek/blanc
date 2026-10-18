@@ -66,12 +66,6 @@ def PreInv (okx : Xinst → Bool) (W0 W E : List Nat) (f : SFunc) (K : List SFun
   (f.preExec okx W0 W E = true ∧ ∀ t ∈ K, t.execFreeIn E = true) ∨
     (f.silentIn W0 = true ∧ PreK okx W0 W E K)
 
-theorem SilentSet.lookup' (hS : SilentSet fs W0 = true) {k : Nat} {g : SFunc} (hk : k ∈ W0)
-    (hg : fs[k]? = some g) : g.silentIn W0 = true := by
-  have h := (List.all_eq_true.mp hS) k hk
-  rw [hg] at h
-  exact h
-
 theorem PreExecSet.lookup (hW : PreExecSet fs okx W0 W E = true) {k : Nat} {g : SFunc}
     (hk : k ∈ W) (hg : fs[k]? = some g) : g.preExec okx W0 W E = true := by
   have h := (List.all_eq_true.mp hW) k hk
@@ -139,7 +133,7 @@ theorem ConfStep.preExec (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
         exact .inl ⟨PreExecSet.lookup hW hf.1 hk, hK⟩
       · simp only [SFunc.silentIn, SFunc.silent, SFunc.refs, List.all_cons,
           Bool.and_eq_true, decide_eq_true_eq] at hf
-        exact .inr ⟨SilentSet.lookup' hS hf.2.1 hk, hK⟩
+        exact .inr ⟨SilentSet.lookup hS hf.2.1 hk, hK⟩
   | jump t hk pop =>
       refine .inl ⟨pop.state.symm, ?_⟩
       rcases inv with ⟨hf, hK⟩ | ⟨hf, hK⟩
@@ -147,12 +141,12 @@ theorem ConfStep.preExec (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
         exact .inl ⟨PreExecSet.lookup hW hf hk, hK⟩
       · simp only [SFunc.silentIn, SFunc.silent, SFunc.refs, List.all_cons, List.all_nil,
           Bool.and_true, Bool.true_and, decide_eq_true_eq] at hf
-        exact .inr ⟨SilentSet.lookup' hS hf hk, hK⟩
+        exact .inr ⟨SilentSet.lookup hS hf hk, hK⟩
   | @call d d' f g k K t hk pop =>
       rcases inv with ⟨hf, hK⟩ | ⟨hf, hK⟩
       · simp only [SFunc.preExec, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at hf
         rcases hf with ⟨h0, hc⟩ | ⟨h1 | h1, hc⟩
-        · exact .inl ⟨pop.state.symm, .inr ⟨SilentSet.lookup' hS h0 hk, .inl ⟨hc, hK⟩⟩⟩
+        · exact .inl ⟨pop.state.symm, .inr ⟨SilentSet.lookup hS h0 hk, .inl ⟨hc, hK⟩⟩⟩
         · refine .inl ⟨pop.state.symm, .inl ⟨PreExecSet.lookup hW h1 hk, ?_⟩⟩
           intro s hs
           rcases List.mem_cons.mp hs with rfl | hs
@@ -165,7 +159,7 @@ theorem ConfStep.preExec (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
           · exact hK s hs
       · simp only [SFunc.silentIn, SFunc.silent, SFunc.refs, List.all_cons,
           Bool.and_eq_true, decide_eq_true_eq] at hf
-        exact .inl ⟨pop.state.symm, .inr ⟨SilentSet.lookup' hS hf.2.1 hk,
+        exact .inl ⟨pop.state.symm, .inr ⟨SilentSet.lookup hS hf.2.1 hk,
           .inr (.inl ⟨by simp only [SFunc.silentIn, hf.1, hf.2.2, Bool.and_self], hK⟩)⟩⟩
   | @ret d d' f K t pop =>
       rcases inv with ⟨-, hK⟩ | ⟨-, hK⟩
