@@ -44,7 +44,8 @@ theorem rx_oc_p2 {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome �
     (hpush : CoinPushOkAt sevm W W' (σ.get (coinsBase + ocI sevm)) dy U 0x540 0x5e0)
     (hG : 30000 + U ≤ G) (hGb : G + 2000 < 2 ^ 256)
     (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
-      Q (.halted D)) :
+      (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+        Bytes.toB256 (data.sliceD 0x20 32 0) = dy) → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_45c9_c0 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 584 := ⟨G - 584, by omega⟩
   xr (rx_dest ·)
@@ -264,7 +265,11 @@ theorem rx_oc_p2 {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome �
   xr (rx_log2 (c := 1637) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·); 
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := (hL.addLogE _).sstoreE hb2
-  exact ⟨_, .last rfl, k _ (hL.st _ _ _)⟩
+  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22
+  have hL2 := (hL.addLogE _).sstoreE hb2
+  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_⟩⟩
+  rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
+    show (Bytes.toB256 [0x06, 0x20]).toNat + 0x20 = 0x640 by decide]
+  exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
 
 end Blanc.Lift.Curve3Pool

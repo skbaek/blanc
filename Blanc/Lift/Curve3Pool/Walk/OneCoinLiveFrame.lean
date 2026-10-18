@@ -79,7 +79,9 @@ theorem rx_oc_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
           (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])) (ocI sevm)
           (cwDy (ocI sevm) r0 r1 r2 y2) ((pickWord3 (ocI sevm).toNat x0 x1 x2 - y) /
             pickWord3 (ocI sevm).toNat cwP1 cwPm cwPm - cwDy (ocI sevm) r0 r1 r2 y2))).set
-        (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) → Q (.halted D')) :
+        (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      (∃ L ts data, D'.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+        Bytes.toB256 (data.sliceD 0x20 32 0) = cwDy (ocI sevm) r0 r1 r2 y2) → Q (.halted D')) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty G) t_0000_c0 Q := by
   set σ := pre.getStor sevm.currentTarget with hσ
   set σ1 := σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1]) with hσ1
