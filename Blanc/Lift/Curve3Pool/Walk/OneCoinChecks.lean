@@ -39,3 +39,31 @@ theorem removeLiquidityOneCoin_raw {sevm : Sevm} {pre post : Devm} {s : State}
     hcoin hpc hid hkeep hidk
 
 end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+
+open Jaune Blanc.Lift
+
+/-- **Safety of `remove_liquidity_one_coin`, with the observed environment exposed**:
+`ocEnv` at the frame's `i` and the supply reply `T`. -/
+theorem removeLiquidityOneCoin_rawE {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ (hi : (exJ sevm).toNat < 3) (T : Nat) (o : Out),
+      step s (ocEnv sevm ⟨_, hi⟩ T) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (ocEnv sevm ⟨_, hi⟩ T) o :=
+  removeLiquidityOneCoin_rawE_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+    hcoin hpc hid hkeep hidk
+
+end Blanc.Lift.Curve3Pool

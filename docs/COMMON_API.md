@@ -4936,6 +4936,16 @@ contract-neutral.
   halting chain `ChainFree`), `node_span_childFrames`, `prec_parentStep_of_free`,
   `SpanOut.back` and `SilentSet.execFreeSet` in
   [`Blanc/Lift/SoundSpan.lean`](../Blanc/Lift/SoundSpan.lean).
+- Matching a gas-exact forward run's states and call steps with the actual derivation (so a
+  reply a forward run consumed is the reply `Exec.childFrames` records): `xa_cutAt` /
+  `xa_cutAt_start` (a walked checked node and a `SFunc.RunExact` run of a cut of its tree,
+  `SFunc.CutAt`, halting in `s` put the walk at the cut subtree in state `s`, same remaining
+  children), the cut-by-steps helpers `CutStep`, `SFunc.cutPath`, `SFunc.subAt`,
+  `SFunc.cutPathOk`, `SFunc.cutAt_of_cutPathOk`, the checked-step invariant
+  `checkNodeM_next_step` / `checkNodeM_next_at`, and `xa_staticcall_runCompiled` (a compiled
+  `STATICCALL` from a walked state is the frame's step; the head child's output is its return
+  data), in [`Blanc/Lift/FrameWalkCut.lean`](../Blanc/Lift/FrameWalkCut.lean). The 3pool's
+  `remove_liquidity_imbalance` liveness (`RliLiveCut`, `LiveLink`) is the worked example.
 - Memory across a crossed callee: `Mem.KeepsOff M M' W` (no shrink; every byte off the windows
   `W` kept) with `refl`/`trans`/`mono`/`of_agreeOutside`, the image transport
   `Mem.Reads.keepsOff`, `Words.keepsOff`, `MemMatches.keepsOff`, `memWord_keepsOff`, and the
