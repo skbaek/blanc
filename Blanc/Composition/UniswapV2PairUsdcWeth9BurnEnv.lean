@@ -22,7 +22,6 @@ namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Lift.Usdc
   Blanc.Composition.UniswapV2PairWeth9Joint Blanc.Composition.UsdcLive
-open Blanc.Composition.UniswapV2PairWeth9XLeg (StaticChildFresh wethRunKeys)
 
 
 /-- `BurnBackForwardEnv` with both transfers and both final queries pinned. -/
@@ -188,13 +187,6 @@ def BurnEnvUW.factoryPre (env : BurnEnvUW sevm b g) : Devm :=
         (burnT0 sevm b) (burnR1 sevm b) (burnR0 sevm b) (burnRecipientWord sevm) 0x053d [0x89afcb44])
     (feeRequestMemory (feeBurnMemory (burnMem2 sevm env.d0 env.d1) sevm.currentTarget))
     env.fee.factoryGas
-
-/-- **HASH-T over the factory query's child** (the one premise record left between WETH9's initial
-query and its transfer): the WETH9 keys its frames touch are fresh against WETH9's universe.  USDC's
-children need none: their posts are explicit (`usdcTransferCall`, `usdcBalanceCall`), and U9d
-carries WETH9's facts across them by a storage-keeping lemma instead. -/
-structure BurnEnvUW.XFresh (env : BurnEnvUW sevm b g) (weth : Adr) (UW : Weth9.Key → Prop) : Prop where
-  factory : StaticChildFresh sevm env.factoryPre fun D => Weth9.KeysFresh UW (wethRunKeys weth D)
 
 /-- **USDC's gas sentries**: each USDC leg's call gas a word, and room for USDC's run (proxy and
 implementation) under the 63/64 rule. -/

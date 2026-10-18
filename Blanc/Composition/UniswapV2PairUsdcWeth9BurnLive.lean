@@ -22,8 +22,8 @@ checkpoint with all six token records pinned (`BurnEnvUW`).  Inside the model's 
 * USDC's final query after WETH9's transfer: USDC's codes and slots cross WETH9's explicit post
   (`wethTransferCall_storOff`); WETH9's final query reads USDC's through its skeleton.
 
-The factory query's HASH-T premise (`xFresh`) is stated as frozen but not used: WETH9's legs here
-need only codes and storage words, which a `STATICCALL` keeps.
+No HASH-T premise over the factory query's child is needed: WETH9's legs here need only codes and
+storage words, which a `STATICCALL` keeps.
 -/
 
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
@@ -32,12 +32,11 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcToken Blanc.Composition.UsdcLive
 
-set_option linter.unusedVariables false in
 /-- **C6(c), the burn liveness row with both tokens' records discharged** (USDC = token0, WETH9 =
 token1).  As `pair_history_burn_live`, from the two-token joint checkpoint, with USDC's initial
 query, transfer and final query and WETH9's pinned in `callee` to the legs the tokens' codes
 determine.  What stays is the factory `feeTo` record, the Pair's charges and sentries, the LP rows'
-HASH-T, HASH-T over the factory query's child, the frame's call depth, the Pair not USDC's admin
+HASH-T, the frame's call depth, the Pair not USDC's admin
 word, HASH-T for the recipient's USDC row, USDC's state conditions at the frame (`usdcLive`: not
 paused, Pair and recipient unflagged, credit within the packed word, parties nonzero), and the legs'
 gas sentries.  USDC's transfer is covered by its own queried balance (`burnAmount_le_balance`), so
@@ -71,8 +70,7 @@ theorem pair_usdc_weth9_history_burn_live {pair usdc weth : Adr} {cfg : ChainCon
         [.bal (Sevm.dataWord sevm 4).toAdr]) (pre.state.getStor usdc))
       pair (Sevm.dataWord sevm 4).toAdr callee.words.amount0.toNat)
     (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace KP)
-      (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo))
-    (xFresh : callee.XFresh weth (Weth9.historyKeyUniverse weth trace KW)) :
+      (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo)) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
       PairHistoryReplayed pair trace KP st₀ finish K' ∧
       ∀ (transcript : Transcript) (returndata : Bytes),
