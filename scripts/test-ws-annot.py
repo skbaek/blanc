@@ -27,6 +27,7 @@ from ws_annot import (
     wst_param, prov_of, compat_w, site_covers, site_of,
     wstep, refine_w, popped_w, eq_guard, inst_site, resume_w, ret_ok,
     resolve_args, lean_term, lean_site, lean_b256,
+    emit_ann, emit_checks, split_parts, ret_arg_free,
 )
 from symcore import goto_compat, ninst_kind
 
@@ -357,11 +358,52 @@ require(st.kv[0] not in (3, 4) and prov_of(st, st.kv[0]) == CALLER,
 require(('le', st.kv[0], 3) in st.facts, "resume instantiates order facts")
 
 # -- emission shapes --
-require(lean_b256(0) == "(Nat.toB256 0x0)", "b256 emission")
+require(lean_b256(0) == "0x0", "b256 emission (a numeral at type B256)")
 require(lean_term(('kecc', CALLER, ('const', 3)))
-        == "(.kecc .caller (.const (Nat.toB256 0x3)))", "kecc emission")
+        == "(.kecc .caller (.const 0x3))", "kecc emission")
 require(lean_term(('op2', 'shr', ('const', 2), CALLER))
-        == "(.op2 .shr (.const (Nat.toB256 0x2)) .caller)", "op2 emission")
+        == "(.op2 .shr (.const 0x2) .caller)", "op2 emission")
 require(lean_site((TOP, [], True)) == "⟨.top, [], true⟩", "site emission")
+c4 = checker([(0, [], 0), (5, [], 0)],
+             {0: {'kind': 'last', 'pc': 0, 'op': '0x0'},
+              1: {'kind': 'last', 'pc': 5, 'op': '0x0'}})
+c4.ann = {0: INIT, 1: INIT}
+c4.comp = {0: 0, 1: 0}
+text = emit_ann(c4, "T", [])
+require(text.count("def implWsRet0 : WRet :=") == 1
+        and text.count(", implWsRet0⟩") == 2,
+        "one shared summary per component, referenced by each entry")
+require("Nat.toB256" not in text, "no unqualified Nat.toB256 in the module")
+checks = emit_checks(c4, 2, "T", "C.cert", "C.Cert", "T.Ann")
+require(sorted(checks) == ["Check.lean", "Check0.lean", "Check1.lean"],
+        "two parts and the chain")
+require("theorem ws_entry_1 : wsEntry C.cert implWsAnn 1 = true := by" in checks["Check1.lean"]
+        and "wsFrom_step 0 ws_entry_0 ws_rest_1" in checks["Check.lean"]
+        and "ws_rest_2 : wsFrom C.cert implWsAnn 2 = true" in checks["Check.lean"],
+        "per-entry kernel decides and the chain from the end")
+require(split_parts([1, 1, 1, 1], 2) == [(0, 2), (2, 4)], "balanced split")
+
+# -- prototype of the proposed relaxations (off by default) --
+inc = WSt((1,), (2, 3), frozenset(), (), (), (), (), (), ())
+ann_short = WSt((4,), (5,), frozenset(), (), (), (), (), (), ())
+require(compat_w(inc, ann_short) == "args length", "equal entry-word count by default")
+ws_annot.ARGS_PREFIX = True
+require(compat_w(inc, ann_short) is None, "prototype: annotation entry words a prefix")
+require(compat_w(ann_short, inc) == "args length", "prototype: never longer")
+pa = resolve_args([(0, [], 0), (1, [U(), U()], 0), (2, [U()], 0), (3, [U()], 0)],
+                  {0: {'kind': 'last'}, 1: {'kind': 'jump', 'target_entry': 3},
+                   2: {'kind': 'jump', 'target_entry': 3}, 3: {'kind': 'last'}},
+                  {1, 2})
+require(pa[0][3] == (1,) and not pa[1], "prototype: least source length, no conflict")
+ws_annot.ARGS_PREFIX = False
+require(ret_arg_free(WRet([TOP], frozenset(), True, frozenset())),
+        "summary without entry words")
+require(not ret_arg_free(WRet([('arg', 0)], frozenset(), True, frozenset())),
+        "returned entry word")
+require(not ret_arg_free(WRet([], frozenset(), True,
+                              frozenset({(('kecc', ('arg', 1), ('const', 9)), (), False)}))),
+        "site over an entry word")
+require(not ret_arg_free(WRet([TOP], frozenset({(0, 0)}), True, frozenset())),
+        "order fact")
 
 print(f"ws_annot checks: {COUNT} passed")

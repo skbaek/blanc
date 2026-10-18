@@ -390,31 +390,42 @@ def run_registry(args: argparse.Namespace) -> int:
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
-            fp = row.get("fp")
-            if fp:
-                # free-pointer annotations and their kernel-decide modules
-                # (`scripts/lift/fp_annot.py`, checked by `Blanc/Lift/FreePtr.lean`'s `fpCert`)
-                fp_out = out / "fp"
-                fp_argv = [sys.executable, "-B", str(root / fp["producer"]),
-                           "--registry", str(registry_path), "--row", ident,
-                           "--namespace", fp["namespace"],
-                           "--ann-out", str(fp_out / "Ann.lean"),
-                           "--check-dir", str(fp_out), "--check-parts", str(fp["parts"])]
-                fp_proc = subprocess.run(fp_argv, capture_output=True, text=True, timeout=args.timeout)
-                if fp_proc.returncode != 0:
-                    print(f"FAIL {ident}: free-pointer producer exit {fp_proc.returncode}\n"
-                          f"{fp_proc.stdout}{fp_proc.stderr}")
-                    failures += 1
+            # annotation producers: the free-pointer annotations (`fp`,
+            # `scripts/lift/fp_annot.py`, checked by `Blanc/Lift/FreePtr.lean`'s
+            # `fpCert`) and the write-site annotations (`ws`,
+            # `scripts/lift/ws_annot.py`, checked by `Blanc/Lift/WriteSite.lean`'s
+            # `wsCert`), each with its kernel-decide modules when `check_dir` is set
+            ann_failed = False
+            for key, what in (("fp", "free-pointer"), ("ws", "write-site")):
+                spec = row.get(key)
+                if not spec:
                     continue
-                pairs.append((fp_out / "Ann.lean", root / fp["ann"]))
-                check_dir = root / fp["check_dir"]
-                produced_fp = sorted(fp_out.glob("Check*.lean"))
-                pairs += [(q, check_dir / q.name) for q in produced_fp]
-                names = {q.name for q in produced_fp}
-                for extra in sorted(check_dir.glob("Check*.lean")):
-                    if extra.name not in names:
-                        print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
-                        failures += 1
+                ann_out = out / key
+                ann_argv = [sys.executable, "-B", str(root / spec["producer"]),
+                            "--registry", str(registry_path), "--row", ident,
+                            "--namespace", spec["namespace"],
+                            "--ann-out", str(ann_out / "Ann.lean")]
+                if "check_dir" in spec:
+                    ann_argv += ["--check-dir", str(ann_out), "--check-parts", str(spec["parts"])]
+                ann_proc = subprocess.run(ann_argv, capture_output=True, text=True, timeout=args.timeout)
+                if ann_proc.returncode != 0:
+                    print(f"FAIL {ident}: {what} producer exit {ann_proc.returncode}\n"
+                          f"{ann_proc.stdout}{ann_proc.stderr}")
+                    failures += 1
+                    ann_failed = True
+                    break
+                pairs.append((ann_out / "Ann.lean", root / spec["ann"]))
+                if "check_dir" in spec:
+                    check_dir = root / spec["check_dir"]
+                    produced_ann = sorted(ann_out.glob("Check*.lean"))
+                    pairs += [(q, check_dir / q.name) for q in produced_ann]
+                    names = {q.name for q in produced_ann}
+                    for extra in sorted(check_dir.glob("Check*.lean")):
+                        if extra.name not in names:
+                            print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
+                            failures += 1
+            if ann_failed:
+                continue
             for produced, committed in pairs:
                 rel = committed.relative_to(root)
                 if args.write:
