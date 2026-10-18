@@ -1,4 +1,5 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsMint
+import Blanc.Composition.UniswapV2PairUsdcWeth9MintLiveF
 import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLive
 
 /-!
@@ -110,33 +111,8 @@ theorem pair_usdc_weth9_history_mint_live {pair usdc weth : Adr} {cfg : ChainCon
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
               (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G)) := by
-  have h0 : (mintUsdcRead0 sevm (mintCacheWorld sevm pre) [0x6a627842] getterInitMemory
-      (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256 0x039b
-      callee.callGas1).1 = callee.d0 := (congrArg Prod.fst _read0).symm
-  have hg : (mintUsdcRead0 sevm (mintCacheWorld sevm pre) [0x6a627842] getterInitMemory
-      (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256 0x039b
-      callee.callGas1).2 = callee.callGas0 := (congrArg Prod.snd _read0).symm
-  obtain ⟨token0, inst, -⟩ := pair_usdc_frame trace joint pairFresh usdcFresh wethFresh governance
-    factoryInstalled factoryNotSystem state
-  have tok : ((mintCacheWorld sevm pre).getStorVal sevm.currentTarget 6).toAdr = usdc := by
-    rw [mintLockedWorld_slot (by decide), target]
-    exact token0
-  have keeps := mintCacheWorld_keeps sevm pre (w := usdc) (target ▸ joint.apart)
-  obtain ⟨winst, wadmin⟩ := usdc_world_congr (P := usdc) (w := pre.state)
-    (w' := (afterSload sevm (mintCacheWorld sevm pre) 6).state) (mintStageWorld_getCode sevm pre)
-    keeps.2
-  have spec := mintUsdcRead0_spec (callGas1 := callee.callGas1) fork depth
-    (by rw [tok]; exact winst inst) (by rw [tok]; exact notPrecompile_usdc joint fork)
-    (by rw [tok, wadmin, target]; exact notAdmin) (by decide) getterInitMemory_ptr.wf
-    (by rw [hg]; exact fits0) room0
-  rw [h0, hg] at spec
-  obtain ⟨half0, -, skel⟩ := spec
-  have read1 : (callee.d1, callee.callGas1) = mintWethRead1 sevm callee.d0 [0x6a627842]
-      getterInitMemory (mintR1 sevm pre) (mintR0 sevm pre) (Sevm.dataWord sevm 4).toAdr.toB256
-      0x039b callee.factoryGas := by
-    rw [_read1, skel, mintWethRead1_withGasLeft]
-  exact pair_weth9_history_mint_live_one trace joint.weth9 pairFresh wethFresh factoryInstalled
-    factoryNotSystem target state codeEq fork output representable value size guard selector
-    (by omega) callee half0 read1 fits1 room1 rowsFresh
+  exact pair_usdc_weth9_history_mint_live_finite trace joint.toF pairFresh usdcFresh wethFresh
+    governance factoryInstalled factoryNotSystem target state codeEq fork output representable
+    value size guard selector depth notAdmin callee _read1 _read0 fits0 fits1 room0 room1 rowsFresh
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9
