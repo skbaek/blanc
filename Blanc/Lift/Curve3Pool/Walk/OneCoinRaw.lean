@@ -159,7 +159,8 @@ theorem removeLiquidityOneCoin_raw_getYD_of (hc : Cert.CheckedM code cert mems t
       subst heq
       exact .inr ⟨cp, hcpm, by rw [hci]; exact hpt, hpSel, hpok⟩
     · cases hT
-      exact .inr ⟨0, cs, by rw [hch]; rfl, hsw.target, hsw.data, hsw.len, rfl⟩
+      exact .inr ⟨0, ⟨cs, by rw [hch]; rfl, hsw.target, hsw.data, hsw.len, rfl⟩,
+        supplyFirst_zero hch hsw.static⟩
     case stor =>
       rw [hdec]
       refine ⟨fun x hx => ?_, fun f hf => ?_⟩

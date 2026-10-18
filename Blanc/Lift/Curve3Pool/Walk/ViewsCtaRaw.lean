@@ -145,7 +145,7 @@ theorem cta_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
         (fun r => some (viewOut s r))) = _
     rw [req, ite_eq_left hd2, Option.bind_some, hg, Option.bind_some]
   · have hch : children ⟨0, sevm, pre, .ok post, exc⟩ = [c] := hL
-    refine rawEffect_view (envOf_vEnv hch (by rw [htgt, hb2.getStor]; rfl) hdata hlen')
+    refine rawEffect_view (envOf_vEnv hch (by rw [htgt, hb2.getStor]; rfl) hdata hlen' hstat)
       (by rw [hdec]; rfl) (fun x => by rw [hstor, hb2.getStor]; rfl) ?_ ?_ ?_
     · rw [hch, hlogs, hb2.logs]
       simp only [List.flatMap_cons, List.flatMap_nil, hclogs, List.append_nil]

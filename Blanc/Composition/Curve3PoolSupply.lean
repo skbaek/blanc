@@ -58,11 +58,12 @@ def poolBurned : Curve3Pool.State → List PoolInvocation → Nat
 /-- 3Crv's supply word in a world. -/
 def supplyAt (ca : Adr) (w : Jaune.State) : Nat := ((w.getStor ca).get vySupplySlot).toNat
 
-/-- The supply an invocation observed is 3Crv's supply word at the entry of the frame's
-`totalSupply()` child at 3Crv. -/
+/-- The supply an invocation observed is 3Crv's supply word at the frame's entry, and at the entry
+of the frame's `totalSupply()` child at 3Crv. -/
 def SupplyObserved (ca : Adr) (i : PoolInvocation) : Prop :=
-  ∀ T, i.env.supply = some T → ∃ c ∈ Exec.childFrames i.frame.run, c.sevm.currentTarget = ca ∧
-    c.sevm.data = Curve3Pool.totalSupplyData ∧ T = supplyAt ca c.pre.state
+  ∀ T, i.env.supply = some T → T = supplyAt ca i.frame.pre.state ∧
+    ∃ c ∈ Exec.childFrames i.frame.run, c.sevm.currentTarget = ca ∧
+      c.sevm.data = Curve3Pool.totalSupplyData ∧ T = supplyAt ca c.pre.state
 
 /-- Each replayed invocation moves 3Crv's supply word from its frame's entry to its frame's post by
 its own minted and burned amounts. -/
@@ -454,7 +455,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
     have keepToken : Curve3Pool.PoolCoinCallsKeepToken (Blanc.Exec.Frame.rootDeriv i.frame) :=
       (derivEntry_frame hpc
         ((trace.frameAdmitted_iff_rawFrames pool _).1 W.env.callbacks _ raw atPool)).2
-    obtain ⟨X', Y', runX', runY', invX', invY', moved, kept⟩ :=
+    obtain ⟨X', Y', runX', runY', invX', invY', moved, kept, prefixes⟩ :=
       pool_frame_supply trace W.injective W.apartU W.ready W.hK W.invariant W.apart globalSplit
         atPool (W.view globalSplit mutable) token calls keepToken
     have hX' : X' = Xg := Option.some.inj (runX'.symm.trans hXg)
@@ -488,7 +489,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
         rw [invY'.supply, invX'.supply]
         exact moved
       · intro T hT
-        rcases hraw.env.supply T hT with unframed | ⟨n, c, hget, ht, hd, -, hans⟩
+        rcases hraw.env.supply T hT with unframed | ⟨n, ⟨c, hget, ht, hd, -, hans⟩, first⟩
         · exfalso
           have notPre : ¬ i.frame.sevm.benvStat.rules.isPrecomp
               (Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv i.frame)) := by
@@ -503,15 +504,45 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
             rw [globalSplit, contig]
             exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _
               (Exec.mem_descendantFrames_of_mem_childFrames i.frame.run c memc)))
-          obtain ⟨Xs, Ks, invS⟩ := child_entry_vyInv trace W.injective W.apartU W.ready W.hK
-            W.invariant W.apart globalSplit atPool (W.view globalSplit mutable) c memc
+          -- the children before the `totalSupply()` child
+          obtain ⟨hn, hc⟩ := List.getElem?_eq_some_iff.mp hget
+          have hn' : n < (Exec.childFrames i.frame.run).length := hn
+          have hc' : (Exec.childFrames i.frame.run)[n] = c := hc
+          have hsplit : Exec.childFrames i.frame.run = (Exec.childFrames i.frame.run).take n ++
+              c :: (Exec.childFrames i.frame.run).drop (n + 1) := by
+            have h := List.take_append_drop n (Exec.childFrames i.frame.run)
+            rw [List.drop_eq_getElem_cons hn', hc'] at h
+            exact h.symm
+          obtain ⟨Xs, Ks, runS, invS⟩ := child_entry_vyInv trace W.injective W.apartU W.ready W.hK
+            W.invariant W.apart globalSplit atPool (W.view globalSplit mutable) _ _ _ hsplit
+          obtain ⟨Xp, runXp, supXp⟩ := prefixes _ _ hsplit
+          have hXs : Xs = Xp := Option.some.inj (runS.symm.trans runXp)
+          subst hXs
+          -- none of them is a token call (`SupplyFirst`)
+          have quiet : tokMsgs ca ((Exec.childFrames i.frame.run).take n) = [] := by
+            unfold tokMsgs
+            rw [List.filter_eq_nil_iff.mpr, List.map_nil]
+            intro c' mem' tok'
+            obtain ⟨m, hm⟩ := List.mem_iff_getElem?.mp mem'
+            obtain ⟨hmlen, -⟩ := List.getElem?_eq_some_iff.mp hm
+            have hmn : m < n := Nat.lt_of_lt_of_le hmlen (List.length_take_le _ _)
+            rw [List.getElem?_take_of_lt hmn] at hm
+            simp only [isTok, decide_eq_true_eq] at tok'
+            exact absurd (first m c' hm tok'.1 (by rw [token]; exact tok'.2)) (Nat.lt_asymm hmn)
+          rw [quiet] at supXp
           have out := totalSupply_answer (W.ready c settledC) ht hd invS
-          refine ⟨c, memc, ht, hd, ?_⟩
-          rw [← hans, Curve3Pool.answerWord, out,
-            List.take_of_length_le (by simp only [B256.length_toBytes]; omega),
-            B256.toB256_toBytes]
+          have hTc : T = supplyAt ca c.pre.state := by
+            rw [← hans, Curve3Pool.answerWord, out,
+              List.take_of_length_le (by simp only [B256.length_toBytes]; omega),
+              B256.toB256_toBytes]
+            unfold supplyAt
+            rw [invS.supply]
+          refine ⟨?_, c, memc, ht, hd, hTc⟩
+          rw [hTc]
           unfold supplyAt
-          rw [invS.supply]
+          rw [invS.supply, invX'.supply]
+          simpa only [SupplyFacet.minted, SupplyFacet.burned, List.filterMap_nil, List.map_nil,
+            List.sum_nil, Nat.add_zero] using supXp
 
 /-! ## The headline -/
 

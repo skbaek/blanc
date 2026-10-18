@@ -194,7 +194,7 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
         | 2 => exact ⟨c3, hmem3, hp2.target, by rw [hp2.data]; exact htake, hp2.ok⟩
       · intro T' h
         cases h
-        exact Or.inr ⟨0, c0, by rw [hL]; rfl, h0t, h0d, h0l, rfl⟩
+        exact Or.inr ⟨0, ⟨c0, by rw [hL]; rfl, h0t, h0d, h0l, rfl⟩, supplyFirst_zero hL h0s⟩
       · exact ⟨c4, hmem4, h4t, by rw [h4d, List.append_assoc]; exact List.take_left' rfl, h4l⟩
     case stor =>
       have hs0 : (balAt (pre.getStor sevm.currentTarget) 0 -

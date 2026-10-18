@@ -329,7 +329,8 @@ theorem removeLiquidityImbalance_raw_of (hc : Cert.CheckedM code cert mems true)
       | 1 => exact .inr (rli_called hP1 m1 (hne 1 h))
       | 2 => exact .inr (rli_called hP2 m2 (hne 2 h))
     · cases hT
-      exact .inr ⟨0, cs, by rw [hch]; rfl, hsw.target, hsw.data, hsw.len, rfl⟩
+      exact .inr ⟨0, ⟨cs, by rw [hch]; rfl, hsw.target, hsw.data, hsw.len, rfl⟩,
+        supplyFirst_zero hch hsw.static⟩
     case stor =>
       rw [hdec]
       refine ⟨fun x hx => ?_, fun f hf => ?_⟩

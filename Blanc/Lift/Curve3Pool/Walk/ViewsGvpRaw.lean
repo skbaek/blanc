@@ -21,7 +21,7 @@ def vEnv (sevm : Sevm) (T : Option Nat) : Env :=
 /-- A frame whose only child is the `totalSupply()` call observes `vEnv` with its reply. -/
 theorem envOf_vEnv {D : Exec.Deriv} {c : Exec.Frame} (hL : children D = [c])
     (htgt : c.sevm.currentTarget = tokenAdr D) (hdata : c.sevm.data = totalSupplyData)
-    (hlen : 32 ≤ c.post.output.length) :
+    (hlen : 32 ≤ c.post.output.length) (hstat : c.sevm.isStatic = true) :
     EnvOf D (vEnv D.sevm (some (vSupply c).toNat)) where
   time := rfl
   caller := rfl
@@ -31,7 +31,7 @@ theorem envOf_vEnv {D : Exec.Deriv} {c : Exec.Frame} (hL : children D = [c])
       fun h => (by cases h)⟩
   supply T h := by
     cases h
-    exact .inr ⟨0, c, by rw [hL]; rfl, htgt, hdata, hlen, rfl⟩
+    exact .inr ⟨0, ⟨c, by rw [hL]; rfl, htgt, hdata, hlen, rfl⟩, supplyFirst_zero hL hstat⟩
   mintOk h := by cases h
   burnOk h := by cases h
 
@@ -116,7 +116,7 @@ theorem gvp_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     rw [hg]
     rfl
   · have hch : children ⟨0, sevm, pre, .ok post, exc⟩ = [c] := hL
-    refine rawEffect_view (envOf_vEnv hch htgt hdata hlen') (by rw [hdec]; rfl)
+    refine rawEffect_view (envOf_vEnv hch htgt hdata hlen' hstat) (by rw [hdec]; rfl)
       (fun x => by rw [hstor]; rfl) ?_ hout ?_
     · rw [hch, hlogs]
       simp only [List.flatMap_cons, List.flatMap_nil, hclogs, List.append_nil]

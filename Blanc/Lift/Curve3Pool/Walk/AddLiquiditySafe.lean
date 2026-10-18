@@ -460,7 +460,8 @@ theorem addLiquidity_raw_of (hchk : Cert.CheckedM code cert mems true)
             (by rw [hch]; simp only [List.cons_append, List.append_assoc]) (hcoinL ⟨2, hk⟩)
         · omega
       · cases hT'
-        exact Or.inr ⟨0, cT, by rw [hch]; rfl, hTt, hTd, hTl, by rw [← hTw]; rfl⟩
+        exact Or.inr ⟨0, ⟨cT, by rw [hch]; rfl, hTt, hTd, hTl, by rw [← hTw]; rfl⟩,
+          supplyFirst_zero hch hTs⟩
       · exact ⟨cm, by rw [hch]; exact List.mem_cons_of_mem _ (List.mem_append_right _
           (List.mem_singleton_self _)), by rw [hmt, htokL]; rfl,
           by rw [hmd, List.append_assoc]; exact List.take_left' rfl, hml⟩

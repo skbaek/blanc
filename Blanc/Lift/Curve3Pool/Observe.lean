@@ -26,7 +26,8 @@ Every answer is read off the frame's **direct, settlement-committed children**
   tail: empty, or its first `min(len, 32)` bytes are not all zero; the call flag is nonzero
   because the child is committed);
 * `supply`: the reply of a child at `token` with calldata exactly `totalSupply()`, at least 32
-  bytes, first word;
+  bytes, first word, made before any state-changing child at `token` (`SupplyFirst`: the supply
+  is read before the frame's own `mint`/`burnFrom` calls move it);
 * `mintOk`/`burnOk`: a child at `token` whose calldata starts with the `mint` / `burnFrom`
   selector returned at least 32 bytes (the bool is discarded by the runtime, U0 review R2).
 
@@ -112,6 +113,24 @@ def ReplyAt (D : Exec.Deriv) (n : Nat) (t : Adr) (input : Bytes) (w : Nat) : Pro
   ∃ c, (children D)[n]? = some c ∧ c.sevm.currentTarget = t ∧ c.sevm.data = input ∧
     32 ≤ c.post.output.length ∧ answerWord c.post.output = w
 
+/-- **No state-changing child at the token up to child `n`**: every non-static child at
+`tokenAdr D` comes after child `n`. -/
+def SupplyFirst (D : Exec.Deriv) (n : Nat) : Prop :=
+  ∀ m c, (children D)[m]? = some c → c.sevm.isStatic = false →
+    c.sevm.currentTarget = tokenAdr D → n < m
+
+/-- A static first child comes before every state-changing child. -/
+theorem supplyFirst_zero {D : Exec.Deriv} {c : Exec.Frame} {rest : List Exec.Frame}
+    (h : children D = c :: rest) (hs : c.sevm.isStatic = true) : SupplyFirst D 0 := by
+  intro m c' hm hs' _
+  cases m with
+  | zero =>
+    rw [h, List.getElem?_cons_zero, Option.some.injEq] at hm
+    subst hm
+    rw [hs] at hs'
+    cases hs'
+  | succ m => exact Nat.succ_pos m
+
 /-- Some child of the frame ran at `t` with calldata starting with `sel` and returned data
 satisfying `ok`. -/
 def CalledWith (D : Exec.Deriv) (t : Adr) (sel : Bytes) (ok : Bytes → Prop) : Prop :=
@@ -137,7 +156,7 @@ structure EnvOf (D : Exec.Deriv) (e : Env) : Prop where
   value : e.value = D.sevm.value.toNat
   coin : ∀ k, CoinObsOf D k (e.coin k)
   supply : ∀ T, e.supply = some T → framed D (tokenAdr D) = false ∨
-    ∃ n, ReplyAt D n (tokenAdr D) totalSupplyData T
+    ∃ n, ReplyAt D n (tokenAdr D) totalSupplyData T ∧ SupplyFirst D n
   mintOk : e.mintOk = true → framed D (tokenAdr D) = false ∨
     CalledWith D (tokenAdr D) mintSel (fun out => 32 ≤ out.length)
   burnOk : e.burnOk = true → framed D (tokenAdr D) = false ∨

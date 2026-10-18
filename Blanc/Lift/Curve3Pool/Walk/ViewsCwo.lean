@@ -153,7 +153,7 @@ theorem cwo_raw_getYD_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
       ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ from Fin.ext ha1, ha0, hg,
       Option.bind_some]
   · have hch : children ⟨0, sevm, pre, .ok post, exc⟩ = [c] := hL
-    refine rawEffect_view (envOf_vEnv hch htgt hdata hlen') (by rw [hdec]; rfl)
+    refine rawEffect_view (envOf_vEnv hch htgt hdata hlen' hstat) (by rw [hdec]; rfl)
       (fun x => by rw [hstor]; rfl) ?_ ?_ ?_
     · rw [hch, hlogs]
       simp only [List.flatMap_cons, List.flatMap_nil, hclogs, List.append_nil]
