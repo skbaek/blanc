@@ -139,7 +139,8 @@ theorem usdc_history_frames_of (signed : ImplStepLaw famSigned)
   have avail : ∀ f ∈ tr.settledFrames, Avail P (adminOf checkpoint.state P) f := fun f hf =>
     ⟨⟨bytes_eq_of_image (codeP f hf), bytes_eq_of_image (codeI f hf),
       bytes_eq_of_image (codeL f hf)⟩, gov f hf⟩
-  obtain ⟨fin, frames⟩ := replay avail ⟨installed.slot, rfl, ext.good⟩
+  obtain ⟨fin, frames⟩ := replay avail ⟨installed.slot, rfl, ext.good,
+    foot.support.mono fun _ h => Or.inl h⟩
   exact ⟨frames, fin⟩
 
 /-- **`usdc_history_slots`, given the signed family's law.** -/

@@ -228,7 +228,7 @@ theorem impl_view_law : ImplStepLaw (· = Call.view) := by
   subst hc
   have stor : post.state.getStor P = pre.state.getStor P := by
     rw [impl_view_state run code fork dec]
-  refine ⟨?_, by rw [stor], by rw [stor],
+  refine ⟨?_, by rw [stor], by rw [stor], fun sup => by rw [stor]; exact sup,
     fun N hN x hx => (impl_view_noExec run code fork dec N hN x hx).elim⟩
   rw [stor]
   change (if sevm.caller = (ledger U (pre.state.getStor P)).admin then

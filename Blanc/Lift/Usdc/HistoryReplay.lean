@@ -248,7 +248,7 @@ theorem usdc_impl_children_lib {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfi
   obtain ⟨-, -, -, nodes⟩ := impl_whole_law ext.inj ext.apart run code target
     ((facts.kind target).impl_codeAddress code) facts.fork nonstatic (facts.keys target)
     (by rw [show pre.state.getCode usdcLib = Lib.code from facts.codes.2.2]; rfl) notAdmin
-    facts.slots.2.2 notRescue
+    facts.slots.2.2.1 notRescue
   obtain ⟨N, f, rsm, pc', cevm, chain, step, enter, childEq⟩ :=
     Exec.childFrames_spawnedAt run (.refl _) c member
   obtain ⟨sevmEq, nfork, -, -, -, ncodes, -, -⟩ := node_child chain facts.fork facts.codes step enter
@@ -365,7 +365,7 @@ theorem usdc_history_goodAt {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     (hist : UsdcHist P K₀ tr) :
     ∀ f ∈ tr.settledFrames,
       (usdcBookS P).toBook.Good (ledger (historyKeyUniverse P tr K₀) (f.pre.state.getStor P)) :=
-  fun f hf => (usdc_settled_facts tr hist f hf).slots.2.2
+  fun f hf => (usdc_settled_facts tr hist f hf).slots.2.2.1
 
 /-- **`decodes`**: a non-entry frame at the proxy has its parents at the proxy
 (`usdc_foreign_child_entry`). -/

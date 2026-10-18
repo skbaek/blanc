@@ -123,7 +123,7 @@ theorem impl_whole_law {P : Adr} {U : Key → Prop} (inj : SlotFootprint.Inj Key
         (post.state.getStor P).get adminSlot = (pre.state.getStor P).get adminSlot ∧
         ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
           ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .delegatecall := fun fam law hc => by
-    obtain ⟨step, hi, ha, nodes⟩ :=
+    obtain ⟨step, hi, ha, -, nodes⟩ :=
       law run codeEq target codeAddr fork nonstatic inj apart keys lib notAdmin c dec hc
     exact ⟨step, hi, ha, fun N chain x hat => (nodes N chain x hat).1⟩
   rcases call_family_cases c with h | h | h | h | h | h | ⟨t, d, v, rfl⟩

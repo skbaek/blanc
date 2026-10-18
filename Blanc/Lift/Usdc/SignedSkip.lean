@@ -95,12 +95,15 @@ theorem skip_libCall {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm}
 
 /-- **The node clause at a library-call node.**  If the proxy's storage at the node is the frame's
 pre-state, or the pre-state with a tracked nonce word written (permit bumps the nonce before its
-library call), the ledger stays good and the implementation and admin slots are the pre-state's. -/
+library call), the ledger stays good, the implementation and admin slots are the pre-state's, and the
+support over `U` is kept. -/
 theorem libNode_clause {U : Key → Prop} {pre N : Stor}
     (apart : SlotFootprint.Apart Key.slot fixedSlots U)
     (h : N = pre ∨ ∃ o w, U (.nonce o) ∧ N = pre.set (nonceSlot o) w) :
     ((ledger U pre).Good → (ledger U N).Good) ∧ N.get implSlot = pre.get implSlot ∧
-      N.get adminSlot = pre.get adminSlot := by
+      N.get adminSlot = pre.get adminSlot ∧
+      (SlotFootprint.Support Key.slot fixedSlots U pre →
+        SlotFootprint.Support Key.slot fixedSlots U N) := by
   have off : ∀ x ∈ fixedSlots, N.get x = pre.get x := by
     intro x hx
     rcases h with rfl | ⟨o, w, ho, rfl⟩
@@ -109,6 +112,10 @@ theorem libNode_clause {U : Key → Prop} {pre N : Stor}
       exact Stor.get_set_ne _ (fun e => apart (.nonce o) ho (by rw [hk, e]; exact hx)) w
   exact ⟨fun good => ledger_good_congr good (off 8 (by decide)) (off 18 (by decide)),
     off implSlot (by simp only [fixedSlots, List.mem_cons, true_or, or_true]),
-    off adminSlot (by simp only [fixedSlots, List.mem_cons, List.not_mem_nil, true_or, or_true])⟩
+    off adminSlot (by simp only [fixedSlots, List.mem_cons, List.not_mem_nil, true_or, or_true]),
+    fun sup => by
+      rcases h with rfl | ⟨o, w, ho, rfl⟩
+      · exact sup
+      · exact sup.set ho w⟩
 
 end Blanc.Lift.Usdc
