@@ -5,7 +5,8 @@ import Blanc.StorageOnlySpec
 /-!
 # USDC at the end of a configured history (U9c)
 
-The USDC analogue of `weth9_history_footprint_universe`, as far as USDC's laws reach: the three
+Everything in the USDC analogue of `weth9_history_footprint_universe` except `FootInv`'s support
+half, which `usdc_history_end` (`HistoryEndFoot.lean`) adds: the three
 runtimes and the implementation slot at the history's end (`UsdcInstalled`), the admin word
 unchanged (`usdc_history_end_installed`), and the footprint ledger over the history's key universe good, with that universe
 injective and apart from the fixed slots.
@@ -43,7 +44,7 @@ theorem usdc_history_end_installed {P : Adr} {K₀ : Key → Prop} {cfg : ChainC
 
 /-- **USDC at the history's end** (`usdc_history_end_core`): installed, the admin word unchanged,
 the history's key universe injective and apart from the fixed slots, and its ledger good at the
-end.  `FootInv`'s support half needs a storage-locality law (decision usdc-history-end-split). -/
+end.  `usdc_history_end` adds `FootInv`'s support half. -/
 theorem usdc_history_end_core {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
     (hist : UsdcHist P K₀ tr) :

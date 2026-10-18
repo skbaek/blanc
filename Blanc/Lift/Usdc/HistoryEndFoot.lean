@@ -7,8 +7,8 @@ The USDC analogue of `weth9_history_footprint_universe` at the predecessor's WET
 `usdc_history_end` adds `FootInv`'s support half to `usdc_history_end_core` (installed, admin,
 `Inj`, `Apart`, ledger good).  The support comes from the slot ladder's end invariant
 (`usdc_history_frames_of`): `SlotInv` carries `Support` over the history's key universe, because
-every family law (`ImplStepLaw`) writes the proxy's storage only at fixed slots and at the slots of
-the frame's keys (`frameKeys`), which the universe contains, the library writes nothing, and
+every family law (`ImplStepLaw`) keeps `Support` over any universe that contains the frame's keys
+(`frameKeys`), as the history's universe does, the library writes nothing, and
 `rescueERC20` and the proxy's own frames keep the storage outside their children.
 -/
 
