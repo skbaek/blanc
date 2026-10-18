@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsSync
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
+import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 import Blanc.Composition.UniswapV2PairWeth9SyncLive
 import Blanc.Lift.Usdc.HistoryEnd
 
@@ -135,27 +136,8 @@ theorem pair_usdc_weth9_history_sync_live {pair usdc weth : Adr} {cfg : ChainCon
           (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData) 128
           (syncToken1 sevm d0))) :
     SyncLiveOutcome pair trace KP st₀ sevm pre d0 d1 callGas0 G := by
-  have h0 : (syncUsdcRead0 sevm pre callGas1).1 = d0 := (congrArg Prod.fst _read0).symm
-  have hg : (syncUsdcRead0 sevm pre callGas1).2 = callGas0 := (congrArg Prod.snd _read0).symm
-  obtain ⟨token0, inst, -⟩ := pair_usdc_frame trace joint pairFresh usdcFresh wethFresh governance
-    factoryInstalled factoryNotSystem state
-  have tok : (syncFirstToken sevm pre).toAdr = usdc := by
-    unfold syncFirstToken
-    rw [toAdr_toB256, syncLockedWorld_slot (by decide), target]
-    exact token0
-  have keeps := syncFirstWorld_keeps sevm pre (w := usdc) (target ▸ joint.apart)
-  obtain ⟨winst, wadmin⟩ := usdc_world_congr (P := usdc) (w := pre.state)
-    (w' := (syncFirstWorld sevm pre).state) (syncFirstWorld_getCode sevm pre) keeps.2
-  have spec := syncUsdcRead0_spec (callGas1 := callGas1) fork depth (by rw [tok]; exact winst inst)
-    (by rw [tok]; exact notPrecompile_usdc joint fork)
-    (by rw [tok, wadmin, target]; exact notAdmin) (by rw [hg]; exact fits0) room0
-  dsimp only at spec
-  rw [h0, hg] at spec
-  obtain ⟨nonzero0, call0, success0, returnedGas0, long0, -, skel⟩ := spec
-  have read1 : (d1, callGas1) = syncWethRead1 sevm d0 G := by
-    rw [_read1, skel, syncWethRead1_withGasLeft]
-  exact pair_weth9_history_sync_live_one trace joint.weth9 pairFresh wethFresh factoryInstalled
-    factoryNotSystem target state codeEq fork output representable value size selector static
-    (by omega) sentry nonzero0 call0 success0 returnedGas0 long0 read1 fits1 room1
+  exact pair_usdc_weth9_history_sync_live_finite trace joint.toF pairFresh usdcFresh wethFresh
+    governance factoryInstalled factoryNotSystem target state codeEq fork output representable
+    value size selector static depth notAdmin sentry _read1 _read0 fits0 fits1 room0 room1
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9
