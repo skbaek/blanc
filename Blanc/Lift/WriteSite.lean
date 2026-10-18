@@ -413,15 +413,17 @@ def wsNode (es : List Entry) (ann : List WAnn) (R : WRet) :
       wsNode es ann R a' (refine σ c kv true) f && wsNode es ann R a' (refine σ c kv false) g
     | _, _ => false
   | a, σ, .branchTo f k =>
-    match a, σ.kv, ann[k]? with
-    | _ :: _ :: a', _ :: c :: kv, some A =>
-      wsNode es ann R a' (refine σ c kv true) f && compat (refine σ c kv false) A.entry &&
+    match a, σ.kv, es[k]?, ann[k]? with
+    | _ :: _ :: a', _ :: c :: kv, some e, some A =>
+      gotoCompat a' e.frame &&
+        wsNode es ann R a' (refine σ c kv true) f && compat (refine σ c kv false) A.entry &&
         A.ret == R
-    | _, _, _ => false
-  | _, σ, .jump k =>
-    match σ.kv, ann[k]? with
-    | _ :: kv, some A => compat (popped σ kv) A.entry && A.ret == R
-    | _, _ => false
+    | _, _, _, _ => false
+  | a, σ, .jump k =>
+    match a, σ.kv, es[k]?, ann[k]? with
+    | _ :: a', _ :: kv, some e, some A =>
+      gotoCompat a' e.frame && compat (popped σ kv) A.entry && A.ret == R
+    | _, _, _, _ => false
   | a, σ, .callNext k f =>
     match a, σ.kv, es[k]?, ann[k]? with
     | .const _ :: a', _ :: kv, some e, some A =>
@@ -438,10 +440,10 @@ def wsNode (es : List Entry) (ann : List WAnn) (R : WRet) :
           | _ => false
         | none => true
     | _, _, _, _ => false
-  | _, σ, .ret =>
-    match σ.kv with
-    | _ :: kv => retOk σ kv R
-    | [] => false
+  | a, σ, .ret =>
+    match a, σ.kv with
+    | .ret :: _, _ :: kv => retOk σ kv R
+    | _, _ => false
   | _, _, .pcAt _ _ => false
   | _, _, .undefined => true
 
