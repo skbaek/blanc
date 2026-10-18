@@ -74,18 +74,41 @@ macro "xmstoreG " o:term "," c:term : tactic => `(tactic|
      decide_true, decide_false, Bool.true_or, Bool.or_true, Bool.false_or, Bool.or_false,
      ite_true, ite_false, Bool.false_eq_true, ↓reduceIte] at hT))
 
+/-- `_A`'s extra gas over a `0x1e0` memory: the ramp's store at `0x1e0` grows it. -/
+def aE (sevm : Sevm) (b : Devm) : Nat :=
+  if sevm.benvStat.time.toNat < (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then 3
+  else 0
+
+/-- The memory size `_A` leaves from `0x1e0`. -/
+def aSz (sevm : Sevm) (b : Devm) : Nat :=
+  if sevm.benvStat.time.toNat < (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then
+    0x200 else 0x1e0
+
+theorem aSz_mod (sevm : Sevm) (b : Devm) : aSz sevm b % 32 = 0 := by
+  unfold aSz; split <;> decide
+
+theorem aSz_ext (sevm : Sevm) (b : Devm) : memExtSize (aSz sevm b) 0x1e0 32 = 0x200 := by
+  unfold aSz; split <;> decide
+
+/-- The extra gas and the growing store at `0x1e0` after it cost `6` together. -/
+theorem aE_store (sevm : Sevm) (b : Devm) :
+    aE sevm b + (3 + (calculateMemoryGasCost 0x200 - calculateMemoryGasCost (aSz sevm b))) = 6 := by
+  unfold aE aSz; split <;> decide
+
+theorem aE_le (sevm : Sevm) (b : Devm) : aE sevm b ≤ 3 := by
+  unfold aE; split <;> decide
+
 -- SEGMENT: aExact1e0
-/-- **`_A`, forward, over a memory of `0x1e0`**: as `a_exact`, but the ramp's store at `0x1e0`
-grows the memory to `0x200` at `3` gas more; outside a ramp the memory stays at `0x1e0`. -/
+/-- **`_A`, forward, over a memory of `0x1e0`**: as `a_exact`, at `aE` more gas (the ramp's store
+at `0x1e0` grows the memory), leaving a memory of `aSz`. -/
 theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Nat} {ret : B256}
     {s : State} (hfork : CoveredFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = 0x1e0)
     (hroom : S.length + 16 < 1024) :
-    ∃ w e n', (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + e + aGas sevm b))
+    ∃ w, (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + aE sevm b + aGas sevm b))
       t_00a9_c27 (.returned (St (aBase sevm b) (w :: S) M' G)) ∧
-      (Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = n')) ∧ w.toNat = v ∧
-      ((e = 0 ∧ n' = 0x1e0) ∨ (e = 3 ∧ n' = 0x200)) := by
+      (Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = aSz sevm b)) ∧ w.toNat = v := by
   have hT := MemTrack.init hwf aWin
   have hn : (0x1e0 : Nat) % 32 = 0 := by decide
   have e1 := ha.futureATime
@@ -94,7 +117,7 @@ theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Na
   have e4 := ha.initialATime
   rw [aChk_eq, ← e1, ← e2, ← e3, ← e4] at hA
   simp only [← getStorVal_eq_getStor] at hA
-  unfold aGas aBase
+  unfold aGas aBase aE aSz
   by_cases ht : sevm.benvStat.time.toNat <
       (b.getStorVal sevm.currentTarget futureATimeSlot).toNat
   · simp only [ht, ↓reduceIte] at hA ⊢
@@ -103,7 +126,7 @@ theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Na
     · simp only [hup, ↓reduceIte] at hA ⊢
       simp only [SFunc.runExact_iff_runExactCut_nil]
       simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
-      refine ⟨?w1, 3, 0x200, ?run1, ?val1, .inr ⟨rfl, rfl⟩⟩
+      refine ⟨?w1, ?run1, ?val1⟩
       case run1 =>
         rw [show ∀ x1 x2 x3 x4 : Nat, G + 3 + (458 + x1 + x2 + x3 + x4) =
           G + 397 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
@@ -121,7 +144,7 @@ theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Na
     · simp only [hup, ↓reduceIte] at hA ⊢
       simp only [SFunc.runExact_iff_runExactCut_nil]
       simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
-      refine ⟨?w2, 3, 0x200, ?run2, ?val2, .inr ⟨rfl, rfl⟩⟩
+      refine ⟨?w2, ?run2, ?val2⟩
       case run2 =>
         rw [show ∀ x1 x2 x3 x4 : Nat, G + 3 + (453 + x1 + x2 + x3 + x4) =
           G + 392 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
@@ -140,7 +163,7 @@ theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Na
   · simp only [ht, ↓reduceIte] at hA ⊢
     simp only [SFunc.runExact_iff_runExactCut_nil]
     simp only [← slot_09, ← slot_07] at ht hA ⊢
-    refine ⟨?w3, 0, 0x1e0, ?run3, ?val3, .inl ⟨rfl, rfl⟩⟩
+    refine ⟨?w3, ?run3, ?val3⟩
     case run3 =>
       rw [show ∀ x1 x2 : Nat, G + 0 + (85 + x1 + x2) = G + 66 + x2 + 9 + x1 + 10 from
         fun _ _ => by omega]
