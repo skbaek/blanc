@@ -9,14 +9,14 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Impl
 
-theorem RunCut.ite_left {fs : List SFunc} {sevm : Sevm} {C : List Nat} {d : Devm} {r : Seg}
-    {c : Prop} [Decidable c] {f g : SFunc} (hc : c)
-    (h : SFunc.RunCut fs sevm C d (if c then f else g) r) : SFunc.RunCut fs sevm C d f r := by
+theorem RunCut.ite_left {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {C : List Nat} {d : Devm} {r : Seg} {c : Prop} [Decidable c] {f g : SFunc} (hc : c)
+    (h : SFunc.RunCutP P fs sevm C d (if c then f else g) r) : SFunc.RunCutP P fs sevm C d f r := by
   rwa [ite_eq_left hc] at h
 
-theorem RunCut.ite_right {fs : List SFunc} {sevm : Sevm} {C : List Nat} {d : Devm} {r : Seg}
-    {c : Prop} [Decidable c] {f g : SFunc} (hc : ¬ c)
-    (h : SFunc.RunCut fs sevm C d (if c then f else g) r) : SFunc.RunCut fs sevm C d g r := by
+theorem RunCut.ite_right {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {C : List Nat} {d : Devm} {r : Seg} {c : Prop} [Decidable c] {f g : SFunc} (hc : ¬ c)
+    (h : SFunc.RunCutP P fs sevm C d (if c then f else g) r) : SFunc.RunCutP P fs sevm C d g r := by
   rwa [ite_eq_right hc] at h
 
 /-- One comparison of the dispatcher's binary search on a known selector. -/

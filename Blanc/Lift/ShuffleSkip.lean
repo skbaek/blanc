@@ -433,35 +433,38 @@ theorem shNinst_run {sevm : Sevm} {d d' : Devm} {n : Ninst} {a a' : List SVal}
 
 /-- What a checked result promises for a cut run from `d0`: none can succeed (`none`), or every
 one reaches `tgt` from a state with `d0`'s world state and a stack `Y ++ R` described by `π`. -/
-def ShReach (fs : List SFunc) (sevm : Sevm) (C : List Nat) (X R : List B256) (d0 : Devm)
-    (tgt : SFunc) (r : Seg) : Option (List SVal) → Prop
+def ShReach (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List SFunc) (sevm : Sevm)
+    (C : List Nat) (X R : List B256) (d0 : Devm) (tgt : SFunc) (r : Seg) :
+    Option (List SVal) → Prop
   | none => False
   | some π => ∃ d, d.state = d0.state ∧ ∃ Y, d.stack = Y ++ R ∧ Carried X π Y ∧
-      SFunc.RunCut fs sevm C d tgt r
+      SFunc.RunCutP P fs sevm C d tgt r
 
 section Sound
 
-variable {fs : List SFunc} {es : List Entry} {Fw C : List Nat} {tgt : SFunc} {pB : Nat}
-  {sevm : Sevm} {X R : List B256} {r : Seg}
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {es : List Entry}
+  {Fw C : List Nat} {tgt : SFunc} {pB : Nat} {sevm : Sevm} {X R : List B256} {r : Seg}
 
 theorem ShReach.mono {d0 : Devm} {o o' : Option (List SVal)}
-    (h : ShReach fs sevm C X R d0 tgt r o) (hle : ShLe o o') :
-    ShReach fs sevm C X R d0 tgt r o' := by
+    (h : ShReach P fs sevm C X R d0 tgt r o) (hle : ShLe o o') :
+    ShReach P fs sevm C X R d0 tgt r o' := by
   match o, o', h, hle with
   | some _, some _, ⟨d, hs, Y, hst, hY, run⟩, hle => exact ⟨d, hs, Y, hst, hY.mono hle, run⟩
 
 theorem ShReach.state {d0 d1 : Devm} {o : Option (List SVal)}
-    (h : ShReach fs sevm C X R d1 tgt r o) (hs : d1.state = d0.state) :
-    ShReach fs sevm C X R d0 tgt r o := by
+    (h : ShReach P fs sevm C X R d1 tgt r o) (hs : d1.state = d0.state) :
+    ShReach P fs sevm C X R d0 tgt r o := by
   match o, h with
   | some _, ⟨d, hd, rest⟩ => exact ⟨d, hd.trans hs, rest⟩
 
-/-- **Soundness of the shuffle checker**, for every cut run. -/
-theorem shuffle_sound (fork : CoveredFork sevm.benvStat.fork) (hFw : ∀ k ∈ Fw, k ∉ C) :
+/-- **Soundness of the shuffle checker**, for every cut run under any instruction relation that
+implies Jaune's steps. -/
+theorem shuffle_sound (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (hFw : ∀ k ∈ Fw, k ∉ C) :
     ∀ (fuel pc : Nat) (a : List SVal) (f : SFunc) (o : Option (List SVal)) (d : Devm)
       (Y : List B256), shuffle fs es Fw tgt pB fuel pc a f = some o →
-      SFunc.RunCut fs sevm C d f r → d.stack = Y ++ R → Carried X a Y →
-      ShReach fs sevm C X R d tgt r o := by
+      SFunc.RunCutP P fs sevm C d f r → d.stack = Y ++ R → Carried X a Y →
+      ShReach P fs sevm C X R d tgt r o := by
   intro fuel
   induction fuel with
   | zero => intro pc a f o d Y h; simp only [shuffle, reduceCtorEq] at h
@@ -482,7 +485,7 @@ theorem shuffle_sound (fork : CoveredFork sevm.benvStat.fork) (hFw : ∀ k ∈ F
         obtain ⟨a', hn, h'⟩ := Option.bind_eq_some_iff.mp h
         cases run with
         | next hrun rest =>
-          obtain ⟨hs, Y', hst', hY'⟩ := shNinst_run fork hn hst hY hrun
+          obtain ⟨hs, Y', hst', hY'⟩ := shNinst_run fork hn hst hY (hP hrun)
           exact (ih _ _ _ _ _ _ h' rest hst' hY').state hs
       | dest g =>
         simp only at h
@@ -593,18 +596,20 @@ end Sound
 /-- **The shuffle skip.**  A checked segment from `f` to `tgt` over `n` input words: every cut
 run of `f` from `St b (X ++ R) M G` with `X.length = n` reaches `tgt` from a state with `b`'s
 world state and the stack `Y ++ R`, where `Y` is described by `π` over the inputs `X`.  Gotos
-the check follows (`Fw`) must not be cut. -/
-theorem ric_shuffle {fs : List SFunc} {es : List Entry} {Fw C : List Nat} {tgt f : SFunc}
-    {pB pA fuel n : Nat} {π : List SVal} {sevm : Sevm} {r : Seg}
+the check follows (`Fw`) must not be cut.  The run's instruction relation `P` (any relation
+implying Jaune's steps) is kept in the continuation. -/
+theorem ric_shuffle {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {es : List Entry}
+    {Fw C : List Nat} {tgt f : SFunc} {pB pA fuel n : Nat} {π : List SVal} {sevm : Sevm} {r : Seg}
     (fork : CoveredFork sevm.benvStat.fork) (hFw : ∀ k ∈ Fw, k ∉ C)
     (hchk : shuffle fs es Fw tgt pB fuel pA (argFrame n) f = some (some π))
     {X R : List B256} (hX : X.length = n) {b : Devm} {M : Mem} {G : Nat}
-    (run : SFunc.RunCut fs sevm C (St b (X ++ R) M G) f r) :
+    (run : SFunc.RunCutP P fs sevm C (St b (X ++ R) M G) f r) :
     ∃ b' Y M' G', b'.state = b.state ∧ Carried X π Y ∧
-      SFunc.RunCut fs sevm C (St b' (Y ++ R) M' G') tgt r := by
+      SFunc.RunCutP P fs sevm C (St b' (Y ++ R) M' G') tgt r := by
   subst hX
   obtain ⟨d, hs, Y, hst, hY, run'⟩ :=
-    shuffle_sound fork hFw _ _ _ _ _ _ _ hchk run rfl (carried_argFrame X)
+    shuffle_sound hP fork hFw _ _ _ _ _ _ _ hchk run rfl (carried_argFrame X)
   refine ⟨d, Y, d.memory, d.gasLeft, hs, hY, ?_⟩
   rw [← St.self hst rfl]
   exact run'

@@ -212,7 +212,7 @@ theorem LibMem.set {p : B256} {M : Mem} (h : LibMem p M) (q : B256) :
     by rw [Mem.read_write_word_of_wf h.wf, B256.toB256_toBytes]⟩
 
 theorem lit32 : (Bytes.toB256 [32]).toNat = 32 := by decide
-theorem lit36 : (Bytes.toB256 [36]).toNat = 36 := by decide
+theorem lit36_toNat : (Bytes.toB256 [36]).toNat = 36 := by decide
 theorem lit64 : (Bytes.toB256 [64]).toNat = 64 := by decide
 
 /-- **Entry 10's prologue** (`isValidERC1271SignatureNow(signer, digest, signature)`, up to the
@@ -244,7 +244,7 @@ theorem e10_pre {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
   have hF0 : (M.read (Bytes.toB256 [64]).toNat 32).1.toB256 = F := by rw [lit64]; exact hp.ptr
   rw [hF0] at h
   have hF36 : (Bytes.toB256 [36] + F).toNat = 36 + F.toNat := by
-    rw [add_toNat_small (by rw [lit36]; omega), lit36]
+    rw [add_toNat_small (by rw [lit36_toNat]; omega), lit36_toNat]
   have hF68 : (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)).toNat = 68 + F.toNat := by
     rw [add_toNat_small (by rw [lit32, hF36]; omega), lit32, hF36]
     omega
@@ -613,7 +613,7 @@ theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
   obtain ⟨M1, G1, hp1, h⟩ := e10_pre fork hp hF hsig hlen run
   rw [t0257_eq] at h
   have hF36 : (Bytes.toB256 [36] + F).toNat = 36 + F.toNat := by
-    rw [add_toNat_small (by rw [lit36]; omega), lit36]
+    rw [add_toNat_small (by rw [lit36_toNat]; omega), lit36_toNat]
   have hF68 : (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)).toNat = 68 + F.toNat := by
     rw [add_toNat_small (by rw [lit32, hF36]; omega), lit32, hF36]
     omega
@@ -659,7 +659,7 @@ theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
       (by rw [hE0]; omega) (by rw [hE0]; omega) hpe hwe h
 
 /-- **Entry 8, `isContract(addr)`**: `extcodesize(addr) > 0`. -/
-theorem e8_inv {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}
+theorem lib_e8_inv {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}
     {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: ret :: S) M G) t_0179_c8 o) :
     ∃ G', o = .returned (St (temporalAccountAccessBase b x.toAdr)
@@ -708,9 +708,9 @@ theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : L
   iterate 4 lx h
   rcases ric_call rfl h with ⟨G1, ⟨D, hc, h⟩ | ⟨D, hc, -⟩⟩
   swap
-  · obtain ⟨_, e⟩ := e8_inv fork hc
+  · obtain ⟨_, e⟩ := lib_e8_inv fork hc
     cases e
-  obtain ⟨G2, e⟩ := e8_inv fork hc
+  obtain ⟨G2, e⟩ := lib_e8_inv fork hc
   cases e
   clear hc
   unfold t_0121_c6 at h
