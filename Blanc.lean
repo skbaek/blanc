@@ -1289,3 +1289,4 @@ import Blanc.Lift.Curve3Pool.Walk.AlLiveBack
 import Blanc.Lift.Curve3Pool.Walk.AlLiveMid
 import Blanc.Lift.Curve3Pool.Walk.AlLiveFrame
 import Blanc.Lift.Curve3Pool.Walk.AlLiveCut
+import Blanc.Lift.Curve3Pool.Walk.AlLiveModel
