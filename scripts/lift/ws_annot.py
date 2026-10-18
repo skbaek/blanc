@@ -100,6 +100,9 @@ TOP = ('top',)
 # may be a prefix of the incoming ones). Off by default: the committed
 # checker requires equal lengths.
 ARGS_PREFIX = False
+# Prototype of the proposed per-entry summaries: a goto needs the target's
+# summary to be covered by the jumper's (`retLe`), not equal. Off by default.
+SUB_SUMMARY = False
 
 
 def known(t) -> bool:
@@ -848,7 +851,7 @@ class Checker:
                     except Reject:
                         kk = ('exec', 'unknown')
                     if writes_stor(kk):
-                        writes.add(self.comp[k])
+                        writes.add(self.rkey(k))
                     stack.append(u['sub'])
                 elif kind == 'dest':
                     stack.append(u['sub'])
@@ -857,16 +860,21 @@ class Checker:
                     stack.append(u['taken'])
                 elif kind == 'branchTo':
                     stack.append(u['fall'])
+                    if SUB_SUMMARY and 0 <= u['target_entry'] < len(self.entries):
+                        call_edges.setdefault(k, set()).add(u['target_entry'])
+                elif kind == 'jump':
+                    if SUB_SUMMARY and 0 <= u['target_entry'] < len(self.entries):
+                        call_edges.setdefault(k, set()).add(u['target_entry'])
                 elif kind == 'callNext':
                     ck = u['target_entry']
                     if 0 <= ck < len(self.entries):
-                        call_edges.setdefault(self.comp[k], set()).add(self.comp[ck])
+                        call_edges.setdefault(self.rkey(k), set()).add(self.rkey(ck))
                     stack.append(u['continuation'])
                 elif kind == 'join':
                     if u['target_entry'] in self.trees:
                         stack.append(self.trees[u['target_entry']])
-        keeps = {c: (c not in writes)
-                 for c in set(self.comp.values())}
+        keys = range(len(self.entries)) if SUB_SUMMARY else set(self.comp.values())
+        keeps = {c: (c not in writes) for c in keys}
         changed = True
         while changed:
             changed = False
@@ -1015,6 +1023,21 @@ class Checker:
                     self.keeps.get(c, True),
                     self.sites.get(c, frozenset()))
 
+    def rkey(self, k: int) -> int:
+        """The key of entry k's sites and keeps: its component, or (under the
+        per-entry prototype) the entry itself."""
+        return k if SUB_SUMMARY else self.comp[k]
+
+    def get_ret_e(self, k: int) -> WRet:
+        """Entry k's summary: the component's return words and order facts,
+        the key's keeps and sites."""
+        c = self.comp[k]
+        r = self.rkey(k)
+        n = self.comp_n[c]
+        return WRet(self.ret_prov.get(c, tuple([TOP] * n)),
+                    self.ret_les.get(c, frozenset()),
+                    self.keeps.get(r, True), self.sites.get(r, frozenset()))
+
     def _cover(self, c: int, obs) -> None:
         """Infer mode: list the observed site when nothing covers it yet."""
         if not any(site_covers(s, obs) for s in self.sites.get(c, frozenset())):
@@ -1033,6 +1056,9 @@ class Checker:
             else:
                 self.incoming.setdefault(k, []).append(st)
                 self.incoming_src.setdefault(k, []).append(cur)
+                if SUB_SUMMARY and check_ret:
+                    for s in sorted(self.sites.get(self.rkey(k), ()), key=repr):
+                        self._cover(self.rkey(cur), s)
             return
         if is_join or not do_compat:
             # Lean's wsNode checks no compat at a call (only the parameter
@@ -1047,15 +1073,28 @@ class Checker:
         if why is not None:
             raise Reject(f"{what} to entry {k} "
                          f"(pc {self.entries[k][0]:#x}): {why}")
-        if check_ret and self.get_ret(self.comp[k]) != self.get_ret(self.comp[cur]):
+        if check_ret and not self._ret_ok_goto(k, cur):
             raise Reject(f"{what} to entry {k}: return summary differs")
+
+    def _ret_ok_goto(self, k: int, cur: int) -> bool:
+        """The goto's summary condition: equality, or under the prototype the
+        target's summary below the jumper's (`retLe`)."""
+        Rt, Rs = self.get_ret_e(k), self.get_ret_e(cur)
+        if not SUB_SUMMARY:
+            return Rt == Rs
+        return (tuple(Rt.prov) == tuple(Rs.prov) and Rt.les == Rs.les
+                and (not Rs.keeps or Rt.keeps)
+                and all(any(site_covers(q, s) for q in Rs.sites) for s in Rt.sites))
 
     def _tail_ok(self, k: int, st: WSt, cur: int) -> bool:
         """Prototype of the proposed tail-call goto: a jump into a callee
         entry (parameter annotation) whose shared summary names no entry
         word, with the callee's frame on the stack."""
         n = len(self.entries[k][1])
-        R = self.get_ret(self.comp[cur])
+        # the target's summary is read in the callee environment: it must
+        # name no entry word (under SUB_SUMMARY the target's own summary,
+        # else the shared one)
+        R = self.get_ret_e(k if SUB_SUMMARY else cur)
         return (self.ann.get(k) == wst_param(n) and len(st.kv) >= n
                 and ret_arg_free(R))
 
@@ -1078,8 +1117,8 @@ class Checker:
                 # List the observed site first: wstep below checks coverage
                 # against the summary, which must already include it.
                 if kk == ('reg', 'sstore') and len(st.kv) >= 2:
-                    self._cover(self.comp[k], site_of(st, st.kv[0], st.kv[1]))
-                R = self.get_ret(self.comp[k])
+                    self._cover(self.rkey(k), site_of(st, st.kv[0], st.kv[1]))
+                R = self.get_ret_e(k)
             lab = None if kk[0] == 'push' else lockann.labels(op, len(st.kv), self.effects)
             st2 = wstep(R, op, data, kk, lab, st, pc)
             if self.mode == 'check':
@@ -1168,7 +1207,7 @@ class Checker:
                 raise Reject(f"call at {t['pc']:#x}: frame shorter than callee's")
             cw = kv[:L]
             below = kv[L:]
-            Rc = self.get_ret(self.comp[ck])
+            Rc = self.get_ret_e(ck)
             want_entry = wst_param(L)
             if self.ann.get(ck) != want_entry:
                 raise Reject(f"call at {t['pc']:#x}: entry {ck} annotation "
@@ -1181,8 +1220,8 @@ class Checker:
             pa = [prov_of(st, s) for s in cw]
             if self.mode == 'infer':
                 for s in sorted(Rc.sites, key=repr):
-                    self._cover(self.comp[k], inst_site(pa, list(st.guards), s))
-                R = self.get_ret(self.comp[k])
+                    self._cover(self.rkey(k), inst_site(pa, list(st.guards), s))
+                R = self.get_ret_e(k)
             else:
                 for s in sorted(Rc.sites, key=repr):
                     inst = inst_site(pa, list(st.guards), s)
@@ -1229,7 +1268,7 @@ class Checker:
                     continue
                 try:
                     self.walk(self.trees[k], list(self.entries[k][1]),
-                              self.ann[k], self.get_ret(self.comp[k]), k)
+                              self.ann[k], self.get_ret_e(k), k)
                 except Reject:
                     pass
             changed = self._sites_grew
@@ -1389,7 +1428,7 @@ class Checker:
                 continue
             try:
                 self.walk(self.trees[k], list(self.entries[k][1]),
-                          self.ann[k], self.get_ret(self.comp[k]), k)
+                          self.ann[k], self.get_ret_e(k), k)
             except Reject as e:
                 tag = getattr(self, "seeded", {}).get(k, "inferred")
                 errors.append(f"entry {k} (pc {self.entries[k][0]:#x}) [{tag}]: {e}")
@@ -1508,19 +1547,36 @@ def emit_ann(checker: Checker, namespace: str, errors: List[str]) -> str:
         "",
     ]
     # One summary per function component, named once and shared by its
-    # entries (the summaries repeat across a component's entries).
-    comps = sorted(set(checker.comp[k] for k in range(n)))
-    for c in comps:
-        lines += [
-            f"/-- The summary of the function component rooted at entry {c}. -/",
-            f"def implWsRet{c} : WRet :=",
-            f"  {lean_wret(checker.get_ret(c))}",
-            "",
-        ]
+    # entries (the summaries repeat across a component's entries); under the
+    # per-entry prototype, one per distinct summary, named by its first entry.
+    ret_name: Dict[int, str] = {}
+    if SUB_SUMMARY:
+        by_text: Dict[str, str] = {}
+        for k in range(n):
+            text = lean_wret(checker.get_ret_e(k))
+            if text not in by_text:
+                by_text[text] = f"implWsRet{k}"
+                lines += [
+                    f"/-- A summary, first of entry {k}. -/",
+                    f"def implWsRet{k} : WRet :=",
+                    f"  {text}",
+                    "",
+                ]
+            ret_name[k] = by_text[text]
+    else:
+        comps = sorted(set(checker.comp[k] for k in range(n)))
+        for c in comps:
+            lines += [
+                f"/-- The summary of the function component rooted at entry {c}. -/",
+                f"def implWsRet{c} : WRet :=",
+                f"  {lean_wret(checker.get_ret(c))}",
+                "",
+            ]
+        ret_name = {k: f"implWsRet{checker.comp[k]}" for k in range(n)}
     lines += [
         "def implWsAnn : List WAnn :=",
         "  [ " + (",\n    ".join(
-            f"⟨{lean_wst(checker.ann[k])}, implWsRet{checker.comp[k]}⟩"
+            f"⟨{lean_wst(checker.ann[k])}, {ret_name[k]}⟩"
             for k in range(n))) if n else "",
         "  ]",
         "",
@@ -1633,11 +1689,14 @@ def main() -> int:
     ap.add_argument("--check-dir", default=None,
                     help="also write the kernel-decide Check<i>.lean and Check.lean here")
     ap.add_argument("--check-parts", type=int, default=4)
+    ap.add_argument("--sub-summary", action="store_true",
+                    help="prototype: per-entry summaries, a goto's target summary covered by the jumper's")
     ap.add_argument("--args-prefix", action="store_true",
                     help="prototype: mirror the proposed prefix relaxation of compat's entry words")
     args = ap.parse_args()
-    global ARGS_PREFIX
+    global ARGS_PREFIX, SUB_SUMMARY
     ARGS_PREFIX = args.args_prefix
+    SUB_SUMMARY = args.sub_summary
 
     t0 = time.time()
     registry = json.loads(Path(args.registry).read_text())
@@ -1723,7 +1782,7 @@ def main() -> int:
         else:
             print(f"entry {k} pc 0x{pc:x}: ACCEPT")
     print("ROOT SITES (entry 0 summary):")
-    for s in sorted(checker.get_ret(checker.comp[0]).sites, key=show_site):
+    for s in sorted(checker.get_ret_e(0).sites, key=show_site):
         print(f"  {show_site(s)}")
     print("OBSERVED SSTORE SITES (check walk, deduplicated):")
     seen = set()

@@ -396,6 +396,23 @@ pa = resolve_args([(0, [], 0), (1, [U(), U()], 0), (2, [U()], 0), (3, [U()], 0)]
                   {1, 2})
 require(pa[0][3] == (1,) and not pa[1], "prototype: least source length, no conflict")
 ws_annot.ARGS_PREFIX = False
+c5 = checker([(0, [], 0), (5, [], 0)],
+             {0: {'kind': 'last', 'pc': 0, 'op': '0x0'},
+              1: {'kind': 'last', 'pc': 5, 'op': '0x0'}})
+c5.comp = {0: 0, 1: 0}
+site_a = (('kecc', CALLER, ('const', 9)), (), False)
+site_b = (('const', 1), (), False)
+ws_annot.SUB_SUMMARY = True
+c5.sites = {0: {site_a, site_b}, 1: {site_a}}
+c5.keeps = {0: False, 1: True}
+require(c5._ret_ok_goto(1, 0), "prototype: a target summary below the jumper's")
+require(not c5._ret_ok_goto(0, 1), "prototype: an uncovered target site rejects")
+c5.keeps = {0: True, 1: False}
+require(not c5._ret_ok_goto(1, 0), "prototype: a keeping jumper needs a keeping target")
+ws_annot.SUB_SUMMARY = False
+c5.sites = {0: {site_a}}
+c5.keeps = {0: True}
+require(c5._ret_ok_goto(1, 0), "default: one summary per component")
 require(ret_arg_free(WRet([TOP], frozenset(), True, frozenset())),
         "summary without entry words")
 require(not ret_arg_free(WRet([('arg', 0)], frozenset(), True, frozenset())),
