@@ -76,34 +76,108 @@ theorem Xinst.step_staticcall_spawn
       rw [hf.2.2, congrArg (fun t => t.2.2.1) hdel, hcode]
       exact congrArg devm.getCode hf.2.1.symm
 
-/-- **What a direct child frame runs.**  In a frame whose same-frame chain decodes only
-`CALL`/`STATICCALL`, a direct committed child at an address holding nonempty undelegated code at the
-frame's entry runs that code. -/
+/-- `Exec.childFrames_spawnedAt`, with the child's entry machine. -/
+theorem Exec.childFrames_spawnedAt_entry {root : Exec.Deriv} :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
+      Exec.Deriv.ParentPrefix root ⟨pc, sevm, pre, out, run⟩ →
+      ∀ c ∈ Exec.childFrames run, ∃ (N : Exec.Deriv) (f : Frame) (rsm : Resume) (pc' : Nat)
+        (cevm : Evm), Exec.Deriv.ParentPrefix root N ∧
+          Evm.step ⟨N.pc, N.sevm, N.devm⟩ = .spawn f rsm pc' ∧ f.enter = .run cevm ∧
+          c.sevm = cevm.sta ∧ c.pre = cevm.dyna := by
+  intro pc sevm pre out run
+  induction run with
+  | halt _ =>
+      intro _ c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | cont step next ih =>
+      intro chain
+      simpa only [Exec.childFrames] using ih (chain.snoc (.cont step next))
+  | doneErr _ _ _ =>
+      intro _ c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | doneOk step enter resume next ih =>
+      intro chain
+      simpa only [Exec.childFrames] using ih (chain.snoc (.doneOk step enter resume next))
+  | runErr _ _ _ _ =>
+      intro _ c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | runOk step enter child resume next childIh nextIh =>
+      intro chain c member
+      simp only [Exec.childFrames, List.mem_append] at member
+      rcases member with here | later
+      · split at here
+        · rw [List.mem_singleton] at here
+          subst here
+          exact ⟨_, _, _, _, _, chain, step, enter, rfl, rfl⟩
+        · simp only [List.not_mem_nil] at here
+      · exact nextIh (chain.snoc (.runOk step enter child resume next)) c later
+
+/-- **What a direct child frame runs and sees.**  In a frame whose same-frame chain decodes only
+`CALL`/`STATICCALL`, every direct committed child runs under a covered fork, sees at its entry the
+frame's entry code at every address holding nonempty code there, and — at an address holding
+nonempty undelegated code at the frame's entry — runs that code. -/
 theorem Exec.childFrames_code {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
     (hcall : ∀ N, Exec.Deriv.ParentPrefix ⟨pc, sevm, pre, out, run⟩ N →
-      ∀ x, Xinst.At N.sevm.code N.pc x → x = .call ∨ x = .staticcall)
-    {a : Adr} (hne : (pre.getCode a).toList ≠ []) (hnd : ¬ isValidDelegation (pre.getCode a)) :
-    ∀ c ∈ Exec.childFrames run, c.sevm.currentTarget = a → c.sevm.code = pre.getCode a := by
-  intro c hc ht
-  obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm⟩ :=
-    Exec.childFrames_spawnedAt run (.refl _) c hc
+      ∀ x, Xinst.At N.sevm.code N.pc x → x = .call ∨ x = .staticcall) :
+    ∀ c ∈ Exec.childFrames run, CoveredFork c.sevm.benvStat.fork ∧
+      (∀ a, (pre.getCode a).toList ≠ [] → c.pre.getCode a = pre.getCode a) ∧
+      ∀ a, (pre.getCode a).toList ≠ [] → ¬ isValidDelegation (pre.getCode a) →
+        c.sevm.currentTarget = a → c.sevm.code = pre.getCode a := by
+  intro c hc
+  obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm, hpre⟩ :=
+    Exec.childFrames_spawnedAt_entry run (.refl _) c hc
   have hNs : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq pp
-  have hNc : N.devm.getCode a = pre.getCode a :=
-    Exec.Deriv.ParentPrefix.codePreserve pp a hne
+  have hNc : ∀ a, (pre.getCode a).toList ≠ [] → N.devm.getCode a = pre.getCode a :=
+    fun a hne => Exec.Deriv.ParentPrefix.codePreserve pp a hne
   obtain ⟨x, hxat, hxs, -⟩ := Evm.step_spawn_inv hstep
   obtain ⟨benv, -, hcevm⟩ := Frame.enter_run_inv henter
-  have htf : f.inner.currentTarget = a := by
-    rw [← ht, hsevm, hcevm]; rfl
-  have hcf : c.sevm.code = f.inner.code := by
-    rw [hsevm, hcevm]; rfl
   have hfk : CoveredFork N.sevm.benvStat.fork := by rw [hNs]; exact hfork
-  have hnd' : ¬ isValidDelegation (N.devm.getCode f.inner.currentTarget) := by
-    rw [htf, hNc]; exact hnd
-  rw [hcf]
-  rcases hcall N pp x hxat with rfl | rfl
-  · rw [(Xinst.step_call_spawn hfk hxs).2 hnd', htf, hNc]
-  · rw [Xinst.step_staticcall_spawn hfk hxs hnd', htf, hNc]
+  refine ⟨by rw [hsevm]; exact Evm.step_spawn_child_fork hstep henter hfk, fun a hne => ?_,
+    fun a hne hnd ht => ?_⟩
+  · rw [hpre, Frame.enter_run_getCode henter a, Xinst.step_spawn_getCode hxs a, hNc a hne]
+  · have htf : f.inner.currentTarget = a := by
+      rw [← ht, hsevm, hcevm]; rfl
+    have hcf : c.sevm.code = f.inner.code := by
+      rw [hsevm, hcevm]; rfl
+    have hnd' : ¬ isValidDelegation (N.devm.getCode f.inner.currentTarget) := by
+      rw [htf, hNc a hne]; exact hnd
+    rw [hcf]
+    rcases hcall N pp x (by rw [hNs] at hxat ⊢; exact hxat) with rfl | rfl
+    · rw [(Xinst.step_call_spawn hfk hxs).2 hnd', htf, hNc a hne]
+    · rw [Xinst.step_staticcall_spawn hfk hxs hnd', htf, hNc a hne]
+
+/-- Every direct committed child starts at pc `0`. -/
+theorem Exec.childFrames_pc :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
+      ∀ c ∈ Exec.childFrames run, c.pc = 0 := by
+  intro pc sevm pre out run
+  induction run with
+  | halt _ =>
+      intro c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | cont _ _ ih =>
+      simpa only [Exec.childFrames] using ih
+  | doneErr _ _ _ =>
+      intro c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | doneOk _ _ _ _ ih =>
+      simpa only [Exec.childFrames] using ih
+  | runErr _ _ _ _ =>
+      intro c member
+      simp only [Exec.childFrames, List.not_mem_nil] at member
+  | runOk _ enter _ _ _ _ nextIh =>
+      intro c member
+      simp only [Exec.childFrames, List.mem_append] at member
+      rcases member with here | later
+      · split at here
+        · rw [List.mem_singleton] at here
+          subst here
+          obtain ⟨benv, -, hcevm⟩ := Frame.enter_run_inv enter
+          show _ = 0
+          exact congrArg Evm.pc hcevm
+        · simp only [List.not_mem_nil] at here
+      · exact nextIh c later
 
 /-- **A committed frame of spawn-free code keeps the storage of every other address with code and
 the code of every other address.** -/
