@@ -185,7 +185,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
            "Lift.MemWrites", "Lift.StepTops", "Lift.WriteSiteStep", "Lift.WriteSiteJoin"]
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
-SHARED += ["Lift.BndInterval"]
+SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
@@ -968,6 +968,7 @@ CONTRACTS = {
     # SignatureChecker library it reaches by DELEGATECALL (usdc-weth9-pair-composition-v1).
     "usdc": [
         "Lift.Usdc.Book",
+        "Lift.Usdc.ImplFp.Ann",
         "Lift.Usdc.CodeImage",
         "Lift.Usdc.Constants",
         "Lift.Usdc.Decode",

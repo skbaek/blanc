@@ -4504,6 +4504,9 @@ contract-neutral.
 - For the stack top after one lifted step of an environment or hashing instruction, use
   [`Blanc/Lift/StepTops.lean`](../Blanc/Lift/StepTops.lean): `run_{caller,address,not,shl,exp,
   calldataload,keccak256,sload}_top`, `Ninst.Run.getStor_of_storKeep` and `getStor_push`.
+- For the return-data buffer across one lifted step, use
+  [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
+  `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
 - For a callee that cannot return, use
   [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
   predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
