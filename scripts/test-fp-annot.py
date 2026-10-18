@@ -142,6 +142,31 @@ require(fp_annot.compat(FSt((4,), frozenset({('bnd', 4, 5, 9)}), 4), A) is None,
 require(fp_annot.compat(FSt((4,), frozenset({('bnd', 4, 5, 9)}), None), A)
         == "free pointer unknown", "missing incoming fp")
 
+# -- R1: the calldata `bytes` decoder check ISZERO(OR(GT(len, C), GT(..))) JUMPI --
+# bounds len on the jump arm: the comparison chain survives closeLive through
+# its consumed results, three learning rounds reach the GT, and the order fact
+# learned is also stated as len's interval.
+C32 = 2 ** 32
+chain = frozenset({('bnd', 18, C32, C32), ('ltr', 19, 18, 11), ('bnd', 19, 0, 1),
+                   ('ltr', 17, 13, 16), ('bnd', 17, 0, 1), ('orr', 20, 19, 17),
+                   ('isz', 21, 20), ('bnd', 21, 0, 1)})
+kept = fp_annot.close_live((21, 11, 13), None, chain)
+require(('ltr', 19, 18, 11) in kept and ('bnd', 18, C32, C32) in kept,
+        "closeLive keeps the comparison chain below a live result")
+learned = fp_annot.refine_facts(kept, 21, False)
+require(fp_annot.bnd2(learned, 11)[1] == C32, "jump arm bounds len by 2^32")
+require(fp_annot.bnd2(fp_annot.close_live((11,), None, learned), 11)[1] == C32,
+        "len's bound outlives the dead constant symbol")
+
+# -- R1: CALL leaves return data below 2^160; RETURNDATASIZE reads the bound --
+call = ('exec', 'call')
+after = fp_annot.rds_keep(call, frozenset({('rds', 5)}))
+require(after == frozenset({('rds', fp_annot.MEMCAP - 1)}), "CALL resets the bound")
+require(fp_annot.rds_keep(('exec', 'staticcall'), after) == frozenset(),
+        "other exec instructions forget it")
+require(fp_annot.rds_eff(after, ('reg', 'returndatasize'), 9)
+        == {('bnd', 9, 0, fp_annot.MEMCAP - 1)}, "RETURNDATASIZE is bounded")
+
 # -- a store of a value not known good forgets the pointer (Lean: no rejection) --
 fs0 = frozenset({('bnd', 1, 64, 64)})
 require(fp_annot.mem_eff(fs0, 3, ('reg', 'mstore'), [1, 2], 0)[0] is None,

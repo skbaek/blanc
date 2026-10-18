@@ -4,7 +4,8 @@
 Produces `Ann.lean` for `Blanc/Lift/FreePtr.lean` (`fpCert`): one `Ann`
 (entry state plus return summary) per certificate entry, in entry order.
 The analysis mirrors `FreePtr.lean` (`fstep`, `opFacts`, `memEff`,
-`refineFacts`, `closeLive`, `compat`, `fpNode`) the way
+`refineFacts`, `closeLive`, `compat`, `fpNode`) in its R1 revision
+(evidence `design/r1-resolution.md` of usdc-neversigner-freepointer-v1) the way
 `scripts/lift/lockann.py` mirrors `Blanc/Lift/LockCheck.lean`: it infers one
 abstract frame state per entry by a fixpoint over the entry trees, then
 re-walks every tree with the inferred annotations exactly as the Lean checker
@@ -43,9 +44,10 @@ FPLO = 0x80                # FreePtr.fpLo
 FPCAP = 2 ** 256 - 2 ** 32  # FreePtr.fpCap
 
 # Fact encodings (tuples): ('bnd', s, lo, hi) ('le', s, t) ('lt', s, t)
-# ('ltr', r, x, y) ('isz', r, s) ('orr', r, x, y)
+# ('ltr', r, x, y) ('isz', r, s) ('orr', r, x, y) ('rds', h) (FreePtr.Fact.rdsLe:
+# the return-data buffer has at most h bytes; no symbols)
 SYMPOS = {'bnd': (1,), 'le': (1, 2), 'lt': (1, 2), 'ltr': (1, 2, 3),
-          'isz': (1, 2), 'orr': (1, 2, 3)}
+          'isz': (1, 2), 'orr': (1, 2, 3), 'rds': ()}
 
 
 def syms(f: Tuple) -> List[int]:
@@ -162,34 +164,29 @@ def fresh(kv, facts, fp) -> int:
     return m + 1
 
 
+CMP = ('isz', 'ltr', 'orr')
+
+
+def cmp_live(alive, f) -> bool:
+    """A comparison fact is live when its result is, or all its operands are."""
+    return alive(f[1]) or all(alive(x) for x in syms(f)[1:])
+
+
 def close_live(kv, fp, fs):
-    """Keep the facts live in kv/fp, closed twice through comparison results
-    (FreePtr.closeLive). As a set operation this is exactly Lean's filter."""
-    kv = tuple(kv)
-    alive0 = lambda s: s in set(kv) or fp == s  # noqa: E731
-
-    def live1(f):
-        if f[0] == 'isz':
-            return alive0(f[2])
-        if f[0] in ('ltr', 'orr'):
-            return alive0(f[2]) and alive0(f[3])
-        return all(alive0(s) for s in syms(f))
-
-    k1 = [f for f in fs if live1(f)]
-    named = set()
-    for f in k1:
-        for s in syms(f):
-            named.add(s)
-    alive1 = lambda s: alive0(s) or s in named  # noqa: E731
-
-    def live2(f):
-        if f[0] == 'isz':
-            return alive1(f[2])
-        if f[0] in ('ltr', 'orr'):
-            return alive1(f[2]) and alive1(f[3])
-        return all(alive1(s) for s in syms(f))
-
-    return frozenset(f for f in fs if live2(f))
+    """FreePtr.closeLive (R1 revision): keep the facts live in kv/fp, closed
+    three times through comparison facts (`growLive`: a live result keeps its
+    operands alive; live operands keep the result alive). As a set operation
+    this is exactly Lean's filter."""
+    alive = set(kv) | ({fp} if fp is not None else set())
+    for _ in range(3):
+        named = set()
+        for f in fs:
+            if f[0] in CMP and cmp_live(alive.__contains__, f):
+                named.update(syms(f))
+        alive = alive | named
+    return frozenset(f for f in fs
+                     if (cmp_live(alive.__contains__, f) if f[0] in CMP
+                         else all(s in alive for s in syms(f))))
 
 
 # ---- Ninst classification from raw opcodes (FreePtr matches on Ninst) ----
@@ -262,6 +259,28 @@ def op_facts(fs, kind, xs, r) -> Set[Tuple]:
     if name == 'msize':
         return {('bnd', r, 0, MEMCAP)}
     return set()
+
+
+def rds_of(fs) -> Optional[int]:
+    hs = [f[1] for f in fs if f[0] == 'rds']
+    return min(hs) if hs else None
+
+
+def rds_eff(fs, kind, r) -> Set[Tuple]:
+    """FreePtr.rdsEff: what RETURNDATASIZE learns about its result."""
+    h = rds_of(fs)
+    if kind == ('reg', 'returndatasize') and h is not None:
+        return {('bnd', r, 0, h)}
+    return set()
+
+
+def rds_keep(kind, fs):
+    """FreePtr.rdsKeep: CALL leaves return data below 2^160; any other exec
+    instruction forgets the bound."""
+    if kind[0] != 'exec':
+        return fs
+    rest = frozenset(f for f in fs if f[0] != 'rds')
+    return rest | {('rds', MEMCAP - 1)} if kind == ('exec', 'call') else rest
 
 
 def touched(fs, a, length: int) -> Set[Tuple]:
@@ -366,10 +385,13 @@ def fstep(op: int, data: bytes, st: FSt, effects, lean_reg, pc: int) -> FSt:
             kv2.append(st.kv[l])
     kv2 = tuple(kv2)
     return FSt(kv2, close_live(kv2, fp2, op_facts(st.facts, kind, list(st.kv), r)
-                               | gas | st.facts), fp2)
+                               | rds_eff(st.facts, kind, r) | gas
+                               | rds_keep(kind, st.facts)), fp2)
 
 
 def learn1(fs, z: Set[int], nz: Set[int]) -> Set[Tuple]:
+    """FreePtr.learn1 (R1 revision): an order fact learned is also stated as
+    the interval bounds it gives under the current facts."""
     out = set()
     for f in fs:
         if f[0] == 'isz':
@@ -378,10 +400,15 @@ def learn1(fs, z: Set[int], nz: Set[int]) -> Set[Tuple]:
             elif f[1] in nz:
                 out.add(('bnd', f[2], 0, 0))
         elif f[0] == 'ltr':
+            x, y = f[2], f[3]
             if f[1] in z:
-                out.add(('le', f[3], f[2]))
+                out.add(('le', y, x))
+                out.add(('bnd', y, 0, bnd2(fs, x)[1]))
+                out.add(('bnd', x, bnd2(fs, y)[0], MAXW))
             elif f[1] in nz:
-                out.add(('lt', f[2], f[3]))
+                out.add(('lt', x, y))
+                out.add(('bnd', x, 0, max(bnd2(fs, y)[1] - 1, 0)))
+                out.add(('bnd', y, bnd2(fs, x)[0] + 1, MAXW))
         elif f[0] == 'orr':
             if f[1] in z:
                 out.add(('bnd', f[2], 0, 0))
@@ -389,13 +416,23 @@ def learn1(fs, z: Set[int], nz: Set[int]) -> Set[Tuple]:
     return out
 
 
+def zeros(r):
+    return {f[1] for f in r if f[0] == 'bnd' and f[3] == 0}
+
+
+def nonzeros(r):
+    return {f[1] for f in r if f[0] == 'bnd' and f[2] == 1}
+
+
 def refine_facts(fs, c: int, zero: bool):
+    """FreePtr.refineFacts (R1 revision): three learning rounds."""
     f1 = ({('bnd', c, 0, 0)} if zero else {('bnd', c, 1, MAXW)}) | fs
     r1 = learn1(f1, {c} if zero else set(), set() if zero else {c})
     f2 = r1 | f1
-    r2 = learn1(f2, {f[1] for f in r1 if f[0] == 'bnd' and f[3] == 0},
-                {f[1] for f in r1 if f[0] == 'bnd' and f[2] == 1})
-    return r2 | f2
+    r2 = learn1(f2, zeros(r1), nonzeros(r1))
+    f3 = r2 | f2
+    r3 = learn1(f3, zeros(r2), nonzeros(r2))
+    return r3 | f3
 
 
 def refine(st: FSt, c: int, kv, zero: bool) -> FSt:
@@ -463,8 +500,9 @@ def resume(sig: FSt, below, R: FSt) -> FSt:
     m = lambda s: base + s  # noqa: E731
     kv = tuple(m(s) for s in R.kv) + tuple(below)
     fp = None if R.fp is None else m(R.fp)
-    return FSt(kv, close_live(kv, fp,
-                              {rename(f, m) for f in R.facts} | sig.facts), fp)
+    return FSt(kv, close_live(kv, fp, {f for f in
+                                       {rename(f, m) for f in R.facts} | sig.facts
+                                       if f[0] != 'rds'}), fp)
 
 
 class Checker:
@@ -736,7 +774,8 @@ class Checker:
         fp = None if st.fp is None else len(ren)
         out = set()
         for f in st.facts:
-            if f[0] == 'bnd':
+            # Return-data facts never enter annotations (resume drops them).
+            if f[0] in ('bnd', 'rds'):
                 continue
             if all(s in ren for s in syms(f)):
                 out.add(rename(f, lambda s: ren[s]))
@@ -994,11 +1033,12 @@ def check_alignment(entries, cert_path: Path):
 
 
 # ---- Lean emission ----
-FACT_ORDER = {'bnd': 0, 'le': 1, 'lt': 2, 'ltr': 3, 'isz': 4, 'orr': 5}
+FACT_ORDER = {'bnd': 0, 'le': 1, 'lt': 2, 'ltr': 3, 'isz': 4, 'orr': 5, 'rds': 6}
 
 
 def lean_fact(f: Tuple) -> str:
-    return "(." + f[0] + "".join(f" {x}" for x in f[1:]) + ")"
+    name = 'rdsLe' if f[0] == 'rds' else f[0]
+    return "(." + name + "".join(f" {x}" for x in f[1:]) + ")"
 
 
 def lean_fst(st: FSt) -> str:
@@ -1019,6 +1059,9 @@ def emit_ann(checker: Checker, namespace: str, errors: List[str]) -> str:
         "(`Blanc/Lift/FreePtr.lean`): the state the entry is entered in and",
         "its function's return summary. The producer is untrusted; only the",
         "Lean kernel's `fpCert` over these annotations proves anything.",
+        "The mirror follows the R1 revision of the checker (`closeLive` closed",
+        "three times through comparisons, `learn1` stating learned order facts",
+        "as bounds, three `refineFacts` rounds, `Fact.rdsLe` after `CALL`).",
         f"Self-check: {n_ok}/{n} entries accepted. -/",
         "",
         f"namespace {namespace}",
