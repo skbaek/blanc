@@ -2074,6 +2074,10 @@ wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
 comparison flag into the negated strict comparison. The latter does not
 assert that arithmetic producing either operand was overflow-free. Import
 this owner directly; CommonProofs and Ladder do not reexport it.
+For the converse direction, a comparison flag discharged from values,
+[`Blanc/B256CheckFacts.lean`](../Blanc/B256CheckFacts.lean) has
+`B256.gtCheck_eq_zero_of_toNat_le` (`GT` is `0` when the left operand's
+value is at most the right's), the step a walk needs at a solc range check.
 
 Use the fixed-width arithmetic declarations in
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word

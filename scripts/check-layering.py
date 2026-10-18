@@ -296,6 +296,12 @@ SHARED += [
     "SlotFootprintWord",
 ]
 
+# Comparison flags from arithmetic facts (usdc-weth9-pair-composition-v1 fold of a BeaconDeposit/USDC
+# duplicate): contract-neutral.
+SHARED += [
+    "B256CheckFacts",
+]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
@@ -1031,6 +1037,8 @@ CONTRACTS = {
         "Lift.Usdc.ShuffleSegments",
         "Lift.Usdc.SignedSkip",
         "Lift.Usdc.Slots",
+        "Lift.Usdc.HistoryEnd",
+        "Lift.Usdc.HistoryEndFoot",
     ],
 }
 
@@ -1108,6 +1116,7 @@ CONTRACTS["uniswap-v2-pair"].extend([
 # The FrameSkip worked example over the Pair's code (usdc-weth9-pair-composition-v1): Pair family.
 CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Pair.FrameSkipExample",
+    "Lift.UniswapV2Pair.SkimForwardKept",
 ])
 
 # The WETH9 finite footprint and the Token20 run splits stay within their contract families.
@@ -1296,6 +1305,19 @@ COMPOSITION = [
     "Composition.UsdcTokenCore",
     "Composition.UsdcTokenLive",
     "Composition.Weth9TokenSigned",
+    "Composition.UniswapV2PairUsdcWeth9BurnEnv",
+    "Composition.UniswapV2PairUsdcWeth9BurnLive",
+    "Composition.UniswapV2PairUsdcWeth9LegsBurn",
+    "Composition.UniswapV2PairUsdcWeth9LegsMint",
+    "Composition.UniswapV2PairUsdcWeth9LegsSkim",
+    "Composition.UniswapV2PairUsdcWeth9LegsSync",
+    "Composition.UniswapV2PairUsdcWeth9LegsXferKeep",
+    "Composition.UniswapV2PairUsdcWeth9MintLive",
+    "Composition.UniswapV2PairUsdcWeth9SkimEnv",
+    "Composition.UniswapV2PairUsdcWeth9SkimLive",
+    "Composition.UniswapV2PairUsdcWeth9SwapLive",
+    "Composition.UniswapV2PairUsdcWeth9SwapLiveFacts",
+    "Composition.UniswapV2PairUsdcWeth9SyncLive",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
