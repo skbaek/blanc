@@ -261,33 +261,35 @@ elab "xunfold" : tactic => withMainContext do
 
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- A proof of `FpM fp n M` for a concrete image `M` built by word writes from a hypothesis or from
-the prologue's pointer write, by recursion on the image. -/
-private partial def fpProof (M : Expr) : TacticM Expr := do
-  for d in (← getLCtx) do
-    unless d.isImplementationDetail do
-      let ty ← instantiateMVars d.type
-      if ty.isAppOfArity ``FpM 3 then
-        if ← withReducible (isDefEq ty.appArg! M) then return d.toExpr
-  match (← whnfR M).getAppFnArgs with
-  | (``Jaune.Mem.write, #[M0, i, bs]) =>
-    let v := bs.appArg!
-    if M0.isConstOf ``Jaune.Mem.empty then
-      return ← mkAppM ``FpM.init #[v]
-    let h0 ← fpProof M0
-    let ty ← instantiateMVars (← inferType h0)
-    let n := ty.appFn!.appArg!
-    if (← isDefEq n (mkNatLit 96)) && (← isDefEq i (mkNatLit 128)) then
-      return ← mkAppM ``FpM.write_out #[h0, v]
-    let side (t : Expr) : TacticM Expr := do
-      let g ← mkFreshExprMVar t
-      let gs ← Tactic.run g.mvarId! (evalTactic (← `(tactic| first | decide | omega)))
-      unless gs.isEmpty do throwError "fpProof: side goal {t}"
-      instantiateMVars g
-    let hi ← side (← mkAppM ``LE.le #[← mkAppM ``HAdd.hAdd #[i, mkNatLit 32], n])
-    let hd ← side (mkOr (← mkAppM ``LE.le #[← mkAppM ``HAdd.hAdd #[i, mkNatLit 32], mkNatLit 64])
-      (← mkAppM ``LE.le #[mkNatLit 96, i]))
-    mkAppM ``FpM.write #[h0, i, v, hi, hd]
-  | _ => throwError "fpProof: not a word-write image {M}"
+the prologue's pointer write, by recursion on the image, bounded by `fuel` word writes. -/
+private def fpProof : Nat → Expr → TacticM Expr
+  | 0, M => throwError "fpProof: image {M} has more word writes than the fuel bound"
+  | fuel + 1, M => do
+    for d in (← getLCtx) do
+      unless d.isImplementationDetail do
+        let ty ← instantiateMVars d.type
+        if ty.isAppOfArity ``FpM 3 then
+          if ← withReducible (isDefEq ty.appArg! M) then return d.toExpr
+    match (← whnfR M).getAppFnArgs with
+    | (``Jaune.Mem.write, #[M0, i, bs]) =>
+      let v := bs.appArg!
+      if M0.isConstOf ``Jaune.Mem.empty then
+        return ← mkAppM ``FpM.init #[v]
+      let h0 ← fpProof fuel M0
+      let ty ← instantiateMVars (← inferType h0)
+      let n := ty.appFn!.appArg!
+      if (← isDefEq n (mkNatLit 96)) && (← isDefEq i (mkNatLit 128)) then
+        return ← mkAppM ``FpM.write_out #[h0, v]
+      let side (t : Expr) : TacticM Expr := do
+        let g ← mkFreshExprMVar t
+        let gs ← Tactic.run g.mvarId! (evalTactic (← `(tactic| first | decide | omega)))
+        unless gs.isEmpty do throwError "fpProof: side goal {t}"
+        instantiateMVars g
+      let hi ← side (← mkAppM ``LE.le #[← mkAppM ``HAdd.hAdd #[i, mkNatLit 32], n])
+      let hd ← side (mkOr (← mkAppM ``LE.le #[← mkAppM ``HAdd.hAdd #[i, mkNatLit 32], mkNatLit 64])
+        (← mkAppM ``LE.le #[mkNatLit 96, i]))
+      mkAppM ``FpM.write #[h0, i, v, hi, hd]
+    | _ => throwError "fpProof: not a word-write image {M}"
 
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- The free-pointer invariant of a concrete image built from the prologue's pointer write by word
@@ -295,7 +297,7 @@ writes (or a hypothesis). -/
 elab "xfp" : tactic => withMainContext do
   let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
   unless tgt.isAppOfArity ``FpM 3 do throwError "xfp: not an FpM goal"
-  let p ← fpProof tgt.appArg!
+  let p ← fpProof 256 tgt.appArg!
   closeMainGoalUsing `xfp fun ty _ => do
     unless ← isDefEq (← inferType p) ty do throwError "xfp: proof does not fit: {← inferType p} vs {ty}"
     return p
