@@ -262,13 +262,13 @@ theorem run_div_top (run : Ninst.Run sevm d (.reg .div) d') (hs : d.stack = x ::
   exact binary_top run hs
 
 theorem run_and_top (run : Ninst.Run sevm d (.reg .and) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.and x y :: rest := by
+    d'.stack = (x &&& y) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact binary_top run hs
 
 theorem run_or_top (run : Ninst.Run sevm d (.reg .or) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.or x y :: rest := by
+    d'.stack = (x ||| y) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact binary_top run hs
@@ -284,6 +284,13 @@ theorem run_lt_top (run : Ninst.Run sevm d (.reg .lt) d') (hs : d.stack = x :: y
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact binary_top run hs
+
+theorem run_msize_top (run : Ninst.Run sevm d (.reg .msize) d') :
+    d'.stack = d.memory.size.toB256 :: d.stack := by
+  rcases of_run_reg run with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore] at run
+  have h := (Devm.pushBurn_of_pushItem run).stack
+  simpa only [Stack.Push, Split, List.singleton_append, List.cons_append, List.nil_append] using h
 
 end Ops
 
