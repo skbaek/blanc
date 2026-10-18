@@ -5,9 +5,8 @@ import Blanc.Lift.Curve3Pool.Decode
 # `remove_liquidity_imbalance`: the model entry point (segment 0)
 
 First segment of the `remove_liquidity_imbalance` walk (source lines 527–579, model
-`removeLiquidityImbalance`): the environment shape a frame observes (`rliEnv`), the
-dispatcher fact selecting the model's call (`rli_decode`), and the step unfolding
-(`rli_step`).
+`removeLiquidityImbalance`): the dispatcher fact selecting the model's call
+(`rli_decode`) and the step unfolding (`rli_step`).
 
 Shared-library check: the model (`Model.removeLiquidityImbalance`), the decoder
 (`Decode.decodeCall_at`, `Decode.callAt`) and the callee contracts
@@ -18,12 +17,6 @@ copied. Nothing below is generic, so nothing is hoisted.
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune
-
-/-- The environment a `remove_liquidity_imbalance` frame observes: the supply word `T`,
-every coin's `transfer` and the `burnFrom` accepted, no balance read, no pull, no mint. -/
-def rliEnv (sevm : Sevm) (T : B256) : Env :=
-  ⟨sevm.benvStat.time.toNat, sevm.caller.toB256.toNat, sevm.value.toNat,
-    fun _ => ⟨none, none, false, true⟩, some T.toNat, false, true⟩
 
 /-- The dispatcher selects `removeLiquidityImbalance` on test `8`
 (`selRemoveLiquidityImbalance`). -/
