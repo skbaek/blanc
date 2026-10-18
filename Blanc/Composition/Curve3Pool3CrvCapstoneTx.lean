@@ -126,14 +126,16 @@ execution** from an `ExFrame` entry. -/
 theorem ex_trace_raw {state : Jaune.State} {bout' : BlockOutput}
     (trace : TransactionTrace benv BlockOutput.init signedExchangeTx 0 state bout') :
     ∃ (sevm : Sevm) (b post : Devm) (_ : ExFrame sevm b) (exc : Exec 0 sevm b (.ok post)),
-      trace.rawFrames = Exec.rawFrameRoots exc := by
+      trace.rawFrames = Exec.rawFrameRoots exc ∧
+      ∃ f ∈ trace.settledFrames, f.sevm = sevm ∧ f.pre = b ∧ f.out = .ok post := by
   have fork := ex_fork ctx
   let R : Jaune.State → Msg → Benv → Devm → Prop := fun _ msg after _ =>
     ExFrame (initSevm (msg.withBenv after)) (initDevm (msg.withBenv after)) ∧
     (Frame.ofCall msg).enter = .run (initEvm (msg.withBenv after)) ∧
     msg.target.isNone = false ∧ msg.tenv.stat.auths.isEmpty = true ∧
     getDelegatedCodeAddress msg.code = none
-  obtain ⟨debit, msg, after, post, msgEq, ⟨frame, enter, target, auths, nodeleg⟩, -⟩ :=
+  obtain ⟨debit, msg, after, post, msgEq, ⟨frame, enter, target, auths, nodeleg⟩, f, hfm, hfpc,
+      hfs, hfp, hfo⟩ :=
     trace.root_frame_of_call_value_with_message (R := R) (E := trader) (t := poolAddr)
       (chainId := 1) (maxPriorityFee := 1) (maxFee := 8) (intrinsicGas := 21600)
       (calldataFloorGas := 22500)
@@ -180,7 +182,10 @@ theorem ex_trace_raw {state : Jaune.State} {bout' : BlockOutput}
   have h2 := (exec_iff_exec_eq 0 _ _ (.ok post')).mp ⟨exc⟩
   have hraw : raw = .ok post' := h1.symm.trans h2
   subst hraw
-  exact ⟨_, _, _, frame, run, frames⟩
+  have h3 := (exec_iff_exec_eq _ _ _ _).mp ⟨f.run⟩
+  rw [hfpc, hfs, hfp, hfo] at h3
+  have hpp : (Except.ok post : Execution) = .ok post' := h3.symm.trans h2
+  refine ⟨_, _, _, frame, run, frames, f, hfm, hfs, hfp, hfo.trans hpp⟩
 
 end Run
 

@@ -160,7 +160,7 @@ theorem oneTx_fold {txs : List (Nat × Tx)} {B B0 finalB : Benv} {finalBout : Bl
     {s1 : Jaune.State} {bout1 : BlockOutput} (htxs : txs = [(0, tx)])
     (run : processTransaction B0 BlockOutput.init tx 0 = .ok (s1, bout1)) :
     ∃ t1 : TransactionTrace B0 BlockOutput.init tx 0 s1 bout1,
-      t.rawFrames = t1.rawFrames ∧ finalB.state = s1 := by
+      t.rawFrames = t1.rawFrames ∧ t.settledFrames = t1.settledFrames ∧ finalB.state = s1 := by
   subst hB htxs
   cases t with
   | cons head tail =>
@@ -169,7 +169,8 @@ theorem oneTx_fold {txs : List (Nat × Tx)} {B B0 finalB : Benv} {finalBout : Bl
     obtain ⟨rfl, rfl⟩ := e1
     cases tail with
     | nil =>
-      exact ⟨head, by simp only [ApplyTransactionsTrace.rawFrames, List.append_nil], rfl⟩
+      exact ⟨head, by simp only [ApplyTransactionsTrace.rawFrames, List.append_nil],
+        by simp only [ApplyTransactionsTrace.settledFrames, List.append_nil], rfl⟩
 
 /-- **The closed block in a configured history** (see the module note).  From any canonical
 checkpoint state with representable total ether and the STOP fixture at the system addresses, a run
@@ -191,7 +192,8 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
       trace.rawFrames = sysRaw ++ t1.rawFrames ++ sysRaw' ∧
       trace.systemRawFrames = sysRaw ++ sysRaw' ∧
       (tx.auths = [] → ∀ a, trace.NoAuthorityAt a) ∧
-      ∀ root ∈ sysRaw ++ sysRaw', root.sevm.currentTarget ∈ systemAddresses := by
+      (∀ root ∈ sysRaw ++ sysRaw', root.sevm.currentTarget ∈ systemAddresses) ∧
+      ∀ f ∈ t1.settledFrames, f ∈ trace.settledFrames := by
   have body := oneTx_body beforeCodes afterCodes run requests
   have gas' : (requestsOutput bout1 [] []).blockGasUsed ≤ 1000000 := gas
   refine ⟨oneTx_transition gas' body, oneTxHistory canonical bound gas' body, ?_⟩
@@ -229,7 +231,7 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
     change Except.ok [tx] = Except.ok tr.decodedTxs at run
     rw [← Except.ok.inj run]
     rfl
-  obtain ⟨t1, raw, final⟩ := oneTx_fold tr.transactions hB decoded run
+  obtain ⟨t1, raw, settled, final⟩ := oneTx_fold tr.transactions hB decoded run
   have requestCode (a : Adr) (ha : a ∈ systemAddresses) :
       (processWithdrawalsState tr.transactionBenv.state []).getCode a = systemCode := by
     rw [processWithdrawalsState_getCode, final]
@@ -268,7 +270,7 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
         rw [withdrawalState]
         exact requestCode _ (by decide +kernel))
   refine ⟨t1, tr.beacon.rawFrames ++ tr.history.rawFrames, tr.requests.rawFrames, ?_, ?_,
-    fun hauth a => ⟨trivial, fun p hp auth hauthm => ?_⟩, ?_⟩
+    fun hauth a => ⟨trivial, fun p hp auth hauthm => ?_⟩, ?_, fun f hf => ?_⟩
   · change [] ++ (tr.beacon.rawFrames ++ tr.history.rawFrames ++ tr.transactions.rawFrames ++
       tr.requests.rawFrames) = _
     rw [raw]
@@ -287,5 +289,10 @@ theorem oneTx_history {tx : Tx} {st s1 : Jaune.State} {bout1 : BlockOutput}
     · rw [historyRaw root member]; decide +kernel
     · rw [withdrawalRaw root member]; decide +kernel
     · rw [consolidationRaw root member]; decide +kernel
+  · change f ∈ [] ++ (tr.beacon.settledFrames ++ tr.history.settledFrames ++
+      tr.transactions.settledFrames ++ tr.requests.settledFrames)
+    rw [settled]
+    simp only [List.nil_append, List.mem_append]
+    exact .inl (.inr hf)
 
 end Blanc.Composition.Curve3Pool3CrvInstance
