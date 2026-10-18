@@ -218,6 +218,7 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # Spawn kinds from code bytes (curve-3pool-stableswap-v1): contract-neutral.
 SHARED += ["Lift.SpawnKindsM"]
+SHARED += ["Lift.GuardedCalls"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
@@ -724,6 +725,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Creation.Jumps",
                     "Lift.Curve3Pool.Model",
                     "Lift.Curve3Pool.SpawnKinds",
+                    "Lift.Curve3Pool.CallGuards",
                     "Lift.Curve3Pool.Bridge",
                     "Lift.Curve3Pool.U5",
                     "Lift.Curve3Pool.U3Refute",

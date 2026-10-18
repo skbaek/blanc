@@ -485,6 +485,7 @@ import Blanc.Lift.BeaconDeposit.Liveness
 import Blanc.Lift.Reach
 import Blanc.Lift.Cursor
 import Blanc.Lift.SpawnKindsM
+import Blanc.Lift.GuardedCalls
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ReachChain
 import Blanc.Lift.ReachDispatch
@@ -860,6 +861,7 @@ import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Creation.Walk
 import Blanc.Lift.Curve3Pool.Creation.Deploy
 import Blanc.Lift.Curve3Pool.SpawnKinds
+import Blanc.Lift.Curve3Pool.CallGuards
 import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.Curve3Pool.Walk.Admin

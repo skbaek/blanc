@@ -4400,6 +4400,15 @@ contract-neutral.
   `PUSH` immediate covers, and `callKinds_of_check` refuses every external instruction but
   `CALL`/`STATICCALL` there; the walk reads `code.data.toList`, so the kernel decision is
   linear, in [`Blanc/Lift/SpawnKindsM.lean`](../Blanc/Lift/SpawnKindsM.lean).
+- To show that every raw frame a successful frame enters lies under a direct *committed*
+  child (no failed or reverted child frames), when its code tests every call's success flag,
+  decide `guardCheck code` for the runtime bytes (each `CALL`/`STATICCALL` at an instruction
+  start is followed by `PUSH2; JUMPI` falling through to `PUSH1 0; DUP1; REVERT`, or is an
+  identity copy `PUSH1 4; GAS; CALL`) and apply `Exec.rawFrameDescendants_of_guardCheck_entry`
+  (premises: covered fork, `4` a precompile and undelegated at entry, committed children keep the
+  code at `4`), in [`Blanc/Lift/GuardedCalls.lean`](../Blanc/Lift/GuardedCalls.lean).  The same
+  module proves the linear walk's predecessors unique (`PushReach.succ_inj`) and where a continued
+  step lands (`Evm.step_cont_succ`).
 - To advance a checked certificate cursor through an actual successful raw
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
