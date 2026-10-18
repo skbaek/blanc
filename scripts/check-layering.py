@@ -837,6 +837,8 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Callee.CalcWithdrawLiveLoop",
                     "Lift.Curve3Pool.Callee.CalcWithdrawLiveE",
                     "Lift.Curve3Pool.Callee.CalcWithdrawLive",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveP1",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveP2",
                     "Lift.Curve3Pool.Walk.ViewsDispatch",
                     "Lift.Curve3Pool.Walk.ViewsLoop",
                     "Lift.Curve3Pool.Walk.ViewsKit",
