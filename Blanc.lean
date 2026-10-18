@@ -878,6 +878,7 @@ import Blanc.Composition.Curve3PoolSupplyStep
 import Blanc.Composition.Curve3PoolSupply
 import Blanc.Composition.Curve3Pool3CrvU3
 import Blanc.Composition.Curve3PoolCalleeLive
+import Blanc.Composition.Curve3Pool3CrvHeadlines
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.ABase
 import Blanc.Lift.Curve3Pool.Callee.Xp
