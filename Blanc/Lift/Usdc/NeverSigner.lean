@@ -1,13 +1,15 @@
 import Blanc.Lift.Usdc.SignedPaths
 import Blanc.Lift.Usdc.LibSeam
 import Blanc.Lift.Usdc.HistoryReplay
+import Blanc.Lift.Usdc.HistFFacts
 import Blanc.Lift.HistoryGas
 import Blanc.ExecutionTraceEntered
 
 /-!
 # The Pair never signs a USDC entry (unit N, amendment A10)
 
-`usdc_neverSigner_pairCode`: along a `UsdcHist` history, no settled entry frame of the proxy whose
+`usdc_neverSigner_pairCode`: along a `UsdcHistF` history (so along every `UsdcHist` history,
+`UsdcHist.toUsdcHistF`), no settled entry frame of the proxy whose
 book signer is a holder running the Pair's runtime commits (for any code semantics with that image;
 `Blanc/Composition/UsdcNeverSigner.lean` instantiates `pairSem` as `usdc_neverSigner_pair`).  An entry from the admin word asks an admin selector
 (`proxy_admin_selectors`), never a signed one; any other entry forwards to one implementation frame
@@ -40,21 +42,21 @@ theorem usdcSigner_selector {e : Sevm} {a : Adr} (h : usdcSigner e = some a) :
 whose image is the Pair's runtime (the composition instantiates `pairSem`). -/
 theorem usdc_neverSigner_pairCode {P pair : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (tr : ConfiguredHistoryTrace cfg checkpoint future)
-    (hist : UsdcHist P K₀ tr) {sem : CodeSem} (image : sem.image = some UniswapV2Pair.code.toList)
+    (hist : UsdcHistF P K₀ tr) {sem : CodeSem} (image : sem.image = some UniswapV2Pair.code.toList)
     (installed : some (checkpoint.state.getCode pair).toList = sem.image)
     (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) :
     NeverSigner P (usdcBookS P) tr pair := by
   refine ⟨fun g member entry _ signed => ?_⟩
   change usdcSigner g.sevm = some pair at signed
-  have facts := usdc_settled_facts tr hist g member
-  have codeEq := usdc_entry_code tr hist member entry
+  have facts := usdc_settled_factsF tr hist g member
+  have codeEq := usdc_entry_codeF tr hist member entry
   obtain ⟨before, after, split⟩ := List.append_of_mem member
   obtain ⟨r, hafter⟩ := tr.settledFrames_contig split
   have inDesc : ∀ c ∈ Exec.descendantFrames g.run, c ∈ tr.settledFrames := fun c hc => by
     rw [split, hafter]
     exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _ hc))
   revert inDesc codeEq signed
-  refine frame_cases_ok (Q := fun g => IsEntry P g → SettledFacts P (historyKeyUniverse P tr K₀)
+  refine frame_cases_ok (Q := fun g => IsEntry P g → SettledFactsF P (historyKeyUniverse P tr K₀)
     (adminOf checkpoint.state P) g → usdcSigner g.sevm = some pair → g.sevm.code = Proxy.code →
     (∀ c ∈ Exec.descendantFrames g.run, c ∈ tr.settledFrames) → False) g facts.pc ?_ entry facts
   intro sevm pre post run _ entry facts signed codeEq inDesc
@@ -69,7 +71,7 @@ theorem usdc_neverSigner_pairCode {P pair : Adr} {K₀ : Key → Prop} {cfg : Ch
   obtain ⟨c, -, desc, ct, -, -, cvalue, cdata, -, ccode⟩ :=
     usdc_entry_forward run codeEq facts.fork entry.1 facts.codes facts.slots.1 admin facts.data
   have cmem : c ∈ tr.settledFrames := inDesc c (by rw [desc]; exact List.mem_cons_self)
-  have cfacts := usdc_settled_facts tr hist c cmem
+  have cfacts := usdc_settled_factsF tr hist c cmem
   have fresh : Exec.FreshEntry c.sevm c.pre :=
     tr.rawFrames_entered enteredCondition_fresh _ (tr.settled_mem_rawFrames c cmem)
   have gas : c.pre.gasMeasure < 2 ^ 256 := tr.rawFrame_gas _ (tr.settled_mem_rawFrames c cmem)
@@ -78,7 +80,7 @@ theorem usdc_neverSigner_pairCode {P pair : Adr} {K₀ : Key → Prop} {cfg : Ch
   have csigned : usdcSigner c.sevm = some pair := by
     unfold usdcSigner; rw [decodeCall_congr cvalue cdata]; exact signed
   revert ct ccode fresh gas pairCode csigned
-  refine frame_cases_ok (Q := fun c => SettledFacts P (historyKeyUniverse P tr K₀)
+  refine frame_cases_ok (Q := fun c => SettledFactsF P (historyKeyUniverse P tr K₀)
     (adminOf checkpoint.state P) c → c.sevm.currentTarget = P → c.sevm.code = Impl.code →
     Exec.FreshEntry c.sevm c.pre → c.pre.gasMeasure < 2 ^ 256 →
     c.pre.getCode pair = UniswapV2Pair.code → usdcSigner c.sevm = some pair → False) c cfacts.pc ?_

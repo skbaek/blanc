@@ -54,7 +54,6 @@ theorem pair_usdc_weth9_joint_finite {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -83,7 +82,7 @@ theorem pair_usdc_weth9_joint_finite {pair usdc weth : Adr}
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
   obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet neverSigner usdcFresh
+    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet usdcFresh
   obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
   obtain ⟨positions, finish, K₁, -, -, -, -, -, rep, ⟨res0, zero0⟩, ⟨res1, zero1⟩, -⟩ :=
     pair_two_token_joint (usdcCoreF usdc KU) (weth9Core weth KW).weak (usdcBook_erc20Abi usdc)

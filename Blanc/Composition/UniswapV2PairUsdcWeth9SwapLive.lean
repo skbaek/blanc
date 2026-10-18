@@ -31,12 +31,13 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.UsdcToken Blanc.Composition.UsdcLive
 
 /-- **C6(c), the swap liveness row with both tokens' records discharged** (USDC = token0, WETH9 =
-token1, both outputs allowed).  §10c amended to U9a's legs: the never-signer premise (C6(a) bounds
-reserve0 by the Pair's USDC balance, which covers `amount0Out`), two levels of call depth, the Pair
-not USDC's admin word, HASH-T for the recipient's USDC row and `usdcLive` over that extended
-universe, the USDC transfer leg's 63/64 sentry, and the callback's governance (the callback leaves
-USDC's implementation slot, and does not make the Pair USDC's admin; frame-level F2).  WETH9's records after USDC's transfer
-are discharged from USDC's explicit post, with no HASH-T over USDC's child. -/
+token1, both outputs allowed).  §10c amended to U9a's legs: the never-signer fact, now derived from
+the checkpoint (`usdc_neverSigner_pair`; C6(a) bounds reserve0 by the Pair's USDC balance, which
+covers `amount0Out`), two levels of call depth, the Pair not USDC's admin word, HASH-T for the
+recipient's USDC row and `usdcLive` over that extended universe, the USDC transfer leg's 63/64
+sentry, and the callback's governance (the callback leaves USDC's implementation slot, and does not
+make the Pair USDC's admin; frame-level F2).  WETH9's records after USDC's transfer are discharged
+from USDC's explicit post, with no HASH-T over USDC's child. -/
 theorem pair_usdc_weth9_history_swap_live {pair usdc weth : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {KU : Usdc.Key → Prop} {KW : Weth9.Key → Prop}
     {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
@@ -46,7 +47,6 @@ theorem pair_usdc_weth9_history_swap_live {pair usdc weth : Adr} {cfg : ChainCon
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress)
@@ -108,7 +108,7 @@ theorem pair_usdc_weth9_history_swap_live {pair usdc weth : Adr} {cfg : ChainCon
               ⟨0, sevm, _, .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) := by
   exact pair_usdc_weth9_history_swap_live_finite trace joint.toF pairFresh usdcFresh wethFresh
-    governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled factoryNotSystem target
+    governance (joint.allowQuiet usdcFresh) factoryInstalled factoryNotSystem target
     state codeEq fork output representable value size selector guards depth notAdmin recipientFresh
     usdcLive
 

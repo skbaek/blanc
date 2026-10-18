@@ -23,6 +23,6 @@ theorem usdc_neverSigner_pair {P pair : Adr} {K₀ : Key → Prop} {cfg : ChainC
     (apart : pair ≠ P)
     (pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair) :
     NeverSigner P (usdcBookS P) tr pair :=
-  usdc_neverSigner_pairCode tr hist rfl installed pairNotPrecompile
+  usdc_neverSigner_pairCode tr hist.toUsdcHistF rfl installed pairNotPrecompile
 
 end Blanc.Composition.UsdcToken

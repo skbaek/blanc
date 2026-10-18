@@ -26,7 +26,8 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
 
 /-- **C6(a), the exhibit composition**: every V2 pair whose `token0` is USDC and `token1` is WETH9,
 from the two-token joint checkpoint, with HASH-T for the Pair, USDC and WETH9, USDC's governance
-premise F2, the never-signer premise for the Pair and the factory premises.  At every settled frame
+premise F2 and the factory premises (the Pair never signs a USDC entry: `usdc_neverSigner_pair`,
+through the checkpoint's `pairNotPrecompile`).  At every settled frame
 outside the Pair's non-static frames and not shadowed in USDC (`Usdc.UsdcShadowed`: a frame running
 USDC's implementation or library code at the proxy's storage, static or not, or any frame inside
 the block of an earlier library frame, such as an EIP-1271 wallet's `isValidSignature` check after
@@ -42,7 +43,6 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
     (usdcFresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace))
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -71,6 +71,6 @@ theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
         ∀ g, Weth9.historyKeyUniverse weth trace KW (.allow pair g) →
           (future.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
   exact pair_usdc_weth9_joint_finite trace joint.toF pairFresh usdcFresh wethFresh
-    governance (joint.allowQuiet usdcFresh) neverSigner factoryInstalled factoryNotSystem
+    governance (joint.allowQuiet usdcFresh) factoryInstalled factoryNotSystem
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9
