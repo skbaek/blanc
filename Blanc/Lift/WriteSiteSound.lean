@@ -19,7 +19,7 @@ leaves its continuation unchecked; such a callee never returns
 namespace Blanc.Lift.WriteSite
 
 open Jaune AbstractStackSafety Blanc.Lift.SymTransfer
-open Blanc.Lift.FreePtr (cert_at gotoCompat_length transfer_length_mono)
+open Blanc.Lift.FreePtr (cert_at gotoCompat_length transfer_length_mono mapM_length foldTop_length)
 
 /-! ## The certificate's entries -/
 
@@ -196,22 +196,6 @@ theorem push_stack_lt {sevm : Sevm} {d d' : Devm} {bs : Bytes} {fits : bs.length
     by_contra hn
     simp only [hn, ↓reduceIte, reduceCtorEq] at hif
 
-theorem mapM_some_length {α β : Type} {g : α → Option β} :
-    ∀ {l : List α} {l' : List β}, l.mapM g = some l' → l'.length = l.length
-  | [], _, h => by
-    rw [List.mapM_nil] at h
-    cases h
-    rfl
-  | x :: l, l', h => by
-    rw [List.mapM_cons] at h
-    obtain ⟨y, -, h⟩ := Option.bind_eq_some_iff.mp h
-    obtain ⟨l2, hl, h⟩ := Option.bind_eq_some_iff.mp h
-    cases h
-    exact congrArg Nat.succ (mapM_some_length hl)
-
-theorem foldTop_length' (c : Option B256) (a : List AVal) : (foldTop c a).length = a.length := by
-  rcases c with _ | _ <;> rcases a with _ | _ <;> rfl
-
 /-- **The checker frame never outgrows the abstract stack**, and stays within the stack limit
 for a step `wstep_sound` accepts. -/
 theorem wstep_length {R : WRet} {n : Ninst} {σ σ' : WSt} {a a' : List AVal} {sevm : Sevm}
@@ -233,7 +217,7 @@ theorem wstep_length {R : WRet} {n : Ninst} {σ σ' : WSt} {a a' : List AVal} {s
     obtain ⟨out, kv', -, -, -, -, ho, -, -, -, hm, rfl, -⟩ := wstep_nonpush hn hw
     refine ⟨le_trans hlen hlenA, ?_⟩
     show kv'.length ≤ _
-    rw [mapM_some_length hm, foldTop_length', mapM_some_length hr0]
+    rw [mapM_length hm, foldTop_length, mapM_length hr0]
     exact transfer_length_mono ho hA hlen
 
 /-- A keeping summary's accepted step keeps the executing account's storage. -/

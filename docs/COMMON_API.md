@@ -4489,8 +4489,10 @@ contract-neutral.
   [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
   `fpRun_sound` (every run of an accepted certificate reads a good free
   pointer, `FpStep`), `lift_sound_fp` (the same from `Cert.check` and a
-  successful frame), `fp_run` (the big-step recursion), and `fstep_sound`
-  (one accepted step keeps the invariant `FpInv`).
+  successful frame), `fp_run` (the big-step recursion), `fstep_sound`
+  (one accepted step keeps the invariant `FpInv`), and the frame-length facts
+  `mapM_length` (an `Option` `mapM` keeps length), `foldTop_length` and
+  `transfer_length_mono`.
 - For the write-site checker's step and join soundness, use
   [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
   [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
