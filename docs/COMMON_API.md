@@ -2309,8 +2309,10 @@ For a token with a privileged minter, the minter/supply facet `SupplyFacet B`
 ([`Blanc/Lift/Token/Supply.lean`](../Blanc/Lift/Token/Supply.lean)) reads a book's supply and minter
 and classifies mint and burn messages (zero amounts included); `SupplyFacet.run_supply` says that
 along an accepted run whose minter-sent messages keep the minter (`KeepsMinter`), the minter persists
-and the final supply plus `burned` equals the initial supply plus `minted`. Worked instance: 3Crv
-(`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`).
+and the final supply plus `burned` equals the initial supply plus `minted`; `SupplyFacet.run_keep`
+says that a run none of whose messages the minter sends keeps supply and minter. Worked instance: 3Crv
+(`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`), composed with
+the Curve 3pool over one history in `Blanc/Composition/Curve3PoolSupply.lean` (`pool_3crv_history`).
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 

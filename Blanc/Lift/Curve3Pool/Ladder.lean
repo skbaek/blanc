@@ -165,29 +165,67 @@ theorem Checkpoint.of_get {σ σ' : Stor} {s : State} (h : σ.get = σ'.get) (hc
 
 /-! ## Carrier and observation -/
 
+/-- **Each invocation entered at a `Checkpoint` of the state its prefix reaches**: the frame's
+own storage at its entry abstracts the replayed state, unlocked. -/
+def PoolEntries : State → List PoolInvocation → Prop
+  | _, [] => True
+  | s, i :: rest => Checkpoint (i.frame.pre.getStor i.frame.sevm.currentTarget) s ∧
+      ∀ o, step s i.env (decodeCall i.frame.sevm) = some o → PoolEntries o.state rest
+
+theorem PoolEntries.append :
+    ∀ {s m : State} {left right : List PoolInvocation},
+      PoolRun s left m → PoolEntries s left → PoolEntries m right → PoolEntries s (left ++ right)
+  | _, _, [], _, h, _, h₂ => by
+    simp only [PoolRun] at h
+    subst h
+    exact h₂
+  | _, _, _ :: _, _, h, h₁, h₂ => by
+    obtain ⟨o, hstep, -, rest⟩ := h
+    exact ⟨h₁.1, fun o' hstep' => by
+      cases Option.some.inj (hstep.symm.trans hstep')
+      exact PoolEntries.append rest (h₁.2 o hstep) h₂⟩
+
+/-- **An invocation's entry checkpoint**: inside entries of `pre ++ i :: post`, `i`'s frame entered
+at a `Checkpoint` of the state `pre` replays to. -/
+theorem PoolEntries.split :
+    ∀ {s m : State} {pre : List PoolInvocation} {i : PoolInvocation} {post : List PoolInvocation},
+      PoolEntries s (pre ++ i :: post) → PoolRun s pre m →
+      Checkpoint (i.frame.pre.getStor i.frame.sevm.currentTarget) m
+  | _, _, [], _, _, h, hp => by
+    simp only [PoolRun] at hp
+    subst hp
+    exact h.1
+  | _, _, _ :: _, _, _, h, hp => by
+    obtain ⟨o, hstep, -, rest⟩ := hp
+    exact PoolEntries.split (h.2 o hstep) rest
+
 /-- The replay of a list of frames between two storage views: from every model state the incoming
-view abstracts at a `Checkpoint`, authentic invocations over exactly these frames replay to a state
-the outgoing view abstracts at a `Checkpoint`. -/
+view abstracts at a `Checkpoint`, authentic invocations over exactly these frames, each entered at a
+`Checkpoint` of the state its prefix reaches, replay to a state the outgoing view abstracts at a
+`Checkpoint`. -/
 def PoolReplay (Q : State → Prop) (pool : Adr) (a : B256 → B256) (frames : List Exec.Frame)
     (b : B256 → B256) : Prop :=
   ∀ (s : State) (σ : Stor), σ.get = a → Checkpoint σ s → Q s →
     ∃ invs : List PoolInvocation, invs.map PoolInvocation.frame = frames ∧
       (∀ i ∈ invs, i.Authentic pool) ∧
-      ∃ s', PoolRun s invs s' ∧ ∃ σ' : Stor, σ'.get = b ∧ Checkpoint σ' s' ∧ Q s'
+      ∃ s', PoolRun s invs s' ∧ PoolEntries s invs ∧
+        ∃ σ' : Stor, σ'.get = b ∧ Checkpoint σ' s' ∧ Q s'
 
 theorem PoolReplay.nil {Q : State → Prop} {pool : Adr} (view : B256 → B256) :
     PoolReplay Q pool view [] view := by
   intro s σ hview hc hq
-  exact ⟨[], rfl, fun _ h => absurd h List.not_mem_nil, s, PoolRun.nil s, σ, hview, hc, hq⟩
+  exact ⟨[], rfl, fun _ h => absurd h List.not_mem_nil, s, PoolRun.nil s, trivial, σ, hview, hc,
+    hq⟩
 
 theorem PoolReplay.append {Q : State → Prop} {pool : Adr} {a b c : B256 → B256}
     {left right : List Exec.Frame}
     (first : PoolReplay Q pool a left b) (second : PoolReplay Q pool b right c) :
     PoolReplay Q pool a (left ++ right) c := by
   intro s σ hview hc hq
-  obtain ⟨invs₁, frames₁, auth₁, m, run₁, σ₁, view₁, hc₁, hq₁⟩ := first s σ hview hc hq
-  obtain ⟨invs₂, frames₂, auth₂, t, run₂, σ₂, view₂, hc₂, hq₂⟩ := second m σ₁ view₁ hc₁ hq₁
-  refine ⟨invs₁ ++ invs₂, ?_, ?_, t, run₁.append run₂, σ₂, view₂, hc₂, hq₂⟩
+  obtain ⟨invs₁, frames₁, auth₁, m, run₁, ent₁, σ₁, view₁, hc₁, hq₁⟩ := first s σ hview hc hq
+  obtain ⟨invs₂, frames₂, auth₂, t, run₂, ent₂, σ₂, view₂, hc₂, hq₂⟩ := second m σ₁ view₁ hc₁ hq₁
+  refine ⟨invs₁ ++ invs₂, ?_, ?_, t, run₁.append run₂, PoolEntries.append run₁ ent₁ ent₂, σ₂, view₂,
+    hc₂, hq₂⟩
   · rw [List.map_append, frames₁, frames₂]
   · intro i member
     rcases List.mem_append.mp member with h | h
@@ -271,7 +309,7 @@ theorem pool_wholeFrameReplay {Q : State → Prop} {E : Sevm → Devm → Prop}
     obtain ⟨e, o, hstep, hraw⟩ := refines run codeEq fork entry nonstatic hpc herr hc' hq
     obtain ⟨hpost, -⟩ := rawEffect_refines (D := ⟨0, sevm, pre, .ok post, run⟩) hc' hstep hraw
     refine ⟨[⟨Exec.Frame.ofRun run committed, e⟩], rfl, ?_, o.state,
-      ⟨o, hstep, hraw, rfl⟩, _, rfl, hpost, hQ hstep hq⟩
+      ⟨o, hstep, hraw, rfl⟩, ⟨hc', fun _ _ => trivial⟩, _, rfl, hpost, hQ hstep hq⟩
     intro i member
     rw [List.mem_singleton] at member
     subst member
@@ -292,6 +330,38 @@ def poolLadder {Q : State → Prop} {E : Sevm → Devm → Prop} (hQ : StepKeeps
 
 /-! ## The committed history -/
 
+/-- **The committed history with entry checkpoints**: `pool_history_committed_in`'s conclusion,
+and every invocation entered at a `Checkpoint` of the state its prefix replays to
+(`PoolEntries`). -/
+theorem pool_history_committed_entries {Q : State → Prop} {E : Sevm → Devm → Prop}
+    (hQ : StepKeeps Q) (refines : PoolFrameRefinesIn Q E)
+    {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pool).toList = poolSem.image)
+    (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (inv : Q s₀)
+    (admitted : trace.FrameAdmitted pool E) :
+    some (future.state.getCode pool).toList = poolSem.image ∧
+    ∃ invs : List PoolInvocation,
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧ PoolEntries s₀ invs ∧
+      ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
+        Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token ∧
+        Q s := by
+  have start : poolSpec.StateInv pool checkpoint.state := ⟨installed, trivial, trivial⟩
+  have finishInv := trace.stateInv_admitted_sem (poolSpec_preservesAdmitted pool E) admitted start
+  obtain ⟨frames, replay, observed⟩ :=
+    (poolLadder hQ refines pool).configuredHistory trace admitted start
+  change PoolReplay Q pool (checkpoint.state.getStor pool).get frames
+    (future.state.getStor pool).get at replay
+  change frames.flatMap (poolSubtreeFrames pool) =
+    trace.settledFrames.flatMap (poolFrameObs pool) at observed
+  obtain ⟨invs, framesEq, auth, s, run, entries, σ', view, hc, hq⟩ := replay s₀ _ rfl initial inv
+  obtain ⟨hcoins, htoken⟩ := run.coins_token
+  refine ⟨finishInv.code, invs, ?_, auth, entries, s, run, run.runPool_eq,
+    Checkpoint.of_get view hc, hcoins, htoken, hq⟩
+  rw [← framesEq, List.flatMap_map] at observed
+  exact observed
+
 /-- **The committed history within a model invariant `Q`** (the general form of
 `pool_history_committed_with`): when every accepted step keeps `Q` and the checkpoint's model state
 satisfies it, a frame refinement on the `Q`-states suffices, and the replay ends in a `Q`-state. -/
@@ -309,20 +379,9 @@ theorem pool_history_committed_in {Q : State → Prop} {E : Sevm → Devm → Pr
       ∃ s, PoolRun s₀ invs s ∧ runPool s₀ invs = some s ∧
         Checkpoint (future.state.getStor pool) s ∧ s.coins = s₀.coins ∧ s.token = s₀.token ∧
         Q s := by
-  have start : poolSpec.StateInv pool checkpoint.state := ⟨installed, trivial, trivial⟩
-  have finishInv := trace.stateInv_admitted_sem (poolSpec_preservesAdmitted pool E) admitted start
-  obtain ⟨frames, replay, observed⟩ :=
-    (poolLadder hQ refines pool).configuredHistory trace admitted start
-  change PoolReplay Q pool (checkpoint.state.getStor pool).get frames
-    (future.state.getStor pool).get at replay
-  change frames.flatMap (poolSubtreeFrames pool) =
-    trace.settledFrames.flatMap (poolFrameObs pool) at observed
-  obtain ⟨invs, framesEq, auth, s, run, σ', view, hc, hq⟩ := replay s₀ _ rfl initial inv
-  obtain ⟨hcoins, htoken⟩ := run.coins_token
-  refine ⟨finishInv.code, invs, ?_, auth, s, run, run.runPool_eq, Checkpoint.of_get view hc,
-    hcoins, htoken, hq⟩
-  rw [← framesEq, List.flatMap_map] at observed
-  exact observed
+  obtain ⟨code, invs, obs, auth, -, rest⟩ :=
+    pool_history_committed_entries hQ refines trace installed initial inv admitted
+  exact ⟨code, invs, obs, auth, rest⟩
 
 /-- **The pool model replays the committed history (U2(b)), over a frame refinement.**  In a
 configured history from a checkpoint with the runtime installed at `pool` and the pool's storage at

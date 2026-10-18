@@ -146,6 +146,44 @@ theorem run_supply (F : SupplyFacet B) :
       rw [minted_cons, burned_cons]
       omega
 
+/-- **A run the minter takes no part in keeps supply and minter**: along an accepted run of the book
+none of whose messages the minter sends, no mint or burn is accepted and the minter cannot change,
+so the supply and the minter are kept. -/
+theorem run_keep (F : SupplyFacet B) :
+    ∀ {as : List Sevm} {l l' : B.Ledger}, B.run l as = some l' →
+      (∀ a ∈ as, a.caller ≠ F.minter l) →
+      F.supply l' = F.supply l ∧ F.minter l' = F.minter l := by
+  intro as
+  induction as with
+  | nil =>
+    intro l l' hrun _
+    simp only [Book.run, Option.some.injEq] at hrun
+    subst hrun
+    exact ⟨rfl, rfl⟩
+  | cons a as ih =>
+    intro l l' hrun foreign
+    simp only [Book.run] at hrun
+    cases hs : B.step l a with
+    | none => rw [hs, Option.bind_none] at hrun; cases hrun
+    | some m =>
+      rw [hs, Option.bind_some] at hrun
+      have other := foreign a List.mem_cons_self
+      have hm : F.minter m = F.minter l := by
+        apply Classical.byContradiction
+        intro hne
+        exact other (F.minter_step hs hne)
+      have hsup : F.supply m = F.supply l := by
+        cases hmint : F.mintOf a with
+        | some p => exact absurd (F.mint_step hs hmint).1 other
+        | none =>
+          cases hburn : F.burnOf a with
+          | some p => exact absurd (F.burn_step hs hburn).1 other
+          | none => exact F.other_step hs hmint hburn
+      obtain ⟨ihs, ihm⟩ := ih hrun fun a' ha' => by
+        rw [hm]
+        exact foreign a' (List.mem_cons_of_mem a ha')
+      exact ⟨ihs.trans hsup, ihm.trans hm⟩
+
 end SupplyFacet
 
 end Blanc.Lift.Token
