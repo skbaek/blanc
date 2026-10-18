@@ -58,20 +58,27 @@ def poolBurned : Curve3Pool.State → List PoolInvocation → Nat
 /-- 3Crv's supply word in a world. -/
 def supplyAt (ca : Adr) (w : Jaune.State) : Nat := ((w.getStor ca).get vySupplySlot).toNat
 
+/-- The supply an invocation observed is 3Crv's supply word at the entry of the frame's
+`totalSupply()` child at 3Crv. -/
+def SupplyObserved (ca : Adr) (i : PoolInvocation) : Prop :=
+  ∀ T, i.env.supply = some T → ∃ c ∈ Exec.childFrames i.frame.run, c.sevm.currentTarget = ca ∧
+    c.sevm.data = Curve3Pool.totalSupplyData ∧ T = supplyAt ca c.pre.state
+
 /-- Each replayed invocation moves 3Crv's supply word from its frame's entry to its frame's post by
 its own minted and burned amounts. -/
 def StepSupplies (ca : Adr) : Curve3Pool.State → List PoolInvocation → Prop
   | _, [] => True
   | s, i :: rest => ∀ o, Curve3Pool.step s i.env (Curve3Pool.decodeCall i.frame.sevm) = some o →
-      supplyAt ca i.frame.post.state + callsBurned o.calls =
-        supplyAt ca i.frame.pre.state + callsMinted o.calls ∧ StepSupplies ca o.state rest
+      (supplyAt ca i.frame.post.state + callsBurned o.calls =
+        supplyAt ca i.frame.pre.state + callsMinted o.calls ∧ SupplyObserved ca i) ∧
+      StepSupplies ca o.state rest
 
 theorem StepSupplies.split {ca : Adr} :
     ∀ {s m : Curve3Pool.State} {pre : List PoolInvocation} {i : PoolInvocation}
       {post : List PoolInvocation}, StepSupplies ca s (pre ++ i :: post) → PoolRun s pre m →
       ∀ o, Curve3Pool.step m i.env (Curve3Pool.decodeCall i.frame.sevm) = some o →
         supplyAt ca i.frame.post.state + callsBurned o.calls =
-          supplyAt ca i.frame.pre.state + callsMinted o.calls
+          supplyAt ca i.frame.pre.state + callsMinted o.calls ∧ SupplyObserved ca i
   | _, _, [], _, _, h, hp => by
     simp only [PoolRun] at hp
     subst hp
@@ -476,10 +483,35 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
       omega
     · intro o' hstep'
       cases Option.some.inj (hstep.symm.trans hstep')
-      refine ⟨?_, steps⟩
-      unfold supplyAt
-      rw [invY'.supply, invX'.supply]
-      exact moved
+      refine ⟨⟨?_, ?_⟩, steps⟩
+      · unfold supplyAt
+        rw [invY'.supply, invX'.supply]
+        exact moved
+      · intro T hT
+        rcases hraw.env.supply T hT with unframed | ⟨n, c, hget, ht, hd, -, hans⟩
+        · exfalso
+          have notPre : ¬ i.frame.sevm.benvStat.rules.isPrecomp
+              (Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv i.frame)) := by
+            rw [Curve3Pool.tokenAdr_eq abs, htoken]
+            exact parties.2
+          simp only [Curve3Pool.framed, Bool.or_eq_false_iff, Bool.not_eq_eq_eq_not, Bool.not_false,
+            decide_eq_true_eq] at unframed
+          exact notPre unframed.1
+        · have memc : c ∈ Exec.childFrames i.frame.run := List.mem_of_getElem? hget
+          rw [token] at ht
+          have settledC : c ∈ trace.settledFrames := by
+            rw [globalSplit, contig]
+            exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _
+              (Exec.mem_descendantFrames_of_mem_childFrames i.frame.run c memc)))
+          obtain ⟨Xs, Ks, invS⟩ := child_entry_vyInv trace W.injective W.apartU W.ready W.hK
+            W.invariant W.apart globalSplit atPool (W.view globalSplit mutable) c memc
+          have out := totalSupply_answer (W.ready c settledC) ht hd invS
+          refine ⟨c, memc, ht, hd, ?_⟩
+          rw [← hans, Curve3Pool.answerWord, out,
+            List.take_of_length_le (by simp only [B256.length_toBytes]; omega),
+            B256.toB256_toBytes]
+          unfold supplyAt
+          rw [invS.supply]
 
 /-! ## The headline -/
 
@@ -496,7 +528,9 @@ premises (`PoolTraceEnv`, whose callback premise makes coin children keep 3Crv's
   supply plus the pool's committed mints, the amounts read off the replayed steps' model calls
   (`poolMinted`, `poolBurned`; word values);
 * **per invocation**: 3Crv's supply word at the invocation frame's post plus the step's own burned
-  amounts equals its supply word at the frame's entry plus the step's own minted amounts. -/
+  amounts equals its supply word at the frame's entry plus the step's own minted amounts, and the
+  supply the invocation observed (`EnvOf.supply`) is 3Crv's supply word at the entry of the frame's
+  `totalSupply()` child (`SupplyObserved`). -/
 theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -524,7 +558,8 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
           ∃ o, Curve3Pool.step sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) = some o ∧
             Curve3Pool.RawEffect (Blanc.Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
             supplyAt c3 i.frame.post.state + callsBurned o.calls =
-              supplyAt c3 i.frame.pre.state + callsMinted o.calls := by
+              supplyAt c3 i.frame.pre.state + callsMinted o.calls ∧
+            SupplyObserved c3 i := by
   let U := historyKeyUniverse c3 trace K₀
   have topology : VyInv (checkpoint.state.getStor c3) cs₀ U := joint.c3.extend fresh
   have ready := settled_ready trace c3Installed joint.c3 fresh

@@ -366,4 +366,92 @@ theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
   · rw [← mintEq, ← burnEq]
     exact supXn
 
+/-! ## The supply a frame observes -/
+
+/-- **3Crv at the entry of a pool frame's child**: some model state abstracts 3Crv's storage there
+(the positional replay inside the frame, from 3Crv's replay at the frame's entry). -/
+theorem child_entry_vyInv {pool ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {cs₀ : Blanc.Curve3Crv.State} {U K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
+    (apartU : ∀ k, U k → k.slot ∉ vyFixedSlots)
+    (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f)
+    (hK : ∀ k, K₀ k → U k) (invariant : VyInv (checkpoint.state.getStor ca) cs₀ K₀)
+    (apart : pool ≠ ca)
+    {before after : List Exec.Frame} {P : Exec.Frame}
+    (split : trace.settledFrames = before ++ P :: after)
+    (target : P.sevm.currentTarget = pool)
+    (entry : ViewReplay U (viewOf (checkpoint.state.getStor ca))
+      (before.flatMap (viewFrameObs ca)) (viewOf (P.pre.state.getStor ca))) :
+    ∀ c ∈ Exec.childFrames P.run, ∃ X K, VyInv (c.pre.state.getStor ca) X K := by
+  intro c memc
+  obtain ⟨xs, ys, hxs⟩ := List.mem_iff_append.mp memc
+  have settledP : P ∈ trace.settledFrames := by
+    rw [split]; exact List.mem_append_right _ List.mem_cons_self
+  have localSplit : Exec.committedFrames P.run =
+      (P :: xs.flatMap fun c => Exec.committedFrames c.run) ++
+        c :: (Exec.descendantFrames c.run ++ ys.flatMap fun c => Exec.committedFrames c.run) := by
+    rw [Exec.Frame.committedFrames_self, descendantFrames_eq_children, hxs, List.flatMap_append,
+      List.flatMap_cons, Exec.Frame.committedFrames_self]
+    simp only [List.cons_append, List.append_assoc]
+  have noOpaque : ∀ A ∈ P :: xs.flatMap (fun c => Exec.committedFrames c.run), A.Encloses c →
+      ¬ (A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false) := by
+    rintro A member encloses ⟨tA, -⟩
+    rcases List.mem_cons.mp member with rfl | inXs
+    · exact apart (target.symm.trans tA)
+    · obtain ⟨c', memc', inC'⟩ := List.mem_flatMap.mp inXs
+      have deeper := descendantFrames_depth_lt A.run c encloses
+      have hA : A.sevm.depth ≤ c'.sevm.depth := by
+        rcases Exec.Frame.mem_committedFrames.mp inC' with rfl | below
+        · exact Nat.le_refl _
+        · exact Nat.le_of_lt (descendantFrames_depth_lt c'.run A below)
+      have dc := childFrames_depth P.run c memc
+      have dc' := childFrames_depth P.run c' (by rw [hxs]; exact List.mem_append_left _ memc')
+      omega
+  have posR := frame_positional injective apartU (ready P settledP) localSplit noOpaque
+  obtain ⟨X, -, invX⟩ := replay_run hK invariant (viewReplay_append entry posR)
+  exact ⟨X, _, invX⟩
+
+theorem totalSupplySel_eq : Curve3Pool.totalSupplySel = abiSelectorBytes selTotalSupply := by decide
+
+theorem decode_totalSupply {e : Sevm} (h : e.data = Curve3Pool.totalSupplyData) :
+    decodeCall e = .totalSupply := by
+  have hsel : Sevm.selector e = selTotalSupply :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (tail := []) (by decide)
+      (by rw [h, List.append_nil]; exact totalSupplySel_eq)
+  have hlen : ¬ e.data.length < 4 := by rw [h]; decide
+  unfold decodeCall
+  rw [if_neg hlen]
+  simp only [hsel]
+  rw [if_neg (by decide), if_neg (by decide), if_pos trivial]
+
+/-- **3Crv's `totalSupply()` answers the supply of the state abstracting its storage.** -/
+theorem totalSupply_answer {ca : Adr} {U : Key → Prop} {S : Exec.Frame}
+    (ready : FrameReady ca U S) (target : S.sevm.currentTarget = ca)
+    (data : S.sevm.data = Curve3Pool.totalSupplyData) {X : Blanc.Curve3Crv.State} {K : Key → Prop}
+    (inv : VyInv (S.pre.state.getStor ca) X K) :
+    S.post.output = X.totalSupply.toBytes := by
+  obtain ⟨hpc, fork, at_, admitted, -⟩ := ready
+  obtain ⟨⟨hstack, hmem⟩, hcd, -⟩ := admitted.root target
+  have hcode : S.sevm.code = code := c3crv_code_of_image (at_.2 target).1
+  have hdec := decode_totalSupply data
+  obtain ⟨pc, sevm, pre, out, run, committed⟩ := S
+  dsimp only at hpc hstack hmem hcd hcode target data hdec inv ⊢
+  subst hpc
+  subst target
+  cases out with
+  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | ok post =>
+    have hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)) := by
+      rw [hdec]
+      exact ⟨fun k hk => absurd hk List.not_mem_nil, fun k hk => absurd hk List.not_mem_nil⟩
+    have refinement := c3crv_frame_refines_raw hcode fork hcd hstack hmem inv hfresh run
+    obtain ⟨-, -, o, hstep, hret⟩ := refinement.2 (by rw [hdec]; exact id)
+    rw [hdec] at hstep
+    obtain ⟨-, hbody⟩ := Blanc.Curve3Crv.step_eq_ok.mp hstep
+    change Blanc.Curve3Crv.totalSupplyView X = .ok o at hbody
+    unfold Blanc.Curve3Crv.totalSupplyView at hbody
+    cases hbody
+    exact hret
+
 end Blanc.Composition.Curve3PoolSupply
