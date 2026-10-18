@@ -979,6 +979,8 @@ CONTRACTS = {
         "Lift.Usdc.ImplFp.Check1",
         "Lift.Usdc.ImplFp.Check2",
         "Lift.Usdc.ImplFp.Check3",
+        "Lift.Usdc.LibSeam",
+        "Lift.Usdc.SignedSites",
         "Lift.Usdc.CodeImage",
         "Lift.Usdc.Constants",
         "Lift.Usdc.Decode",
