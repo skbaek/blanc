@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UsdcTokenF
+import Blanc.Lift.UniswapV2Pair.StaticSilent
 
 /-!
 # The support-free two-token joint checkpoint of the USDC/WETH9 Pair
@@ -99,7 +100,8 @@ theorem JointCheckpoint2F.toUsdcCoreF {pair usdc weth : Adr} {KU : Usdc.Key → 
       HolderLaws usdc (Usdc.usdcBookS usdc).toBook trace pair := by
   have hist : Usdc.UsdcHistF usdc KU trace := ⟨h.usdcInstalled, governance, h.usdcFoot, fresh⟩
   refine ⟨hist, Or.inl h.tracked, ⟨?_, ?_⟩, (Usdc.usdcBook_lawsS usdc).holderLaws usdc
-    (Usdc.usdc_neverSigner_pairCode trace hist rfl h.weth9.pairCode h.pairNotPrecompile)⟩
+    (Usdc.usdc_neverSigner_pairCode trace hist rfl h.weth9.pairCode h.pairNotPrecompile
+      not_staticAnswered_pair)⟩
   · change st₀.reserve0.val ≤
       (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (checkpoint.state.getStor usdc)).bal pair
     rw [Usdc.historyKeyUniverse, Usdc.ledger_bal (Or.inl h.tracked)]

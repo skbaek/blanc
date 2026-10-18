@@ -4990,6 +4990,17 @@ contract-neutral.
   `StaticAnswered` witness a successful-flag `STATICCALL` inversion retains. Use it for
   failing-callee (callee-premise) controls, in
   [`Blanc/Lift/RevertingCallee.lean`](../Blanc/Lift/RevertingCallee.lean).
+- A callee silent on one selector, whatever its code: `NoStaticAnswer code sel` (no
+  static child message to a non-precompile account holding `code` answers calldata
+  with selector `sel`), which refutes the same `StaticAnswered` witness. The Pair
+  proves the `0x1626ba7e` instance in its own stratum; the USDC library side takes it
+  as a hypothesis. Use it for selector-silence (answered-call) refutations, in
+  [`Blanc/Lift/StaticSilent.lean`](../Blanc/Lift/StaticSilent.lean).
+- The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
+  `UniswapV2Pair.code`, emitted by the registered certificate generator from the
+  `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
+  Both contract strata name the same bytes through this module; `Check.cert_check`
+  checks them.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
