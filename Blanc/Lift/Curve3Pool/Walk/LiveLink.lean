@@ -23,10 +23,10 @@ theorem xa_staticWordOkAt {sevm : Sevm} {post b : Devm} {M : Mem} {pc G U : Nat}
     (h : XAt sevm post pc (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G) L)
     (hp : StaticWordOkAt sevm W W' t data A U ii is oi) (hW : W b) (hU : U ≤ G)
     (hG : G < 2 ^ 256) (hin : (M.read ii.toNat is.toNat).1 = data)
-    (hpc : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) :
+    (hpc : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hroom : S.length < 1024) :
     ∃ c L', L = c :: L' ∧ c.sevm.currentTarget = t.toAdr ∧ c.sevm.data = data ∧
       32 ≤ c.post.output.length ∧ Bytes.toB256 (c.post.output.take 32) = A := by
-  obtain ⟨d, out, hrun, hpost, hlen, -, hA, -⟩ := hp b S M G hW hU hG hin
+  obtain ⟨d, out, hrun, hpost, hlen, -, hA, -⟩ := hp b S M G hW hU hG hin hroom
   obtain ⟨c, L', hL, -, hch⟩ := xa_staticcall_runCompiled fork hat rfl h hrun hpost.stack
     (by decide) hpc
   refine ⟨c, L', hL, hch.target, ?_, ?_, ?_⟩

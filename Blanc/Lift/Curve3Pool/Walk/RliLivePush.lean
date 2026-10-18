@@ -284,7 +284,7 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
       rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
       exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
     obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-      hpush hz b2 _ M g3 hL.w (by omega) (by omega) hin
+      hpush hz b2 ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
     xr (.next hrun ·)
     obtain ⟨hmem, -⟩ := hpost.settled (by decide)
     rw [show (0xaa0 : B256).toNat = 0xaa0 by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -595,7 +595,7 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
       exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
     obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-      hpush hz b2 _ M g3 hL.w (by omega) (by omega) hin
+      hpush hz b2 ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
     xr (.next hrun ·)
     obtain ⟨hmem, -⟩ := hpost.settled (by decide)
     rw [show (0xaa0 : B256).toNat = 0xaa0 by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -906,7 +906,7 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
       exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
     obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-      hpush hz b2 _ M g3 hL.w (by omega) (by omega) hin
+      hpush hz b2 ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
     xr (.next hrun ·)
     obtain ⟨hmem, -⟩ := hpost.settled (by decide)
     rw [show (0xaa0 : B256).toNat = 0xaa0 by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -1218,7 +1218,7 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
       exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
     obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-      hpush hz b2 _ M g3 hL.w (by omega) (by omega) hin
+      hpush hz b2 ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
     xr (.next hrun ·)
     obtain ⟨hmem, -⟩ := hpost.settled (by decide)
     rw [show (0xaa0 : B256).toNat = 0xaa0 by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -1530,7 +1530,7 @@ theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
       exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
     obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-      hpush hz b2 _ M g3 hL.w (by omega) (by omega) hin
+      hpush hz b2 ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) M g3 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
     xr (.next hrun ·)
     obtain ⟨hmem, -⟩ := hpost.settled (by decide)
     rw [show (0xaa0 : B256).toNat = 0xaa0 by decide, show (0x44 : B256).toNat = 0x44 by decide,

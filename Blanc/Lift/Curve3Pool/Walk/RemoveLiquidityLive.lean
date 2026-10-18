@@ -219,7 +219,7 @@ theorem rx_rl_pre {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W 
     rw [hR.read, Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
     decide
   obtain ⟨d, out, hrun, hpost, hlen32, hlt, hT, hgas, hgle, hWd, hidd⟩ :=
-    hsup _ [] M Gs hWb2 (by omega) hGs' hin
+    hsup _ [] M Gs hWb2 (by omega) hGs' hin (by decide)
   xr (.next hrun ·)
   have hd := hpost.eq_St
   rw [show (0x17c : B256).toNat = 0x17c by decide, show (4 : B256).toNat = 4 by decide,
@@ -1060,7 +1060,7 @@ theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M :
     exact Region.slice (Region.write_other hdata.right (by simp only [B256.length_toBytes]; omega))
       (by simp only [List.length_append, B256.length_toBytes]; rfl)
   obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hpush _ [3, 0x2a0] M Gx (hWc.sload _ _ hWb) (by omega) (by omega) hin
+    hpush _ [3, 0x2a0] M Gx (hWc.sload _ _ hWb) (by omega) (by omega) hin (by decide)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x520 : B256).toNat = 0x520 by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -1218,7 +1218,7 @@ theorem rx_rl_post {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M
       burnFromSel ++ sevm.caller.toB256.toBytes ++ (rlAmt sevm).toBytes := by
     rw [hR.read, burn_input]
   obtain ⟨d, hrun, hpost, hrd32, hrdlt, hgas, hgle, -, -⟩ :=
-    hburn _ [] M Gx (hWc.sload _ _ hWb) (by omega) hGb hin
+    hburn _ [] M Gx (hWc.sload _ _ hWb) (by omega) hGb hin (by decide)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x61c : B256).toNat = 0x61c by decide, show (0x44 : B256).toNat = 0x44 by decide,

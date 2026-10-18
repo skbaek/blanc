@@ -196,6 +196,7 @@ theorem rxe_staticWord {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {b : Dev
     {M : Mem} {img : Bytes} {G U : Nat} {t A ii is oi : B256} {data : Bytes} {o s : Nat}
     {Q : Outcome → Prop} {f : SFunc} (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hp : StaticWordOkAt sevm W W' t data A U ii is oi) (hU : U ≤ G) (hG : G < 2 ^ 256)
+    (hroom : S.length < 1024)
     (hin : (M.read ii.toNat is.toNat).1 = data) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hoi : oi.toNat = o)
     (hext : (M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).size = s) (hfit : o + 0x20 ≤ s)
@@ -206,7 +207,7 @@ theorem rxe_staticWord {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {b : Dev
       SFunc.RunEx cert.prog sevm (St d (1 :: S) M' d.gasLeft) f Q) :
     SFunc.RunEx cert.prog sevm (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G)
       (.next (.exec .staticcall) f) Q := by
-  obtain ⟨d, out, hrun, hpost, hlen, hlt, hA, hg1, hg2, hWd, hidd⟩ := hp b S M G hL.w hU hG hin
+  obtain ⟨d, out, hrun, hpost, hlen, hlt, hA, hg1, hg2, hWd, hidd⟩ := hp b S M G hL.w hU hG hin hroom
   have hd := hpost.eq_St
   rw [show (0x20 : B256).toNat = 0x20 by decide] at hd
   subst hoi

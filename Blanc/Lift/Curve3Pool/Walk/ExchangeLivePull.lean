@@ -173,7 +173,7 @@ theorem rx_ex_pull {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : Outco
     rw [hR.read]
     exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
   obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hpull bI [] M g1 hL.w (by omega) (by omega) hin
+    hpull bI [] M g1 hL.w (by omega) (by omega) hin (by first | decide | (simp only [List.length_cons, List.length_nil]; omega) | omega)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x600 : B256).toNat = 0x600 by decide, show (0x64 : B256).toNat = 0x64 by decide,

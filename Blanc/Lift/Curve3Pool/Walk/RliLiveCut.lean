@@ -46,7 +46,8 @@ theorem rx_rli_toSupply {sevm : Sevm} {pre : Devm} {W : Devm → Prop} {G U : Na
       (fun r => ∃ (b : Devm) (S : List B256) (M : Mem) (g : Nat),
         r = .halted (St b (Nat.toB256 g :: (pre.getStor sevm.currentTarget).get tokenSlot ::
           0x17c :: 4 :: 0x1c0 :: 0x20 :: S) M g) ∧
-        W b ∧ U ≤ g ∧ g < 2 ^ 256 ∧ (M.read (0x17c : B256).toNat (4 : B256).toNat).1 = totalSupplyData) := by
+        W b ∧ U ≤ g ∧ g < 2 ^ 256 ∧ (M.read (0x17c : B256).toNat (4 : B256).toNat).1 = totalSupplyData ∧
+        S.length < 1024) := by
   set σ := pre.getStor sevm.currentTarget with hσ
   obtain ⟨G, rfl⟩ : ∃ g, G = g + 480 := ⟨G - 480, by omega⟩
   unfold rliSupplyPath
@@ -220,6 +221,6 @@ theorem rx_rli_toSupply {sevm : Sevm} {pre : Devm} {W : Devm → Prop} {G U : Na
     rw [hR.read, show (0x17c : B256).toNat = 0x17c by decide, show (4 : B256).toNat = 4 by decide,
       Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
     decide
-  exact ⟨_, .last rfl, _, _, _, _, rfl, hL.w, by omega, by omega, hin⟩
+  exact ⟨_, .last rfl, _, _, _, _, rfl, hL.w, by omega, by omega, hin, by decide⟩
 
 end Blanc.Lift.Curve3Pool
