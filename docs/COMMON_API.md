@@ -3778,7 +3778,12 @@ Use
   preserves the whole balance map, and `_benv_stat` the static environment.
   `_nonce_ne_zero` keeps every nonzero nonce nonzero (unconditionally: the
   only nonce write is a guarded authority increment), with the same law at
-  `setDelegationStep`, `setDelegationLoop`, and `setDelegation`.
+  `setDelegationStep`, `setDelegationLoop`, and `setDelegation`. The matching
+  gas preservations — `setDelegationStep_gas`, `setDelegationLoop_gas`,
+  `setDelegation_gas`, `messageCallDelegation_gas` (the delegation prefix
+  hands the call its original grant) — live beside those `*_fields` lemmas in
+  [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean) as the one public copy
+  shared by message-call and history gas bounds.
 - `Blanc.getDelegatedCodeAddress_eq_none_of_size_ne` in
   [`Blanc/CodeDelegation.lean`](../Blanc/CodeDelegation.lean) discharges a
   wrapper's `getDelegatedCodeAddress code = none` obligation from the code's
@@ -4471,7 +4476,14 @@ contract-neutral.
   `bnd2_sound`/`entails_sound` (the interval reading and entailment),
   `opFacts_sound` (the facts about an instruction's fresh result),
   `learn1_sound` (what a `JUMPI` arm learns), and `transfer_val` (symbols
-  through an instruction's stack transfer).
+  through an instruction's stack transfer). The interval folds both bound
+  checkers share (`bndOf` over `bnd` facts, `bnd2` refined once through
+  `lt`/`le` facts) live in
+  [`Blanc/Lift/BndInterval.lean`](../Blanc/Lift/BndInterval.lean):
+  `bndOfG`/`bnd2G` over a small projection interface, with the shared fold
+  inductions `bndOfG_sound`/`bnd2G_sound`; each checker's `bndOf_sound`/
+  `bnd2_sound` keeps its statement, discharging one per-fact bridge over its
+  own `Fact` type.
 - For write-site provenance terms and the generic locality corollary, use
   [`Blanc/Lift/WriteSite.lean`](../Blanc/Lift/WriteSite.lean),
   [`Blanc/Lift/WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean),

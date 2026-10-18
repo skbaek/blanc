@@ -138,50 +138,9 @@ theorem ProcessCreateMessageTrace.rawFrames_gasMeasure_le
     ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ msg.gas :=
   RetainedXlot.rawFrames_gasMeasure_le trace.retained trace.run
 
-/-- An EIP-7702 authorization never changes the message's grant. -/
-private theorem setDelegationStep_gas_eq {auth : Auth} {msg : Msg} {rc : B256}
-    {p : Msg × B256} (run : setDelegationStep auth msg rc = .ok p) : p.1.gas = msg.gas := by
-  unfold setDelegationStep at run
-  split at run
-  · cases run; rfl
-  split at run
-  · cases run; rfl
-  split at run
-  · cases run; rfl
-  · cases run
-  · dsimp only at run
-    split at run
-    · cases run; rfl
-    split at run
-    · cases run; rfl
-    · cases run; rfl
-
-private theorem setDelegationLoop_gas_eq :
-    ∀ {auths : List Auth} {msg : Msg} {rc : B256} {p : Msg × B256},
-      setDelegationLoop auths msg rc = .ok p → p.1.gas = msg.gas
-  | [], _, _, _, run => by cases run; rfl
-  | _ :: _, _, _, _, run => by
-      unfold setDelegationLoop at run
-      obtain ⟨_, step, rest⟩ := Except.bind_eq_ok run
-      exact (setDelegationLoop_gas_eq rest).trans (setDelegationStep_gas_eq step)
-
-/-- The EIP-7702 delegation prefix hands the call its original grant. -/
-private theorem messageCallDelegation_gas_eq {msg delegated : Msg} {refund : Nat}
-    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) : delegated.gas = msg.gas := by
-  unfold messageCallDelegation at run
-  split at run
-  · cases run; rfl
-  · obtain ⟨p, set, rest⟩ := Except.bind_eq_ok run
-    cases rest
-    unfold setDelegation at set
-    obtain ⟨q, loop, set⟩ := Except.bind_eq_ok set
-    have hq := setDelegationLoop_gas_eq loop
-    rcases hca : q.1.codeAddress with _ | ca
-    · simp only [hca] at set
-      cases set
-    · simp only [hca] at set
-      cases set
-      exact hq
+/- The delegation-prefix gas preservations live in `Blanc.LadderBase`
+(`setDelegationStep_gas`, `setDelegationLoop_gas`, `setDelegation_gas`,
+`messageCallDelegation_gas`). -/
 
 /-- **Every frame a settled message call enters starts at or below the message's grant.** -/
 theorem MessageCallTrace.rawFrames_gasMeasure_le
@@ -199,7 +158,7 @@ theorem MessageCallTrace.rawFrames_gasMeasure_le
       have hexec : (messageCallExecutionMessage delegated).gas = delegated.gas := by
         unfold messageCallExecutionMessage
         cases getDelegatedCodeAddress delegated.code <;> rfl
-      rw [hexec, messageCallDelegation_gas_eq delegation] at h
+      rw [hexec, messageCallDelegation_gas delegation] at h
       exact h
 
 /-! ### Transactions, system messages, bodies, blocks, histories -/

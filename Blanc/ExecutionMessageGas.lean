@@ -64,63 +64,9 @@ theorem ProcessCreateMessageTrace.settledFrames_length_gas_le {msg : Msg} {post 
       simp only [List.length_nil, Nat.zero_add]
       omega
 
-private theorem setDelegationStep_gas {auth : Auth} {msg : Msg} {rc : B256}
-    {p : Msg × B256} (run : setDelegationStep auth msg rc = .ok p) :
-    p.1.gas = msg.gas := by
-  unfold setDelegationStep at run
-  split at run
-  · cases run; rfl
-  · split at run
-    · cases run; rfl
-    · cases recovered : recoverAuthority auth with
-      | error error =>
-        cases error <;> simp only [recovered] at run
-        all_goals cases run
-        rfl
-      | ok authority =>
-        simp only [recovered] at run
-        split at run
-        · cases run; rfl
-        · split at run
-          · cases run; rfl
-          · cases run; rfl
-
-private theorem setDelegationLoop_gas :
-    ∀ (auths : List Auth) {msg : Msg} {rc : B256} {p : Msg × B256},
-      setDelegationLoop auths msg rc = .ok p → p.1.gas = msg.gas
-  | [], _, _, _, run => by cases run; rfl
-  | _ :: _, _, _, _, run => by
-      unfold setDelegationLoop at run
-      obtain ⟨next, step, rest⟩ := Except.bind_eq_ok run
-      exact (setDelegationLoop_gas _ rest).trans (setDelegationStep_gas step)
-
-private theorem setDelegation_gas {msg : Msg} {p : Msg × B256}
-    (run : setDelegation msg = .ok p) : p.1.gas = msg.gas := by
-  unfold setDelegation at run
-  obtain ⟨next, loop, run⟩ := Except.bind_eq_ok run
-  have gas := setDelegationLoop_gas _ loop
-  cases codeAddress : next.1.codeAddress with
-  | none =>
-    simp only [codeAddress] at run
-    cases run
-  | some address =>
-    simp only [codeAddress] at run
-    cases run
-    exact gas
-
-private theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
-    (run : messageCallDelegation msg = .ok (delegated, refund)) :
-    delegated.gas = msg.gas := by
-  unfold messageCallDelegation at run
-  by_cases empty : msg.tenv.stat.auths.isEmpty = true
-  · rw [ite_eq_left empty] at run
-    cases run
-    rfl
-  · rw [ite_eq_right empty] at run
-    obtain ⟨next, set, rest⟩ := Except.bind_eq_ok run
-    cases rest
-    exact setDelegation_gas set
-
+/-- The delegation-prefix gas preservations live in `Blanc.LadderBase`
+(`setDelegationStep_gas`, `setDelegationLoop_gas`, `setDelegation_gas`,
+`messageCallDelegation_gas`); only the execution-message wrapper stays here. -/
 private theorem messageCallExecutionMessage_gas (msg : Msg) :
     (messageCallExecutionMessage msg).gas = msg.gas := by
   unfold messageCallExecutionMessage
