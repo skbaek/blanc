@@ -189,7 +189,7 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", "Lift.SilentCallP"]
 # Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
 # Lift.FreePtr; no statement names a contract.
-SHARED += ["Lift.FreePtrChain"]
+SHARED += ["Lift.FreePtrChain", "Lift.WriteSiteChain"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
@@ -974,7 +974,13 @@ CONTRACTS = {
         "Lift.Usdc.Book",
         "Lift.Usdc.ImplFp",
         "Lift.Usdc.ImplFp.Ann",
+        "Lift.Usdc.ImplWs",
         "Lift.Usdc.ImplWs.Ann",
+        "Lift.Usdc.ImplWs.Check",
+        "Lift.Usdc.ImplWs.Check0",
+        "Lift.Usdc.ImplWs.Check1",
+        "Lift.Usdc.ImplWs.Check2",
+        "Lift.Usdc.ImplWs.Check3",
         "Lift.Usdc.ImplFp.Check",
         "Lift.Usdc.ImplFp.Check0",
         "Lift.Usdc.ImplFp.Check1",

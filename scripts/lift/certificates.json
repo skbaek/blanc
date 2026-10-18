@@ -747,6 +747,13 @@
         "ann": "Blanc/Lift/Usdc/ImplFp/Ann.lean",
         "check_dir": "Blanc/Lift/Usdc/ImplFp",
         "parts": 4
+      },
+      "ws": {
+        "producer": "scripts/lift/ws_annot.py",
+        "namespace": "Blanc.Lift.Usdc.ImplWs",
+        "ann": "Blanc/Lift/Usdc/ImplWs/Ann.lean",
+        "check_dir": "Blanc/Lift/Usdc/ImplWs",
+        "parts": 4
       }
     },
     {

@@ -35,14 +35,14 @@ def Env.Frame (ε : Env) (sevm : Sevm) : Prop :=
 theorem Env.root_frame (sevm : Sevm) : (Env.root sevm).Frame sevm := ⟨rfl, rfl, rfl⟩
 
 /-- **The meaning of an abstract write-site state** under the symbol valuation `ν`, in the
-environment `ε` of the frame `sevm`: `σ.kv` names the frame words `S`, `σ.args` the entry words,
+environment `ε` of the frame `sevm`: `σ.kv` names the frame words `S`, `σ.args` a prefix of the entry words,
 the facts hold, each recorded term reads its symbol's word, each recorded memory word is in
 memory, each `cur` symbol is the current value of its slot and each `ub` symbol is below it, each
 recorded `EQ` result compares two words its terms read, and every guard holds. -/
 structure WSt.Holds (ε : Env) (sevm : Sevm) (ν : Nat → B256) (σ : WSt) (S : List B256)
     (d : Devm) : Prop where
   kv : List.Forall₂ (fun s w => ν s = w) σ.kv S
-  args : σ.args.map ν = ε.args
+  args : σ.args.map ν <+: ε.args
   facts : AllHold ν σ.facts
   prov : ∀ p ∈ σ.prov, p.2.Den ε (ν p.1)
   mem : ∀ p ∈ σ.mem, p.1 + 32 ≤ d.memory.size ∧ memWord d.memory p.1 = ν p.2
@@ -119,8 +119,8 @@ theorem WSt.Holds.agree (h : σ.Holds ε sevm ν S d) (hag : ∀ s, s < σ.fresh
   simp only [WSt.syms, List.mem_append, List.mem_flatMap, List.mem_map] at hs
   refine ⟨forall₂_congr' (fun s hm => hs s (.inl (.inl (.inl (.inl (.inl (.inl (.inl (hm))))))))) h.kv,
     ?_, ?_, ?_, ?_, ?_, ?_, ?_, h.guards⟩
-  · rw [← h.args]
-    exact List.map_congr_left fun s hm => hs s (.inl (.inl (.inl (.inl (.inl (.inl (.inr hm)))))))
+  · rw [List.map_congr_left fun s hm => hs s (.inl (.inl (.inl (.inl (.inl (.inl (.inr hm)))))))]
+    exact h.args
   · exact fun f hf => FreePtr.Fact.holds_congr (fun s hm =>
       (hs s (.inl (.inl (.inl (.inl (.inl (.inr ⟨f, hf, hm⟩))))))).symm) (h.facts f hf)
   · intro p hp

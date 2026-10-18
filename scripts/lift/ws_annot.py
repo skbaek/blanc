@@ -96,13 +96,14 @@ OP2_COMM = {'add', 'mul', 'and', 'or'}
 # ('kecc', a, b) ('kecc1', t). B256 values are Python ints.
 TOP = ('top',)
 
-# Prototype of the proposed `compat` relaxation (entry words: the annotation's
-# may be a prefix of the incoming ones). Off by default: the committed
-# checker requires equal lengths.
-ARGS_PREFIX = False
-# Prototype of the proposed per-entry summaries: a goto needs the target's
-# summary to be covered by the jumper's (`retLe`), not equal. Off by default.
-SUB_SUMMARY = False
+# Amendment A9 (WriteSite.lean): `compat` accepts an annotation whose entry
+# words are a prefix of the incoming ones (C1), a goto may be a tail call into
+# a parameter entry under an entry-word-free summary (C2), and a goto needs
+# the target's summary below the jumper's (`retLe`, C3), so summaries are per
+# entry. Both switches mirror the checker; False reproduces the pre-A9 walk
+# (kept for the focused tests only).
+ARGS_PREFIX = True
+SUB_SUMMARY = True
 
 
 def known(t) -> bool:
@@ -1025,7 +1026,7 @@ class Checker:
 
     def rkey(self, k: int) -> int:
         """The key of entry k's sites and keeps: its component, or (under the
-        per-entry prototype) the entry itself."""
+        A9 per-entry summaries) the entry itself."""
         return k if SUB_SUMMARY else self.comp[k]
 
     def get_ret_e(self, k: int) -> WRet:
@@ -1077,8 +1078,8 @@ class Checker:
             raise Reject(f"{what} to entry {k}: return summary differs")
 
     def _ret_ok_goto(self, k: int, cur: int) -> bool:
-        """The goto's summary condition: equality, or under the prototype the
-        target's summary below the jumper's (`retLe`)."""
+        """The goto's summary condition: WriteSite.retLe (A9 C3), or equality
+        before A9."""
         Rt, Rs = self.get_ret_e(k), self.get_ret_e(cur)
         if not SUB_SUMMARY:
             return Rt == Rs
@@ -1087,15 +1088,15 @@ class Checker:
                 and all(any(site_covers(q, s) for q in Rs.sites) for s in Rt.sites))
 
     def _tail_ok(self, k: int, st: WSt, cur: int) -> bool:
-        """Prototype of the proposed tail-call goto: a jump into a callee
-        entry (parameter annotation) whose shared summary names no entry
-        word, with the callee's frame on the stack."""
+        """WriteSite.gotoOk's tail call (A9 C2): a jump into a callee entry
+        (parameter annotation) whose summary names no entry word, with
+        exactly the callee's frame on the stack."""
         n = len(self.entries[k][1])
         # the target's summary is read in the callee environment: it must
         # name no entry word (under SUB_SUMMARY the target's own summary,
         # else the shared one)
         R = self.get_ret_e(k if SUB_SUMMARY else cur)
-        return (self.ann.get(k) == wst_param(n) and len(st.kv) >= n
+        return (self.ann.get(k) == wst_param(n) and len(st.kv) == n
                 and ret_arg_free(R))
 
     def walk(self, t, a: List[Tuple], st: WSt, R: WRet, k: int):
@@ -1548,7 +1549,7 @@ def emit_ann(checker: Checker, namespace: str, errors: List[str]) -> str:
     ]
     # One summary per function component, named once and shared by its
     # entries (the summaries repeat across a component's entries); under the
-    # per-entry prototype, one per distinct summary, named by its first entry.
+    # A9 per-entry summaries, one per distinct summary, named by its first entry.
     ret_name: Dict[int, str] = {}
     if SUB_SUMMARY:
         by_text: Dict[str, str] = {}
@@ -1689,14 +1690,7 @@ def main() -> int:
     ap.add_argument("--check-dir", default=None,
                     help="also write the kernel-decide Check<i>.lean and Check.lean here")
     ap.add_argument("--check-parts", type=int, default=4)
-    ap.add_argument("--sub-summary", action="store_true",
-                    help="prototype: per-entry summaries, a goto's target summary covered by the jumper's")
-    ap.add_argument("--args-prefix", action="store_true",
-                    help="prototype: mirror the proposed prefix relaxation of compat's entry words")
     args = ap.parse_args()
-    global ARGS_PREFIX, SUB_SUMMARY
-    ARGS_PREFIX = args.args_prefix
-    SUB_SUMMARY = args.sub_summary
 
     t0 = time.time()
     registry = json.loads(Path(args.registry).read_text())
