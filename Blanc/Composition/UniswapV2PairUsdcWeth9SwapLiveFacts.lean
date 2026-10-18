@@ -113,4 +113,68 @@ theorem usdcInstalled_of_runCompiled {P : Adr} {sevm : Sevm} {b d : Devm} {S : L
   usdcInstalled_of inst (image_of_runCompiled _ run inst.proxy) (image_of_runCompiled _ run inst.impl)
     (image_of_runCompiled _ run inst.lib) (slot.trans inst.slot.symm)
 
+/-! ## The pinned two-token callee environments (shared by the row and its finite twin) -/
+
+/-- The front environment with both tokens pinned: the WETH9 one's fields minus `transfer0`
+(§10c, verbatim). -/
+structure SwapFrontEnvUW (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 d1 dC : Devm)
+    (cg0 cg1 cgC Gc : Nat) : Prop where
+  callback : swapDataLength sevm ≠ 0 → SwapCallbackCallForward sevm
+    (swapFrontTransferWorld sevm b d0 d1) (swapLocalsStack sevm st)
+    (swapFrontTransferMem sevm d0 d1) (swapFrontPtr sevm d0 d1) (swapRecipientWord sevm)
+    (swapAmount0Out sevm) (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) cgC Gc dC
+  sentry : gCallStipend < swapFrontTransferGas sevm b d0 d1 cg0 cg1 cgC Gc +
+    sstoreCost sevm (afterSload sevm b 12) 12 0
+
+/-- The back environment with both reads pinned (§10c plus `room0`). -/
+structure SwapBackCalleeEnvUW (sevm : Sevm) (d : Devm) (M : Mem) (n : Nat) (p : B256)
+    (w : SwapCutWords) (ρ : B256) (R : List B256) (G : Nat) where
+  d0 : Devm
+  d1 : Devm
+  callGas0 : Nat
+  callGas1 : Nat
+  read1 : (d1, callGas1) = swapWethRead1 sevm d M n p w ρ R G (usdcRead0Skel sevm d M n p w ρ R)
+  read0 : (d0, callGas0) = swapUsdcRead0 sevm d M n p w ρ R G callGas1
+  room0 : usdcBalNeed sevm d (read0Stack w ρ R) M p w.token0 ≤
+    except64th (read0Need n p w callGas1 (usdcRead0Skel sevm d M n p w ρ R) +
+      usdcBalUsed sevm d (read0Stack w ρ R) M p w.token0)
+  sentries : SwapUpdateSentries sevm d1 (swapRequestSize (swapRequestSize n p) p) p w.reserve0
+    w.reserve1 (swapBalanceWord d0.returnData) (swapBalanceWord d1.returnData)
+    (swapEventRunGas G (swapSyncSize (swapRequestSize (swapRequestSize n p) p) p) p
+      (swapUnlockCost sevm d1 w.reserve0 w.reserve1 (swapBalanceWord d0.returnData)
+        (swapBalanceWord d1.returnData)
+        (swapInWord (swapBalanceWord d0.returnData) w.reserve0 w.amount0Out)
+        (swapInWord (swapBalanceWord d1.returnData) w.reserve1 w.amount1Out)
+        w.amount0Out w.amount1Out w.recipient))
+  unlock : gCallStipend < G + 26 + swapUnlockCost sevm d1 w.reserve0 w.reserve1
+    (swapBalanceWord d0.returnData) (swapBalanceWord d1.returnData)
+    (swapInWord (swapBalanceWord d0.returnData) w.reserve0 w.amount0Out)
+    (swapInWord (swapBalanceWord d1.returnData) w.reserve1 w.amount1Out)
+    w.amount0Out w.amount1Out w.recipient
+
+section UW
+variable {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256} {w : SwapCutWords} {ρ : B256}
+  {R : List B256} {G : Nat}
+
+def SwapBackCalleeEnvUW.gas (env : SwapBackCalleeEnvUW sevm d M n p w ρ R G) : Nat :=
+  env.callGas0 + 5 + swapRequestCharge d n p w.token0 72 + 16
+
+def SwapBackCalleeEnvUW.post (env : SwapBackCalleeEnvUW sevm d M n p w ρ R G) : Devm :=
+  afterSstore sevm (swapLoggedWorld sevm env.d1 w.reserve0 w.reserve1
+    (swapBalanceWord env.d0.returnData) (swapBalanceWord env.d1.returnData)
+    (swapInWord (swapBalanceWord env.d0.returnData) w.reserve0 w.amount0Out)
+    (swapInWord (swapBalanceWord env.d1.returnData) w.reserve1 w.amount1Out)
+    w.amount0Out w.amount1Out w.recipient) 12 1
+
+def SwapBackCalleeEnvUW.memory (env : SwapBackCalleeEnvUW sevm d M n p w ρ R G) : Mem :=
+  swapEventMemory (swapSyncMemory (swapBalanceReply (swapBalanceReply M p sevm.currentTarget
+      env.d0.returnData) p sevm.currentTarget env.d1.returnData) p
+      (updateFinalPackedWord sevm env.d1 w.reserve0 w.reserve1
+        (swapBalanceWord env.d0.returnData) (swapBalanceWord env.d1.returnData)))
+    p (swapInWord (swapBalanceWord env.d0.returnData) w.reserve0 w.amount0Out)
+    (swapInWord (swapBalanceWord env.d1.returnData) w.reserve1 w.amount1Out)
+    w.amount0Out w.amount1Out
+
+end UW
+
 end Blanc.Composition.UniswapV2PairUsdcWeth9
