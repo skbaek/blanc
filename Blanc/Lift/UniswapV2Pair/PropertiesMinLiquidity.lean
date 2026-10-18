@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SourceReplay
+import Blanc.MachineDataFacts
 
 /-!
 # The `MINIMUM_LIQUIDITY` supply floor, model side
@@ -54,9 +55,6 @@ private def State.FloorAt (locked : Prop) (st : State) : Prop :=
 private theorem State.FloorAt.of_locked {locked : Prop} {st : State} (held : st.MinimumLocked)
     (zero : st.ZeroAllowances) : st.FloorAt locked :=
   ⟨Or.inr held, zero, fun _ => held⟩
-
-private theorem B256.eq_zero_of_toNat {x : B256} (h : x.toNat = 0) : x = 0 :=
-  B256.toNat_inj _ _ (by rw [h, B256.toNat_zero])
 
 private theorem B256.eq_zero_of_le_zero {x y : B256} (zero : y = 0) (h : x ≤ y) : x = 0 := by
   have := B256.toNat_le_toNat h
