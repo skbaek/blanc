@@ -179,4 +179,13 @@ require(cst.fp is not None and cst.fp not in cst.kv
         and fp_annot.bnd2(cst.facts, cst.fp) == (128, 256),
         "canon gives fp its own symbol with its bounds")
 
+# -- Check part split: contiguous ranges covering every entry exactly once --
+for costs, parts in (([5, 1, 1, 1, 1, 1], 4), ([1] * 10, 4), ([3, 3], 4), ([7], 1)):
+    ranges = fp_annot.split_parts(costs, parts)
+    require(ranges[0][0] == 0 and ranges[-1][1] == len(costs)
+            and all(a < b for a, b in ranges)
+            and all(ranges[i][1] == ranges[i + 1][0] for i in range(len(ranges) - 1))
+            and len(ranges) == min(parts, len(costs)),
+            f"split_parts covers {costs} in {parts} parts")
+
 print(f"fp_annot checks: {COUNT} passed")

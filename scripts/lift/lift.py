@@ -390,6 +390,31 @@ def run_registry(args: argparse.Namespace) -> int:
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
+            fp = row.get("fp")
+            if fp:
+                # free-pointer annotations and their kernel-decide modules
+                # (`scripts/lift/fp_annot.py`, checked by `Blanc/Lift/FreePtr.lean`'s `fpCert`)
+                fp_out = out / "fp"
+                fp_argv = [sys.executable, "-B", str(root / fp["producer"]),
+                           "--registry", str(registry_path), "--row", ident,
+                           "--namespace", fp["namespace"],
+                           "--ann-out", str(fp_out / "Ann.lean"),
+                           "--check-dir", str(fp_out), "--check-parts", str(fp["parts"])]
+                fp_proc = subprocess.run(fp_argv, capture_output=True, text=True, timeout=args.timeout)
+                if fp_proc.returncode != 0:
+                    print(f"FAIL {ident}: free-pointer producer exit {fp_proc.returncode}\n"
+                          f"{fp_proc.stdout}{fp_proc.stderr}")
+                    failures += 1
+                    continue
+                pairs.append((fp_out / "Ann.lean", root / fp["ann"]))
+                check_dir = root / fp["check_dir"]
+                produced_fp = sorted(fp_out.glob("Check*.lean"))
+                pairs += [(q, check_dir / q.name) for q in produced_fp]
+                names = {q.name for q in produced_fp}
+                for extra in sorted(check_dir.glob("Check*.lean")):
+                    if extra.name not in names:
+                        print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
+                        failures += 1
             for produced, committed in pairs:
                 rel = committed.relative_to(root)
                 if args.write:
