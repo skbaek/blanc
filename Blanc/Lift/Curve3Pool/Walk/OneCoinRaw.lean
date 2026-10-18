@@ -78,10 +78,10 @@ section
 
 variable {sevm : Sevm} {pre post : Devm} {s : State}
 
-/-- **`remove_liquidity_one_coin`'s raw effect with the second `get_y_D` call**, given the
-certificate's checkedness: the frame's observed environment `e` (its time, the supply `T` the frame
-read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
-theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems true)
+/-- **`remove_liquidity_one_coin`'s raw effect with the observed environment and both `get_y_D`
+calls**, given the certificate's checkedness: `ocEnv` at the frame's `i` and the supply reply `T`, at
+whose time the walk's two `get_y_D` calls (`CwFirstGetYD`, `CwSecondGetYD`) were made. -/
+theorem removeLiquidityOneCoin_rawEYD_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
@@ -95,11 +95,12 @@ theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems 
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
-    ∃ e o, step s e (decodeCall sevm) = some o ∧
-      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
-      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
-        CwFirstGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T ∧
-        CwSecondGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
+    ∃ (hi : (exJ sevm).toNat < 3) (T : Nat) (o : Out),
+      step s (ocEnv sevm ⟨_, hi⟩ T) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (ocEnv sevm ⟨_, hi⟩ T) o ∧
+      ∃ (hi' : arg sevm 1 < 3),
+        CwFirstGetYD s (ocEnv sevm ⟨_, hi⟩ T).time (arg sevm 0) ⟨arg sevm 1, hi'⟩ T ∧
+        CwSecondGetYD s (ocEnv sevm ⟨_, hi⟩ T).time (arg sevm 0) ⟨arg sevm 1, hi'⟩ T := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   have hcoinJ : (exJ sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp
@@ -128,7 +129,7 @@ theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems 
   have hmodel := oc_model (i := i) (e := ocEnv sevm i (vSupply cs).toNat) hck.abs hk
     (hmod _ rfl rfl) (toNat_le_of_not_lt hmin) hmf hadd (by rw [hbK]; exact hsub) rfl
     (by simp only [ocEnv, decide_true])
-  refine ⟨ocEnv sevm i (vSupply cs).toNat, ?o, ?step, ?raw, hi1, (vSupply cs).toNat, rfl, ?first⟩
+  refine ⟨hi, (vSupply cs).toNat, ?o, ?step, ?raw, hi1, ?first⟩
   case first =>
     rw [ha0, show (⟨arg sevm 1, hi1⟩ : Fin 3) = i from Fin.ext ha1]
     exact ⟨hfirst, hsec⟩
@@ -194,6 +195,55 @@ theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems 
         decide_eq_false htok, decide_eq_false (hcoinJ hi), Bool.not_false, Bool.true_or,
         hbt, hpt, hbd, hpd, hbv, hpv, exPushData, word, toB256_toNat, ocEnv]
 
+/-- **`remove_liquidity_one_coin`'s raw effect**, given the certificate's checkedness, with the
+observed environment exposed: `ocEnv` at the frame's `i` and the supply reply `T`. -/
+theorem removeLiquidityOneCoin_rawE_of (hc : Cert.CheckedM code cert mems true)
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ (hi : (exJ sevm).toNat < 3) (T : Nat) (o : Out),
+      step s (ocEnv sevm ⟨_, hi⟩ T) (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (ocEnv sevm ⟨_, hi⟩ T) o := by
+  obtain ⟨hi, T, o, h1, h2, -⟩ := removeLiquidityOneCoin_rawEYD_of hc exc hcode hfork hlen hcd hsel
+    hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
+  exact ⟨hi, T, o, h1, h2⟩
+
+/-- **`remove_liquidity_one_coin`'s raw effect with the second `get_y_D` call**, given the
+certificate's checkedness: the frame's observed environment `e` (its time, the supply `T` the frame
+read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
+theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems true)
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
+    (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o ∧
+      ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
+        CwFirstGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T ∧
+        CwSecondGetYD s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
+  obtain ⟨hi, T, o, h1, h2, hi', hf, hs⟩ := removeLiquidityOneCoin_rawEYD_of hc exc hcode hfork hlen
+    hcd hsel hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
+  exact ⟨_, o, h1, h2, hi', T, rfl, hf, hs⟩
+
 /-- **`remove_liquidity_one_coin`'s raw effect with the first `get_y_D` call**, given the
 certificate's checkedness: the frame's observed environment `e` (its time, the supply `T` the frame
 read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
@@ -237,9 +287,9 @@ theorem removeLiquidityOneCoin_raw_of (hc : Cert.CheckedM code cert mems true)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
-  obtain ⟨e, o, hstep, hraw, -⟩ := removeLiquidityOneCoin_raw_getYD_of hc exc hcode hfork hlen hcd
-    hsel hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
-  exact ⟨e, o, hstep, hraw⟩
+  obtain ⟨hi, T, o, h1, h2⟩ := removeLiquidityOneCoin_rawE_of hc exc hcode hfork hlen hcd hsel
+    hstack hmem hgas hck htok hcoin hpc hid hkeep hidk
+  exact ⟨_, o, h1, h2⟩
 
 
 end
