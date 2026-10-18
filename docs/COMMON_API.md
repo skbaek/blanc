@@ -4390,8 +4390,9 @@ contract-neutral.
   `Cert.check` in [`Blanc/Lift/Check.lean`](../Blanc/Lift/Check.lean), with
   the per-instruction abstract transfer (`ninstTransfer`, `ninstTransfer_run`)
   in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean) (it accepts `XOR`,
-  Vyper's `!=`, and the `SLT`, `EXTCODESIZE`, `TLOAD`, and `TSTORE` steps needed
-  by deployed Lido bytecode, `CREATE2` through `create2Transfer`, which pops
+  Vyper's `!=`, the `SLT`, `EXTCODESIZE`, `TLOAD`, and `TSTORE` steps needed
+  by deployed Lido bytecode, `EXTCODEHASH` (USDC V2 and V2_1, whose exact pushed word
+  `run_extcodehash_val` gives: zero for an empty account, else the code's keccak-256), `CREATE2` through `create2Transfer`, which pops
   endowment, offset, size and salt and pushes the new address or zero, and
   `DELEGATECALL` through `delegatecallTransfer`, which pops gas, target, input
   offset and size, output offset and size and pushes the flag; these
@@ -4463,7 +4464,7 @@ contract-neutral.
   forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
   `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
   `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
-  `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
+  `EXTCODEHASH`, `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
   `Mem.write_size_ge` (a write never shrinks memory).
 - For crossing solc's word-copy loop without knowing the copied bytes, use
   [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):

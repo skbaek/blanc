@@ -234,6 +234,21 @@ theorem run_extcodesize_memory {sevm : Sevm} {d d' : Devm}
     rw [← (Devm.push_of_push h3).memory, ← m1]
     exact (Devm.burn_of_chargeGas h2).memory.symm
 
+theorem run_extcodehash_memory {sevm : Sevm} {d d' : Devm}
+    (run : Ninst.Run sevm d (.reg .extcodehash) d') : d'.memory = d.memory := by
+  rcases of_run_reg run with ⟨pc, h⟩
+  simp only [Rinst.run, Rinst.runCore] at h
+  obtain ⟨⟨a, d1⟩, h1, h⟩ := Except.bind_eq_ok h
+  have m1 : d1.memory = d.memory := by
+    obtain ⟨_, _, hp⟩ := Devm.pop_of_popToAdr h1
+    exact (Devm.pop_of_pop hp).memory.symm
+  dsimp only at h
+  split at h
+  all_goals
+    obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok h
+    rw [← (Devm.push_of_push h3).memory, ← m1]
+    exact (Devm.burn_of_chargeGas h2).memory.symm
+
 theorem run_exp_memory {sevm : Sevm} {d d' : Devm}
     (run : Ninst.Run sevm d (.reg .exp) d') : d'.memory = d.memory := by
   rcases of_run_reg run with ⟨pc, h⟩

@@ -41,6 +41,7 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .address, words => some (none :: words)
   | .balance, words => unaryTransfer words
   | .extcodesize, words => unaryTransfer words
+  | .extcodehash, words => unaryTransfer words
   | .log n, words => dropTransfer (n.val + 2) words
   | .mod, words => binaryTransfer words
   | .or, words => binaryTransfer words
@@ -329,7 +330,7 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
     liftRegularTransfer r (words.map φ) = some (output.map φ) := by
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_map φ hφ checked
-  case not | balance | extcodesize | tload => exact unaryTransfer_map φ hφ checked
+  case not | balance | extcodesize | extcodehash | tload => exact unaryTransfer_map φ hφ checked
   case address | origin | chainid | selfbalance | codesize | number => cases checked; simp only [List.map_cons,
     hφ]
   case log n =>
@@ -351,7 +352,7 @@ private theorem liftRegularTransfer_append {r : Rinst}
     liftRegularTransfer r (words ++ below) = some (output ++ below) := by
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_append checked
-  case not | balance | extcodesize | tload => exact unaryTransfer_append checked
+  case not | balance | extcodesize | extcodehash | tload => exact unaryTransfer_append checked
   case address | origin | chainid | selfbalance | codesize | number => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
   case mod | or | xor | byte | shl => exact binaryTransfer_append checked
@@ -1265,6 +1266,48 @@ private theorem ninstTransfer_run_delegatecall {sevm : Sevm} {devm devm' : Devm}
       rw [hw]
       exact ⟨Or.inl rfl, hrest⟩
 
+/-- `EXTCODEHASH` at a known stack, read through Jaune's arm: it pops the address, charges the
+warm access or the fork's cold access (warming the address), and pushes zero for an empty
+account and the keccak-256 of the account's code otherwise, both read from the instruction's
+input state.  Memory is untouched. -/
+theorem run_extcodehash_val {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
+    (hs : s.stack = x :: xs) (run : Ninst.Run sevm s (.reg .extcodehash) r) :
+    r.stack =
+        (if (s.getAcct x.toAdr).Empty then (0 : B256)
+         else ByteArray.keccak 0 (s.getAcct x.toAdr).code.size (s.getAcct x.toAdr).code) :: xs ∧
+      r.memory = s.memory := by
+  rcases of_run_reg run with ⟨pc, hrun⟩
+  simp only [Rinst.run, Rinst.runCore] at hrun
+  rcases Except.bind_eq_ok hrun with ⟨⟨adr, d0⟩, hpopAdr, hrun⟩
+  rcases Devm.pop_of_popToAdr hpopAdr with ⟨word, hadr, hpop⟩
+  have hp := Devm.pop_of_pop hpop
+  have hsplit := hp.stack
+  simp only [Stack.Pop, Split, hs, List.cons_append, List.nil_append, List.cons.injEq] at hsplit
+  obtain ⟨rfl, htail⟩ := hsplit
+  subst hadr
+  dsimp only at hrun
+  have hd0 : s.state = d0.state := hp.state
+  split at hrun
+  all_goals
+    rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+    have hb := Devm.burn_of_chargeGas hgas
+    have hst : s.state = d2.state := hd0.trans hb.state
+    have hacct : (Devm.balReadAccount sevm.benvStat.rules x.toAdr d2).getAcct x.toAdr =
+        s.getAcct x.toAdr := by
+      rw [Devm.balReadAccount_getAcct]
+      unfold Devm.getAcct
+      rw [hst]
+    have hq := Devm.push_of_push hpush
+    rw [hacct] at hq
+    refine ⟨?_, ?_⟩
+    · rw [hq.stack]
+      simp only [List.cons_append, List.nil_append, List.cons.injEq, true_and,
+        Devm.balReadAccount_stack]
+      rw [← hb.stack, htail]
+      all_goals rfl
+    · rw [← hq.memory]
+      exact (hp.memory.trans hb.memory).symm
+
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
@@ -1522,6 +1565,15 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                 List.pref_unique (by simpa only [List.length_cons] using sameLength.symm) pref
                   (by simpa only [List.append_nil] using pref_append devm'.stack [])
               rw [← exactStack]
+              exact ⟨Or.inl rfl, tailMatched⟩
+      | extcodehash =>
+          rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
+          cases hstack : devm.stack with
+          | nil => simp only [hstack, Matches] at matched
+          | cons address xs =>
+              rw [hstack] at matched
+              obtain ⟨_, tailMatched⟩ := matched
+              rw [(run_extcodehash_val hstack run).1]
               exact ⟨Or.inl rfl, tailMatched⟩
       | dup index =>
           simp only [regularTransfer] at checked

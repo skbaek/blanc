@@ -219,6 +219,9 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
     case extcodesize =>
       rw [fp_keep he rfl, run_extcodesize_memory run]
       exact hw
+    case extcodehash =>
+      rw [fp_keep he rfl, run_extcodehash_memory run]
+      exact hw
     case selfbalance =>
       rw [fp_keep he rfl, ← (of_run_selfbalance hfork run).memory]
       exact hw
