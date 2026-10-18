@@ -1333,6 +1333,7 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvLiveEndKeep",
     "Composition.Curve3Pool3CrvLiveEndRLI",
     "Composition.Curve3Pool3CrvLiveEndAL",
+    "Composition.Curve3Pool3CrvLiveEndKeepRLI",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",
