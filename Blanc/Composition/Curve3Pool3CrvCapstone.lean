@@ -8,19 +8,22 @@ import Blanc.ExecutionHistoryFrameTime
 # U9(b): the closed 3pool–3Crv instance — one signed `exchange` in one configured BPO2 block
 
 `curve3pool_closed_agreeing` (universal form): for every canonical world `st` with representable
-total ether that agrees with `P0` on the touched accounts (`AgreesP0`), the configured BPO2 block
-with the signed type-2 `exchange(0, 1, 100, 0)` (`signedExchangeTx`) is a valid state transition
-from the checkpoint at `st`, and on a configured history of it the composed U3 headline
-(`pool_3crv_u3`) applies with every hypothesis discharged — the code premises, the joint
-pool–3Crv checkpoint (U9(a)'s checker), the fresh 3Crv keys (no frame runs at 3Crv), the pool's
-trace premises (`ex_poolTraceEnv`) — and its first replayed invocation is the swap:
+total ether that agrees with `P0` on the touched accounts (agreement `AgreesP0` plus `Canonical`
+and `SumNof` are assumed; the checkpoint is derived from agreement via `joint_of_agrees` and
+U9(a)'s checker `checkJoint`), the configured BPO2 block with the signed type-2
+`exchange(0, 1, 100, 0)` (`signedExchangeTx`) is a valid state transition from the checkpoint
+derived at `st`, and on a configured history of it the composed U3 headline (`pool_3crv_u3`)
+applies with every hypothesis discharged — the code premises, the joint pool–3Crv checkpoint,
+the fresh 3Crv keys (no frame runs at 3Crv), the pool's trace premises (`ex_poolTraceEnv`) —
+and its first replayed invocation is the swap, giving the U3 ledger bounds:
 
 * the decoded call is `exchange(0, 1, 100, 0)` at `poolState`, the model's step leaves
   `poolState1` (balances `[1100, 1868, 3000]`) and pulls 100 of coin 0, pushes `a > 0` of coin 1
   (the swap moves a positive amount);
-* the U3 bounds hold at 3Crv's ledger supplies, the supply is unchanged (`exchange` makes no 3Crv
-  call), and `get_virtual_price`'s `D` rises strictly (22177905188247 → 22178770202300): `D/T`
-  strictly increases from the fee.
+* the U3 bounds hold at 3Crv's ledger supplies and the supply is unchanged (`exchange` makes no
+  3Crv call). Strict `D < D'` (`22177905188247 < 22178770202300`) is a separate evaluated fact
+  (`ex_model_D`: both `vDChk` values by kernel evaluation), not a consequence of `pool_3crv_u3`
+  and not derived from any fee-positivity lemma.
 
 The coins' answers are `Token20`'s code (`token20_coinPullOkAt`, `token20_coinPushOkAt`), not
 premises; the frame is `exchange_live` instantiated (`ex_frame_live`).
