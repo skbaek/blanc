@@ -67,7 +67,10 @@ theorem reserves_eq_of_fixed {s : Stor} {st st' : UniswapV2Pair.State}
 /-- **C6(a), the exhibit composition**: every V2 pair whose `token0` is USDC and `token1` is WETH9,
 from the two-token joint checkpoint, with HASH-T for the Pair, USDC and WETH9, USDC's governance
 premise F2, the never-signer premise for the Pair and the factory premises.  At every settled frame
-outside the Pair's non-static frames and outside USDC's writer frames, both joint relations hold; at
+outside the Pair's non-static frames and not shadowed in USDC (`Usdc.UsdcShadowed`: a frame running
+USDC's implementation or library code at the proxy's storage, static or not, or any frame inside
+the block of an earlier library frame, such as an EIP-1271 wallet's `isValidSignature` check after
+a signed call has written its nonce or authorization state), both joint relations hold; at
 the end, over the Pair's full replay, both reserves are covered by the stored balance words and
 every tracked allowance row of the Pair is zero.  No hypothesis mentions either token's answers. -/
 theorem pair_usdc_weth9_joint {pair usdc weth : Adr}
