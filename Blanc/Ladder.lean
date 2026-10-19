@@ -1043,15 +1043,26 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
   exact msgInv_ofSem (ContractSpecSem.setDelegation_preserves_msgInv (c := c.toSem)
     h_run (msgInv_toSem h))
 
-theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.State}
+theorem processMessageCall_preserves_stateInv {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
     (hfork : CoveredFork msg.benv.stat.fork)
     (hp : c.Preserves wa)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : c.MsgInv wa msg) :
+    c.StateInv wa st' := by
+  exact stateInv_ofSem (ContractSpecSem.processMessageCall_preserves_stateInv (c := c.toSem)
+    hfork (preserves_toSem hp) h_run (msgInv_toSem h_inv))
+
+theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.State}
+    {out : MsgCallOutput}
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hp : c.Preserves wa)
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h_inv : c.MsgInv wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) :
     c.StateInv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
   have h := ContractSpecSem.processMessageCall_preserves_inv (c := c.toSem)
-    hfork (preserves_toSem hp) h_run (msgInv_toSem h_inv)
+    hfork (preserves_toSem hp) h_run (msgInv_toSem h_inv) h_inherited
   exact ⟨stateInv_ofSem h.1, h.2⟩
 
 lemma checkTransaction_sender_ne_of_inv {wa : Adr}
@@ -1135,9 +1146,9 @@ lemma processGeneralPurposeRequests_preserves_inv_sum_le (wa : Adr)
   exact ⟨stateInv_ofSem h.1, h.2⟩
 
 theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
-    (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
+    (benv : Benv) (txs : List (Bytes ⊕ Tx)) (ommers : List Header) (wds : List Withdrawal)
     (st : Jaune.State) (bout : BlockOutput)
-    (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
+    (h_run : applyBody benv txs ommers wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : c.BenvInv wa benv)
     (hfork : CoveredFork benv.stat.fork) : c.StateInv wa st := by
@@ -1163,7 +1174,8 @@ theorem stateTransitionUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   exact stateInv_ofSem (ContractSpecSem.stateTransitionUsing_preserves_inv
     (c := c.toSem) (wa := wa) (hp := preserves_toSem hp)
@@ -1182,7 +1194,8 @@ theorem stateTransition_preserves_inv (wa : Adr) (hp : c.Preserves wa)
 theorem chainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   exact stateInv_ofSem (ContractSpecSem.chainUsing_preserves_inv
     (c := c.toSem) (wa := wa) (hp := preserves_toSem hp)
@@ -1213,7 +1226,8 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   exact stateInv_ofSem (ContractSpecSem.addBlockToChainUsing_preserves_inv
     (c := c.toSem) (wa := wa) (hp := preserves_toSem hp)

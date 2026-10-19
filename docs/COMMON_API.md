@@ -2949,6 +2949,31 @@ fact `wa ∉ msg.inheritedDeletions`; message NoDel alone constrains code and th
 created-account set, not the inherited deletion snapshot. Derive this fact
 from the actual message producer. It is not a default-empty assumption.
 
+For a whole successful `processMessageCall`, use
+`ContractSpecSem.processMessageCall_preserves_stateInv` in
+[`Blanc/LadderSem.lean`](../Blanc/LadderSem.lean), or the thin
+`ContractSpec.processMessageCall_preserves_stateInv` wrapper in
+[`Blanc/Ladder.lean`](../Blanc/Ladder.lean), when only `StateInv` is needed.
+These retain the actual `MsgInv`, covered fork and contract preservation
+premises, and require no inherited-deletion exclusion. The conjunction theorem
+`processMessageCall_preserves_inv` additionally requires
+`wa ∉ msg.inheritedDeletions` and preserves both `StateInv` and exclusion of
+`wa` from the output deletion set. Transaction and system-message rungs derive
+that exclusion from their actual message constructors; they do not add a
+blanket hypothesis to their public signatures. This is contract-invariant
+preservation over the existing wrapper, not a generic historical NoDel claim
+or a raw interpreter-to-settlement equality recipe.
+
+The same two owners' `applyBody_preserves_inv` theorem takes the actual
+`ommers : List Header` before withdrawals. It keeps `CoveredFork` and the
+existing balance and environment-invariant premises; covered modern rules
+have no proof-of-work reward pass, so this is not a historical reward
+preservation theorem. The static transition rung passes `block.ommers`.
+Configured transition and import rungs reuse Jaune's
+`stateTransitionScheduledE_of_pow_none`, deriving its no-reward premise from
+`CoveredFork`, rather than assuming that scheduled ommer validation always
+matches a fixed fork.
+
 ### T2. I need to know which child effects survive settlement
 
 Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`

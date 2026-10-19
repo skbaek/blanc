@@ -280,12 +280,12 @@ lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
           have hBs : benv.state = st_mid.addBal target value := by
             rw [hB, hc_ct, hc_value]; rfl
           have h_state : inter.state = st_mid.addBal target value := by
-            rw [h_inter_state, h_child_state, hBs]
+            rw [h_inter_state, Devm.recordTouch_state, h_child_state, hBs]
           exact Pre.transfer_state h_pc (h_ne h_stv) h_sub h_state
         · have h_benv : benv = childMsg.benv :=
             benvAfterTransfer_eq_of_not_transfer (by rw [hc_stv, hc_value]; exact h_tr) eq_bt
           apply h_pc.state_eq
-          rw [h_inter_state, h_child_state, h_benv]
+          rw [h_inter_state, Devm.recordTouch_state, h_child_state, h_benv]
           exact hc_state
       · cases h_xl_some
 
@@ -385,12 +385,9 @@ lemma Ninst.none_preserves_precond
     c.Pre wa sevm inter := by
   cases n with
   | push xs le =>
-      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp run
-      rcases Except.bind_eq_ok hrun.2.symm with
-        ⟨charged, charge, pushed⟩
-      exact precondition.state_eq
-        (((Devm.burn_of_chargeGas charge).state).trans
-          ((Devm.push_of_push pushed).state)).symm
+      have frame := Ninst.push_instructionFrame_effectRec
+        (xl := .none) trivial run
+      exact precondition.state_eq frame.state.symm
   | dupn imm =>
     have frame := Ninst.dupn_instructionFrame_effectRec
       (xl := .none) trivial run
@@ -894,8 +891,11 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rw [ite_eq_right h_errC] at h_ifB
       have h_A := Except.ok.inj h_ifB
       subst h_A
-      rw [ite_eq_left (h_isNone_true h_errC)] at h_ifA
-      rcases h_cc : processCreateMessage.chargeCodeGas childMsg.benv.stat.rules child4
+      simp only [Devm.recordTouch_error] at h_ifA
+      simp only [h_isNone_true h_errC, ↓reduceIte] at h_ifA
+      rcases h_cc : processCreateMessage.chargeCodeGas childMsg.benv.stat.rules
+          (child4.recordTouch (processCreateMessage.msg childMsg).benv.stat.rules true
+            (processCreateMessage.msg childMsg).currentTarget)
         with ⟨errC, evmC⟩ | evmC
       · -- code-deposit gas charge failed
         simp only [h_cc] at h_ifA
@@ -909,7 +909,8 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       · -- code deposit succeeded : reconstruct the precondition
         simp only [h_cc] at h_ifA
         have h_child := Except.ok.inj h_ifA
-        have h_stC : evmC.state = child4.state := chargeCodeGas_state_ok h_cc
+        have h_stC : evmC.state = child4.state := by
+          simpa only [Devm.recordTouch_state] using chargeCodeGas_state_ok h_cc
         apply Pre.of_postcond h_post h_ct_ne h_pre1.code
           (code_eq_of_exec_sem (hpc0 ▸ ex_sub) h_pre1.code)
         · rw [h_inter_state, ← h_child, Devm.setCode_state, h_stC, hc_ct,
@@ -1025,10 +1026,20 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
     have hbal : sevm.benvStat.rules.bal = none :=
       BenvStat.bal_none_of_stateGas_none hsg
+    have haccess : sevm.benvStat.rules.access = .eip2929 :=
+      hfork.cases (motive := fun f => f.ruleSet.access = .eip2929) rfl rfl rfl rfl
+    have herase : sevm.benvStat.rules.settle.eraseEmptyOnModify = true :=
+      hfork.cases (motive := fun f => f.ruleSet.settle.eraseEmptyOnModify = true)
+        rfl rfl rfl rfl
+    have honly : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true :=
+      hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructOnlyCreated = true)
+        rfl rfl rfl rfl
     dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
       Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at h_run
     rw [hsg] at h_run
-    simp only [Devm.balReadAccount_of_bal_none hbal] at h_run
+    simp only [Devm.balReadAccount_of_bal_none hbal, haccess,
+      Devm.creditBeneficiary_of_eraseEmptyOnModify herase, honly,
+      Bool.true_eq_false, or_false] at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
     rcases Except.bind_eq_ok h_run1 with ⟨devm2, h_charge, h_run2⟩
     rcases Except.bind_eq_ok h_run2 with ⟨_, h_assert, h_run3⟩
@@ -1075,7 +1086,8 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     by_cases hdel : sevm.currentTarget ∈ (devm3.addBal (dest_a, devm1).1 ((dest_a, devm1).2.getAcct sevm.currentTarget).bal).createdAccounts
     · simp only [hdel, ite_true] at h_run4
       rw [← Except.ok.inj h_run4]
-      exact Post.selfdestruct_delete h_ne h_pc3
+      exact Post.of_state_eq (Post.selfdestruct_delete h_ne h_pc3)
+        (creditSelfdestructRefund_state _ _ _)
     · simp only [hdel, ite_false] at h_run4
       rw [← Except.ok.inj h_run4]
       exact post_of_pre h_pc3
@@ -1116,11 +1128,9 @@ theorem preserves_lift_sem (c : ContractSpecSem) (ca : Adr)
     replace hσ := σ_pre hσ
     cases n' with
     | push xs le =>
-      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
-      rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
-      exact hσ.state_eq
-        (((Devm.burn_of_chargeGas h_charge).state).trans
-          ((Devm.push_of_push h_push).state)).symm
+      have frame := Ninst.push_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact hσ.state_eq frame.state.symm
     | dupn imm =>
       have frame := Ninst.dupn_instructionFrame_effectRec
         (xl := .none) trivial h_run'
@@ -1153,9 +1163,8 @@ theorem preserves_lift_sem (c : ContractSpecSem) (ca : Adr)
     obtain ⟨hσ, hfork'⟩ := h_pc'
     cases n' with
     | push xs le =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
+      simp only [Ninst.StepRun, Ninst.step_push] at h_run'
+      split at h_run' <;> cases (Step.run_ofExecution.mp h_run').1
     | dupn imm =>
       have hrun := (Step.run_ofExecution
         (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
@@ -1400,7 +1409,10 @@ lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
 lemma StateInv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
     (hne : a ≠ wa) (h : c.StateInv wa w) : c.StateInv wa (w.setStor a s) := by
   have hget : (w.setStor a s).get wa = w.get wa := by
-    unfold State.setStor; exact State.get_set_ne _ hne _
+    unfold State.setStor
+    split
+    · exact State.get_setPresent_ne _ hne _
+    · exact State.get_set_ne _ hne _
   refine ⟨?_, ?_, ?_⟩
   · show some (((w.setStor a s).get wa).code).toList = c.sem.image
     rw [hget]; exact h.code
@@ -1496,8 +1508,7 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
     exact h_inv
   · -- clean success
     rw [ite_eq_right herr] at hset
-    have h_eq : evm' = evm := Except.ok.inj hset.symm
-    subst h_eq
+    rw [Except.ok.inj hset, Devm.recordTouch_state]
     rcases of_executeCode_cases hbody with ⟨adr, h_he⟩ | ⟨exn, h_xl, h_he⟩
     · -- precompile : the state is left untouched
       rw [state_of_executePrecomp_ok h_he herr]
@@ -1616,7 +1627,7 @@ lemma setDelegationStep_preserves_inv {wa : Adr} {auth : Auth} {msg msg' : Msg}
                 exact (ne_wa_of_code_size_zero h_code_ne h_size) rfl
               · have h_valid : isValidDelegation (msg.benv.state.get wa).code := by
                   simp_all only [Bool.and_eq_true, bne_iff_ne, ne_eq, not_and, Decidable.not_not,
-                    Bool.false_eq_true, false_or, ite_not, Bool.not_eq_true]
+                    Bool.false_eq_true, false_or, Bool.not_eq_true]
                 exact h_not_del (by simpa only [State.getCode] using h_valid)
             change c.StateInv wa ((msg.benv.state.setCode authority _).incrNonce authority)
             exact StateInv.incrNonce (StateInv.setCode_ne h_ne h_inv)
@@ -1797,16 +1808,14 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
       · change msg_mid.currentTarget = wa at h_ct
         rwa [h_mid_ct] at h_ct
 
-theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.State}
+theorem processMessageCall_preserves_stateInv {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
     (hfork : CoveredFork msg.benv.stat.fork)
     (hp : c.Preserves wa)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h_inv : c.MsgInv wa msg) :
-    c.StateInv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
+    c.StateInv wa st' := by
   have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
-  refine ⟨?_, processMessageCall_accountsToDelete_ne hfork h_run h_inv.nodel
-    (c.sem.not_delegation h_inv.state.code)⟩
   unfold processMessageCall at h_run
   split at h_run
   · unfold processMessageCall.create at h_run
@@ -1840,161 +1849,60 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨rfl, _⟩
           exact h_pm
-  · rename_i h_target
-    have h_target_false : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp only [ht, Bool.false_eq_true, not_false_eq_true, not_true_eq_false] at h_target ⊢
+  · have h_target_false : msg.target.isNone = false := by
+      cases ht : msg.target.isNone <;>
+        simp only [ht, Bool.false_eq_true, not_false_eq_true, not_true_eq_false] at *
     unfold processMessageCall.call at h_run
-    dsimp only at h_run
-    rw [hsg] at h_run
-    dsimp only at h_run
+    simp only [hsg] at h_run
+    rcases Except.bind_eq_ok h_run with ⟨⟨delegated, refund⟩, hauth, h_run⟩
+    have hd : c.MsgInv wa delegated ∧ CoveredFork delegated.benv.stat.fork ∧
+        delegated.target.isNone = false := by
+      unfold processMessageCall.legacyAuthorization at hauth
+      split at hauth
+      · cases hauth; exact ⟨h_inv, hfork, h_target_false⟩
+      · rcases Except.bind_eq_ok hauth with ⟨⟨msg', v⟩, hdel, hauth⟩
+        cases hauth
+        exact ⟨setDelegation_preserves_msgInv hdel h_inv,
+          (setDelegation_benvStat hdel) ▸ hfork,
+          by rw [(setDelegation_fields hdel).2.1]; exact h_target_false⟩
+    rcases Except.bind_eq_ok h_run with ⟨evm, hpm, h_run⟩
+    have hpm' : processMessage delegated.resolveCodeDelegation = .ok evm := by
+      cases hm : processMessage delegated.resolveCodeDelegation with
+      | error err => simp only [hm, Except.bimap, reduceCtorEq] at hpm
+      | ok d => simpa only [hm, Except.bimap, bind, Except.bind, id_eq, Except.ok.injEq] using hpm
+    have hdeleg : delegated.benv.stat.rules.delegationEnabled = true :=
+      hd.2.1.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
+    have hpc : c.MsgInv wa delegated.resolveCodeDelegation := by
+      rw [Msg.resolveCodeDelegation_enabled delegated hdeleg]
+      exact MsgInv.pc hd.1
+    have htarget : delegated.resolveCodeDelegation.target.isNone = false := by
+      unfold Msg.resolveCodeDelegation
+      split <;> exact hd.2.2
+    have hfork' : CoveredFork delegated.resolveCodeDelegation.benv.stat.fork := by
+      unfold Msg.resolveCodeDelegation
+      split <;> exact hd.2.1
+    have hi := processMessage_preserves_inv hfork' hp hpm'
+      (fun ht => hpc.code htarget ht) hpc.ne hpc.val0 hpc.state
     split at h_run
-    · simp only [bind, Except.bind] at h_run
-      unfold Except.bimap at h_run
-      split at h_run
-      · injection h_run
-      · rename_i evm h_evm
-        split at h_evm
-        · injection h_evm
-        · rename_i evm' h_pm
-          simp only [id_eq, Except.ok.injEq] at h_evm
-          subst h_evm
-          have h_pc : c.MsgInv wa
-              (match getDelegatedCodeAddress msg.code with
-              | none => msg
-              | some dca =>
-                { msg with
-                  disablePrecompiles := true,
-                  accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,
-                  codeAddress := some dca }) :=
-            MsgInv.pc (codeSrc := fun dca => msg.benv.state.getCode dca) h_inv
-          have h_tgt_pc :
-              (match getDelegatedCodeAddress msg.code with
-              | none => msg
-              | some dca =>
-                { msg with
-                  disablePrecompiles := true,
-                  accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,
-                  codeAddress := some dca }).target.isNone = false := by
-            split <;> simpa only [Option.isNone_eq_false_iff] using h_target_false
-          have hfork' : CoveredFork               (match getDelegatedCodeAddress msg.code with
-              | none => msg
-              | some dca =>
-                { msg with
-                  disablePrecompiles := true,
-                  accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,
-                  codeAddress := some dca }).benv.stat.fork := by
-            have hbenv :               (match getDelegatedCodeAddress msg.code with
-              | none => msg
-              | some dca =>
-                { msg with
-                  disablePrecompiles := true,
-                  accessedAddresses := msg.accessedAddresses.insert dca,
-                  code := msg.benv.state.getCode dca,
-                  codeAddress := some dca }).benv = msg.benv := by split <;> rfl
-            rw [hbenv]; exact hfork
-          have h_evm_inv :=
-            processMessage_preserves_inv hfork' hp h_pm
-              (fun hct => h_pc.code h_tgt_pc hct)
-              h_pc.ne h_pc.val0 h_pc.state
-          split at h_run
-          · split at h_run
-            · injection h_run
-            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-              rcases h_run with ⟨rfl, _⟩
-              exact h_evm_inv
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-            rcases h_run with ⟨rfl, _⟩
-            exact h_evm_inv
-    · rename_i h_col
-      rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgDelegation, val⟩⟩
-      · simp only [h_del, bind, Except.bind] at h_run
-        injection h_run
-      · simp only [h_del, bind, Except.bind] at h_run
-        have h_del_inv := setDelegation_preserves_msgInv h_del h_inv
-        unfold Except.bimap at h_run
-        split at h_run
-        · injection h_run
-        · rename_i evm h_evm
-          split at h_evm
-          · injection h_evm
-          · rename_i evm' h_pm
-            simp only [id_eq, Except.ok.injEq] at h_evm
-            subst h_evm
-            have h_pc : c.MsgInv wa
-                (match getDelegatedCodeAddress msgDelegation.code with
-                | none => msgDelegation
-                | some dca =>
-                  { msgDelegation with
-                    disablePrecompiles := true,
-                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,
-                    codeAddress := some dca }) :=
-              MsgInv.pc (codeSrc := fun dca => msgDelegation.benv.state.getCode dca) h_del_inv
-            have h_del_fields := setDelegation_fields h_del
-            have h_msgDelegation_target_false : msgDelegation.target.isNone = false := by
-              rw [h_del_fields.2.1]
-              exact h_target_false
-            have h_tgt_pc :
-                (match getDelegatedCodeAddress msgDelegation.code with
-                | none => msgDelegation
-                | some dca =>
-                  { msgDelegation with
-                    disablePrecompiles := true,
-                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,
-                    codeAddress := some dca }).target.isNone = false := by
-              split <;> simpa only [Option.isNone_eq_false_iff] using h_msgDelegation_target_false
-            have hfork' : CoveredFork                 (match getDelegatedCodeAddress msgDelegation.code with
-                | none => msgDelegation
-                | some dca =>
-                  { msgDelegation with
-                    disablePrecompiles := true,
-                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,
-                    codeAddress := some dca }).benv.stat.fork := by
-              have hbenv :                 (match getDelegatedCodeAddress msgDelegation.code with
-                | none => msgDelegation
-                | some dca =>
-                  { msgDelegation with
-                    disablePrecompiles := true,
-                    accessedAddresses := msgDelegation.accessedAddresses.insert dca,
-                    code := msgDelegation.benv.state.getCode dca,
-                    codeAddress := some dca }).benv = msgDelegation.benv := by split <;> rfl
-              have hstat : msgDelegation.benv.stat = msg.benv.stat :=
-                setDelegation_benvStat h_del
-              rw [hbenv, hstat]; exact hfork
-            have h_evm_inv :=
-              processMessage_preserves_inv hfork' hp h_pm
-                (fun hct => h_pc.code h_tgt_pc hct)
-                h_pc.ne h_pc.val0 h_pc.state
-            split at h_run
-            · split at h_run
-              · injection h_run
-              · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-                rcases h_run with ⟨rfl, _⟩
-                exact h_evm_inv
-            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-              rcases h_run with ⟨rfl, _⟩
-              exact h_evm_inv
+    · rcases Except.bind_eq_ok h_run with ⟨r, hr, h_run⟩
+      have hh := Except.ok.inj h_run
+      cases hh
+      exact hi
+    · simp only [Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at h_run
+      obtain ⟨rfl, _⟩ := h_run
+      exact hi
 
-/-! ### Transaction-level helper lemmas
-
-The proof of `processTransaction_preserves_inv` factors into three local facts.
-They are intentionally stated at the executable-definition boundary:
-
-* a checked transaction sender cannot be the WETH account, since successful
-  `checkTransaction` accepted the sender as an EOA/delegation account;
-* `prepareMessage` packages the post-upfront-fee state into a message satisfying
-  `c.MsgInv`;
-* the final transaction gas credits are funded by the earlier upfront debit, so
-  the two `addBal`s cannot overflow the global balance sum.
-
-These are the intended follow-up proof obligations; with them available, the
-main transaction invariant proof below is just definition inversion and
-composition of already-proved message-level invariants. -/
+theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.State}
+    {out : MsgCallOutput}
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hp : c.Preserves wa)
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h_inv : c.MsgInv wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) :
+    c.StateInv wa st' ∧ (∀ a ∈ out.accountsToDelete.toList, a ≠ wa) := by
+  exact ⟨processMessageCall_preserves_stateInv hfork hp h_run h_inv,
+    processMessageCall_accountsToDelete_ne hfork h_run h_inv.nodel
+      (c.sem.not_delegation h_inv.state.code) h_inherited⟩
 
 lemma checkTransaction_sender_ne_of_inv {wa : Adr}
     {benv : Benv} {bout : BlockOutput} {tx : Tx}
@@ -2018,6 +1926,9 @@ lemma checkTransaction_sender_ne_of_inv {wa : Adr}
   rcases Except.bind_eq_ok h_check with ⟨_, hg, h_check⟩
   have hs : senderAddress = wa := congrArg Prod.fst (Except.ok.inj h_check)
   subst senderAddress
+  rw [Except.mapError_eq_ok_iff] at hg
+  unfold checkTransactionSenderAccountFor at hg
+  rcases Except.bind_eq_ok hg with ⟨_, hg, _⟩
   unfold checkTransactionSenderAccount at hg
   split at hg <;> try contradiction
   split at hg <;> try contradiction
@@ -2034,7 +1945,7 @@ lemma checkTransaction_sender_ne_of_inv {wa : Adr}
       exact (c.sem.ne_nil (by rw [← h_inv.state.code, h_empty'])) rfl
     · exact c.sem.not_delegation h_inv.state.code h_del
   simp only [checkTransactionSenderCode, h_no, not_false_eq_true, ↓reduceIte,
-    Except.mapError_eq_ok_iff, reduceCtorEq] at hg
+    reduceCtorEq] at hg
 
 lemma prepareMessage_preserves_inv {wa : Adr}
     {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -2258,7 +2169,11 @@ theorem processTransaction_preserves_inv (wa : Adr)
   have hfork_msg : CoveredFork msg.benv.stat.fork := by
     rw [prepareMessage_benv hprep]
     exact hfork
-  have hpm_inv := processMessageCall_preserves_inv hfork_msg hp hpm hmsg
+  have h_inherited : wa ∉ msg.inheritedDeletions := by
+    unfold prepareMessage at hprep
+    cases hprep
+    exact AdrSet.not_mem_empty
+  have hpm_inv := processMessageCall_preserves_inv hfork_msg hp hpm hmsg h_inherited
   have hmsg_benv := prepareMessage_benv hprep
   have hsum_le : sum state2.bal ≤ sum state1.bal := by
     have hgas_msg : msg.benv.stat.rules.stateGas = none := by
@@ -2295,7 +2210,11 @@ theorem processTransaction_preserves_inv (wa : Adr)
     -- matches, align `hsg` to their scrutinee form, and rewrite by it
     have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
     simp only [settleSelfdestructs, settleTransactionGas, BenvStat.rules] at hsg ⊢
-    simp only [hsg] at ⊢
+    have hquotient : benv.stat.fork.ruleSet.settle.refundQuotient = 5 :=
+      hfork.cases (motive := fun f => f.ruleSet.settle.refundQuotient = 5) rfl rfl rfl rfl
+    have hsweep : benv.stat.fork.ruleSet.settle.touchedSweep = false :=
+      hfork.cases (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+    simp only [hsg, hquotient, sweepTouchedAccounts_of_not_touchedSweep hsweep] at ⊢
     exact StateInv.foldl_destroyAccount hpm_inv.2 hcredits
   · simpa only [Benv.withState] using h_inv.ca
 
@@ -2371,7 +2290,8 @@ lemma processUncheckedSystemTransaction_preserves_inv_sum_le (wa : Adr)
   have hfork_msg : CoveredFork (processSystemTransactionMsg benv.beginTransaction
 (processSystemTransactionTenv benv.beginTransaction)
 target data (benv.state.getCode target)).benv.stat.fork := hfork
-  exact ⟨(processMessageCall_preserves_inv hfork_msg hp h_run h_msg).1, hsum⟩
+  exact ⟨(processMessageCall_preserves_inv hfork_msg hp h_run h_msg
+    (by exact AdrSet.not_mem_empty)).1, hsum⟩
 
 /-
 (1) Difficulty: ★★★☆☆
@@ -2471,14 +2391,28 @@ lemma processGeneralPurposeRequests_preserves_inv_sum_le (wa : Adr)
     h_contracts h_inv hfork
 
 theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
-    (benv : Benv) (txs : List (Bytes ⊕ Tx)) (wds : List Withdrawal)
+    (benv : Benv) (txs : List (Bytes ⊕ Tx)) (ommers : List Header) (wds : List Withdrawal)
     (st : Jaune.State) (bout : BlockOutput)
-    (h_run : applyBody benv txs wds = .ok ⟨st, bout⟩)
+    (h_run : applyBody benv txs ommers wds = .ok ⟨st, bout⟩)
     (h_wds : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (h_inv : c.BenvInv wa benv)
     (hfork : CoveredFork benv.stat.fork) : c.StateInv wa st := by
+  have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
+  have hbeaconRules : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistoryRules : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawalsRules : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequestsRules : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hpow : benv.stat.rules.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
   rw [applyBody] at h_run
-  simp only at h_run
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte,
+    BalBuilder.incorporateSystem, hbal, checkBlockAccessListGasLimit, bind_assoc] at h_run
+  simp only [bind, Except.bind] at h_run
   rcases Except.bind_eq_ok h_run with ⟨⟨stBeacon, outBeacon⟩, h_beacon, h_run⟩
   rcases Except.bind_eq_ok h_run with ⟨lastHash, h_lastHash, h_run⟩
   rcases Except.bind_eq_ok h_run with ⟨⟨stHistory, outHistory⟩, h_history, h_run⟩
@@ -2527,23 +2461,19 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   have hfork_txs : CoveredFork benvTxs.stat.fork := by
     rw [applyTransactions_benvStat_eq h_txs]
     simpa only [Benv.withState] using hfork
-  -- `h_requests` still runs the request pass and the access-list check after
-  -- the withdrawals; invert both binds, then the request pass is `h_req`.
+  -- CoveredFork makes the final access-list check a no-op. The remaining
+  -- request pass owns the final state; output normalization changes no state.
   obtain ⟨⟨stReq, boutReq⟩, h_req, h_requests⟩ := Except.bind_eq_ok h_requests
-  obtain ⟨_, _, h_requests⟩ := Except.bind_eq_ok h_requests
   simp only [Except.ok.injEq, Prod.mk.injEq] at h_requests
   obtain ⟨rfl, _⟩ := h_requests
   exact (processGeneralPurposeRequests_preserves_inv_sum_le wa hp
     (benvTxs.withState (processWithdrawalsState benvTxs.state wds))
     _ _ _ h_req h_benv_wds hfork_txs).1
 
--- The state transition preserves WETH solvency at whichever explicitly named
--- fork it runs. This is the general theorem, and it is general for a reason
--- rather than by luck: `applyBody_preserves_inv` never asks which fork it is
--- running at, because solvency is a statement about how value moves and no
--- fork rule moves value. Everything below -- Prague, an explicitly named
--- fork, a configured chain crossing Osaka and the BPO forks -- is an instance
--- of this one proof.
+-- The state transition preserves the contract invariant at each CoveredFork.
+-- Its body proof uses the covered modern pass flags and absence of proof-of-work
+-- rewards; this is not an invariant theorem for arbitrary historical forks.
+-- Configured chains below supply CoveredFork at each selected number/timestamp.
 
 theorem stateTransitionAt_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (f : Fork)
@@ -2565,7 +2495,7 @@ theorem stateTransitionAt_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   rw [← Except.ok.inj h_run]
   exact applyBody_preserves_inv wa hp (initBenv f ch block.header) block.txs
-    block.wds st bout h_ab h_wds ⟨h_inv, AdrSet.not_mem_empty⟩ hfork
+    block.ommers block.wds st bout (Except.mapError_eq_ok_iff.mp h_ab) h_wds ⟨h_inv, AdrSet.not_mem_empty⟩ hfork
 
 
 
@@ -2576,7 +2506,8 @@ theorem stateTransitionUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   -- the configured entry point checks the chain identity first; the invariant
   -- needs neither that fact nor which fork the schedule picked, only that
@@ -2584,8 +2515,13 @@ theorem stateTransitionUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   rw [stateTransitionUsing] at h_run
   obtain ⟨_, _, h_run⟩ := Except.bind_eq_ok h_run
   obtain ⟨f, hf, h_run⟩ := Except.bind_eq_ok h_run
-  have hfork : CoveredFork f := hcov _ _ (Except.mapError_eq_ok_iff.mp hf)
-  exact stateTransitionAt_preserves_inv wa hp f ch ch' block h_run h_wds h_inv hfork
+  have hfork : CoveredFork f := hcov _ _ _ (Except.mapError_eq_ok_iff.mp hf)
+  have hpow : f.ruleSet.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
+  rw [stateTransitionScheduledE_of_pow_none cfg f ch block hpow] at h_run
+  exact stateTransitionAt_preserves_inv wa hp f ch ch' block
+    (stateTransitionAt_eq_ok_iff.mpr (Except.mapError_eq_ok_iff.mp h_run))
+    h_wds h_inv hfork
 
 /-- Prague is the `f := .prague` instance, and `stateTransition` is
 *definitionally* `stateTransitionAt .prague`. -/
@@ -2603,7 +2539,8 @@ whichever activations that sequence crosses. -/
 theorem chainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   induction h_reach with
   | refl => exact h_inv
@@ -2643,7 +2580,8 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : c.StateInv wa ch.state)
-    (hcov : ∀ (t : Nat) (f' : Fork), cfg.forkAt t = .ok f' → CoveredFork f') :
+    (hcov : ∀ (number timestamp : Nat) (f' : Fork),
+      cfg.forkAt number timestamp = .ok f' → CoveredFork f') :
     c.StateInv wa ch'.state := by
   unfold addBlockToChainUsing at h_run
   cases hE : addBlockToChainUsingE cfg ch rlp with
@@ -2666,10 +2604,14 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
           · simp only [Except.ok.injEq, reduceCtorEq] at hE
           · rename_i block hash h_decode
             obtain ⟨f, hf, hE⟩ := Except.bind_eq_ok hE
-            obtain ⟨_, h_st⟩ := addBlockToChainCanonicalE_eq_ok_inl hE
-            have hfork : CoveredFork f := hcov _ _ (Except.mapError_eq_ok_iff.mp hf)
+            obtain ⟨_, h_st⟩ := addBlockToChainScheduledCanonicalE_eq_ok_inl hE
+            have hfork : CoveredFork f := hcov _ _ _ (Except.mapError_eq_ok_iff.mp hf)
+            have hpow : f.ruleSet.pow = none :=
+              hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
+            change stateTransitionScheduledE cfg f ch block = .ok (.ok ch') at h_st
+            rw [stateTransitionScheduledE_of_pow_none cfg f ch block hpow] at h_st
             exact stateTransitionAt_preserves_inv wa hp f ch ch' block
-              (stateTransitionAt_eq_ok_iff.mpr h_st)
+              (stateTransitionAt_eq_ok_iff.mpr (Except.ok.inj h_st))
               (h_wds block hash (rlpToBlock_eq_ok_iff.mpr h_decode)) h_inv hfork
 
 /-- Prague is the `f := .prague` instance here too. -/
@@ -2900,6 +2842,11 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
             ((h_pop5.state).trans ((h_pop6.state).trans h_pop7.state)))))
   clear e1 e2 e3 hp hs₂ hs₃ eq1 eq2 eq3 eq4 eq5 eq6 eq7
   clear h_pop2 h_pop4 h_pop5 h_pop6 h_pop7
+  have haccess : sevm.benvStat.rules.access = .eip2929 :=
+    hfork.cases (motive := fun f => f.ruleSet.access = .eip2929) rfl rfl rfl rfl
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
+  simp only [haccess, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   -- delegation resolution
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
       (addAccessedAddress devm7 callee) callee with
@@ -3022,14 +2969,15 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
         exact hc_state
       have h_if' := h_if.symm
       subst h_if'
+      simp only [Devm.recordTouch_state] at h_sf_state
       have h_wb_ca : (childMsg.withBenv benv').codeAddress = some na := hc_ca
       have hchildPost : c.Post sevm.currentTarget
-          (initSevm (childMsg.withBenv benv')) child := by
+          (initSevm (childMsg.withBenv benv')) evm2 := by
         rcases of_executeCode_someCode h_wb_ca run_ec with
           ⟨_, _, h_he⟩ | ⟨_, ex''', h_xl_some, h_he⟩
         · -- precompile : only the transfer
           have h_child_state :
-              child.state = (initDevm (childMsg.withBenv benv')).state := by
+              evm2.state = (initDevm (childMsg.withBenv benv')).state := by
             exact state_of_executePrecomp_ok h_he h_err2
           exact post_of_pre (hchildPre.state_eq h_child_state)
         · -- regular callee : a sub-execution takes place
@@ -3038,7 +2986,7 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
           have hstat : (childMsg.withBenv benv').benv.stat = sevm.benvStat := by
             show benv'.stat = sevm.benvStat
             rw [benvAfterTransfer_stat eq_bt, hc_stat]
-          have hexn : ex''' = .ok child := exec_ok_of_handleError h_he h_err2
+          have hexn : ex''' = .ok evm2 := exec_ok_of_handleError h_he h_err2
           subst hexn
           obtain ⟨ex_sub, hq⟩ := h_fill
           have h_ss_ct : (initSevm (childMsg.withBenv benv')).currentTarget = callee :=
@@ -3083,7 +3031,7 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
             rw [hstat]
             exact hfork
           exact ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
-            child ex_sub hq h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
+            evm2 ex_sub hq h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
       exact Post.of_state_eq hchildPost h_sf_state
 
 end ContractSpecSem
