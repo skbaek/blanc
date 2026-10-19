@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.ExactLivePremises
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
+import Blanc.Lift.StaticGasTransport
 
 /-!
 # `remove_liquidity`, exact: the canonical schedule and its finite cost
@@ -237,5 +238,58 @@ def rlExactCost : Nat :=
     rlPostExactCost sevm pre T P
 
 end Schedule
+
+/-! ## The static initial-gas coordinate
+
+A message entry's static machine records its initial gas. Changing only that field changes
+neither the schedule, nor its cost, nor the exact premises with the same data `P`, nor a closed
+world invariant: the profiles are transported with their functions unchanged
+(`StaticWordCallProfile.withStaticGas`, `MutableCallProfile.withStaticGas`). -/
+
+section StaticGas
+
+variable (sevm : Sevm) (F : Nat)
+
+theorem sloadCost_withStaticGas (b : Devm) (k : B256) :
+    sloadCost {sevm with gas := F} b k = sloadCost sevm b k := rfl
+
+theorem sstoreCost_withStaticGas (b : Devm) (k v : B256) :
+    sstoreCost {sevm with gas := F} b k v = sstoreCost sevm b k v := rfl
+
+theorem afterSload_withStaticGas (b : Devm) (k : B256) :
+    afterSload {sevm with gas := F} b k = afterSload sevm b k := rfl
+
+theorem afterSstore_withStaticGas (b : Devm) (k v : B256) :
+    afterSstore {sevm with gas := F} b k v = afterSstore sevm b k v := rfl
+
+theorem dataWord_withStaticGas (i : B256) :
+    Sevm.dataWord {sevm with gas := F} i = Sevm.dataWord sevm i := rfl
+
+/-- The exact cost ignores the frame's static initial gas, with the data `P` fixed. -/
+theorem rlExactCost_withStaticGas (pre : Devm) (T : B256) (P : RLExactCalls) :
+    rlExactCost {sevm with gas := F} pre T P = rlExactCost sevm pre T P := by
+  simp only [rlExactCost, rlPreCost, rlSupplyBase, rlSupplyMem, rlIter0Cost, rlIter1Cost,
+    rlIter2Cost, rlPostExactCost, rlIterCost, rlPushDebit, rlPushNext, rlPushBase, rlPushMem,
+    rlReplyLen, rlS2Base, rlS2MemOf, rlS1Base, rlHead0, rlHead1, rlHead2, rlHead3, rlHeadMem0,
+    rlHeadMem1, rlHeadMem2, rlHeadMem3, rlIterBase, rlIterMem, rlBurnBase, rlS1CostA, rlS1CostB,
+    rlS3Cost, rlPostCost, rlLoopMem0, rlBurnMem, rlS2Next, rlS2Mem, rlS2Mem2, rlS2Base1, rlV, rlB,
+    rlAmt, sloadCost_withStaticGas, sstoreCost_withStaticGas, afterSload_withStaticGas,
+    afterSstore_withStaticGas, dataWord_withStaticGas, identityCallNext_withStaticGas,
+    rawTailBaseNext_withStaticGas]
+
+end StaticGas
+
+/-- The exact premises survive a change of static initial gas, with the same data `P`. -/
+theorem RLExactPremises.withStaticGas {sevm : Sevm} {pre : Devm} {T : B256}
+    {W : Nat → Devm → Prop} {U : Nat} {P : RLExactCalls}
+    (h : RLExactPremises sevm pre T W U P) (F : Nat) :
+    RLExactPremises {sevm with gas := F} pre T W U P := by
+  obtain ⟨hs, hp, hb⟩ := h
+  exact ⟨hs.withStaticGas F, fun i hi => (hp i hi).withStaticGas F, hb.withStaticGas F⟩
+
+/-- A closed world invariant stays closed when only the static initial gas changes. -/
+theorem WClosed.withStaticGas {sevm : Sevm} {W : Devm → Prop} (h : WClosed sevm W) (F : Nat) :
+    WClosed {sevm with gas := F} W :=
+  ⟨h.st, h.sload, h.sstore, h.sha, h.log⟩
 
 end Blanc.Lift.Curve3Pool
