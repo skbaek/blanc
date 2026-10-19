@@ -29,8 +29,22 @@ abbrev rliExit : SFunc := t_359f_c1055
 
 theorem rli_exit63 : t_359f_c1063 = rliExit := rfl
 
+/-- A fee iteration's charge but the balance store: `c` before the store (`868` for iteration
+0, `861` later), `10` more when `ideal > new`, and `192` after it. -/
+def rliFeeCost (c : Nat) (D0 D1 B N : B256) : Nat :=
+  (if N < D1 * B / D0 then c + 10 else c) + 192
+
+/-- A fee iteration's literal memory: `ideal` at `0x620`, the difference cleared then set at
+`0x640`, `fees[i]` at `0x5a0 + 32 i`, the key word at `0xc0`, the new balance less the fee at
+`0x2e0 + 32 i`, the counter at `0x600`. -/
+def rliFeeMem (M : Mem) (i : Nat) (D0 D1 B N f af : B256) : Mem :=
+  ((((((M.write 0x620 (D1 * B / D0).toBytes).write 0x640 (Bytes.toB256 [0]).toBytes).write 0x640
+    (if N < D1 * B / D0 then D1 * B / D0 - N else N - D1 * B / D0).toBytes).write (0x5a0 + 32 * i)
+    f.toBytes).write 0xc0 (Bytes.toB256 [1]).toBytes).write (0x2e0 + 32 * i) af.toBytes).write 0x600
+    (Nat.toB256 (i + 1)).toBytes
+
 /-- Fee iteration 0 at `t_336e_c1039`, forward. -/
-theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_fee0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x620)
@@ -47,6 +61,8 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 0) af → WordAt img' (0x5a0 + 32 * 0) f →
       WordAt img' 0x600 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 868 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 0) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 0) st → M' = rliFeeMem M 0 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1048 Q)
     (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
@@ -57,6 +73,8 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 0) af → WordAt img' (0x5a0 + 32 * 0) f →
       WordAt img' 0x600 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 868 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 0) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 0) st → M' = rliFeeMem M 0 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -117,10 +135,10 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -170,7 +188,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_3458_c1047) rli_prog_1047 ·)
     xr (rx_dest ·)
@@ -223,7 +241,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5a0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5a0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5a0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5a0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -309,13 +327,13 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -359,7 +377,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x2e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x2e0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x2e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x2e0 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -368,14 +386,16 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
-    exact kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_pos hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 868 := ⟨G - 868, by omega⟩
     xr (rx_dest ·)
@@ -429,10 +449,10 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -483,7 +503,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x1e0) (v := F) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hF) (by hrs) ·)
@@ -534,7 +554,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5a0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5a0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5a0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5a0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -620,13 +640,13 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -670,7 +690,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x2e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x2e0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x2e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x2e0 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -679,17 +699,19 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1048) rli_prog_1048 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_neg hge]; rfl
 
 /-- Fee iteration 1 at `t_336e_c1048`, forward. -/
-theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
@@ -706,6 +728,8 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
       WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 1) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 1) st → M' = rliFeeMem M 1 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q)
     (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
@@ -716,6 +740,8 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
       WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 1) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 1) st → M' = rliFeeMem M 1 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -776,10 +802,10 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -829,7 +855,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_3458_c1047) rli_prog_1047 ·)
     xr (rx_dest ·)
@@ -882,7 +908,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -968,13 +994,13 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1018,7 +1044,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -1027,14 +1053,16 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
-    exact kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_pos hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -1088,10 +1116,10 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1142,7 +1170,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x1e0) (v := F) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hF) (by hrs) ·)
@@ -1193,7 +1221,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1279,13 +1307,13 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1329,7 +1357,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -1338,17 +1366,19 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_neg hge]; rfl
 
 /-- Fee iteration 1 at `t_336e_c1055`, forward. -/
-theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
@@ -1365,6 +1395,8 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
       WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 1) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 1) st → M' = rliFeeMem M 1 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q)
     (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
@@ -1375,6 +1407,8 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
       WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 1) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 1) st → M' = rliFeeMem M 1 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -1435,10 +1469,10 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1488,7 +1522,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_3458_c1063) rli_prog_1063 ·)
     xr (rx_dest ·)
@@ -1541,7 +1575,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1627,13 +1661,13 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1677,7 +1711,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -1686,14 +1720,16 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
-    exact kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_pos hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -1747,10 +1783,10 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1801,7 +1837,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x1e0) (v := F) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hF) (by hrs) ·)
@@ -1852,7 +1888,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5c0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5c0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -1938,13 +1974,13 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1988,7 +2024,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x300 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -1997,17 +2033,19 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_neg hge]; rfl
 
 /-- Fee iteration 2 at `t_336e_c1055`, forward. -/
-theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
@@ -2024,6 +2062,8 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 2) af → WordAt img' (0x5a0 + 32 * 2) f →
       WordAt img' 0x600 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 2) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 2) st → M' = rliFeeMem M 2 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) rliExit Q)
     (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
@@ -2034,6 +2074,8 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
         WordAt img' o v) →
       WordAt img' (0x2e0 + 32 * 2) af → WordAt img' (0x5a0 + 32 * 2) f →
       WordAt img' 0x600 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      G = g + (rliFeeCost 861 D0 D1 B N + sstoreCost sevm b (balancesBase + Nat.toB256 2) st) →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 2) st → M' = rliFeeMem M 2 D0 D1 B N f af →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [6, 0] :: S) M' g) rliExit Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -2094,10 +2136,10 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -2147,7 +2189,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_3458_c1063) rli_prog_1063 ·)
     xr (rx_dest ·)
@@ -2200,7 +2242,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5e0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5e0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5e0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5e0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -2286,13 +2328,13 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -2336,7 +2378,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x320) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x320 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x320) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x320 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -2345,15 +2387,17 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
     rw [rli_exit63]
-    exact kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_pos hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -2407,10 +2451,10 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x660 0x620 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -2461,7 +2505,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x660 0x640 32 = 0x660 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x1e0) (v := F) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hF) (by hrs) ·)
@@ -2512,7 +2556,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_push rfl (by hrs) ·)
     xr (rx_mul rfl (by hrs) ·)
     xr (rx_add (by hrs) ·)
-    refine rxe_mstore (o := 0x5e0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x5e0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x5e0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x660 0x5e0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x600) (v := Nat.toB256 2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -2598,13 +2642,13 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x660 0xc0 32 = 0x660 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
     rw [keccak_one]
     xr (rx_add (by hrs) ·)
-    refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+    refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 192 := ⟨g2 - 192, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -2648,7 +2692,7 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x320) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x320 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x320) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x660 0x320 32 = 0x660 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -2657,13 +2701,159 @@ theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rx_add (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
+    refine rxe_mstoreL (o := 0x600) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x660 0x600 32 = 0x660 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
-    exact kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega)
+    refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+    rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
+    unfold rliFeeMem; rw [if_neg hge]; rfl
+
+/-- Fee iteration 0 at `t_336e_c1039`, forward. -/
+theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x620)
+    (hc : WordAt img 0x600 (Nat.toB256 0)) (hD1 : WordAt img 0x480 D1)
+    (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 0) B)
+    (hN : WordAt img (0x2e0 + 32 * 0) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
+    (hit : RliFeeIter F AF D0 D1 B N f st af)
+    (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 0) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 0) ∨
+        (0x300 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 0) ∨ (0x5c0 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 0) af → WordAt img' (0x5a0 + 32 * 0) f →
+      WordAt img' 0x600 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1048 Q)
+    (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 0) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 0) ∨
+        (0x300 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 0) ∨ (0x5c0 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 0) af → WordAt img' (0x5a0 + 32 * 0) f →
+      WordAt img' 0x600 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [6, 0] :: S) M G) t_336e_c1039 Q :=
+  rx_rli_fee0E hfork hstatic hL hR hW hsz hc hD1 hD0w hB hN hF hAF hit hG hroom
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kZ b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+
+/-- Fee iteration 1 at `t_336e_c1048`, forward. -/
+theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
+    (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
+    (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
+    (hN : WordAt img (0x2e0 + 32 * 1) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
+    (hit : RliFeeIter F AF D0 D1 B N f st af)
+    (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 1) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 1) ∨
+        (0x300 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 1) ∨ (0x5c0 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
+      WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q)
+    (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 1) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 1) ∨
+        (0x300 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 1) ∨ (0x5c0 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
+      WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [6, 0] :: S) M G) t_336e_c1048 Q :=
+  rx_rli_fee1aE hfork hstatic hL hR hW hsz hc hD1 hD0w hB hN hF hAF hit hG hroom
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kZ b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+
+/-- Fee iteration 1 at `t_336e_c1055`, forward. -/
+theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
+    (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
+    (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
+    (hN : WordAt img (0x2e0 + 32 * 1) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
+    (hit : RliFeeIter F AF D0 D1 B N f st af)
+    (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 1) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 1) ∨
+        (0x300 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 1) ∨ (0x5c0 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
+      WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q)
+    (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 1) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 1) ∨
+        (0x300 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 1) ∨ (0x5c0 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 1) af → WordAt img' (0x5a0 + 32 * 1) f →
+      WordAt img' 0x600 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) t_336e_c1055 Q) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [6, 0] :: S) M G) t_336e_c1055 Q :=
+  rx_rli_fee1bE hfork hstatic hL hR hW hsz hc hD1 hD0w hB hN hF hAF hit hG hroom
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kZ b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+
+/-- Fee iteration 2 at `t_336e_c1055`, forward. -/
+theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
+    (hc : WordAt img 0x600 (Nat.toB256 2)) (hD1 : WordAt img 0x480 D1)
+    (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 2) B)
+    (hN : WordAt img (0x2e0 + 32 * 2) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
+    (hit : RliFeeIter F AF D0 D1 B N f st af)
+    (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 2) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 2) ∨
+        (0x300 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 2) ∨ (0x5c0 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 2) af → WordAt img' (0x5a0 + 32 * 2) f →
+      WordAt img' 0x600 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) rliExit Q)
+    (kZ : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 2) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x660 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x2e0 + 32 * 2) ∨
+        (0x300 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x5a0 + 32 * 2) ∨ (0x5c0 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x600) →
+        WordAt img' o v) →
+      WordAt img' (0x2e0 + 32 * 2) af → WordAt img' (0x5a0 + 32 * 2) f →
+      WordAt img' 0x600 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+        Bytes.toB256 [6, 0] :: S) M' g) rliExit Q) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [6, 0] :: S) M G) t_336e_c1055 Q :=
+  rx_rli_fee2E hfork hstatic hL hR hW hsz hc hD1 hD0w hB hN hF hAF hit hG hroom
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => kZ b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
 
 end Blanc.Lift.Curve3Pool
