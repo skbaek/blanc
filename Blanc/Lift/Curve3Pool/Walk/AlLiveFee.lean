@@ -52,10 +52,13 @@ section Fee
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R i : Nat}
   {Q : Outcome → Prop}
 
-/-- **A fee iteration's head and `difference` arm, forward**: `ideal = D1 * B / D0` at `0xa60`
-and the difference at `0xa80`, on to the tail `tS` (`ideal ≤ new`) or entry `k`'s `tZ`
-(`ideal > new`). Memory `0xa60` (iteration `0`, grown to `0xaa0`) or `0xaa0`. -/
-theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 s2 tS tZ : SFunc}
+/-- A fee iteration's arm memory: `ideal` at `0xa60`, the difference cleared then set at
+`0xa80`. -/
+def alFeeArmMem (M : Mem) (ideal dif : B256) : Mem :=
+  ((M.write 0xa60 ideal.toBytes).write 0xa80 (Bytes.toB256 [0]).toBytes).write 0xa80 dif.toBytes
+
+/-- `rx_al_feeArm`, the continuation also receiving the exact charge and the literal memory. -/
+theorem rx_al_feeArmE {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 s2 tS tZ : SFunc}
     (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
     (hs : (s = 0xa60 ∧ c1 = 6 ∧ c2 = 7) ∨ (s = 0xaa0 ∧ c1 = 3 ∧ c2 = 3))
     (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hD1 : WordAt img 0x900 D1)
@@ -66,6 +69,8 @@ theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 
       Mem.Wf M' → M'.size = 0xaa0 →
       (∀ o w, WordAt img o w → o + 32 ≤ 0xa60 ∨ 0xaa0 ≤ o → WordAt img' o w) →
       WordAt img' 0xa80 dif → RliDif (D1 * B / D0) N dif → (t = tS ∨ t = tZ) → R ≤ g → g ≤ G →
+      G = g + (350 + c1 + c2 + (if N < D1 * B / D0 then 10 else 0)) →
+      M' = alFeeArmMem M (D1 * B / D0) dif →
       SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M' g) t Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M G)
       (alFeeHd a1 a2 a3 a4 (alFeeZ z1 z2 k) (alFeeS s1 s2 tS)) Q := by
@@ -123,16 +128,16 @@ theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0xa60) (c := c1) hR hW hsz rfl
+  refine rxe_mstoreL (o := 0xa60) (c := c1) hR hW hsz rfl
     (by rcases hs with ⟨rfl, rfl, -⟩ | ⟨rfl, rfl, -⟩ <;> decide) ?_
-  clear hR hW hsz M; intro M hR hW hsz
+  clear hR hW hsz; rename' M => Mf1; intro M hMf1 hR hW hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0xa80) (c := c2) hR hW hsz rfl
+  refine rxe_mstoreL (o := 0xa80) (c := c2) hR hW hsz rfl
     (by rcases hs with ⟨rfl, -, rfl⟩ | ⟨rfl, -, rfl⟩ <;> decide) ?_
   have hs' : memExtSize (memExtSize s 0xa60 32) 0xa80 32 = 0xaa0 := by
     rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
-  clear hR hW hsz M; intro M hR hW hsz; rw [hs'] at hsz
+  clear hR hW hsz; rename' M => Mf2; intro M hMf2 hR hW hsz; rw [hs'] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0xa40) (v := Nat.toB256 i) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hctr) (by hrs) ·)
@@ -190,12 +195,13 @@ theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstoreK (o := 0xa80) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+    refine rxe_mstoreKL (o := 0xa80) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := tZ) hk ·)
     exact kk M _ _ _ tZ hR hW hsz (fun o w hw ho => by
         refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
         exact hP o w hw ho) (by wauto) (.inl ⟨hlt, rfl⟩) (.inr rfl) (by omega) (by omega)
+        (by simp only [hlt, ↓reduceIte]; omega) (by rw [hMq1, hMf2, hMf1]; rfl)
   · -- `ideal ≤ new`
     xr (rx_branch_succ (gtCheck_iszero_of_not_lt (fun h => hlt (B256.lt_iff_toNat_lt_toNat.mpr h))) ·)
     xr (rx_dest ·)
@@ -229,15 +235,39 @@ theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstoreK (o := 0xa80) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+    refine rxe_mstoreKL (o := 0xa80) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz
     exact kk M _ _ _ tS hR hW hsz (fun o w hw ho => by
         refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
         exact hP o w hw ho) (by wauto) (.inr ⟨hlt, rfl⟩) (.inl rfl) (by omega) (by omega)
+        (by simp only [hlt, ↓reduceIte]; omega) (by rw [hMq2, hMf2, hMf1]; rfl)
 
-/-- **A fee iteration's tail, forward** (`0x14f3` → the loop test): `fees[i] = F * dif / FEE`,
-`balances[i] = N - fees[i] * AF / FEE` stored, `new_balances[i] = N - fees[i]`, the counter
-bumped. -/
-theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
+/-- **A fee iteration's head and `difference` arm, forward**: `ideal = D1 * B / D0` at `0xa60`
+and the difference at `0xa80`, on to the tail `tS` (`ideal ≤ new`) or entry `k`'s `tZ`
+(`ideal > new`). Memory `0xa60` (iteration `0`, grown to `0xaa0`) or `0xaa0`. -/
+theorem rx_al_feeArm {s c1 c2 k : Nat} {D0 D1 B N : B256} {a1 a2 a3 a4 z1 z2 s1 s2 tS tZ : SFunc}
+    (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
+    (hs : (s = 0xa60 ∧ c1 = 6 ∧ c2 = 7) ∨ (s = 0xaa0 ∧ c1 = 3 ∧ c2 = 3))
+    (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hD1 : WordAt img 0x900 D1)
+    (hD0w : WordAt img 0x2e0 D0) (hB : WordAt img (0x300 + 32 * i) B)
+    (hN : WordAt img (0x460 + 32 * i) N) (hm1 : D1.Nofm B) (hD0 : D0 ≠ 0)
+    (hk : cert.prog[k]? = some tZ) (hG : R + 700 ≤ G) (hroom : S.length + 20 < 1024)
+    (kk : ∀ (M' : Mem) (img' : Bytes) (g : Nat) (dif : B256) (t : SFunc), Mem.Reads M' img' →
+      Mem.Wf M' → M'.size = 0xaa0 →
+      (∀ o w, WordAt img o w → o + 32 ≤ 0xa60 ∨ 0xaa0 ≤ o → WordAt img' o w) →
+      WordAt img' 0xa80 dif → RliDif (D1 * B / D0) N dif → (t = tS ∨ t = tZ) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M' g) t Q) :
+    SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M G)
+      (alFeeHd a1 a2 a3 a4 (alFeeZ z1 z2 k) (alFeeS s1 s2 tS)) Q :=
+  rx_al_feeArmE hi hR hW hsz hs hctr hD1 hD0w hB hN hm1 hD0 hk hG hroom
+    fun M' img' g dif t h1 h2 h3 h4 h5 h6 h7 h8 h9 _ _ => kk M' img' g dif t h1 h2 h3 h4 h5 h6 h7 h8 h9
+/-- A fee iteration's tail memory: `fees[i]` at `0x140 + 32 i`, the key word,
+`new_balances[i]` after the fee at `0x460 + 32 i`, the counter `i + 1`. -/
+def alFeeTlMem (M : Mem) (i : Nat) (f af : B256) : Mem :=
+  (((M.write (0x140 + 32 * i) f.toBytes).write 0xc0 (Bytes.toB256 [1]).toBytes).write
+    (0x460 + 32 * i) af.toBytes).write 0xa40 (Nat.toB256 (i + 1)).toBytes
+
+/-- `rx_al_feeTl`, the continuation also receiving the exact charge and the literal memory. -/
+theorem rx_al_feeTlE {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
     {a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 fin : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hi : i < 3) (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
@@ -255,6 +285,9 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
         0xa60 ≤ o → WordAt img' o w) →
       WordAt img' (0x140 + 32 * i) f → WordAt img' (0x460 + 32 * i) af →
       WordAt img' 0xa40 (Nat.toB256 (i + 1)) → R ≤ g → g ≤ G →
+      b' = afterSstore sevm b (balancesBase + Nat.toB256 i) st →
+      G = g + (687 + sstoreCost sevm b (balancesBase + Nat.toB256 i) st) →
+      M' = alFeeTlMem M i f af →
       SFunc.RunEx cert.prog sevm (St b' (Bytes.toB256 [0x14, 0x09] ::
         B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0xa40 :: S) M' g) fin Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M G)
@@ -311,7 +344,7 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
   xr (rx_push rfl (by hrs) ·)
   xr (rx_mul rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstoreK (o := 0x140 + 32 * i) hR hW hsz (al_off hi 0x140 (by decide) _ (by decide)) ⟨by omega, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0x140 + 32 * i) hR hW hsz (al_off hi 0x140 (by decide) _ (by decide)) ⟨by omega, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0xa40) (v := Nat.toB256 i) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hctr) (by hrs) ·)
@@ -397,13 +430,13 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreK (o := 0xc0) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0xc0) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 182 := ⟨g2 - 182, by omega⟩
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -447,7 +480,7 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstoreK (o := 0x460 + 32 * i) hR hW hsz (al_off hi 0x460 (by decide) _ (by decide)) ⟨by omega, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0x460 + 32 * i) hR hW hsz (al_off hi 0x460 (by decide) _ (by decide)) ⟨by omega, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz
   xr (rx_pop ·)
   xr (rx_dest ·)
   xr (rx_dup rfl (by hrs) ·)
@@ -456,7 +489,7 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
   xr (rx_add (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstoreK (o := 0xa40) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0xa40) hR hW hsz rfl ⟨by decide, by decide⟩ ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_eq rfl (by hrs) ·)
   xr (rx_iszero rfl (by hrs) ·)
@@ -472,7 +505,35 @@ theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
       refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
       exact WordAt.write_self _ _ _)
     (by wauto) (by omega) (by omega)
+    hb2 (by rw [g2x]; unfold rliDen; omega) (by rw [hMq4, hMq3, hMq2, hMq1, succ_lit hi]; rfl)
 
+/-- **A fee iteration's tail, forward** (`0x14f3` → the loop test): `fees[i] = F * dif / FEE`,
+`balances[i] = N - fees[i] * AF / FEE` stored, `new_balances[i] = N - fees[i]`, the counter
+bumped. -/
+theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
+    {a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 fin : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hi : i < 3) (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hsz : M.size = 0xaa0) (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hF : WordAt img 0x1a0 F)
+    (hAF : WordAt img 0x1c0 AF) (hdif : WordAt img 0xa80 dif)
+    (hN : WordAt img (0x460 + 32 * i) N)
+    (hm2 : F.Nofm dif) (hf : f = F * dif / rliDen) (hm3 : f.Nofm AF)
+    (hs3 : ¬ N < f * AF / rliDen) (hst : st = N - f * AF / rliDen) (hs4 : ¬ N < f)
+    (haf : af = N - f) (hG : R + 26000 ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (σ.set (balancesBase + Nat.toB256 i) st) →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xaa0 →
+      (∀ o w, WordAt img o w → o + 32 ≤ 0xc0 ∨ (0xe0 ≤ o ∧ o + 32 ≤ 0x140 + 32 * i) ∨
+        (0x160 + 32 * i ≤ o ∧ o + 32 ≤ 0x460 + 32 * i) ∨ (0x480 + 32 * i ≤ o ∧ o + 32 ≤ 0xa40) ∨
+        0xa60 ≤ o → WordAt img' o w) →
+      WordAt img' (0x140 + 32 * i) f → WordAt img' (0x460 + 32 * i) af →
+      WordAt img' 0xa40 (Nat.toB256 (i + 1)) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' (Bytes.toB256 [0x14, 0x09] ::
+        B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0xa40 :: S) M' g) fin Q) :
+    SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M G)
+      (alFeeTl a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 fin) Q :=
+  rx_al_feeTlE hfork hstatic hi hL hR hW hsz hctr hF hAF hdif hN hm2 hf hm3 hs3 hst hs4 haf hG hroom
+    fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 _ _ _ => k b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
 end Fee
 
 end Blanc.Lift.Curve3Pool

@@ -21,8 +21,12 @@ theorem t_12d6_c41_eq : t_12d6_c41 = alCredit t_12e6_c41 t_12fe_c41 t_1319_c41 (
 theorem t_12d6_c66_eq : t_12d6_c66 = alCredit .undefined t_12fe_c66 .undefined ((.branch t_1333_c66 .undefined)) := rfl
 theorem t_12d6_c6_eq : t_12d6_c6 = alCredit t_12e6_c6 t_12fe_c6 t_1319_c6 ((.branchTo t_1333_c6 41)) := rfl
 
-/-- **The credit and the counter, forward.** -/
-theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes}
+/-- The memory after a credit: `new_balances[i]` at `0x460 + 32 i`, the counter `i + 1`. -/
+def alCreditMem (M : Mem) (i : Nat) (x : B256) : Mem :=
+  (M.write (0x460 + 32 * i) x.toBytes).write 0x4c0 (Nat.toB256 (i + 1)).toBytes
+
+/-- `rx_al_credit`, the continuation also receiving its memory as a term and its exact gas. -/
+theorem rx_al_creditE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes}
     {G R i : Nat} {Q : Outcome → Prop} {v F AF A T D0 : B256} {old nv : Nat → B256}
     {a1 a2 a3 fin : SFunc}
     (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) {s : Nat} (hsz : M.size = s)
@@ -32,7 +36,7 @@ theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : B
     (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
       M'.size = s →
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) →
-      WordAt img' 0x4e0 v → R ≤ g → g ≤ G →
+      WordAt img' 0x4e0 v → R ≤ g → g ≤ G → G = g + 184 → M' = alCreditMem M i (old i + v) →
       SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [0x10, 0x5d] ::
         B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M' g) fin Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) (alCredit a1 a2 a3 fin) Q := by
@@ -81,7 +85,7 @@ theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : B
   xr (rx_push rfl (by hrs) ·)
   xr (rx_mul rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstoreK (o := 0x460 + 32 * i) hR hW hsz (al_off hi 0x460 (by decide) _ (by decide)) ⟨by omega, hs32⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0x460 + 32 * i) hR hW hsz (al_off hi 0x460 (by decide) _ (by decide)) ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz
   xr (rx_dest ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x4c0) (v := Nat.toB256 i) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hm.ctr) (by hrs) ·)
@@ -89,13 +93,14 @@ theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : B
   xr (rx_add (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstoreK (o := 0x4c0) hR hW hsz rfl ⟨by omega, hs32⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0x4c0) hR hW hsz rfl ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_eq rfl (by hrs) ·)
   xr (rx_iszero rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   rw [succ_lit hi] at hR ⊢
-  refine k M _ g1 hR hW hsz ?_ (by wauto) (by omega) (by omega)
+  refine k M _ g1 hR hW hsz ?_ (by wauto) (by omega) (by omega) (by omega)
+    (by rw [hMq2, hMq1, succ_lit hi]; rfl)
   refine ⟨(hm.m0.keep (by simp only [B256.length_toBytes]; omega)).keep
     (by simp only [B256.length_toBytes]; omega), WordAt.write_self _ _ _, ?_, ?_, ?_⟩ <;>
   refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
@@ -111,5 +116,23 @@ theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : B
     · subst e; rw [Function.update_self]; exact WordAt.write_self _ _ _
     · rw [Function.update_of_ne (Ne.symm e)]
       exact hm.n2.write_other (by simp only [B256.length_toBytes]; omega)
+
+/-- **The credit and the counter, forward.** -/
+theorem rx_al_credit {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes}
+    {G R i : Nat} {Q : Outcome → Prop} {v F AF A T D0 : B256} {old nv : Nat → B256}
+    {a1 a2 a3 fin : SFunc}
+    (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) {s : Nat} (hsz : M.size = s)
+    (hs : 0x520 ≤ s) (hs32 : s % 32 = 0)
+    (hm : AlPullImg img i F AF A T D0 old nv) (hv : WordAt img 0x4e0 v)
+    (hadd : ¬ old i + v < old i) (hG : 200 + R ≤ G) (hroom : S.length + 12 < 1024)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = s →
+      AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) →
+      WordAt img' 0x4e0 v → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b (Bytes.toB256 [0x10, 0x5d] ::
+        B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M' g) fin Q) :
+    SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) (alCredit a1 a2 a3 fin) Q :=
+  rx_al_creditE hi hR hW hsz hs hs32 hm hv hadd hG hroom
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7
 
 end Blanc.Lift.Curve3Pool
