@@ -1466,6 +1466,7 @@ COMPOSITION = [
     "Composition.Curve3PoolSupply",
     "Composition.Curve3Pool3CrvU3",
     "Composition.Curve3PoolCalleeLive",
+    "Composition.Curve3PoolCalleeExactProfiles",
     "Composition.Curve3Pool3CrvHeadlines",
     "Composition.Curve3Pool3CrvWorld",
     "Composition.Curve3Pool3CrvTxData",

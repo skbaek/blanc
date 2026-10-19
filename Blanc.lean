@@ -886,6 +886,7 @@ import Blanc.Composition.Curve3PoolSupplyStep
 import Blanc.Composition.Curve3PoolSupply
 import Blanc.Composition.Curve3Pool3CrvU3
 import Blanc.Composition.Curve3PoolCalleeLive
+import Blanc.Composition.Curve3PoolCalleeExactProfiles
 import Blanc.Composition.Curve3Pool3CrvHeadlines
 import Blanc.Composition.Curve3Pool3CrvWorld
 import Blanc.Composition.Curve3Pool3CrvTxData
