@@ -35,13 +35,6 @@ def exYMem (M : Mem) (sevm : Sevm) (xw x0 x1 x2 : B256) (v : Nat) (w : Nat → B
     (Nat.toB256 v).toBytes).write 0x7e0 (Bytes.toB256 [7, 0xc0]).toBytes) (0x140 + 32 * 52)
     (exSaved w 0x140 (52 + 1))
 
-/-- A word store past the logical size materialises the array. -/
-theorem ex_full_write_word {μ : Mem} {o : Nat} (v : B256) (h : μ.size < o + 32) :
-    Mem.Full (μ.write o v.toBytes) :=
-  Mem.full_write_of_grow (fun e => by
-    have := B256.length_toBytes v; rw [e] at this; exact absurd this (by decide))
-    (by rw [B256.length_toBytes]; exact h)
-
 /-- A callee that keeps off `get_y`'s windows and leaves `y` at word `0` agrees, off its frame
 scratch `[0x140, 0x4c0)`, with the caller's memory and `y` written at `0`. -/
 theorem exY_glue {A M' : Mem} {y : B256} (hk : Mem.KeepsOff A M' gyWin) (hsz : M'.size = A.size)
@@ -185,8 +178,8 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   have hgs := hg.1.trans hszM'
   refine ((((hg.write 0x900 (Nat.toB256 v).toBytes).write 0x7e0 _).restoreMem 0x7e0
     (p := 0x140 + 32 * 52) (exSaved w 0x140 (52 + 1))).eq (exY_cover _ _ _) ?_ ?_).symm
-  · exact Mem.Full.restoreMem _ _ ((ex_full_write_word _ (by rw [hgs]; decide)).write _ _)
-  · exact Mem.Full.restoreMem _ _ ((ex_full_write_word _ (by rw [hszM']; decide)).write _ _)
+  · exact Mem.Full.restoreMem _ _ ((Mem.full_write_word_of_grow _ (by rw [hgs]; decide)).write _ _)
+  · exact Mem.Full.restoreMem _ _ ((Mem.full_write_word_of_grow _ (by rw [hszM']; decide)).write _ _)
 
 /-- **`get_y` and the frame restore, forward** (`t_2776_c751` → `t_27fc_c1174`). -/
 theorem rx_ex_y {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v : Nat}

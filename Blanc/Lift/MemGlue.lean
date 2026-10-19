@@ -307,7 +307,7 @@ theorem Mem.getD_eq_of_memWord_eq {M N : Mem} {o : Nat} (h : memWord M o = memWo
 def Mem.writeWords (M : Mem) (ws : List (Nat × B256)) : Mem :=
   ws.foldl (fun M ov => M.write ov.1 ov.2.toBytes) M
 
-@[simp] theorem Mem.writeWords_nil (M : Mem) : Mem.writeWords M [] = M := rfl
+theorem Mem.writeWords_nil (M : Mem) : Mem.writeWords M [] = M := rfl
 
 theorem Mem.writeWords_cons (M : Mem) (o : Nat) (v : B256) (ws : List (Nat × B256)) :
     Mem.writeWords M ((o, v) :: ws) = Mem.writeWords (M.write o v.toBytes) ws := rfl
@@ -343,11 +343,16 @@ theorem Mem.EqExcept.writeWords_eq {M N : Mem} {D : Nat → Prop} (h : Mem.EqExc
     obtain ⟨o, ho, hi⟩ := hcov i hd
     exact hno o ho hi) hM hN
 
+/-- A word store past the logical size materialises the array. -/
+theorem Mem.full_write_word_of_grow {μ : Mem} {o : Nat} (v : B256) (h : μ.size < o + 32) :
+    Mem.Full (μ.write o v.toBytes) :=
+  Mem.full_write_of_grow (fun e => by
+    have := B256.length_toBytes v; rw [e] at this; exact absurd this (by decide))
+    (by rw [B256.length_toBytes]; exact h)
+
 /-- A first word store past the logical size materialises the array for the rest. -/
 theorem Mem.full_writeWords_of_grow {M : Mem} {o : Nat} {v : B256} (h : M.size < o + 32)
     (ws : List (Nat × B256)) : Mem.Full (Mem.writeWords M ((o, v) :: ws)) :=
-  Mem.Full.writeWords ws (Mem.full_write_of_grow (xs := v.toBytes)
-    (by intro e; have := B256.length_toBytes v; rw [e] at this; simp only [List.length_nil] at this; omega)
-    (by rw [B256.length_toBytes]; exact h))
+  Mem.Full.writeWords ws (Mem.full_write_word_of_grow v h)
 
 end Blanc.Lift
