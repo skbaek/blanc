@@ -691,6 +691,46 @@ def rawJoinCost (n : Nat) : Nat :=
 short side jumps to the join entry (58), the long side falls in (48). -/
 def rawTailCost (n : Nat) : Nat := (if n < 32 then 58 else 48) + rawJoinCost n
 
+/-- **The join's canonical identity base**: the identity copy's canonical successor
+(`identityCallNext`) at the join's own call site, for an explicit clamped length `n`. The copy's
+stack tail is `[32 + len, L] ++ S` and its memory is `M` with `len` written at `L`. -/
+def rawJoinBaseNext (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (p : VyRawSite)
+    (n : Nat) : Devm :=
+  identityCallNext sevm b
+    ((Bytes.toB256 [0x20] + Nat.toB256 n) :: Bytes.toB256 [p.lh, p.ll] :: S)
+    (M.write (Bytes.toB256 [p.lh, p.ll]).toNat (Nat.toB256 n).toBytes)
+    (Bytes.toB256 [p.lh, p.ll]) (Bytes.toB256 [0x20] + Nat.toB256 n)
+    (Bytes.toB256 [p.bh, p.bl]) (Bytes.toB256 [0x20] + Nat.toB256 n)
+
+/-- **The tail's canonical identity base**: `rawJoinBaseNext` at the clamped length of the
+original base's return data, read before the identity copy replaces it. -/
+def rawTailBaseNext (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (p : VyRawSite) : Devm :=
+  rawJoinBaseNext sevm b S M p (min b.returnData.length 32)
+
+/-- The join's canonical base is stable modulo gas in its base, at literal `S` and `M`. -/
+theorem rawJoinBaseNext_congr (sevm : Sevm) {b b' : Devm} (S : List B256) (M : Mem)
+    (p : VyRawSite) (n : Nat) (h : Devm.EqModGas b b') :
+    Devm.EqModGas (rawJoinBaseNext sevm b S M p n) (rawJoinBaseNext sevm b' S M p n) :=
+  identityCallNext_congr sevm _ _ _ _ _ _ h
+
+/-- The tail's canonical base is stable modulo gas in its base, at literal `S` and `M`. -/
+theorem rawTailBaseNext_congr (sevm : Sevm) {b b' : Devm} (S : List B256) (M : Mem)
+    (p : VyRawSite) (h : Devm.EqModGas b b') :
+    Devm.EqModGas (rawTailBaseNext sevm b S M p) (rawTailBaseNext sevm b' S M p) := by
+  unfold rawTailBaseNext
+  rw [h.returnData]
+  exact rawJoinBaseNext_congr sevm S M p _ h
+
+/-- The join's canonical base ignores the frame's static initial gas. -/
+theorem rawJoinBaseNext_withStaticGas (sevm : Sevm) (F : Nat) (b : Devm) (S : List B256)
+    (M : Mem) (p : VyRawSite) (n : Nat) :
+    rawJoinBaseNext {sevm with gas := F} b S M p n = rawJoinBaseNext sevm b S M p n := rfl
+
+/-- The tail's canonical base ignores the frame's static initial gas. -/
+theorem rawTailBaseNext_withStaticGas (sevm : Sevm) (F : Nat) (b : Devm) (S : List B256)
+    (M : Mem) (p : VyRawSite) :
+    rawTailBaseNext {sevm with gas := F} b S M p = rawTailBaseNext sevm b S M p := rfl
+
 section Fwd
 
 variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M : Mem}
