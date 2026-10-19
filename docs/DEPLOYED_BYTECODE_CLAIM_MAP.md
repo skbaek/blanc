@@ -1888,6 +1888,23 @@ the other definitions written there (`U3Ledger`, `U3Step`, `ClosedExchangeOutcom
 exact costs) and the Curve 3pool names of Section 9 are not pinned. The remaining rows, among them the WETH9 liveness rows of Section 5.1, are held here
 by name and line only.
 
+Each of those pins is a definitional-equality check against the current
+definitions it mentions, so on its own it does not see a definition below the
+pinned layer change. `scripts/check-claim-hash.sh` covers that layer: in one run
+it hashes with SHA-256 the full definitional closure of every pinned statement
+and every unfolding pin in `scripts/ClaimCheck.lean` (a definition by its type
+and body, a theorem by its statement only, an inductive type by its whole mutual
+block with its constructor types; binder names and annotations are ignored, and
+a referenced constant contributes its own hash, not its name) and compares each
+pin's root hash with the manifest committed in `scripts/claim-pin-hash/`; a
+mismatch names the definitions whose content changed and the pins they reach.
+The hash stops at the pinned dependencies: a constant from the Lean toolchain,
+Batteries, Mathlib or Jaune counts as its name together with the toolchain in
+`lean-toolchain` or the package revision in `lake-manifest.json`, so its body is
+fixed by that pin rather than by the hash. A hash records change, not
+weakening: a mismatch says that the meaning of those claims moved and must be
+reviewed, not that they became weaker.
+
 Every run also executes in-memory falsifiers, each of which must be rejected: a
 misspelled declaration, a stale line, a wrong file, an orphan line reference, a
 missing cited file, a stale bare name, a wrong leaf count, an extra, a missing and a wrong stricter
