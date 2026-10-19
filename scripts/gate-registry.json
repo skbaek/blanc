@@ -2918,6 +2918,9 @@
      "scripts/claim-pin-hash/boundary.tsv",
      "scripts/gate-cache.py",
      "scripts/gate_semaphore.py",
+     "scripts/gate_cache_lock.py",
+     "scripts/gate_cache_t8n_root.py",
+     "scripts/gate_cache_host_identity.py",
      "lean-toolchain",
      "lake-manifest.json"
     ],
@@ -2930,7 +2933,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "The closure hash reads ClaimCheck's elaborated environment, so ClaimCheck is a Lean entry and every artifact it imports is fingerprinted; the driver imports only Lean and is a plain file input. It requires the exact build certificate through scripts/gate-cache.py (imported, with scripts/gate_semaphore.py), so both are inputs; the lake-build prerequisite writes that certificate. scripts/check-claims.sh is an input because its pin-count literal is cross-checked. lean-toolchain and lake-manifest.json are the boundary identities. The three manifest files are the golden compared against.",
+   "note": "The closure hash reads ClaimCheck's elaborated environment, so ClaimCheck is a Lean entry and every artifact it imports is fingerprinted; the driver imports only Lean and is a plain file input. It requires the exact build certificate through scripts/gate-cache.py (imported, with its import closure scripts/gate_semaphore.py, scripts/gate_cache_lock.py, scripts/gate_cache_t8n_root.py and scripts/gate_cache_host_identity.py), so all are inputs; the lake-build prerequisite writes that certificate. scripts/check-claims.sh is an input because its pin-count literal is cross-checked. lean-toolchain and lake-manifest.json are the boundary identities. The three manifest files are the golden compared against.",
    "order": 60,
    "verdict": {
     "expect_exit": 0,
