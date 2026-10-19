@@ -399,21 +399,30 @@ lemma State.setCode_get_code_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
 lemma State.setStor_get_bal {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).bal = (st.get a).bal := by
   unfold State.setStor
-  by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
+  dsimp only
+  split <;> by_cases h : adr = a
+  · subst a; rw [State.get_setPresent_self]
+  · rw [State.get_setPresent_ne _ h]
+  · subst a; rw [State.get_set_self]
   · rw [State.get_set_ne _ h]
 
 lemma State.setStor_get_code {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).code = (st.get a).code := by
   unfold State.setStor
-  by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
+  dsimp only
+  split <;> by_cases h : adr = a
+  · subst a; rw [State.get_setPresent_self]
+  · rw [State.get_setPresent_ne _ h]
+  · subst a; rw [State.get_set_self]
   · rw [State.get_set_ne _ h]
 
 lemma State.setStor_get_stor_ne {st : Jaune.State} {adr a : Adr} {s : Stor}
     (h : adr ≠ a) : ((st.setStor adr s).get a).stor = (st.get a).stor := by
   unfold State.setStor
-  rw [State.get_set_ne _ h]
+  dsimp only
+  split
+  · rw [State.get_setPresent_ne _ h]
+  · rw [State.get_set_ne _ h]
 
 -- balance of an uninvolved account is unchanged by a transfer
 lemma of_transfer_bal_other {st st_mid : Jaune.State} {caller target a : Adr} {value : B256}
@@ -597,32 +606,31 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
   cases hsg : sevm.benvStat.rules.stateGas
   · -- Covered forks: the historical eight-bind walk.
     simp only [hsg] at run
-    rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
-    rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
-    rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
-    rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
-    rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
-    rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
-    rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
-    rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
-    have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
-    have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
-    have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
-      split at h4 <;> (injection h4 with eq; injection eq with eq _; subst eq)
-      · have hbr : Devm.getStor s₂ =
-            Devm.getStor (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget key s₂) := rfl
-        exact hbr.trans addAccessedStorageKey_getStor.symm
-      · rfl
-    have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
-      injection h6 with eq; rw [← eq]; rfl
-    have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
-    have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
-    have E' : Devm.getStor s =
-        Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
-      E.trans rfl
-    injection h9 with eq
-    rw [← eq, setStorVal_getStor_ne h_ne]
-    exact (congr_fun E' a).symm
+    split at run
+    all_goals
+      rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, h1, run₁⟩
+      rcases Except.bind_eq_ok run₁ with ⟨⟨val, s₂⟩, h2, run₂⟩
+      rcases Except.bind_eq_ok run₂ with ⟨_, h3, run₃⟩
+      rcases Except.bind_eq_ok run₃ with ⟨⟨s₃, g₂⟩, h4, run₄⟩
+      rcases Except.bind_eq_ok run₄ with ⟨g₃, h5, run₅⟩
+      rcases Except.bind_eq_ok run₅ with ⟨s₄, h6, run₆⟩
+      rcases Except.bind_eq_ok run₆ with ⟨s₅, h7, run₇⟩
+      rcases Except.bind_eq_ok run₇ with ⟨_, h8, h9⟩
+      have e1 : Devm.getStor s = Devm.getStor s₁ := Devm.pop_getStor_eq h1
+      have e2 : Devm.getStor s₁ = Devm.getStor s₂ := Devm.pop_getStor_eq h2
+      have e4 : Devm.getStor s₂ = Devm.getStor s₃ := by
+        repeat' split at h4
+        all_goals injection h4 with eq; injection eq with eq _; subst eq; rfl
+      have e6 : Devm.getStor s₃ = Devm.getStor s₄ := by
+        injection h6 with eq; rw [← eq]; rfl
+      have e7 : Devm.getStor s₄ = Devm.getStor s₅ := chargeGas_getStor_eq h7
+      have E : Devm.getStor s = Devm.getStor s₅ := e1.trans (e2.trans (e4.trans (e6.trans e7)))
+      have E' : Devm.getStor s =
+          Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
+        E.trans rfl
+      injection h9 with eq
+      rw [← eq, setStorVal_getStor_ne h_ne]
+      exact (congr_fun E' a).symm
   · -- Amsterdam: static check first, state-gas second dimension.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨_, h0, run₁⟩
@@ -670,26 +678,9 @@ lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
 lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
     (h : processCreateMessage.chargeCodeGas rules d = .ok d') :
     d'.state = d.state := by
-  simp only [processCreateMessage.chargeCodeGas] at h
-  cases hsg : rules.stateGas
-  · simp only [hsg] at h
-    split at h
-    · cases h
-    · rcases Except.bind_eq_ok h with ⟨dG, h_charge, h_if⟩
-      split_ifs at h_if
-      rw [← Except.ok.inj h_if]
-      exact ((Devm.burn_of_chargeGas h_charge).state).symm
-  · simp only [hsg] at h
-    split at h
-    · cases h
-    · split at h
-      · cases h
-      · rcases Except.bind_eq_ok h with ⟨dG1, h_c1, h2⟩
-        have hst : d'.state = dG1.state :=
-          (chargeStateGas_worldEq_of_ok h2).1.symm
-        have hburn : dG1.state = d.state :=
-          ((Devm.burn_of_chargeGas h_c1).state).symm
-        exact hst.trans hburn
+  have hf := processCreateMessage.chargeCodeGas_instructionFrame rules d
+  rw [h] at hf
+  exact hf.state.symm
 
 lemma Devm.setCode_state {d : Devm} {adr : Adr} {c : ByteArray} :
     (d.setCode adr c).state = d.state.setCode adr c := rfl
@@ -1166,8 +1157,6 @@ theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm
     exact ⟨h_err, ProcessMessage.rollback_of_error h_pm h_err⟩
   · exfalso
     rw [ite_eq_right herr] at hset
-    have h_eq : evm' = out := Except.ok.inj hset.symm
-    subst h_eq
     rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
     · obtain ⟨ex', h_xl, h_he⟩ := of_executeCode_noneCode h_ca hbody
       subst h_xl
@@ -1858,6 +1847,12 @@ lemma of_step_call_val_with_depth_frame
       ((f4.output).trans ((f5.output).trans ((f6.output).trans f7.output)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear h_pop2
+  -- Covered forks use the warm-access and delegation-enabled facade branch.
+  have hac : sevm.benvStat.rules.access = .eip2929 :=
+    hfork.cases (motive := fun f => f.ruleSet.access = .eip2929) rfl rfl rfl rfl
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
+  simp only [hac, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   -- delegation resolution
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
     ⟨dp, na, code0, dagc, devm9⟩
@@ -2099,7 +2094,7 @@ lemma of_step_call_val_with_depth_frame
               (Resume.call
                 ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
                 oi.toNat os.toNat) (pc + 1) := by
-          simp only [Ninst.call, Ninst.step_exec, Xinst.step, hsg,
+          simp only [Ninst.call, Ninst.step_exec, Xinst.step, hsg, hac, ForkRules.accessDelegation, hdeleg, ↓reduceIte,
             Bind.bind, Except.bind, Except.assert, eq1, eq2, eq3, eq4, eq5, eq6, eq7,
             hp11, eq16, staticPassed, ite_eq_right balanceOK, Except.pure, Pure.pure, XStep.ofExcept, genericCall.step,
             ite_eq_right h_depth_ne, XStep.toStep]
@@ -2411,6 +2406,12 @@ lemma of_step_staticcall_val_with_depth_frame_cause
       ((f4.output).trans ((f5.output).trans f6.output))))
   clear e1 e2 e3 e4 e5 e6 f1 f2 f3 f4 f5 f6
   clear h_pop2
+  -- Covered forks use the warm-access and delegation-enabled facade branch.
+  have hac : sevm.benvStat.rules.access = .eip2929 :=
+    hfork.cases (motive := fun f => f.ruleSet.access = .eip2929) rfl rfl rfl rfl
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
+  simp only [hac, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   -- delegation resolution
   rcases hp10 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm6 t.toAdr) t.toAdr with
     ⟨dp, na, code0, dagc, devm8⟩
@@ -2624,7 +2625,7 @@ lemma of_step_staticcall_val_with_depth_frame_cause
             (Resume.call
               ((devm9.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
               oi.toNat os.toNat) (pc + 1) := by
-        simp only [Ninst.staticcall, Ninst.step_exec, Xinst.step, hsg,
+        simp only [Ninst.staticcall, Ninst.step_exec, Xinst.step, hsg, hac, ForkRules.accessDelegation, hdeleg, ↓reduceIte,
           Bind.bind, Except.bind, eq1, eq2, eq3, eq4, eq5, eq6, hp10, eq14,
           Except.pure, Pure.pure, XStep.ofExcept, genericCall.step,
           ite_eq_right h_depth_ne, XStep.toStep]
@@ -2807,7 +2808,7 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
             rw [hB, hc_ct, hc_value]
             rfl
           show (inter.state.get a).stor = (devm.state.get a).stor
-          rw [h_inter_state, h_child_state, hBs]
+          rw [h_inter_state, Devm.recordTouch_state, h_child_state, hBs]
           exact (of_state_transfer_fields h_sub).1 a hp
         · have h_benv : benv = childMsg.benv := by
             by_cases h_stv : stv = true
@@ -2819,7 +2820,7 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
               exact (Except.ok.inj eq_bt).symm
             · exact of_benvAfterTransfer_no (by rw [hc_stv]; exact h_stv) eq_bt
           apply getStor_eq_of_state_eq
-          rw [h_inter_state, h_child_state, h_benv]
+          rw [h_inter_state, Devm.recordTouch_state, h_child_state, h_benv]
           exact hc_state
       · cases h_xl_some
 
@@ -2992,7 +2993,7 @@ lemma GenericCallAmsterdam.none_getStor_eq
             rw [hB, hc_ct, hc_value]
             rfl
           show (inter.state.get a).stor = (devm.state.get a).stor
-          rw [h_inter_state, h_child_state, hBs]
+          rw [h_inter_state, Devm.recordTouch_state, h_child_state, hBs]
           exact (of_state_transfer_fields h_sub).1 a hp
         · have h_benv : benv = childMsg.benv := by
             by_cases h_stv : stv = true
@@ -3004,7 +3005,7 @@ lemma GenericCallAmsterdam.none_getStor_eq
               exact (Except.ok.inj eq_bt).symm
             · exact of_benvAfterTransfer_no (by rw [hc_stv]; exact h_stv) eq_bt
           apply getStor_eq_of_state_eq
-          rw [h_inter_state, h_child_state, h_benv]
+          rw [h_inter_state, Devm.recordTouch_state, h_child_state, h_benv]
           exact hc_state
       · cases h_xl_some
 
@@ -3216,7 +3217,7 @@ theorem Linst.getStor_eq
         have subState : devm2.state.subBal sevm.currentTarget
             (devm1.getAcct sevm.currentTarget).bal = some devm3.state :=
           Devm.subBal_state subSome
-        let transferred := devm3.addBal donee
+        let transferred := devm3.creditBeneficiary sevm.benvStat.rules donee
           (devm1.getAcct sevm.currentTarget).bal
         have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
           congrFun (Devm.popToAdr_getStor_eq pop) owner
@@ -3224,40 +3225,48 @@ theorem Linst.getStor_eq
             Devm.getStor devm2 owner := by
           have chargedEq := chargeGas_getStor_eq charge
           rw [← chargedEq]
-          split
-          · dsimp only
-            exact (((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
-              ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)).trans
-              ((addAccessedAddress_instructionFrame _ _).getStor owner)
-          · dsimp only
-            exact ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
-              ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)
+          cases ha : sevm.benvStat.rules.access <;> simp only [ha]
+          · rfl
+          · split <;> rfl
         have hstate2 : pre.state = devm2.state := by
           have h1 : pre.state = devm1.state :=
             (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
           rw [h1, ← (chargeGas_worldEq_of_ok charge).1]
-          split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+          cases ha : sevm.benvStat.rules.access <;> simp only [ha]
+          · rfl
+          · split <;> rfl
         have hp2 : State.Protected devm2.state owner := hstate2 ▸ hp
-        have hp3 : State.Protected transferred.state owner := by
+        have hpSub : State.Protected devm3.state owner := by
           rcases State.of_subBal subState with ⟨_, hmid⟩
-          show State.Protected (devm3.state.setBal donee _) owner
           rw [hmid]
-          exact (hp2.setBal _ _).setBal _ _
-        have transferredEq : Devm.getStor devm2 owner =
-            Devm.getStor transferred owner :=
-          (of_state_transfer_fields subState).1 owner hp2 |>.symm
+          exact hp2.setBal _ _
+        have hp3 : State.Protected transferred.state owner :=
+          hpSub.creditBeneficiary _ _ _
+        have transferredEq : Devm.getStor devm2 owner = Devm.getStor transferred owner := by
+          have hs : Devm.getStor devm3 owner = Devm.getStor devm2 owner := by
+            rcases State.of_subBal subState with ⟨_, hmid⟩
+            change (devm3.state.get owner).stor = (devm2.state.get owner).stor
+            rw [hmid]
+            exact State.setBal_get_stor_of_protected hp2
+          exact hs.symm.trans (Devm.creditBeneficiary_getStor_of_protected _ _ _ _ _ hpSub).symm
         have postEq : Devm.getStor transferred owner =
             Devm.getStor post owner := by
           dsimp only [transferred] at final ⊢
-          by_cases h_if : sevm.currentTarget ∈
-              (devm3.addBal donee (devm1.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, ite_eq_left] at final
-            have equal := Except.ok.inj final
-            rw [← equal]
-            exact (State.setBal_get_stor_of_protected hp3).symm
-          · simp only [h_if] at final
-            have equal := Except.ok.inj final
-            rw [← equal]
+          by_cases hsched : sevm.currentTarget ∈ transferred.createdAccounts ∨
+              sevm.benvStat.rules.settle.selfdestructOnlyCreated = false
+          · dsimp only [transferred] at hsched
+            simp only [hsched, ↓reduceIte] at final
+            rw [← Except.ok.inj final]
+            change (transferred.state.get owner).stor =
+              ((creditSelfdestructRefund _ _ _).state.get owner).stor
+            by_cases hrefund : sevm.currentTarget ∈ transferred.accountsToDelete
+            all_goals
+              dsimp only [transferred] at hrefund
+              simp only [creditSelfdestructRefund, hrefund, ↓reduceIte]
+              exact (State.setBal_get_stor_of_protected hp3).symm
+          · dsimp only [transferred] at hsched
+            simp only [hsched, ↓reduceIte] at final
+            rw [← Except.ok.inj final]
         exact (preToOne.trans (charged.trans
           (transferredEq.trans postEq))).symm
       · simp only [hsg] at run
@@ -3292,7 +3301,8 @@ theorem Linst.getStor_eq
           have h1 : pre.state = devm1.state :=
             (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
           rw [h1, Devm.chargeStateGas_state stg, ← (chargeGas_worldEq_of_ok charge).1]
-          split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+          simp only [Devm.balReadAccount_state]
+          split <;> rfl
         have hp2 : State.Protected devm2b.state owner := hstate2b ▸ hp
         have h_tr1 : Devm.getStor devm2b owner =
             Devm.getStor (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal) owner :=
@@ -3730,14 +3740,9 @@ theorem Linst.targetBalanceMono_of_foreign
             funext address
             have hchg := chargeGas_getBal_eq charged address
             rw [hchg]
-            split
-            · dsimp only
-              exact (((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
-                ((Devm.balReadAccount_instructionFrame _ _ _).getBal address)).trans
-                ((addAccessedAddress_instructionFrame _ _).getBal address)
-            · dsimp only
-              exact ((Devm.balReadAccount_instructionFrame _ _ _).getBal address).trans
-                ((Devm.balReadAccount_instructionFrame _ _ _).getBal address)
+            cases ha : sevm.benvStat.rules.access <;> simp only [ha]
+            · rfl
+            · split <;> rfl
           have h2 : devm1.getBal = pre.getBal := by
             funext address
             exact Devm.popToAdr_getBal_eq popped address
@@ -3761,19 +3766,30 @@ theorem Linst.targetBalanceMono_of_foreign
           · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
         have postBalance : post.state.bal ca = transferred.state.bal ca := by
           dsimp only [transferred] at final ⊢
-          by_cases h_if : sevm.currentTarget ∈
-              (devm3.addBal destination (devm1.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, ite_eq_left] at final
-            have state_eq := Except.ok.inj final
-            rw [← state_eq]
-            change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
-              transferred.state.bal ca
-            show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
-              (transferred.state.get ca).bal
-            rw [State.setBal_get_ne target_ne]
-          · simp only [h_if] at final
-            have state_eq := Except.ok.inj final
-            rw [← state_eq]
+          by_cases hsched : sevm.currentTarget ∈
+              (devm3.creditBeneficiary sevm.benvStat.rules destination
+                (devm1.getAcct sevm.currentTarget).bal).createdAccounts ∨
+              sevm.benvStat.rules.settle.selfdestructOnlyCreated = false
+          · simp only [hsched, ↓reduceIte] at final
+            rw [← Except.ok.inj final]
+            change (creditSelfdestructRefund _ _ _).state.bal ca = transferred.state.bal ca
+            have hz : (addAccountToDelete
+                ((devm3.creditBeneficiary sevm.benvStat.rules destination
+                  (devm1.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0)
+                sevm.currentTarget).state.bal ca = transferred.state.bal ca := by
+              change ((Devm.creditBeneficiary _ _ _ devm3).state.setBal sevm.currentTarget 0).bal ca = _
+              change (State.get ((devm3.creditBeneficiary sevm.benvStat.rules destination
+                (devm1.getAcct sevm.currentTarget).bal).state.setBal sevm.currentTarget 0) ca).bal = _
+              rw [State.setBal_get_ne target_ne]
+              exact congrFun (Devm.creditBeneficiary_getBal _ _ _ _) ca
+            by_cases hrefund : sevm.currentTarget ∈
+                (devm3.creditBeneficiary sevm.benvStat.rules destination
+                  (devm1.getAcct sevm.currentTarget).bal).accountsToDelete
+            all_goals simpa only [creditSelfdestructRefund, hrefund, ↓reduceIte,
+              Devm.withRefundCounter, Devm.setMeta, Devm.state] using hz
+          · simp only [hsched, ↓reduceIte] at final
+            rw [← Except.ok.inj final]
+            exact congrFun (Devm.creditBeneficiary_getBal _ _ _ _) ca
         rw [← chargedBalance, postBalance]
         exact transferMono
       · simp only [hsg] at run
@@ -4436,15 +4452,16 @@ lemma ExecuteCode.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ExecuteCode msg xl ex)
-    (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
+    (h : Msg.NoDel wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) : MsgResult.NoDel wa ex := by
   rcases of_executeCode_cases run with ⟨adr, h_precomp⟩ | ⟨ex', h_xl, h_err⟩
-  · have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h
+  · have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h h_inherited
     have h_ex_noDel : Execution.NoDel wa (executePrecomp (initEvm msg) adr) := executePrecomp_noDel rfl h_init
     rw [← h_precomp]
     exact handleError_noDel h_ex_noDel
   · rw [h_xl] at inv
     dsimp only [ExceptT.stM_eq, Xlot.InvNoDel] at inv
-    have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h
+    have h_init : Devm.NoDel wa (initDevm msg) := Msg.NoDel.initDevm h h_inherited
     have h_ex'_noDel : Execution.NoDel wa ex' := inv h_init
     rw [← h_err]
     exact handleError_noDel h_ex'_noDel
@@ -4453,33 +4470,38 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessMessage msg xl ex)
-    (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
+    (h : Msg.NoDel wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) : MsgResult.NoDel wa ex := by
   obtain ⟨r0, hbody, rfl⟩ := ProcessMessage.iff_body.mp run
   unfold FrameBody at hbody
   rcases eq_bt : msg.benvAfterTransfer with e | benv' <;> rw [eq_bt] at hbody
   · rw [hbody.2, processMessage.settle_error]
     exact Msg.NoDel.benvAfterTransfer_err eq_bt h
   · have h_nof' : Msg.NoDel wa (msg.withBenv benv') := Msg.NoDel.benvAfterTransfer eq_bt h
-    have h_exec : MsgResult.NoDel wa r0 := ExecuteCode.inv_noDel inv hbody h_nof'
+    have h_exec : MsgResult.NoDel wa r0 := ExecuteCode.inv_noDel inv hbody h_nof' h_inherited
     unfold processMessage.settle
     rcases r0 with x | evm2
     · exact h_exec
     · dsimp only [bind, Except.bind]
       split
-      · exact (⟨h_exec.atd, h_exec.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
-      · exact h_exec
+      · exact Devm.NoDel.of_eqs
+          (d := (evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites) rfl rfl
+          (⟨h_exec.atd, h_exec.ca, h.code⟩ : Devm.NoDel wa
+            ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
+      · exact Devm.NoDel.of_eqs (d := evm2) rfl rfl h_exec
 
 lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (inv : Xlot.InvNoDel wa xl)
     (run : ProcessCreateMessage msg xl ex)
     (h_ct : msg.currentTarget ≠ wa)
-    (h : Msg.NoDel wa msg) : MsgResult.NoDel wa ex := by
+    (h : Msg.NoDel wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) : MsgResult.NoDel wa ex := by
   obtain ⟨ex', run_pm, rfl⟩ := ProcessCreateMessage.iff_processMessage.mp run
   have h_seed : Msg.NoDel wa (processCreateMessage.msg msg) :=
     Msg.NoDel.processCreateMessage_msg h_ct h
   have h_pm : MsgResult.NoDel wa ex' :=
-    ProcessMessage.inv_noDel inv run_pm h_seed
+    ProcessMessage.inv_noDel inv run_pm h_seed h_inherited
   unfold processCreateMessage.settle
   rcases ex' with x | evm
   · exact h_pm
@@ -4596,7 +4618,11 @@ lemma GenericCall.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
   -- the child frame is entered
   · obtain ⟨r, hframe, rfl⟩ := h
     exact Resume.call_noDel ⟨hnd.atd, hnd.ca, hnd.code⟩
-      (ProcessMessage.inv_noDel inv hframe ⟨hnd.ca, hnd.code⟩)
+      (ProcessMessage.inv_noDel inv hframe ⟨hnd.ca, hnd.code⟩ (by
+        dsimp only [callMsg]
+        split
+        · exact AdrSet.not_mem_empty
+        · exact hnd.atd))
 
 lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {endowment : B256} {newAddress : Adr} {mi ms : Nat}
@@ -4649,7 +4675,11 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
       push Not at h_c2
       exact ne_wa_of_code_size_zero hnd5.code h_c2.2
     exact Resume.create_noDel hnd5
-      (ProcessCreateMessage.inv_noDel inv hframe h_ct ⟨hnd5.ca, hnd5.code⟩)
+      (ProcessCreateMessage.inv_noDel inv hframe h_ct ⟨hnd5.ca, hnd5.code⟩ (by
+        dsimp only [createMsg]
+        split
+        · exact AdrSet.not_mem_empty
+        · exact hnd5.atd))
 
 lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     {xl : Xlot} {exn : Execution}
@@ -4676,19 +4706,13 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
   cases n with
   | push xs le =>
-    simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at run
-    obtain ⟨-, rfl⟩ := run
-    · cases h_charge : chargeGas (if xs = [] then gBase else gVerylow) devm
-      case error err =>
-        exact Devm.NoDel.of_eqs (chargeGas_delSets_err h_charge).symm (chargeGas_getCode_err h_charge wa).symm h
-      case ok d1 =>
-        have h1 : Devm.NoDel wa d1 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h_charge).symm (chargeGas_getCode_eq h_charge wa).symm h
-        dsimp only [bind, Except.bind]
-        cases h_push : Devm.push xs.toB256 d1
-        case error err2 =>
-          exact Devm.NoDel.of_eqs (Devm.push_delSets_err h_push).symm (Devm.push_getCode_err h_push wa).symm h1
-        case ok d2 =>
-          exact Devm.NoDel.of_eqs (Devm.push_delSets_eq h_push).symm (Devm.push_getCode_eq h_push wa).symm h1
+    have hxl : xl = none := by
+      simp only [Ninst.StepRun, Ninst.step_push] at run
+      split at run <;> simp only [Step.run_ofExecution] at run <;> exact run.1
+    subst xl
+    have hf := Ninst.push_instructionFrame_effectRec (hxs := le) (xl := none)
+      (pc := pc) (sevm := sevm) (pre := devm) (out := exn) trivial run
+    exact Execution.NoDel.of_instructionFrame hf h
   | reg rg =>
     simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at run
     obtain ⟨-, rfl⟩ := run
@@ -4769,10 +4793,14 @@ lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     refine fun h => ?_
     exact Devm.NoDel.of_eqs (Jinst.inv_delSets hrun).symm (hcode wa).symm h
 
-lemma Linst.noDelCode_effect (wa : Adr) (l : Linst) :
-    Linst.Effect (Devm.NoDelCode wa) l := by
-  intro sevm pre out hrun
-  have hnd := Linst.inv_noDel (wa := wa) hrun
+lemma Linst.noDelCode_effectFork (wa : Adr) (l : Linst) :
+    Linst.EffectFork (Devm.NoDelCode wa) l := by
+  intro sevm pre out hfork hrun
+  have h_onlyCreated : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true := by
+    exact hfork.cases
+      (motive := fun f => f.ruleSet.settle.selfdestructOnlyCreated = true)
+      rfl rfl rfl rfl
+  have hnd := fun h => Linst.inv_noDel (wa := wa) hrun h h_onlyCreated
   cases out with
   | error e => exact hnd
   | ok d => exact hnd
@@ -4782,9 +4810,9 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (run : Exec pc sevm devm exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  have heff := Exec.effectFork (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
+  have heff := Exec.effectForkTerminal (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
     (Ninst.noDelCode_effectRec wa) (Jinst.noDelCode_effect wa)
-    (Linst.noDelCode_effect wa) run hfork
+    (Linst.noDelCode_effectFork wa) run hfork
   cases exn with
   | error e => exact heff h
   | ok d => exact heff h
@@ -4792,7 +4820,8 @@ lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
 theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (hfork : CoveredFork msg.benv.stat.fork)
     (h_run : processMessage msg = .ok evm)
-    (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
+    (h : Msg.NoDel wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) : Devm.NoDel wa evm := by
   obtain ⟨xl, hfill, hrel⟩ := of_processMessage msg (.ok evm) h_run
   have hinv : Xlot.InvNoDel wa xl := by
     rcases xl with _ | ⟨cevm, cexn⟩
@@ -4803,13 +4832,14 @@ theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
       have hfork_c : CoveredFork cevm.sta.benvStat.fork := by
         rw [hbenv]; exact hfork
       exact Exec.inv_noDel hfork_c exc hnd
-  exact ProcessMessage.inv_noDel hinv hrel h
+  exact ProcessMessage.inv_noDel hinv hrel h h_inherited
 
 theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     (hfork : CoveredFork msg.benv.stat.fork)
     (h_run : processCreateMessage msg = .ok evm)
     (h_ct : msg.currentTarget ≠ wa)
-    (h : Msg.NoDel wa msg) : Devm.NoDel wa evm := by
+    (h : Msg.NoDel wa msg)
+    (h_inherited : wa ∉ msg.inheritedDeletions) : Devm.NoDel wa evm := by
   rw [processCreateMessage_eq] at h_run
   have h_inv_cm : Msg.NoDel wa (processCreateMessage.msg msg) :=
     Msg.NoDel.processCreateMessage_msg h_ct h
@@ -4820,7 +4850,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
   have h_rest := h_run
   have hfork' : CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by
     rw [processCreateMessage.msg_benvStat]; exact hfork
-  have h_pm : Devm.NoDel wa evm2 := processMessage_preserves_noDel hfork' hpm0 h_inv_cm
+  have h_pm : Devm.NoDel wa evm2 := processMessage_preserves_noDel hfork' hpm0 h_inv_cm h_inherited
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
   · by_cases herr : evm2.error.isNone = true
@@ -5027,12 +5057,69 @@ lemma setDelegation_fields {msg msg' : Msg} {v : B256}
     subst msg'
     exact ⟨hc, htgt, hct, hstv, hv, hca⟩
 
+lemma setDelegationStep_inheritedDeletions {auth : Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationStep auth msg refund = .ok (msg', refund')) :
+    msg'.inheritedDeletions = msg.inheritedDeletions := by
+  unfold setDelegationStep at h_run
+  split at h_run
+  · injection h_run with h1; injection h1 with h_msg h_refund
+    subst h_msg
+    rfl
+  · split at h_run
+    · injection h_run with h1; injection h1 with h_msg h_refund
+      subst h_msg
+      rfl
+    · split at h_run
+      · injection h_run with h1; injection h1 with h_msg h_refund
+        subst h_msg
+        rfl
+      · contradiction
+      · dsimp only at h_run
+        split at h_run
+        · injection h_run with h1; injection h1 with h_msg h_refund
+          subst h_msg
+          rfl
+        · split at h_run
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            rfl
+          · injection h_run with h1; injection h1 with h_msg h_refund
+            subst h_msg
+            rfl
+
+lemma setDelegationLoop_inheritedDeletions {auths : List Auth} {msg msg' : Msg}
+    {refund refund' : B256}
+    (h_run : setDelegationLoop auths msg refund = .ok (msg', refund')) :
+    msg'.inheritedDeletions = msg.inheritedDeletions := by
+  induction auths generalizing msg refund with
+  | nil => cases h_run; rfl
+  | cons auth auths ih =>
+    unfold setDelegationLoop at h_run
+    rcases Except.bind_eq_ok h_run with ⟨⟨msg1, refund1⟩, h_step, h_tail⟩
+    exact (ih h_tail).trans (setDelegationStep_inheritedDeletions h_step)
+
+lemma setDelegation_inheritedDeletions {msg msg' : Msg} {v : B256}
+    (h_run : setDelegation msg = .ok ⟨msg', v⟩) :
+    msg'.inheritedDeletions = msg.inheritedDeletions := by
+  unfold setDelegation at h_run
+  rcases Except.bind_eq_ok h_run with ⟨⟨msg_mid, refund⟩, h_loop, h_rest⟩
+  dsimp only at h_rest
+  split at h_rest
+  · contradiction
+  · have hh := congrArg (fun p : Msg × B256 => p.1.inheritedDeletions)
+      (Except.ok.inj h_rest)
+    calc
+      msg'.inheritedDeletions = msg_mid.inheritedDeletions := hh.symm
+      _ = msg.inheritedDeletions := setDelegationLoop_inheritedDeletions h_loop
+
 theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.State}
     {out : MsgCallOutput}
     (hfork : CoveredFork msg.benv.stat.fork)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
-    (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa)) :
+    (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa))
+    (h_inherited : wa ∉ msg.inheritedDeletions) :
     wa ∉ out.accountsToDelete := by
   have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at h_run
@@ -5056,7 +5143,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_preserves_noDel hfork h_evm h_ct h
+        have h_nodel := processCreateMessage_preserves_noDel hfork h_evm h_ct h h_inherited
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
@@ -5069,86 +5156,58 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
           rcases h_run with ⟨_, rfl⟩
           simp_all only [Option.isNone_iff_eq_none, ne_eq, ↓reduceIte,
             Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
-  · rename_i h_target
-    have h_target_false : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp only [ht, Bool.false_eq_true, not_false_eq_true, not_true_eq_false] at h_target ⊢
-    unfold processMessageCall.call at h_run
-    dsimp only at h_run
-    rw [hsg] at h_run
-    dsimp only at h_run
+  · unfold processMessageCall.call at h_run
+    simp only [hsg] at h_run
+    rcases Except.bind_eq_ok h_run with ⟨⟨delegated, refund⟩, hauth, h_run⟩
+    have hd : Msg.NoDel wa delegated ∧ CoveredFork delegated.benv.stat.fork ∧
+        wa ∉ delegated.inheritedDeletions := by
+      unfold processMessageCall.legacyAuthorization at hauth
+      split at hauth
+      · cases hauth; exact ⟨h, hfork, h_inherited⟩
+      · rcases Except.bind_eq_ok hauth with ⟨⟨msg', v⟩, hdel, hauth⟩
+        cases hauth
+        exact ⟨setDelegation_msg_noDel hdel h h_not_del,
+          (setDelegation_benvStat hdel) ▸ hfork,
+          (setDelegation_inheritedDeletions hdel) ▸ h_inherited⟩
+    rcases Except.bind_eq_ok h_run with ⟨evm, hpm, h_run⟩
+    have hpm' : processMessage delegated.resolveCodeDelegation = .ok evm := by
+      cases hp : processMessage delegated.resolveCodeDelegation with
+      | error e => simp only [hp, Except.bimap, bind, Except.bind, reduceCtorEq] at hpm
+      | ok d => simpa only [hp, Except.bimap, bind, Except.bind, id_eq, Except.ok.injEq] using hpm
+    clear hpm
+    have hpc : Msg.NoDel wa delegated.resolveCodeDelegation := by
+      unfold Msg.resolveCodeDelegation
+      split <;> exact ⟨hd.1.ca, hd.1.code⟩
+    have hfpc : CoveredFork delegated.resolveCodeDelegation.benv.stat.fork := by
+      unfold Msg.resolveCodeDelegation
+      split <;> exact hd.2.1
+    have hipc : wa ∉ delegated.resolveCodeDelegation.inheritedDeletions := by
+      unfold Msg.resolveCodeDelegation
+      split <;> exact hd.2.2
+    have hn := processMessage_preserves_noDel hfpc hpm' hpc hipc
     split at h_run
-    · simp only [bind, Except.bind] at h_run
-      unfold Except.bimap at h_run
-      split at h_run
-      · injection h_run
-      · rename_i evm h_evm
-        split at h_evm
-        · injection h_evm
-        · rename_i evm' h_pm
-          simp only [id_eq, Except.ok.injEq] at h_evm
-          subst h_evm
-          have h_pc : Msg.NoDel wa (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msg.stateGasGrant }) := by
-            split
-            · exact h
-            · exact ⟨h.ca, h.code⟩
-          have hfork' : CoveredFork (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msg.stateGasGrant }).benv.stat.fork := by
-            have hbenv : (match getDelegatedCodeAddress msg.code with | none => msg | some dca => { benv := msg.benv, tenv := msg.tenv, caller := msg.caller, target := msg.target, currentTarget := msg.currentTarget, gas := msg.gas, value := msg.value, data := msg.data, codeAddress := some dca, code := msg.benv.state.getCode dca, depth := msg.depth, shouldTransferValue := msg.shouldTransferValue, isStatic := msg.isStatic, accessedAddresses := Std.HashSet.insert msg.accessedAddresses dca, accessedStorageKeys := msg.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msg.stateGasGrant }).benv = msg.benv := by split <;> rfl
-            rw [hbenv]; exact hfork
-          have h_nodel_evm := processMessage_preserves_noDel hfork' h_pm h_pc
-          split at h_run
-          · split at h_run
-            · injection h_run
-            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-              rcases h_run with ⟨_, rfl⟩
-              exact h_nodel_evm.atd
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-            rcases h_run with ⟨_, rfl⟩
-            exact AdrSet.not_mem_empty
-    · rename_i h_col
-      rcases h_del : setDelegation msg with ⟨err⟩ | ⟨⟨msgDelegation, val⟩⟩
-      · simp only [h_del, bind, Except.bind] at h_run
-        injection h_run
-      · simp only [h_del, bind, Except.bind] at h_run
-        have h_del_nodel := setDelegation_msg_noDel h_del h h_not_del
-        unfold Except.bimap at h_run
-        split at h_run
-        · injection h_run
-        · rename_i evm h_evm
-          split at h_evm
-          · injection h_evm
-          · rename_i evm' h_pm
-            simp only [id_eq, Except.ok.injEq] at h_evm
-            subst h_evm
-            have h_pc : Msg.NoDel wa (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msgDelegation.stateGasGrant }) := by
-              split
-              · exact h_del_nodel
-              · exact ⟨h_del_nodel.ca, h_del_nodel.code⟩
-            have hfork' : CoveredFork (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msgDelegation.stateGasGrant }).benv.stat.fork := by
-              have hbenv : (match getDelegatedCodeAddress msgDelegation.code with | none => msgDelegation | some dca => { benv := msgDelegation.benv, tenv := msgDelegation.tenv, caller := msgDelegation.caller, target := msgDelegation.target, currentTarget := msgDelegation.currentTarget, gas := msgDelegation.gas, value := msgDelegation.value, data := msgDelegation.data, codeAddress := some dca, code := msgDelegation.benv.state.getCode dca, depth := msgDelegation.depth, shouldTransferValue := msgDelegation.shouldTransferValue, isStatic := msgDelegation.isStatic, accessedAddresses := Std.HashSet.insert msgDelegation.accessedAddresses dca, accessedStorageKeys := msgDelegation.accessedStorageKeys, disablePrecompiles := true, stateGasGrant := msgDelegation.stateGasGrant }).benv = msgDelegation.benv := by split <;> rfl
-              have hstat : msgDelegation.benv.stat = msg.benv.stat :=
-                setDelegation_benvStat h_del
-              rw [hbenv, hstat]; exact hfork
-            have h_nodel_evm := processMessage_preserves_noDel hfork' h_pm h_pc
-            split at h_run
-            · split at h_run
-              · injection h_run
-              · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-                rcases h_run with ⟨_, rfl⟩
-                exact h_nodel_evm.atd
-            · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
-              rcases h_run with ⟨_, rfl⟩
-              exact AdrSet.not_mem_empty
+    · rename_i herr
+      rcases Except.bind_eq_ok h_run with ⟨r, hr, h_run⟩
+      have hh := Except.ok.inj h_run
+      cases hh
+      simpa only [herr, ↓reduceIte] using hn.atd
+    · rename_i herr
+      simp only [Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at h_run
+      obtain ⟨_, rfl⟩ := h_run
+      simp only [herr, ↓reduceIte]
+      exact AdrSet.not_mem_empty
 
 theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
     {st' : Jaune.State} {out : MsgCallOutput}
     (hfork : CoveredFork msg.benv.stat.fork)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
-    (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa)) :
+    (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa))
+    (h_inherited : wa ∉ msg.inheritedDeletions) :
     ∀ a ∈ out.accountsToDelete.toList, a ≠ wa := by
   intro a ha heq
   subst heq
-  exact processMessageCall_preserves_noDel hfork h_run h h_not_del
+  exact processMessageCall_preserves_noDel hfork h_run h h_not_del h_inherited
     (Std.HashSet.mem_toList.mp ha)
 
 lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -5195,6 +5254,9 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
   obtain ⟨rfl, rfl, rfl, rfl⟩ := h_result
   have h_afford :
       maxGasFee' ≤ ((benv.state.get senderAddress).bal).toNat := by
+    rw [Except.mapError_eq_ok_iff] at h_account
+    unfold checkTransactionSenderAccountFor at h_account
+    rcases Except.bind_eq_ok h_account with ⟨_, h_account, _⟩
     unfold checkTransactionSenderAccount at h_account
     split at h_account <;> try contradiction
     split at h_account <;> try contradiction
@@ -5335,26 +5397,21 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
         simp only [h_limit] at h_validate
         split at h_validate
         · cases h_validate
-        · unfold checkInitcodeSize at h_validate
-          split at h_validate
-          · cases h_validate
-          · have h_result := Except.ok.inj h_validate
-            simp only [Prod.mk.injEq] at h_result
-            obtain ⟨rfl, rfl⟩ := h_result
-            omega
+        · rcases Except.bind_eq_ok h_validate with ⟨_, _, h_result⟩
+          have hh := Except.ok.inj h_result
+          simp only [Prod.mk.injEq] at hh
+          obtain ⟨rfl, rfl⟩ := hh
+          omega
       | some maxGas =>
         simp only [h_limit] at h_validate
-        unfold checkInitcodeSize at h_validate
+        rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+        rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
         split at h_validate
-        · cases h_validate
-        · rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
-          rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
-          split at h_validate
-          · simp only [bind, Except.bind, reduceCtorEq] at h_validate
-          · have h_result := Except.ok.inj h_validate
-            simp only [Prod.mk.injEq] at h_result
-            obtain ⟨rfl, rfl⟩ := h_result
-            omega
+        · simp only [bind, Except.bind, reduceCtorEq] at h_validate
+        · have h_result := Except.ok.inj h_validate
+          simp only [Prod.mk.injEq] at h_result
+          obtain ⟨rfl, rfl⟩ := h_result
+          omega
   · -- some lane : the structural checks cannot fail on an ok run, and the
     -- separate floor check yields the bound
     rcases h_cost : calculateIntrinsicCost rules tx sender with ⟨ig, floorCost⟩
@@ -5486,30 +5543,30 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     ((state2.addBal sender
         ((tx.gas -
             max (tx.gas - txOutput.gasLeft -
-              min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+              min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
               calldataFloorGasCost) *
           effectiveGasPrice).toB256).addBal
       benv.stat.coinbase
         (max (tx.gas - txOutput.gasLeft -
-            min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+            min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
             calldataFloorGasCost *
           (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256)
   have h2 := State.addBal_growth
     (state2.addBal sender
       ((tx.gas -
           max (tx.gas - txOutput.gasLeft -
-            min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+            min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
             calldataFloorGasCost) *
         effectiveGasPrice).toB256)
     benv.stat.coinbase
       (max (tx.gas - txOutput.gasLeft -
-          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
           calldataFloorGasCost *
         (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256
   have h3 := State.addBal_growth state2 sender
     ((tx.gas -
         max (tx.gas - txOutput.gasLeft -
-          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
           calldataFloorGasCost) *
       effectiveGasPrice).toB256
   have h4 : sum state2.bal ≤ sum state1.bal := by
@@ -5526,29 +5583,29 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
   have h7 := toB256_toNat_le
     ((tx.gas -
         max (tx.gas - txOutput.gasLeft -
-          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
           calldataFloorGasCost) *
       effectiveGasPrice)
   have h8 := toB256_toNat_le
     (max (tx.gas - txOutput.gasLeft -
-        min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+        min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
         calldataFloorGasCost *
       (effectiveGasPrice - benv.stat.baseFeePerGas))
   -- the debit is exactly its Nat value
   have h6 := B256.toNat_toB256_of_lt hfee_lt
   -- Nat arithmetic: refund + tip ≤ gas fee
   have hGle : max (tx.gas - txOutput.gasLeft -
-      min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+      min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
       calldataFloorGasCost ≤ tx.gas := by
     apply max_le _ hcdf
-    omega
+    exact (Nat.sub_le _ _).trans (Nat.sub_le _ _)
   have hkey : (tx.gas -
         max (tx.gas - txOutput.gasLeft -
-          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
           calldataFloorGasCost) *
       effectiveGasPrice +
       max (tx.gas - txOutput.gasLeft -
-          min ((tx.gas - txOutput.gasLeft) / 5) refundCounter)
+          min ((tx.gas - txOutput.gasLeft) / benv.stat.rules.settle.refundQuotient) refundCounter)
           calldataFloorGasCost *
         (effectiveGasPrice - benv.stat.baseFeePerGas) ≤
       tx.gas * effectiveGasPrice := by
@@ -5557,7 +5614,8 @@ lemma processTransaction_sum_le {benv : Benv} {bout bout' : BlockOutput}
     rw [← Nat.add_mul, Nat.sub_add_cancel hGle]
   -- normalize the goal's settlements to the none-lane arithmetic `h1` uses
   simp only [settleSelfdestructs, settleTransactionGas, BenvStat.rules] at hgas ⊢
-  simp only [hgas] at ⊢
+  simp only [hgas, sweepTouchedAccounts_bal] at ⊢
+  simp only [BenvStat.rules] at h1 h2 h3 h7 h8 hkey
   omega
 
 /-
@@ -5667,41 +5725,29 @@ lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
 -- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
 -- by construction, and the base snapshot's context validity is the one fact
 -- plain `Reach` never established, so it enters as a hypothesis.
-theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (t : Nat) :
-    (ChainConfig.pragueOnly chainId).forkAt t = .ok .prague := by
-  have h : (ChainConfig.pragueOnly chainId).forkAt? t = some .prague := by
-    unfold ChainConfig.forkAt? ChainConfig.pragueOnly
-    simp only [zero_le, decide_true, List.filter_cons_of_pos, List.filter_nil,
-      List.getLast?_singleton, Option.map_some]
-  unfold ChainConfig.forkAt
-  simp only [bind, Except.bind, Except.mapError, ChainConfig.pragueOnly_validate, h]
+theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (number timestamp : Nat) :
+    (ChainConfig.pragueOnly chainId).forkAt number timestamp = .ok .prague := by
+  exact ChainConfig.single_forkAt chainId .prague number timestamp
 
 /-- A fork a configured lookup selects is one the schedule activates. -/
-theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {t : Nat} {f : Fork}
-    (h : cfg.forkAt t = .ok f) : f ∈ cfg.activations.map (·.fork) := by
-  have hsome : cfg.forkAt? t = some f := by
-    unfold ChainConfig.forkAt at h
-    cases hv : cfg.validate with
-    | error e =>
-      simp only [bind, Except.bind, Except.mapError, hv, reduceCtorEq] at h
-    | ok u =>
-      cases hq : cfg.forkAt? t with
-      | none => simp only [bind, Except.bind, Except.mapError, hv, hq, reduceCtorEq] at h
-      | some g =>
-        simp only [bind, Except.bind, Except.mapError, hv, hq, Except.ok.injEq] at h
-        rw [h]
-  unfold ChainConfig.forkAt? at hsome
-  obtain ⟨a, ha, rfl⟩ := Option.map_eq_some_iff.mp hsome
-  exact List.mem_map.mpr
-    ⟨a, List.mem_of_mem_filter (List.mem_of_getLast? ha), rfl⟩
+theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {number timestamp : Nat} {f : Fork}
+    (h : cfg.forkAt number timestamp = .ok f) : f ∈ cfg.activations.map (·.fork) := by
+  exact Jaune.ChainConfig.forkAt_mem h
 
-/-- Every fork the mainnet schedule selects is covered: its activations are
-exactly Prague, Osaka, BPO1, and BPO2. -/
-theorem mainnetChainConfig_covered (t : Nat) (f : Fork)
-    (h : mainnetChainConfig.forkAt t = .ok f) : CoveredFork f := by
-  have hmem := ChainConfig.forkAt_mem h
-  simp only [mainnetChainConfig, List.map_cons, List.map_nil] at hmem
-  exact hmem
+/-- At or after Prague's timestamp, a successful mainnet selection is covered.
+Both schedule coordinates are real inputs; no block-number floor is assumed. -/
+theorem mainnetChainConfig_covered (number timestamp : Nat) (f : Fork)
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (h : mainnetChainConfig.forkAt number timestamp = .ok f) : CoveredFork f := by
+  have hbase : mainnetChainConfig.forkAt 0 mainnetPragueTimestamp = .ok .prague := by
+    rfl
+  have hindex := Jaune.ChainConfig.forkAt_index_mono (Nat.zero_le number) hmodern hbase h
+  have hmem := Jaune.ChainConfig.forkAt_mem h
+  simp only [mainnetChainConfig, List.map_cons, List.map_nil, List.mem_cons,
+    List.not_mem_nil, or_false] at hmem
+  cases f <;>
+    simp_all only [Fork.index, CoveredFork, coveredForks, List.mem_cons,
+      List.not_mem_nil, reduceCtorEq, false_or, true_or, or_true, or_false] <;> omega
 
 theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
     (h_ctx : ch.ValidContext)
@@ -5711,10 +5757,9 @@ theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
   | refl => exact .refl ch (ChainConfig.pragueOnly_valid _) h_ctx rfl
   | step h_reach' h_bound h_st ih =>
       refine .step ih h_bound ?_
-      rw [stateTransitionUsing_eq_of_chainId_eq
-        (show (ChainConfig.pragueOnly ch.chainId).chainId = _ from
-          (Reach.chainId_eq h_reach').symm),
-        ChainConfig.pragueOnly_forkAt]
+      change stateTransitionUsing (ChainConfig.single ch.chainId .prague) _ _ = _
+      rw [stateTransitionUsing_single
+        (show ch.chainId = _ from (Reach.chainId_eq h_reach').symm)]
       exact h_st
 
 

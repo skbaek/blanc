@@ -68,8 +68,11 @@ registry has identified the likely vocabulary.
   `rules_stateGas_none`, `rules_bal_none`, `requests_eq`,
   `beaconRoots_not_precompile`, `historyStorage_not_precompile`, `of_eq` and,
   where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
-  schedule premise with `mainnetChainConfig_covered` or a concrete config lemma
-  such as `Drip.concreteConfig_covered`.
+  schedule premise with a concrete config lemma such as
+  `Drip.concreteConfig_covered`. `mainnetChainConfig_covered` takes both the
+  real block number and timestamp and requires
+  `mainnetPragueTimestamp ≤ timestamp`; it does not cover historical mainnet
+  selections before Prague.
   To move an execution *between* covered forks, use
   [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean): `withFork` replaces the fork on
   `Sevm`/`Evm`/`Msg`/`Frame`; `evm_step_withFork` (one step commutes at an
@@ -1734,6 +1737,18 @@ assert a historical-uniform NoDel invariant.
 
 ### I2. The property concerns a complete execution or child frames
 
+- `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
+  `Exec.effectForkTerminal` in `Blanc/CommonProofs.lean` let terminal as well
+  as nonterminal effects use the frame's `CoveredFork` premise. Child
+  coverage follows the actual spawn; the existing unrestricted terminal
+  traversal APIs remain available. `Linst.noDelCode_effectFork` and
+  `Exec.inv_noDel` in `Blanc/LadderBase.lean` consume this interface without
+  assuming historical-uniform no-deletion behavior.
+- `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
+  `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
+  in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
+  arbitrary-message boundary. CALL and CREATE derive the child exclusion
+  from the parent's `Devm.NoDel.atd` in both snapshot branches.
 - Message-entry projections: `processMessage_entry_facts` carries the code,
   target, calldata, time, storage and `Mem.Wf` facts, with `pre.stack = []` and
   `pre.memory = Mem.empty` kept separate as `processMessage_entry_stack` and
@@ -1894,8 +1909,13 @@ unfolding a concrete state tower. Examples include:
   presence-preserving historical credits or ordinary credits.
   `Devm.creditBeneficiary_getBal` compares their balance maps with `addBal`;
   it does not equate account presence or storage-write annotations.
+  `Devm.creditBeneficiary_getStor_of_protected` preserves a protected owner's
+  storage, and `State.Protected.creditBeneficiary` preserves that protection.
   `creditSelfdestructRefund_getCode` and `creditSelfdestructRefund_delSets`
-  isolate the refund hook's unchanged observations.
+  isolate the refund hook's unchanged observations;
+  `creditSelfdestructRefund_state` preserves its persistent state.
+  `sweepTouchedAccounts_bal` preserves every balance because it erases only
+  empty accounts; it does not assert equality of raw account presence.
 - For persistent storage setters, use Jaune's
   `State.setStorVal_get_self` / `State.setStorVal_get_ne`, which handle the
   existing-account `setPresent` branch, and Blanc's

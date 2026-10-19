@@ -4846,6 +4846,37 @@ lemma Devm.creditBeneficiary_getCode (rules : ForkRules) (donee : Adr)
       rfl
     · rw [State.get_setPresent_ne _ h]
 
+/-- Refund bookkeeping changes no persistent state. -/
+lemma creditSelfdestructRefund_state (rules : ForkRules) (scheduled : Prop)
+    [Decidable scheduled] (d : Devm) :
+    (creditSelfdestructRefund rules scheduled d).state = d.state := by
+  unfold creditSelfdestructRefund
+  split <;> rfl
+
+/-- Removing only touched empty accounts preserves every balance. -/
+lemma sweepTouchedAccounts_bal (rules : ForkRules) (addresses : List Adr) (state : State) :
+    (sweepTouchedAccounts rules addresses state).bal = state.bal := by
+  have eraseEmpty (w : State) (a : Adr) (h : accountExistsAndIsEmpty w a) :
+      (destroyAccount w a).bal = w.bal := by
+    funext b
+    change (State.get (w.erase a) b).bal = (w.get b).bal
+    rw [State.get_eq_getD, State.getElem?_erase]
+    by_cases hab : a = b
+    · subst b
+      simp only [↓reduceIte, Option.getD_none]
+      exact h.2.2.2.symm
+    · rw [if_neg hab, State.get_eq_getD]
+  unfold sweepTouchedAccounts
+  split
+  · induction addresses generalizing state with
+    | nil => rfl
+    | cons a as ih =>
+      rw [List.foldl_cons, ih]
+      split
+      · exact eraseEmpty _ _ (by assumption)
+      · rfl
+  · rfl
+
 lemma Devm.creditBeneficiary_delSets (rules : ForkRules) (donee : Adr)
     (value : B256) (d : Devm) :
     Devm.delSets (d.creditBeneficiary rules donee value) = Devm.delSets d := by
@@ -5152,11 +5183,16 @@ def Ninst.EffectRecFork (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {pc sevm pre xl out}, CoveredFork sevm.benvStat.fork → Xlot.Rel R xl →
     Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
 
-lemma Evm.step_effectFork {R : Devm → Devm → Prop}
+/-- Terminal effect restricted to a frame whose fork is covered. -/
+def Linst.EffectFork (R : Devm → Devm → Prop) (l : Linst) : Prop :=
+  ∀ {sevm pre out}, CoveredFork sevm.benvStat.fork →
+    Linst.Run sevm pre l out → Execution.Rel R pre out
+
+lemma Evm.step_effectForkTerminal {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R)
     (hn : ∀ n, Ninst.EffectRecFork R n)
     (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
+    (hl : ∀ l, Linst.EffectFork R l)
     {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hxl : Xlot.Rel R xl)
@@ -5179,17 +5215,17 @@ lemma Evm.step_effectFork {R : Devm → Devm → Prop}
     | last l =>
       rw [Evm.step_last (l := l) hgi] at hrun
       obtain ⟨-, rfl⟩ := hrun
-      exact hl l rfl
+      exact hl l hfork rfl
 
 /-- The fork-indexed traversal: `Exec.effect` where the per-instruction
 `Ninst` effect may assume the frame's fork is covered. Child-frame coverage
 is transported across each spawn by `Evm.step_spawn_child_fork`; tails keep
 the same frame. -/
-theorem Exec.effectFork {R : Devm → Devm → Prop}
+theorem Exec.effectForkTerminal {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
     (hn : ∀ n, Ninst.EffectRecFork R n)
     (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
+    (hl : ∀ l, Linst.EffectFork R l)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (hfork : CoveredFork sevm.benvStat.fork) :
@@ -5205,34 +5241,65 @@ theorem Exec.effectFork {R : Devm → Devm → Prop}
     induction run with
     | halt hstep =>
       intro hfork
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) trivial
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) trivial
         (by rw [hstep]; exact ⟨rfl, rfl⟩)
     | cont hstep _ ih =>
       intro hfork
       refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
         (by rw [hstep]; exact ⟨rfl, rfl⟩)
     | doneErr hstep henter hr =>
       intro hfork
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) trivial
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) trivial
         (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
     | doneOk hstep henter hr _ ih =>
       intro hfork
       refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
         (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
     | runErr hstep henter _ hr ihc =>
       intro hfork
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (ihc hfork_c)
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (ihc hfork_c)
         (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
     | runOk hstep henter _ hr _ ihc ih =>
       intro hfork
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectFork hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (out := .ok _) (ihc hfork_c)
+      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (out := .ok _) (ihc hfork_c)
         (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
   exact aux run hfork
+
+lemma Evm.step_effectFork {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R)
+    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hxl : Xlot.Rel R xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel R devm out := by
+  apply Evm.step_effectForkTerminal hrefl hn hj ?_ hfork hxl hrun
+  intro l sevm pre out _ run
+  exact hl l run
+
+/-- The fork-indexed traversal: `Exec.effect` where the per-instruction
+`Ninst` effect may assume the frame's fork is covered. Child-frame coverage
+is transported across each spawn by `Evm.step_spawn_child_fork`; tails keep
+the same frame. -/
+theorem Exec.effectFork {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
+    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ l, Linst.Effect R l)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Execution.Rel R pre out := by
+  apply Exec.effectForkTerminal hrefl htrans hn hj ?_ run hfork
+  intro l sevm pre out _ run
+  exact hl l run
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
@@ -10249,6 +10316,31 @@ theorem State.subBal_zero_of_protected {state : State} {owner : Adr}
   unfold State.subBal
   simp only [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, Nat.not_lt_zero, ite_false, B256.sub_zero,
     State.setBal_current_of_protected hp]
+
+/-- Beneficiary credit keeps protected storage in either account-presence regime. -/
+lemma Devm.creditBeneficiary_getStor_of_protected (rules : ForkRules) (donee : Adr)
+    (value : B256) (d : Devm) (a : Adr) (hp : State.Protected d.state a) :
+    (d.creditBeneficiary rules donee value).getStor a = d.getStor a := by
+  unfold Devm.creditBeneficiary
+  split
+  · exact State.setBal_get_stor_of_protected hp
+  · change ((d.state.setPresent donee
+      ((d.state.get donee).withBal (d.state.bal donee + value))).get a).stor = (d.state.get a).stor
+    by_cases h : donee = a
+    · subst a; rw [State.get_setPresent_self]; rfl
+    · rw [State.get_setPresent_ne _ h]
+
+lemma State.Protected.creditBeneficiary {d : Devm} {a : Adr}
+    (hp : State.Protected d.state a) (rules : ForkRules) (donee : Adr) (value : B256) :
+    State.Protected (d.creditBeneficiary rules donee value).state a := by
+  unfold Devm.creditBeneficiary
+  split
+  · exact hp.setBal donee _
+  · change State.Protected (d.state.setPresent donee _) a
+    unfold State.Protected at hp ⊢
+    by_cases h : donee = a
+    · subst a; rw [State.get_setPresent_self]; exact hp
+    · rw [State.get_setPresent_ne _ h]; exact hp
 
 /-- Message entry that moves no value — no transfer flag, or a zero value —
 leaves the block environment exactly as it was. -/
