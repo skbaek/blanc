@@ -1414,6 +1414,10 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactFee
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactBack
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactWalk
 import Blanc.Lift.Curve3Pool.AddLiquidityExactFrame
+import Blanc.Lift.Curve3Pool.Walk.RliExactKit
+import Blanc.Lift.Curve3Pool.Walk.RliExactSchedule
+import Blanc.Lift.Curve3Pool.Walk.RliExactWalk
+import Blanc.Lift.Curve3Pool.RemoveLiquidityImbalanceExactFrame
 import Blanc.Composition.PairTokenJoint
 import Blanc.Composition.PairTokenJointControl
 import Blanc.Composition.PairTokenJointWalk

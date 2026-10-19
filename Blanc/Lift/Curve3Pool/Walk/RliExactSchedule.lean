@@ -276,4 +276,33 @@ def rliExactCost : Nat :=
 
 end Total
 
+/-! ## The static initial-gas coordinate
+
+Changing only a message's static initial gas changes neither the schedule nor its cost, nor the
+exact premises with the same data `P`: the profiles are transported with their functions
+unchanged (`StaticWordCallProfile.withStaticGas`, `MutableCallProfile.withStaticGas`). -/
+
+/-- The exact cost ignores the frame's static initial gas, with `P` and `w` fixed. -/
+theorem rliExactCost_withStaticGas (sevm : Sevm) (F : Nat) (pre : Devm) (P : RLIExactCalls)
+    (T : B256) (w : RliWords) :
+    rliExactCost {sevm with gas := F} pre P T w = rliExactCost sevm pre P T w := by
+  simp only [rliExactCost, rliPreCost1, rliSupBase, rliSupMem, rliMv, rliPreCost2, rliSupNext,
+    rliFeeLoopCost, rliN1, rliNF1, rliNF2, rliNF3, rliPreBase2, rliPreBaseA, rliBurnCost,
+    rliBurnBase, rliBurnMemC, rliBurnMem, rliMF1, rliMF2, rliMF3, rliM3, rliD1Mem, rliM2, rliD0Mem,
+    rliM1, rliPreMem2, rliPreMem4, rliNew, rliσ, rliTail0Cost, rliTail1Cost, rliTail2Cost,
+    rliEndCostAt, rliPushCost, rliPushBase, rliPushMemNext, rliPushPost, rliPushCallBase, rliPushId2,
+    rliPushId1, rliPushMem2, rliPushMemC, rliP0, rliPM0, rliBurnPost, aGas, aBase, aMemNext, rliAmt,
+    sloadCost_withStaticGas, sstoreCost_withStaticGas, afterSload_withStaticGas,
+    afterSstore_withStaticGas, dataWord_withStaticGas, identityCallNext_withStaticGas,
+    rawTailBaseNext_withStaticGas]
+  rfl
+
+/-- The exact premises survive a change of static initial gas, with the same data `P`. -/
+theorem RLIExactPremises.withStaticGas {sevm : Sevm} {σ : Stor} {T burn : B256}
+    {W : Nat → Devm → Prop} {U : Nat} {P : RLIExactCalls}
+    (h : RLIExactPremises sevm σ T burn W U P) (F : Nat) :
+    RLIExactPremises {sevm with gas := F} σ T burn W U P :=
+  ⟨h.supply.withStaticGas F, h.burn.withStaticGas F,
+    fun k hk ha => (h.push k hk ha).withStaticGas F⟩
+
 end Blanc.Lift.Curve3Pool
