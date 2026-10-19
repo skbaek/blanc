@@ -32,9 +32,6 @@ theorem initSevm_withGas (msg : Msg) (G : Nat) :
 theorem initDevm_withGas (msg : Msg) (G : Nat) :
     initDevm (msg.withGas G) = St (initDevm msg) [] Mem.empty G := rfl
 
-/-- The base message's entry storage is the message's state's. -/
-theorem initDevm_state (msg : Msg) : (initDevm msg).state = msg.benv.state := rfl
-
 /-- A message's frame state at gas `G` measures `G`: nothing is spilled at entry. -/
 theorem initDevm_gasMeasure (msg : Msg) (G : Nat) :
     (St (initDevm msg) [] Mem.empty G).gasMeasure = G := rfl

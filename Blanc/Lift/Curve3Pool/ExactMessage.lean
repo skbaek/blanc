@@ -18,7 +18,8 @@ The proof instantiates the frame theorem at `{initSevm msg with gas := R + c}` (
 transported across the static initial gas (`*.withStaticGas`); the cost is rewritten back to `c`
 (`*ExactCost_withStaticGas`) before the residual gas is chosen, so no execution is transported
 across gas. Where the frame theorem chooses the model's words after the static machine, the words
-it chooses at the grant are the base message's (`*_words_unique`, from the model's own checks).
+it chooses at the grant are the base message's (`xpWords_unique`, `alExactCost_words_eq`,
+`RliWordsPin.unique`, `ocWords_unique`, from the model's own checks).
 -/
 
 namespace Blanc.Lift.Curve3Pool
