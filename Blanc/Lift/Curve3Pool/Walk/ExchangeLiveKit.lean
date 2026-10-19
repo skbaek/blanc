@@ -116,6 +116,63 @@ theorem rxe_sstoreV {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork se
     SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q :=
   rxe_sstoreB hfork hstatic hG fun G' h1 h2 => k G' _ rfl h1 h2
 
+/-- `MSTORE` over the image carrier, to some outcome, the continuation over the literal written
+memory (`rxe_mstore` with the memory named). -/
+theorem rxe_mstoreL {Q : Outcome → Prop} {i v : B256} {o s c : Nat} (hR : Mem.Reads M img)
+    (hW : Mem.Wf M) (hsz : M.size = s) (ho : i.toNat = o)
+    (hc : gVerylow + (calculateMemoryGasCost (memExtSize s o 32) - calculateMemoryGasCost s) = c ∧
+      s % 32 = 0)
+    (k : Mem.Reads (M.write o v.toBytes) (Bytes.writeAt img o v.toBytes) →
+      Mem.Wf (M.write o v.toBytes) → (M.write o v.toBytes).size = memExtSize s o 32 →
+      SFunc.RunEx fs sevm (St b S (M.write o v.toBytes) G) f Q) :
+    SFunc.RunEx fs sevm (St b (i :: v :: S) M (G + c)) (.next (.reg .mstore) f) Q := by
+  subst ho
+  obtain ⟨r, hr, hq⟩ := k (hR.write hW _ _) (hW.write _ _)
+    (Mem.size_write_of_size hsz hc.2 (B256.length_toBytes _))
+  refine ⟨r, rx_mstore (M' := M.write i.toNat v.toBytes) ?_ rfl hr, hq⟩
+  rw [St.extCost_eq hsz]; exact hc.1
+
+/-- `MLOAD` past the memory's end over the image carrier, to some outcome, the continuation over
+the literal extended memory (`rxe_mloadX` with the memory named). -/
+theorem rxe_mloadXL {Q : Outcome → Prop} {i : B256} {o s c : Nat} (hR : Mem.Reads M img)
+    (hW : Mem.Wf M) (hsz : M.size = s) (ho : i.toNat = o)
+    (hc : gVerylow + (calculateMemoryGasCost (memExtSize s o 32) - calculateMemoryGasCost s) = c ∧
+      s % 32 = 0) (hroom : S.length < 1024)
+    (k : Mem.Reads (M.extend o 32) img → Mem.Wf (M.extend o 32) →
+      (M.extend o 32).size = memExtSize s o 32 →
+      SFunc.RunEx fs sevm (St b (Bytes.toB256 (img.sliceD o 32 0) :: S) (M.extend o 32) G) f Q) :
+    SFunc.RunEx fs sevm (St b (i :: S) M (G + c)) (.next (.reg .mload) f) Q := by
+  subst ho
+  obtain ⟨r, hr, hq⟩ := k (hR.extend _ _) (hW.extend _ _) (by rw [← hsz]; rfl)
+  refine ⟨r, rx_mload_ext ?_ (by rw [hR.read]) rfl hroom hr, hq⟩
+  rw [St.extCost_eq hsz]; exact hc.1
+
+/-- **`SLOAD` within a gas budget**, the base, the word read and the exact charge named. -/
+theorem rxe_sloadVX {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hroom : S.length < 1024) (hG : 2100 ≤ G)
+    (k : ∀ G' b' v, b' = afterSload sevm b k' → v = b.getStorVal sevm.currentTarget k' →
+      G ≤ G' + 2100 → G' ≤ G → G = G' + sloadCost sevm b k' →
+      SFunc.RunEx fs sevm (St b' (v :: S) M G') f Q) :
+    SFunc.RunEx fs sevm (St b (k' :: S) M G) (.next (.reg .sload) f) Q := by
+  have hc := sloadCost_le sevm b k'
+  have e1 : gasColdSload = 2100 := rfl
+  obtain ⟨r, hr, hq⟩ := k (G - sloadCost sevm b k') _ _ rfl rfl (by omega) (by omega) (by omega)
+  refine ⟨r, ?_, hq⟩
+  rw [show G = (G - sloadCost sevm b k') + sloadCost sevm b k' by omega]
+  exact rx_sload_sel hfork hroom hr
+
+/-- **`SSTORE` within a gas budget**, the base and the exact charge named. -/
+theorem rxe_sstoreVX {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
+    (k : ∀ G' b', b' = afterSstore sevm b k' v → G ≤ G' + 22100 → G' ≤ G →
+      G = G' + sstoreCost sevm b k' v → SFunc.RunEx fs sevm (St b' S M G') f Q) :
+    SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q := by
+  have hc := sstoreCost_le_22100 sevm b k' v
+  obtain ⟨r, hr, hq⟩ := k (G - sstoreCost sevm b k' v) _ rfl (by omega) (by omega) (by omega)
+  refine ⟨r, ?_, hq⟩
+  rw [show G = (G - sstoreCost sevm b k' v) + sstoreCost sevm b k' v by omega]
+  exact rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic hr
+
 /-- **Vyper's internal-call idiom, to some outcome**: an exact callee run from the return
 address `p + 6` to `.returned D`, and a continuation from `D`, at `19` gas for the idiom. -/
 theorem rxe_pcCall {Q : Outcome → Prop} {p k : Nat} {t0 t1 : UInt8} {D : Devm}
@@ -194,6 +251,82 @@ theorem mono {W' : Devm → Prop} (h : ExLive sevm W b σ) (hc : WClosed sevm W'
 
 end ExLive
 
+/-- `StaticWordOkAt`, the call also relating its input and post by `E` (the old premise is
+`E = True`; an exact profile supplies its debit and canonical successor). -/
+def StaticWordOkAtE (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes) (A : B256)
+    (U : Nat) (ii is oi : B256) (E : Devm → List B256 → Mem → Nat → Devm → Prop) : Prop :=
+  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
+    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
+    ∃ d out, Ninst.RunCompiled sevm
+        (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .staticcall) d ∧
+      StaticCallPost b d S M ii is oi 0x20 1 out ∧ 32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
+      Bytes.toB256 (out.take 32) = A ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧ W' d ∧
+      (IdReady sevm b → IdReady sevm d) ∧ E b S M G d
+
+/-- The bounded premise, with no extra relation. -/
+theorem StaticWordOkAt.withE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
+    {A : B256} {U : Nat} {ii is oi : B256} (h : StaticWordOkAt sevm W W' t data A U ii is oi) :
+    StaticWordOkAtE sevm W W' t data A U ii is oi (fun _ _ _ _ _ => True) := by
+  intro b S M G hW hU hG hin hroom
+  obtain ⟨d, out, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := h b S M G hW hU hG hin hroom
+  exact ⟨d, out, h1, h2, h3, h4, h5, h6, h7, h8, h9, trivial⟩
+
+/-- `MutCallOkAt`, the call also relating its input and post by `E`. -/
+def MutCallOkAtE (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes)
+    (ok : Bytes → Prop) (U : Nat) (ii is oi : B256)
+    (E : Devm → List B256 → Mem → Nat → Devm → Prop) : Prop :=
+  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
+    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
+    ∃ d, Ninst.RunCompiled sevm
+        (St b (Nat.toB256 G :: t :: 0 :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .call) d ∧
+      MutableCallPost b d S M ii is oi 0x20 1 ∧ ok d.returnData ∧
+      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
+      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W' d ∧
+      (IdReady sevm b → IdReady sevm d) ∧ E b S M G d
+
+/-- The bounded premise, with no extra relation. -/
+theorem MutCallOkAt.withE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
+    {ok : Bytes → Prop} {U : Nat} {ii is oi : B256}
+    (h : MutCallOkAt sevm W W' t data ok U ii is oi) :
+    MutCallOkAtE sevm W W' t data ok U ii is oi (fun _ _ _ _ _ => True) := by
+  intro b S M G hW hU hG hin hroom
+  obtain ⟨d, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := h b S M G hW hU hG hin hroom
+  exact ⟨d, h1, h2, h3, h4, h5, h6, h7, h8, h9, trivial⟩
+
+/-- **A one-word `STATICCALL` answered by its premise, forward, with its relation**:
+`rxe_staticWord` over `StaticWordOkAtE`, the continuation also receiving the literal post
+memory and `E` at the call's input. -/
+theorem rxe_staticWordE {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {b : Devm} {S : List B256}
+    {M : Mem} {img : Bytes} {G U : Nat} {t A ii is oi : B256} {data : Bytes} {o s : Nat}
+    {Q : Outcome → Prop} {f : SFunc} {E : Devm → List B256 → Mem → Nat → Devm → Prop}
+    (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
+    (hp : StaticWordOkAtE sevm W W' t data A U ii is oi E) (hU : U ≤ G) (hG : G < 2 ^ 256)
+    (hroom : S.length < 1024)
+    (hin : (M.read ii.toNat is.toNat).1 = data) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hoi : oi.toNat = o)
+    (hext : (M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).size = s) (hfit : o + 0x20 ≤ s)
+    (k : ∀ (d : Devm) (M' : Mem) (out : Bytes), ExLive sevm W' d σ →
+      Mem.Reads M' (Bytes.writeAt img o (out.take 0x20)) → Mem.Wf M' → M'.size = s →
+      32 ≤ out.length → out.length < 2 ^ 256 → Bytes.toB256 (out.take 32) = A →
+      d.returnData = out → G ≤ d.gasLeft + U → d.gasLeft ≤ G →
+      M' = (M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).write o (out.take 0x20) →
+      E b S M G d →
+      SFunc.RunEx cert.prog sevm (St d (1 :: S) M' d.gasLeft) f Q) :
+    SFunc.RunEx cert.prog sevm (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G)
+      (.next (.exec .staticcall) f) Q := by
+  obtain ⟨d, out, hrun, hpost, hlen, hlt, hA, hg1, hg2, hWd, hidd, hE⟩ :=
+    hp b S M G hL.w hU hG hin hroom
+  have hd := hpost.eq_St
+  rw [show (0x20 : B256).toNat = 0x20 by decide] at hd
+  subst hoi
+  have hsz' : ((M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).write oi.toNat
+      (out.take 0x20)).size = s := by
+    rw [Mem.size_write_of_le (by rw [hext, List.length_take]; omega), hext]
+  obtain ⟨r, hr, hq⟩ := k d _ out ⟨fun x => by rw [hpost.stor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
+    ((hR.extends _).write (hW.extends _) _ _) ((hW.extends _).write _ _) hsz' hlen hlt hA
+    hpost.returnData hg1 hg2 rfl hE
+  exact ⟨r, .next hrun (Eq.mpr (congrArg (fun x => SFunc.RunExact cert.prog sevm x f r) hd) hr), hq⟩
+
 /-- **A one-word `STATICCALL` answered by its premise, forward**: the call at `(ii, is, oi)`
 reading `A`, the `RETURNDATASIZE > 31` test, and the answer loaded back (`PUSH; MLOAD oi`), up
 to the tree `f2` after the load, over an image carrier. -/
@@ -211,18 +344,10 @@ theorem rxe_staticWord {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {b : Dev
       d.returnData = out → G ≤ d.gasLeft + U → d.gasLeft ≤ G →
       SFunc.RunEx cert.prog sevm (St d (1 :: S) M' d.gasLeft) f Q) :
     SFunc.RunEx cert.prog sevm (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G)
-      (.next (.exec .staticcall) f) Q := by
-  obtain ⟨d, out, hrun, hpost, hlen, hlt, hA, hg1, hg2, hWd, hidd⟩ := hp b S M G hL.w hU hG hin hroom
-  have hd := hpost.eq_St
-  rw [show (0x20 : B256).toNat = 0x20 by decide] at hd
-  subst hoi
-  have hsz' : ((M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).write oi.toNat
-      (out.take 0x20)).size = s := by
-    rw [Mem.size_write_of_le (by rw [hext, List.length_take]; omega), hext]
-  obtain ⟨r, hr, hq⟩ := k d _ out ⟨fun x => by rw [hpost.stor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
-    ((hR.extends _).write (hW.extends _) _ _) ((hW.extends _).write _ _) hsz' hlen hlt hA
-    hpost.returnData hg1 hg2
-  exact ⟨r, .next hrun (Eq.mpr (congrArg (fun x => SFunc.RunExact cert.prog sevm x f r) hd) hr), hq⟩
+      (.next (.exec .staticcall) f) Q :=
+  rxe_staticWordE hL hW'c hp.withE hU hG hroom hin hR hW hoi hext hfit
+    fun d M' out hLd hR' hW' hsz' hlen hlt hA hrd hg1 hg2 _ _ =>
+      k d M' out hLd hR' hW' hsz' hlen hlt hA hrd hg1 hg2
 
 /-- A call's answer word read back where the call wrote it. -/
 theorem ex_ans_read (img out : Bytes) (o : Nat) (h : 32 ≤ out.length) :

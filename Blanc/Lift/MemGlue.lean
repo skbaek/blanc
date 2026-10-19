@@ -278,4 +278,76 @@ theorem Mem.Full.restoreMem (c : Nat) :
   | _, _, [], h => h
   | _, p, _ :: ws, h => Mem.Full.restoreMem c ws ((h.write p _).write c _)
 
+
+/-- `saveMem`'s first counter write peeled off the front. -/
+theorem saveMem_succ_left (M : Mem) (c lo : Nat) :
+    ∀ n, saveMem M c lo (n + 1) = saveMem (M.write c (Nat.toB256 (lo + 32)).toBytes) c (lo + 32) n
+  | 0 => by simp only [saveMem, Nat.zero_add, Nat.mul_one]
+  | n + 1 => by
+    rw [saveMem, saveMem_succ_left M c lo n, saveMem,
+      show lo + 32 * (n + 1 + 1) = lo + 32 + 32 * (n + 1) by omega]
+
+
+/-- Equal words read the same 32 bytes. -/
+theorem Mem.getD_eq_of_memWord_eq {M N : Mem} {o : Nat} (h : memWord M o = memWord N o)
+    {j : Nat} (hj : j < 32) : M.data.getD (o + j) 0 = N.data.getD (o + j) 0 := by
+  have hl : ∀ μ : Mem, (μ.read o 32).1.length = 32 := fun μ => by
+    show (Array.sliceD _ _ _ _).length = 32
+    rw [Array.sliceD_eq_map, List.length_map, List.length_range]
+  have e : (M.read o 32).1 = (N.read o 32).1 := by
+    rw [← Bytes.toBytes_toB256_of_length (hl M), ← Bytes.toBytes_toB256_of_length (hl N)]
+    exact congrArg B256.toBytes h
+  have e2 := congrArg (fun l : Bytes => l.getD j 0) e
+  simp only [Mem.read, Array.sliceD_eq_map, List.getD_eq_getElem?_getD, List.getElem?_map,
+    List.getElem?_range hj, Option.map_some, Option.getD_some] at e2
+  exact e2
+
+
+/-- Word stores in order. -/
+def Mem.writeWords (M : Mem) (ws : List (Nat × B256)) : Mem :=
+  ws.foldl (fun M ov => M.write ov.1 ov.2.toBytes) M
+
+@[simp] theorem Mem.writeWords_nil (M : Mem) : Mem.writeWords M [] = M := rfl
+
+theorem Mem.writeWords_cons (M : Mem) (o : Nat) (v : B256) (ws : List (Nat × B256)) :
+    Mem.writeWords M ((o, v) :: ws) = Mem.writeWords (M.write o v.toBytes) ws := rfl
+
+/-- The same word stores on both sides cover every byte of their words. -/
+theorem Mem.EqExcept.writeWords :
+    ∀ (ws : List (Nat × B256)) {M N : Mem} {D : Nat → Prop}, Mem.EqExcept M N D →
+      Mem.EqExcept (Mem.writeWords M ws) (Mem.writeWords N ws)
+        (fun i => D i ∧ ∀ o ∈ ws.map Prod.fst, ¬ (o ≤ i ∧ i < o + 32))
+  | [], _, _, _, h => h.mono fun i hi => ⟨hi, fun o ho => absurd ho (List.not_mem_nil)⟩
+  | (o, v) :: ws, _, _, _, h => by
+    have h2 := (h.write o v.toBytes).writeWords ws
+    rw [B256.length_toBytes] at h2
+    refine h2.mono fun i hi => ⟨hi.1.1, fun o' ho' => ?_⟩
+    simp only [List.map_cons, List.mem_cons] at ho'
+    rcases ho' with rfl | ho'
+    · exact hi.1.2
+    · exact hi.2 o' ho'
+
+/-- Word stores keep a memory fully materialised. -/
+theorem Mem.Full.writeWords :
+    ∀ (ws : List (Nat × B256)) {M : Mem}, Mem.Full M → Mem.Full (Mem.writeWords M ws)
+  | [], _, h => h
+  | (o, v) :: ws, _, h => Mem.Full.writeWords ws (h.write o v.toBytes)
+
+/-- Equal off windows that the same word stores then cover, and fully materialised by them:
+the same memory. -/
+theorem Mem.EqExcept.writeWords_eq {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D)
+    (ws : List (Nat × B256)) (hcov : ∀ i, D i → ∃ o ∈ ws.map Prod.fst, o ≤ i ∧ i < o + 32)
+    (hM : Mem.Full (Mem.writeWords M ws)) (hN : Mem.Full (Mem.writeWords N ws)) :
+    Mem.writeWords M ws = Mem.writeWords N ws :=
+  (h.writeWords ws).eq (fun i ⟨hd, hno⟩ => by
+    obtain ⟨o, ho, hi⟩ := hcov i hd
+    exact hno o ho hi) hM hN
+
+/-- A first word store past the logical size materialises the array for the rest. -/
+theorem Mem.full_writeWords_of_grow {M : Mem} {o : Nat} {v : B256} (h : M.size < o + 32)
+    (ws : List (Nat × B256)) : Mem.Full (Mem.writeWords M ((o, v) :: ws)) :=
+  Mem.Full.writeWords ws (Mem.full_write_of_grow (xs := v.toBytes)
+    (by intro e; have := B256.length_toBytes v; rw [e] at this; simp only [List.length_nil] at this; omega)
+    (by rw [B256.length_toBytes]; exact h))
+
 end Blanc.Lift
