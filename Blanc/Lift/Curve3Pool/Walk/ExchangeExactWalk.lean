@@ -338,4 +338,576 @@ theorem rx_ex_back_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {s0 : State} {R 
   exact rx_ex_tail_exact hfork hstatic hdepth hL4 hn4 hi hj hR4 hW4 hsz4 hF4 hout4 hfee4 hma hmap
     hbi hbj1 hbj2 hW''c hpush hR0 (by omega) k
 
+
+/-! ## The pull and the fee coin's two reads -/
+
+/-- The pull payload's first identity successor. -/
+def exPullN1 (sevm : Sevm) (n : Devm) (M : Mem) : Devm :=
+  identityCallNext sevm n exPullS1 (exPullM1 M) (Bytes.toB256 [4, 192] + Bytes.toB256 [32])
+    (Bytes.toB256 [4]) (Bytes.toB256 [5, 32] + Bytes.toB256 [0] + Bytes.toB256 [32]) (Bytes.toB256 [4])
+
+/-- The pull payload's second identity successor (the `transferFrom` call's input base). -/
+def exPullN2 (sevm : Sevm) (n : Devm) (M : Mem) : Devm :=
+  identityCallNext sevm (exPullN1 sevm n M) exPullS2 (exPullM2 M sevm) (Bytes.toB256 [5, 32])
+    (Bytes.toB256 [32] + exPullLen) (Bytes.toB256 [5, 224]) (Bytes.toB256 [32] + exPullLen)
+
+/-- The `transferFrom` call's canonical successor. -/
+def exPullNext (sevm : Sevm) (n : Devm) (M : Mem) (plN : Devm → List B256 → Mem → Devm) : Devm :=
+  plN (exPullN2 sevm n M) [] (exPullI2 M sevm)
+
+/-- The pull's raw tail canonical successor. -/
+def exPullTail (sevm : Sevm) (n : Devm) (M : Mem) (plN : Devm → List B256 → Mem → Devm) : Devm :=
+  rawTailBaseNext sevm (exPullNext sevm n M plN) [] (exPullNext sevm n M plN).memory exPullSite
+
+/-- The memory the pull's raw tail leaves. -/
+def exPullMem (sevm : Sevm) (n : Devm) (M : Mem) (plN : Devm → List B256 → Mem → Devm) : Mem :=
+  vyRawMem (exPullNext sevm n M plN).memory 0x6a0 0x460
+    (min (exPullNext sevm n M plN).returnData.length 32)
+
+/-- **The pull's exact charge**: `575 + c0` fixed (both payload identity copies included), the
+profile's debit, and the raw tail at the reply's actual length. -/
+def exPullCost (sevm : Sevm) (n : Devm) (M : Mem) (c0 : Nat) (plD : Devm → List B256 → Mem → Nat)
+    (plN : Devm → List B256 → Mem → Devm) : Nat :=
+  575 + c0 + plD (exPullN2 sevm n M) [] (exPullI2 M sevm) +
+    rawTailCost (min (exPullNext sevm n M plN).returnData.length 32)
+
+/-- **The pull, exactly**: from an actual base equal modulo gas to `n`, at the literal memory
+`M`, from `R + exPullCost` to the second fee test with exactly `R`, at a base equal modulo gas
+to `exPullTail` and the memory `exPullMem`. -/
+theorem rx_ex_pull_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
+    {plD : Devm → List B256 → Mem → Nat} {plN : Devm → List B256 → Mem → Devm}
+    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n) (hW'c : WClosed sevm W')
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
+    (hs : (s = 0x3c0 ∧ c0 = 31) ∨ (s = 0x460 ∧ c0 = 15)) (hF : ExFrame img B X D C)
+    (hpull : MutableCallProfile sevm W W' C (transferFromSel ++ sevm.caller.toB256.toBytes ++
+      sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes) RawCallOk U 0x600 0x64 0x6c0 plD plN)
+    (hR0 : 4000 + U ≤ R) (hGb : R + exPullCost sevm n M c0 plD plN + 2000 < 2 ^ 256)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x6e0 → ExFrame img' B X D C →
+      Devm.EqModGas b' (exPullTail sevm n M plN) → M' = exPullMem sevm n M plN →
+      SFunc.RunEx cert.prog sevm (St b' [] M' R) t_2666_c12 Q) :
+    SFunc.RunEx cert.prog sevm (St b [] M (R + exPullCost sevm n M c0 plD plN)) t_2517_c11 Q := by
+  refine rx_ex_pull_core (R := 0) hfork hdepth hL hW'c hR hW hsz hs hF (MutableCallProfile.okE hpull)
+    (by unfold exPullCost; omega) (by omega) ?_
+  intro b' M' img' g h1 h2 h3 h4 h5 _ _ bI1 bI d hc1 hc2 hE hg hcT hM'
+  have hN1 : Devm.EqModGas bI1 (exPullN1 sevm n M) :=
+    hc1.trans (identityCallNext_congr sevm exPullS1 _ _ _ _ _ hn)
+  have hN2 : Devm.EqModGas bI (exPullN2 sevm n M) :=
+    hc2.trans (identityCallNext_congr sevm exPullS2 _ _ _ _ _ hN1)
+  obtain ⟨e5, hnx⟩ := hpull.congr [] (exPullI2 M sevm) hN2
+  obtain ⟨hEg, hEn⟩ := hE
+  have hEg' : R + exPullCost sevm n M c0 plD plN - (575 + c0) =
+      d.gasLeft + plD bI [] (exPullI2 M sevm) := hEg
+  have hdN : Devm.EqModGas d (exPullNext sevm n M plN) := hEn.trans hnx
+  have e6 : min d.returnData.length 32 = min (exPullNext sevm n M plN).returnData.length 32 := by
+    rw [hdN.returnData]
+  have hgR : g = R := by
+    rw [e6] at hg
+    unfold exPullCost at hEg' hGb
+    omega
+  subst hgR
+  refine k b' M' img' h1 h2 h3 h4 h5 ?_ ?_
+  · refine hcT.trans ?_
+    rw [hdN.memory]
+    exact rawTailBaseNext_congr sevm _ _ exPullSite hdN
+  · rw [hM', hdN.memory, e6]; rfl
+
+/-- The first `balanceOf(self)` call's canonical successor. -/
+def exBal1Next (sevm : Sevm) (n : Devm) (M : Mem) (bN : Devm → List B256 → Mem → Devm) : Devm :=
+  bN n [] (exBalIn M sevm 0x3c0)
+
+/-- The memory after the first `balanceOf(self)` and its answer parked at `0x380`. -/
+def exBal1Mem (sevm : Sevm) (n : Devm) (M : Mem) (B1 : B256)
+    (bN : Devm → List B256 → Mem → Devm) : Mem :=
+  (((exBalIn M sevm 0x3c0).extends [(0x3dc, 0x24), (0x440, 0x20)]).write 0x440
+    ((exBal1Next sevm n M bN).returnData.take 0x20)).write 0x380 B1.toBytes
+
+/-- **The first `balanceOf(self)`, exactly**: `97` fixed plus the profile's debit. -/
+theorem rx_ex_bal1_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {D C B1 : B256}
+    {bD : Devm → List B256 → Mem → Nat} {bN : Devm → List B256 → Mem → Devm}
+    (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3c0)
+    (hF : ExFrame img B X D C)
+    (hbal : StaticWordCallProfile sevm W W C (balanceOfData sevm.currentTarget) B1 U 0x3dc 0x24 0x440
+      bD bN)
+    (hR0 : 1000 + U ≤ R) (hGb : R + (97 + bD n [] (exBalIn M sevm 0x3c0)) < 2 ^ 256)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x460 → ExFrame img' B X B1 C →
+      Devm.EqModGas b' (exBal1Next sevm n M bN) → M' = exBal1Mem sevm n M B1 bN →
+      SFunc.RunEx cert.prog sevm (St b' [] M' R) t_2517_c11 Q) :
+    SFunc.RunEx cert.prog sevm (St b [] M (R + (97 + bD n [] (exBalIn M sevm 0x3c0)))) t_24d8_c0 Q := by
+  obtain ⟨e5, hnx⟩ := hbal.congr [] (exBalIn M sevm 0x3c0) hn
+  refine rx_ex_bal1_core (R := 0) hL hR hW hsz hF (StaticWordCallProfile.okE hbal) (by omega)
+    (by omega) ?_
+  intro b' M' img' g h1 h2 h3 h4 h5 _ _ hE hg hM'
+  obtain ⟨hEg, hEn⟩ := hE
+  have hEg' : R + (97 + bD n [] (exBalIn M sevm 0x3c0)) - 44 =
+      b'.gasLeft + bD b [] (exBalIn M sevm 0x3c0) := hEg
+  have hdN : Devm.EqModGas b' (exBal1Next sevm n M bN) := hEn.trans hnx
+  have hgR : g = R := by omega
+  subst hgR
+  refine k b' M' img' h1 h2 h3 h4 h5 hdN ?_
+  rw [hM', hdN.returnData]; rfl
+
+/-- The second `balanceOf(self)` call's canonical successor. -/
+def exBal2Next (sevm : Sevm) (n : Devm) (M : Mem) (bN : Devm → List B256 → Mem → Devm) : Devm :=
+  bN n [] (exBalIn M sevm 0x700)
+
+/-- The memory after the second `balanceOf(self)` and the credited difference at `0x380`. -/
+def exBal2Mem (sevm : Sevm) (n : Devm) (M : Mem) (B1 B2 : B256)
+    (bN : Devm → List B256 → Mem → Devm) : Mem :=
+  (((exBalIn M sevm 0x700).extends [(0x71c, 0x24), (0x780, 0x20)]).write 0x780
+    ((exBal2Next sevm n M bN).returnData.take 0x20)).write 0x380 (B2 - B1).toBytes
+
+/-- **The second `balanceOf(self)` and the credited amount, exactly**: `151` fixed plus the
+profile's debit. -/
+theorem rx_ex_bal2_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {C B1 B2 : B256}
+    {bD : Devm → List B256 → Mem → Nat} {bN : Devm → List B256 → Mem → Devm}
+    (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x6e0)
+    (hF : ExFrame img B X B1 C)
+    (hbal : StaticWordCallProfile sevm W W C (balanceOfData sevm.currentTarget) B2 U 0x71c 0x24 0x780
+      bD bN) (hsub : ¬ B2 < B1)
+    (hR0 : 1000 + U ≤ R) (hGb : R + (151 + bD n [] (exBalIn M sevm 0x700)) < 2 ^ 256)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x7a0 → ExFrame img' B X (B2 - B1) C →
+      Devm.EqModGas b' (exBal2Next sevm n M bN) → M' = exBal2Mem sevm n M B1 B2 bN →
+      SFunc.RunEx cert.prog sevm (St b' [] M' R) t_26c9_c13 Q) :
+    SFunc.RunEx cert.prog sevm (St b [] M (R + (151 + bD n [] (exBalIn M sevm 0x700)))) t_2672_c12 Q := by
+  obtain ⟨e5, hnx⟩ := hbal.congr [] (exBalIn M sevm 0x700) hn
+  refine rx_ex_bal2_core (R := 0) hL hR hW hsz hF (StaticWordCallProfile.okE hbal) hsub (by omega)
+    (by omega) ?_
+  intro b' M' img' g h1 h2 h3 h4 h5 _ _ hE hg hM'
+  obtain ⟨hEg, hEn⟩ := hE
+  have hEg' : R + (151 + bD n [] (exBalIn M sevm 0x700)) - 47 =
+      b'.gasLeft + bD b [] (exBalIn M sevm 0x700) := hEg
+  have hdN : Devm.EqModGas b' (exBal2Next sevm n M bN) := hEn.trans hnx
+  have hgR : g = R := by omega
+  subst hgR
+  refine k b' M' img' h1 h2 h3 h4 h5 hdN ?_
+  rw [hM', hdN.returnData]; rfl
+
+
+/-! ## The front: dispatcher, guards, `_xp_mem` -/
+
+/-- The prologue's memory. -/
+abbrev exM0 (sevm : Sevm) : Mem := vyMem Mem.empty (Sevm.dataWord sevm 0)
+
+/-- The words the prefix reads past the memory's end. -/
+abbrev exZ (sevm : Sevm) (o : Nat) : B256 :=
+  Bytes.toB256 ((vyImg [] (Sevm.dataWord sevm 0)).sliceD o 32 0)
+
+/-- The canonical base at the fee test: the prefix's storage steps and the `coins[i]` load. -/
+def exN2 (sevm : Sevm) (pre : Devm) : Devm :=
+  afterSload sevm (exPreBase sevm pre) (coinsBase + exI sevm)
+
+/-- The literal memory at the fee test. -/
+def exM2 (sevm : Sevm) (pre : Devm) (x0 x1 x2 : B256) : Mem :=
+  Mem.writeWords (exPreMem (exM0 sevm) (pre.getStor sevm.currentTarget))
+    (exMidWords x0 x1 x2 (exZ sevm 0x200) (exZ sevm 0x220) (exZ sevm 0x240)
+      (balAt (pre.getStor sevm.currentTarget) 0) (balAt (pre.getStor sevm.currentTarget) 1)
+      (balAt (pre.getStor sevm.currentTarget) 2) (exDx sevm)
+      (((pre.getStor sevm.currentTarget).set lockSlot 1).get (coinsBase + exI sevm)))
+
+/-- **The front's exact charge**: the dispatcher (`422`), the prefix (`661` plus its storage
+charges) and `_xp_mem` with its surroundings (`1589` plus the `coins[i]` load). -/
+def exHeadCost (sevm : Sevm) (pre : Devm) : Nat :=
+  422 + (661 + exPreCost sevm pre) +
+    (1589 + sloadCost sevm (exPreBase sevm pre) (coinsBase + exI sevm))
+
+/-- **The dispatcher and the prefix, exactly**: from the frame's entry with
+`R + 422 + 661 + exPreCost` to `_xp_mem`'s call idiom with exactly `R`, at the canonical base
+`exPreBase` and memory `exPreMem`. -/
+theorem rx_ex_head_exact {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → Prop}
+    {W : Devm → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
+    (hWc : WClosed sevm W) (hWb : W pre)
+    (hlock : (pre.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
+    (hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0)
+    (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3) (hR0 : 60000 ≤ R)
+    (k : ∀ img1 : Bytes,
+      ExBase sevm pre (exPreBase sevm pre) ((pre.getStor sevm.currentTarget).set lockSlot 1) →
+      W (exPreBase sevm pre) →
+      Mem.Reads (exPreMem (exM0 sevm) (pre.getStor sevm.currentTarget)) img1 →
+      Mem.Wf (exPreMem (exM0 sevm) (pre.getStor sevm.currentTarget)) →
+      (exPreMem (exM0 sevm) (pre.getStor sevm.currentTarget)).size = 0x2e0 →
+      SFunc.RunEx cert.prog sevm (St (exPreBase sevm pre)
+        [balAt (pre.getStor sevm.currentTarget) 0, balAt (pre.getStor sevm.currentTarget) 1,
+          balAt (pre.getStor sevm.currentTarget) 2, exZ sevm 0x240, exZ sevm 0x220, exZ sevm 0x200,
+          balAt (pre.getStor sevm.currentTarget) 2, balAt (pre.getStor sevm.currentTarget) 1,
+          balAt (pre.getStor sevm.currentTarget) 0, exR1, exR1, exR0, Bytes.toB256 [2, 0]]
+        (exPreMem (exM0 sevm) (pre.getStor sevm.currentTarget)) R)
+        (pcCallTree 0x2452 0x03 0xa1 34 t_2458_c0) Q) :
+    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + 422 + (661 + exPreCost sevm pre)))
+      t_0000_c0 Q := by
+  rw [show R + 422 + (661 + exPreCost sevm pre) = (R + (661 + exPreCost sevm pre)) + 422 by omega]
+  refine rx_dispatch_ex hlen hcd hsel ?_
+  refine rx_ex_pre_core (b0 := pre) (σ := pre.getStor sevm.currentTarget) (R := 0) hfork
+    hstatic ⟨fun _ => rfl, rfl, rfl, hid⟩ hWc hWb hlock hval hkill hi hj
+    (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyMem_wf Mem.wf_empty _)
+    (vyMem_empty_size _) (vyImg_clamps _ _) (by omega) ?_
+  intro b1 M1 img1 g1 z0 z1 z2 hB1 hW1 hR1 hWf1 hsz1 _ hg1' hgx1 hb1 hM1 hz0 hz1 hz2
+  have hg : g1 = R := by omega
+  rw [hg]; rw [hb1] at hB1 hW1 ⊢; rw [hM1] at hR1 hWf1 hsz1 ⊢; rw [hz0, hz1, hz2]
+  exact k img1 hB1 hW1 hR1 hWf1 hsz1
+
+/-- **The front, exactly**: from the frame's entry with `R + exHeadCost` to the fee test with
+exactly `R`, at the canonical base `exN2` and memory `exM2` themselves. -/
+theorem rx_ex_front_exact {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → Prop}
+    {W : Devm → Prop} {x0 x1 x2 : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
+    (hWc : WClosed sevm W) (hWb : W pre)
+    (hlock : (pre.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
+    (hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0)
+    (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
+    (hX : xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩)
+    (hR0 : 60000 ≤ R)
+    (k : ∀ img2 : Bytes,
+      ExBase sevm pre (exN2 sevm pre) ((pre.getStor sevm.currentTarget).set lockSlot 1) →
+      W (exN2 sevm pre) → Mem.Reads (exM2 sevm pre x0 x1 x2) img2 →
+      Mem.Wf (exM2 sevm pre x0 x1 x2) → (exM2 sevm pre x0 x1 x2).size = 0x3c0 →
+      ExFrame img2 (exW3 (balAt (pre.getStor sevm.currentTarget) 0)
+        (balAt (pre.getStor sevm.currentTarget) 1) (balAt (pre.getStor sevm.currentTarget) 2))
+        (exW3 x0 x1 x2) (exDx sevm)
+        (((pre.getStor sevm.currentTarget).set lockSlot 1).get (coinsBase + exI sevm)) →
+      SFunc.RunEx cert.prog sevm (St (exN2 sevm pre) [Bytes.toB256 [0x25, 0x17],
+        B256.eqCheck (B256.eqCheck (exI sevm) (Bytes.toB256 [2])) 0] (exM2 sevm pre x0 x1 x2) R)
+        (.branchTo t_24d8_c0 11) Q) :
+    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + exHeadCost sevm pre)) t_0000_c0 Q := by
+  rw [show R + exHeadCost sevm pre = (R + (1589 + sloadCost sevm (exPreBase sevm pre)
+      (coinsBase + exI sevm))) + 422 + (661 + exPreCost sevm pre) by unfold exHeadCost; omega]
+  refine rx_ex_head_exact hfork hstatic hlen hcd hsel hid hWc hWb hlock hval hkill hi hj
+    (by omega) ?_
+  intro img1 hB1 hW1 hR1 hWf1 hsz1
+  refine rx_ex_mid_core (R := 0) hfork hB1 hWc hW1 hi hX hR1 hWf1 hsz1 (by omega) ?_
+  intro b2 M2 img2 g2 x0' x1' x2' hxp hB2 hW2 hR2 hWf2 hsz2 hF2 _ hg2' hgx2 hb2 hM2
+  obtain ⟨e0, e1, e2⟩ := V3.mk.inj hxp
+  obtain rfl := B256.toNat_inj _ _ e0
+  obtain rfl := B256.toNat_inj _ _ e1
+  obtain rfl := B256.toNat_inj _ _ e2
+  have hg : g2 = R := by omega
+  have hb : b2 = exN2 sevm pre := hb2
+  have hM : M2 = exM2 sevm pre x0 x1 x2 := hM2
+  rw [hg]; rw [hb] at hB2 hW2 ⊢; rw [hM] at hR2 hWf2 hsz2 ⊢
+  exact k img2 hB2 hW2 hR2 hWf2 hsz2 hF2
+
+
+/-! ## The two fee-test branches -/
+
+/-- **Another coin, exactly**: from the fee test to `x` — the test (`10`), the pull, the second
+test (`29`) — at a base equal modulo gas to the pull's tail successor. -/
+theorem rx_ex_nofee_exact {sevm : Sevm} {b : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256}
+    {plD : Devm → List B256 → Mem → Nat} {plN : Devm → List B256 → Mem → Devm}
+    (hfee : exI sevm ≠ 2) (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3c0) (hF : ExFrame img B X D C)
+    (hpull : MutableCallProfile sevm W W' C (transferFromSel ++ sevm.caller.toB256.toBytes ++
+      sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes) RawCallOk U 0x600 0x64 0x6c0 plD plN)
+    (hR0 : 4000 + U ≤ R) (hGb : R + (29 + exPullCost sevm b M 31 plD plN) + 2000 < 2 ^ 256)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x6e0 → ExFrame img' B X D C →
+      Devm.EqModGas b' (exPullTail sevm b M plN) → M' = exPullMem sevm b M plN →
+      SFunc.RunEx cert.prog sevm (St b' [] M' R) t_26c9_c13 Q) :
+    SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [0x25, 0x17],
+        B256.eqCheck (B256.eqCheck (exI sevm) (Bytes.toB256 [2])) 0] M
+        (R + (29 + exPullCost sevm b M 31 plD plN) + 10)) (.branchTo t_24d8_c0 11) Q := by
+  xr (rx_branchTo_succ (exFeeTest_ne hfee) (g := t_2517_c11) rfl ·)
+  rw [show R + (29 + exPullCost sevm b M 31 plD plN) = (R + 29) + exPullCost sevm b M 31 plD plN by
+    omega]
+  refine rx_ex_pull_exact hfork hdepth hL (Devm.EqModGas.refl _) hW'c hR hW hsz (.inl ⟨rfl, rfl⟩) hF
+    hpull (by omega) (by omega) ?_
+  intro b' M' img' h1 h2 h3 h4 h5 hn' hM'
+  exact rx_ex_test2_ne hfee (k b' M' img' h1 h2 h3 h4 h5 hn' hM')
+
+/-- The fee path's charge from the fee test to `x`. -/
+def exFeeMidCost (sevm : Sevm) (n : Devm) (M : Mem) (B1 : B256)
+    (bD1 : Devm → List B256 → Mem → Nat) (bN1 : Devm → List B256 → Mem → Devm)
+    (plD : Devm → List B256 → Mem → Nat) (plN : Devm → List B256 → Mem → Devm)
+    (bD2 : Devm → List B256 → Mem → Nat) : Nat :=
+  10 + (97 + bD1 n [] (exBalIn M sevm 0x3c0)) +
+    exPullCost sevm (exBal1Next sevm n M bN1) (exBal1Mem sevm n M B1 bN1) 15 plD plN + 29 +
+    (151 + bD2 (exPullTail sevm (exBal1Next sevm n M bN1) (exBal1Mem sevm n M B1 bN1) plN) []
+      (exBalIn (exPullMem sevm (exBal1Next sevm n M bN1) (exBal1Mem sevm n M B1 bN1) plN) sevm 0x700))
+
+/-- **The fee coin, exactly**: from the fee test to `x` — the test, the first `balanceOf(self)`,
+the pull, the second test and the second `balanceOf(self)` — at a base equal modulo gas to the
+second read's successor. -/
+theorem rx_ex_fee_exact {sevm : Sevm} {b : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C B1 B2 : B256}
+    {bD1 bD2 plD : Devm → List B256 → Mem → Nat} {bN1 bN2 plN : Devm → List B256 → Mem → Devm}
+    (hfee : exI sevm = 2) (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3c0) (hF : ExFrame img B X D C)
+    (hb1 : StaticWordCallProfile sevm W W C (balanceOfData sevm.currentTarget) B1 U 0x3dc 0x24 0x440
+      bD1 bN1)
+    (hb2 : StaticWordCallProfile sevm W' W' C (balanceOfData sevm.currentTarget) B2 U 0x71c 0x24 0x780
+      bD2 bN2) (hsub : ¬ B2 < B1)
+    (hpull : MutableCallProfile sevm W W' C (transferFromSel ++ sevm.caller.toB256.toBytes ++
+      sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes) RawCallOk U 0x600 0x64 0x6c0 plD plN)
+    (hR0 : 4000 + U ≤ R)
+    (hGb : R + exFeeMidCost sevm b M B1 bD1 bN1 plD plN bD2 + 2000 < 2 ^ 256)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x7a0 → ExFrame img' B X (B2 - B1) C →
+      Devm.EqModGas b' (exBal2Next sevm (exPullTail sevm (exBal1Next sevm b M bN1)
+        (exBal1Mem sevm b M B1 bN1) plN)
+        (exPullMem sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) bN2) →
+      M' = exBal2Mem sevm (exPullTail sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN)
+        (exPullMem sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) B1 B2 bN2 →
+      SFunc.RunEx cert.prog sevm (St b' [] M' R) t_26c9_c13 Q) :
+    SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [0x25, 0x17],
+        B256.eqCheck (B256.eqCheck (exI sevm) (Bytes.toB256 [2])) 0] M
+        (R + exFeeMidCost sevm b M B1 bD1 bN1 plD plN bD2)) (.branchTo t_24d8_c0 11) Q := by
+  unfold exFeeMidCost at hGb ⊢
+  rw [show R + (10 + (97 + bD1 b [] (exBalIn M sevm 0x3c0)) +
+      exPullCost sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) 15 plD plN + 29 +
+      (151 + bD2 (exPullTail sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) []
+        (exBalIn (exPullMem sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) sevm
+          0x700))) =
+      (R + (151 + bD2 (exPullTail sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) []
+        (exBalIn (exPullMem sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) plN) sevm
+          0x700)) + 29 + exPullCost sevm (exBal1Next sevm b M bN1) (exBal1Mem sevm b M B1 bN1) 15
+          plD plN + (97 + bD1 b [] (exBalIn M sevm 0x3c0))) + 10 by omega]
+  xr (rx_branchTo_zero' (exFeeTest_eq hfee) ·)
+  refine rx_ex_bal1_exact hL (Devm.EqModGas.refl _) hR hW hsz hF hb1 (by omega) (by omega) ?_
+  intro b4 M4 img4 hL4 hR4 hW4 hsz4 hF4 hn4 hM4
+  rw [hM4] at hR4 hW4 hsz4 ⊢
+  refine rx_ex_pull_exact hfork hdepth hL4 hn4 hW'c hR4 hW4 hsz4 (.inr ⟨rfl, rfl⟩) hF4 hpull
+    (by omega) (by omega) ?_
+  intro b5 M5 img5 hL5 hR5 hW5 hsz5 hF5 hn5 hM5
+  rw [hM5] at hR5 hW5 hsz5 ⊢
+  refine rx_ex_test2_eq hfee ?_
+  exact rx_ex_bal2_exact hL5 hn5 hR5 hW5 hsz5 hF5 hb2 hsub (by omega) (by omega) k
+
+
+/-! ## The whole frame -/
+
+/-- The four exact calls' functions, as data fixed before any gas: debit and canonical
+successor of the fee coin's two `balanceOf(self)` reads, the pull and the push. -/
+structure ExchangeExactCalls where
+  balD1 : Devm → List B256 → Mem → Nat
+  balN1 : Devm → List B256 → Mem → Devm
+  pullD : Devm → List B256 → Mem → Nat
+  pullN : Devm → List B256 → Mem → Devm
+  balD2 : Devm → List B256 → Mem → Nat
+  balN2 : Devm → List B256 → Mem → Devm
+  pushD : Devm → List B256 → Mem → Nat
+  pushN : Devm → List B256 → Mem → Devm
+
+/-- The fee path's charge after the second `balanceOf(self)`. -/
+def exFeeBackCost (sevm : Sevm) (pre : Devm) (P : ExchangeExactCalls) (x0 x1 x2 B1 B2 : B256)
+    (amp v : Nat) : Nat :=
+  exBackCost sevm
+    (exBal2Next sevm (exPullTail sevm (exBal1Next sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.balN1)
+      (exBal1Mem sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balN1) P.pullN)
+      (exPullMem sevm (exBal1Next sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.balN1)
+        (exBal1Mem sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balN1) P.pullN) P.balN2)
+    (exBal2Mem sevm (exPullTail sevm (exBal1Next sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.balN1)
+      (exBal1Mem sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balN1) P.pullN)
+      (exPullMem sevm (exBal1Next sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.balN1)
+        (exBal1Mem sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balN1) P.pullN) B1 B2 P.balN2)
+    6 ((pre.getStor sevm.currentTarget).set lockSlot 1)
+    (exW3 (balAt (pre.getStor sevm.currentTarget) 0) (balAt (pre.getStor sevm.currentTarget) 1)
+      (balAt (pre.getStor sevm.currentTarget) 2)) (exW3 x0 x1 x2) (B2 - B1) amp v P.pushD P.pushN
+
+/-- Another coin's path's charge after the pull. -/
+def exNoFeeBackCost (sevm : Sevm) (pre : Devm) (P : ExchangeExactCalls) (x0 x1 x2 : B256)
+    (amp v : Nat) : Nat :=
+  exBackCost sevm (exPullTail sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.pullN)
+    (exPullMem sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) P.pullN) 26
+    ((pre.getStor sevm.currentTarget).set lockSlot 1)
+    (exW3 (balAt (pre.getStor sevm.currentTarget) 0) (balAt (pre.getStor sevm.currentTarget) 1)
+      (balAt (pre.getStor sevm.currentTarget) 2)) (exW3 x0 x1 x2) (exDx sevm) amp v P.pushD P.pushN
+
+/-- **`exchange`'s exact charge**, a function of the entry, the calls' data and the checked
+model words only (no residual gas, no observed run): the front, then the fee coin's or another
+coin's path, then the stages after the pull. -/
+def exExactCost (sevm : Sevm) (pre : Devm) (P : ExchangeExactCalls) (x0 x1 x2 B1 B2 : B256)
+    (amp v : Nat) : Nat :=
+  exHeadCost sevm pre + if exI sevm = 2 then
+    exFeeMidCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balD1 P.balN1 P.pullD P.pullN
+      P.balD2 + exFeeBackCost sevm pre P x0 x1 x2 B1 B2 amp v
+  else
+    (29 + exPullCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) 31 P.pullD P.pullN + 10) +
+      exNoFeeBackCost sevm pre P x0 x1 x2 amp v
+
+/-- **The `exchange` frame, exactly**: with the calls' data `P` fixed first and every call an
+exact profile, for every residual `R ≥ 60000 + U` (headroom only) the frame runs from
+`R + exExactCost` to `STOP` with exactly `R` left. -/
+theorem rx_ex_frame_exact {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : Nat}
+    {Q : Outcome → Prop} {W W' W'' : Devm → Prop} {x0 x1 x2 B1 B2 : B256}
+    (P : ExchangeExactCalls) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
+    (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre)
+    (ha : Abstracts (pre.getStor sevm.currentTarget) s0)
+    (hlock : (pre.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
+    (hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0)
+    (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
+    (hX : xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩)
+    (hbal : exI sevm = 2 →
+      StaticWordCallProfile sevm W W ((pre.getStor sevm.currentTarget).get (coinsBase + exI sevm))
+        (balanceOfData sevm.currentTarget) B1 U 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧
+      StaticWordCallProfile sevm W' W' ((pre.getStor sevm.currentTarget).get (coinsBase + exI sevm))
+        (balanceOfData sevm.currentTarget) B2 U 0x71c 0x24 0x780 P.balD2 P.balN2 ∧ ¬ B2 < B1)
+    (hpull : MutableCallProfile sevm W W' ((pre.getStor sevm.currentTarget).get (coinsBase + exI sevm))
+      (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++
+        (exDx sevm).toBytes) RawCallOk U 0x600 0x64 0x6c0 P.pullD P.pullN)
+    (hmx : exCred sevm B1 B2 * exRate (exI sevm).toNat / exCred sevm B1 B2 =
+      exRate (exI sevm).toNat ∨ exCred sevm B1 B2 = 0)
+    (hax : ¬ exW3 x0 x1 x2 (exI sevm).toNat + exCred sevm B1 B2 * exRate (exI sevm).toNat / exR0 <
+      exW3 x0 x1 x2 (exI sevm).toNat)
+    (hA : aChk s0 sevm.benvStat.time.toNat = some amp)
+    (hres : getYChk amp ⟨(exI sevm).toNat, hi⟩ ⟨(exJ sevm).toNat, hj⟩
+      (exW3 x0 x1 x2 (exI sevm).toNat + exCred sevm B1 B2 * exRate (exI sevm).toNat / exR0).toNat
+      (V3.mk x0.toNat x1.toNat x2.toNat).get = some v)
+    (hy1 : ¬ exW3 x0 x1 x2 (exJ sevm).toNat < Nat.toB256 v)
+    (hy2 : ¬ exW3 x0 x1 x2 (exJ sevm).toNat - Nat.toB256 v < Bytes.toB256 [1])
+    (hmf : exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) *
+        (pre.getStor sevm.currentTarget).get feeSlot /
+        exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) =
+        (pre.getStor sevm.currentTarget).get feeSlot ∨
+      exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) = 0)
+    (hsf : ¬ exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) <
+      exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot))
+    (hmo : (exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) -
+        exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot)) * exR0 /
+        (exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) -
+          exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+            ((pre.getStor sevm.currentTarget).get feeSlot)) = exR0 ∨
+      exDy0 (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v) -
+        exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot) = 0)
+    (hmin : ¬ exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+      ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat) < exMinDy sevm)
+    (hma : exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot) *
+        (pre.getStor sevm.currentTarget).get adminFeeSlot /
+        exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot) =
+        (pre.getStor sevm.currentTarget).get adminFeeSlot ∨
+      exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot) = 0)
+    (hmap : exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot))
+        ((pre.getStor sevm.currentTarget).get adminFeeSlot) * exR0 /
+        exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) = exR0 ∨
+      exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot))
+        ((pre.getStor sevm.currentTarget).get adminFeeSlot) = 0)
+    (hbi : ¬ exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi⟩ + exCred sevm B1 B2 <
+      exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi⟩)
+    (hbj1 : ¬ exBal (pre.getStor sevm.currentTarget) ⟨(exJ sevm).toNat, hj⟩ <
+      exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat))
+    (hbj2 : ¬ exBal (pre.getStor sevm.currentTarget) ⟨(exJ sevm).toNat, hj⟩ -
+        exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat) <
+      exAdm (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+        ((pre.getStor sevm.currentTarget).get feeSlot))
+        ((pre.getStor sevm.currentTarget).get adminFeeSlot) (exRate (exJ sevm).toNat))
+    (hW''c : WClosed sevm W'')
+    (hpush : MutableCallProfile sevm W' W''
+      ((pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm))
+      (transferSel ++ sevm.caller.toB256.toBytes ++ (exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat)
+        (Nat.toB256 v) ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat)).toBytes)
+      RawCallOk U 0xb60 0x44 0xc00 P.pushD P.pushN)
+    (hR0 : 60000 + U ≤ R)
+    (hGb : R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v + 2000 < 2 ^ 256)
+    (k : ∀ D' : Devm, ExLive sevm W'' D' (exFinal ((pre.getStor sevm.currentTarget).set lockSlot 1)
+      sevm (exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi⟩ + exCred sevm B1 B2)
+      (exBal (pre.getStor sevm.currentTarget) ⟨(exJ sevm).toNat, hj⟩ -
+        exDyOut (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat) -
+        exAdm (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) (Nat.toB256 v)
+          ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (exRate (exJ sevm).toNat))) →
+      D'.gasLeft = R → Q (.halted D')) :
+    SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v))
+      t_0000_c0 Q := by
+
+  have ef : ((pre.getStor sevm.currentTarget).set lockSlot 1).get feeSlot =
+      (pre.getStor sevm.currentTarget).get feeSlot := Stor.get_set_ne _ (by decide) _
+  have eaf : ((pre.getStor sevm.currentTarget).set lockSlot 1).get adminFeeSlot =
+      (pre.getStor sevm.currentTarget).get adminFeeSlot := Stor.get_set_ne _ (by decide) _
+  have eci : ((pre.getStor sevm.currentTarget).set lockSlot 1).get (coinsBase + exI sevm) =
+      (pre.getStor sevm.currentTarget).get (coinsBase + exI sevm) := Stor.get_set_ne _ (by
+    rw [show coinsBase + exI sevm = coinsBase + Nat.toB256 (exI sevm).toNat by rw [toB256_toNat]]
+    exact coin_ne_lock hi) _
+  have ecj : ((pre.getStor sevm.currentTarget).set lockSlot 1).get (coinsBase + exJ sevm) =
+      (pre.getStor sevm.currentTarget).get (coinsBase + exJ sevm) := Stor.get_set_ne _ (by
+    rw [show coinsBase + exJ sevm = coinsBase + Nat.toB256 (exJ sevm).toNat by rw [toB256_toNat]]
+    exact coin_ne_lock hj) _
+  have ha1 : Abstracts ((pre.getStor sevm.currentTarget).set lockSlot 1) s0 :=
+    ha.of_lock fun x hx => Stor.get_set_ne _ (Ne.symm hx) _
+  by_cases hfee : exI sevm = 2
+  · -- the fee coin
+    obtain ⟨hb1, hb2, hsub⟩ := hbal hfee
+    have hD : exCred sevm B1 B2 = B2 - B1 := ite_eq_left hfee
+    rw [hD] at hmx hax hres hbi k
+    have hc : exExactCost sevm pre P x0 x1 x2 B1 B2 amp v = exHeadCost sevm pre +
+        (exFeeMidCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balD1 P.balN1 P.pullD
+          P.pullN P.balD2 + exFeeBackCost sevm pre P x0 x1 x2 B1 B2 amp v) := by
+      unfold exExactCost; rw [ite_eq_left hfee]
+    rw [hc] at hGb ⊢
+    rw [show R + (exHeadCost sevm pre + (exFeeMidCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2)
+        B1 P.balD1 P.balN1 P.pullD P.pullN P.balD2 + exFeeBackCost sevm pre P x0 x1 x2 B1 B2 amp v)) =
+        (R + exFeeBackCost sevm pre P x0 x1 x2 B1 B2 amp v +
+          exFeeMidCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) B1 P.balD1 P.balN1 P.pullD
+            P.pullN P.balD2) + exHeadCost sevm pre by omega]
+    refine rx_ex_front_exact hfork hstatic hlen hcd hsel hid hWc hWb hlock hval hkill hi hj hX
+      (by omega) ?_
+    intro img2 hB2 hW2 hR2 hWf2 hsz2 hF2
+    rw [eci] at hF2
+    refine rx_ex_fee_exact hfee hfork hdepth ⟨hB2.stor, hB2.id, hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2 hb1
+      hb2 hsub hpull (by omega) (by omega) ?_
+    intro b7 M7 img7 hL7 hR7 hWf7 hsz7 hF7 hn7 hM7
+    rw [hM7] at hR7 hWf7 hsz7 ⊢
+    exact rx_ex_back_exact hfork hstatic hdepth hL7 hn7 ha1 hi hj hR7 hWf7 hsz7 (.inr ⟨rfl, rfl⟩) hF7
+      hmx hax hA hres hy1 hy2 (by rw [ef]; exact hmf) (by rw [ef]; exact hsf) (by rw [ef]; exact hmo)
+      (by rw [ef]; exact hmin) (by rw [ef, eaf]; exact hma) (by rw [ef, eaf]; exact hmap) hbi
+      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) hW''c (by rw [ef, ecj]; exact hpush)
+      hR0 (by unfold exFeeBackCost at hGb; omega) (by rw [ef, eaf]; exact k)
+  · -- another coin
+    have hD : exCred sevm B1 B2 = exDx sevm := ite_eq_right hfee
+    rw [hD] at hmx hax hres hbi k
+    have hc : exExactCost sevm pre P x0 x1 x2 B1 B2 amp v = exHeadCost sevm pre +
+        ((29 + exPullCost sevm (exN2 sevm pre) (exM2 sevm pre x0 x1 x2) 31 P.pullD P.pullN + 10) +
+          exNoFeeBackCost sevm pre P x0 x1 x2 amp v) := by
+      unfold exExactCost; rw [ite_eq_right hfee]
+    rw [hc] at hGb ⊢
+    rw [show R + (exHeadCost sevm pre + ((29 + exPullCost sevm (exN2 sevm pre)
+        (exM2 sevm pre x0 x1 x2) 31 P.pullD P.pullN + 10) + exNoFeeBackCost sevm pre P x0 x1 x2 amp v)) =
+        (R + exNoFeeBackCost sevm pre P x0 x1 x2 amp v + (29 + exPullCost sevm (exN2 sevm pre)
+          (exM2 sevm pre x0 x1 x2) 31 P.pullD P.pullN) + 10) + exHeadCost sevm pre by omega]
+    refine rx_ex_front_exact hfork hstatic hlen hcd hsel hid hWc hWb hlock hval hkill hi hj hX
+      (by omega) ?_
+    intro img2 hB2 hW2 hR2 hWf2 hsz2 hF2
+    rw [eci] at hF2
+    refine rx_ex_nofee_exact hfee hfork hdepth ⟨hB2.stor, hB2.id, hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2
+      hpull (by omega) (by omega) ?_
+    intro b5 M5 img5 hL5 hR5 hWf5 hsz5 hF5 hn5 hM5
+    rw [hM5] at hR5 hWf5 hsz5 ⊢
+    exact rx_ex_back_exact hfork hstatic hdepth hL5 hn5 ha1 hi hj hR5 hWf5 hsz5 (.inl ⟨rfl, rfl⟩) hF5
+      hmx hax hA hres hy1 hy2 (by rw [ef]; exact hmf) (by rw [ef]; exact hsf) (by rw [ef]; exact hmo)
+      (by rw [ef]; exact hmin) (by rw [ef, eaf]; exact hma) (by rw [ef, eaf]; exact hmap) hbi
+      (by rw [ef]; exact hbj1) (by rw [ef, eaf]; exact hbj2) hW''c (by rw [ef, ecj]; exact hpush)
+      hR0 (by unfold exNoFeeBackCost at hGb; omega) (by rw [ef, eaf]; exact k)
+
 end Blanc.Lift.Curve3Pool
