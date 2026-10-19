@@ -11,8 +11,9 @@ for a nonzero fee-coin amount, and the `mint` of the model's amount), the model'
 reads (`amp`, the `get_D_mem` inputs and results, the fee iterations' words) are pinned by the
 model's own checks (`aChk`, `xpChk`, `getDChk`, `RliFeeIter`), and the closed cost `alExactCost`
 at them (`alExactCost0` on a first deposit, `alExactCost1` on a positive supply) is fixed before
-the residual gas: for every `R` above the bounded walk's headroom (`costAddLiquidity … + 7 U ≤ R`)
-at which the entry's gas measure is a word, the frame entered with `R + alExactCost …` has an
+the residual gas: for every `R` above the exact walk's headroom (`100000 + 5 U ≤ R`) whose entry
+gas `R + c` covers `addLiquidity_live`'s bounded cost (`costAddLiquidity … + 7 U ≤ R + c`) and at
+which the entry's gas measure is a word with `6000` to spare (the walk's no-wrap margin), the frame entered with `R + alExactCost …` has an
 actual successful execution that ends with exactly `R` gas, whose effect is the model's step: the
 same conclusion as `addLiquidity_live`. The headroom and the no-wrap bound are stated separately
 from the cost.
@@ -77,7 +78,9 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
           (balAt (pre.getStor sevm.currentTarget) 2)
           (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2) f2 s2 x2 ∧
         xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
-      ∀ R, costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤ R →
+      ∀ R, 100000 + 5 * U ≤ R →
+      costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
+        R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 →
       (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)).gasMeasure + 6000 < 2 ^ 256 →
       (∀ post (exc : Exec 0 sevm (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) (.ok post)),
         PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2), .ok post, exc⟩ ∧
@@ -112,7 +115,7 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
   -- the model's step, inverted, as words
   obtain ⟨hv0, hal⟩ := al_body hlen hsel hstep
   have hval : sevm.value = 0 := B256.toNat_inj _ _ (by rw [show sevm.value.toNat = 0 from hv0]; rfl)
-  obtain ⟨amp, v1, xb, mint, T', hk, hamp, hfeeN, hnew, hmf, t0, sub, a0, a1, a2, hxb, hD1, hmin,
+  obtain ⟨amp, v1, xb, mint, T', hk, hamp, -, -, hmf, t0, sub, a0, a1, a2, hxb, hD1, hmin,
     hT', hbr⟩ := al_words_common hck.abs hal
   have hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     rw [hck.abs.isKilled, hk]; rfl
@@ -124,15 +127,14 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
     hx, hy, hm, ho⟩
   · -- the first deposit
     obtain ⟨hlt1, hslip, hadd, rfl, hv1e⟩ := al_words0 hD1 hpos hmin hT'
-    have hcost := al_cost0 hamp hnew hxb
     have hma : alMintAmt o = mint := by rw [ho]; exact alMintAmt_eq
     rw [hma] at hP bmint
     refine ⟨amp, 0, mint, 0, xb, xb, xb, 0, 0, 0, 0, 0, 0, 0, 0, 0, hamp, hxb, hD1,
-      fun h => absurd rfl h, fun R hR hGm hkeep => ?_⟩
+      fun h => absurd rfl h, fun R hR hRc hGm hkeep => ?_⟩
     have hc : alExactCost sevm pre P amp 0 B1 B2 xb xb xb 0 mint 0 0 0 0 0 0 0 0 0 0 =
         alExactCost0 sevm pre P amp B1 B2 xb mint := by
       unfold alExactCost; rw [ite_eq_left rfl]
-    rw [hc] at hGm hkeep ⊢
+    rw [hc] at hRc hGm hkeep ⊢
     have hG256 : R + alExactCost0 sevm pre P amp B1 B2 xb mint + 6000 < 2 ^ 256 := by
       have e : (St pre [] Mem.empty (R + alExactCost0 sevm pre P amp B1 B2 xb mint)).gasMeasure =
         R + alExactCost0 sevm pre P amp B1 B2 xb mint + pre.mach.stateGas.spilled +
@@ -140,7 +142,7 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
       omega
     obtain ⟨r, hr, -, D, rfl, hDg⟩ := rx_al_frame0_exact P hfork hstatic hdepth hlen hcd hsel hid
       hWc hWb hck.abs hck.unlocked hval hkill hamp hmf hP hskip' (t0 rfl) sub a0 a1 a2 hxb hD1 hlt1
-      hslip hadd (by rw [hcost] at hR; omega) hG256
+      hslip hadd hR hG256
     obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
     obtain ⟨post, exc, e, he, hstep', hraw, hckp⟩ := addLiquidity_live
       (G := R + alExactCost0 sevm pre P amp B1 B2 xb mint) hcode hfork hstatic hdepth hlen hcd hsel
@@ -153,11 +155,8 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
     exact ⟨post, exc, hDg, e, he, hstep', hraw, hckp⟩
   · -- a positive supply
     obtain ⟨xa, xc, v0, v2, f0, f1, f2, s0, s1, s2, x0, x1, x2, hxa, hD0', hlt', i0, i1, i2, hxc, hD2',
-      hge, hmul, hD00, hslip, hadd, rfl, rfl, rfl, rfl, rfl, hxc0⟩ :=
+      hge, hmul, hD00, hslip, hadd, rfl, rfl, rfl, rfl, rfl, -⟩ :=
       al_words1 hck.abs hD1 hD0 hlt hfl hD2 hx hy hm hmin hT'
-    have hfl' := hfl
-    rw [hck.abs.adminFee] at hfl'
-    have hcost := al_cost1 hT0 hamp hfeeN hnew hxb (by rw [hbal]; exact hxa) hD0' hD1 hfl' hxc0
     have hma : Nat.toB256 (alMintAmt o) = alMintW T (Nat.toB256 D0) (Nat.toB256 v2) := by
       rw [ho, alMintAmt_eq]; exact toB256_toNat _
     have hP1 := hP
@@ -181,11 +180,11 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
       obtain rfl := Option.some.inj (hD0'.symm.trans hD1)
       exact Nat.lt_irrefl _ hlt
     refine ⟨amp, D0, v1, v2, xa, xb, xc, f0, f1, f2, s0, s1, s2, x0, x1, x2, hamp, hxb, hD1,
-      fun _ => ⟨hxa, hD0', i0, i1, i2, hxc, hD2'⟩, fun R hR hGm hkeep => ?_⟩
+      fun _ => ⟨hxa, hD0', i0, i1, i2, hxc, hD2'⟩, fun R hR hRc hGm hkeep => ?_⟩
     have hc : alExactCost sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 =
         alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 := by
       unfold alExactCost; rw [ite_eq_right hT0]
-    rw [hc] at hGm hkeep ⊢
+    rw [hc] at hRc hGm hkeep ⊢
     have hG256 : R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1
         x2 + 6000 < 2 ^ 256 := by
       have e : (St pre [] Mem.empty (R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0
@@ -195,7 +194,7 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
       omega
     obtain ⟨r, hr, -, D, rfl, hDg⟩ := rx_al_frame1_exact P hfork hstatic hdepth hlen hcd hsel hid
       hWc hWb hck.abs hck.unlocked hval hkill hamp hmf hP1 hskip' hT0 hnz sub a0 a1 a2 hxa hD0' hxb
-      hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd (by rw [hcost] at hR; omega) hG256
+      hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd hR hG256
     obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
     obtain ⟨post, exc, e, he, hstep', hraw, hckp⟩ := addLiquidity_live
       (G := R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)

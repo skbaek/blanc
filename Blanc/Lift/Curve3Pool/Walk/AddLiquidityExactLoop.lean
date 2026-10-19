@@ -57,10 +57,6 @@ theorem alHeadCost_congr {b n : Devm} (h : Devm.EqModGas b n) (i : Nat) (T : B25
     alHeadCost sevm b i T = alHeadCost sevm n i T := by
   unfold alHeadCost; rw [h.sloadCost_congr]
 
-theorem alHeadCostX_congr {b n : Devm} (h : Devm.EqModGas b n) (i : Nat) (T : B256) :
-    alHeadCostX sevm b i T = alHeadCostX sevm n i T := by
-  unfold alHeadCostX alHeadCost; rw [h.sloadCost_congr, h.sloadCost_congr]
-
 end Congr
 
 /-! ## Iteration `0` on a positive supply -/

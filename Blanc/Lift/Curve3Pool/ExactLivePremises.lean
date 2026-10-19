@@ -9,8 +9,12 @@ successor before quantifying over input gas, and speaks only about one external 
 successors agree modulo gas, so returndata, warm sets and all later cost-relevant world columns
 remain stable. The existing world chain, input windows and stack-room requirements are retained.
 
-The projections keep all bounded-success clients available. These premises and the shared
-continuation helpers do not yet establish the pool's exact whole-entry or history costs.
+The projections keep all bounded-success clients available. The five exact frame theorems
+(`removeLiquidity_live_exact`, `exchange_live_exact`, `addLiquidity_live_exact`,
+`removeLiquidityImbalance_live_exact`, `removeLiquidityOneCoin_live_exact`) consume these profiles
+through their schedules' premise bundles, each with its debit and successor functions fixed in the
+call data before any residual gas; the message-entry, history and composed twins transport the same
+data across the frame's static initial gas.
 -/
 
 namespace Blanc.Lift.Curve3Pool

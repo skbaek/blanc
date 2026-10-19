@@ -42,24 +42,6 @@ theorem cw_restored {img img' : Bytes} {o : Nat} {v : B256}
   rw [WordAt.eq_self h] at hm
   exact hm
 
-/-- A callee that leaves `v` at the scratch word `0` and keeps off its frame `[lo, hi)`
-(`ScratchOut`) agrees, off that frame, with its entry memory and `v` written at `0`. -/
-theorem _root_.Blanc.Lift.ScratchOut.eqExcept {A M' : Mem} {lo hi : Nat} {v : B256}
-    (h : ScratchOut A M' lo hi v) (hA : Mem.Wf A) (h32 : 32 ≤ A.size) :
-    Mem.EqExcept (A.write 0 v.toBytes) M' (fun i => lo ≤ i ∧ i < hi) := by
-  have hk := h.keepsOff hA
-  refine ⟨by rw [Mem.size_write_word_of_add_le h32, h.size], hA.write _ _, h.wf hA,
-    fun i hi' => ?_⟩
-  by_cases h0 : i < 32
-  · have e := Mem.getD_eq_of_memWord_eq (o := 0) (j := i)
-      (((Mem.memWord_write_word A 0 v).1).trans h.word0.symm) h0
-    simpa only [Nat.zero_add] using e
-  · rw [Mem.write_getD hA, ite_eq_right (by rw [B256.length_toBytes]; omega)]
-    refine (hk.2 i ?_).symm
-    intro w hw'
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
-    rcases hw' with rfl | rfl <;> simp only <;> omega
-
 /-- `get_D`'s input memory in `_calc_withdraw_one_coin`: the frame `[0x140, 0x420)` saved
 (the counter at `0x420`), `xp` and `amp` at `0x440 … 0x4a0`. -/
 def cwCArgs (M : Mem) (x0 x1 x2 Aw : B256) : Mem :=

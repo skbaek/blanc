@@ -355,4 +355,75 @@ theorem Mem.full_writeWords_of_grow {M : Mem} {o : Nat} {v : B256} (h : M.size <
     (ws : List (Nat × B256)) : Mem.Full (Mem.writeWords M ((o, v) :: ws)) :=
   Mem.Full.writeWords ws (Mem.full_write_word_of_grow v h)
 
+/-! ## Memories equal off a set, and at every byte
+
+`Mem.EqExcept.trans` composes two agreements; `writeD`, `restoreMemD` and `saveMemD` carry one
+exception set unchanged through the same store, restore chain or frame save on both sides.
+`Mem.EqExcept M N (fun _ => False)` (one logical size, both well formed, every byte equal) is what
+a crossed callee that keeps its scratch to itself leaves relative to its normal form; the `eqB_*`
+lemmas carry it, and `eqB_write_grow` turns it into equality at the next store that grows the
+memory, where both arrays become fully materialised. -/
+
+/-- Two agreements compose, their exceptions joined. -/
+theorem Mem.EqExcept.trans {A B C : Mem} {D1 D2 : Nat → Prop} (h1 : Mem.EqExcept A B D1)
+    (h2 : Mem.EqExcept B C D2) : Mem.EqExcept A C (fun i => D1 i ∨ D2 i) :=
+  ⟨h1.1.trans h2.1, h1.2.1, h2.2.2.1, fun i hi =>
+    (h1.2.2.2 i fun h => hi (.inl h)).trans (h2.2.2.2 i fun h => hi (.inr h))⟩
+
+theorem _root_.Blanc.Lift.Mem.EqExcept.writeD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (n : Nat)
+    (xs : Bytes) : Mem.EqExcept (M.write n xs) (N.write n xs) D :=
+  (h.write n xs).mono fun _ hi => hi.1
+
+theorem _root_.Blanc.Lift.Mem.EqExcept.restoreMemD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (c p : Nat)
+    (ws : List B256) : Mem.EqExcept (restoreMem c M p ws) (restoreMem c N p ws) D :=
+  (h.restoreMem c ws).mono fun _ hi => hi.1
+
+theorem _root_.Blanc.Lift.Mem.EqExcept.saveMemD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (c lo : Nat) :
+    ∀ n, Mem.EqExcept (saveMem M c lo n) (saveMem N c lo n) D
+  | 0 => h
+  | n + 1 => (h.saveMemD c lo n).writeD _ _
+
+/-- The same store on two memories equal at every byte. -/
+theorem eqB_write {M N : Mem} (h : Mem.EqExcept M N fun _ => False) (o : Nat) (xs : Bytes) :
+    Mem.EqExcept (M.write o xs) (N.write o xs) fun _ => False :=
+  h.writeD o xs
+
+/-- **A growing store makes two memories equal at every byte equal.** Both arrays are then
+materialised to the (common) logical size. -/
+theorem eqB_write_grow {M N : Mem} (h : Mem.EqExcept M N fun _ => False) {o : Nat} {xs : Bytes}
+    (hne : xs ≠ []) (hg : M.size < o + xs.length) : M.write o xs = N.write o xs :=
+  (eqB_write h o xs).eq (fun _ hi => hi) (Mem.full_write_of_grow hne hg)
+    (Mem.full_write_of_grow hne (by rw [← h.1]; exact hg))
+
+/-- A growing word store makes two memories equal at every byte equal. -/
+theorem eqB_write_word_grow {M N : Mem} (h : Mem.EqExcept M N fun _ => False) {o : Nat}
+    (v : B256) (hg : M.size < o + 32) : M.write o v.toBytes = N.write o v.toBytes :=
+  eqB_write_grow h (fun e => by have := B256.length_toBytes v; rw [e] at this; exact absurd this (by decide))
+    (by rw [B256.length_toBytes]; exact hg)
+
+/-- Two memories equal at every byte read the same words. -/
+theorem eqB_memWord {M N : Mem} (h : Mem.EqExcept M N fun _ => False) (o : Nat) :
+    memWord M o = memWord N o :=
+  (memWord_congr fun j _ => (h.2.2.2 (o + j) id).symm).symm
+
+/-- A frame save's counter writes keep two memories equal at every byte. -/
+theorem eqB_saveMem {M N : Mem} (h : Mem.EqExcept M N fun _ => False) (c lo : Nat) :
+    ∀ n, Mem.EqExcept (saveMem M c lo n) (saveMem N c lo n) fun _ => False :=
+  h.saveMemD c lo
+
+/-- A word read off the image carrier is the literal memory's word. -/
+theorem slice_memWord {M : Mem} {img : Bytes} (hR : Mem.Reads M img) (o : Nat) :
+    Bytes.toB256 (img.sliceD o 32 0) = memWord M o := by
+  unfold memWord
+  rw [hR.read]
+
+/-- The words a frame save reads off the image carrier are the literal memory's. -/
+theorem slice_memWord_fun {M : Mem} {img : Bytes} (hR : Mem.Reads M img) :
+    (fun o => Bytes.toB256 (img.sliceD o 32 0)) = memWord M :=
+  funext (slice_memWord hR)
+
+/-- A log leaves the price of a later `SSTORE` alone. -/
+theorem sstoreCost_addLog (sevm : Sevm) (b : Devm) (l : Log) (k v : B256) :
+    sstoreCost sevm (b.addLog l) k v = sstoreCost sevm b k v := rfl
+
 end Blanc.Lift

@@ -30,19 +30,6 @@ theorem xpGas_le (sevm : Sevm) (b : Devm) : xpGas sevm b ≤ 7683 := by
 `_calc_withdraw_one_coin` writes and restores only above it, and the return tuple's pointer
 overwrites it, so the returned memory is a function of the stages' canonical inputs alone. -/
 
-theorem _root_.Blanc.Lift.Mem.EqExcept.writeD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (n : Nat)
-    (xs : Bytes) : Mem.EqExcept (M.write n xs) (N.write n xs) D :=
-  (h.write n xs).mono fun _ hi => hi.1
-
-theorem _root_.Blanc.Lift.Mem.EqExcept.restoreMemD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (c p : Nat)
-    (ws : List B256) : Mem.EqExcept (restoreMem c M p ws) (restoreMem c N p ws) D :=
-  (h.restoreMem c ws).mono fun _ hi => hi.1
-
-theorem _root_.Blanc.Lift.Mem.EqExcept.saveMemD {M N : Mem} {D : Nat → Prop} (h : Mem.EqExcept M N D) (c lo : Nat) :
-    ∀ n, Mem.EqExcept (saveMem M c lo n) (saveMem N c lo n) D
-  | 0 => h
-  | n + 1 => (h.saveMemD c lo n).writeD _ _
-
 /-- Off `cwD`, a word at or above `0xe0` reads the same. -/
 theorem cw_memWord_eq {M N : Mem} (h : Mem.EqExcept M N cwD) {o : Nat} (ho : 0xe0 ≤ o) :
     memWord M o = memWord N o :=

@@ -79,17 +79,6 @@ theorem rxc_restore_08d8 {ts : List B256} (hts : ts.length = 23) (hsz : M.size %
 
 end FwdChains
 
-set_option hygiene false in
-open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
-/-- `xname` keeping the equation: generalize the tracked memory term to `n`, with `h : term = n`. -/
-elab "xnameE " n:ident h:ident : tactic => withMainContext do
-  let some ld := (← getLCtx).findFromUserName? `hT | throwError "xnameE: no hT"
-  let ty ← instantiateMVars ld.type
-  let args := ty.getAppArgs
-  unless args.size == 4 do throwError "xnameE: hT is not a MemTrack: {ty}"
-  let stx ← Term.exprToSyntax args[1]!
-  evalTactic (← `(tactic| generalize $h:ident : $stx:term = $n:ident at hT hS ⊢))
-
 /-! ## `get_D_mem`'s memory on return
 
 `getDMemNext` is the memory `get_D_mem` leaves, as the finite sequence of its own stores, frame
@@ -101,8 +90,7 @@ final store at `0` cover it. A run's memory agrees with it at every byte and in 
 /-- Two agreements compose, their exceptions joined. -/
 theorem gdm_eqExcept_trans {A B C : Mem} {D1 D2 : Nat → Prop} (h1 : Mem.EqExcept A B D1)
     (h2 : Mem.EqExcept B C D2) : Mem.EqExcept A C (fun i => D1 i ∨ D2 i) :=
-  ⟨h1.1.trans h2.1, h1.2.1, h2.2.2.1, fun i hi =>
-    (h1.2.2.2 i fun h => hi (.inl h)).trans (h2.2.2.2 i fun h => hi (.inr h))⟩
+  h1.trans h2
 
 /-- `get_D_mem`'s prologue: the return address and the arguments stored, the outer save's
 counter at `0x420`. -/

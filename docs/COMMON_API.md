@@ -1753,8 +1753,23 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `ExactCallProfile.withStaticGas` preserves the literal debit and successor
   functions; `StaticWordCallProfile.withStaticGas` and
   `MutableCallProfile.withStaticGas` also transport their indexed identity
-  readiness postconditions via `IdReady.withStaticGas`. These theorems update
-  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged. Comparing runs from
+  readiness postconditions via `IdReady.withStaticGas`. `sloadCost_withStaticGas`,
+  `sstoreCost_withStaticGas`, `afterSload_withStaticGas`, `afterSstore_withStaticGas` and
+  `dataWord_withStaticGas` (all `rfl`) are the storage-charge, post-world and calldata-word
+  facts an exact schedule's cost transport unfolds to. These theorems update
+  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged.
+- To state a frame theorem (given at an arbitrary static machine and entry
+  `St pre [] Mem.empty G`) for a message entered with an execution grant, use
+  [`Blanc/Lift/StaticGasMessage.lean`](../Blanc/Lift/StaticGasMessage.lean): `Msg.withGas`,
+  `initSevm_withGas` (`{initSevm msg with gas := G}`), `initDevm_withGas`
+  (`St (initDevm msg) [] Mem.empty G`), `initDevm_gasMeasure` and `exec_withGas_of_frame` (a frame
+  `Exec` at the grant is `exec (initEvm (msg.withGas G)) = .ok post`). Fix the cost at the base
+  message, instantiate the frame theorem at a fresh gas variable `F` with the premises transported
+  by `*.withStaticGas F`, rewrite the cost back with the schedule's `*_withStaticGas`, and only
+  then relate `F` to `R + c` (rewriting `← hF` rather than substituting, so no definitional check
+  unfolds the closed cost). The Curve 3pool instances are
+  `Blanc/Lift/Curve3Pool/ExactMessage.lean` (`*_msg_exact`), with the exchange/add_liquidity
+  stage transports in `Blanc/Lift/Curve3Pool/ExactStaticGas.lean`. Comparing runs from
   different dynamic gas values still needs the following gas-erasure branch.
   Existing recipe triggers cannot distinguish this static-coordinate update
   from ordinary run construction, so discovery remains in this registry.
@@ -1788,13 +1803,33 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   [`Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean)),
   since the callee's scratch writes are not materialised alike; the caller's next growing
   store makes it literal (`eqB_write_word_grow` in
-  [`Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean),
-  with the exact `MLOAD`/`STATICCALL` twins `rxe_mloadXE`, `rxe_staticWordAlE`; the exact
-  `SLOAD`/`SSTORE` steps are exchange's `rxe_sloadVX`, `rxe_sstoreVX` in
-  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean)). The frame save/restore loops around them are literal
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean), below). The pool's literal-memory
+  forward steps are one kit: `rxe_mstoreL`, `rxe_calldatacopyL`, `rxe_identityL` (with the
+  identity call's canonical successor) and `rxe_sstoreX` (exact `SSTORE` charge) in
+  [`Blanc/Lift/Curve3Pool/Walk/LiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveKit.lean), whose
+  bounded twins `rxe_mstore`, `rxe_calldatacopy`, `rxe_identity`, `rxe_sstore_le` are
+  projections; `rxe_mloadXL`, `rxe_sloadVX`, `rxe_staticWordE` (and the projections
+  `rxe_mloadX`, `rxe_sloadB`/`rxe_sloadV`, `rxe_sstoreB`/`rxe_sstoreV`/`rxe_sstoreVX`,
+  `rxe_mstoreW`, `rxe_staticWord`) in
+  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean);
+  `add_liquidity`'s `rxe_mloadXE`/`rxe_staticWordAlE` are their projections. A fee iteration's
+  words are functions of its inputs (`RliDif.unique`, `RliFeeIter.unique` in
+  [`Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean)). The frame save/restore loops around them are literal
   through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
   [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
   The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
+- For the 3pool's exact-gas entry frames and their stage cores (an exact walk to reuse or extend):
+  `removeLiquidity_live_exact`, `exchange_live_exact`, `addLiquidity_live_exact`,
+  `removeLiquidityImbalance_live_exact`, `removeLiquidityOneCoin_live_exact` in
+  `Blanc/Lift/Curve3Pool/{RemoveLiquidityExactFrame,ExchangeExactLive,AddLiquidityExactFrame,RemoveLiquidityImbalanceExactFrame,OneCoinExactFrame}.lean`,
+  each over a schedule with call data, premise bundle, closed cost and static-gas transport
+  (`Walk/{RemoveLiquidity,AddLiquidity,Rli,OneCoin}ExactSchedule.lean`,
+  `ExchangeExactSchedule.lean`, `ExactStaticGas.lean`) and relation-parametric stage cores (the
+  `*E`/`*_core` walks in `Walk/RemoveLiquidityLive.lean`, `Walk/ExchangeLive*.lean`,
+  `Walk/AlLive*.lean`, `Walk/RliLive*.lean`, `Callee/CalcWithdrawLive*.lean` (`rx_cw_*E`) and
+  `Walk/OneCoinLive*.lean` (`rx_oc_*E`)), whose bounded statements are projections; the
+  message-entry, history and composed twins are `ExactMessage.lean`, `HistoryLiveExact.lean`
+  and `Blanc/Composition/Curve3Pool3CrvHeadlinesExact.lean`.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
@@ -2884,6 +2919,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `.restoreMem`; `.eq` and `.writeWords_eq` conclude literal equality.
   `Mem.write_getD`, `Mem.size_write_eq`, `Mem.getD_eq_of_memWord_eq` and
   `saveMem_succ_left` are the byte, size and save-chain facts underneath.
+  `Mem.EqExcept.trans` composes two agreements (exceptions joined); `.writeD`, `.restoreMemD`
+  and `.saveMemD` keep one exception set through the same store, restore chain or frame save.
+  For memories equal at every byte (`D := fun _ => False`, what a crossed callee that keeps its
+  scratch to itself leaves), `eqB_write`, `eqB_saveMem`, `eqB_memWord` carry the agreement and
+  `eqB_write_grow` / `eqB_write_word_grow` conclude literal equality at the next growing store;
+  `slice_memWord` / `slice_memWord_fun` name a word read off an image carrier as the literal
+  memory's `memWord`. A callee export in `ScratchOut` form gives the agreement directly by
+  `ScratchOut.eqExcept` in [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  `sstoreCost_addLog` (`rfl`) prices an `SSTORE` after a `LOG` as before it.
   Boundary: coverage only discharges bytes both sides overwrite with the same
   literal values; it never compares independently computed stores.
 
