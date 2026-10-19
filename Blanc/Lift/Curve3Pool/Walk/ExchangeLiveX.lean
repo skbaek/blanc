@@ -120,12 +120,12 @@ theorem rx_ex_x_core {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop}
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x7a0) (c := c0) hR hW hsz rfl (by rcases hs with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide) ?_
+  refine rxe_mstoreW (o := 0x7a0) (c := c0) hR hW hsz rfl (by rcases hs with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide) ?_
   have hs' : memExtSize s 0x7a0 32 = 0x7c0 := by rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   clear hR hW hsz; intro hR hW hsz; rw [hs'] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x7e0) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7c0 0x7e0 32 = 0x800 by decide] at hsz
+  refine rxe_mstoreW (o := 0x7e0) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7c0 0x7e0 32 = 0x800 by decide] at hsz
   -- STOP at t_2754_c13
   refine k _ _ g1 hR hW (by rw [hsz]) (hF.mono fun o v hv ho => by wauto) (by wauto) (by wauto)
     (by omega) (by omega) (by omega) rfl

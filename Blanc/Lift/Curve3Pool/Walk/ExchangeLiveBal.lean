@@ -39,10 +39,10 @@ theorem rx_ex_bal1_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x3c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3c0 0x3c0 32 = 0x3e0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x3c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3c0 0x3c0 32 = 0x3e0 by decide] at hsz
   xr (rx_address (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x3e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3e0 0x3e0 32 = 0x400 by decide] at hsz
+  refine rxe_mstoreW (o := 0x3e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3e0 0x3e0 32 = 0x400 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x3a0) hR hsz rfl (by decide) (by hr) ·)
@@ -76,7 +76,7 @@ theorem rx_ex_bal1_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rxm_mload (o := 0x440) hR hsz rfl (by decide) (by hr) ·)
   rw [ex_ans_read _ _ _ hlen, hA]
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x380) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x460 0x380 32 = 0x460 by decide] at hsz
+  refine rxe_mstoreW (o := 0x380) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x460 0x380 32 = 0x460 by decide] at hsz
   refine k d _ _ g2 hLd hR hW hsz ⟨fun k hk => by wautoH (hF.rate k hk),
     fun k hk => by wautoH (hF.old k hk), fun k hk => by wautoH (hF.xp k hk),
     WordAt.write_self _ _ _, by wautoH hF.coin⟩ (by omega) (by omega)
@@ -118,10 +118,10 @@ theorem rx_ex_bal2_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x700) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x6e0 0x700 32 = 0x720 by decide] at hsz
+  refine rxe_mstoreW (o := 0x700) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x6e0 0x700 32 = 0x720 by decide] at hsz
   xr (rx_address (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x720) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x720 0x720 32 = 0x740 by decide] at hsz
+  refine rxe_mstoreW (o := 0x720) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x720 0x720 32 = 0x740 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x3a0) hR hsz rfl (by decide) (by hr) ·)
@@ -173,7 +173,7 @@ theorem rx_ex_bal2_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x380) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7a0 0x380 32 = 0x7a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x380) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7a0 0x380 32 = 0x7a0 by decide] at hsz
   refine k d _ _ g2 hLd hR hW hsz ⟨fun k hk => by wautoH (hF.rate k hk),
     fun k hk => by wautoH (hF.old k hk), fun k hk => by wautoH (hF.xp k hk),
     WordAt.write_self _ _ _, by wautoH hF.coin⟩ (by omega) (by omega)

@@ -100,23 +100,23 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   xr (rx_push rfl (by hrs) ·)
   xr (rx_calldataload (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreL (o := 0x800) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x800 0x800 32 = 0x820 by decide] at hsz
+  refine rxe_mstoreW (o := 0x800) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x800 0x800 32 = 0x820 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_calldataload (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreL (o := 0x820) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x820 0x820 32 = 0x840 by decide] at hsz
+  refine rxe_mstoreW (o := 0x820) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x820 0x820 32 = 0x840 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x7a0) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [hx.read]
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreL (o := 0x840) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x840 0x840 32 = 0x860 by decide] at hsz
+  refine rxe_mstoreW (o := 0x840) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x840 0x840 32 = 0x860 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rxm_mload (o := 0x200) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [(hF.xp 0 (by decide)).read]
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstoreL (o := 0x860) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x860 0x860 32 = 0x880 by decide] at hsz
+  refine rxe_mstoreW (o := 0x860) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x860 0x860 32 = 0x880 by decide] at hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
@@ -125,7 +125,7 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstoreL (o := 0x880) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x880 0x880 32 = 0x8a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x880) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x880 0x880 32 = 0x8a0 by decide] at hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
@@ -134,7 +134,7 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstoreL (o := 0x8a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8a0 0x8a0 32 = 0x8c0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x8a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8a0 0x8a0 32 = 0x8c0 by decide] at hsz
   xr (rx_pop ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hrs) ·)
@@ -166,11 +166,11 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   xr (rx_push rfl (by hrs) ·)
   have hWM' := hW
   have hszM' := hsz
-  refine rxe_mstoreL (o := 0x900) (c := 13) hR hW hsz rfl (by decide) ?_
+  refine rxe_mstoreW (o := 0x900) (c := 13) hR hW hsz rfl (by decide) ?_
   clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x900 32 = 0x920 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreL (o := 0x7e0) (c := 3) hR hW hsz rfl (by decide) ?_
+  refine rxe_mstoreW (o := 0x7e0) (c := 3) hR hW hsz rfl (by decide) ?_
   clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x7e0 32 = 0x920 by decide] at hsz
   rw [ex_rest_first, show exSaved w 0x140 53 = exSaved w 0x140 (52 + 1) ++ [] from
     (List.append_nil _).symm]

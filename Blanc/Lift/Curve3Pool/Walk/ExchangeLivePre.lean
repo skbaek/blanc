@@ -170,23 +170,23 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x140) (c := 18) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc0 0x140 32 = 0x160 by decide] at hsz
+  refine rxe_mstoreW (o := 0x140) (c := 18) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc0 0x140 32 = 0x160 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x160) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x160 0x160 32 = 0x180 by decide] at hsz
+  refine rxe_mstoreW (o := 0x160) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x160 0x160 32 = 0x180 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x180) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x180 0x180 32 = 0x1a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x180) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x180 0x180 32 = 0x1a0 by decide] at hsz
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1a0 0xc0 32 = 0x1a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1a0 0xc0 32 = 0x1a0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
@@ -194,11 +194,11 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g8 b8 v8 hb8 hv8 hg81 hg82 hx_g8
   obtain ⟨g9, rfl⟩ : ∃ g, g8 = g + 66 := ⟨g8 - 66, by omega⟩
   xr (rx_dup rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x1a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1a0 0x1a0 32 = 0x1c0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x1a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1a0 0x1a0 32 = 0x1c0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1c0 0xc0 32 = 0x1c0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1c0 0xc0 32 = 0x1c0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
@@ -209,11 +209,11 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x1c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1c0 0x1c0 32 = 0x1e0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x1c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1c0 0x1c0 32 = 0x1e0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1e0 0xc0 32 = 0x1e0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1e0 0xc0 32 = 0x1e0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
@@ -224,7 +224,7 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x1e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1e0 0x1e0 32 = 0x200 by decide] at hsz
+  refine rxe_mstoreW (o := 0x1e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x1e0 0x1e0 32 = 0x200 by decide] at hsz
   xr (rx_pop ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
@@ -251,7 +251,7 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_dup rfl (by hr) ·)
   xr (rxm_mload (o := 0x1a0) hR hsz rfl (by decide) (by hr) ·); try wsimp
   xr (rx_dup rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x280) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x260 0x280 32 = 0x2a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x280) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x260 0x280 32 = 0x2a0 by decide] at hsz
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
@@ -259,7 +259,7 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x2a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x2a0 0x2a0 32 = 0x2c0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x2a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x2a0 0x2a0 32 = 0x2c0 by decide] at hsz
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
@@ -267,7 +267,7 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rx_dup rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_add (by hr) ·)
-  refine rxe_mstoreL (o := 0x2c0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x2c0 0x2c0 32 = 0x2e0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x2c0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x2c0 0x2c0 32 = 0x2e0 by decide] at hsz
   xr (rx_pop ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)

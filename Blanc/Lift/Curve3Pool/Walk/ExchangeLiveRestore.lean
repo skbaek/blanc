@@ -61,7 +61,7 @@ theorem rx_ex_restBody_core {br : SFunc} {S : List B256} {M : Mem} {img : Bytes}
   xr (rx_dest ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mloadW (o := 0x7e0) hR hsz rfl (by decide) hctr (by hr) ·)
-  refine rxe_mstoreL (o := q) (c := 3) hR hW hsz hq' ⟨by
+  refine rxe_mstoreW (o := q) (c := 3) hR hW hsz hq' ⟨by
     rw [memExtSize_of_le (by decide) (by omega), Nat.sub_self]; rfl, by decide⟩ ?_
   generalize hM1 : M.write q v.toBytes = M1
   intro hR1 hW1 hsz1
@@ -74,7 +74,7 @@ theorem rx_ex_restBody_core {br : SFunc} {S : List B256} {M : Mem} {img : Bytes}
   xr (rx_sub (by hr) ·)
   rw [ex_sub32 (by omega) (by omega)]
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x7e0) (c := 3) hR1 hW1 hsz1 rfl (by decide) ?_
+  refine rxe_mstoreW (o := 0x7e0) (c := 3) hR1 hW1 hsz1 rfl (by decide) ?_
   generalize hM2 : M1.write 0x7e0 (Nat.toB256 (q - 32)).toBytes = M2
   intro hR2 hW2 hsz2
   rw [show memExtSize 0x920 0x7e0 32 = 0x920 by decide] at hsz2

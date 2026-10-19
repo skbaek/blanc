@@ -118,7 +118,7 @@ theorem rxe_sstoreV {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork se
 
 /-- `MSTORE` over the image carrier, to some outcome, the continuation over the literal written
 memory (`rxe_mstore` with the memory named). -/
-theorem rxe_mstoreL {Q : Outcome → Prop} {i v : B256} {o s c : Nat} (hR : Mem.Reads M img)
+theorem rxe_mstoreW {Q : Outcome → Prop} {i v : B256} {o s c : Nat} (hR : Mem.Reads M img)
     (hW : Mem.Wf M) (hsz : M.size = s) (ho : i.toNat = o)
     (hc : gVerylow + (calculateMemoryGasCost (memExtSize s o 32) - calculateMemoryGasCost s) = c ∧
       s % 32 = 0)

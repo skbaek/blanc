@@ -66,7 +66,7 @@ theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outc
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hr) ·)
   rw [hy.read]
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x7c0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x7c0 32 = 0x920 by decide] at hsz
+  refine rxe_mstoreW (o := 0x7c0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x7c0 32 = 0x920 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_calldataload (by hr) ·)
@@ -115,7 +115,7 @@ theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outc
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x920) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x920 32 = 0x940 by decide] at hsz
+  refine rxe_mstoreW (o := 0x920) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x920 32 = 0x940 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x920) hR hsz rfl (by decide) (by hr) ·); try wsimp
   xr (rx_push rfl (by hr) ·)
@@ -158,7 +158,7 @@ theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outc
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x940) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x940 0x940 32 = 0x960 by decide] at hsz
+  refine rxe_mstoreW (o := 0x940) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x940 0x940 32 = 0x960 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x920) hR hsz rfl (by decide) (by hr) ·); try wsimp
   xr (rx_push rfl (by hr) ·)
@@ -228,22 +228,22 @@ theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outc
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x920) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x960 0x920 32 = 0x960 by decide] at hsz
+  refine rxe_mstoreW (o := 0x920) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x960 0x920 32 = 0x960 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x960) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x960 0x960 32 = 0x980 by decide] at hsz
+  refine rxe_mstoreW (o := 0x960) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x960 0x960 32 = 0x980 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x980) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x980 0x980 32 = 0x9a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x980) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x980 0x980 32 = 0x9a0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x9a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9a0 0x9a0 32 = 0x9c0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x9a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9a0 0x9a0 32 = 0x9c0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x9c0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9c0 0x9c0 32 = 0x9e0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x9c0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9c0 0x9c0 32 = 0x9e0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x9e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9e0 0x9e0 32 = 0xa00 by decide] at hsz
+  refine rxe_mstoreW (o := 0x9e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x9e0 0x9e0 32 = 0xa00 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)

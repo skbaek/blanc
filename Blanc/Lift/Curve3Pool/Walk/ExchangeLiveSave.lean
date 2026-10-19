@@ -79,7 +79,7 @@ theorem rx_ex_saveBody_core {br : SFunc} {S : List B256} {M : Mem} {img : Bytes}
   xr (rx_add (by hr) ·)
   rw [ex_add32 (by omega)]
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstoreL (o := 0x7e0) (c := 3) hR hW hsz rfl (by decide) ?_
+  refine rxe_mstoreW (o := 0x7e0) (c := 3) hR hW hsz rfl (by decide) ?_
   generalize hM' : M.write 0x7e0 (Nat.toB256 (p + 32)).toBytes = M'
   intro hR' hW' hsz'
   rw [show memExtSize 0x800 0x7e0 32 = 0x800 by decide] at hsz'
