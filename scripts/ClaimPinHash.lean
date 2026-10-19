@@ -1,0 +1,452 @@
+import Lean
+import Lean.Elab.Frontend
+
+/-!
+# Closure serializer for the ClaimCheck pins
+
+Driver for `scripts/claim_pin_hash.py`; run through `lake env lean --run`, never
+imported by `Blanc`, so no module or audited-theorem count moves.
+
+`scripts/ClaimCheck.lean` pins each claim as an `example`.  An `example` leaves
+nothing in the environment, so this driver elaborates a copy of the file in
+memory in which every pin line counted by `scripts/check-claims.sh` (a line whose
+first word is `example`) has that keyword replaced by
+`noncomputable def «claimPinHash_NNNN»`.  An `example` is elaborated as a `def`,
+so the replacement changes no elaboration; it only keeps the pinned statement.
+Any elaboration error fails the run.
+
+From the pinned statements it then walks the definitional closure once, with a
+visited set (the in-run memo), and writes one JSON line per reached constant: a
+canonical serialization of what the constant contributes, plus the ordered
+list of constants that serialization refers to.  The Python step turns these
+records into a Merkle SHA-256 table with its own in-run memo.
+
+What each constant contributes:
+* definitions: kind, universe arity, type and value;
+* theorems: universe arity and type (proof irrelevance);
+* opaque constants (including `partial` definitions) and axioms: name and type;
+* inductive types, constructors and recursors: the whole mutual block (universe
+  arity, parameters, indices, every type and every constructor type), with
+  references into the block written as block-local indices; each member is
+  then attributed to its block;
+* constants whose defining module is outside `Blanc` (Lean core, Std, Batteries,
+  Mathlib, Jaune and every other dependency): the boundary; name, module and
+  owning package only, the package being resolved from the `.olean` location
+  and later bound by Python to the pinned toolchain or `lake-manifest.json` rev.
+
+Binder names, binder info and `mdata` are not serialized, universe parameters
+are written by position, and every subterm is hash-consed on its canonical
+line, so the bytes depend only on the normalized term.
+-/
+
+namespace BlancClaimPinHash
+
+open Lean Lean.Elab
+
+/-- The `scripts/check-claims.sh` pin regex `^[[:space:]]*example([[:space:]]|$)`. -/
+def pinLine? (line : String) : Option (String × String) :=
+  let isSpace (c : Char) := c == ' ' || c == '\t' || c == '\r' || c == '\x0b' || c == '\x0c'
+  let indent := String.ofList (line.toList.takeWhile isSpace)
+  let rest := String.ofList (line.toList.drop indent.length)
+  if rest.startsWith "example" then
+    let tail := String.ofList (rest.toList.drop "example".length)
+    match tail.toList.head? with
+    | none => some (indent, tail)
+    | some c => if isSpace c then some (indent, tail) else none
+  else none
+
+def pad4 (n : Nat) : String :=
+  let s := toString n
+  "".pushn '0' (4 - s.length) ++ s
+
+def pinName (n : Nat) : String := s!"claimPinHash_{pad4 n}"
+
+/-- Rewrite the pin lines; returns the new source and the 1-based line of each pin. -/
+def rewrite (source : String) : String × Array Nat := Id.run do
+  let lines := source.splitOn "\n"
+  let mut out : Array String := #[]
+  let mut pins : Array Nat := #[]
+  let mut lineNo := 0
+  for line in lines do
+    lineNo := lineNo + 1
+    match pinLine? line with
+    | some (indent, tail) =>
+      pins := pins.push lineNo
+      out := out.push s!"{indent}noncomputable def «{pinName pins.size}»{tail}"
+    | none => out := out.push line
+  return ("\n".intercalate out.toList, pins)
+
+/-- Serialization state for one record. -/
+structure RecState where
+  lines : Array String := #[]
+  lineIds : Std.HashMap String Nat := {}
+  exprIds : Std.HashMap Expr Nat := {}
+  refs : Array Name := #[]
+  refIds : Std.HashMap Name Nat := {}
+  exprHits : Nat := 0
+  /-- Anything that cannot occur in a closed, well-formed constant; any entry fails the run. -/
+  bad : Array String := #[]
+
+abbrev RecM := StateT RecState (ReaderT (Std.HashMap Name Nat × Std.HashMap Name Nat) Id)
+
+partial def lvl (ps : List Name) : Level → Except String String
+  | .zero => pure "z"
+  | .succ l => return s!"s({← lvl ps l})"
+  | .max a b => return s!"m({← lvl ps a},{← lvl ps b})"
+  | .imax a b => return s!"i({← lvl ps a},{← lvl ps b})"
+  | .param n => match ps.idxOf? n with
+    | some i => pure s!"p{i}"
+    | none => throw s!"undeclared universe parameter {n}"
+  | .mvar _ => throw "universe metavariable"
+
+def markBad (why : String) : RecM String := do
+  modify fun s => { s with bad := s.bad.push why }
+  return "?"
+
+def lvlM (ps : List Name) (l : Level) : RecM String :=
+  match lvl ps l with
+  | .ok s => pure s
+  | .error e => markBad e
+
+def lvls (ps : List Name) (ls : List Level) : RecM String := do
+  let parts ← ls.mapM (lvlM ps)
+  return "{" ++ ",".intercalate parts ++ "}"
+
+def ref (n : Name) : RecM Nat := do
+  let s ← get
+  match s.refIds[n]? with
+  | some i => return i
+  | none =>
+    let i := s.refs.size
+    set { s with refs := s.refs.push n, refIds := s.refIds.insert n i }
+    return i
+
+def emit (line : String) : RecM Nat := do
+  let s ← get
+  match s.lineIds[line]? with
+  | some i => return i
+  | none =>
+    let i := s.lines.size
+    set { s with lines := s.lines.push line, lineIds := s.lineIds.insert line i }
+    return i
+
+/-- Canonical, injective serialization: strings are length-prefixed. -/
+partial def ser (ps : List Name) (e : Expr) : RecM Nat := do
+  if let some i := (← get).exprIds[e]? then
+    modify fun s => { s with exprHits := s.exprHits + 1 }
+    return i
+  let i ← match e with
+    | .bvar k => emit s!"B{k}"
+    | .sort l => emit s!"S{← lvlM ps l}"
+    | .const n ls => do
+      let (selfIdx, _) ← read
+      match selfIdx[n]? with
+      | some j => emit s!"X{j}{← lvls ps ls}"
+      | none => emit s!"C{← ref n}{← lvls ps ls}"
+    | .app f a => do
+      let fi ← ser ps f
+      let ai ← ser ps a
+      emit s!"A{fi},{ai}"
+    | .lam _ t b _ => do
+      let ti ← ser ps t
+      let bi ← ser ps b
+      emit s!"L{ti},{bi}"
+    | .forallE _ t b _ => do
+      let ti ← ser ps t
+      let bi ← ser ps b
+      emit s!"F{ti},{bi}"
+    | .letE _ t v b _ => do
+      let ti ← ser ps t
+      let vi ← ser ps v
+      let bi ← ser ps b
+      emit s!"E{ti},{vi},{bi}"
+    | .lit (.natVal n) => emit s!"N{n}"
+    | .lit (.strVal s) => emit s!"T{s.utf8ByteSize}:{s}"
+    | .mdata _ b => ser ps b
+    | .proj n k b => do
+      let bi ← ser ps b
+      let (selfIdx, _) ← read
+      match selfIdx[n]? with
+      | some j => emit s!"Jx{j},{k},{bi}"
+      | none => emit s!"J{← ref n},{k},{bi}"
+    | .fvar _ => do emit (← markBad "free variable")
+    | .mvar _ => do emit (← markBad "metavariable")
+  modify fun s => { s with exprIds := s.exprIds.insert e i }
+  return i
+
+structure Record where
+  name : String
+  kind : String
+  module : String
+  package : String := ""
+  ser : String := ""
+  refs : Array String := #[]
+  extra : List (String × Json) := []
+
+def Record.toJson (r : Record) : Json :=
+  Json.mkObj ([("n", Json.str r.name), ("k", Json.str r.kind), ("m", Json.str r.module),
+    ("p", Json.str r.package), ("s", Json.str r.ser),
+    ("r", Json.arr (r.refs.map Json.str))] ++ r.extra)
+
+def runRec (selfIdx : Std.HashMap Name Nat) (body : RecM String) :
+    Except String (String × Array Name × Nat) :=
+  let ((head, st)) := (body.run {}).run (selfIdx, {}) |>.run
+  if let some why := st.bad[0]? then throw s!"not a closed term ({why})" else
+  let text := head ++ "\n" ++ "\n".intercalate st.lines.toList
+  return (text, st.refs, st.exprHits)
+
+def blockName (n : Name) : String := s!"block:{n}"
+
+structure Stats where
+  constants : Nat := 0
+  blanc : Nat := 0
+  local_ : Nat := 0
+  boundary : Nat := 0
+  blocks : Nat := 0
+  exprHits : Nat := 0
+  refEdges : Nat := 0
+  visitHits : Nat := 0
+  serBytes : Nat := 0
+
+/-- Kind-specific serialization of a non-boundary constant. -/
+def serializeConst (env : Environment) (ci : ConstantInfo) :
+    Except String (String × String × Array Name × Nat) := do
+  let ps := ci.levelParams
+  let arity := ps.length
+  match ci with
+  | .defnInfo v =>
+    if v.safety == .unsafe then throw s!"unsafe definition reached: {ci.name}"
+    let (s, r, h) ← runRec {} do
+      let t ← ser ps v.type
+      let b ← ser ps v.value
+      return s!"def u={arity} type={t} value={b}"
+    return ("def", s, r, h)
+  | .thmInfo v =>
+    let (s, r, h) ← runRec {} do
+      let t ← ser ps v.type
+      return s!"theorem u={arity} type={t}"
+    return ("theorem", s, r, h)
+  | .opaqueInfo v =>
+    let (s, r, h) ← runRec {} do
+      let t ← ser ps v.type
+      return s!"opaque name={(toString ci.name).utf8ByteSize}:{ci.name} u={arity} type={t}"
+    return ("opaque", s, r, h)
+  | .axiomInfo v =>
+    let (s, r, h) ← runRec {} do
+      let t ← ser ps v.type
+      return s!"axiom name={(toString ci.name).utf8ByteSize}:{ci.name} u={arity} type={t}"
+    return ("axiom", s, r, h)
+  | .quotInfo _ => throw s!"quotient constant outside the core boundary: {ci.name}"
+  | .inductInfo v =>
+    -- the block record is emitted separately; the member points at it
+    let some j := v.all.idxOf? ci.name | throw s!"inductive not in its block: {ci.name}"
+    return ("inductive", s!"member type={j}", #[], 0)
+  | .ctorInfo v =>
+    let some ind := env.find? v.induct | throw s!"missing inductive {v.induct}"
+    let .inductInfo iv := ind | throw s!"constructor of non-inductive {ci.name}"
+    let some j := iv.all.idxOf? v.induct | throw s!"inductive not in its block: {v.induct}"
+    return ("ctor", s!"member type={j} ctor={v.cidx}", #[], 0)
+  | .recInfo v =>
+    let suffix := match ci.name with
+      | .str _ s => s
+      | _ => toString ci.name
+    let major := ci.name.getPrefix
+    let some j := v.all.idxOf? major | throw s!"recursor outside its block: {ci.name}"
+    return ("rec", s!"member type={j} rec={suffix.utf8ByteSize}:{suffix}", #[], 0)
+
+/-- The whole mutual block, self references as block-local indices. -/
+def serializeBlock (env : Environment) (all : List Name) :
+    Except String (String × Array Name × Nat) := do
+  let mut selfIdx : Std.HashMap Name Nat := {}
+  let mut vals : Array InductiveVal := #[]
+  for n in all do
+    let some (.inductInfo v) := env.find? n | throw s!"block member is not inductive: {n}"
+    selfIdx := selfIdx.insert n selfIdx.size
+    vals := vals.push v
+  for v in vals do
+    for c in v.ctors do
+      selfIdx := selfIdx.insert c selfIdx.size
+  let ps := vals[0]!.levelParams
+  let mut ctorInfos : Array (Array ConstructorVal) := #[]
+  for v in vals do
+    let mut cs := #[]
+    for c in v.ctors do
+      let some (.ctorInfo cv) := env.find? c | throw s!"missing constructor {c}"
+      cs := cs.push cv
+    ctorInfos := ctorInfos.push cs
+  let selfIdx' := selfIdx
+  let vals' := vals
+  let ctorInfos' := ctorInfos
+  let (s, r, h) ← runRec selfIdx' do
+    let mut parts : Array String := #[]
+    for i in [0:vals'.size] do
+      let v := vals'[i]!
+      let t ← ser ps v.type
+      parts := parts.push
+        s!"type {i} params={v.numParams} indices={v.numIndices} nested={v.numNested} unsafe={v.isUnsafe} type={t} ctors={v.ctors.length}"
+      for cv in ctorInfos'[i]! do
+        let ct ← ser ps cv.type
+        parts := parts.push s!"ctor {cv.cidx} params={cv.numParams} fields={cv.numFields} type={ct}"
+    return s!"block u={ps.length} types={vals'.size} " ++ " ".intercalate parts.toList
+  return (s, r, h)
+
+/-- Package of a boundary module, from where its `.olean` lives. -/
+def packageOf (sysroot : System.FilePath) (mod : Name) : IO String := do
+  let path := (← findOLean mod).toString
+  if path.startsWith sysroot.toString then return "@toolchain"
+  match (path.splitOn "/.lake/packages/").getLast? with
+  | some tail =>
+    if (path.splitOn "/.lake/packages/").length < 2 then
+      throw <| IO.userError s!"HASH boundary module outside every pinned package: {mod} at {path}"
+    return (tail.splitOn "/").head!
+  | none => throw <| IO.userError s!"HASH boundary module unresolved: {mod}"
+
+def peakRssKiB : IO Nat := do
+  let status ← IO.FS.readFile "/proc/self/status"
+  for line in status.splitOn "\n" do
+    if line.startsWith "VmHWM:" then
+      let digits := line.toList.filter Char.isDigit
+      return (String.ofList digits).toNat!
+  return 0
+
+unsafe def generate (claimCheck output : System.FilePath) : IO UInt32 := do
+  let t0 ← IO.monoMsNow
+  let source ← IO.FS.readFile claimCheck
+  let (rewritten, pinLines) := rewrite source
+  let sysroot ← findSysroot
+  initSearchPath sysroot
+  enableInitializersExecution
+  -- The two warnings the `example` → `def` rewrite itself would add are silenced;
+  -- neither option changes elaboration.
+  let opts : Options := ({} : Options)
+    |>.setBool `linter.defProp false |>.setBool `warn.classDefReducibility false
+  let some env ← Lean.Elab.runFrontend rewritten opts claimCheck.toString `ClaimPinHashInput
+    | IO.eprintln "HASH ClaimCheck copy failed to elaborate"; return 1
+  let tElab ← IO.monoMsNow
+  -- locate the pins
+  let mut pinDecl : Std.HashMap String Name := {}
+  for (n, _) in env.constants.map₂.toList do
+    if let .str _ s := n then
+      if s.startsWith "claimPinHash_" then
+        if pinDecl.contains s then
+          IO.eprintln s!"HASH duplicate pin declaration {s}"; return 1
+        pinDecl := pinDecl.insert s n
+  if pinDecl.size != pinLines.size then
+    IO.eprintln s!"HASH pin count mismatch: {pinLines.size} pin lines, {pinDecl.size} pin declarations"
+    return 1
+  let out ← IO.FS.Handle.mk output .write
+  let mut stats : Stats := {}
+  let mut visited : Std.HashSet Name := {}
+  let mut blocksDone : Std.HashSet Name := {}
+  let mut moduleCache : Std.HashMap Name String := {}
+  let mut queue : Array Name := #[]
+  -- pin roots
+  for i in [0:pinLines.size] do
+    let some n := pinDecl[pinName (i + 1)]? |
+      IO.eprintln s!"HASH missing pin declaration {pinName (i+1)}"; return 1
+    let some ci := env.find? n | IO.eprintln s!"HASH missing {n}"; return 1
+    let ps := ci.levelParams
+    let pinSer := runRec {} do
+      let t ← ser ps ci.type
+      return s!"pin u={ps.length} type={t}"
+    let (s, r, h) ← match pinSer with
+      | .ok v => pure v
+      | .error e => IO.eprintln s!"HASH pin {i+1}: {e}"; return 1
+    stats := { stats with exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
+    let ns := n.getPrefix
+    let pinRec : Record := {
+      name := s!"pin:{pad4 (i+1)}", kind := "pin", module := "scripts.ClaimCheck",
+      ser := s, refs := r.map toString,
+      extra := [("line", toJson pinLines[i]!), ("ns", Json.str ns.toString)] }
+    out.putStrLn pinRec.toJson.compress
+    for x in r do
+      if visited.contains x then stats := { stats with visitHits := stats.visitHits + 1 }
+      else
+        visited := visited.insert x
+        queue := queue.push x
+  -- closure walk
+  let mut qi := 0
+  while qi < queue.size do
+    let n := queue[qi]!
+    qi := qi + 1
+    let some ci := env.find? n | IO.eprintln s!"HASH unknown constant {n}"; return 1
+    stats := { stats with constants := stats.constants + 1 }
+    let modIdx? := env.getModuleIdxFor? n
+    let mod? := modIdx?.map fun idx => env.header.moduleNames[idx.toNat]!
+    let internal := match mod? with
+      | none => true
+      | some m => m.getRoot == `Blanc
+    let modStr := match mod? with
+      | none => "scripts.ClaimCheck"
+      | some m => m.toString
+    if !internal then
+      let some m := mod? | return 1
+      let pkg ← match moduleCache[m]? with
+        | some p => pure p
+        | none => do
+          let p ← packageOf sysroot m
+          moduleCache := moduleCache.insert m p
+          pure p
+      stats := { stats with boundary := stats.boundary + 1 }
+      out.putStrLn (Record.toJson { name := n.toString, kind := "boundary", module := modStr, package := pkg }).compress
+      continue
+    if mod?.isNone then stats := { stats with local_ := stats.local_ + 1 }
+    else stats := { stats with blanc := stats.blanc + 1 }
+    -- the block record, once per mutual block
+    let blockAll? : Option (List Name) := match ci with
+      | .inductInfo v => some v.all
+      | .ctorInfo v => match env.find? v.induct with
+        | some (.inductInfo iv) => some iv.all
+        | _ => none
+      | .recInfo v => some v.all
+      | _ => none
+    let mut refs : Array Name := #[]
+    let mut blockRef : Option String := none
+    if let some all := blockAll? then
+      let head := all.head!
+      blockRef := some (blockName head)
+      if !blocksDone.contains head then
+        blocksDone := blocksDone.insert head
+        match serializeBlock env all with
+        | .error e => IO.eprintln s!"HASH {e}"; return 1
+        | .ok (s, r, h) =>
+          stats := { stats with blocks := stats.blocks + 1, exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
+          out.putStrLn (Record.toJson { name := blockName head, kind := "block", module := modStr, ser := s, refs := r.map toString }).compress
+          refs := r
+    match serializeConst env ci with
+    | .error e => IO.eprintln s!"HASH {e}"; return 1
+    | .ok (kind, s, r, h) =>
+      stats := { stats with exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
+      let recRefs := match blockRef with
+        | some b => #[b]
+        | none => r.map toString
+      out.putStrLn (Record.toJson { name := n.toString, kind, module := modStr, ser := s, refs := recRefs }).compress
+      refs := refs ++ r
+    for x in refs do
+      if visited.contains x then stats := { stats with visitHits := stats.visitHits + 1 }
+      else
+        visited := visited.insert x
+        queue := queue.push x
+  let tEnd ← IO.monoMsNow
+  let rss ← peakRssKiB
+  out.putStrLn (Json.mkObj [("k", Json.str "stats"), ("pins", toJson pinLines.size),
+    ("constants", toJson stats.constants), ("blanc", toJson stats.blanc),
+    ("local", toJson stats.local_), ("boundary", toJson stats.boundary),
+    ("blocks", toJson stats.blocks), ("expr_memo_hits", toJson stats.exprHits),
+    ("ref_edges", toJson stats.refEdges), ("visit_memo_hits", toJson stats.visitHits),
+    ("serialized_bytes", toJson stats.serBytes),
+    ("elab_ms", toJson (tElab - t0)), ("walk_ms", toJson (tEnd - tElab)),
+    ("peak_rss_kib", toJson rss)]).compress
+  out.flush
+  return 0
+
+end BlancClaimPinHash
+
+unsafe def main (args : List String) : IO UInt32 := do
+  match args with
+  | [claimCheck, output] =>
+    try BlancClaimPinHash.generate claimCheck output
+    catch e => IO.eprintln s!"HASH {e}"; return 1
+  | _ =>
+    IO.eprintln "usage: lake env lean --run scripts/ClaimPinHash.lean CLAIMCHECK OUTPUT_JSONL"
+    return 2
