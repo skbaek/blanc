@@ -906,6 +906,9 @@ import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
 import Blanc.Composition.Curve3Pool3CrvCapstoneTx
 import Blanc.Composition.Curve3Pool3CrvCapstone
 import Blanc.Composition.Curve3Pool3CrvLiveWitness
+import Blanc.Composition.Curve3Pool3CrvExactAssembly
+import Blanc.Composition.Curve3Pool3CrvHeadlinesExact
+import Blanc.Composition.Curve3Pool3CrvExactWitness
 import Blanc.Composition.Curve3Pool3CrvLiveConcrete
 import Blanc.Composition.Curve3Pool3CrvLiveEndEntry
 import Blanc.Composition.Curve3Pool3CrvLiveEndRL
@@ -1421,6 +1424,10 @@ import Blanc.Lift.Curve3Pool.Walk.RliExactKit
 import Blanc.Lift.Curve3Pool.Walk.RliExactSchedule
 import Blanc.Lift.Curve3Pool.Walk.RliExactWalk
 import Blanc.Lift.Curve3Pool.RemoveLiquidityImbalanceExactFrame
+import Blanc.Lift.StaticGasMessage
+import Blanc.Lift.Curve3Pool.ExactStaticGas
+import Blanc.Lift.Curve3Pool.ExactMessage
+import Blanc.Lift.Curve3Pool.HistoryLiveExact
 import Blanc.Composition.PairTokenJoint
 import Blanc.Composition.PairTokenJointControl
 import Blanc.Composition.PairTokenJointWalk

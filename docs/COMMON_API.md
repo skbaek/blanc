@@ -1757,7 +1757,19 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `sstoreCost_withStaticGas`, `afterSload_withStaticGas`, `afterSstore_withStaticGas` and
   `dataWord_withStaticGas` (all `rfl`) are the storage-charge, post-world and calldata-word
   facts an exact schedule's cost transport unfolds to. These theorems update
-  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged. Comparing runs from
+  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged.
+- To state a frame theorem (given at an arbitrary static machine and entry
+  `St pre [] Mem.empty G`) for a message entered with an execution grant, use
+  [`Blanc/Lift/StaticGasMessage.lean`](../Blanc/Lift/StaticGasMessage.lean): `Msg.withGas`,
+  `initSevm_withGas` (`{initSevm msg with gas := G}`), `initDevm_withGas`
+  (`St (initDevm msg) [] Mem.empty G`), `initDevm_gasMeasure` and `exec_withGas_of_frame` (a frame
+  `Exec` at the grant is `exec (initEvm (msg.withGas G)) = .ok post`). Fix the cost at the base
+  message, instantiate the frame theorem at a fresh gas variable `F` with the premises transported
+  by `*.withStaticGas F`, rewrite the cost back with the schedule's `*_withStaticGas`, and only
+  then relate `F` to `R + c` (rewriting `← hF` rather than substituting, so no definitional check
+  unfolds the closed cost). The Curve 3pool instances are
+  `Blanc/Lift/Curve3Pool/ExactMessage.lean` (`*_msg_exact`), with the exchange/add_liquidity
+  stage transports in `Blanc/Lift/Curve3Pool/ExactStaticGas.lean`. Comparing runs from
   different dynamic gas values still needs the following gas-erasure branch.
   Existing recipe triggers cannot distinguish this static-coordinate update
   from ordinary run construction, so discovery remains in this registry.
@@ -1806,6 +1818,18 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
   [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
   The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
+- For the 3pool's exact-gas entry frames and their stage cores (an exact walk to reuse or extend):
+  `removeLiquidity_live_exact`, `exchange_live_exact`, `addLiquidity_live_exact`,
+  `removeLiquidityImbalance_live_exact`, `removeLiquidityOneCoin_live_exact` in
+  `Blanc/Lift/Curve3Pool/{RemoveLiquidityExactFrame,ExchangeExactLive,AddLiquidityExactFrame,RemoveLiquidityImbalanceExactFrame,OneCoinExactFrame}.lean`,
+  each over a schedule with call data, premise bundle, closed cost and static-gas transport
+  (`Walk/{RemoveLiquidity,AddLiquidity,Rli,OneCoin}ExactSchedule.lean`,
+  `ExchangeExactSchedule.lean`, `ExactStaticGas.lean`) and relation-parametric stage cores (the
+  `*E`/`*_core` walks in `Walk/RemoveLiquidityLive.lean`, `Walk/ExchangeLive*.lean`,
+  `Walk/AlLive*.lean`, `Walk/RliLive*.lean`, `Callee/CalcWithdrawLive*.lean` (`rx_cw_*E`) and
+  `Walk/OneCoinLive*.lean` (`rx_oc_*E`)), whose bounded statements are projections; the
+  message-entry, history and composed twins are `ExactMessage.lean`, `HistoryLiveExact.lean`
+  and `Blanc/Composition/Curve3Pool3CrvHeadlinesExact.lean`.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
