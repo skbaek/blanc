@@ -97,15 +97,6 @@ theorem rx_dispatch_al {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop}
   xr (rx_branch_zero' (by rw [hX]; decide) ·)
   exact k
 
-set_option hygiene false in
-/-- `wsimp` over the goal and the memory carriers `hR`, `hW`, `hsz` alike, so a literal memory
-term holding a loaded word stays one term in all four. -/
-macro "wsimpA" : tactic => `(tactic| simp (disch := first | decide | (simp only
-    [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons, List.length_nil,
-      List.length_append, transferFromSel, transferSel, burnFromSel, mintSel, balanceOfSel]; omega))
-  only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self,
-    Bytes.sliceD_writeAt_before, Bytes.sliceD_writeAt_after] at hR hW hsz ⊢)
-
 theorem al_prog_27 : cert.prog[27]? = some t_00a9_c27 := prog_27
 
 /-- The supply test falls through on a positive supply. -/

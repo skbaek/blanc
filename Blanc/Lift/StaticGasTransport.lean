@@ -98,4 +98,29 @@ theorem MutableCallProfile.withStaticGas
   intro hb
   exact (hid (hb.withStaticGas s.gas)).withStaticGas F
 
+/-! ## Storage and calldata reads
+
+A storage access's charge and its post world, and a calldata word, read no static gas. -/
+
+section Reads
+
+variable (sevm : Sevm) (F : Nat)
+
+theorem sloadCost_withStaticGas (b : Devm) (k : B256) :
+    sloadCost {sevm with gas := F} b k = sloadCost sevm b k := rfl
+
+theorem sstoreCost_withStaticGas (b : Devm) (k v : B256) :
+    sstoreCost {sevm with gas := F} b k v = sstoreCost sevm b k v := rfl
+
+theorem afterSload_withStaticGas (b : Devm) (k : B256) :
+    afterSload {sevm with gas := F} b k = afterSload sevm b k := rfl
+
+theorem afterSstore_withStaticGas (b : Devm) (k v : B256) :
+    afterSstore {sevm with gas := F} b k v = afterSstore sevm b k v := rfl
+
+theorem dataWord_withStaticGas (i : B256) :
+    Sevm.dataWord {sevm with gas := F} i = Sevm.dataWord sevm i := rfl
+
+end Reads
+
 end Blanc.Lift

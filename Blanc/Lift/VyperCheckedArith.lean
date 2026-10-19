@@ -477,6 +477,24 @@ theorem ScratchOut.words {M0 M : Mem} {lo hi : Nat} {v : B256} (h : ScratchOut M
     (hs : 32 ≤ M0.size) : Words M [(0, v)] :=
   Words.cons.mpr ⟨⟨by rw [h.size]; exact hs, h.word0⟩, Words.nil M⟩
 
+/-- A callee that leaves `v` at the scratch word `0` and keeps off its frame `[lo, hi)`
+(`ScratchOut`) agrees, off that frame, with its entry memory and `v` written at `0`. -/
+theorem _root_.Blanc.Lift.ScratchOut.eqExcept {A M' : Mem} {lo hi : Nat} {v : B256}
+    (h : ScratchOut A M' lo hi v) (hA : Mem.Wf A) (h32 : 32 ≤ A.size) :
+    Mem.EqExcept (A.write 0 v.toBytes) M' (fun i => lo ≤ i ∧ i < hi) := by
+  have hk := h.keepsOff hA
+  refine ⟨by rw [Mem.size_write_word_of_add_le h32, h.size], hA.write _ _, h.wf hA,
+    fun i hi' => ?_⟩
+  by_cases h0 : i < 32
+  · have e := Mem.getD_eq_of_memWord_eq (o := 0) (j := i)
+      (((Mem.memWord_write_word A 0 v).1).trans h.word0.symm) h0
+    simpa only [Nat.zero_add] using e
+  · rw [Mem.write_getD hA, ite_eq_right (by rw [B256.length_toBytes]; omega)]
+    refine (hk.2 i ?_).symm
+    intro w hw'
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hw'
+    rcases hw' with rfl | rfl <;> simp only <;> omega
+
 section FrameSteps
 
 variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M0 M : Mem}
@@ -937,5 +955,16 @@ elab "xname " n:ident : tactic => withMainContext do
   unless args.size == 4 do throwError "xname: hT is not a MemTrack: {ty}"
   let stx ← Term.exprToSyntax args[1]!
   evalTactic (← `(tactic| generalize $stx:term = $n:ident at hT hS ⊢))
+
+set_option hygiene false in
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- `xname` keeping the equation: generalize the tracked memory term to `n`, with `h : term = n`. -/
+elab "xnameE " n:ident h:ident : tactic => withMainContext do
+  let some ld := (← getLCtx).findFromUserName? `hT | throwError "xnameE: no hT"
+  let ty ← instantiateMVars ld.type
+  let args := ty.getAppArgs
+  unless args.size == 4 do throwError "xnameE: hT is not a MemTrack: {ty}"
+  let stx ← Term.exprToSyntax args[1]!
+  evalTactic (← `(tactic| generalize $h:ident : $stx:term = $n:ident at hT hS ⊢))
 
 end Blanc.Lift

@@ -250,21 +250,6 @@ section StaticGas
 
 variable (sevm : Sevm) (F : Nat)
 
-theorem sloadCost_withStaticGas (b : Devm) (k : B256) :
-    sloadCost {sevm with gas := F} b k = sloadCost sevm b k := rfl
-
-theorem sstoreCost_withStaticGas (b : Devm) (k v : B256) :
-    sstoreCost {sevm with gas := F} b k v = sstoreCost sevm b k v := rfl
-
-theorem afterSload_withStaticGas (b : Devm) (k : B256) :
-    afterSload {sevm with gas := F} b k = afterSload sevm b k := rfl
-
-theorem afterSstore_withStaticGas (b : Devm) (k v : B256) :
-    afterSstore {sevm with gas := F} b k v = afterSstore sevm b k v := rfl
-
-theorem dataWord_withStaticGas (i : B256) :
-    Sevm.dataWord {sevm with gas := F} i = Sevm.dataWord sevm i := rfl
-
 /-- The exact cost ignores the frame's static initial gas, with the data `P` fixed. -/
 theorem rlExactCost_withStaticGas (pre : Devm) (T : B256) (P : RLExactCalls) :
     rlExactCost {sevm with gas := F} pre T P = rlExactCost sevm pre T P := by

@@ -1753,7 +1753,10 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `ExactCallProfile.withStaticGas` preserves the literal debit and successor
   functions; `StaticWordCallProfile.withStaticGas` and
   `MutableCallProfile.withStaticGas` also transport their indexed identity
-  readiness postconditions via `IdReady.withStaticGas`. These theorems update
+  readiness postconditions via `IdReady.withStaticGas`. `sloadCost_withStaticGas`,
+  `sstoreCost_withStaticGas`, `afterSload_withStaticGas`, `afterSstore_withStaticGas` and
+  `dataWord_withStaticGas` (all `rfl`) are the storage-charge, post-world and calldata-word
+  facts an exact schedule's cost transport unfolds to. These theorems update
   `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged. Comparing runs from
   different dynamic gas values still needs the following gas-erasure branch.
   Existing recipe triggers cannot distinguish this static-coordinate update
@@ -1788,10 +1791,18 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   [`Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean)),
   since the callee's scratch writes are not materialised alike; the caller's next growing
   store makes it literal (`eqB_write_word_grow` in
-  [`Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean),
-  with the exact `MLOAD`/`STATICCALL` twins `rxe_mloadXE`, `rxe_staticWordAlE`; the exact
-  `SLOAD`/`SSTORE` steps are exchange's `rxe_sloadVX`, `rxe_sstoreVX` in
-  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean)). The frame save/restore loops around them are literal
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean), below). The pool's literal-memory
+  forward steps are one kit: `rxe_mstoreL`, `rxe_calldatacopyL`, `rxe_identityL` (with the
+  identity call's canonical successor) and `rxe_sstoreX` (exact `SSTORE` charge) in
+  [`Blanc/Lift/Curve3Pool/Walk/LiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveKit.lean), whose
+  bounded twins `rxe_mstore`, `rxe_calldatacopy`, `rxe_identity`, `rxe_sstore_le` are
+  projections; `rxe_mloadXL`, `rxe_sloadVX`, `rxe_staticWordE` (and the projections
+  `rxe_mloadX`, `rxe_sloadB`/`rxe_sloadV`, `rxe_sstoreB`/`rxe_sstoreV`/`rxe_sstoreVX`,
+  `rxe_mstoreW`, `rxe_staticWord`) in
+  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean);
+  `add_liquidity`'s `rxe_mloadXE`/`rxe_staticWordAlE` are their projections. A fee iteration's
+  words are functions of its inputs (`RliDif.unique`, `RliFeeIter.unique` in
+  [`Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean)). The frame save/restore loops around them are literal
   through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
   [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
   The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
@@ -2884,6 +2895,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `.restoreMem`; `.eq` and `.writeWords_eq` conclude literal equality.
   `Mem.write_getD`, `Mem.size_write_eq`, `Mem.getD_eq_of_memWord_eq` and
   `saveMem_succ_left` are the byte, size and save-chain facts underneath.
+  `Mem.EqExcept.trans` composes two agreements (exceptions joined); `.writeD`, `.restoreMemD`
+  and `.saveMemD` keep one exception set through the same store, restore chain or frame save.
+  For memories equal at every byte (`D := fun _ => False`, what a crossed callee that keeps its
+  scratch to itself leaves), `eqB_write`, `eqB_saveMem`, `eqB_memWord` carry the agreement and
+  `eqB_write_grow` / `eqB_write_word_grow` conclude literal equality at the next growing store;
+  `slice_memWord` / `slice_memWord_fun` name a word read off an image carrier as the literal
+  memory's `memWord`. A callee export in `ScratchOut` form gives the agreement directly by
+  `ScratchOut.eqExcept` in [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  `sstoreCost_addLog` (`rfl`) prices an `SSTORE` after a `LOG` as before it.
   Boundary: coverage only discharges bytes both sides overwrite with the same
   literal values; it never compares independently computed stores.
 

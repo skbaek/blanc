@@ -10,10 +10,11 @@ import Blanc.ExecDeterminism
 `P` (the input coin's `transferFrom`, for the fee coin its two `balanceOf(self)` reads, the output
 coin's `transfer` of the model's amount), the checked model words `x0 x1 x2 amp v` (pinned by
 `xpChk`, `aChk` and `getYChk`) and with them the cost `c = exExactCost sevm pre P x0 x1 x2 B1 B2
-amp v` are fixed before any residual gas. For every `R ≥ costExchange … + 4 U + 60000`
-(headroom, not cost) at which the entry's gas measure is a word and every execution's children
-keep the pool's storage and the code at `4` (`hkeep`, at that entry gas, as `exchange_live` takes
-it), the frame entered with `R + c` has an actual successful execution ending with exactly `R` gas,
+amp v` are fixed before any residual gas. For every `R` with the exact walk's headroom
+`60000 + U ≤ R` whose entry gas `R + c` covers `exchange_live`'s bounded cost (`costExchange … +
+4 U ≤ R + c`; both are headroom, not cost) at which the entry's gas measure is a word and every
+execution's children keep the pool's storage and the code at `4` (`hkeep`, at that entry gas, as
+`exchange_live` takes it), the frame entered with `R + c` has an actual successful execution ending with exactly `R` gas,
 whose effect is `exchange_live`'s: the same `RawEffect`, `Checkpoint` and post-push invariant.
 
 The route is `removeLiquidity_live_exact`'s: the exact byte walk `rx_ex_frame_exact` gives a run
@@ -61,8 +62,9 @@ theorem exchange_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i 
         getYChk amp ⟨(exI sevm).toNat, hi3⟩ ⟨(exJ sevm).toNat, hj3⟩
           (exW3 x0 x1 x2 (exI sevm).toNat + exCred sevm B1 B2 * exRate (exI sevm).toNat /
             exR0).toNat (V3.mk x0.toNat x1.toNat x2.toNat).get = some v) ∧
-      ∀ R, costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
-          (exDx sevm).toNat + 4 * U + 60000 ≤ R →
+      ∀ R, 60000 + U ≤ R →
+        costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
+          (exDx sevm).toNat + 4 * U ≤ R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v →
         (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v)).gasMeasure <
           2 ^ 256 →
         (∀ post (exc : Exec 0 sevm
@@ -87,7 +89,7 @@ theorem exchange_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i 
   have hval : sevm.value = 0 := B256.toNat_inj _ _ (by rw [show sevm.value.toNat = 0 from hv0]; rfl)
   obtain ⟨x0, x1, x2, amp, v, hi3', hj3', hk, hX, hsub, hmx, hax, hA, hres, hy1, hy2, hmf, hsf, hmo,
     hmin, hma, hmap, hbi, hbj1, hbj2, hpa, -, -, -, -⟩ := ex_words hck.abs rfl rfl hex
-  refine ⟨x0, x1, x2, amp, v, hX, hA, ⟨hi3', hj3', hres⟩, fun R hR hGm hkeep => ?_⟩
+  refine ⟨x0, x1, x2, amp, v, hX, hA, ⟨hi3', hj3', hres⟩, fun R hR hRc hGm hkeep => ?_⟩
   have hG256 : R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v < 2 ^ 256 := by
     have e : (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v)).gasMeasure =
       R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v + pre.mach.stateGas.spilled +

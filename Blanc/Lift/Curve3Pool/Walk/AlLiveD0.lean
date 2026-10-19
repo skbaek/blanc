@@ -46,10 +46,8 @@ def alD0Mem (M : Mem) (b0 b1 b2 Aw : B256) (x : V3) (v : Nat) : Mem :=
 
 /-- The saved words of a frame save, read off the memory's image, are its words. -/
 theorem al_saved_memWord {M : Mem} {img : Bytes} (hR : Mem.Reads M img) :
-    (fun o => Bytes.toB256 (img.sliceD o 32 0)) = memWord M := by
-  funext o
-  unfold memWord
-  rw [hR.read]
+    (fun o => Bytes.toB256 (img.sliceD o 32 0)) = memWord M :=
+  slice_memWord_fun hR
 
 theorem alD0Mem_eq {Mq1 Mq2 M1 Mq3 Mq4 Mq5 Mq6 M2 Mq7 Mq8 M3 M : Mem} {img2 : Bytes}
     {b0 b1 b2 Aw : B256} {x : V3} {v : Nat}

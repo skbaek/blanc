@@ -376,7 +376,8 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
           { address := sevm.currentTarget, topics := [Bytes.toB256 [66, 63, 100, 149, 160, 143, 198, 82,
             66, 92, 244, 237, 13, 31, 158, 55, 229, 113, 217, 185, 82, 155, 28, 28, 35, 204, 231, 128,
             178, 231, 223, 13], sevm.caller.toB256], data := (M.read (Bytes.toB256 [13, 32]).toNat
-            (Bytes.toB256 [1, 0]).toNat).1 }) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) := rfl
+            (Bytes.toB256 [1, 0]).toNat).1 }) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) :=
+        (sstoreCost_addLog ..).symm
       omega
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_⟩ hX⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]

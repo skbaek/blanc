@@ -45,14 +45,6 @@ def rsIt (c1 c2 x1 x2 : UInt8) (br : SFunc) : SFunc :=
   (.next (.reg .mload) (.next (.reg .lt) (.next (.reg .iszero) (.next (.reg .iszero)
   (.next (.push [x1, x2] (Nat.le_of_ble_eq_true rfl)) br))))))))))))))))
 
-/-- `saveMem`'s first counter write peeled off the front. -/
-private theorem saveMem_succ_first (M : Mem) (c lo : Nat) :
-    ∀ n, saveMem M c lo (n + 1) = saveMem (M.write c (Nat.toB256 (lo + 32)).toBytes) c (lo + 32) n
-  | 0 => by simp only [saveMem, Nat.zero_add, Nat.mul_one]
-  | n + 1 => by
-    rw [saveMem, saveMem_succ_first M c lo n, saveMem,
-      show lo + 32 * (n + 1 + 1) = lo + 32 + 32 * (n + 1) by omega]
-
 section Fwd
 
 variable {sevm : Sevm} {b : Devm} {Q : Outcome → Prop} {c1 c2 l1 l2 x1 x2 : UInt8} {C Lm sz : Nat}
@@ -175,7 +167,7 @@ theorem rx_svFromLM (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8
       rfl
     rw [e]
     have hM3 : M'' = saveMem M C (0x140 + 32 * n) (k + 1 + 1) := by
-      rw [hM'', hM', saveMem_succ_first M C (0x140 + 32 * n) (k + 1),
+      rw [hM'', hM', saveMem_succ_left M C (0x140 + 32 * n) (k + 1),
         show 0x140 + 32 * (n + 1) = 0x140 + 32 * n + 32 by ring]
     exact kk M'' img'' hM3 hR'' hW'' hsz'' (fun o v h ho =>
       hk'' o v (h.write_other (by simp only [B256.length_toBytes]; omega)) ho) hc''
