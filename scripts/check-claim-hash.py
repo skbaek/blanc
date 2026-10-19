@@ -21,11 +21,13 @@ Pipeline (one run for all pins):
 2. This script computes a Merkle SHA-256 table bottom-up with its own in-run
    memo: a constant's digest is the SHA-256 of its kind, its serialization and
    the digests of the constants it refers to, so a referenced constant
-   contributes its digest, never its name.  Boundary constants (defined outside
-   ``Blanc``) contribute their name and the identity of the pinned dependency
-   that owns them: ``lean-toolchain`` for Lean core and Std, the
-   ``lake-manifest.json`` rev for every Lake package (Mathlib, Batteries,
-   Jaune, ...).
+   contributes its digest, never its name.  Constants of Blanc and of the
+   pinned Jaune package are hashed in full (Jaune's EVM semantics are part of
+   every claim's meaning; user decision 2026-10-20), so a Jaune bump moves
+   exactly the roots whose meaning changed.  Boundary constants (the Lean
+   toolchain, Mathlib, Batteries and any other package) contribute their name
+   and the identity of the pinned dependency that owns them: ``lean-toolchain``
+   for Lean core and Std, the ``lake-manifest.json`` rev otherwise.
 
 Why the split: Lean ships no SHA-256, and a hand-written one would run in the
 interpreter over ~10 MB of serialization; Python's ``hashlib`` is the reviewed
@@ -85,8 +87,10 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_DIR = ROOT / "scripts" / "claim-pin-hash"
 DRIVER = "scripts/ClaimPinHash.lean"
 CLAIMCHECK = "scripts/ClaimCheck.lean"
-SCHEMA = 2
+SCHEMA = 3
 DOMAIN = b"blanc-claim-pin-hash/v2\0"
+# Packages hashed in full (user decision 2026-10-20); the driver's list must agree.
+FULLY_HASHED = ("jaune",)
 PIN_REGEX = re.compile(r"^[ \t\r\v\f]*example([ \t\r\v\f]|$)")
 
 # The fixture pairs the driver must emit, each with its expectation.
@@ -114,6 +118,7 @@ FIXTURE = {
     "theorem statement": "differ",
     "inductive unsafe flag": "differ",
     "theorem proof (must be equal)": "equal",
+    "a Jaune constant is hashed by content": "differ",
     "binder name (must be equal)": "equal",
     "binder info (must be equal)": "equal",
     "metadata (must be equal)": "equal",
@@ -154,6 +159,10 @@ def check_installed_packages(root: Path) -> int:
         if head.returncode != 0 or head.stdout.strip() != package["rev"]:
             raise GateError(f"Lake package {package['name']} is at {head.stdout.strip() or '?'}, "
                             f"lake-manifest.json pins {package['rev']}")
+        dirt = subprocess.run(["git", "-C", str(directory), "status", "--porcelain"],
+                              capture_output=True, text=True)
+        if dirt.returncode != 0 or dirt.stdout.strip():
+            raise GateError(f"Lake package {package['name']} has uncommitted or untracked changes")
     return len(manifest["packages"])
 
 
@@ -353,8 +362,14 @@ def verify_fixture(path: Path, deps: dict[str, str]) -> int:
 # ---------------------------------------------------------------- manifest
 
 
+def scope_of(rec: dict) -> str:
+    if rec["k"] == "boundary":
+        return "boundary"
+    return rec.get("sc") or ("local" if rec["m"] == "scripts.ClaimCheck" else "blanc")
+
+
 def manifest_rows(records: dict[str, dict], digest: dict[str, str]) -> list[str]:
-    return [f"{name}\t{records[name]['k']}\t{records[name]['m']}\t{digest[name]}"
+    return [f"{name}\t{records[name]['k']}\t{records[name]['m']}\t{scope_of(records[name])}\t{digest[name]}"
             for name in sorted(records) if records[name]["k"] != "pin"]
 
 
@@ -396,7 +411,7 @@ def header(records: dict[str, dict], pins: list[dict], deps: dict[str, str]) -> 
     for rec in records.values():
         kinds[rec["k"]] += 1
         if rec["k"] not in ("pin", "boundary", "block"):
-            modules["claimcheck-local" if rec["m"] == "scripts.ClaimCheck" else "blanc"] += 1
+            modules[scope_of(rec)] += 1
     used = sorted({rec["p"] for rec in records.values() if rec["k"] == "boundary"})
     return {
         "schema": SCHEMA,
@@ -408,6 +423,7 @@ def header(records: dict[str, dict], pins: list[dict], deps: dict[str, str]) -> 
         "kinds": dict(sorted(kinds.items())),
         "hashed_constants": dict(sorted(modules.items())),
         "boundary_identities": {p: deps[p] for p in used},
+        "fully_hashed_provenance": {p: deps[p] for p in FULLY_HASHED if p in deps},
     }
 
 
@@ -423,7 +439,7 @@ def write_manifest(out: Path, records, pins, digest, deps) -> None:
 def read_manifest(directory: Path):
     constants = {}
     for line in (directory / "constants.tsv").read_text().splitlines():
-        name, kind, module, value = line.split("\t")
+        name, kind, module, _scope, value = line.split("\t")
         constants[name] = (kind, module, value)
     roots = {}
     for line in (directory / "roots.tsv").read_text().splitlines():
@@ -453,7 +469,7 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
     if old_head.get("boundary_identities") != new_head["boundary_identities"]:
         lines.append("boundary identity moved (toolchain or a pinned package rev): "
                      f"{old_head.get('boundary_identities')} -> {new_head['boundary_identities']}")
-    for key in ("kinds", "hashed_constants", "entries"):
+    for key in ("kinds", "hashed_constants", "entries", "fully_hashed_provenance"):
         if old_head.get(key) != new_head[key]:
             notes.append(f"header {key} moved: {old_head.get(key)} -> {new_head[key]}")
     new_boundary = boundary_diagnostics(records)
@@ -730,7 +746,7 @@ def report_stats(r: dict, total_wall: float) -> str:
     s, m, pins = r["lean_stats"], r["merkle_stats"], r["pins"]
     parts = [
         f"pins={len(pins)}",
-        f"constants={s['constants']} (blanc={s['blanc']}, claimcheck-local={s['local']}, boundary={s['boundary']}, inductive-blocks={s['blocks']})",
+        f"constants={s['constants']} (blanc={s['blanc']}, jaune={s['jaune']}, claimcheck-local={s['local']}, boundary={s['boundary']}, inductive-blocks={s['blocks']})",
         f"closure-walk visited-memo hits={s['visit_memo_hits']}",
         f"subterm memo hits={s['expr_memo_hits']}",
         f"digests computed={m['digests_computed']}, digest memo hits={m['memo_hits']}",

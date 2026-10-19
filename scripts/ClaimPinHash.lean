@@ -32,12 +32,14 @@ What each constant contributes:
   written as block-local indices; each member record carries its own full name
   and is attributed to its block.  Two isomorphic but distinct types therefore
   never share a digest, and renaming a generative constant is a change;
-* constants whose defining module is outside `Blanc` (Lean core, Std, Batteries,
-  Mathlib, Jaune and every other dependency): the boundary; name, module and
-  owning package only, the package being resolved from the `.olean` location
-  and later bound by Python to the pinned toolchain or `lake-manifest.json` rev.
-  A shallow serialization of the boundary constant's own content (references by
-  name) is emitted beside it for diagnostics only.
+* constants of the pinned Jaune package are hashed in full, exactly like
+  Blanc's (Jaune's EVM semantics are part of every claim's meaning);
+* every other constant (Lean core and Std, Batteries, Mathlib and any other
+  dependency) is the boundary: name, module and owning package only, the
+  package being resolved from the `.olean` location and later bound by Python
+  to the pinned toolchain or `lake-manifest.json` rev.  A shallow serialization
+  of the boundary constant's own content (references by name) is emitted beside
+  it for diagnostics only.
 
 Binder names, binder info and `mdata` are not serialized, universe parameters
 are written by position, and every subterm is hash-consed on its canonical
@@ -340,6 +342,7 @@ structure Stats where
   constants : Nat := 0
   blanc : Nat := 0
   local_ : Nat := 0
+  jaune : Nat := 0
   boundary : Nat := 0
   blocks : Nat := 0
   exprHits : Nat := 0
@@ -347,17 +350,18 @@ structure Stats where
   visitHits : Nat := 0
   serBytes : Nat := 0
 
-/-- Which constants are fully hashed. -/
-inductive Scope where
-  /-- the claim run: modules under `Blanc`, and the file being elaborated -/
-  | blanc
-  /-- the fixture: only the constants the fixture added (no defining module) -/
-  | fixture
+/-- Lake packages whose constants are hashed in full, like Blanc's own (user
+decision 2026-10-20: Jaune's EVM semantics are part of every claim's meaning).
+Every other package, and the toolchain, stays nominal. -/
+def fullyHashedPackages : List String := ["jaune"]
 
-/-- Walk the closure of `roots`, emitting one record per reached constant. -/
-def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
+/-- Walk the closure of `roots`, emitting one record per reached constant.
+`override` replaces a constant's environment entry (the fixture uses it to
+change one Jaune constant's content in one side of a pair). -/
+def walk (env : Environment) (sysroot : System.FilePath)
     (roots : Array Name) (moduleCache : IO.Ref (Std.HashMap Name String))
-    (emitRec : Record → IO Unit) (stats : IO.Ref Stats) : IO Unit := do
+    (emitRec : Record → IO Unit) (stats : IO.Ref Stats)
+    (override : Std.HashMap Name ConstantInfo := {}) : IO Unit := do
   let mut visited : Std.HashSet Name := {}
   let mut blocksDone : Std.HashSet Name := {}
   let mut queue : Array Name := #[]
@@ -370,24 +374,26 @@ def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
   while qi < queue.size do
     let n := queue[qi]!
     qi := qi + 1
-    let some ci := env.find? n | throw <| IO.userError s!"HASH unknown constant {n}"
+    let some ci := override[n]? <|> env.find? n
+      | throw <| IO.userError s!"HASH unknown constant {n}"
     stats.modify fun s => { s with constants := s.constants + 1 }
     let mod? := (env.getModuleIdxFor? n).map fun idx => env.header.moduleNames[idx.toNat]!
-    let internal := match scope, mod? with
-      | _, none => true
-      | .blanc, some m => m.getRoot == `Blanc
-      | .fixture, some _ => false
     let modStr := match mod? with
       | none => "scripts.ClaimCheck"
       | some m => m.toString
-    if !internal then
-      let some m := mod? | throw <| IO.userError "HASH unreachable"
-      let pkg ← match (← moduleCache.get)[m]? with
-        | some p => pure p
-        | none => do
-          let p ← packageOf sysroot m
-          moduleCache.modify (·.insert m p)
-          pure p
+    -- scope: local (no module), blanc, a fully hashed package, or boundary
+    let (scopeTag, pkg) ← match mod? with
+      | none => pure ("local", "")
+      | some m =>
+        if m.getRoot == `Blanc then pure ("blanc", "") else do
+        let pkg ← match (← moduleCache.get)[m]? with
+          | some p => pure p
+          | none => do
+            let p ← packageOf sysroot m
+            moduleCache.modify (·.insert m p)
+            pure p
+        pure (if fullyHashedPackages.contains pkg then (pkg, pkg) else ("boundary", pkg))
+    if scopeTag == "boundary" then
       stats.modify fun s => { s with boundary := s.boundary + 1 }
       let diag : List (String × Json) := match shallowBoundary env ci with
         | some (s, r) => [("d", Json.str s), ("dr", Json.arr (r.map fun x => Json.str x.toString))]
@@ -395,8 +401,11 @@ def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
       emitRec { name := n.toString, kind := "boundary", module := modStr, package := pkg,
                 extra := diag }
       continue
-    if mod?.isNone then stats.modify fun s => { s with local_ := s.local_ + 1 }
-    else stats.modify fun s => { s with blanc := s.blanc + 1 }
+    match scopeTag with
+    | "local" => stats.modify fun s => { s with local_ := s.local_ + 1 }
+    | "blanc" => stats.modify fun s => { s with blanc := s.blanc + 1 }
+    | _ => stats.modify fun s => { s with jaune := s.jaune + 1 }
+    let tag : List (String × Json) := [("sc", Json.str scopeTag)]
     let blockAll? : Option (List Name) := match ci with
       | .inductInfo v => some v.all
       | .ctorInfo v => match env.find? v.induct with
@@ -416,7 +425,7 @@ def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
         | .ok (s, r, h) =>
           stats.modify fun st => { st with blocks := st.blocks + 1, exprHits := st.exprHits + h, refEdges := st.refEdges + r.size, serBytes := st.serBytes + s.utf8ByteSize }
           emitRec { name := blockName head, kind := "block", module := modStr, ser := s,
-                    refs := r.map toString }
+                    refs := r.map toString, package := pkg, extra := tag }
           refs := r
     match serializeConst env ci with
     | .error e => throw <| IO.userError s!"HASH {e}"
@@ -425,7 +434,8 @@ def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
       let recRefs := match blockRef with
         | some b => #[b]
         | none => r.map toString
-      emitRec { name := n.toString, kind, module := modStr, ser := s, refs := recRefs }
+      emitRec { name := n.toString, kind, module := modStr, ser := s, refs := recRefs,
+                package := pkg, extra := tag }
       refs := refs ++ r
     for x in refs do
       if visited.contains x then stats.modify fun s => { s with visitHits := s.visitHits + 1 }
@@ -534,6 +544,10 @@ def structDeclU (name ctor : Name) (fields : List Expr) (isUnsafe : Bool) : Decl
   | .inductDecl lps n tys _ => .inductDecl lps n tys isUnsafe
   | d => d
 
+/-- `n : Nat` as elaborated source writes it: `@OfNat.ofNat Nat n (instOfNatNat n)`. -/
+def natLit (n : Nat) : Expr :=
+  mkApp3 (.const ``OfNat.ofNat [0]) nat (.lit (.natVal n)) (mkApp (.const ``instOfNatNat []) (.lit (.natVal n)))
+
 def opaqueNat (name : Name) : Declaration :=
   .opaqueDecl { name, levelParams := [], type := nat, value := .lit (.natVal 1),
                 isUnsafe := false, all := [name] }
@@ -544,6 +558,8 @@ structure Pair where
   /-- Kernel-check the declarations; off only for pairs whose point is a term
   shape no well-typed pair can isolate (the serializer is under test, not Lean). -/
   check : Bool := true
+  /-- Side B only: constants whose environment entry is replaced for the walk. -/
+  overrideB : Std.HashMap Name ConstantInfo := {}
   a : List Declaration
   rootA : Name
   b : List Declaration
@@ -629,6 +645,13 @@ def fixturePairs : List Pair :=
     { label := "theorem proof (must be equal)", expect := "equal",
       a := [thmTrue (fx "tp") (.const ``True.intro [])], rootA := fx "tp",
       b := [thmTrue (fx "tp") (.const ``trivial [])], rootB := fx "tp" },
+    { label := "a Jaune constant is hashed by content", expect := "differ",
+      a := [natDef (fx "jr") nat (.const `Jaune.gCallStipend [])], rootA := fx "jr",
+      b := [natDef (fx "jr") nat (.const `Jaune.gCallStipend [])], rootB := fx "jr",
+      overrideB := ({} : Std.HashMap Name ConstantInfo).insert `Jaune.gCallStipend
+        (.defnInfo { name := `Jaune.gCallStipend, levelParams := [], type := nat,
+                     value := natLit 2301, hints := .abbrev, safety := .safe,
+                     all := [`Jaune.gCallStipend] }) },
     { label := "binder name (must be equal)", expect := "equal",
       a := [natDef (fx "f") (.forallE `x nat nat .default) (.lam `x nat (.bvar 0) .default)],
       rootA := fx "f",
@@ -663,13 +686,15 @@ def runFixture (base : Environment) (sysroot : System.FilePath)
   let mut count := 0
   for p in fixturePairs do
     let mut sides : Array Json := #[]
-    for (decls, root) in [(p.a, p.rootA), (p.b, p.rootB)] do
+    for (decls, root, ovr) in [(p.a, p.rootA, ({} : Std.HashMap Name ConstantInfo)),
+                               (p.b, p.rootB, p.overrideB)] do
       let env ← match addAll base decls p.check with
         | .ok e => pure e
         | .error e => throw <| IO.userError s!"HASH fixture {p.label}: {e}"
       let recs ← IO.mkRef (#[] : Array Json)
       let stats ← IO.mkRef ({} : Stats)
-      walk env sysroot .fixture #[root] moduleCache (fun r => recs.modify (·.push r.toJson)) stats
+      walk env sysroot #[root] moduleCache (fun r => recs.modify (·.push r.toJson)) stats
+        (override := ovr)
       sides := sides.push (Json.mkObj [("root", Json.str root.toString),
         ("records", Json.arr (← recs.get))])
     out.putStrLn (Json.mkObj [("label", Json.str p.label), ("expect", Json.str p.expect),
@@ -758,7 +783,7 @@ unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32
     emitRec pinRec
     roots := roots ++ r
   try
-    walk env sysroot .blanc roots moduleCache emitRec stats
+    walk env sysroot roots moduleCache emitRec stats
   catch e => IO.eprintln e.toString; return 1
   let tEnd ← IO.monoMsNow
   -- the serializer fixture, on every run
@@ -770,7 +795,7 @@ unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32
   let st ← stats.get
   out.putStrLn (Json.mkObj [("k", Json.str "stats"), ("pins", toJson pinLines.size),
     ("constants", toJson st.constants), ("blanc", toJson st.blanc),
-    ("local", toJson st.local_), ("boundary", toJson st.boundary),
+    ("local", toJson st.local_), ("jaune", toJson st.jaune), ("boundary", toJson st.boundary),
     ("blocks", toJson st.blocks), ("expr_memo_hits", toJson st.exprHits),
     ("ref_edges", toJson st.refEdges), ("visit_memo_hits", toJson st.visitHits),
     ("serialized_bytes", toJson st.serBytes),
