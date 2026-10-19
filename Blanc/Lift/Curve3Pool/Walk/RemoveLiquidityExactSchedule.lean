@@ -292,4 +292,63 @@ theorem WClosed.withStaticGas {sevm : Sevm} {W : Devm → Prop} (h : WClosed sev
     WClosed {sevm with gas := F} W :=
   ⟨h.st, h.sload, h.sstore, h.sha, h.log⟩
 
+/-! ## The compact regrouping
+
+`rlExactCost` regroups as the fixed `7384` plus twelve ordered `SLOAD` charges and five
+`SSTORE` charges at the schedule's actual intermediate worlds, the five call debits and the
+three raw-tail charges. -/
+
+section Regroup
+
+variable (sevm : Sevm) (pre : Devm) (T : B256) (P : RLExactCalls)
+
+/-- An iteration's ordered storage charges from its head `n`: the two `balances[i]` reads, the
+debit write, and the `coins[i]` read after the payload. -/
+def rlIterStorageCost (i : Nat) (n : Devm) (m : Mem) : Nat :=
+  sloadCost sevm n (rlKey i) + sloadCost sevm (afterSload sevm n (rlKey i)) (rlKey i) +
+    sstoreCost sevm (afterSload sevm (afterSload sevm n (rlKey i)) (rlKey i)) (rlKey i)
+      (rlB sevm pre i - rlB sevm pre i * rlAmt sevm / T) +
+    sloadCost sevm (rlS2Base sevm pre T i n m) (coinsBase + Nat.toB256 i)
+
+/-- The prologue's and the tail's ordered storage charges: the lock read and set, the token slot
+read; the token slot read at the loop exit and the lock's reset after the event. -/
+def rlEdgeStorageCost : Nat :=
+  sloadCost sevm pre (Bytes.toB256 [0xff, 0xff, 0xff]) +
+    sstoreCost sevm (afterSload sevm pre (Bytes.toB256 [0xff, 0xff, 0xff]))
+      (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1]) +
+    sloadCost sevm (afterSstore sevm (afterSload sevm pre (Bytes.toB256 [0xff, 0xff, 0xff]))
+      (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])) (Bytes.toB256 [5]) +
+    sloadCost sevm (rlHead3 sevm pre T P) tokenSlot +
+    sstoreCost sevm (P.burnNext (rlBurnBase sevm pre T P) []
+      (rlBurnMem sevm (rlHeadMem3 sevm pre T P))) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])
+
+/-- The five call debits, at the calls' canonical inputs. -/
+def rlDebits : Nat :=
+  P.supplyDebit (rlSupplyBase sevm pre) [] (rlSupplyMem sevm) +
+    rlPushDebit sevm pre T P 0 (rlHead0 sevm pre P) (rlHeadMem0 sevm pre T P) +
+    rlPushDebit sevm pre T P 1 (rlHead1 sevm pre T P) (rlHeadMem1 sevm pre T P) +
+    rlPushDebit sevm pre T P 2 (rlHead2 sevm pre T P) (rlHeadMem2 sevm pre T P) +
+    P.burnDebit (rlBurnBase sevm pre T P) [] (rlBurnMem sevm (rlHeadMem3 sevm pre T P))
+
+/-- The three raw-call tails' charges, at the canonical replies' clamped lengths. -/
+def rlRawTails : Nat :=
+  rawTailCost (rlReplyLen sevm pre T P 0 (rlHead0 sevm pre P) (rlHeadMem0 sevm pre T P)) +
+    rawTailCost (rlReplyLen sevm pre T P 1 (rlHead1 sevm pre T P) (rlHeadMem1 sevm pre T P)) +
+    rawTailCost (rlReplyLen sevm pre T P 2 (rlHead2 sevm pre T P) (rlHeadMem2 sevm pre T P))
+
+/-- **The compact cost**: `7384` fixed, twelve ordered `SLOAD` and five `SSTORE` charges, five
+debits and three raw tails. -/
+theorem rlExactCost_eq : rlExactCost sevm pre T P =
+    7384 + rlEdgeStorageCost sevm pre T P +
+      rlIterStorageCost sevm pre T 0 (rlHead0 sevm pre P) (rlHeadMem0 sevm pre T P) +
+      rlIterStorageCost sevm pre T 1 (rlHead1 sevm pre T P) (rlHeadMem1 sevm pre T P) +
+      rlIterStorageCost sevm pre T 2 (rlHead2 sevm pre T P) (rlHeadMem2 sevm pre T P) +
+      rlDebits sevm pre T P + rlRawTails sevm pre T P := by
+  unfold rlExactCost rlIter0Cost rlIter1Cost rlIter2Cost rlPostExactCost rlIterCost
+    rlEdgeStorageCost rlIterStorageCost rlDebits rlRawTails rlPreCost rlS1CostA rlS1CostB
+    rlS3Cost rlPostCost rlKey
+  omega
+
+end Regroup
+
 end Blanc.Lift.Curve3Pool
