@@ -197,11 +197,14 @@ theorem ninst_push_safe {evm : Evm} {bytes : Bytes} {fits : bytes.length ≤ 32}
     StepSafe (fun pc post => pc = evm.pc + (Ninst.push bytes fits).size ∧
       Matches (some bytes.toB256 :: words) post.stack)
       (Ninst.step evm (.push bytes fits)) := by
-  unfold Ninst.step
-  apply step_ofExecution_safe
-  exact ((chargeGas_safe _ matched).bind
-    (fun _ charged => push_safe bytes.toB256 charged room)).mono
-    (fun _ pushed => ⟨rfl, pushed⟩)
+  simp only [Ninst.step]
+  split
+  · apply step_ofExecution_safe
+    simp only [SafeResult, StackFault, reduceCtorEq, or_self, not_false_eq_true]
+  · apply step_ofExecution_safe
+    exact ((chargeGas_safe _ matched).bind
+      (fun _ charged => push_safe bytes.toB256 charged room)).mono
+      (fun _ pushed => ⟨rfl, pushed⟩)
 
 /-- A checked abstract lookup exposes a real operand, including exact
 literal information when present. -/

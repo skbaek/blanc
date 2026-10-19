@@ -310,24 +310,35 @@ theorem sload_safe (pc : Nat) (sevm : Sevm)
   simp only [Rinst.runCore]
   apply (pop_safe matched).bind
   intro result popped
-  by_cases warm : (sevm.currentTarget, result.1) ∈
-      result.2.accessedStorageKeys
-  · simp only [warm, ite_eq_left]
-    apply (chargeGas_safe gasWarmAccess popped.2).bind
-    intro charged chargedMatch
-    exact (push_safe _
-      (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
-        result.1) room).mono
-      (fun _ pushed => pushed.forget_head)
-  · simp only [warm]
-    have accessedMatch :=
-      popped.2.addAccessedStorageKey sevm.currentTarget result.1
-    apply (chargeGas_safe gasColdSload accessedMatch).bind
-    intro charged chargedMatch
-    exact (push_safe _
-      (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
-        result.1) room).mono
-      (fun _ pushed => pushed.forget_head)
+  cases access : sevm.benvStat.rules.access with
+  | flat gas =>
+      simp only [access]
+      apply (chargeGas_safe gas.sload popped.2).bind
+      intro charged chargedMatch
+      exact (push_safe _
+        (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
+          result.1) room).mono
+        (fun _ pushed => pushed.forget_head)
+  | eip2929 =>
+      simp only [access]
+      by_cases warm : (sevm.currentTarget, result.1) ∈
+          result.2.accessedStorageKeys
+      · simp only [warm, ite_eq_left]
+        apply (chargeGas_safe gasWarmAccess popped.2).bind
+        intro charged chargedMatch
+        exact (push_safe _
+          (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
+            result.1) room).mono
+          (fun _ pushed => pushed.forget_head)
+      · simp only [warm]
+        have accessedMatch :=
+          popped.2.addAccessedStorageKey sevm.currentTarget result.1
+        apply (chargeGas_safe gasColdSload accessedMatch).bind
+        intro charged chargedMatch
+        exact (push_safe _
+          (chargedMatch.balReadStorage sevm.benvStat.rules sevm.currentTarget
+            result.1) room).mono
+          (fun _ pushed => pushed.forget_head)
 
 theorem sstore_safe (pc : Nat) (sevm : Sevm)
     {pre : Devm} {key value : Option B256} {words : Pattern}
@@ -336,26 +347,29 @@ theorem sstore_safe (pc : Nat) (sevm : Sevm)
       (Rinst.runCore pc pre sevm .sstore) := by
   simp only [Rinst.runCore]
   split
-  · apply (pop_safe matched).bind
-    intro keyResult keyPop
-    apply (pop_safe keyPop.2).bind
-    intro valueResult valuePop
-    apply (assert_safe _ noStackFault_outOfGas).bind
-    intro _ _
-    apply SafeResult.pure_bind
-    apply SafeResult.pure_bind
-    apply SafeResult.pure_bind
-    have readMatch := valuePop.2.balReadStorage sevm.benvStat.rules
-      sevm.currentTarget keyResult.1
-    apply (chargeGas_safe _ (Matches.withRefundCounter (by
-      split
-      · exact readMatch.addAccessedStorageKey sevm.currentTarget keyResult.1
-      · exact readMatch) _)).bind
-    intro charged chargedMatch
-    apply (assertDynamic_safe sevm charged).bind
-    intro _ _
-    exact (chargedMatch.balReadAccount _ _).setStorVal sevm.currentTarget
-      keyResult.1 valueResult.1
+  · split
+    all_goals
+      apply (pop_safe matched).bind
+      intro keyResult keyPop
+      apply (pop_safe keyPop.2).bind
+      intro valueResult valuePop
+      apply (assert_safe _ noStackFault_outOfGas).bind
+      intro _ _
+      apply SafeResult.pure_bind
+      apply SafeResult.pure_bind
+      apply SafeResult.pure_bind
+      have readMatch := valuePop.2.balReadStorage sevm.benvStat.rules
+        sevm.currentTarget keyResult.1
+      apply (chargeGas_safe _ (Matches.withRefundCounter (by
+        repeat' first
+          | exact readMatch
+          | exact readMatch.addAccessedStorageKey sevm.currentTarget keyResult.1
+          | split) _)).bind
+      intro charged chargedMatch
+      apply (assertDynamic_safe sevm charged).bind
+      intro _ _
+      exact (chargedMatch.balReadAccount _ _).setStorVal sevm.currentTarget
+        keyResult.1 valueResult.1
   · apply (assertDynamic_safe sevm pre).bind
     intro _ _
     apply (pop_safe matched).bind
@@ -405,9 +419,14 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
       (Rinst.run evm instruction) := by
   have room : input.length < 1024 := by omega
   cases instruction <;> simp only [regularTransfer] at checked
-  case add | mul | sub | div | lt | gt | eq | and | shr =>
+  case add | mul | sub | div | lt | gt | eq | and =>
     simp only [Rinst.run, Rinst.runCore]
     exact applyBinary_transfer_safe _ _ matched bound checked
+  case shr =>
+    simp only [Rinst.run, Rinst.runCore]
+    split
+    · exact applyBinary_transfer_safe _ _ matched bound checked
+    · simp only [SafeResult, StackFault, not_false_eq_true]
   case iszero =>
     simp only [Rinst.run, Rinst.runCore]
     exact applyUnary_transfer_safe _ _ matched bound checked
@@ -1045,19 +1064,29 @@ theorem callTransfer_safe (pc : Nat)
                                 let ranges :=
                                   [(inputIndexResult.1, inputSizeResult.1),
                                     (outputIndexResult.1, outputSizeResult.1)]
-                                let accessed := addAccessedAddress
-                                  outputSizeResult.2 calleeResult.1
-                                have accessedMatch : Matches words accessed.stack :=
-                                  outputSizePopped.addAccessedAddress calleeResult.1
+                                let accessed :=
+                                  match evm.sta.benvStat.rules.access with
+                                  | .eip2929 => addAccessedAddress outputSizeResult.2 calleeResult.1
+                                  | .flat _ => outputSizeResult.2
+                                have accessedMatch : Matches words accessed.stack := by
+                                  dsimp only [accessed]
+                                  split
+                                  · exact outputSizePopped.addAccessedAddress calleeResult.1
+                                  · exact outputSizePopped
                                 rcases delegation :
-                                    evm.sta.benvStat.rules.gas.accessDelegation accessed calleeResult.1 with
+                                    evm.sta.benvStat.rules.accessDelegation accessed calleeResult.1 with
                                   ⟨disablePrecompiles, newCodeAddress, code,
                                     delegatedAccessGasCost, delegated⟩
                                 have delegatedMatch : Matches words
                                     delegated.stack := by
-                                  have preserved :=
-                                    accessedMatch.gasAccessDelegation evm.sta.benvStat.rules.gas
-                                      calleeResult.1
+                                  have preserved : Matches words
+                                      (evm.sta.benvStat.rules.accessDelegation accessed
+                                        calleeResult.1).2.2.2.2.stack := by
+                                    unfold ForkRules.accessDelegation
+                                    split
+                                    · exact accessedMatch.gasAccessDelegation
+                                        evm.sta.benvStat.rules.gas calleeResult.1
+                                    · exact accessedMatch
                                   rw [delegation] at preserved
                                   exact preserved
                                 apply (chargeGas_safe _ delegatedMatch).bind
