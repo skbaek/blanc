@@ -108,6 +108,12 @@ FIXTURE = {
     "inductive name (isomorphic types)": "differ",
     "constructor name": "differ",
     "use of isomorphic types in a definition": "differ",
+    "universe arguments of a constant": "differ",
+    "application argument order": "differ",
+    "lambda vs forall": "differ",
+    "theorem statement": "differ",
+    "inductive unsafe flag": "differ",
+    "theorem proof (must be equal)": "equal",
     "binder name (must be equal)": "equal",
     "binder info (must be equal)": "equal",
     "metadata (must be equal)": "equal",
@@ -352,13 +358,32 @@ def manifest_rows(records: dict[str, dict], digest: dict[str, str]) -> list[str]
             for name in sorted(records) if records[name]["k"] != "pin"]
 
 
-def label_of(pin: dict) -> str:
-    return pin["n"][len("pin:"):]
+def pin_keys(pins: list[dict], digest: dict[str, str]) -> dict[str, str]:
+    """Pin record name -> stable key.  A label used by one pin is its key.  A
+    repeated label is disambiguated by the pin's own statement digest (its root),
+    so inserting or reordering pins moves no other key; pins whose label and
+    statement are both equal are interchangeable and are numbered ~2, ~3 in file
+    order, which cannot hide a change because their roots are equal."""
+    by_label: dict[str, list[dict]] = defaultdict(list)
+    for pin in sorted(pins, key=lambda p: p["ordinal"]):
+        by_label[pin["label"]].append(pin)
+    keys: dict[str, str] = {}
+    for label, group in by_label.items():
+        if len(group) == 1:
+            keys[group[0]["n"]] = label
+            continue
+        seen: dict[str, int] = defaultdict(int)
+        for pin in group:
+            base = f"{label}#{digest[pin['n']][:16]}"
+            seen[base] += 1
+            keys[pin["n"]] = base if seen[base] == 1 else f"{base}~{seen[base]}"
+    return keys
 
 
 def root_rows(pins: list[dict], digest: dict[str, str]) -> list[str]:
-    return [f"{label_of(p)}\t{p['ordinal']}\t{p['line']}\t{p['ns']}\t{digest[p['n']]}"
-            for p in sorted(pins, key=label_of)]
+    keys = pin_keys(pins, digest)
+    return [f"{keys[p['n']]}\t{p['ordinal']}\t{p['line']}\t{p['ns']}\t{digest[p['n']]}"
+            for p in sorted(pins, key=lambda p: keys[p["n"]])]
 
 
 def boundary_rows(records: dict[str, dict], diag: dict[str, str]) -> list[str]:
@@ -377,7 +402,7 @@ def header(records: dict[str, dict], pins: list[dict], deps: dict[str, str]) -> 
         "schema": SCHEMA,
         "digest": "sha256",
         "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
-        "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon, repeated labels numbered #2.. in file order)",
+        "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
         "pins": len(pins),
         "entries": sum(n for k, n in kinds.items() if k != "pin"),
         "kinds": dict(sorted(kinds.items())),
@@ -449,7 +474,8 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
     moved = (changed | added) - renamed_in
     origins = sorted(n for n in moved
                      if all(new_constants[ref][2] in old_digests for ref in records[n]["r"]))
-    new_roots = {label_of(p): (str(p["line"]), digest[p["n"]]) for p in pins}
+    keys = pin_keys(pins, digest)
+    new_roots = {keys[p["n"]]: (str(p["line"]), digest[p["n"]]) for p in pins}
     pins_added = sorted(set(new_roots) - set(old_roots))
     pins_removed = sorted(set(old_roots) - set(new_roots))
     pins_moved = sorted(l for l in set(new_roots) & set(old_roots) if new_roots[l][1] != old_roots[l][1])
@@ -486,7 +512,7 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
         for name in origins[:limit]:
             kind, module, _ = new_constants[name]
             reached = pins_reaching(name)
-            shown = ", ".join(f"{label_of(records[p])} (line {records[p]['line']})" for p in reached[:8])
+            shown = ", ".join(f"{keys[p]} (line {records[p]['line']})" for p in reached[:8])
             more = f", +{len(reached) - 8} more" if len(reached) > 8 else ""
             state = "new" if name in added else "changed"
             lines.append(f"  {state} {kind} {name} [{module}] -> {len(reached)} pin(s): {shown}{more}")
@@ -513,9 +539,9 @@ def self_test(quiet: bool = False) -> int:
     """In-memory controls for the Merkle table and the comparison."""
     deps = {"@toolchain": "lean4:test", "mathlib": "mathlib@abc"}
 
-    def pin(label: str, refs, line: int, ordinal: int) -> dict:
-        return {"n": f"pin:{label}", "k": "pin", "m": "scripts.ClaimCheck", "p": "",
-                "s": "pin u=0 type=0\nC0{}", "r": list(refs), "line": line, "ordinal": ordinal, "ns": "Blanc"}
+    def pin(label: str, refs, line: int, ordinal: int, ser: str = "pin u=0 type=0\nC0{}") -> dict:
+        return {"n": f"pin:{label}@{line}", "k": "pin", "m": "scripts.ClaimCheck", "p": "", "label": label,
+                "s": ser, "r": list(refs), "line": line, "ordinal": ordinal, "ns": "Blanc"}
 
     def recs(leaf_ser: str = "def u=0 type=0 value=1\nC0{}\nN1", leaf_refs=("Nat",)) -> dict:
         rows = [
@@ -570,8 +596,8 @@ def self_test(quiet: bool = False) -> int:
         check("deep change names constants moved through it", "Blanc.mid" in text and "Blanc.top" in text)
 
         more = recs()
-        more["pin:thm:Blanc.mid"] = pin("thm:Blanc.mid", ["Blanc.mid"], 15, 2)
-        more["pin:stmt:Nat"]["ordinal"] = 3
+        more["pin:thm:Blanc.mid@15"] = pin("thm:Blanc.mid", ["Blanc.mid"], 15, 2)
+        more["pin:stmt:Nat@20"]["ordinal"] = 3
         m_digest, _ = merkle(more, deps)
         report, _ = compare(base, more, pins_of(more), m_digest, deps)
         text = "\n".join(report)
@@ -579,12 +605,40 @@ def self_test(quiet: bool = False) -> int:
               "1 pin(s) added: thm:Blanc.mid" in text and "pin root(s) moved" not in text)
 
         fewer = recs()
-        del fewer["pin:stmt:Nat"]
+        del fewer["pin:stmt:Nat@20"]
         f_digest, _ = merkle(fewer, deps)
         report, _ = compare(base, fewer, pins_of(fewer), f_digest, deps)
         check("a removed pin fails as one removed root",
               any("1 pin(s) removed: stmt:Nat" in l for l in report)
               and not any("pin root(s) moved" in l for l in report))
+
+        # a repeated label: keys come from the statement digest, not file order
+        def dup_recs(extra: bool) -> dict:
+            rows = recs()
+            shift = 1 if extra else 0
+            if extra:
+                p0 = pin("thm:Blanc.dup", ["Nat"], 30, 3, "pin u=0 type=0\nC0{}\nN0")
+                rows[p0["n"]] = p0
+            for i, n in enumerate(("N1", "N2")):
+                p1 = pin("thm:Blanc.dup", ["Nat"], 40 + i, 4 + i + shift, f"pin u=0 type=0\nC0{{}}\n{n}")
+                rows[p1["n"]] = p1
+            twin = pin("thm:Blanc.dup", ["Nat"], 50, 6 + shift, "pin u=0 type=0\nC0{}\nN2")
+            rows[twin["n"]] = twin
+            return rows
+        base2 = Path(tmp) / "base2"
+        d0 = dup_recs(False)
+        d0_digest, _ = merkle(d0, deps)
+        write_manifest(base2, d0, pins_of(d0), d0_digest, deps)
+        d1 = dup_recs(True)
+        d1_digest, _ = merkle(d1, deps)
+        report, _ = compare(base2, d1, pins_of(d1), d1_digest, deps)
+        text = "\n".join(report)
+        check("a pin inserted ahead of a repeated-label group adds one root and moves no other",
+              "1 pin(s) added: thm:Blanc.dup#" in text and "removed" not in text
+              and "pin root(s) moved" not in text)
+        keys = pin_keys(pins_of(d0), d0_digest)
+        check("equal-statement pins of one label get distinct keys",
+              len(set(keys.values())) == len(keys))
 
         bumped = dict(deps, **{"@toolchain": "lean4:other"})
         b_digest, _ = merkle(records, bumped)
@@ -622,7 +676,7 @@ def self_test(quiet: bool = False) -> int:
         renamed["Blanc.mid"] = dict(renamed["Blanc.mid"], r=["Nat", "Blanc.leaf2"])
         r_digest, _ = merkle(renamed, deps)
         check("a renamed definition keeps the pin root",
-              r_digest["pin:thm:Blanc.thm"] == digest["pin:thm:Blanc.thm"])
+              r_digest["pin:thm:Blanc.thm@10"] == digest["pin:thm:Blanc.thm@10"])
         r_fail, r_notes = compare(base, renamed, pins_of(renamed), r_digest, deps)
         check("a definition rename alone is a note, not a failure", r_fail == [] and len(r_notes) == 1)
 

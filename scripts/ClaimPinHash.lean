@@ -46,8 +46,10 @@ line, so the bytes depend only on the normalized term.
 Each pin is keyed by a label that does not depend on its position: `thm:N` for a
 pin whose proof is the constant `N` applied (`:= @N`), `iff:N` / `eq:N` for an
 unfolding pin whose statement is `N … ↔ …` / `N … = …`, `stmt:N` for a pin whose
-statement's head is `N`, and `anon` otherwise; a label that repeats gets `#2`,
-`#3`, … in file order.
+statement's head is `N`, `uses:N` for the first Blanc constant the statement
+uses, and `anon` otherwise.  Records are named by ordinal and carry that label;
+the Python step turns labels into keys (a repeated label is disambiguated by the
+pin's statement digest, not by file order).
 
 Every run also builds a fixture of declaration pairs that differ in exactly one
 feature (or, for the equality controls, only in what must be ignored), each side
@@ -519,6 +521,19 @@ def projDef (s : Name) (k : Nat) : Declaration :=
   natDef (fx "pj") (.forallE `s (.const s []) nat .default)
     (.lam `s (.const s []) (.proj s k (.bvar 0)) .default)
 
+/-- `name : n = n := rfl` at the literal `n`. -/
+def thmEq (name : Name) (n : Expr) : Declaration :=
+  .thmDecl { name, levelParams := [], type := mkApp3 (.const ``Eq [1]) nat n n,
+             value := mkApp2 (.const ``Eq.refl [1]) nat n, all := [name] }
+
+def thmTrue (name : Name) (proof : Expr) : Declaration :=
+  .thmDecl { name, levelParams := [], type := .const ``True [], value := proof, all := [name] }
+
+def structDeclU (name ctor : Name) (fields : List Expr) (isUnsafe : Bool) : Declaration :=
+  match structDecl name ctor fields with
+  | .inductDecl lps n tys _ => .inductDecl lps n tys isUnsafe
+  | d => d
+
 def opaqueNat (name : Name) : Declaration :=
   .opaqueDecl { name, levelParams := [], type := nat, value := .lit (.natVal 1),
                 isUnsafe := false, all := [name] }
@@ -526,6 +541,9 @@ def opaqueNat (name : Name) : Declaration :=
 structure Pair where
   label : String
   expect : String  -- "differ" or "equal"
+  /-- Kernel-check the declarations; off only for pairs whose point is a term
+  shape no well-typed pair can isolate (the serializer is under test, not Lean). -/
+  check : Bool := true
   a : List Declaration
   rootA : Name
   b : List Declaration
@@ -594,6 +612,23 @@ def fixturePairs : List Pair :=
       b := [structDecl s (s.str "mk") sFields, structDecl s' (s'.str "mk") sFields,
             natDef (fx "use") (.forallE `x (.const s' []) nat .default)
               (.lam `x (.const s' []) one .default)], rootB := fx "use" },
+    { label := "universe arguments of a constant", expect := "differ", check := false,
+      a := [natDef (fx "ua") nat (mkApp2 (.const ``id [1]) nat one)], rootA := fx "ua",
+      b := [natDef (fx "ua") nat (mkApp2 (.const ``id [2]) nat one)], rootB := fx "ua" },
+    { label := "application argument order", expect := "differ",
+      a := [natDef (fx "ap") nat (mkApp2 (.const ``Nat.add []) one two)], rootA := fx "ap",
+      b := [natDef (fx "ap") nat (mkApp2 (.const ``Nat.add []) two one)], rootB := fx "ap" },
+    { label := "lambda vs forall", expect := "differ", check := false,
+      a := [natDef (fx "lf") (.sort 1) (.lam `x nat nat .default)], rootA := fx "lf",
+      b := [natDef (fx "lf") (.sort 1) (.forallE `x nat nat .default)], rootB := fx "lf" },
+    { label := "theorem statement", expect := "differ",
+      a := [thmEq (fx "t") one], rootA := fx "t", b := [thmEq (fx "t") two], rootB := fx "t" },
+    { label := "inductive unsafe flag", expect := "differ",
+      a := [structDeclU s (s.str "mk") sFields false], rootA := s,
+      b := [structDeclU s (s.str "mk") sFields true], rootB := s },
+    { label := "theorem proof (must be equal)", expect := "equal",
+      a := [thmTrue (fx "tp") (.const ``True.intro [])], rootA := fx "tp",
+      b := [thmTrue (fx "tp") (.const ``trivial [])], rootB := fx "tp" },
     { label := "binder name (must be equal)", expect := "equal",
       a := [natDef (fx "f") (.forallE `x nat nat .default) (.lam `x nat (.bvar 0) .default)],
       rootA := fx "f",
@@ -612,10 +647,11 @@ def fixturePairs : List Pair :=
       a := [natDef (fx "d1") nat one], rootA := fx "d1",
       b := [natDef (fx "d2") nat one], rootB := fx "d2" } ]
 
-def addAll (env : Environment) (decls : List Declaration) : Except String Environment := do
+def addAll (env : Environment) (decls : List Declaration) (check : Bool) :
+    Except String Environment := do
   let mut e := env
   for d in decls do
-    match e.addDeclCore 0 512 d none with
+    match e.addDeclCore 0 512 d none (doCheck := check) with
     | .ok e' => e := e'
     | .error _ => throw s!"fixture declaration rejected by the kernel: {decl_names d}"
   return e
@@ -628,7 +664,7 @@ def runFixture (base : Environment) (sysroot : System.FilePath)
   for p in fixturePairs do
     let mut sides : Array Json := #[]
     for (decls, root) in [(p.a, p.rootA), (p.b, p.rootB)] do
-      let env ← match addAll base decls with
+      let env ← match addAll base decls p.check with
         | .ok e => pure e
         | .error e => throw <| IO.userError s!"HASH fixture {p.label}: {e}"
       let recs ← IO.mkRef (#[] : Array Json)
@@ -700,16 +736,12 @@ unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32
   let moduleCache ← IO.mkRef ({} : Std.HashMap Name String)
   let emitRec (r : Record) : IO Unit := out.putStrLn r.toJson.compress
   -- pin roots, labelled independently of position
-  let mut labelCount : Std.HashMap String Nat := {}
   let mut roots : Array Name := #[]
   for i in [0:pinLines.size] do
     let some n := pinDecl[pinName (i + 1)]? |
       IO.eprintln s!"HASH missing pin declaration {pinName (i+1)}"; return 1
     let some ci := env.find? n | IO.eprintln s!"HASH missing {n}"; return 1
     let base := pinLabel env ci
-    let k := labelCount.getD base 0 + 1
-    labelCount := labelCount.insert base k
-    let label := if k == 1 then base else s!"{base}#{k}"
     let ps := ci.levelParams
     let pinSer := runRec {} do
       let t ← ser ps ci.type
@@ -719,9 +751,9 @@ unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32
       | .error e => IO.eprintln s!"HASH pin {i+1}: {e}"; return 1
     stats.modify fun st => { st with exprHits := st.exprHits + h, refEdges := st.refEdges + r.size, serBytes := st.serBytes + s.utf8ByteSize }
     let pinRec : Record := {
-      name := s!"pin:{label}", kind := "pin", module := "scripts.ClaimCheck",
+      name := s!"pin:{pad4 (i + 1)}", kind := "pin", module := "scripts.ClaimCheck",
       ser := s, refs := r.map toString,
-      extra := [("line", toJson pinLines[i]!), ("ordinal", toJson (i + 1)),
+      extra := [("label", Json.str base), ("line", toJson pinLines[i]!), ("ordinal", toJson (i + 1)),
                 ("ns", Json.str n.getPrefix.toString)] }
     emitRec pinRec
     roots := roots ++ r
