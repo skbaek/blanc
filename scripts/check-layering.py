@@ -893,6 +893,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.ExchangeLiveModel",
                     "Lift.Curve3Pool.Walk.ExchangeLiveWords",
                     "Lift.Curve3Pool.ExchangeLive",
+                    "Lift.Curve3Pool.ExchangeExactSchedule",
                     "Lift.Curve3Pool.Walk.LiveLoops",
                     "Lift.Curve3Pool.Callee.AGrow",
                     "Lift.Curve3Pool.Callee.CalcWithdrawLiveA",
