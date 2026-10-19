@@ -75,14 +75,16 @@ macro "xmstoreG' " o:term "," c:term : tactic => `(tactic|
      decide_true, decide_false, Bool.true_or, Bool.or_true, Bool.false_or, Bool.or_false,
      ite_true, ite_false, Bool.false_eq_true, ↓reduceIte] at hT))
 
--- SEGMENT: getDMem_exact_400
-theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S : List B256} {M : Mem}
+/-- `getDMem_exact_400` with the memory `get_D_mem` leaves: at every byte and in logical size it
+is `getDMemNext`. -/
+theorem getDMem_exact_400L {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S : List B256} {M : Mem}
     {G v : Nat} {x : V3} (hX : xpChk ⟨b0.toNat, b1.toNat, b2.toNat⟩ = some x)
     (hres : getDChk x.get amp.toNat 1 = some v) (hwf : Mem.Wf M) (hS : M.size = 0x400)
     (hroom : S.length + 64 < 1024) :
     ∃ M', SFunc.RunExact prog sevm (St b (ρ :: b0 :: b1 :: b2 :: amp :: S) M
         (G + costGetDMem x amp.toNat + 28)) t_07b7_c29 (.returned (St b (Nat.toB256 v :: S) M' G)) ∧
-      (Mem.KeepsOff M M' gdmWin ∧ Mem.Wf M' ∧ M'.size = 0x520) := by
+      ((Mem.KeepsOff M M' gdmWin ∧ Mem.Wf M' ∧ M'.size = 0x520) ∧
+        Mem.EqExcept M' (getDMemNext M ρ b0 b1 b2 amp x v) (fun _ => False)) := by
   have hT := MemTrack.init hwf gdmWin
   have hn : (0x400 : Nat) % 32 = 0 := by decide
   rw [show G + costGetDMem x amp.toNat + 28 = G + costGetD x.v0 x.v1 x.v2 amp.toNat + 6704 from by
@@ -92,7 +94,7 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   xstep; xmstore 0x1c0; xmstore 0x140; xmstore 0x160; xmstore 0x180; xmstore 0x1a0
   xstep; xstep; xmstoreG' 0x420, 9
   clear hn; have hn : (0x440 : Nat) % 32 = 0 := by decide
-  xname M1
+  xnameE M1 hM1
   -- the outer frame save, `[0x140, 0x420)`
   have hρ1 := hT.words.memWord (o := 0x1c0) (v := ρ) (by wmem)
   have hc1 := hT.words.memWord (o := 0x420) (v := Bytes.toB256 [1, 64]) (by wmem)
@@ -115,7 +117,7 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
     rw [← hF1, List.length_append, List.length_reverse, length_frameWords]; omega
   -- the inner frame save, `[0x140, 0x300)`
   xstep; xstep; xstep; xmstore 0x300
-  xname M3
+  xnameE M3 hM3
   have hamp3 := hT.words.memWord (o := 0x1a0) (v := amp) (by wmem)
   have hc2 := hT.words.memWord (o := 0x300) (v := Bytes.toB256 [1, 64]) (by wmem)
   have hT2 := (hT.sub (L' := [(0x420, Nat.toB256 (0x140 + 32 * 23)), (0x180, b2), (0x160, b1),
@@ -140,13 +142,16 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   xstep; xstep; xstep; xmload' 0x160; xstep; xstep; xstep; xmstore' 0x340
   xstep; xstep; xstep; xmload' 0x180; xstep; xstep; xstep; xmstore' 0x360
   xstep; xstep; xmload 0x360; xmload 0x340; xmload 0x320
-  xname M4
+  xnameE M4 hM4
+  have hwf4 := hT.wf
+  have hS4 := hS
   obtain ⟨x0, x1, x2, ⟨M5, hcall, hk5, hwf5, hS5⟩, hx⟩ := xpMem_exact
     (sevm := sevm) (b := b) (ret := Nat.toB256 (0x851 + 6)) (G := G + costGetD x.v0 x.v1 x.v2 amp.toNat + 2790)
     (S := S2)
     hX hT.wf hS hn (by omega)
     (by gdmlen)
   subst hx
+  have hS5x := hS5
   refine xlift (fun _ k => rxc_pcCall prog_34 (by decide)
     (by gdmlen) hcall k) ?_
   have hT5 : MemTrack M M5 gdmWin [] :=
@@ -157,7 +162,7 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   clear hT5 hS5
   -- store its words, restore `[0x140, 0x300)`
   xstep; xmstore 0x3c0; xmstore 0x3e0; xmstore 0x400; xstep; xmstore 0x300
-  xname M6
+  xnameE M6 hM6
   have hc6 := hT.words.memWord (o := 0x300) (v := Bytes.toB256 [2, 0xe0]) (by wmem)
   subst hF2
   refine xlift (fun _ k => rxc_restore_086b (by simp only [List.length_reverse, length_frameWords])
@@ -194,7 +199,9 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   xstep; xstep; xmload 0x1a0; xstep; xmstoreG' 0x4a0, 6
   clear hn; have hn : (0x4a0 + 32 : Nat) % 32 = 0 := by decide
   xmload 0x4a0; xmload 0x480; xmload 0x460; xmload 0x440
-  xname M8
+  xnameE M8 hM8
+  have hwf8 := hT.wf
+  have hS8 := hS
   obtain ⟨M9, hso, hgD⟩ := getD_exact (sevm := sevm) (b := b) (ρ := Nat.toB256 (0x8c6 + 6)) (G := G + 1658)
     (S := S1) (by rw [hS]) (by omega)
     (by gdmlen) hres
@@ -214,7 +221,7 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   xstep; xstep; xmstoreG' 0x500, 13
   clear hn; have hn : (0x500 + 32 : Nat) % 32 = 0 := by decide
   xstep; xmstore 0x420
-  xname M10
+  xnameE M10 hM10
   have hc10 := hT.words.memWord (o := 0x420) (v := Bytes.toB256 [4, 0]) (by wmem)
   subst hF1
   refine xlift (fun _ k => rxc_restore_08d8 (by simp only [List.length_reverse, length_frameWords])
@@ -242,7 +249,60 @@ theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S :
   clear hT11 hS11
   -- the exit: `return D`
   xstep; xmload 0x500; xmstore 0x0; xmload 0x0; xmload 0x1c0
-  xret
+  refine ⟨_, rxc_ret, ⟨hT.keeps, hT.wf, hS⟩, ?_⟩
+  -- the memory: the callees' scratch is covered by the restores and the store at `0`
+  have h5 := (hk5.eqExcept (by rw [hS5x, hS4]) hwf4 hwf5).mono
+    (D' := fun i => 0x140 ≤ i ∧ i < 0x260) fun i hi => by
+      simp only [Mem.OffWindows, xpMemWin, List.mem_cons, List.not_mem_nil, or_false,
+        forall_eq] at hi
+      omega
+  have h6 := ((((h5.write 0x3c0 x0.toBytes).write 0x3e0 x1.toBytes).write 0x400 x2.toBytes).write
+    0x300 (Bytes.toB256 [2, 224]).toBytes).mono (D' := fun i => 0x140 ≤ i ∧ i < 0x260)
+    fun i hi => hi.1.1.1.1
+  rw [hM6] at h6
+  have h7 := (h6.restoreMem 0x300 (p := 0x2e0) (frameWords M3 0x140 14).reverse).mono
+    (D' := fun _ => False) fun i hi => by
+      obtain ⟨hd, -, hj⟩ := hi
+      simp only [List.length_reverse, length_frameWords] at hj
+      exact hj ((0x2ff - i) / 32) (by omega) ⟨by omega, by omega⟩
+  have h8 := ((((h7.write 0x440 x0.toBytes).write 0x460 x1.toBytes).write 0x480 x2.toBytes).write
+    0x4a0 amp.toBytes).mono (D' := fun _ => False) fun i hi => hi.1.1.1.1
+  rw [hM8] at h8
+  have h9 := (gdm_eqExcept_trans h8 ((hso.keepsOff hwf8).eqExcept (by rw [hso.size]) hwf8
+    (hso.wf hwf8))).mono (D' := fun i => i < 32 ∨ (0x140 ≤ i ∧ i < 0x340)) fun i hi => by
+      rcases hi with hi | hi
+      · exact hi.elim
+      · simp only [Mem.OffWindows, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp,
+          forall_eq] at hi
+        omega
+  have h10 := ((h9.write 0x500 (Nat.toB256 v).toBytes).write 0x420
+    (Bytes.toB256 [4, 0]).toBytes).mono (D' := fun i => i < 32 ∨ (0x140 ≤ i ∧ i < 0x340))
+    fun i hi => hi.1.1
+  rw [hM10] at h10
+  have h11 := (h10.restoreMem 0x420 (p := 0x400) (frameWords M1 0x140 23).reverse).mono
+    (D' := fun i => i < 32) fun i hi => by
+      obtain ⟨hd, -, hj⟩ := hi
+      simp only [List.length_reverse, length_frameWords] at hj
+      rcases hd with hd | hd
+      · exact hd
+      · exact (hj ((0x41f - i) / 32) (by omega) ⟨by omega, by omega⟩).elim
+  have h12 := (h11.write 0 (Nat.toB256 v).toBytes).mono (D' := fun _ => False) fun i hi => by
+    rw [B256.length_toBytes] at hi
+    exact hi.2 ⟨by omega, hi.1⟩
+  refine Mem.EqExcept.symm ?_
+  subst hM1 hM3 hM4
+  simp only [getDMemNext, toB256_toNat]
+  exact h12
 
+-- SEGMENT: getDMem_exact_400
+theorem getDMem_exact_400 {sevm : Sevm} {b : Devm} {ρ b0 b1 b2 amp : B256} {S : List B256} {M : Mem}
+    {G v : Nat} {x : V3} (hX : xpChk ⟨b0.toNat, b1.toNat, b2.toNat⟩ = some x)
+    (hres : getDChk x.get amp.toNat 1 = some v) (hwf : Mem.Wf M) (hS : M.size = 0x400)
+    (hroom : S.length + 64 < 1024) :
+    ∃ M', SFunc.RunExact prog sevm (St b (ρ :: b0 :: b1 :: b2 :: amp :: S) M
+        (G + costGetDMem x amp.toNat + 28)) t_07b7_c29 (.returned (St b (Nat.toB256 v :: S) M' G)) ∧
+      (Mem.KeepsOff M M' gdmWin ∧ Mem.Wf M' ∧ M'.size = 0x520) :=
+  let ⟨M', h1, h2, _⟩ := getDMem_exact_400L (G := G) (ρ := ρ) hX hres hwf hS hroom
+  ⟨M', h1, h2⟩
 
 end Blanc.Lift.Curve3Pool
