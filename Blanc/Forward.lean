@@ -47,16 +47,12 @@ are *written* as `setMach` terms rather than destructured. -/
 lemma Devm.stack_setMach {devm : Devm} {m : Mach} :
     (devm.setMach m).stack = m.stack := rfl
 
-/-- Every one-dimensional fork uses the Prague gas schedule.  `BenvStat.rules`
-is selected from the five concrete forks, and Amsterdam is the only fork whose
-state-gas switch is present. -/
-lemma BenvStat.gas_eq_prague_of_stateGas_none {s : BenvStat}
-    (h : s.rules.stateGas = none) : s.rules.gas = pragueRules.gas := by
-  have key : ∀ f : Fork,
-      (Fork.ruleSet f).stateGas = none → (Fork.ruleSet f).gas = pragueRules.gas := by
-    intro f hf
-    cases f <;> first | rfl | exact absurd hf (by decide)
-  exact key s.fork h
+/-- Covered forks use the Prague gas schedule. Historical one-dimensional
+forks may have different refund and access prices. -/
+lemma BenvStat.gas_eq_prague_of_covered {s : BenvStat}
+    (h : CoveredFork s.fork) : s.rules.gas = pragueRules.gas := by
+  exact h.cases (motive := fun f => (Fork.ruleSet f).gas = pragueRules.gas)
+    rfl rfl rfl rfl
 
 /-- `Devm.popToNat`, evaluated forward: `Devm.pop` with the popped word read
 as a `Nat`. -/
@@ -99,13 +95,19 @@ alike; `Blanc/Compiled.lean`'s `Evm.push_cont` is the same step at the `Exec`
 altitude and is restricted to the non-empty case. -/
 lemma Ninst.runCompiled_push {sevm : Sevm} {devm : Devm} {xs : Bytes}
     {le : xs.length ≤ 32} (h_gas : pushCost xs ≤ devm.gasLeft)
-    (h_room : devm.stack.length < 1024) :
+    (h_room : devm.stack.length < 1024)
+    (h_push0 : xs = [] → sevm.benvStat.rules.op.push0 = true) :
     Ninst.RunCompiled sevm devm (.push xs le)
       (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory,
         devm.gasLeft - pushCost xs, devm.stateGas⟩) := by
   refine ⟨.none, trivial, fun pc => ?_⟩
   unfold Ninst.StepRun
   rw [Ninst.step_push]
+  have available : (decide (xs = []) && !sevm.benvStat.rules.op.push0) = false := by
+    by_cases empty : xs = []
+    · simp only [empty, decide_true, h_push0 empty, Bool.not_true, Bool.and_false]
+    · simp only [empty, decide_false, Bool.false_and]
+  simp only [available, Bool.false_eq_true, ↓reduceIte]
   refine Step.run_ofExecution.mpr ⟨rfl, ?_⟩
   show _ = (chargeGas (pushCost xs) devm >>= fun d => Devm.push xs.toB256 d)
   rw [chargeGas_eq_ok h_gas]
@@ -251,6 +253,9 @@ is the exact size of the account code in the pre-state. -/
 lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
     {sevm : Sevm} {x : B256} {s : List B256}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_surcharge : sevm.benvStat.rules.gas.codeReadSurcharge = 0)
+    (h_coldCost : sevm.benvStat.rules.gas.coldAccountAccess = gasColdAccountAccess)
     (h_stk : devm.stack = x :: s)
     (h_cold : x.toAdr ∉ devm.accessedAddresses)
     (h_gas : gasColdAccountAccess ≤ devm.gasLeft)
@@ -269,9 +274,8 @@ lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
           chargeGas gasColdAccountAccess (addAccessedAddress d adr)
       d.push (d.getCode adr).size.toB256) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_gas, pragueRules_gas_codeReadSurcharge, add_zero,
-      h_bal, Devm.balReadAccount_of_bal_none, pragueRules_gas_coldAccountAccess]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_access, h_surcharge, add_zero,
+      h_bal, Devm.balReadAccount_of_bal_none, h_coldCost]]
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
@@ -304,6 +308,8 @@ list, so the base state does not move and the instruction costs
 lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
     {sevm : Sevm} {x : B256} {s : List B256}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_surcharge : sevm.benvStat.rules.gas.codeReadSurcharge = 0)
     (h_stk : devm.stack = x :: s)
     (h_warm : x.toAdr ∈ devm.accessedAddresses)
     (h_gas : gasWarmAccess ≤ devm.gasLeft)
@@ -321,9 +327,15 @@ lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
           chargeGas gasColdAccountAccess (addAccessedAddress d adr)
       d.push (d.getCode adr).size.toB256) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_gas, pragueRules_gas_codeReadSurcharge, add_zero,
-      h_bal, Devm.balReadAccount_of_bal_none, pragueRules_gas_coldAccountAccess]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_access, h_surcharge, add_zero,
+      h_bal, Devm.balReadAccount_of_bal_none]
+    rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
+    simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
+      id, bind, Except.bind]
+    have warm : x.toAdr ∈
+        (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses :=
+      h_warm
+    rw [ite_eq_left warm, ite_eq_left warm]]
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
@@ -351,6 +363,7 @@ gas equation. -/
 lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {k : B256} {s : List B256}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (h_stk : devm.stack = k :: s)
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_gas : gasColdSload ≤ devm.gasLeft) (h_room : s.length < 1024) :
@@ -370,8 +383,7 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
             (addAccessedStorageKey d sevm.currentTarget key)
       d.push (d.getStorVal sevm.currentTarget key)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_bal, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_access, h_bal, Devm.balReadStorage_of_bal_none]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
@@ -411,6 +423,7 @@ plain `setMach` over `devm`. -/
 lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {k : B256} {s : List B256}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (h_stk : devm.stack = k :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_gas : gasWarmAccess ≤ devm.gasLeft) (h_room : s.length < 1024) :
@@ -428,8 +441,7 @@ lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
             (addAccessedStorageKey d sevm.currentTarget key)
       d.push (d.getStorVal sevm.currentTarget key)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_bal, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_access, h_bal, Devm.balReadStorage_of_bal_none]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
@@ -851,6 +863,8 @@ so, as with `SLOAD`, the base state moves once here — and the charge is
 lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {k v : B256} {s : List B256} {c : Nat} {rc : Int}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_sstore : sevm.benvStat.rules.sstore = ⟨true, true⟩)
     (h_stk : devm.stack = k :: v :: s)
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
@@ -889,9 +903,9 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       assertDynamic sevm d
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_bal, Devm.balReadStorage_of_bal_none,
-      ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none, Except.bind_ok]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_access, h_sstore, h_bal,
+      Devm.balReadStorage_of_bal_none, ite_not, ne_eq,
+      Devm.balReadAccount_of_bal_none, Except.bind_ok]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
@@ -927,6 +941,8 @@ does not move and the charge is the value case alone. -/
 lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     {k v : B256} {s : List B256} {c : Nat} {rc : Int}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_sstore : sevm.benvStat.rules.sstore = ⟨true, true⟩)
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
@@ -964,9 +980,9 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       assertDynamic sevm d
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-    have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_bal, Devm.balReadStorage_of_bal_none,
-      ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none, Except.bind_ok]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_access, h_sstore, h_bal,
+      Devm.balReadStorage_of_bal_none, ite_not, ne_eq,
+      Devm.balReadAccount_of_bal_none, Except.bind_ok]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
@@ -1082,7 +1098,8 @@ closed selector words and a stack of frozen `B256` redexes. -/
 /-- `Ninst.pushB256`, the idiom Blanc's `Line`s are written in. -/
 lemma Ninst.runCompiled_pushB256 {sevm : Sevm} {devm : Devm} {w : B256}
     {c G : Nat} (h_cost : pushCost (w.toBytes.sig) = c)
-    (h_gas : devm.gasLeft = G + c) (h_room : devm.stack.length < 1024) :
+    (h_gas : devm.gasLeft = G + c) (h_room : devm.stack.length < 1024)
+    (h_push0 : w.toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true) :
     Ninst.RunCompiled sevm devm (Ninst.pushB256 w)
       (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   subst h_cost
@@ -1091,7 +1108,7 @@ lemma Ninst.runCompiled_pushB256 {sevm : Sevm} {devm : Devm} {w : B256}
   have h := Ninst.runCompiled_push (sevm := sevm) (devm := devm)
     (xs := w.toBytes.sig)
     (le := le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _))
-    (by omega) h_room
+    (by omega) h_room h_push0
   rw [Bytes.toB256_sig, B256.toB256_toBytes] at h
   exact h
 
@@ -1100,13 +1117,14 @@ lemma Ninst.runCompiled_pushBytes {sevm : Sevm} {devm : Devm}
     {xs : Bytes} {le : xs.length ≤ 32} {c G : Nat}
     (h_cost : pushCost xs = c)
     (h_gas : devm.gasLeft = G + c)
-    (h_room : devm.stack.length < 1024) :
+    (h_room : devm.stack.length < 1024)
+    (h_push0 : xs = [] → sevm.benvStat.rules.op.push0 = true) :
     Ninst.RunCompiled sevm devm (.push xs le)
       (devm.setMach ⟨xs.toB256 :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   subst c
   have h_eq : devm.gasLeft - pushCost xs = G := by omega
   rw [← h_eq]
-  exact Ninst.runCompiled_push (by omega) h_room
+  exact Ninst.runCompiled_push (xs := xs) (by omega) h_room h_push0
 
 /-- A full-width word immediate is nonempty, costs `gVerylow`, and pushes the
 word itself without normalizing its 32-byte image. -/
@@ -1127,7 +1145,11 @@ lemma Ninst.runCompiled_pushB256Full {sevm : Sevm} {devm : Devm} {w : B256}
       (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) := by
   have h := Ninst.runCompiled_pushBytes
     (sevm := sevm) (devm := devm) (xs := w.toBytes) (le := le)
-    (c := gVerylow) (G := G) (pushCost_toBytes w) h_gas h_room
+    (c := gVerylow) (G := G) (pushCost_toBytes w) h_gas h_room (by
+      intro empty
+      have len := B256.length_toBytes w
+      rw [empty] at len
+      contradiction)
   simpa only [B256.toB256_toBytes] using h
 
 /-- A binary register opcode: `EQ`, `GT`, `SHR`, `ADD`, … -/
@@ -1212,6 +1234,9 @@ successor records that the queried address has become warm. -/
 lemma Ninst.runCompiled_extcodesize_cold {sevm : Sevm} {devm : Devm}
     {x v : B256} {s : List B256} {G : Nat}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_surcharge : sevm.benvStat.rules.gas.codeReadSurcharge = 0)
+    (h_coldCost : sevm.benvStat.rules.gas.coldAccountAccess = gasColdAccountAccess)
     (h_stk : devm.stack = x :: s)
     (h_cold : x.toAdr ∉ devm.accessedAddresses)
     (h_val : (devm.getCode x.toAdr).size.toB256 = v)
@@ -1224,12 +1249,14 @@ lemma Ninst.runCompiled_extcodesize_cold {sevm : Sevm} {devm : Devm}
   have h_eq : devm.gasLeft - gasColdAccountAccess = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_extcodesize_cold_eq_ok h_legacy h_stk h_cold (by omega) h_room)
+    (Rinst.runCore_extcodesize_cold_eq_ok h_legacy h_access h_surcharge h_coldCost h_stk h_cold (by omega) h_room)
 
 /-- `EXTCODESIZE` on a warm account.  No access-list field moves. -/
 lemma Ninst.runCompiled_extcodesize_warm {sevm : Sevm} {devm : Devm}
     {x v : B256} {s : List B256} {G : Nat}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_surcharge : sevm.benvStat.rules.gas.codeReadSurcharge = 0)
     (h_stk : devm.stack = x :: s)
     (h_warm : x.toAdr ∈ devm.accessedAddresses)
     (h_val : (devm.getCode x.toAdr).size.toB256 = v)
@@ -1241,7 +1268,7 @@ lemma Ninst.runCompiled_extcodesize_warm {sevm : Sevm} {devm : Devm}
   have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_extcodesize_warm_eq_ok h_legacy h_stk h_warm (by omega) h_room)
+    (Rinst.runCore_extcodesize_warm_eq_ok h_legacy h_access h_surcharge h_stk h_warm (by omega) h_room)
 
 /-- `SLOAD` on a cold key.  The successor is not a `setMach` over `devm`: the
 key joins the accessed set, which is a `meta` field, so the base state moves
@@ -1249,6 +1276,7 @@ once here and stays moved for the rest of the chain. -/
 lemma Ninst.runCompiled_sload_cold {sevm : Sevm} {devm : Devm} {k v : B256}
     {s : List B256} {G : Nat}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (h_stk : devm.stack = k :: s)
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_val : devm.getStorVal sevm.currentTarget k = v)
@@ -1260,7 +1288,7 @@ lemma Ninst.runCompiled_sload_cold {sevm : Sevm} {devm : Devm} {k v : B256}
   have h_eq : devm.gasLeft - gasColdSload = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_sload_cold_eq_ok h_legacy h_stk h_cold (by omega) h_room)
+    (Rinst.runCore_sload_cold_eq_ok h_legacy h_access h_stk h_cold (by omega) h_room)
 
 /-- `SLOAD` on a warm key.  Unlike the cold case the base state does *not*
 move: nothing is added to the accessed set, so the successor is an ordinary
@@ -1274,6 +1302,7 @@ name, which charge they subtract, and whether the base moves. -/
 lemma Ninst.runCompiled_sload_warm {sevm : Sevm} {devm : Devm} {k v : B256}
     {s : List B256} {G : Nat}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (h_stk : devm.stack = k :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_val : devm.getStorVal sevm.currentTarget k = v)
@@ -1284,7 +1313,7 @@ lemma Ninst.runCompiled_sload_warm {sevm : Sevm} {devm : Devm} {k v : B256}
   have h_eq : devm.gasLeft - gasWarmAccess = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_sload_warm_eq_ok h_legacy h_stk h_warm (by omega) h_room)
+    (Rinst.runCore_sload_warm_eq_ok h_legacy h_access h_stk h_warm (by omega) h_room)
 
 /-- `MSTORE`.  The expansion charge is `Devm.extCost`, which a target that
 fixes the pre-state's memory turns into a numeral. -/
@@ -1514,6 +1543,8 @@ three times.  `h_cost` is the whole charge, `gasColdSload` included. -/
 lemma Ninst.runCompiled_sstore_cold {sevm : Sevm} {devm : Devm} {k v : B256}
     {s : List B256} {c G : Nat} {rc : Int}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_sstore : sevm.benvStat.rules.sstore = ⟨true, true⟩)
     (h_stk : devm.stack = k :: v :: s)
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
@@ -1534,7 +1565,7 @@ lemma Ninst.runCompiled_sstore_cold {sevm : Sevm} {devm : Devm} {k v : B256}
         (devm.getStorVal sevm.currentTarget k) v) = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_sstore_cold_eq_ok h_legacy h_stk h_cold h_sentry h_static rfl h_refund
+    (Rinst.runCore_sstore_cold_eq_ok h_legacy h_access h_sstore h_stk h_cold h_sentry h_static rfl h_refund
       (by omega))
 
 /-- `SSTORE` on a warm key.  The accessed set does not move, so `h_cost` is the
@@ -1542,6 +1573,8 @@ value case alone. -/
 lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
     {s : List B256} {c G : Nat} {rc : Int}
     (h_legacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
+    (h_sstore : sevm.benvStat.rules.sstore = ⟨true, true⟩)
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
@@ -1560,7 +1593,7 @@ lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
         (devm.getStorVal sevm.currentTarget k) v = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
-    (Rinst.runCore_sstore_warm_eq_ok h_legacy h_stk h_warm h_sentry h_static rfl h_refund
+    (Rinst.runCore_sstore_warm_eq_ok h_legacy h_access h_sstore h_stk h_warm h_sentry h_static rfl h_refund
       (by omega))
 
 /-! ## The terminal instruction
@@ -1662,7 +1695,7 @@ lemma Devm.burnBy_setMach_gas {devm : Devm} {cost G : Nat}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 /-- The exact pop-and-burn between a state whose stack is `x :: s` and the
 same state cut down to `s` with `cost` off the gas account. -/
@@ -1675,7 +1708,7 @@ lemma Devm.popBurnBy_setMach {devm : Devm} {x : B256} {s : List B256}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 /-! ## The two jump-emitting rules and the program entry
 
@@ -2684,6 +2717,28 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
   let n := (← get).step
   modify fun c => { c with step := c.step + 1 }
   let i' ← whnfR i
+  -- Activation and schedule fields come from the actual rules, not from
+  -- absence of the independent state-gas meter.
+  let access ← `(tactic| first | assumption | rfl |
+    exact CoveredFork.rules_access (by assumption))
+  let surcharge ← `(tactic| first | assumption | rfl |
+    exact (congrArg GasSchedule.codeReadSurcharge
+      (BenvStat.gas_eq_prague_of_covered (by assumption))).trans
+        pragueRules_gas_codeReadSurcharge)
+  let coldCost ← `(tactic| first | assumption | rfl |
+    exact (congrArg GasSchedule.coldAccountAccess
+      (BenvStat.gas_eq_prague_of_covered (by assumption))).trans
+        pragueRules_gas_coldAccountAccess)
+  let sstoreRules ← `(tactic| first | assumption | rfl |
+    exact CoveredFork.rules_sstore (by assumption))
+  let push0 ← `(tactic|
+    first
+    | assumption
+    | intro empty; exact CoveredFork.rules_push0 (by assumption)
+    | intro empty; rfl
+    | intro empty
+      simp only [pushCost, empty, ↓reduceIte, gBase, gVerylow] at *
+      contradiction)
   match i'.getAppFnArgs with
   | (``Blanc.Ninst.pushB256, #[w]) => do
     -- Evaluate `pushCost` rather than testing `w` for zero.  `Bytes.sig` drops
@@ -2697,17 +2752,18 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
     let succ ← mkState base (← mkAppM ``List.cons #[w, stk]) mem gas' sg
     fixPost post succ
     let gs ← applyLemma g ``Ninst.runCompiled_pushB256
-      [(0, sevm), (1, d), (2, w), (3, mkNatLit cost), (4, gas')] [5, 6, 7]
+      [(0, sevm), (1, d), (2, w), (3, mkNatLit cost), (4, gas')] [5, 6, 7, 8]
     -- No nested `by`: a term-level tactic block is postponed past this walk's
     -- own `try`, so its failure would escape instead of falling through.
     let zero ← `(tactic| rfl)
     let ne ← `(tactic| (refine pushCost_of_ne_zero ?_; decide))
     let nek ← `(tactic| (refine pushCost_of_ne_zero ?_; decide +kernel))
     match gs with
-    | [hc, hg, hr] =>
+    | [hc, hg, hr, hpush0] =>
       dischargeLocated hc costProof [zero, ne, nek]
       dischargeProfiled .gas hg (← gasTacs)
       dischargeProfiled .room hr (← roomTacs)
+      discharge hpush0 [push0]
     | _ => throwError "func_run: PUSH left {gs.length} obligations"
   | (``Jaune.Ninst.push, #[xs, le]) => do
     match xs.consumeMData.getAppFnArgs with
@@ -2733,15 +2789,16 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       fixPost post succ
       let gs ← applyLemma g ``Ninst.runCompiled_pushBytes
         [(0, sevm), (1, d), (2, xs), (3, le), (4, mkNatLit cost), (5, gas')]
-        [6, 7, 8]
+        [6, 7, 8, 9]
       let rfl' ← `(tactic| rfl)
       let dec ← `(tactic| decide)
       let deck ← `(tactic| decide +kernel)
       match gs with
-      | [hc, hg, hr] =>
+      | [hc, hg, hr, hpush0] =>
         discharge hc [rfl', dec, deck]
         dischargeProfiled .gas hg (← gasTacs)
         dischargeProfiled .room hr (← roomTacs)
+        discharge hpush0 [push0]
       | _ => throwError "func_run: raw PUSH left {gs.length} obligations"
   | (``Jaune.Ninst.reg, #[r]) => do
     let r' ← whnfR r
@@ -2827,10 +2884,12 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         fixPost post succ
         let gs ← applyLemma g ``Ninst.runCompiled_extcodesize_warm
           [(0, sevm), (1, d), (2, x), (3, v), (4, s), (5, gas')]
-          [6, 7, 8, 9, 10, 11]
+          [6, 7, 8, 9, 10, 11, 12, 13]
         match gs with
-        | [hleg, hstk, hwarm, hval, hg, hr] =>
+        | [hleg, haccess, hsurcharge, hstk, hwarm, hval, hg, hr] =>
           dischargeLocated hleg isLegacy [assum]
+          discharge haccess [access]
+          discharge hsurcharge [surcharge]
           discharge hstk (← rflTacs)
           dischargeLocated hwarm isWarm [assum]
           discharge hval (← rflTacs)
@@ -2845,10 +2904,13 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         fixPost post succ
         let gs ← applyLemma g ``Ninst.runCompiled_extcodesize_cold
           [(0, sevm), (1, d), (2, x), (3, v), (4, s), (5, gas')]
-          [6, 7, 8, 9, 10, 11]
+          [6, 7, 8, 9, 10, 11, 12, 13, 14]
         match gs with
-        | [hleg, hstk, hcold, hval, hg, hr] =>
+        | [hleg, haccess, hsurcharge, hcoldCost, hstk, hcold, hval, hg, hr] =>
           dischargeLocated hleg isLegacy [assum]
+          discharge haccess [access]
+          discharge hsurcharge [surcharge]
+          discharge hcoldCost [coldCost]
           discharge hstk (← rflTacs)
           dischargeLocated hcold isCold [assum]
           discharge hval (← rflTacs)
@@ -2916,10 +2978,11 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         let succ ← mkState base (← mkAppM ``List.cons #[v, s]) mem gas' sg
         fixPost post succ
         let gs ← applyLemma g ``Ninst.runCompiled_sload_warm
-          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10, 11]
+          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10, 11, 12]
         match gs with
-        | [hleg, hstk, hwarm, hval, hg, hr] =>
+        | [hleg, haccess, hstk, hwarm, hval, hg, hr] =>
           dischargeLocated hleg isLegacy [assum]
+          discharge haccess [access]
           discharge hstk (← rflTacs)
           dischargeLocated hwarm isWarm [assum]
           dischargeValueProfiled hval (← valTacs)
@@ -2932,10 +2995,11 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         let succ ← mkState base' (← mkAppM ``List.cons #[v, s]) mem gas' sg
         fixPost post succ
         let gs ← applyLemma g ``Ninst.runCompiled_sload_cold
-          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10, 11]
+          [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, gas')] [6, 7, 8, 9, 10, 11, 12]
         match gs with
-        | [hleg, hstk, hcold, hval, hg, hr] =>
+        | [hleg, haccess, hstk, hcold, hval, hg, hr] =>
           dischargeLocated hleg isLegacy [assum]
+          discharge haccess [access]
           discharge hstk (← rflTacs)
           dischargeLocated hcold isCold [assum]
           dischargeValueProfiled hval (← valTacs)
@@ -3290,10 +3354,12 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         else ``Ninst.runCompiled_sstore_cold
       let gs ← applyLemma g name
         [(0, sevm), (1, d), (2, k), (3, v), (4, s), (5, cost), (6, gas'),
-          (7, rc)] [8, 9, 10, 11, 12, 13, 14, 15]
+          (7, rc)] [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
       match gs with
-      | [hleg, hstk, hwarmth, hsentry, hstatic, hcost, hrefund, hg] =>
+      | [hleg, haccess, hsstore, hstk, hwarmth, hsentry, hstatic, hcost, hrefund, hg] =>
         dischargeLocated hleg isLegacy [assum]
+        discharge haccess [access]
+        discharge hsstore [sstoreRules]
         discharge hstk (← rflTacs)
         dischargeLocated hwarmth (if isWarm.isSome then isWarm else isCold) [assum]
         discharge hsentry [assum, sentry]

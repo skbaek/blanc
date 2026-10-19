@@ -201,6 +201,21 @@ theorem CoveredFork.rules_bal_none {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.bal = none :=
   h.bal_none
 
+theorem CoveredFork.rules_access {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.access = .eip2929 :=
+  h.cases (motive := fun f => (Fork.ruleSet f).access = .eip2929)
+    rfl rfl rfl rfl
+
+theorem CoveredFork.rules_push0 {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.op.push0 = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).op.push0 = true)
+    rfl rfl rfl rfl
+
+theorem CoveredFork.rules_sstore {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.sstore = ⟨true, true⟩ :=
+  h.cases (motive := fun f => (Fork.ruleSet f).sstore = ⟨true, true⟩)
+    rfl rfl rfl rfl
+
 /-- Every covered fork runs the Prague general-purpose request contracts. -/
 theorem CoveredFork.requests_eq {f : Fork} (h : CoveredFork f) :
     (Fork.ruleSet f).requests = pragueRequests :=

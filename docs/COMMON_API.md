@@ -65,7 +65,8 @@ registry has identified the likely vocabulary.
   documentation there rather than expecting a need-first branch for it.
 - Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
   Consume it only through `CoveredFork.stateGas_none`, `bal_none`,
-  `rules_stateGas_none`, `rules_bal_none`, `requests_eq`,
+  `rules_stateGas_none`, `rules_bal_none`, `rules_access`, `rules_push0`,
+  `rules_sstore`, `requests_eq`,
   `beaconRoots_not_precompile`, `historyStorage_not_precompile`, `of_eq` and,
   where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
   schedule premise with a concrete config lemma such as
@@ -109,6 +110,18 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- Constructive opcode helpers in [`Blanc/Forward.lean`](../Blanc/Forward.lean)
+  expose their actual rule requirements: an empty PUSH immediate requires
+  `rules.op.push0`, while nonempty immediates do not; the cold/warm SLOAD and
+  SSTORE helpers require EIP-2929 access, and SSTORE additionally requires the
+  net-metering/stipend-sentry regime. EXTCODESIZE names its zero surcharge and
+  cold-price field where needed. SSTORE retains the actual gas record in its
+  refund formula, including Berlin's refund schedule. State-gas absence alone
+  supplies none of those activation or access facts.
+  For existing covered consumers, use `CoveredFork.rules_access`,
+  `rules_push0`, `rules_sstore` and
+  `BenvStat.gas_eq_prague_of_covered`; the latter replaces the invalid inference
+  from state-gas absence to Prague gas prices.
 - For the loose gas-free walk prefix reaching an intermediate cut of a
   successful source run, with source-path accumulation, use
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
