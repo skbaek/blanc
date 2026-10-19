@@ -250,6 +250,31 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.Curve3Pool.u5_ramp_control",
     "Blanc.Composition.Curve3PoolSupply.pool_3crv_history",
     "Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered",
+    # The Curve 3pool exact-gas liveness forms and their premise-bundle witnesses (Section 5.11).
+    "Blanc.Lift.Curve3Pool.removeLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.exchange_live_exact",
+    "Blanc.Lift.Curve3Pool.addLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact",
+    "Blanc.Lift.Curve3Pool.exchange_msg_exact",
+    "Blanc.Lift.Curve3Pool.addLiquidity_msg_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -318,6 +343,14 @@ NONCLAIM_PHRASES = [
     "no such world is instantiated",
     "the index-2 path is not instantiated",
     "not the recorded constructor arguments",
+    # The Curve 3pool exact-gas rows (Section 5.11, Section 6 [ah], Section 7 items 48 and 53).
+    "no exact-gas theorem is instantiated end to end",
+    "not each composed headline's literal hypothesis set",
+    "a coin's gas use is the coin's, not a blanc fact",
+    "headroom and the no-wrap bound are separate premises",
+    "it reads no residual gas and is not an existential cost",
+    "declared in blanc, not by jaune",
+    "the sufficient-gas rows above remain, unchanged",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
