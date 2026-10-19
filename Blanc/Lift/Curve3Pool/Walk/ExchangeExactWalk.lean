@@ -829,7 +829,7 @@ theorem rx_ex_frame_exact {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : N
         (Nat.toB256 v) ((pre.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat)).toBytes)
       RawCallOk U 0xb60 0x44 0xc00 P.pushD P.pushN)
     (hR0 : 60000 + U ≤ R)
-    (hGb : R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v + 2000 < 2 ^ 256)
+    (hGb : R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v < 2 ^ 256)
     (k : ∀ D' : Devm, ExLive sevm W'' D' (exFinal ((pre.getStor sevm.currentTarget).set lockSlot 1)
       sevm (exBal (pre.getStor sevm.currentTarget) ⟨(exI sevm).toNat, hi⟩ + exCred sevm B1 B2)
       (exBal (pre.getStor sevm.currentTarget) ⟨(exJ sevm).toNat, hj⟩ -
@@ -856,6 +856,7 @@ theorem rx_ex_frame_exact {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : N
     exact coin_ne_lock hj) _
   have ha1 : Abstracts ((pre.getStor sevm.currentTarget).set lockSlot 1) s0 :=
     ha.of_lock fun x hx => Stor.get_set_ne _ (Ne.symm hx) _
+  have hh : 2672 ≤ exHeadCost sevm pre := by unfold exHeadCost; omega
   by_cases hfee : exI sevm = 2
   · -- the fee coin
     obtain ⟨hb1, hb2, hsub⟩ := hbal hfee
