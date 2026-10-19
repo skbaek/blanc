@@ -13,8 +13,8 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-/-- **The event and `STOP`, forward** (memory `0x920`). -/
-theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+/-- **The event and `STOP`, forward, exact** (core of `rx_rli_end920`; memory `0x920`). -/
+theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
@@ -25,7 +25,9 @@ theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
         Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
-        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) → Q (.halted D)) :
+        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) →
+      G = D.gasLeft + (3432 + sstoreCost sevm b (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 3432 := ⟨G - 3432, by omega⟩
@@ -87,9 +89,10 @@ theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
-  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
+    (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0x60 = 0xbe0 by decide]
     exact (show WordAt _ 0xbe0 f0 by wauto).read
@@ -102,8 +105,8 @@ theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0xe0 = 0xc60 by decide]
     exact (show WordAt _ 0xc60 (T - Bw) by wauto).read
 
-/-- **The event and `STOP`, forward** (memory `0xb60`). -/
-theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+/-- **The event and `STOP`, forward, exact** (core of `rx_rli_endB60`; memory `0xb60`). -/
+theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
@@ -114,7 +117,9 @@ theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
         Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
-        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) → Q (.halted D)) :
+        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) →
+      G = D.gasLeft + (3372 + sstoreCost sevm b (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 3372 := ⟨G - 3372, by omega⟩
@@ -176,9 +181,10 @@ theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
-  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩⟩
+  refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
+    (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0x60 = 0xbe0 by decide]
     exact (show WordAt _ 0xbe0 f0 by wauto).read
@@ -190,5 +196,41 @@ theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     exact (show WordAt _ 0xc40 D1 by wauto).read
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0xe0 = 0xc60 by decide]
     exact (show WordAt _ 0xc60 (T - Bw) by wauto).read
+
+/-- **The event and `STOP`, forward** (memory `0x920`). -/
+theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
+    (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
+    (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)
+    (hTX : ¬ T < Bw) (hG : 30000 ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ D : Devm, ExLive sevm W D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+        Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
+        Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
+        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) → Q (.halted D)) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [9, 0] :: S) M G) rliEnd Q :=
+  rx_rli_end920E hfork hstatic hL hR hW hsz hT hD1 hf0 hf1 hf2 hBw hTX hG hroom
+    fun D h1 h2 _ => k D h1 h2
+
+/-- **The event and `STOP`, forward** (memory `0xb60`). -/
+theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
+    {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
+    (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
+    (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)
+    (hTX : ¬ T < Bw) (hG : 30000 ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ D : Devm, ExLive sevm W D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+        Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
+        Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
+        Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) → Q (.halted D)) :
+    SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
+      Bytes.toB256 [9, 0] :: S) M G) rliEnd Q :=
+  rx_rli_endB60E hfork hstatic hL hR hW hsz hT hD1 hf0 hf1 hf2 hBw hTX hG hroom
+    fun D h1 h2 _ => k D h1 h2
 
 end Blanc.Lift.Curve3Pool
