@@ -340,7 +340,7 @@ theorem rx_rli_d2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   rw [show Bytes.toB256 [5] = tokenSlot by decide] at hv2; subst hv2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 2 := ⟨g2 - 2, by omega⟩
   xr (rx_gas (by hrs) ·)

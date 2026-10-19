@@ -254,7 +254,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   have hWc := hL.wc
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 3 := ⟨G - 3, by omega⟩
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 23 := ⟨g2 - 23, by omega⟩
   xr (rx_iszero rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -263,7 +263,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 22 := ⟨g4 - 22, by omega⟩
   xr (rx_callvalue (by hrs) ·)
   xr (rx_iszero rfl (by hrs) ·)
@@ -272,7 +272,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   -- tree t_306f_c0
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g6 b6 v6 hb6 hv6 hg61 hg62 g6x; replace hv6 := hL.val hv6; replace hL := hL.sloadE hb6
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g6 b6 v6 hb6 hv6 hg61 hg62 g6x; replace hv6 := hL.val hv6; replace hL := hL.sloadE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 59 := ⟨g6 - 59, by omega⟩
   xr (rx_iszero rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -287,7 +287,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   refine rxe_mstoreL (o := 0x160) (c := 21) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xc0 0x160 32 = 0x180 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g8 b8 v8 hb8 hv8 hg81 hg82 g8x; replace hv8 := hL.val hv8; replace hL := hL.sloadE hb8
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g8 b8 v8 hb8 hv8 hg81 hg82 g8x; replace hv8 := hL.val hv8; replace hL := hL.sloadE hb8
   rw [show Bytes.toB256 [5] = tokenSlot by decide, Stor.get_set_ne _ (by decide) _] at hv8; subst hv8
   obtain ⟨g9, rfl⟩ : ∃ g, g8 = g + 2 := ⟨g8 - 2, by omega⟩
   xr (rx_gas (by hrs) ·)
@@ -332,7 +332,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   -- tree t_30c5_c0
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g11 b11 v11 hb11 hv11 hg111 hg112 g11x; replace hv11 := hL.val hv11; replace hL := hL.sloadE hb11
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g11 b11 v11 hb11 hv11 hg111 hg112 g11x; replace hv11 := hL.val hv11; replace hL := hL.sloadE hb11
   rw [show Bytes.toB256 [2] = feeSlot by decide, Stor.get_set_ne _ (by decide) _] at hv11; subst hv11
   obtain ⟨g12, rfl⟩ : ∃ g, g11 = g + 125 := ⟨g11 - 125, by omega⟩
   xr (rx_push rfl (by hrs) ·)
@@ -374,7 +374,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x1e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x1e0 0x1e0 32 = 0x200 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g13 b13 v13 hb13 hv13 hg131 hg132 g13x; replace hv13 := hL.val hv13; replace hL := hL.sloadE hb13
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g13 b13 v13 hb13 hv13 hg131 hg132 g13x; replace hv13 := hL.val hv13; replace hL := hL.sloadE hb13
   rw [show Bytes.toB256 [3] = adminFeeSlot by decide, Stor.get_set_ne _ (by decide) _] at hv13; subst hv13
   obtain ⟨g14, rfl⟩ : ∃ g, g13 = g + 60 := ⟨g13 - 60, by omega⟩
   xr (rx_push rfl (by hrs) ·)
@@ -446,7 +446,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g17 b17 v17 hb17 hv17 hg36 hg37 g17x; replace hv17 := hL.val hv17; replace hL := hL.sloadE hb17
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g17 b17 v17 hb17 hv17 hg36 hg37 g17x; replace hv17 := hL.val hv17; replace hL := hL.sloadE hb17
   obtain ⟨g18, rfl⟩ : ∃ g, g17 = g + 66 := ⟨g17 - 66, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x280) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq16; intro M hMq16 hR hW hsz; rw [show memExtSize 0x280 0x280 32 = 0x2a0 by decide] at hsz
@@ -459,7 +459,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g19 b19 v19 hb19 hv19 hg56 hg57 g19x; replace hv19 := hL.val hv19; replace hL := hL.sloadE hb19
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g19 b19 v19 hb19 hv19 hg56 hg57 g19x; replace hv19 := hL.val hv19; replace hL := hL.sloadE hb19
   obtain ⟨g20, rfl⟩ : ∃ g, g19 = g + 72 := ⟨g19 - 72, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -474,7 +474,7 @@ theorem rx_rli_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp 
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g21 b21 v21 hb21 hv21 hg76 hg77 g21x; replace hv21 := hL.val hv21; replace hL := hL.sloadE hb21
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g21 b21 v21 hb21 hv21 hg76 hg77 g21x; replace hv21 := hL.val hv21; replace hL := hL.sloadE hb21
   obtain ⟨g22, rfl⟩ : ∃ g, g21 = g + 114 := ⟨g21 - 114, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)

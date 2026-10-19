@@ -89,7 +89,7 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
     (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩
@@ -181,7 +181,7 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
     (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩

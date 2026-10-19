@@ -4,7 +4,7 @@ import Blanc.Lift.Curve3Pool.Walk.RliExactSchedule
 # `remove_liquidity_imbalance`, exact: the byte-level walk
 
 `rx_rli_frame_exact`: with the calls' data `P`, its exact premises and the model's words `w`
-fixed first, every residual gas `R ≥ 60000 + U` (headroom, not cost) runs the certificate's entry
+fixed first, every residual gas `R ≥ 66000 + 3 U` (headroom, not cost) runs the certificate's entry
 tree from `R + rliExactCost` to `STOP` with exactly `R` left. The walk is the existing one: the
 dispatcher and the stage cores `rx_rli_preE`, `rx_rli_d0E`, `rx_rli_d1E`, `rx_rli_fee*E`,
 `rx_rli_d2E`, `rx_rli_push*E`, `rx_rli_end*E`, each call answered by its exact profile (`ExactE`).
