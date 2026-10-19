@@ -193,14 +193,14 @@ section ArmsFwd
 variable {sevm : Sevm} {B : Devm} {S : List B256} {M₀ M : Mem} {G n v : Nat}
   {ret ft fa ia it : B256}
 
--- SEGMENT: aUpExact
-/-- **The rising ramp, forward** (`357` gas over a covered memory). -/
-theorem a_up_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+/-- `a_up_exact` with the arm's memory as a term: its only store is the result at `0`. -/
+theorem a_up_exactL (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
     (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
     (hv : aUp ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
     (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 357)) t_00e3_c27
       (.done (.returned (St B (aUpW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
-      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      ((Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n) ∧
+        M' = M.write 0 (aUpW ia fa it ft sevm.benvStat.time).toBytes)) ∧
       (aUpW ia fa it ft sevm.benvStat.time).toNat = v := by
   obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aUp_some hv
   obtain ⟨g1, rfl⟩ := fwdChkSub hd
@@ -227,16 +227,28 @@ theorem a_up_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.
   xassert g6
   xstep; xstep; xstep; xstep; xstep; xstep; xstep
   xmstore 0x0; xmload 0x0; xmload 0x140
-  xret
+  exact ⟨_, rxc_ret, ⟨hT.keeps, hT.wf, hS⟩, rfl⟩
 
--- SEGMENT: aDownExact
-/-- **The falling ramp, forward** (`352` gas over a covered memory). -/
-theorem a_down_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+-- SEGMENT: aUpExact
+/-- **The rising ramp, forward** (`357` gas over a covered memory). -/
+theorem a_up_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
+    (hv : aUp ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
+    (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 357)) t_00e3_c27
+      (.done (.returned (St B (aUpW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
+      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      (aUpW ia fa it ft sevm.benvStat.time).toNat = v :=
+  let ⟨⟨M', h1, h2, _⟩, h3⟩ := a_up_exactL hT hS hn htop hroom hv
+  ⟨⟨M', h1, h2⟩, h3⟩
+
+/-- `a_down_exact` with the arm's memory as a term: its only store is the result at `0`. -/
+theorem a_down_exactL (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
     (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
     (hv : aDown ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
     (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 352)) t_018a_c27
       (.done (.returned (St B (aDownW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
-      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      ((Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n) ∧
+        M' = M.write 0 (aDownW ia fa it ft sevm.benvStat.time).toBytes)) ∧
       (aDownW ia fa it ft sevm.benvStat.time).toNat = v := by
   obtain ⟨d, e, p, q, r, hd, he, hp, hq, hr, hvv⟩ := aDown_some hv
   obtain ⟨g1, rfl⟩ := fwdChkSub hd
@@ -264,7 +276,19 @@ theorem a_down_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : 
   xassert g6
   xstep; xstep; xstep; xstep; xstep; xstep; xstep
   xmstore 0x0; xmload 0x0; xmload 0x140
-  xret
+  exact ⟨_, rxc_ret, ⟨hT.keeps, hT.wf, hS⟩, rfl⟩
+
+-- SEGMENT: aDownExact
+/-- **The falling ramp, forward** (`352` gas over a covered memory). -/
+theorem a_down_exact (hT : MemTrack M₀ M aWin (aWords ret ft fa ia it)) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024)
+    (hv : aDown ia.toNat fa.toNat it.toNat ft.toNat sevm.benvStat.time.toNat = some v) :
+    (∃ M', SFunc.RunExactCut prog sevm [] (St B S M (G + 352)) t_018a_c27
+      (.done (.returned (St B (aDownW ia fa it ft sevm.benvStat.time :: S) M' G))) ∧
+      (Mem.KeepsOff M₀ M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
+      (aDownW ia fa it ft sevm.benvStat.time).toNat = v :=
+  let ⟨⟨M', h1, h2, _⟩, h3⟩ := a_down_exactL hT hS hn htop hroom hv
+  ⟨⟨M', h1, h2⟩, h3⟩
 
 end ArmsFwd
 
@@ -350,18 +374,32 @@ def aGas (sevm : Sevm) (b : Devm) : Nat :=
   else 85 + sloadCost sevm b futureATimeSlot +
     sloadCost sevm (afterSload sevm b futureATimeSlot) futureASlot
 
--- SEGMENT: aExact
-/-- **`_A`, forward**: when `aChk s t = some v`, entry 27 runs from its return address over a
-memory covering its frame (`0x200 ≤ M.size`, word aligned) and returns a word reading `v` over
-`aBase`, at gas `aGas`, the memory kept off `aWin` with its size. -/
-theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
+/-- **`_A`'s memory on return**: the entry memory with the return address, `future_A_time` and
+`future_A` at `0x140`, `0x160`, `0x180`; while ramping also `initial_A` and `initial_A_time` at
+`0x1c0`, `0x1e0`; finally the result word `w` at `0`. `_A` writes nothing else (not `0x1a0`). -/
+def aMemNext (sevm : Sevm) (b : Devm) (M : Mem) (ret w : B256) : Mem :=
+  let M1 := ((M.write 0x140 ret.toBytes).write 0x160
+    (b.getStorVal sevm.currentTarget futureATimeSlot).toBytes).write 0x180
+    (b.getStorVal sevm.currentTarget futureASlot).toBytes
+  let M2 := if sevm.benvStat.time.toNat <
+      (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then
+    (M1.write 0x1c0 (b.getStorVal sevm.currentTarget initialASlot).toBytes).write 0x1e0
+      (b.getStorVal sevm.currentTarget initialATimeSlot).toBytes
+  else M1
+  M2.write 0 w.toBytes
+
+/-- `a_exact` with `_A`'s memory as a term (`aMemNext`): over the entry memory, the return
+address, `future_A_time` and `future_A` at `0x140 … 0x180`, on a ramp `initial_A` and
+`initial_A_time` at `0x1c0`, `0x1e0`, and the result at `0`. -/
+theorem a_exactL {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
     {s : State} (hfork : CoveredFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = n)
     (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024) :
     ∃ w, (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + aGas sevm b)) t_00a9_c27
       (.returned (St (aBase sevm b) (w :: S) M' G)) ∧
-      (Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧ w.toNat = v := by
+      ((Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = n) ∧
+        M' = aMemNext sevm b M ret (Nat.toB256 v))) ∧ w.toNat = v := by
   have hT := MemTrack.init hwf aWin
   have e1 := ha.futureATime
   have e2 := ha.futureA
@@ -380,7 +418,13 @@ theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat}
         G + 394 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
       simp only [SFunc.runExact_iff_runExactCut_nil]
       simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
-      refine ⟨?w1, ?run1, ?val1⟩
+      refine ⟨aUpW
+          ((afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7])).getStorVal
+            sevm.currentTarget (Bytes.toB256 [6]))
+          ((afterSload sevm b (Bytes.toB256 [9])).getStorVal sevm.currentTarget (Bytes.toB256 [7]))
+          ((afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7]))
+            (Bytes.toB256 [6])).getStorVal sevm.currentTarget (Bytes.toB256 [8]))
+          (b.getStorVal sevm.currentTarget (Bytes.toB256 [9])) sevm.benvStat.time, ?run1, ?val1⟩
       case run1 =>
         xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
         xmload 0x160; xstep; xstep; xstep; xstep
@@ -388,14 +432,33 @@ theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat}
         xstep; xstep; xmstore 0x1c0; xstep; xstep; xmstore 0x1e0
         xmload 0x1c0; xmload 0x180; xstep; xstep; xstep
         xzero (by simp only [afterSload_getStorVal]; exact gtCheck_iszero_of_lt hup)
-        exact (a_up_exact hT hS hn htop hroom (by simpa only [afterSload_getStorVal] using hA)).1
+        refine (a_up_exactL (B := afterSload sevm (afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9]))
+            (Bytes.toB256 [7])) (Bytes.toB256 [6])) (Bytes.toB256 [8])) (G := G) hT hS hn htop hroom
+          (by simpa only [afterSload_getStorVal] using hA)).1.imp fun M' h => ⟨h.1, h.2.1, ?_⟩
+        have hw : (aUpW
+          ((afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7])).getStorVal
+            sevm.currentTarget (Bytes.toB256 [6]))
+          ((afterSload sevm b (Bytes.toB256 [9])).getStorVal sevm.currentTarget (Bytes.toB256 [7]))
+          ((afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7]))
+            (Bytes.toB256 [6])).getStorVal sevm.currentTarget (Bytes.toB256 [8]))
+          (b.getStorVal sevm.currentTarget (Bytes.toB256 [9])) sevm.benvStat.time).toNat = v :=
+          aUpW_toNat (by simpa only [afterSload_getStorVal] using hA)
+        rw [h.2.2, ← hw, toB256_toNat]
+        simp only [aMemNext, ← slot_09, ← slot_07, ← slot_06, ← slot_08, afterSload_getStorVal, ht,
+          ↓reduceIte]
       case val1 => exact aUpW_toNat (by simpa only [afterSload_getStorVal] using hA)
     · simp only [hup, ↓reduceIte] at hA ⊢
       rw [show ∀ x1 x2 x3 x4 : Nat, G + (453 + x1 + x2 + x3 + x4) =
         G + 389 + x4 + 9 + x3 + 36 + x2 + 9 + x1 + 10 from fun _ _ _ _ => by omega]
       simp only [SFunc.runExact_iff_runExactCut_nil]
       simp only [← slot_09, ← slot_07, ← slot_06, ← slot_08] at ht hup hA ⊢
-      refine ⟨?w2, ?run2, ?val2⟩
+      refine ⟨aDownW
+          ((afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7])).getStorVal
+            sevm.currentTarget (Bytes.toB256 [6]))
+          ((afterSload sevm b (Bytes.toB256 [9])).getStorVal sevm.currentTarget (Bytes.toB256 [7]))
+          ((afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7]))
+            (Bytes.toB256 [6])).getStorVal sevm.currentTarget (Bytes.toB256 [8]))
+          (b.getStorVal sevm.currentTarget (Bytes.toB256 [9])) sevm.benvStat.time, ?run2, ?val2⟩
       case run2 =>
         xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
         xmload 0x160; xstep; xstep; xstep; xstep
@@ -404,23 +467,54 @@ theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat}
         xmload 0x1c0; xmload 0x180; xstep; xstep; xstep
         refine Blanc.Lift.xlift (fun _ k => rxc_branch_succ
           (by simp only [afterSload_getStorVal]; exact gtCheck_iszero_of_not_lt hup) k) ?_
-        exact (a_down_exact hT hS hn htop hroom (by simpa only [afterSload_getStorVal] using hA)).1
+        refine (a_down_exactL (B := afterSload sevm (afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9]))
+            (Bytes.toB256 [7])) (Bytes.toB256 [6])) (Bytes.toB256 [8])) (G := G) hT hS hn htop hroom
+          (by simpa only [afterSload_getStorVal] using hA)).1.imp fun M' h => ⟨h.1, h.2.1, ?_⟩
+        have hw : (aDownW
+          ((afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7])).getStorVal
+            sevm.currentTarget (Bytes.toB256 [6]))
+          ((afterSload sevm b (Bytes.toB256 [9])).getStorVal sevm.currentTarget (Bytes.toB256 [7]))
+          ((afterSload sevm (afterSload sevm (afterSload sevm b (Bytes.toB256 [9])) (Bytes.toB256 [7]))
+            (Bytes.toB256 [6])).getStorVal sevm.currentTarget (Bytes.toB256 [8]))
+          (b.getStorVal sevm.currentTarget (Bytes.toB256 [9])) sevm.benvStat.time).toNat = v :=
+          aDownW_toNat (by simpa only [afterSload_getStorVal] using hA)
+        rw [h.2.2, ← hw, toB256_toNat]
+        simp only [aMemNext, ← slot_09, ← slot_07, ← slot_06, ← slot_08, afterSload_getStorVal, ht,
+          ↓reduceIte]
       case val2 => exact aDownW_toNat (by simpa only [afterSload_getStorVal] using hA)
   · simp only [ht, ↓reduceIte] at hA ⊢
     rw [show ∀ x1 x2 : Nat, G + (85 + x1 + x2) = G + 66 + x2 + 9 + x1 + 10 from
       fun _ _ => by omega]
     simp only [SFunc.runExact_iff_runExactCut_nil]
     simp only [← slot_09, ← slot_07] at ht hA ⊢
-    refine ⟨?w3, ?run3, ?val3⟩
+    refine ⟨(afterSload sevm b (Bytes.toB256 [9])).getStorVal sevm.currentTarget
+      (Bytes.toB256 [7]), ?run3, ?val3⟩
     case run3 =>
       xstep; xmstore 0x140; xstep; xstep; xmstore 0x160; xstep; xstep; xmstore 0x180
       xmload 0x160; xstep; xstep; xstep; xstep
       xassert (ltCheck_iszero_of_not_lt ht)
       xmload 0x180; xmstore 0x0; xmload 0x0; xmload 0x140
-      xret
+      refine ⟨_, rxc_ret, ⟨hT.keeps, hT.wf, hS⟩, ?_⟩
+      simp only [aMemNext, ← slot_09, ← slot_07, afterSload_getStorVal, ht, ↓reduceIte]
+      rw [← Option.some.inj hA, toB256_toNat]
     case val3 =>
       simp only [afterSload_getStorVal]
       exact (Option.some.inj hA)
+
+-- SEGMENT: aExact
+/-- **`_A`, forward**: when `aChk s t = some v`, entry 27 runs from its return address over a
+memory covering its frame (`0x200 ≤ M.size`, word aligned) and returns a word reading `v` over
+`aBase`, at gas `aGas`, the memory kept off `aWin` with its size. -/
+theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
+    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = n)
+    (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024) :
+    ∃ w, (∃ M', SFunc.RunExact prog sevm (St b (ret :: S) M (G + aGas sevm b)) t_00a9_c27
+      (.returned (St (aBase sevm b) (w :: S) M' G)) ∧
+      (Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧ w.toNat = v :=
+  let ⟨w, ⟨M', h1, h2, _⟩, h3⟩ := a_exactL (G := G) (ret := ret) hfork ha hA hwf hS hn htop hroom
+  ⟨w, ⟨M', h1, h2⟩, h3⟩
 
 /-- `_A` changes the world only by warming its storage keys. -/
 theorem aBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (aBase sevm b) := by

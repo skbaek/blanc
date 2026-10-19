@@ -1776,6 +1776,24 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   memory and the exact charge. These carry no new charge, world premise or gas quantifier.
   No registered trigger distinguishes these from the bounded steps, so discovery remains in
   this registry.
+- For the literal memory the 3pool's crossed callees leave (exact walks of `add_liquidity`,
+  `remove_liquidity_imbalance`, `remove_liquidity_one_coin`): `_A()`'s is `aMemNext` (`a_exactL`
+  in [`Blanc/Lift/Curve3Pool/Callee/A.lean`](../Blanc/Lift/Curve3Pool/Callee/A.lean), the
+  `0x1e0` variant `a_exact_1e0L` in
+  [`Blanc/Lift/Curve3Pool/Callee/AGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/AGrow.lean));
+  `get_D_mem`'s is `getDMemNext` up to bytes (`Mem.EqExcept … fun _ => False`: one logical
+  size, every byte equal; `getDMem_exactL` in
+  [`Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean),
+  `getDMem_exact_400L` in
+  [`Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean)),
+  since the callee's scratch writes are not materialised alike; the caller's next growing
+  store makes it literal (`eqB_write_word_grow` in
+  [`Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean),
+  with the exact `SLOAD`/`SSTORE`/`MLOAD`/`STATICCALL` twins `rxe_sloadVE`, `rxe_sstoreVE`,
+  `rxe_mloadXE`, `rxe_staticWordAlE`). The frame save/restore loops around them are literal
+  through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
+  [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
+  The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).

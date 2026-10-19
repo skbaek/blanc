@@ -1406,6 +1406,14 @@ import Blanc.Lift.Curve3Pool.Walk.AlLiveModel
 import Blanc.Lift.Curve3Pool.Walk.AlLiveWords
 import Blanc.Lift.Curve3Pool.Walk.AlLiveUnique
 import Blanc.Lift.Curve3Pool.Walk.AlLiveLink
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactKit
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactSchedule
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactLoop
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactLoopRun
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactFee
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactBack
+import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactWalk
+import Blanc.Lift.Curve3Pool.AddLiquidityExactFrame
 import Blanc.Composition.PairTokenJoint
 import Blanc.Composition.PairTokenJointControl
 import Blanc.Composition.PairTokenJointWalk

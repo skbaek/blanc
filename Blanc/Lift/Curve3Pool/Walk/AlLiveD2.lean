@@ -19,6 +19,62 @@ section Post
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
   {Q : Outcome → Prop} {F AF A T D0 D1 : B256} {old nv : Nat → B256}
 
+/-- The first deposit's base after its three balance stores. -/
+def alStore0Base (sevm : Sevm) (b : Devm) (n : Nat → B256) : Devm :=
+  afterSstore sevm (afterSstore sevm (afterSstore sevm b balancesBase (n 0))
+    (balancesBase + Bytes.toB256 [1]) (n 1)) (balancesBase + Bytes.toB256 [2]) (n 2)
+
+/-- The first deposit's store charge: `110` and the three stores at their actual worlds. -/
+def alStore0Cost (sevm : Sevm) (b : Devm) (n : Nat → B256) : Nat :=
+  110 + sstoreCost sevm b balancesBase (n 0) +
+    sstoreCost sevm (afterSstore sevm b balancesBase (n 0)) (balancesBase + Bytes.toB256 [1]) (n 1) +
+    sstoreCost sevm (afterSstore sevm (afterSstore sevm b balancesBase (n 0))
+      (balancesBase + Bytes.toB256 [1]) (n 1)) (balancesBase + Bytes.toB256 [2]) (n 2)
+
+/-- `rx_al_feePre`, the continuation also receiving the exact charge and the literal memory. -/
+theorem rx_al_feePreE (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa20)
+    (hm : AlPullImg img 3 F AF A T D0 old nv) (hD1 : WordAt img 0x900 D1)
+    (hG : R + 200 ≤ G) (hroom : S.length + 20 < 1024)
+    (k0 : T = 0 → ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0xa40 → (∀ o w, WordAt img o w → o + 32 ≤ 0xa20 → WordAt img' o w) →
+      WordAt img' 0xa20 D1 → R ≤ g → g ≤ G → G = g + 45 → M' = M.write 0xa20 D1.toBytes →
+      SFunc.RunEx cert.prog sevm (St b S M' g) t_16e3_c1273 Q)
+    (k1 : T ≠ 0 → ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0xa60 → (∀ o w, WordAt img o w → o + 32 ≤ 0xa20 → WordAt img' o w) →
+      WordAt img' 0xa20 D1 → WordAt img' 0xa40 (Nat.toB256 0) → R ≤ g → g ≤ G → G = g + 69 →
+      M' = (M.write 0xa20 D1.toBytes).write 0xa40 (Bytes.toB256 [0]).toBytes →
+      SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M' g) t_1409_c1273 Q) :
+    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 Q := by
+  obtain ⟨g1, rfl⟩ : ∃ g, G = g + 100 + 45 := ⟨G - 145, by omega⟩
+  xr (rx_dest ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rxm_mloadW (o := 0x900) (v := D1) hR hsz rfl ⟨by decide, by decide⟩ hD1 (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  refine rxe_mstoreL (o := 0xa20) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xa20 0xa20 32 = 0xa40 by decide] at hsz
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rxm_mloadW (o := 0x240) (v := T) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.m0.supply) (by hrs) ·)
+  xr (rx_gt rfl (by hrs) ·)
+  xr (rx_iszero rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  by_cases hT : T = 0
+  · subst hT
+    xr (rx_branch_succ (by decide) ·)
+    exact k0 rfl M _ _ hR hW hsz (fun o w hw ho => by wauto) (by wauto) (by omega) (by omega)
+      (by omega) hMq1
+  · xr (rx_branch_zero' (al_supply_test hT) ·)
+    xr (rx_push rfl (by hrs) ·)
+    xr (rx_push rfl (by hrs) ·)
+    xr (rx_push rfl (by hrs) ·)
+    xr (rx_dup rfl (by hrs) ·)
+    xr (rx_dup rfl (by hrs) ·)
+    refine rxe_mstoreL (o := 0xa40) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0xa40 0xa40 32 = 0xa60 by decide] at hsz
+    xr (rx_add (by hrs) ·)
+    rw [show Bytes.toB256 [3] + Bytes.toB256 [0] = (3 : B256) by decide,
+      show Bytes.toB256 [10, 64] = (0xa40 : B256) by decide]
+    exact k1 hT M _ _ hR hW hsz (fun o w hw ho => by wauto) (by wauto) (by wauto) (by omega)
+      (by omega) (by omega) (by rw [hMq2, hMq1])
+
 /-- **The supply test after `D1`, forward.** -/
 theorem rx_al_feePre (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa20)
     (hm : AlPullImg img 3 F AF A T D0 old nv) (hD1 : WordAt img 0x900 D1)
@@ -31,40 +87,72 @@ theorem rx_al_feePre (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa2
       M'.size = 0xa60 → (∀ o w, WordAt img o w → o + 32 ≤ 0xa20 → WordAt img' o w) →
       WordAt img' 0xa20 D1 → WordAt img' 0xa40 (Nat.toB256 0) → R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M' g) t_1409_c1273 Q) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 Q := by
-  obtain ⟨g1, rfl⟩ : ∃ g, G = g + 100 + 45 := ⟨G - 145, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rxm_mloadW (o := 0x900) (v := D1) hR hsz rfl ⟨by decide, by decide⟩ hD1 (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0xa20) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xa20 0xa20 32 = 0xa40 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rxm_mloadW (o := 0x240) (v := T) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.m0.supply) (by hrs) ·)
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  by_cases hT : T = 0
-  · subst hT
-    xr (rx_branch_succ (by decide) ·)
-    exact k0 rfl M _ _ hR hW hsz (fun o w hw ho => by wauto) (by wauto) (by omega) (by omega)
-  · xr (rx_branch_zero' (al_supply_test hT) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_dup rfl (by hrs) ·)
-    xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0xa40) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xa40 0xa40 32 = 0xa60 by decide] at hsz
-    xr (rx_add (by hrs) ·)
-    rw [show Bytes.toB256 [3] + Bytes.toB256 [0] = (3 : B256) by decide,
-      show Bytes.toB256 [10, 64] = (0xa40 : B256) by decide]
-    exact k1 hT M _ _ hR hW hsz (fun o w hw ho => by wauto) (by wauto) (by wauto) (by omega)
-      (by omega)
-
+    SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 Q :=
+  rx_al_feePreE hR hW hsz hm hD1 hG hroom
+    (fun hT M' img' g h1 h2 h3 h4 h5 h6 h7 _ _ => k0 hT M' img' g h1 h2 h3 h4 h5 h6 h7)
+    (fun hT M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ => k1 hT M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 /-- The storage the first deposit (or the fee loop) leaves: the three stored balances. -/
 abbrev alStor3 (σ : Stor) (s0 s1 s2 : B256) : Stor :=
   ((σ.set (balancesBase + Nat.toB256 0) s0).set (balancesBase + Nat.toB256 1) s1).set
     (balancesBase + Nat.toB256 2) s2
+
+/-- `rx_al_store0`, the continuation also receiving the exact charge and the literal memory. -/
+theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa40)
+    (hm : AlPullImg img 3 F AF A T D0 old nv)
+    (hG : R + 70000 ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat),
+      ExLive sevm W b' (alStor3 σ (nv 0) (nv 1) (nv 2)) → Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0xa40 → (∀ o w, WordAt img o w → o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o → WordAt img' o w) →
+      R ≤ g → g ≤ G → b' = alStore0Base sevm b nv → G = g + alStore0Cost sevm b nv →
+      M' = M.write 0xc0 (Bytes.toB256 [1]).toBytes →
+      SFunc.RunEx cert.prog sevm (St b' S M' g) t_170b_c1273 Q) :
+    SFunc.RunEx cert.prog sevm (St b S M G) t_16e3_c1273 Q := by
+  obtain ⟨g1, rfl⟩ : ∃ g, G = g + 64 := ⟨G - 64, by omega⟩
+  xr (rx_dest ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xa40 0xc0 32 = 0xa40 by decide] at hsz
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
+  rw [keccak_one]
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_dup rfl (by hrs) ·)
+  xr (rxm_mloadW (o := 0x460) (v := nv 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.n0) (by hrs) ·)
+  xr (rx_dup rfl (by hrs) ·)
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
+  obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 21 := ⟨g2 - 21, by omega⟩
+  xr (rx_dup rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_add (by hrs) ·)
+  xr (rxm_mloadW (o := 0x480) (v := nv 1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n1) (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_dup rfl (by hrs) ·)
+  xr (rx_add (by hrs) ·)
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
+  obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 21 := ⟨g4 - 21, by omega⟩
+  xr (rx_dup rfl (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_add (by hrs) ·)
+  xr (rxm_mloadW (o := 0x4a0) (v := nv 2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n2) (by hrs) ·)
+  xr (rx_push rfl (by hrs) ·)
+  xr (rx_dup rfl (by hrs) ·)
+  xr (rx_add (by hrs) ·)
+  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g6 b6 hb6 hg61 hg62 g6x; replace hL := hL.sstoreE hb6
+  obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 4 := ⟨g6 - 4, by omega⟩
+  xr (rx_pop ·)
+  xr (rx_pop ·)
+  have e : alStor3 σ (nv 0) (nv 1) (nv 2) = ((σ.set balancesBase (nv 0)).set
+      (balancesBase + Bytes.toB256 [1]) (nv 1)).set (balancesBase + Bytes.toB256 [2]) (nv 2) := by
+    unfold alStor3
+    rw [show balancesBase + Nat.toB256 0 = balancesBase by
+        decide,
+      show Nat.toB256 1 = Bytes.toB256 [1] by decide, show Nat.toB256 2 = Bytes.toB256 [2] by decide]
+  rw [← e] at hL
+  exact k b6 M _ g7 hL hR hW hsz (fun o w hw ho => by wauto) (by omega) (by omega)
+    (by rw [hb6, hb4, hb2]; rfl) (by subst hb6 hb4 hb2; unfold alStore0Cost; omega) hMq1
 
 /-- **The first deposit's store, forward** (`t_16e3_c1273` → `t_170b_c1273`):
 `self.balances = new_balances`. -/
@@ -77,51 +165,9 @@ theorem rx_al_store0 {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.b
       ExLive sevm W b' (alStor3 σ (nv 0) (nv 1) (nv 2)) → Mem.Reads M' img' → Mem.Wf M' →
       M'.size = 0xa40 → (∀ o w, WordAt img o w → o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o → WordAt img' o w) →
       R ≤ g → g ≤ G → SFunc.RunEx cert.prog sevm (St b' S M' g) t_170b_c1273 Q) :
-    SFunc.RunEx cert.prog sevm (St b S M G) t_16e3_c1273 Q := by
-  obtain ⟨g1, rfl⟩ : ∃ g, G = g + 64 := ⟨G - 64, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xa40 0xc0 32 = 0xa40 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
-  rw [keccak_one]
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rxm_mloadW (o := 0x460) (v := nv 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.n0) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22; replace hL := hL.sstoreE hb2
-  obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 21 := ⟨g2 - 21, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rxm_mloadW (o := 0x480) (v := nv 1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n1) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42; replace hL := hL.sstoreE hb4
-  obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 21 := ⟨g4 - 21, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rxm_mloadW (o := 0x4a0) (v := nv 2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n2) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g6 b6 hb6 hg61 hg62; replace hL := hL.sstoreE hb6
-  obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 4 := ⟨g6 - 4, by omega⟩
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  have e : alStor3 σ (nv 0) (nv 1) (nv 2) = ((σ.set balancesBase (nv 0)).set
-      (balancesBase + Bytes.toB256 [1]) (nv 1)).set (balancesBase + Bytes.toB256 [2]) (nv 2) := by
-    unfold alStor3
-    rw [show balancesBase + Nat.toB256 0 = balancesBase by
-        decide,
-      show Nat.toB256 1 = Bytes.toB256 [1] by decide, show Nat.toB256 2 = Bytes.toB256 [2] by decide]
-  rw [← e] at hL
-  exact k b6 M _ g7 hL hR hW hsz (fun o w hw ho => by wauto) (by omega) (by omega)
-
+    SFunc.RunEx cert.prog sevm (St b S M G) t_16e3_c1273 Q :=
+  rx_al_store0E hfork hstatic hL hR hW hsz hm hG hroom
+    fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 _ _ _ => k b' M' img' g h1 h2 h3 h4 h5 h6 h7
 /-- **One fee iteration, forward** (head, either arm, tail), up to its loop test `finS` or
 `finZ`. -/
 theorem rx_al_feeIt {σ : Stor} {W : Devm → Prop} {i s c1 c2 kZ : Nat}
