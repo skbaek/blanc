@@ -65,10 +65,6 @@
    "fp": "00000000cb1b4438",
    "kind": "theorem"
   },
-  "Blanc.BeaconDeposit.canonicalDepositCalldata_decodable": {
-   "fp": "00000000678edda0",
-   "kind": "theorem"
-  },
   "Blanc.BeaconDeposit.code_eip170": {
    "fp": "000000007e934c6c",
    "kind": "theorem"
@@ -353,16 +349,8 @@
    "fp": "00000000bb7dbcba",
    "kind": "theorem"
   },
-  "Blanc.Composition.ProrataWethVault.vault_processMessage_none_preserves_conserved": {
-   "fp": "00000000dd822f0e",
-   "kind": "theorem"
-  },
   "Blanc.Composition.ProrataWethVault.vault_processMessage_preserves_stable": {
    "fp": "00000000f1046ac9",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.ProrataWethVault.vault_processMessage_some_preserves_conserved": {
-   "fp": "000000005f285f45",
    "kind": "theorem"
   },
   "Blanc.Composition.ProrataWethVault.vault_terminals_return_or_revert": {
@@ -377,48 +365,8 @@
    "fp": "0000000026b3b293",
    "kind": "theorem"
   },
-  "Blanc.Composition.ProrataWethVault.weth_empty_message_silence": {
-   "fp": "00000000ffdaf826",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.ProrataWethVault.weth_static_processMessage_some_preserves_cell": {
-   "fp": "00000000caedf962",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.ProrataWethVault.weth_transfer_message_silence": {
-   "fp": "00000000cd6edd82",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.ProrataWethVault.weth_view_message_silence": {
-   "fp": "00000000ed546989",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.ProrataWethVault.weth_withdraw_message_split": {
-   "fp": "000000007eb46392",
-   "kind": "theorem"
-  },
   "Blanc.Composition.ProrataWethVault.withdrawSelector_not_allowed": {
    "fp": "00000000cbfa96fc",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.UniswapV2PairWeth9.control_allowZero_needed": {
-   "fp": "00000000c8d4c1c5",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.UniswapV2PairWeth9.control_ethFits_needed": {
-   "fp": "000000009f3a06b6",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.UniswapV2PairWeth9.control_holderCall_needed": {
-   "fp": "00000000928b8d8c",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.UniswapV2PairWeth9.weth9_history_holder_noShrink_pairCalls": {
-   "fp": "00000000e7d38f50",
-   "kind": "theorem"
-  },
-  "Blanc.Composition.UniswapV2PairWeth9.weth9_transfer_fails_of_lt": {
-   "fp": "0000000014d16829",
    "kind": "theorem"
   },
   "Blanc.ConcreteRun.stepN_add": {
@@ -1037,10 +985,6 @@
    "fp": "000000009da87921",
    "kind": "theorem"
   },
-  "Blanc.ExecutionAccountingReplay.AccountingLadder.directWithdrawal": {
-   "fp": "00000000a44d6cf2",
-   "kind": "theorem"
-  },
   "Blanc.ExecutionAccountingReplay.AccountingLadder.messageCall": {
    "fp": "00000000bed07e7c",
    "kind": "theorem"
@@ -1075,14 +1019,6 @@
   },
   "Blanc.ExecutionAccountingReplay.ProcessMessage.targetBalanceCredits_of_body": {
    "fp": "000000006114032b",
-   "kind": "theorem"
-  },
-  "Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body": {
-   "fp": "00000000e08d8b93",
-   "kind": "theorem"
-  },
-  "Blanc.ExecutionAccountingReplay.ReplayCarrier.processCreateMessage_of_body_observed": {
-   "fp": "0000000065855690",
    "kind": "theorem"
   },
   "Blanc.ExecutionAccountingReplay.ReplayCarrier.processMessage_of_body_observed": {
@@ -1409,10 +1345,6 @@
    "fp": "000000001ade0628",
    "kind": "theorem"
   },
-  "Blanc.ForkUniform.Sevm.withFork_data": {
-   "fp": "000000007afde647",
-   "kind": "theorem"
-  },
   "Blanc.ForkUniform.Sevm.withFork_gas": {
    "fp": "00000000b9a25c4a",
    "kind": "theorem"
@@ -1737,10 +1669,6 @@
    "fp": "00000000dc0b00f6",
    "kind": "theorem"
   },
-  "Blanc.LidoCircuitBreaker.heartbeat_success_settled_effects": {
-   "fp": "0000000019eaa187",
-   "kind": "theorem"
-  },
   "Blanc.LidoCircuitBreaker.isPauserLive_runCompiled_of_later": {
    "fp": "00000000440a3b83",
    "kind": "theorem"
@@ -1865,40 +1793,8 @@
    "fp": "0000000009c6e6fe",
    "kind": "theorem"
   },
-  "Blanc.LidoCircuitBreaker.registerPauser_absentZero_success_settled_effects": {
-   "fp": "0000000036f1f225",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_foundZeroOldLastSwapPop_success_settled_effects": {
-   "fp": "00000000f5919ac1",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_foundZeroRetainedLast_success_settled_effects": {
-   "fp": "000000002df59afa",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_foundZeroRetainedSwapPop_success_settled_effects": {
-   "fp": "00000000dca5f1f3",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_freshNonzero_success_settled_effects": {
-   "fp": "00000000527fb2b1",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_oldLastNonzero_success_settled_effects": {
-   "fp": "00000000fa5a783b",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.registerPauser_retainedNonzero_success_settled_effects": {
-   "fp": "0000000070671236",
-   "kind": "theorem"
-  },
   "Blanc.LidoCircuitBreaker.registryObservation_raw_sound": {
    "fp": "00000000893a4371",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.removeTarget_pauseAfterSet_runCompiled": {
-   "fp": "0000000003ba48fe",
    "kind": "theorem"
   },
   "Blanc.LidoCircuitBreaker.runtimeMain_routeTo_pauseKernel_any": {
@@ -1923,14 +1819,6 @@
   },
   "Blanc.LidoCircuitBreaker.setHeartbeatInterval_runCompiledTo_success_requires_admin_and_inclusive": {
    "fp": "00000000ba2378aa",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.setHeartbeatInterval_runCompiled_of_inclusive": {
-   "fp": "0000000098c62185",
-   "kind": "theorem"
-  },
-  "Blanc.LidoCircuitBreaker.setHeartbeatInterval_success_settled_effects": {
-   "fp": "000000008e5f65e1",
    "kind": "theorem"
   },
   "Blanc.LidoCircuitBreaker.setPauserKernel_routeTo_pauseAfterSetCall_any": {
@@ -2105,10 +1993,6 @@
    "fp": "00000000d7c7327d",
    "kind": "theorem"
   },
-  "Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live": {
-   "fp": "0000000061ee8b1d",
-   "kind": "theorem"
-  },
   "Blanc.Lift.BeaconDeposit.configuredHistory_root": {
    "fp": "00000000ee51a383",
    "kind": "theorem"
@@ -2221,16 +2105,8 @@
    "fp": "00000000edad572e",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.PairHistoryReplayed.at_frame": {
-   "fp": "00000000344b95a3",
-   "kind": "theorem"
-  },
   "Blanc.Lift.UniswapV2Pair.PairObservedReplayWith.mono": {
    "fp": "0000000009e9c68f",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.PositionalMutableTurns.forget": {
-   "fp": "00000000baa51df1",
    "kind": "theorem"
   },
   "Blanc.Lift.UniswapV2Pair.RefinementControls.burn_witness_disagrees": {
@@ -2355,14 +2231,6 @@
   },
   "Blanc.Lift.UniswapV2Pair.nonces_bytecode_refines": {
    "fp": "000000002dfdc8b5",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.pair_history_replayed": {
-   "fp": "00000000154caaae",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.pair_live_outcome": {
-   "fp": "00000000d9b60584",
    "kind": "theorem"
   },
   "Blanc.Lift.UniswapV2Pair.permitTypehash_bytecode_live": {
@@ -2501,20 +2369,12 @@
    "fp": "00000000ecbf6962",
    "kind": "theorem"
   },
-  "Blanc.Lift.Weth9.ClosedInstance.deposit_settled_other_stor": {
-   "fp": "0000000057bc83b1",
-   "kind": "theorem"
-  },
   "Blanc.Lift.Weth9.ClosedInstance.deposit_transaction_settledFrame": {
    "fp": "00000000f055f029",
    "kind": "theorem"
   },
   "Blanc.Lift.Weth9.ClosedInstance.exists_depositHistory": {
    "fp": "00000000f3705aea",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Weth9.ClosedInstance.initialWorld_stor": {
-   "fp": "000000007cf49cb5",
    "kind": "theorem"
   },
   "Blanc.Lift.Weth9.ClosedInstance.retainedDepositBlock_transactions": {
@@ -2599,10 +2459,6 @@
   },
   "Blanc.Lift.Weth9.weth9_transfer_model_live": {
    "fp": "00000000ad06feae",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Weth9.weth9_withdraw_model_live": {
-   "fp": "0000000066524149",
    "kind": "theorem"
   },
   "Blanc.Lift.Weth9.weth9_withdraw_send_live": {
@@ -2709,20 +2565,8 @@
    "fp": "00000000f0b24d53",
    "kind": "theorem"
   },
-  "Blanc.Lift.ri_codecopy": {
-   "fp": "00000000798c559d",
-   "kind": "theorem"
-  },
   "Blanc.Lift.ric_branchToCut": {
    "fp": "00000000d4826901",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.rr_cmp_eq": {
-   "fp": "0000000073b4fcfc",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.rr_cmp_gt": {
-   "fp": "000000006a540040",
    "kind": "theorem"
   },
   "Blanc.Lift.rx_callNZ": {
@@ -2779,10 +2623,6 @@
   },
   "Blanc.Linst.run_accGrow": {
    "fp": "00000000987ac2da",
-   "kind": "theorem"
-  },
-  "Blanc.LockExclusion.LockSpec.locked_core": {
-   "fp": "000000003cb69466",
    "kind": "theorem"
   },
   "Blanc.LockExclusion.dominance_of_noSstore_of_nil": {
@@ -2894,10 +2734,6 @@
    "kind": "definition"
   },
   "Blanc.Ninst.coinbase": {
-   "fp": "00000000b614c6ff",
-   "kind": "definition"
-  },
-  "Blanc.Ninst.create2": {
    "fp": "00000000b614c6ff",
    "kind": "definition"
   },
@@ -3015,14 +2851,6 @@
   },
   "Blanc.Prorata.Inv.sumNof": {
    "fp": "00000000cc4d090b",
-   "kind": "theorem"
-  },
-  "Blanc.Prorata.ProrataAccountingReplay.of_addBal": {
-   "fp": "00000000d3e98ad6",
-   "kind": "theorem"
-  },
-  "Blanc.Prorata.ProrataAccountingReplay.of_transfer_from_ne": {
-   "fp": "0000000040b4a656",
    "kind": "theorem"
   },
   "Blanc.Prorata.ProrataAccountingStep.rho_lt_price_divisor": {
@@ -4413,10 +4241,6 @@
    "fp": "0000000069074200",
    "kind": "theorem"
   },
-  "Blanc.processCreateMessage_ok_of_processMessage_error": {
-   "fp": "00000000353b5850",
-   "kind": "theorem"
-  },
   "Blanc.reach_of_dispatch": {
    "fp": "00000000c678f108",
    "kind": "theorem"
@@ -4507,5 +4331,10 @@
   }
  },
  "schema": 2,
- "toolchain": "leanprover/lean4:v4.34.0"
+ "toolchain": "leanprover/lean4:v4.35.0",
+ "unreviewed_excluded": {
+  "count": 140,
+  "sha256": "a89ee9a77bf25b512198a82d92859e11d7baa6ac8c7192c38af4dd2c24b05677",
+  "source": "unreviewed.txt"
+ }
 }
