@@ -989,6 +989,9 @@ import Blanc.Lift.Curve3Pool.LivePremises
 import Blanc.Lift.Curve3Pool.ExactLivePremises
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
 import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityExactSchedule
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityExactWalk
+import Blanc.Lift.Curve3Pool.RemoveLiquidityExactFrame
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
 import Blanc.Lift.Curve3Pool.Walk.Fallback
