@@ -105,6 +105,7 @@ class StackCertificateTests(unittest.TestCase):
         self.assertEqual(missing, (pcs("subtree1459") - pcs("subtree1717")) | {371, 839, 1182})
 
     def assert_proof_structure(self, text, spec):
+        text = GEN.recover_legacy_proof_region(text, self.raw, self.states, spec)
         by_name = {part.name: part for part in self.parts}
         parts = []
 
@@ -198,6 +199,37 @@ class StackCertificateTests(unittest.TestCase):
         self.assertNotIn(1735, {pc for pc, _ in by_name["subtree1221"].rows})
         self.assertIn(1735, {pc for pc, _ in by_name["subtree1730"].rows})
 
+    def test_forward_proofs_preserve_exact_legacy_text(self):
+        for spec, path in GEN.PROOF_OUTPUTS.items():
+            text = self.proofs[path]
+            legacy = GEN.render_proof_region(self.raw, self.states, spec)
+            self.assertEqual(GEN.recover_legacy_proof_region(text, self.raw, self.states, spec), legacy)
+            fragments = GEN.forward_row_proof_fragments(self.states, spec)
+            self.assertEqual(len(fragments), len(GEN.region_parts(self.parts, spec.root)))
+            for old, new in fragments:
+                self.assertEqual(text.count(new), 1)
+                self.assertEqual(legacy.count(old), 1)
+
+    def test_forward_recovery_rejects_unregistered_proof_changes(self):
+        spec = GEN.REGION576
+        text = self.proofs[GEN.REGION576_OUTPUT]
+        old, new = GEN.forward_row_proof_fragments(self.states, spec)[0]
+        corruptions = {
+            "missing rewrite": text.replace(new, old, 1),
+            "duplicate rewrite": text.replace(new, new + "\n" + new, 1),
+            "wrong rewrite": text.replace("jumpable_eq_jumpdestOk", "jumpable", 1),
+            "extra rewrite": text.replace(new, new + "\n  skip", 1),
+            "old body": text.replace("  · exact subtree379_rows_checked", "  · exact subtree411_rows_checked", 1),
+            "layout": text.replace("code.toByteArray 372 387", "code.toByteArray 372 388", 1),
+            "public header": text.replace("theorem subtree379_rows_checked", "theorem changed_rows_checked", 1),
+            "complete table": text.replace("checkRow code.toByteArray table 8", "checkRow code.toByteArray subtree576 8", 1),
+        }
+        for name, corrupted in corruptions.items():
+            with self.subTest(name=name):
+                self.assertNotEqual(corrupted, text)
+                with self.assertRaises(GEN.Rejected):
+                    GEN.recover_legacy_proof_region(corrupted, self.raw, self.states, spec)
+
     def test_certificate_facade_is_complete_and_same_frame(self):
         facade = self.proofs[GEN.CERTIFICATE_OUTPUT]
         self.assertEqual(re.findall(r"^import (\S+)$", facade, re.M), [
@@ -228,7 +260,7 @@ class StackCertificateTests(unittest.TestCase):
             "checkRow code.toByteArray subtree1022 8",
             1,
         )
-        with self.assertRaisesRegex(AssertionError, "complete table"):
+        with self.assertRaisesRegex(GEN.Rejected, "forward row proof"):
             self.assert_proof_structure(mutated, GEN.REGION1022)
         self.assert_proof_structure(rendered, GEN.REGION1022)
 

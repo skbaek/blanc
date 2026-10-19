@@ -246,6 +246,50 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
     return "\n".join(output)
 
 
+def forward_row_proof_fragments(states: dict[int, Pattern], spec: RegionSpec) -> list[tuple[str, str]]:
+    """Exact reversible proof-only replacements; every public header stays fixed."""
+    parts = region_parts(subtrees(states), spec.root)
+    root = parts[-1]
+    fragments = []
+    for part in parts:
+        stem = part.name if part is root else f"{spec.internal_theorem_prefix}{part.name}"
+        header = (f"theorem {stem}_rows_checked :\n"
+                  f"    {part.name}.all (checkRow code.toByteArray table {MAXIMUM}) = true := by\n")
+        if part.left is None:
+            old = header + "  decide +kernel"
+            new = (header + f"  simp only [{part.name}, Table.all, checkRow, checkInstruction, "
+                   "jumpable_eq_jumpdestOk]\n  decide +kernel")
+        else:
+            old = header + "  apply Table.all_node\n  · decide +kernel"
+            new = (header + "  apply Table.all_node\n"
+                   "  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]\n"
+                   "    decide +kernel")
+        fragments.append((old, new))
+    return fragments
+
+
+def recover_legacy_proof_region(text: str, raw: bytes, states: dict[int, Pattern], spec: RegionSpec) -> str:
+    """Remove only the complete prescribed rewrites, then require every old byte."""
+    for old, new in forward_row_proof_fragments(states, spec):
+        require(text.count(new) == 1, f"missing/duplicate forward row proof in {spec.root}")
+        text = text.replace(new, old, 1)
+    # This equality protects the entire old body, topology, layout and headers.
+    require(text == render_proof_region(raw, states, spec),
+            f"forward proof does not recover exact legacy {spec.root}")
+    return text
+
+
+def render_forward_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec) -> str:
+    legacy = render_proof_region(raw, states, spec)
+    text = legacy
+    for old, new in forward_row_proof_fragments(states, spec):
+        require(text.count(old) == 1, f"missing/duplicate legacy row proof in {spec.root}")
+        text = text.replace(old, new, 1)
+    require(recover_legacy_proof_region(text, raw, states, spec) == legacy,
+            f"forward proof does not preserve legacy {spec.root}")
+    return text
+
+
 def render_certificate_facade(raw: bytes, states: dict[int, Pattern]) -> str:
     decoded = decode(raw)
     by_name = {part.name: part for part in subtrees(states)}
@@ -423,7 +467,7 @@ def expected_output(source: Path = SOURCE) -> str:
 def expected_proof_outputs(source: Path = SOURCE) -> dict[Path, str]:
     raw = runtime_bytes(source.read_text())
     states = analyze(raw)
-    outputs = {path: render_proof_region(raw, states, spec) for spec, path in PROOF_OUTPUTS.items()}
+    outputs = {path: render_forward_proof_region(raw, states, spec) for spec, path in PROOF_OUTPUTS.items()}
     outputs[CERTIFICATE_OUTPUT] = render_certificate_facade(raw, states)
     return outputs
 
@@ -442,7 +486,14 @@ def main() -> int:
             print("OK — wrote Blanc/DripStackSafetyData.lean")
         elif args.write_proofs:
             proofs = expected_proof_outputs()
-            require(REGION576_OUTPUT.is_file() and REGION576_OUTPUT.read_text() == proofs[REGION576_OUTPUT],
+            raw = runtime_bytes(SOURCE.read_text())
+            states = analyze(raw)
+            legacy576 = render_proof_region(raw, states, REGION576)
+            forward576 = proofs[REGION576_OUTPUT]
+            require(recover_legacy_proof_region(forward576, raw, states, REGION576) == legacy576,
+                    "renderer does not preserve exact legacy Region576 proof")
+            require(REGION576_OUTPUT.is_file() and
+                    REGION576_OUTPUT.read_text() in (legacy576, forward576),
                     "renderer does not reproduce accepted Blanc/DripStackSafetyRegion576.lean")
             for path, proof in proofs.items():
                 path.write_text(proof)
