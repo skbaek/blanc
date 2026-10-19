@@ -49,8 +49,56 @@ theorem cw_pm_ne {iw : B256} (hi : iw.toNat < 3) : pickWord3 iw.toNat cwP1 cwPm 
   obtain h | h | h : iw.toNat = 0 ∨ iw.toNat = 1 ∨ iw.toNat = 2 := by omega
   all_goals rw [h]; decide
 
-/-- **The first `get_y_D` and `dy_0`, forward.** -/
-theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
+/-- The first `get_y_D`'s input memory: the frame `[0x140, 0x5c0)` saved (the counter at
+`0x5c0`), then `amp`, `i`, `xp` and `D1` at `0x5e0 … 0x680`. -/
+def cwDArgs (M : Mem) (x0 x1 x2 Aw iw D1 : B256) : Mem :=
+  ((((((saveMem M 0x5c0 (0x140 + 32 * 0) (35 + 1)).write 0x5e0 Aw.toBytes).write 0x600
+    iw.toBytes).write 0x620 x0.toBytes).write 0x640 x1.toBytes).write 0x660 x2.toBytes).write
+    0x680 D1.toBytes
+
+/-- **The memory `rx_cw_d` leaves**, from its entry memory `M`: `get_y_D`'s result at `0`,
+`new_y` parked at `0x6e0`, the frame restored, then `new_y`, `dy_0` and the loop counter. -/
+def cwDMem (M : Mem) (x0 x1 x2 Aw iw D1 y : B256) : Mem :=
+  ((((restoreMem 0x5c0 ((((cwDArgs M x0 x1 x2 Aw iw D1).write 0 y.toBytes).write 0x6e0
+    y.toBytes).write 0x5c0 (Bytes.toB256 [5, 160]).toBytes) (0x140 + 32 * 35)
+    (exSaved (memWord M) 0x140 (35 + 1))).write 0x5a0 y.toBytes).write 0x700
+    ((pickWord3 iw.toNat x0 x1 x2 - y) / pickWord3 iw.toNat cwP1 cwPm cwPm).toBytes).write 0x720
+    (Bytes.toB256 [0]).toBytes)
+
+/-- `rx_cw_dE`'s memory bookkeeping, outside the walk. -/
+theorem cwDMem_eq {M M1 M2 M3 : Mem} {img : Bytes} {x0 x1 x2 Aw iw D1 y : B256}
+    (hR0 : Mem.Reads M img) (hM1 : M1 = saveMem M 0x5c0 (0x140 + 32 * 0) (35 + 1))
+    (hso : ScratchOut ((((((M1.write 0x5e0 Aw.toBytes).write 0x600 iw.toBytes).write 0x620
+      x0.toBytes).write 0x640 x1.toBytes).write 0x660 x2.toBytes).write 0x680 D1.toBytes) M2
+      0x140 0x340 (Nat.toB256 y.toNat))
+    (hWA : Mem.Wf ((((((M1.write 0x5e0 Aw.toBytes).write 0x600 iw.toBytes).write 0x620
+      x0.toBytes).write 0x640 x1.toBytes).write 0x660 x2.toBytes).write 0x680 D1.toBytes))
+    (hszA : ((((((M1.write 0x5e0 Aw.toBytes).write 0x600 iw.toBytes).write 0x620
+      x0.toBytes).write 0x640 x1.toBytes).write 0x660 x2.toBytes).write 0x680 D1.toBytes).size =
+      0x6a0)
+    (hM3 : M3 = restoreMem 0x5c0 ((M2.write 0x6e0 (Nat.toB256 y.toNat).toBytes).write 0x5c0
+      (Bytes.toB256 [5, 160]).toBytes) (0x140 + 32 * 35)
+      (exSaved (fun o => Bytes.toB256 (List.sliceD img o 32 0)) 0x140 (35 + 1))) :
+    ((M3.write 0x5a0 y.toBytes).write 0x700
+      ((pickWord3 iw.toNat x0 x1 x2 - y) / pickWord3 iw.toNat cwP1 cwPm cwPm).toBytes).write 0x720
+      (Bytes.toB256 [0]).toBytes = cwDMem M x0 x1 x2 Aw iw D1 y := by
+  have hw : (fun o => Bytes.toB256 (List.sliceD img o 32 0)) = memWord M := by
+    funext o; unfold memWord; rw [hR0.read]
+  rw [toB256_toNat] at hso hM3
+  have hg := hso.eqExcept hWA (by rw [hszA]; decide)
+  have hr := (((hg.write 0x6e0 y.toBytes).write 0x5c0 (Bytes.toB256 [5, 160]).toBytes).restoreMem
+    0x5c0 (p := 0x140 + 32 * 35) (exSaved (memWord M) 0x140 (35 + 1))).eq
+    (cw_cover (N := 35) _ (by rw [exSaved_length]) (by decide) _)
+    (Mem.Full.restoreMem _ _ ((Mem.full_write_word_of_grow _ (by
+      rw [Mem.size_write_word_of_add_le (by rw [hszA]; decide), hszA]; decide)).write _ _))
+    (Mem.Full.restoreMem _ _ ((Mem.full_write_word_of_grow _ (by
+      rw [← hso.size] at hszA; rw [hszA]; decide)).write _ _))
+  rw [hM3, hw, ← hr]
+  unfold cwDMem cwDArgs
+  rw [hM1]
+
+/-- **The first `get_y_D` and `dy_0`, forward, exactly** (core). -/
+theorem rx_cw_dE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {x0 x1 x2 Aw iw D1 y : B256}
     (hi3 : iw.toNat < 3)
     (hy : getYDChk Aw.toNat ⟨iw.toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D1.toNat =
@@ -69,35 +117,38 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       WordAt img' 0x5a0 y → WordAt img' 0x700
         ((pickWord3 iw.toNat x0 x1 x2 - y) / pickWord3 iw.toNat cwP1 cwPm cwPm) →
       WordAt img' 0x720 (Bytes.toB256 [0]) → R ≤ g → g ≤ G →
+      G = g + 5344 + costGetYD Aw.toNat iw.toNat x0.toNat x1.toNat x2.toNat D1.toNat →
+      M' = cwDMem M x0 x1 x2 Aw iw D1 y →
       SFunc.RunEx cert.prog sevm
         (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
         t_405e_c1348 Q) :
     SFunc.RunEx cert.prog sevm (St b S M G) t_3f41_c984 Q := by
+  have hR0 := hR
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 2762 + costGetYD Aw.toNat iw.toNat x0.toNat x1.toNat x2.toNat
       D1.toNat + 19 + 162 + (67 * 35 + 56) :=
     ⟨G - costGetYD Aw.toNat iw.toNat x0.toNat x1.toNat x2.toNat D1.toNat - 5344, by omega⟩
   rw [cw_sv3_first]
-  refine rx_svFrom (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x5c0) (sz := 0x5e0)
+  refine rx_svFromM (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x5c0) (sz := 0x5e0)
     (by decide) rfl (by decide) (by decide) cw_sv3_chain 35 (n := 0) rfl hR hW hsz hctr
     (fun m _ _ => wordAt_self _ _) (by omega) ?_
   clear hR hW hsz
-  intro M1 img1 hR hW hsz hk1 hc1
+  intro M1 img1 hM1 hR hW hsz hk1 hc1
   -- the arguments of `get_y_D`
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x1a0) (v := Aw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hA (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x5e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x5e0 0x5e0 32 = 0x600 by decide] at hsz
+  refine rxe_mstoreW (o := 0x5e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x5e0 0x5e0 32 = 0x600 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hi (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x600) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x600 0x600 32 = 0x620 by decide] at hsz
+  refine rxe_mstoreW (o := 0x600) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x600 0x600 32 = 0x620 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x320) (v := x0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hx0 (.inl (by decide)))) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
+  refine rxe_mstoreW (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x620 0x620 32 = 0x640 by decide] at hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
@@ -105,7 +156,7 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstore (o := 0x640) (c := 7) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
+  refine rxe_mstoreW (o := 0x640) (c := 7) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x640 0x640 32 = 0x660 by decide] at hsz
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
@@ -113,13 +164,13 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_mstore (o := 0x660) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x660 0x660 32 = 0x680 by decide] at hsz
+  refine rxe_mstoreW (o := 0x660) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x660 0x660 32 = 0x680 by decide] at hsz
   xr (rx_pop ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x520) (v := D1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hD1 (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x680) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x680 0x680 32 = 0x6a0 by decide] at hsz
+  refine rxe_mstoreW (o := 0x680) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x680 0x680 32 = 0x6a0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x680) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   xr (rx_push rfl (by hrs) ·)
@@ -134,12 +185,15 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rxm_mload (o := 0x5e0) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   obtain ⟨M2, hso, hrun⟩ := getYD_exact (G := g1 + 2762) (ρ := Nat.toB256 (0x3fb6 + 6))
     (S := exSaved (fun o => Bytes.toB256 (img.sliceD o 32 0)) (0x140 + 32 * 0) (35 + 1) ++ S)
-    (M := M) (by omega) (by omega)
+    (by rw [hsz]) (by rw [hsz]; decide)
     (by simp only [List.length_append, exSaved_length]; omega) hi3 hy
   refine rxe_pcCall cw_prog_753 (by decide)
     (by simp only [List.length_cons, List.length_append, exSaved_length]; omega) hrun ?_
   have hW2 := hso.wf hW
   have hsz2 : M2.size = 0x6a0 := by rw [hso.size, hsz]
+  have hsoA := hso
+  have hWA := hW
+  have hszA := hsz
   clear hR hW hsz hrun hso
   have hR := Mem.reads_data M2
   have hW := hW2
@@ -148,15 +202,15 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   -- `new_y` parked, the restore counter
   xr (rx_dest ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x6e0) (c := 13) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x6a0 0x6e0 32 = 0x700 by decide] at hsz
+  refine rxe_mstoreW (o := 0x6e0) (c := 13) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x6a0 0x6e0 32 = 0x700 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x5c0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x700 0x5c0 32 = 0x700 by decide] at hsz
+  refine rxe_mstoreW (o := 0x5c0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x700 0x5c0 32 = 0x700 by decide] at hsz
   rw [cw_rs3_first]
-  refine rx_rsFrom (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x5c0) (sz := 0x700)
+  refine rx_rsFromM (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x5c0) (sz := 0x700)
     (by decide) rfl (by decide) (by decide) cw_rs3_chain 35 (n := 0) rfl hR hW hsz
     (by wauto) (by hrs) ?_
-  intro M3 img3 hR3 hW3 hsz3 hm3 hk3
+  intro M3 img3 hM3 hR3 hW3 hsz3 hm3 hk3
   have hy3 : WordAt img3 0x6e0 (Nat.toB256 y.toNat) := hk3 _ _ (by wauto) (.inr (.inr (by decide)))
   rw [toB256_toNat] at hy3
   have rhi := cw_restored (hm3 1 (by omega)) hi
@@ -174,7 +228,7 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x6e0) (v := y) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hy3) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x5a0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x700 0x5a0 32 = 0x700 by decide] at hsz
+  refine rxe_mstoreW (o := 0x5a0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x700 0x5a0 32 = 0x700 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH rhi) (by hrs) ·)
@@ -233,15 +287,44 @@ theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x700) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x700 0x700 32 = 0x720 by decide] at hsz
+  refine rxe_mstoreW (o := 0x700) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x700 0x700 32 = 0x720 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x720) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x720 0x720 32 = 0x740 by decide] at hsz
+  refine rxe_mstoreW (o := 0x720) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x720 0x720 32 = 0x740 by decide] at hsz
   xr (rx_add (by hrs) ·)
-  exact k M _ g1 hR hW hsz (fun m v hm' hv => by wautoH (cw_restored (hm3 m (by omega)) hv))
-    (by wauto) (by wauto) (by wauto) (by omega) (by omega)
+  refine k _ _ g1 hR hW hsz (fun m v hm' hv => by wautoH (cw_restored (hm3 m (by omega)) hv))
+    (by wauto) (by wauto) (by wauto) (by omega) (by omega) (by omega)
+    (cwDMem_eq hR0 hM1 hsoA hWA hszA hM3)
+
+
+/-- **The first `get_y_D` and `dy_0`, forward.** -/
+theorem rx_cw_d {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
+    {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {x0 x1 x2 Aw iw D1 y : B256}
+    (hi3 : iw.toNat < 3)
+    (hy : getYDChk Aw.toNat ⟨iw.toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get D1.toNat =
+      some y.toNat)
+    (hyl : ¬ pickWord3 iw.toNat x0 x1 x2 < y)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0)
+    (hctr : WordAt img 0x5c0 (Nat.toB256 0x140)) (hA : WordAt img 0x1a0 Aw)
+    (hi : WordAt img 0x160 iw) (hx0 : WordAt img 0x320 x0) (hx1 : WordAt img 0x340 x1)
+    (hx2 : WordAt img 0x360 x2) (hD1 : WordAt img 0x520 D1) (hp0 : WordAt img 0x220 cwP1)
+    (hp1 : WordAt img 0x240 cwPm) (hp2 : WordAt img 0x260 cwPm)
+    (hG : costGetYD Aw.toNat iw.toNat x0.toNat x1.toNat x2.toNat D1.toNat + 5344 + R ≤ G)
+    (hroom : S.length + 50 < 1024)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x740 →
+      (∀ m v, m < 35 → WordAt img (0x140 + 32 * m) v → WordAt img' (0x140 + 32 * m) v) →
+      WordAt img' 0x5a0 y → WordAt img' 0x700
+        ((pickWord3 iw.toNat x0 x1 x2 - y) / pickWord3 iw.toNat cwP1 cwPm cwPm) →
+      WordAt img' 0x720 (Bytes.toB256 [0]) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm
+        (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
+        t_405e_c1348 Q) :
+    SFunc.RunEx cert.prog sevm (St b S M G) t_3f41_c984 Q :=
+  rx_cw_dE hi3 hy hyl hR hW hsz hctr hA hi hx0 hx1 hx2 hD1 hp0 hp1 hp2 hG hroom
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7 h8 h9
 
 end Blanc.Lift.Curve3Pool
