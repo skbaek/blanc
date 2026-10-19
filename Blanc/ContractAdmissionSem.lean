@@ -103,11 +103,9 @@ theorem preserves_lift_admitted_sem (c : ContractSpecSem) (ca : Adr)
     replace hσ' := σ_pre hσ'
     cases n' with
     | push xs le =>
-      have hrun := (Step.run_ofExecution (xl := (.none : Xlot))).mp h_run'
-      rcases Except.bind_eq_ok hrun.2.symm with ⟨devm1, h_charge, h_push⟩
-      exact hσ'.state_eq
-        (((Devm.burn_of_chargeGas h_charge).state).trans
-          ((Devm.push_of_push h_push).state)).symm
+      have frame := Ninst.push_instructionFrame_effectRec
+        (xl := .none) trivial h_run'
+      exact hσ'.state_eq frame.state.symm
     | dupn imm =>
       have frame := Ninst.dupn_instructionFrame_effectRec
         (xl := .none) trivial h_run'
@@ -141,9 +139,8 @@ theorem preserves_lift_admitted_sem (c : ContractSpecSem) (ca : Adr)
     obtain ⟨hσ', hfork'⟩ := h_pc'
     cases n' with
     | push xs le =>
-      have hrun := (Step.run_ofExecution
-        (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'
-      cases hrun.1
+      simp only [Ninst.StepRun, Ninst.step_push] at h_run'
+      split at h_run' <;> cases (Step.run_ofExecution.mp h_run').1
     | dupn imm =>
       have hrun := (Step.run_ofExecution
         (xl := (.some ⟨evm'', exn''⟩ : Xlot))).mp h_run'

@@ -186,7 +186,7 @@ lemma Devm.Burn.refl {devm : Devm} : Devm.Burn devm devm :=
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     (h : Devm.BurnBy cost devm devm') : Devm.Burn devm devm' :=
@@ -198,7 +198,7 @@ lemma Devm.Burn.of_burnBy {cost : Nat} {devm devm' : Devm}
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites }
+    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites, touchedAccounts := h.touchedAccounts }
 
 lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm}
     (h : Devm.PopBurnBy xs cost devm devm') : Devm.PopBurn xs devm devm' :=
@@ -210,7 +210,7 @@ lemma Devm.PopBurn.of_popBurnBy {xs : List B256} {cost : Nat} {devm devm' : Devm
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites }
+    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites, touchedAccounts := h.touchedAccounts }
 
 lemma Ninst.Run.of_runCompiled {sevm : Sevm} {devm : Devm} {n : Ninst} {devm' : Devm}
     (h : Ninst.RunCompiled sevm devm n devm') : Ninst.Run sevm devm n devm' := by
@@ -254,7 +254,7 @@ lemma Devm.burnBy_setMach {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft)
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 /-- The two-instruction program `[JUMPDEST, STOP]` has a gas-exact run
 whenever it can pay for its entry `JUMPDEST`. -/
@@ -287,7 +287,7 @@ lemma Devm.BurnBy.of_burn {cost : Nat} {devm devm' : Devm}
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites }
+    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites, touchedAccounts := h.touchedAccounts }
 
 /-- Upgrade a `Devm.PopBurn` to a `Devm.PopBurnBy` with the measured
 decrement. -/
@@ -301,7 +301,7 @@ lemma Devm.PopBurnBy.of_popBurn {xs : List B256} {cost : Nat} {devm devm' : Devm
     accessedStorageKeys := h.accessedStorageKeys, state := h.state,
     createdAccounts := h.createdAccounts,
     transientStorage := h.transientStorage, stateGas := h.stateGas,
-    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites }
+    accountReads := h.accountReads, storageReads := h.storageReads, storageWrites := h.storageWrites, touchedAccounts := h.touchedAccounts }
 
 /-- `chargeGas`'s gas equation, kept exact.  `Devm.burn_of_chargeGas` is the
 same fact with `(· ≥ ·)` in place of the equation. -/
@@ -419,8 +419,9 @@ lemma Ninst.stepRun_pc_irrel {n : Ninst} (h : Ninst.pcFree n = true)
     Ninst.StepRun pc' sevm devm n xl ex := by
   cases n with
   | push xs le =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hs ⊢
-    exact hs
+    by_cases disabled : (decide (xs = []) && !sevm.benvStat.rules.op.push0) = true <;>
+      simp only [Ninst.StepRun, Ninst.step_push, disabled, Bool.false_eq_true, ↓reduceIte,
+        Step.run_ofExecution] at hs ⊢ <;> exact hs
   | reg r =>
     have hr : r ≠ Rinst.pc := by rintro rfl; simp only [pcFree, Bool.false_eq_true] at h
     rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hs ⊢
@@ -471,17 +472,20 @@ lemma pushAt_run {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
   | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
   | cont h exc' =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push, ite_eq_right hne] at hs
+    simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+      Bool.false_eq_true, ↓reduceIte] at hs
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
     cases hpc
     exact ⟨_, exc', hrun, Exec.Deriv.Prec.cont h exc'⟩
   | doneOk h _ _ _ =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push] at hs
+    simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+      Bool.false_eq_true, ↓reduceIte] at hs
     cases Step.ofExecution_ne_spawn hs
   | runOk h _ _ _ _ =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push] at hs
+    simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+      Bool.false_eq_true, ↓reduceIte] at hs
     cases Step.ofExecution_ne_spawn hs
 
 lemma pushAt_exact {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
@@ -1088,9 +1092,9 @@ and `pop` on states whose success conditions the relation's premises supply.
 
 The frames pin every `Devm` field, so the state the machine computes and the
 state the derivation names are identified by extensionality through the
-eighteen canonical projections. -/
+nineteen canonical projections. -/
 
-/-- Extensionality through the eighteen canonical projections -- exactly the
+/-- Extensionality through the nineteen canonical projections -- exactly the
 fields a `Devm.Rel` frame relates, so an all-equal frame identifies states. -/
 lemma Devm.eq_of_proj {a b : Devm}
     (h_stack : a.stack = b.stack) (h_memory : a.memory = b.memory)
@@ -1106,9 +1110,10 @@ lemma Devm.eq_of_proj {a b : Devm}
     (h_sg : a.stateGas = b.stateGas)
     (h_ar : a.meta.accountReads = b.meta.accountReads)
     (h_sr : a.meta.storageReads = b.meta.storageReads)
-    (h_sw : a.world.storageWrites = b.world.storageWrites) : a = b := by
-  rcases a with ⟨⟨s₁, m₁, g₁, sg₁⟩, ⟨l₁, r₁, o₁, d₁, rd₁, e₁, aa₁, ak₁, ca₁, ar₁, sr₁⟩, ⟨st₁, ts₁, sw₁⟩⟩
-  rcases b with ⟨⟨s₂, m₂, g₂, sg₂⟩, ⟨l₂, r₂, o₂, d₂, rd₂, e₂, aa₂, ak₂, ca₂, ar₂, sr₂⟩, ⟨st₂, ts₂, sw₂⟩⟩
+    (h_sw : a.world.storageWrites = b.world.storageWrites)
+    (h_touched : a.meta.touchedAccounts = b.meta.touchedAccounts) : a = b := by
+  rcases a with ⟨⟨s₁, m₁, g₁, sg₁⟩, ⟨l₁, r₁, o₁, d₁, rd₁, e₁, aa₁, ak₁, ca₁, ar₁, sr₁, ta₁⟩, ⟨st₁, ts₁, sw₁⟩⟩
+  rcases b with ⟨⟨s₂, m₂, g₂, sg₂⟩, ⟨l₂, r₂, o₂, d₂, rd₂, e₂, aa₂, ak₂, ca₂, ar₂, sr₂, ta₂⟩, ⟨st₂, ts₂, sw₂⟩⟩
   simp only [Devm.stack, Devm.memory, Devm.gasLeft, Devm.stateGas, Devm.logs,
     Devm.refundCounter, Devm.output, Devm.accountsToDelete, Devm.returnData,
     Devm.error, Devm.accessedAddresses, Devm.accessedStorageKeys, Devm.state,
@@ -1161,7 +1166,9 @@ lemma Evm.push_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {xs : Bytes}
       .cont (pc + xs.length + 1)
         (devm.setMach
           ⟨xs.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) := by
-  rw [Evm.step_next h_at, Ninst.step_push, ite_eq_right hne]
+  rw [Evm.step_next h_at]
+  simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+    Bool.false_eq_true, ↓reduceIte]
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
@@ -1182,7 +1189,7 @@ lemma Evm.jumpdest_cont {pc : Nat} {sevm : Sevm} {devm tgt : Devm}
       h_burn.returnData h_burn.error h_burn.accessedAddresses
       h_burn.accessedStorageKeys h_burn.state h_burn.createdAccounts
       h_burn.transientStorage h_burn.stateGas h_burn.accountReads
-      h_burn.storageReads h_burn.storageWrites
+      h_burn.storageReads h_burn.storageWrites h_burn.touchedAccounts
     show devm.gasLeft - gJumpdest = tgt.gasLeft
     have := h_burn.gasLeft; omega
   rw [Evm.step_jump h_at]
@@ -1298,10 +1305,15 @@ lemma Ninst.exec_of_stepRun {pc : Nat} {sevm : Sevm} {devm devmMid : Devm}
     rw [hstep, Ninst.step_reg, ← h_step.2]
     rfl
   | push xs le =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
-    refine ⟨Exec.cont ?_ exc'⟩
-    rw [hstep, Ninst.step_push, ← h_step.2]
-    rfl
+    simp only [Ninst.StepRun, Ninst.step_push] at h_step
+    split at h_step
+    · cases (Step.run_ofExecution.mp h_step).2
+    · rename_i enabled
+      rw [Step.run_ofExecution] at h_step
+      refine ⟨Exec.cont ?_ exc'⟩
+      simp only [hstep, Ninst.step_push, enabled]
+      rw [← h_step.2]
+      rfl
   | dupn imm =>
     rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at h_step
     refine ⟨Exec.cont ?_ exc'⟩
@@ -1390,7 +1402,7 @@ lemma Evm.branch_zero_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
         h_pop.output h_pop.accountsToDelete h_pop.returnData h_pop.error
         h_pop.accessedAddresses h_pop.accessedStorageKeys h_pop.state
         h_pop.createdAccounts h_pop.transientStorage h_pop.stateGas
-        h_pop.accountReads h_pop.storageReads h_pop.storageWrites
+        h_pop.accountReads h_pop.storageReads h_pop.storageWrites h_pop.touchedAccounts
       show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft
       omega
     rw [h_fin] at h2
@@ -1460,7 +1472,8 @@ lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
         state := h_pop.state, createdAccounts := h_pop.createdAccounts,
         transientStorage := h_pop.transientStorage, stateGas := h_pop.stateGas,
         accountReads := h_pop.accountReads,
-        storageReads := h_pop.storageReads, storageWrites := h_pop.storageWrites }
+        storageReads := h_pop.storageReads, storageWrites := h_pop.storageWrites,
+        touchedAccounts := h_pop.touchedAccounts }
     show devm.gasLeft - gVerylow - gHigh = tgt.gasLeft + gJumpdest
     omega
 
@@ -1524,7 +1537,8 @@ lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
         state := h_burn.state, createdAccounts := h_burn.createdAccounts,
         transientStorage := h_burn.transientStorage,
         stateGas := h_burn.stateGas, accountReads := h_burn.accountReads,
-        storageReads := h_burn.storageReads, storageWrites := h_burn.storageWrites }
+        storageReads := h_burn.storageReads, storageWrites := h_burn.storageWrites,
+        touchedAccounts := h_burn.touchedAccounts }
     show devm.gasLeft - gVerylow - gMid = tgt.gasLeft + gJumpdest
     omega
 

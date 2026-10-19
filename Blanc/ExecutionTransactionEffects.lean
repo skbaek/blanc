@@ -101,6 +101,8 @@ theorem checkTransaction_sender_nonce {benv : Benv} {bout : BlockOutput} {tx : T
   rcases Except.bind_eq_ok checked with ⟨_, account, checked⟩
   have senderEq : recovered = sender := congrArg Prod.fst (Except.ok.inj checked)
   rw [senderEq, Except.mapError_eq_ok_iff] at account
+  unfold checkTransactionSenderAccountFor at account
+  rcases Except.bind_eq_ok account with ⟨_, account, _⟩
   unfold checkTransactionSenderAccount at account
   split at account
   · cases account
@@ -198,11 +200,17 @@ theorem TransactionTrace.accountsToDelete_ne
     (inv : c.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (hfork : CoveredFork benv.stat.fork) :
-    ∀ address ∈ trace.messageOut.accountsToDelete.toList, address ≠ ca :=
-  (ContractSpec.processMessageCall_preserves_inv (by
+    ∀ address ∈ trace.messageOut.accountsToDelete.toList, address ≠ ca := by
+  have inherited : ca ∉ trace.msg.inheritedDeletions := by
+    have prepared := trace.prepared
+    unfold prepareMessage at prepared
+    have fields := congrArg Msg.inheritedDeletions (Except.ok.inj prepared)
+    rw [← fields]
+    exact AdrSet.not_mem_empty
+  exact (ContractSpec.processMessageCall_preserves_inv (by
     rw [prepareMessage_benv trace.prepared]
     simpa only [Benv.beginTransaction] using hfork) preserves
-    trace.message.result (trace.msgInv inv notCreated)).2
+    trace.message.result (trace.msgInv inv notCreated) inherited).2
 
 /-- An account the deletion fold never names survives the fold untouched. -/
 theorem foldl_destroyAccount_get_eq

@@ -792,8 +792,9 @@ theorem processCreateMessage_msg_getStor_eq_of_empty
     dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
       Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
     rw [State.incrNonce_get_stor]
-    simp only [State.setStor, State.get_set_self, ite_self]
-    exact empty.symm
+    unfold State.setStor
+    split <;> simp only [State.get_setPresent_self, State.get_set_self, ite_self]
+    all_goals exact empty.symm
   · dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
     Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
     rw [State.incrNonce_get_stor, ite_eq_right (fun h => target h.1), State.setStor_get_stor_ne target]
@@ -2063,7 +2064,8 @@ theorem Exec.Deriv.ParentPrefix.advance_pushToward
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
           have sourceStep := hstatic.symm.trans hstep
-          rw [Ninst.step_push, ite_eq_right hne] at sourceStep
+          simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+            Bool.false_eq_true, ↓reduceIte] at sourceStep
           obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
           cases hpc
           exact ⟨_, next, .cont hstep next, rest,
@@ -2073,13 +2075,19 @@ theorem Exec.Deriv.ParentPrefix.advance_pushToward
               Evm.step ⟨pc, sevm, pre⟩ =
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
+          have sourceStep := hstatic.symm.trans hstep
+          simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+            Bool.false_eq_true, ↓reduceIte] at sourceStep
+          exact (Step.ofExecution_ne_spawn sourceStep).elim
       | runOk hstep henter child hresume next =>
           have hstatic :
               Evm.step ⟨pc, sevm, pre⟩ =
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
+          have sourceStep := hstatic.symm.trans hstep
+          simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+            Bool.false_eq_true, ↓reduceIte] at sourceStep
+          exact (Step.ofExecution_ne_spawn sourceStep).elim
 
 /-- Cross an actually executed compiler jump only when the nominated source
 target lies later in the same-frame prefix. -/

@@ -1921,6 +1921,13 @@ unfolding a concrete state tower. Examples include:
   existing-account `setPresent` branch, and Blanc's
   `setStorVal_getStor_self` / `Devm.getStorVal_setStorVal_self` projections.
 
+For equality of whole dynamic machines, `Devm.eq_of_proj` in
+[`Blanc/Compiled.lean`](../Blanc/Compiled.lean) requires all nineteen exact
+projections, including `a.meta.touchedAccounts = b.meta.touchedAccounts`.
+Supply that equality from the actual frame's `touchedAccounts` field or from
+an update that preserves the metadata. Equality of persistent state alone
+does not determine the touched set.
+
 If several updates form a familiar semantic post-state, continue to S2.
 
 ### S2. I need a reusable composite projection cut
@@ -3233,6 +3240,15 @@ consumer needs canonical interpreter ingress as one conjunct:
   theorem through their exact retained wrappers.  Each carrier has a matching
   `FrameAdmitted` predicate, so admission is required only for interpreter
   frames that the concrete trace actually entered.
+  The whole-call `MessageCallTrace.stateInv_admitted_sem` and
+  `MessageCallTrace.stateInv_admitted` conjunctions additionally require
+  `ca ∉ msg.inheritedDeletions`. Admission constrains actual interpreter
+  roots; it does not constrain an arbitrary incoming deletion set. Keep both
+  the state-invariant and output-deletion conclusions. Prepared transaction
+  callers derive this premise from `trace.prepared` and the actual fresh
+  message constructor; raw/create state-only transports keep their existing
+  signatures.
+
 - To derive structural admission directly from an independently checked predicate
   over the actual raw entries, use `ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames`
   in [`Blanc/ExecutionTraceAdmission.lean`](../Blanc/ExecutionTraceAdmission.lean).

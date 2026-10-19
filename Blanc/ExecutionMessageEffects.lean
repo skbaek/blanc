@@ -221,9 +221,11 @@ theorem ProcessCreateMessage.nonce_ne_zero_of_body
       apply ProcessMessage.nonce_ne_zero_of_body innerRun body owner
       change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
         msg.currentTarget).get owner).nonce ≠ 0
-      rw [State.incrNonce, State.setAccount_get_ne _ targetNe,
-        State.setStor, State.get_set_ne _ targetNe]
-      exact nonce
+      rw [State.incrNonce, State.setAccount_get_ne _ targetNe]
+      unfold State.setStor
+      split
+      · rw [State.get_setPresent_ne _ targetNe]; exact nonce
+      · rw [State.get_set_ne _ targetNe]; exact nonce
 
 /-- A checked nonce increment preserves nonzero nonces at every owner. -/
 theorem State.incrNonce_nonce_ne_zero {state : State} {creator : Adr}
@@ -363,8 +365,11 @@ theorem ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne
       msg.benv.state.get owner := by
     dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor,
       Benv.incrNonce, addCreatedAccount, Benv.clearStorageWritesIfEmpty]
-    rw [State.incrNonce, State.setAccount_get_ne _ targetNe,
-      State.setStor, State.get_set_ne _ targetNe]
+    rw [State.incrNonce, State.setAccount_get_ne _ targetNe]
+    unfold State.setStor
+    split
+    · exact State.get_setPresent_ne _ targetNe _
+    · exact State.get_set_ne _ targetNe _
   have preparedProtected : State.Protected (processCreateMessage.msg msg).benv.state owner := by
     unfold State.Protected
     rw [preparedGet]
@@ -650,7 +655,7 @@ theorem messageCallDelegation_getStor_eq
     (nonempty : (msg.benv.state.getCode owner).toList ≠ [])
     (nondesignator : ¬ isValidDelegation (msg.benv.state.getCode owner)) :
     delegated.benv.state.getStor owner = msg.benv.state.getStor owner := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -666,7 +671,7 @@ theorem messageCallDelegation_bal_eq
     {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
     delegated.benv.state.bal = msg.benv.state.bal := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -683,7 +688,7 @@ theorem messageCallDelegation_nonce_ne_zero
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
     (owner : Adr) (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
     (delegated.benv.state.get owner).nonce ≠ 0 := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -700,7 +705,7 @@ theorem messageCallDelegation_benv_stat
     {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
     delegated.benv.stat = msg.benv.stat := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -721,7 +726,7 @@ theorem messageCallDelegation_fields
       delegated.shouldTransferValue = msg.shouldTransferValue ∧
       delegated.value = msg.value ∧
       delegated.codeAddress = msg.codeAddress := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -760,38 +765,38 @@ theorem messageCallDelegation_shouldTransferValue_eq
 theorem messageCallExecutionMessage_getStor_eq (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state.getStor =
       msg.benv.state.getStor := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving delegated code changes only execution metadata. -/
 theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state.bal =
       msg.benv.state.bal := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving delegated code leaves the complete world state alone. -/
 theorem messageCallExecutionMessage_state (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state = msg.benv.state := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving delegated code preserves the complete static block environment. -/
 theorem messageCallExecutionMessage_benv_stat (msg : Msg) :
     (messageCallExecutionMessage msg).benv.stat = msg.benv.stat := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving delegated code leaves the calling actor alone. -/
 theorem messageCallExecutionMessage_caller_eq (msg : Msg) :
     (messageCallExecutionMessage msg).caller = msg.caller := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving delegated code preserves the call/create discriminator. -/
 theorem messageCallExecutionMessage_target_eq (msg : Msg) :
     (messageCallExecutionMessage msg).target = msg.target := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- A normal transaction whose prepared message is a call cannot take either
@@ -826,13 +831,13 @@ theorem TransactionTrace.exists_callRun_of_target
 
 theorem messageCallExecutionMessage_currentTarget_eq (msg : Msg) :
     (messageCallExecutionMessage msg).currentTarget = msg.currentTarget := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 theorem messageCallExecutionMessage_shouldTransferValue_eq (msg : Msg) :
     (messageCallExecutionMessage msg).shouldTransferValue =
       msg.shouldTransferValue := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- A false EIP-684 collision test establishes zero nonce and empty code.
@@ -914,55 +919,21 @@ theorem processMessageCall_callRun_state_eq
   have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, Bool.false_eq_true, ↓reduceIte] at result
-  cases empty : msg.tenv.stat.auths.isEmpty with
-  | false =>
-      unfold messageCallDelegation at delegation
-      simp only [empty, Bool.false_eq_true, ↓reduceIte] at delegation
-      rcases Except.bind_eq_ok delegation with
-        ⟨⟨delegated', refundWord⟩, set, rest⟩
-      simp only [Except.ok.injEq, Prod.mk.injEq] at rest
-      rcases rest with ⟨rfl, rfl⟩
-      unfold processMessageCall.call at result
-      rw [hsg] at result
-      simp only [empty, Bool.false_eq_true, ↓reduceIte,
-        set, bind, Except.bind] at result
-      have coreExec :
-          processMessage (messageCallExecutionMessage delegated') =
-            .ok evm :=
-        (congrArg processMessage execMsgEq).symm.trans core
-      rcases Except.bind_eq_ok result with
-        ⟨actual, actualMap, tail⟩
-      have actualCore := Except.bimap_id_eq_ok actualMap
-      have actualEq : actual = evm := Except.ok.inj
-        (actualCore.symm.trans coreExec)
-      subst actual
-      split at tail
-      · rcases Except.bind_eq_ok tail with
-          ⟨refundActual, _refund, output⟩
-        exact (Prod.mk.inj (Except.ok.inj output)).1.symm
-      · exact (Prod.mk.inj (Except.ok.inj tail)).1.symm
-  | true =>
-      unfold messageCallDelegation at delegation
-      simp only [empty, ↓reduceIte,
-        Except.ok.injEq, Prod.mk.injEq] at delegation
-      rcases delegation with ⟨rfl, rfl⟩
-      unfold processMessageCall.call at result
-      rw [hsg] at result
-      simp only [empty, ↓reduceIte, bind, Except.bind] at result
-      have coreExec :
-          processMessage (messageCallExecutionMessage msg) = .ok evm :=
-        (congrArg processMessage execMsgEq).symm.trans core
-      rcases Except.bind_eq_ok result with
-        ⟨actual, actualMap, tail⟩
-      have actualCore := Except.bimap_id_eq_ok actualMap
-      have actualEq : actual = evm := Except.ok.inj
-        (actualCore.symm.trans coreExec)
-      subst actual
-      split at tail
-      · rcases Except.bind_eq_ok tail with
-          ⟨refundActual, _refund, output⟩
-        exact (Prod.mk.inj (Except.ok.inj output)).1.symm
-      · exact (Prod.mk.inj (Except.ok.inj tail)).1.symm
+  unfold processMessageCall.call at result
+  simp only [hsg] at result
+  rw [show processMessageCall.legacyAuthorization msg = .ok ⟨delegated, refund⟩ from delegation]
+    at result
+  simp only [Except.bind_ok] at result
+  have coreExec : processMessage (messageCallExecutionMessage delegated) = .ok evm :=
+    (congrArg processMessage execMsgEq).symm.trans core
+  rcases Except.bind_eq_ok result with ⟨actual, actualMap, tail⟩
+  have actualCore := Except.bimap_id_eq_ok actualMap
+  have actualEq : actual = evm := Except.ok.inj (actualCore.symm.trans coreExec)
+  subst actual
+  split at tail
+  · rcases Except.bind_eq_ok tail with ⟨refundActual, _refund, output⟩
+    exact (Prod.mk.inj (Except.ok.inj output)).1.symm
+  · exact (Prod.mk.inj (Except.ok.inj tail)).1.symm
 
 end ExecutionTrace
 
@@ -1023,7 +994,7 @@ theorem MsgInv.of_messageCallDelegation
     (run : ExecutionTrace.messageCallDelegation msg =
       .ok ⟨delegated, refund⟩) :
     c.MsgInv ca delegated := by
-  unfold ExecutionTrace.messageCallDelegation at run
+  unfold ExecutionTrace.messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -1038,8 +1009,13 @@ theorem MsgInv.of_messageCallDelegation
 theorem MsgInv.messageCallExecutionMessage
     {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg) :
     c.MsgInv ca (ExecutionTrace.messageCallExecutionMessage msg) := by
-  exact ContractSpec.MsgInv.pc
-    (codeSrc := fun address => msg.benv.state.getCode address) ready
+  cases enabled : msg.benv.stat.rules.delegationEnabled
+  · simpa only [ExecutionTrace.messageCallExecutionMessage,
+      Msg.resolveCodeDelegation_disabled msg enabled] using ready
+  · rw [ExecutionTrace.messageCallExecutionMessage,
+      Msg.resolveCodeDelegation_enabled msg enabled]
+    exact ContractSpec.MsgInv.pc
+      (codeSrc := fun address => msg.benv.state.getCode address) ready
 
 /-- A CREATE wrapper that does *not* collide is running at a foreign address:
 an installed contract's compiled code is non-empty, so a create at its address

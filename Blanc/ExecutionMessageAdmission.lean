@@ -106,7 +106,7 @@ theorem MsgInv.of_messageCallDelegation
     (run : ExecutionTrace.messageCallDelegation msg =
       .ok ⟨delegated, refund⟩) :
     c.MsgInv ca delegated := by
-  unfold ExecutionTrace.messageCallDelegation at run
+  unfold ExecutionTrace.messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -120,8 +120,13 @@ theorem MsgInv.of_messageCallDelegation
 theorem MsgInv.messageCallExecutionMessage
     {ca : Adr} {msg : Msg} (ready : c.MsgInv ca msg) :
     c.MsgInv ca (ExecutionTrace.messageCallExecutionMessage msg) := by
-  exact MsgInv.pc
-    (codeSrc := fun address => msg.benv.state.getCode address) ready
+  cases enabled : msg.benv.stat.rules.delegationEnabled
+  · simpa only [ExecutionTrace.messageCallExecutionMessage,
+      Msg.resolveCodeDelegation_disabled msg enabled] using ready
+  · rw [ExecutionTrace.messageCallExecutionMessage,
+      Msg.resolveCodeDelegation_enabled msg enabled]
+    exact MsgInv.pc
+      (codeSrc := fun address => msg.benv.state.getCode address) ready
 
 theorem StateInv.ne_of_messageCreateCollision_false
     {ca : Adr} {msg : Msg} (inv : c.StateInv ca msg.benv.state)
@@ -234,8 +239,7 @@ theorem ProcessMessageTrace.stateInv_admitted_sem
     rw [Except.ok.inj settle]
     exact ready.ready.state
   · rw [ite_eq_right failed] at settle
-    have postEq : evm = post := Except.ok.inj settle.symm
-    subst postEq
+    rw [Except.ok.inj settle, Devm.recordTouch_state]
     rcases of_executeCode_cases body with
       ⟨address, precompile⟩ | ⟨exception, slotEq, handled⟩
     · rw [state_of_executePrecomp_ok precompile failed]
@@ -322,11 +326,12 @@ theorem MessageCallTrace.stateInv_admitted_sem
     (preserves : c.PreservesAdmitted ca entry)
     (hfork : CoveredFork msg.benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
-    (ready : c.MsgInv ca msg) :
+    (ready : c.MsgInv ca msg)
+    (h_inherited : ca ∉ msg.inheritedDeletions) :
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
   refine ⟨?_, processMessageCall_accountsToDelete_ne hfork trace.result ready.nodel
-    (c.sem.not_delegation ready.state.code)⟩
+    (c.sem.not_delegation ready.state.code) h_inherited⟩
   cases trace with
   | createCollision target collision result =>
       rw [processMessageCall_createCollision_state_eq target collision result hfork]
@@ -404,12 +409,13 @@ theorem MessageCallTrace.stateInv_admitted
     (preserves : c.PreservesAdmitted ca entry)
     (hfork : CoveredFork msg.benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
-    (ready : c.MsgInv ca msg) :
+    (ready : c.MsgInv ca msg)
+    (h_inherited : ca ∉ msg.inheritedDeletions) :
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
   rcases trace.stateInv_admitted_sem (c := c.toSem)
     (preservesAdmitted_toSem c ca entry preserves) hfork admitted
-    (msgInv_toSem ready) with ⟨hstate, hdelete⟩
+    (msgInv_toSem ready) h_inherited with ⟨hstate, hdelete⟩
   exact ⟨stateInv_ofSem hstate, hdelete⟩
 
 end ExecutionTrace
