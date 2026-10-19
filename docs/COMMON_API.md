@@ -2850,6 +2850,23 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
 - For calldata copies with all three operands already known on the stack,
   `prefix_of_calldatacopy_val` consumes that prefix and exposes the exact
   `Sevm.data.sliceD` memory write.
+- When a later step is priced or forwarded on the **whole** memory (an exact
+  call profile's debit or successor is an arbitrary function of `Mem`),
+  `Mem.Reads`, `Mem.Wf` and the logical size do not determine it: the
+  materialised array may stop short of the logical size. Use
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean):
+  `Mem.eq_of_size_dataSize_getD` is the extensional base; `Mem.EqExcept M N D`
+  (one logical size, both well formed, equal bytes outside `D`) is seeded from a
+  callee export by `Mem.KeepsOff.eqExcept` and shrunk by the *same* literal
+  `.write`, `.extend`, `.writeWords` (word stores in order, `Mem.writeWords`) and
+  `.restoreMem` on both sides; `Mem.Full` (array materialised to the logical
+  size) comes from `Mem.full_write_of_grow`, `Mem.full_write_word_of_grow` or
+  `Mem.full_writeWords_of_grow` and is kept by `.write`, `.writeWords` and
+  `.restoreMem`; `.eq` and `.writeWords_eq` conclude literal equality.
+  `Mem.write_getD`, `Mem.size_write_eq`, `Mem.getD_eq_of_memWord_eq` and
+  `saveMem_succ_left` are the byte, size and save-chain facts underneath.
+  Boundary: coverage only discharges bytes both sides overwrite with the same
+  literal values; it never compares independently computed stores.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly

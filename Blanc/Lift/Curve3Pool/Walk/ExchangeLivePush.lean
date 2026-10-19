@@ -24,8 +24,12 @@ theorem ex_push_tail : (SFunc.next (.push [0x2b, 0x80] (by decide)) (.branch t_2
     vyRawCallTail exPushSite 14 t_2b7c_c1174 t_2bb4_c14 t_2bdd_c14 t_2beb_c14 t_2c06_c14
       t_2c0b_c14 := rfl
 
-/-- **The push to `STOP`, forward.** -/
-theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome → Prop}
+/-- **The push to `STOP`, forward, exactly**: `rx_ex_push` over the relation-carrying premise,
+the halted state's continuation also receiving `E` at the coin call's literal input, the raw
+tail's canonical successor, and the exact charge after the call (the raw tail, `2232` fixed
+including `LOG2`, and the lock reset at the tail's base). -/
+theorem rx_ex_push_core {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome → Prop}
+    {E : Devm → List B256 → Mem → Nat → Devm → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dyOut : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
@@ -33,9 +37,17 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
     (hdata : Region img 0xb40 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
       Bytes.toB256 [32]).toBytes ++ exPushData sevm dyOut))
     (hout : WordAt img 0x920 dyOut)
-    (hpush : CoinPushOkAt sevm W W' (σ.get (coinsBase + exJ sevm)) dyOut U 0xb60 0xc00)
+    (hpush : MutCallOkAtE sevm W W' (σ.get (coinsBase + exJ sevm)) (transferSel ++
+      sevm.caller.toB256.toBytes ++ dyOut.toBytes) RawCallOk U 0xb60 0x44 0xc00 E)
     (hG : 30000 + U ≤ G) (hGb : G + 2000 < 2 ^ 256)
     (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      ∀ d b' : Devm,
+      E (afterSload sevm b (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36]))) []
+        (M.write 0xc0 (Bytes.toB256 [0]).toBytes)
+        (G - (108 + sloadCost sevm b (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36])))) d →
+      Devm.EqModGas b' (rawTailBaseNext sevm d [] d.memory exPushSite) →
+      d.gasLeft = D.gasLeft + 2232 + sstoreCost sevm b' (Bytes.toB256 [255, 255, 255])
+        (Bytes.toB256 [0]) + rawTailCost (min d.returnData.length 32) →
       Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [32] + (Bytes.toB256 [0] + Bytes.toB256 [4] +
       Bytes.toB256 [32] + Bytes.toB256 [32]), Bytes.toB256 [10, 160]] M G) t_2b49_c1174 Q := by
@@ -61,13 +73,13 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
   xr (rx_dest ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xbc0 0xc0 32 = 0xbc0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; generalize hMc : M.write 0xc0 (Bytes.toB256 [0]).toBytes = Mc; intro hR hW hsz; rw [show memExtSize 0xbc0 0xc0 32 = 0xbc0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hr) ·)
-  refine rxe_sloadV hfork (by hr) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+  refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 hx_g2; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 2 := ⟨g2 - 2, by omega⟩
   xr (rx_gas (by hr) ·)
   rw [show Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32] =
@@ -76,20 +88,20 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
     show Bytes.toB256 [12, 0] = (0xc00 : B256) by decide,
     show Bytes.toB256 [32] = (0x20 : B256) by decide]
   subst hv2
-  have hin : (M.read 0xb60 0x44).1 = transferSel ++ sevm.caller.toB256.toBytes ++
+  have hin : (Mc.read 0xb60 0x44).1 = transferSel ++ sevm.caller.toB256.toBytes ++
       dyOut.toBytes := by
     rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
     exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
-  obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd⟩ :=
-    hpush b2 [] M g3 hL.w (by omega) (by omega) hin (by hrs)
+  obtain ⟨d, hrun, hpost, hok, hrdlt, hgas, hgle, hstor, hWd, hidd, hE⟩ :=
+    hpush b2 [] Mc g3 hL.w (by omega) (by omega) hin (by hrs)
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0xb60 : B256).toNat = 0xb60 by decide, show (0x44 : B256).toNat = 0x44 by decide,
     show (0xc00 : B256).toNat = 0xc00 by decide, show (0x20 : B256).toNat = 0x20 by decide] at hmem
   have hd : d = St d [1] d.memory d.gasLeft := St.self hpost.stack rfl
   rw [hd, ex_push_tail]
-  have hext : (M.extends [(0xb60, 0x44), (0xc00, 0x20)]).size = 0xc20 := by
-    show memExtsSize M.size _ = _
+  have hext : (Mc.extends [(0xb60, 0x44), (0xc00, 0x20)]).size = 0xc20 := by
+    show memExtsSize Mc.size _ = _
     rw [hsz]; decide
   have hsz5 : d.memory.size = 0xc20 := by
     rw [hmem, Mem.size_write_of_le (by rw [hext, List.length_take]; omega), hext]
@@ -105,14 +117,14 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
   rw [hG2]
   have hLd : ExLive sevm W' d σ :=
     ⟨fun x => by rw [hstor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
-  refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail hLd.id
+  refine SFunc.runEx_iff_runExCut_nil.mpr (rxce_vyRawCallTail_canonical hLd.id
     hdepth (by decide) ex_push_join (by simp only [List.not_mem_nil, not_false_eq_true]) hrdlt hok
     ?_ (by rw [hsz5]) (by rw [hsz5]; decide) (by rw [hsz5]; decide) (by omega) (by omega) (by hr)
     ?_)
   · rw [show (Bytes.toB256 [exPushSite.lh, exPushSite.ll]).toNat + 32 = 0xc00 by decide]
     intro j hj
     exact (rawCall_window hmem rfl j hj).2
-  intro b' rd' hsha
+  intro b' rd' hsha hcanT
   refine SFunc.runEx_iff_runExCut_nil.mp ?_
   rw [show (Bytes.toB256 [exPushSite.lh, exPushSite.ll]).toNat = 0xbe0 by decide,
     show (Bytes.toB256 [exPushSite.bh, exPushSite.bl]).toNat = 0x460 by decide]
@@ -147,21 +159,21 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
   xr (rx_push rfl (by hr) ·)
   xr (rx_calldataload (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0xc40) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro M hR hW hsz; rw [show memExtSize 0xc20 0xc40 32 = 0xc60 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc40) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc20 0xc40 32 = 0xc60 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_calldataload (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0xc60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro M hR hW hsz; rw [show memExtSize 0xc60 0xc60 32 = 0xc80 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc60 0xc60 32 = 0xc80 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_calldataload (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0xc80) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro M hR hW hsz; rw [show memExtSize 0xc80 0xc80 32 = 0xca0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xc80) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc80 0xc80 32 = 0xca0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x920) hR hsz rfl (by decide) (by hr) ·)
   wsimp
   rw [hout6.read]
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0xca0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro M hR hW hsz; rw [show memExtSize 0xca0 0xca0 32 = 0xcc0 by decide] at hsz
+  refine rxe_mstoreW (o := 0xca0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xca0 0xca0 32 = 0xcc0 by decide] at hsz
   xr (rx_caller (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
@@ -169,7 +181,33 @@ theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome
   xr (rx_log2 (c := 2149) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g9 b9 hb9 hg91 hg92; replace hL := (hL.addLogE _).sstoreE hb9
-  exact ⟨_, .last rfl, k _ (hL.st _ _ _)⟩
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g9 b9 hb9 hg91 hg92 hx_g9; replace hL := (hL.addLogE _).sstoreE hb9
+  have hlog : ∀ (x : Devm) (l : Log), sstoreCost sevm (x.addLog l) (Bytes.toB256 [255, 255, 255])
+      (Bytes.toB256 [0]) = sstoreCost sevm x (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) :=
+    fun _ _ => rfl
+  rw [hlog] at hx_g9
+  refine ⟨_, .last rfl, k _ (hL.st _ _ _) d b' ?_ hcanT (by simp only [St.gasLeft]; omega)⟩
+  rw [hMc.symm] at hE
+  rw [show g1 + 106 - (108 + sloadCost sevm b (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36]))) =
+    g3 by omega, ← hb2]
+  exact hE
+
+/-- **The push to `STOP`, forward.** -/
+theorem rx_ex_push {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome → Prop}
+    {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dyOut : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
+    (hj : (exJ sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
+    (hdata : Region img 0xb40 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
+      Bytes.toB256 [32]).toBytes ++ exPushData sevm dyOut))
+    (hout : WordAt img 0x920 dyOut)
+    (hpush : CoinPushOkAt sevm W W' (σ.get (coinsBase + exJ sevm)) dyOut U 0xb60 0xc00)
+    (hG : 30000 + U ≤ G) (hGb : G + 2000 < 2 ^ 256)
+    (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
+      Q (.halted D)) :
+    SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [32] + (Bytes.toB256 [0] + Bytes.toB256 [4] +
+      Bytes.toB256 [32] + Bytes.toB256 [32]), Bytes.toB256 [10, 160]] M G) t_2b49_c1174 Q :=
+  rx_ex_push_core hfork hstatic hdepth hL hW'c hj hR hW hsz hdata hout hpush.withE hG hGb
+    fun D h _ _ _ _ _ => k D h
 
 end Blanc.Lift.Curve3Pool

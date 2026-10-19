@@ -1351,6 +1351,9 @@ import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveFrame
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveModel
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveWords
 import Blanc.Lift.Curve3Pool.ExchangeLive
+import Blanc.Lift.Curve3Pool.ExchangeExactSchedule
+import Blanc.Lift.Curve3Pool.Walk.ExchangeExactWalk
+import Blanc.Lift.Curve3Pool.ExchangeExactLive
 import Blanc.Lift.Curve3Pool.Walk.LiveLoops
 import Blanc.Lift.Curve3Pool.Callee.AGrow
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawLiveA

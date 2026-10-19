@@ -972,12 +972,10 @@ def costGetY (sevm : Sevm) (b : Devm) (amp i j x x0 x1 x2 : Nat) : Nat :=
     | some D, some ann => costGetD x0 x1 x2 amp + gyCostFrom0 i j x x0 x1 x2 D ann (D, 0)
     | _, _ => 0
 
--- SEGMENT: getY_exact
-/-- **`get_y`'s forward twin.**  When `_A` reads `amp` and the checked model returns `v`, the
-entry tree runs from the call's state with `costGetY` gas over `G` to its return of `v` over the
-caller's stack with `G` left and the world moved by `_A`'s reads (`aBase`), over a memory
-already covering `[0, 0x4c0)`: kept off `get_y`'s windows, well formed, of the same size. -/
-theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
+-- SEGMENT: getY_exact_rich
+/-- **`get_y`'s forward twin, with its result word**: `getY_exact`, and the returned memory also
+reads `v` at the scratch word `0` (where the callee writes its result on its way out). -/
+theorem getY_exact_rich {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
     {G n v amp : Nat} {s : State} (hfork : CoveredFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp) (hi : i.toNat < 3) (hj : j.toNat < 3)
@@ -988,7 +986,7 @@ theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List
     ∃ M', SFunc.RunExact prog sevm (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M
         (G + costGetY sevm b amp i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat)) t_18a4_c252
         (.returned (St (aBase sevm b) (Nat.toB256 v :: S) M' G)) ∧
-      (Mem.KeepsOff M M' gyWin ∧ Mem.Wf M' ∧ M'.size = n) := by
+      (Mem.KeepsOff M M' gyWin ∧ Mem.Wf M' ∧ M'.size = n) ∧ memWord M' 0 = Nat.toB256 v := by
   obtain ⟨hij, D, ann, hD, hann, hgy⟩ := getYChk_gyRes hi hj hres
   have hT := (MemTrack.init hwf gyWin).withWords (L' := [(0x220, memWord M 0x220)])
     (Words.cons.mpr ⟨⟨by omega, rfl⟩, Words.nil _⟩)
@@ -1191,7 +1189,28 @@ theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List
   obtain ⟨r, hrun, Mf, hr, hout⟩ := gyStage0X (G := G) (S := S) (by omega) hF hres0
   subst hr
   rw [hDlt, show (Nat.toB256 0).toNat = 0 by decide] at hrun
-  refine ⟨Mf, hrun, hT.keeps.trans ((hout.keepsOff hT.wf).widen (by decide)), hout.wf hT.wf,
-    by rw [hout.size, hS]⟩
+  refine ⟨Mf, hrun, ⟨hT.keeps.trans ((hout.keepsOff hT.wf).widen (by decide)), hout.wf hT.wf,
+    by rw [hout.size, hS]⟩, hout.word0⟩
+
+
+-- SEGMENT: getY_exact
+/-- **`get_y`'s forward twin.**  When `_A` reads `amp` and the checked model returns `v`, the
+entry tree runs from the call's state with `costGetY` gas over `G` to its return of `v` over the
+caller's stack with `G` left and the world moved by `_A`'s reads (`aBase`), over a memory
+already covering `[0, 0x4c0)`: kept off `get_y`'s windows, well formed, of the same size. -/
+theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
+    {G n v amp : Nat} {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    (ha : Abstracts (b.getStor sevm.currentTarget) s)
+    (hA : aChk s sevm.benvStat.time.toNat = some amp) (hi : i.toNat < 3) (hj : j.toNat < 3)
+    (hres : getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat
+      (V3.mk x0.toNat x1.toNat x2.toNat).get = some v)
+    (hwf : Mem.Wf M) (hS : M.size = n) (hn : n % 32 = 0) (htop : 0x4c0 ≤ n)
+    (hroom : S.length + 64 < 1024) :
+    ∃ M', SFunc.RunExact prog sevm (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M
+        (G + costGetY sevm b amp i.toNat j.toNat x.toNat x0.toNat x1.toNat x2.toNat)) t_18a4_c252
+        (.returned (St (aBase sevm b) (Nat.toB256 v :: S) M' G)) ∧
+      (Mem.KeepsOff M M' gyWin ∧ Mem.Wf M' ∧ M'.size = n) := by
+  obtain ⟨M', hrun, hk, -⟩ := getY_exact_rich hfork ha hA hi hj hres hwf hS hn htop hroom
+  exact ⟨M', hrun, hk⟩
 
 end Blanc.Lift.Curve3Pool

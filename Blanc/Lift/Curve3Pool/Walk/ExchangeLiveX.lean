@@ -11,8 +11,9 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
 
-/-- **`x`, forward.** -/
-theorem rx_ex_x {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop} {M : Mem}
+/-- **`x`, forward, exactly**: `rx_ex_x`, the continuation also receiving its exact charge
+`279 + c0` and the literal memory (`x` at `0x7a0`, the save counter at `0x7e0`). -/
+theorem rx_ex_x_core {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
     (hi : (exI sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
     (hs : (s = 0x6e0 ∧ c0 = 26) ∨ (s = 0x7a0 ∧ c0 = 6)) (hF : ExFrame img B X D C)
@@ -23,6 +24,9 @@ theorem rx_ex_x {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop} {M :
       ExFrame img' B X D C →
       WordAt img' 0x7a0 (X (exI sevm).toNat + D * exRate (exI sevm).toNat / exR0) →
       WordAt img' 0x7e0 (Bytes.toB256 [1, 0x40]) → R ≤ g → g ≤ G →
+      G = g + 279 + c0 →
+      M' = (M.write 0x7a0 (X (exI sevm).toNat + D * exRate (exI sevm).toNat / exR0).toBytes).write
+        0x7e0 (Bytes.toB256 [1, 0x40]).toBytes →
       SFunc.RunEx cert.prog sevm (St b [] M' g) t_2754_c13 Q) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_26c9_c13 Q := by
   have hs32 : s % 32 = 0 := by rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
@@ -116,14 +120,31 @@ theorem rx_ex_x {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop} {M :
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0x7a0) (c := c0) hR hW hsz rfl (by rcases hs with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide) ?_
+  refine rxe_mstoreW (o := 0x7a0) (c := c0) hR hW hsz rfl (by rcases hs with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide) ?_
   have hs' : memExtSize s 0x7a0 32 = 0x7c0 := by rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
-  clear hR hW hsz M; intro M hR hW hsz; rw [hs'] at hsz
+  clear hR hW hsz; intro hR hW hsz; rw [hs'] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rx_push rfl (by hr) ·)
-  refine rxe_mstore (o := 0x7e0) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x7c0 0x7e0 32 = 0x800 by decide] at hsz
+  refine rxe_mstoreW (o := 0x7e0) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7c0 0x7e0 32 = 0x800 by decide] at hsz
   -- STOP at t_2754_c13
-  refine k M _ g1 hR hW (by rw [hsz]) (hF.mono fun o v hv ho => by wauto) (by wauto) (by wauto)
-    (by omega) (by omega)
+  refine k _ _ g1 hR hW (by rw [hsz]) (hF.mono fun o v hv ho => by wauto) (by wauto) (by wauto)
+    (by omega) (by omega) (by omega) rfl
+
+/-- **`x`, forward.** -/
+theorem rx_ex_x {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop} {M : Mem}
+    {img : Bytes} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
+    (hi : (exI sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
+    (hs : (s = 0x6e0 ∧ c0 = 26) ∨ (s = 0x7a0 ∧ c0 = 6)) (hF : ExFrame img B X D C)
+    (hmx : D * exRate (exI sevm).toNat / D = exRate (exI sevm).toNat ∨ D = 0)
+    (hax : ¬ X (exI sevm).toNat + D * exRate (exI sevm).toNat / exR0 < X (exI sevm).toNat)
+    (hG : 400 + R ≤ G)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x800 →
+      ExFrame img' B X D C →
+      WordAt img' 0x7a0 (X (exI sevm).toNat + D * exRate (exI sevm).toNat / exR0) →
+      WordAt img' 0x7e0 (Bytes.toB256 [1, 0x40]) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b [] M' g) t_2754_c13 Q) :
+    SFunc.RunEx cert.prog sevm (St b [] M G) t_26c9_c13 Q :=
+  rx_ex_x_core hi hR hW hsz hs hF hmx hax hG
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7 h8
 
 end Blanc.Lift.Curve3Pool
