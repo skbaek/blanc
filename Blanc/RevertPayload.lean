@@ -346,6 +346,9 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
     {ex : Execution} {G : Nat}
     (h_mem : devm.memory = M)
     (h_gas : devm.gasLeft = G + storesRevCost M iws)
+    (h_push0 : ∀ iw ∈ iws,
+      iw.1.toBytes.sig = [] ∨ (Nat.toB256 (32 * iw.2)).toBytes.sig = [] →
+        sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1023)
     (h_bound : ∀ iw ∈ iws, 32 * iw.2 < 2 ^ 256)
     (h_next : Func.RunCompiledTo fs sevm
@@ -371,13 +374,15 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
           simp only [storesRevCost, storeCost] at h_gas ⊢
           dsimp only [Mt, e, cw, ci] at h_gas ⊢
           omega)
+        (fun x hx => h_push0 x (by simp only [List.mem_cons, hx, or_true]))
         h_room (fun x hx => h_bound x (by simp only [List.mem_cons, hx, or_true])) ?_
       · simpa only [prependStoresRev] using htail
       · refine Func.RunCompiledTo.next
           (Ninst.runCompiled_pushB256 (c := cw)
             (G := G + (ci + gVerylow + e)) (by rfl)
             (by simp only [Devm.gasLeft_setMach]; omega)
-            (by simp only [Devm.stack_setMach]; omega)) ?_
+            (by simp only [Devm.stack_setMach]; omega)
+            (fun empty => h_push0 iw (by simp only [List.mem_cons, true_or]) (Or.inl empty))) ?_
         refine Func.RunCompiledTo.next
           (Ninst.runCompiled_pushB256
             (devm := (devm.setMach
@@ -387,7 +392,8 @@ lemma Func.runCompiledTo_prependStoresRev {fs : List Func} {sevm : Sevm}
                 G + (ci + gVerylow + e), devm.stateGas⟩)
             (c := ci) (G := G + (gVerylow + e)) (by rfl)
             (by simp only [Devm.gasLeft_setMach]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+            (by simp only [Devm.stack_setMach, List.length_cons]; omega)
+            (fun empty => h_push0 iw (by simp only [List.mem_cons, true_or]) (Or.inr empty))) ?_
         simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
         have hoff : (Nat.toB256 (32 * iw.2)).toNat = 32 * iw.2 :=
           B256.toNat_toB256_of_lt hb
@@ -447,6 +453,7 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
     (hwf : Mem.Wf devm.memory) (hr : Mem.Reads devm.memory img)
     (halign : devm.memory.size % 32 = 0)
     (h_gas : devm.gasLeft = G + revertSelectorCost devm)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1023) :
     Func.RunCompiledTo fs sevm devm (Func.revertSelector data hlen)
       (.error (.revert,
@@ -482,7 +489,7 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
           (.next (Ninst.pushB256 28) (.last .revert)))))) _
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushBytes (c := gVerylow)
-      (G := G + (3 * gVerylow + gBase + e)) hpush ?_ (by omega)) ?_
+      (G := G + (3 * gVerylow + gBase + e)) hpush ?_ (by omega) (fun _ => h_push0)) ?_
   · unfold revertSelectorCost at h_gas
     dsimp only [e] at h_gas ⊢
     omega
@@ -490,7 +497,7 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
       (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
         (G := G + (3 * gVerylow + e)) pushCost_zero
         (by simp only [Devm.gasLeft_setMach]; omega)
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_mstore_of
@@ -505,13 +512,13 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
         (Ninst.runCompiled_pushB256 (w := 4) (c := gVerylow)
           (G := G + gVerylow) hc4
           (by simp only [Devm.gasLeft_setMach]; omega)
-          (by simp only [Devm.stack_setMach]; omega)) ?_
+          (by simp only [Devm.stack_setMach]; omega) (fun _ => h_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_pushB256 (w := 28) (c := gVerylow)
           (G := G) hc28
           (by simp only [Devm.gasLeft_setMach])
-          (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+          (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       have h4nat : (Nat.toB256 4).toNat = 4 :=
         B256.toNat_toB256_of_lt (by norm_num only)
@@ -717,6 +724,7 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
       G + (storesFixedCost (bytesWords blob).zipIdx +
         pushCost (Nat.toB256 blob.length).toBytes.sig + gBase +
         devm.extCost [⟨0, 32 * (bytesWords blob).length⟩]))
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1023) :
     Func.RunCompiledTo fs sevm devm (Func.revertData blob)
       (.error (.revert,
@@ -741,21 +749,21 @@ lemma Func.runCompiledTo_revertData {fs : List Func} {sevm : Sevm}
       (.next (Ninst.pushB256 (Nat.toB256 blob.length))
         (.next (Ninst.pushB256 0) (.last .revert)))) _
   refine Func.runCompiledTo_prependStoresRev
-    (G := G + (clen + gBase)) rfl ?_ h_room hbound ?_
+    (G := G + (clen + gBase)) rfl ?_ (fun _ _ _ => h_push0) h_room hbound ?_
   · dsimp only [ws, clen] at hcost hext h_gas ⊢
     simp only [Nat.mul_zero] at hcost
     omega
   · refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushB256 (c := clen) (G := G + gBase) rfl
         (by simp only [Devm.gasLeft_setMach]; omega)
-        (by simp only [Devm.stack_setMach]; omega)) ?_
+        (by simp only [Devm.stack_setMach]; omega) (fun _ => h_push0)) ?_
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushB256
         (devm := (devm.setMach
           ⟨devm.stack, M', G + (clen + gBase), devm.stateGas⟩).setMach
           ⟨Nat.toB256 blob.length :: devm.stack, M', G + gBase, devm.stateGas⟩)
         (c := gBase) (G := G) pushCost_zero rfl
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     have hlen : (Nat.toB256 blob.length).toNat = blob.length :=
       B256.toNat_toB256_of_lt h_blob
@@ -819,6 +827,7 @@ lemma Func.runCompiledTo_revertWith {fs : List Func} {sevm : Sevm}
       G + (storesFixedCost (bytesWords (errorData s)).zipIdx +
         pushCost (Nat.toB256 (errorData s).length).toBytes.sig + gBase +
         devm.extCost [⟨0, 32 * (bytesWords (errorData s)).length⟩]))
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1023) :
     Func.RunCompiledTo fs sevm devm (Func.revertWith s)
       (.error (.revert,
@@ -826,7 +835,7 @@ lemma Func.runCompiledTo_revertWith {fs : List Func} {sevm : Sevm}
           Mem.writeStoresRev devm.memory (bytesWords (errorData s)).zipIdx,
           G, devm.stateGas⟩).withOutput (errorData s))) := by
   simpa only [Func.revertWith] using
-    Func.runCompiledTo_revertData hwf hr halign h_blob h_words h_gas h_room
+    Func.runCompiledTo_revertData hwf hr halign h_blob h_words h_gas h_push0 h_room
 
 /-- A nonzero guard followed by an internal call to a constant-error
 auxiliary reverts with that auxiliary's complete ABI `Error(string)` payload.
@@ -844,6 +853,7 @@ theorem Func.runCompiledTo_errorGuard {fs : List Func} {sevm : Sevm}
     (h_blob : (errorData reason).length < 2 ^ 256)
     (h_words : 32 * (bytesWords (errorData reason)).length < 2 ^ 256)
     (h_gas : devm.gasLeft = G + errorGuardCost devm reason)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1024) :
     Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
@@ -867,7 +877,7 @@ theorem Func.runCompiledTo_errorGuard {fs : List Func} {sevm : Sevm}
       omega
     · simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       refine Func.runCompiledTo_revertWith (G := G) hwf hr halign
-        h_blob h_words ?_ ?_
+        h_blob h_words ?_ h_push0 ?_
       · simp only [Devm.gasLeft_setMach, errorBodyCost, Devm.extCost,
           Devm.memory_setMach]
       · simpa only [Devm.stack_setMach] using h_room_tail
@@ -885,6 +895,7 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
     (halign : devm.memory.size % 32 = 0)
     (h_len : devm.returnData.length < 2 ^ 256)
     (h_gas : devm.gasLeft = G + revertReturnDataCost devm)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (h_room : devm.stack.length < 1022) :
     Func.RunCompiledTo fs sevm devm Func.revertReturnData
       (.error (.revert,
@@ -916,13 +927,13 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
       (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
         (G := G + (3 * gBase + c)) pushCost_zero
         (by simp only [Devm.gasLeft_setMach]; omega)
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
         (G := G + (2 * gBase + c)) pushCost_zero
         (by simp only [Devm.gasLeft_setMach]; omega)
-        (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+        (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     refine Func.RunCompiledTo.next
       (Ninst.runCompiled_returndatacopy_of
@@ -954,7 +965,7 @@ lemma Func.runCompiledTo_revertReturnData {fs : List Func} {sevm : Sevm}
         (Ninst.runCompiled_pushB256 (w := 0) (c := gBase) (G := G)
           pushCost_zero
           (by simp only [Devm.gasLeft_setMach])
-          (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+          (by simp only [Devm.stack_setMach, List.length_cons]; omega) (fun _ => h_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       have ha : M'.size % 32 = 0 := by
         rcases hrd : devm.returnData with _ | ⟨b, bs⟩
@@ -1248,10 +1259,10 @@ theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
   have h_out := Except.ok.inj hset
   have h_err : out.error = some .revert := by
     rw [h_out]
-    simpa only [Devm.error, Devm.rollback, Devm.setWorld, Devm.withStorageWrites] using h_handled
+    exact h_handled
   have h_output : out.output = post.output := by
     rw [h_out]
-    simpa only [Devm.output, Devm.rollback, Devm.setWorld, Devm.withStorageWrites] using h_handled_output
+    exact h_handled_output
   exact ⟨h_err, h_output,
     ProcessMessage.rollback_of_error h_pm (by simp only [h_err, Option.isSome_some])⟩
 

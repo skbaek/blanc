@@ -115,6 +115,7 @@ theorem Devm.PopBurn.trans_burn {xs : List B256} {a b c : Devm}
     accessedStorageKeys := hp.accessedStorageKeys.trans hb.accessedStorageKeys,
     state := hp.state.trans hb.state,
     createdAccounts := hp.createdAccounts.trans hb.createdAccounts,
+    touchedAccounts := hp.touchedAccounts.trans hb.touchedAccounts,
     transientStorage := hp.transientStorage.trans hb.transientStorage,
     stateGas := hp.stateGas.trans hb.stateGas,
     accountReads := hp.accountReads.trans hb.accountReads,

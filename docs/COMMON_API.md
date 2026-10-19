@@ -795,8 +795,9 @@ state-gas absence alone does not enable PUSH0.
 For a nonzero branch flag that tail-calls a constant `Error(string)`
 auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and
 `Func.runCompiledTo_errorGuard` in
-[`Blanc/RevertPayload.lean`](../Blanc/RevertPayload.lean). The cost remains a
-function of the entry state, so arbitrary aligned prior memory and its exact
+[`Blanc/RevertPayload.lean`](../Blanc/RevertPayload.lean), with the actual
+`sevm.benvStat.rules.op.push0 = true` availability flag for its zero pushes.
+The cost remains a function of the entry state, so arbitrary aligned prior memory and its exact
 expansion charge are retained.  When an existential carrier exposes a
 different entry state with the same memory size, transport the exact cost with
 `errorGuardCost_congr_memory_size`.

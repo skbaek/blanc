@@ -28,9 +28,13 @@ lemma Xinst.step_call_zero_value_outOfGas {sevm : Sevm} {devm : Devm}
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨callee, d⟩ ← d.popToAdr
@@ -119,9 +123,13 @@ lemma Xinst.step_staticcall_outOfGas {sevm : Sevm} {devm : Devm}
       .done (.error ⟨.halt (.outOfGas .none), d1⟩) := by
   subst h_ext; subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨target, d⟩ ← d.popToAdr

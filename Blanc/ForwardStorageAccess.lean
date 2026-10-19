@@ -80,12 +80,11 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
       address = devm.getCode address := by
   show (((devm.withRefundCounter rc).state.setStorVal target key value).get
     address).code = ((devm.state.get address)).code
-  unfold State.setStorVal
   by_cases h : target = address
   · subst h
-    rw [State.get_set_self]
+    rw [State.setStorVal_get_self]
     rfl
-  · rw [State.get_set_ne _ h]
+  · rw [State.setStorVal_get_ne _ h]
     rfl
 
 theorem afterSstore_getCode
