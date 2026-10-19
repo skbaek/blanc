@@ -7,13 +7,15 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactWalk
 `addLiquidity_live_exact`: at a `Checkpoint`, when the model's `add_liquidity` succeeds in
 `alEnvW sevm T B1 B2` and the calls are exact profiles with the data `P` (`ALExactPremises`:
 `totalSupply()`, each nonzero amount's `transferFrom`, the fee coin's two `balanceOf(self)` reads
-for a nonzero fee-coin amount, and the `mint` of the model's amount), there is one cost `c`,
-fixed before the residual gas, such that for every `R` above the bounded walk's headroom
-(`costAddLiquidity … + 7 U ≤ R`) at which the entry's gas measure is a word, the frame entered
-with `R + c` has an actual successful execution that ends with exactly `R` gas, whose effect is
-the model's step: the same conclusion as `addLiquidity_live`. The cost is the closed
-`alExactCost1` (positive supply) or `alExactCost0` (first deposit) at the model's words; the
-headroom and the no-wrap bound are stated separately from it.
+for a nonzero fee-coin amount, and the `mint` of the model's amount), the model's words the cost
+reads (`amp`, the `get_D_mem` inputs and results, the fee iterations' words) are pinned by the
+model's own checks (`aChk`, `xpChk`, `getDChk`, `RliFeeIter`), and the closed cost `alExactCost`
+at them (`alExactCost0` on a first deposit, `alExactCost1` on a positive supply) is fixed before
+the residual gas: for every `R` above the bounded walk's headroom (`costAddLiquidity … + 7 U ≤ R`)
+at which the entry's gas measure is a word, the frame entered with `R + alExactCost …` has an
+actual successful execution that ends with exactly `R` gas, whose effect is the model's step: the
+same conclusion as `addLiquidity_live`. The headroom and the no-wrap bound are stated separately
+from the cost.
 
 The route is the one of `removeLiquidity_live_exact`: the exact byte walk
 `rx_al_frame1_exact` / `rx_al_frame0_exact` gives a run ending with `R`; `lift_exactM` makes it an
@@ -25,6 +27,13 @@ one result (`Exec.result_unique`), so that post is the exact walk's.
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift Blanc.StableSwapNewton
+
+/-- **`add_liquidity`'s closed exact cost**: `alExactCost0` on a first deposit (`T = 0`; it reads
+`amp`, `xb`, `v1` only), `alExactCost1` on a positive supply. -/
+def alExactCost (sevm : Sevm) (pre : Devm) (P : ALExactCalls) (amp : Nat) (T B1 B2 : B256)
+    (xa xb xc : V3) (v0 v1 v2 : Nat) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256) : Nat :=
+  if T = 0 then alExactCost0 sevm pre P amp B1 B2 xb v1
+  else alExactCost1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2
 
 /-- **Exact-gas liveness of `add_liquidity`** (see the module note). -/
 theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1 B2 : B256}
@@ -44,14 +53,39 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
     (hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b)
     (hP : ALExactPremises sevm (pre.getStor sevm.currentTarget) T B1 B2
       (Nat.toB256 (alMintAmt o)) W U P) :
-    ∃ c, ∀ R, costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤ R →
-      (St pre [] Mem.empty (R + c)).gasMeasure + 6000 < 2 ^ 256 →
-      (∀ post (exc : Exec 0 sevm (St pre [] Mem.empty (R + c)) (.ok post)),
-        PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + c), .ok post, exc⟩ ∧
+    ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
+      aChk s sevm.benvStat.time.toNat = some amp ∧
+      xpChk ⟨(alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0).toNat,
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1).toNat,
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2).toNat⟩ = some xb ∧
+      getDChk xb.get amp 1 = some v1 ∧
+      (T ≠ 0 →
+        xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+          (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+          (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some xa ∧
+        getDChk xa.get amp 1 = some v0 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 0)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0) f0 s0 x0 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 1)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1) f1 s1 x1 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 2)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2) f2 s2 x2 ∧
+        xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
+      ∀ R, costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤ R →
+      (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)).gasMeasure + 6000 < 2 ^ 256 →
+      (∀ post (exc : Exec 0 sevm (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) (.ok post)),
+        PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2), .ok post, exc⟩ ∧
           ∀ c' ∈ Exec.childFrames exc, c'.post.getCode 4 = c'.pre.getCode 4) →
-      ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty (R + c)) (.ok post), post.gasLeft = R ∧
+      ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) (.ok post),
+        post.gasLeft = R ∧
         ∃ e : Env, e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
-          RawEffect ⟨0, sevm, St pre [] Mem.empty (R + c), .ok post, exc⟩ post e o ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2), .ok post, exc⟩ post e o ∧
           Checkpoint (post.getStor sevm.currentTarget) o.state := by
   have hP' := hP
   obtain ⟨hsup, hpull, hbalB, hbalA, hmint⟩ := hP'
@@ -93,7 +127,12 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
     have hcost := al_cost0 hamp hnew hxb
     have hma : alMintAmt o = mint := by rw [ho]; exact alMintAmt_eq
     rw [hma] at hP bmint
-    refine ⟨alExactCost0 sevm pre P amp B1 B2 xb mint, fun R hR hGm hkeep => ?_⟩
+    refine ⟨amp, 0, mint, 0, xb, xb, xb, 0, 0, 0, 0, 0, 0, 0, 0, 0, hamp, hxb, hD1,
+      fun h => absurd rfl h, fun R hR hGm hkeep => ?_⟩
+    have hc : alExactCost sevm pre P amp 0 B1 B2 xb xb xb 0 mint 0 0 0 0 0 0 0 0 0 0 =
+        alExactCost0 sevm pre P amp B1 B2 xb mint := by
+      unfold alExactCost; rw [ite_eq_left rfl]
+    rw [hc] at hGm hkeep ⊢
     have hG256 : R + alExactCost0 sevm pre P amp B1 B2 xb mint + 6000 < 2 ^ 256 := by
       have e : (St pre [] Mem.empty (R + alExactCost0 sevm pre P amp B1 B2 xb mint)).gasMeasure =
         R + alExactCost0 sevm pre P amp B1 B2 xb mint + pre.mach.stateGas.spilled +
@@ -141,8 +180,12 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
       obtain rfl := Option.some.inj hxb
       obtain rfl := Option.some.inj (hD0'.symm.trans hD1)
       exact Nat.lt_irrefl _ hlt
-    refine ⟨alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2,
-      fun R hR hGm hkeep => ?_⟩
+    refine ⟨amp, D0, v1, v2, xa, xb, xc, f0, f1, f2, s0, s1, s2, x0, x1, x2, hamp, hxb, hD1,
+      fun _ => ⟨hxa, hD0', i0, i1, i2, hxc, hD2'⟩, fun R hR hGm hkeep => ?_⟩
+    have hc : alExactCost sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 =
+        alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 := by
+      unfold alExactCost; rw [ite_eq_right hT0]
+    rw [hc] at hGm hkeep ⊢
     have hG256 : R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1
         x2 + 6000 < 2 ^ 256 := by
       have e : (St pre [] Mem.empty (R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0
