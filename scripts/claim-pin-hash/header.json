@@ -1,8 +1,10 @@
 {
- "schema": 1,
+ "schema": 2,
  "digest": "sha256",
+ "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
+ "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon, repeated labels numbered #2.. in file order)",
  "pins": 961,
- "constants": 16224,
+ "entries": 16224,
  "kinds": {
   "block": 519,
   "boundary": 1125,
@@ -12,6 +14,10 @@
   "pin": 961,
   "rec": 79,
   "theorem": 2345
+ },
+ "hashed_constants": {
+  "blanc": 14561,
+  "claimcheck-local": 19
  },
  "boundary_identities": {
   "@toolchain": "leanprover/lean4:v4.35.0",
