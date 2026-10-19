@@ -1288,6 +1288,16 @@ says every retained frame at `ca` lies inside one frame that
 `Xinst.step_callKind_spawn_target`/`_codeAddress` read a CALL-kind child's
 target and code address. Worked use: `Blanc/Lift/UniswapV2Pair/PairPositionalCalls.lean`.
 
+The same owner supplies the raw counterparts, including rolled-back children:
+`Exec.Deriv.ExecFreeUntil.rawFrameDescendants_eq` preserves raw descendants across
+an actual entry-free span, and `Exec.Deriv.ParentStep.rawFrameDescendants_cases`
+separates the continuation from an actual entered child's raw roots. These facts
+do not assert settlement commitment. Worked use:
+`Blanc/Composition/UniswapV2PairWeth9CapstoneSwapRaw.lean`, through the preserved
+CapstoneRaw wrappers. This is a registry-only route: the equality or membership
+goal alone does not identify the required free-span or parent-edge witness;
+the current suggestion matchers do not select from that joint local evidence.
+
 ### E8. I need an exact ordered replay of world-state changes
 
 Start with [`Blanc/ExecutionStateTrace.lean`](../Blanc/ExecutionStateTrace.lean):
