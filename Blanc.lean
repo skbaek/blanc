@@ -453,6 +453,9 @@ import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
+import Blanc.Lift.ExactCallProfile
+import Blanc.Lift.CallProfileTransport
+import Blanc.Lift.StaticGasTransport
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk
 import Blanc.Lift.ConsolidationRequest.Prog
@@ -982,6 +985,7 @@ import Blanc.Lift.Curve3Pool.Callee.GetY
 import Blanc.Lift.Curve3Pool.Callee.GetYExact
 import Blanc.Lift.Curve3Pool.Walk.LiveKit
 import Blanc.Lift.Curve3Pool.LivePremises
+import Blanc.Lift.Curve3Pool.ExactLivePremises
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLive
 import Blanc.Lift.Curve3Pool.RemoveLiquidityLiveness
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks

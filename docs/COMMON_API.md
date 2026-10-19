@@ -395,6 +395,33 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   to the continuation, immediately after code equality. Use them when a walk
   must transport nonce-based account protection. The original step helpers
   retain their signatures as wrappers that discard this additional fact.
+- For one external call with a gas-independent exact debit and canonical
+  successor, use `ExactCallProfile` in
+  [`Blanc/Lift/ExactCallProfile.lean`](../Blanc/Lift/ExactCallProfile.lean).
+  Its `entry_gas` identifies the metered input gas; `congr` fixes the debit
+  and every successor column except gas, including returndata and access
+  sets. `sound` keeps the exact debit equation. `runExact`, `runEx`, and
+  `runExact_residual` prepend the call while retaining that equation and
+  successor for the continuation. Headroom is a separate `Ready` condition.
+  `allGasStaticCallEntry`, `allGasZeroCallEntry`, `CallWindowReady`,
+  `StaticWordCallProfile`, and `MutableCallProfile` specialize this interface
+  to all-gas word-reply windows, preserving world transitions, result-stack
+  room, and identity-precompile readiness. These are per-call premises;
+  constructing a profile still requires the callee's exact run and stability.
+- For an all-gas, zero-value call site with a one-word output window, use
+  `Blanc.Lift.AllGasCall` in
+  [`Blanc/Lift/CallProfileTransport.lean`](../Blanc/Lift/CallProfileTransport.lean):
+  `ext`, `access`, `forwarded`, `warmed`, `parent`, `message`, and `resume`
+  name the priced site and its child message; `forwarded_le` and `cross`
+  construct the existing clean call crossing from the callee's actual execution.
+  `message_sevm_reframe` and `message_devm_reframe` expose complete child
+  initialization at normalized parent gas, with the actual forwarded gas restored;
+  the latter preserves the state-gas grant and every world/metadata field.
+  `resume_debit` cancels funded forwarding against returned child gas, leaving
+  exactly access + expansion + child consumption as the parent debit.
+  The forwarding fraction is returned through `resume`; it is not an extra
+  consumed charge. Supply the fork, nondelegation, depth, non-precompile,
+  funding, input-gas bound and result-stack-room hypotheses explicitly.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
 - When the walk already holds the callee's own exact run, use
   [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean):
@@ -1695,7 +1722,7 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   (`of_memWrite`, `of_addAccessedStorageKey`, `of_withRefundCounter`,
   `of_setStorVal`, `of_withMemory`, `of_withStack`), and read congruences
   (`extCost_congr`, `getStorVal_congr`, `memRead_congr`, `of_popToNat`).
-  `Rinst.gasFree` whitelists the `regularTransfer` opcode family minus `gas`;
+  `Rinst.gasFree` covers the `regularTransfer` opcode family minus `gas`, plus XOR;
   `Ninst.gasFree` adds `push` and `Line.gasFree` covers lines.
   `Rinst.run_eqModGas` replays two successful per-op runs against each other,
   `Ninst.run_eqModGas` lifts that to instructions, and `Line.run_eqModGas`
@@ -1707,6 +1734,30 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   at any such bump. Existing suggestion facilities were checked and no
   registered trigger matches the two-run congruence goal shape, so discovery
   remains in this registry.
+- For literal equality after choosing a common execution-gas value, use
+  `Devm.EqModGas.withGasLeft_eq` in
+  [`Blanc/Lift/CallProfileTransport.lean`](../Blanc/Lift/CallProfileTransport.lean).
+  `of_normalized_eq` proves the converse relation from equality at gas zero;
+  `.st`, `.addAccessedAddress`, `.callSpawnParent`, and `.callChildPost`
+  transport every column except execution gas through caller preparation and
+  clean child resumption. The resume theorem needs both parent and child
+  agreement, and retains returndata, access sets, refunds, state-gas and read/
+  write metadata. These lemmas do not assert equal debit or callee liveness.
+- To change only a frame's initial-gas environment coordinate while retaining
+  the complete dynamic machine and outcome, use
+  [`Blanc/Lift/StaticGasTransport.lean`](../Blanc/Lift/StaticGasTransport.lean).
+  `ninstRunCompiled_withStaticGas` retains the same child-execution slot for
+  every instruction, including external calls; `linstRun_withStaticGas`
+  covers terminal instructions. `SFunc.RunExact.withStaticGas` transports the
+  full exact derivation, including program references and PC nodes.
+  `ExactCallProfile.withStaticGas` preserves the literal debit and successor
+  functions; `StaticWordCallProfile.withStaticGas` and
+  `MutableCallProfile.withStaticGas` also transport their indexed identity
+  readiness postconditions via `IdReady.withStaticGas`. These theorems update
+  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged. Comparing runs from
+  different dynamic gas values still needs the following gas-erasure branch.
+  Existing recipe triggers cannot distinguish this static-coordinate update
+  from ordinary run construction, so discovery remains in this registry.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).

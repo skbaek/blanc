@@ -1,4 +1,5 @@
 import Blanc.ProofRecipeTactic
+import Blanc.Lift.CallProfileTransport
 import Blanc.Lift.FrameWalk
 import Blanc.MachineDataFacts
 import Blanc.Lift.CodeSizeWalk
@@ -1127,5 +1128,19 @@ theorem intended_relation_with_memory_shape
     (window : MemWordAt pre offset word) :
     MemWordAt post offset word := by
   exact MemWordAt.applyStage stage source shape miss window
+
+
+-- EXPECT: normalized-call-world-transport
+example (a b c d : Devm) (hp : Devm.EqModGas a b) (hc : Devm.EqModGas c d)
+    (oi os : Nat) :
+    Devm.EqModGas (Lift.callChildPost a c oi os) (Lift.callChildPost b d oi os) := by
+  expect_recipe_trigger "goal-head:Devm.EqModGas"
+  blanc_suggest
+  exact hp.callChildPost hc oi os
+
+-- A gas equality is outside the relation's guarantee and must not receive this advice.
+example (a : Devm) : a.gasLeft = a.gasLeft := by
+  expect_no_recipe_trigger "goal-head:Devm.EqModGas"
+  rfl
 
 end Blanc

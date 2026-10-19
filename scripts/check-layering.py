@@ -173,7 +173,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
-SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport"]
 # Parameterized free-pointer memory for lifted walks.
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
@@ -856,6 +856,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",
                     "Lift.Curve3Pool.Walk.LiveKit",
                     "Lift.Curve3Pool.LivePremises",
+                    "Lift.Curve3Pool.ExactLivePremises",
                     "Lift.Curve3Pool.CalldataWords",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
                     "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.Fallback", "Lift.Curve3Pool.Walk.AdminRaw",
@@ -1478,6 +1479,8 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvTraceEnv",
     "Composition.Curve3Pool3CrvCapstoneModel",
     "Composition.Curve3Pool3CrvWorldAgrees",
+    "Composition.Curve3Pool3CrvCoinExactTransport",
+    "Composition.Curve3Pool3CrvCoinExact",
     "Composition.Curve3Pool3CrvCoinAnswers",
     "Composition.Curve3Pool3CrvCapstoneFrame",
     "Composition.Curve3Pool3CrvCapstoneTx",

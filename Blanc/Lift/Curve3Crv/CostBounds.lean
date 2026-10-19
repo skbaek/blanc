@@ -20,8 +20,9 @@ calls; no existing statement changes.
   runtime.  Unlike `c3crv_exec` it asks no `isStatic = false`: the bound is the body's, and a
   `totalSupply()` body runs in a static frame.
 
-The `mint` and `burnFrom` bounds are the walks of `live_mint` and `live_burnFrom`, which conclude
-`BodyLiveLe` and forget the bound there; this file keeps `totalSupply()` and the dispatcher lift.
+The `mint` and `burnFrom` walks expose their fixed charges through `live_mint_cost` and
+`live_burnFrom_cost`; their `_le` wrappers package the bounds. This file keeps `totalSupply()`
+and the dispatcher lift.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -34,16 +35,21 @@ variable {sevm : Sevm} {b : Devm}
 
 local notation "stor₀" => Devm.getStor b sevm.currentTarget
 
-/-- `totalSupply()` costs at most `34 + 2100`: 34 gas and the `SLOAD` of slot 5. -/
-theorem live_totalSupply_le (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+/-- The closed supply-body charge: fixed instructions and the actual selected SLOAD. -/
+def totalSupplyBodyCost (s : Sevm) (b : Devm) : Nat :=
+  34 + sloadCost s b vySupplySlot
+
+/-- `totalSupply()`: a body run at the specified closed cost, before all residual gas. -/
+theorem live_totalSupply_cost (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
     (hr : rawTotalSupply sevm stor₀ = some r) :
-    BodyLiveLe sevm b t_0240_c0 r (34 + 2100) := by
+    ∀ G, gCallStipend < G → ∃ post,
+      SFunc.RunExact prog sevm (entrySt sevm b (G + totalSupplyBodyCost sevm b))
+        t_0240_c0 (.halted post) ∧ post.gasLeft = G ∧ Lands sevm b post r := by
   unfold rawTotalSupply at hr
   split_ifs at hr with hv
   cases hr
-  have hcost := Blanc.sloadCost_le sevm b vySupplySlot
-  have hcs : gasColdSload = 2100 := rfl
-  refine ⟨34 + sloadCost sevm b vySupplySlot, by omega, fun G _ => ?_⟩
+  intro G _
+  unfold totalSupplyBodyCost
   have hsz := vyMem_empty_size (Sevm.dataWord sevm 0)
   obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b) hfork (vyMem_wf Mem.wf_empty _)
     (vyMem_reads Mem.wf_empty Mem.reads_empty _) (by rw [hsz]; omega) (by rw [hsz]) vySupplySlot G
@@ -62,6 +68,16 @@ theorem live_totalSupply_le (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine rx_dest ?_
   refine rx_push (w := vySupplySlot) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   exact hrun
+
+/-- `totalSupply()` costs at most `34 + 2100`: 34 gas and the `SLOAD` of slot 5. -/
+theorem live_totalSupply_le (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+    (hr : rawTotalSupply sevm stor₀ = some r) :
+    BodyLiveLe sevm b t_0240_c0 r (34 + 2100) := by
+  refine ⟨totalSupplyBodyCost sevm b, ?_, live_totalSupply_cost hfork hr⟩
+  have hcost := Blanc.sloadCost_le sevm b vySupplySlot
+  have hcs : gasColdSload = 2100 := rfl
+  unfold totalSupplyBodyCost
+  omega
 
 end
 
