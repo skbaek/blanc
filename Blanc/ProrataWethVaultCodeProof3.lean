@@ -1,0 +1,2645 @@
+-- GENERATED FILE: scripts/gen-prorata-weth-vault-code.lean
+-- Maintained proof text: scripts/prorata-weth-vault-code-proof3.lean.in
+import Blanc.ProrataWethVaultCodeProof2
+import Blanc.CompiledShape
+
+namespace Blanc
+open Jaune CompiledShape
+open scoped CompiledShape
+namespace ProrataWethVaultCodeProof
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def auxQuoteStore : Line := mstoreAt quoteWord
+private theorem auxQuoteStore_size : prefixByteSize auxQuoteStore = 4 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def auxReceiverPrefix : Line := loadWord receiverWord ++ [dup 0] ++ checkNonAddress
+private theorem auxReceiverPrefix_size : prefixByteSize auxReceiverPrefix = 11 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def auxOwnerPrefix : Line := loadWord ownerWord ++ [dup 0] ++ checkNonAddress
+private theorem auxOwnerPrefix_size : prefixByteSize auxOwnerPrefix = 11 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def auxTruePrefix : Line := [pushB256 0, mload, pushB256 1, eq, iszero]
+private theorem auxTruePrefix_size : prefixByteSize auxTruePrefix = 6 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxRoomPrefix : Line := loadWord quoteWord ++ shareRoom ++ [lt]
+private theorem depositAuxRoomPrefix_size : prefixByteSize depositAuxRoomPrefix = 43 := by
+  simp only [depositAuxRoomPrefix]
+  rfl
+private theorem depositAuxRoomPrefix_bytes : depositAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 89).take 43 := by
+  simp only [depositAuxRoomPrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxCallPrefix : Line := [pushB256 wethTransferFromSelector] ++ mstoreAt 0 ++ [caller] ++ mstoreAt 1 ++ [address] ++ mstoreAt 2 ++ loadWord amountWord ++ mstoreAt 3 ++ pushList [32, 0, 100, 28, 0] ++ [pushB256 assetAddress, gas, call, iszero]
+private theorem depositAuxCallPrefix_size : prefixByteSize depositAuxCallPrefix = 36 := by
+  simp only [depositAuxCallPrefix, vault_wethTransferFromSelector_value]
+  rfl
+private theorem depositAuxCallPrefix_bytes : depositAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 136).take 36 := by
+  simp only [depositAuxCallPrefix, vault_wethTransferFromSelector_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxBalancePrefix : Line := loadWord receiverWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord quoteWord ++ loadWord balanceWord ++ [add] ++ mstoreAt scratchWord ++ loadWord balanceWord ++ loadWord scratchWord ++ [lt]
+private theorem depositAuxBalancePrefix_size : prefixByteSize depositAuxBalancePrefix = 31 := by
+  simp only [depositAuxBalancePrefix]
+  rfl
+private theorem depositAuxBalancePrefix_bytes : depositAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 195).take 31 := by
+  simp only [depositAuxBalancePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxWritePrefix : Line := loadWord scratchWord ++ loadWord receiverWord ++ [sstore] ++ loadWord quoteWord ++ loadWord supplyWord ++ [add] ++ pushSupplySlot ++ [sstore]
+private theorem depositAuxWritePrefix_size : prefixByteSize depositAuxWritePrefix = 21 := by
+  simp only [depositAuxWritePrefix]
+  rfl
+private theorem depositAuxWritePrefix_bytes : depositAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 230).take 21 := by
+  simp only [depositAuxWritePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxLogMintPrefix : Line := logMintTransfer (loadWord quoteWord)
+private theorem depositAuxLogMintPrefix_size : prefixByteSize depositAuxLogMintPrefix = 48 := by
+  simp only [depositAuxLogMintPrefix, ProrataWethVault.logMintTransfer, vault_transferEvent_value]
+  rfl
+private theorem depositAuxLogMintPrefix_bytes : depositAuxLogMintPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk61.drop 251 ++ prorataWethVaultCodeChunk62.take 43 := by
+  simp only [depositAuxLogMintPrefix, ProrataWethVault.logMintTransfer, vault_transferEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxLogDepositPrefix : Line := logDeposit (loadWord amountWord) (loadWord quoteWord)
+private theorem depositAuxLogDepositPrefix_size : prefixByteSize depositAuxLogDepositPrefix = 55 := by
+  simp only [depositAuxLogDepositPrefix, ProrataWethVault.logDeposit, vault_depositEvent_value]
+  rfl
+private theorem depositAuxLogDepositPrefix_bytes : depositAuxLogDepositPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 43).take 55 := by
+  simp only [depositAuxLogDepositPrefix, ProrataWethVault.logDeposit, vault_depositEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxTail : Func := loadWord quoteWord +++ returnWord
+
+private theorem depositAuxTail_compile : Func.compile vaultTable 15970 (depositAuxTail) = some ((prorataWethVaultCodeChunk62.drop 98).take 10) := by
+  simp only [depositAuxTail, ProrataWethVault.returnWord, ProrataWethVault.loadWord, mstoreAt, returnMemoryRange, prepend, Func.compile]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxWrites : Func := depositAuxWritePrefix +++ depositAuxLogMintPrefix +++ depositAuxLogDepositPrefix +++ depositAuxTail
+
+private theorem depositAuxWrites_compile :
+    Func.compile vaultTable 15846 (depositAuxWrites) = some (prorataWethVaultCodeChunk61.drop 230 ++ prorataWethVaultCodeChunk62.take 108) := by
+  have hb0 : depositAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 230).take 21 := by
+    rw [depositAuxWritePrefix_bytes]
+  have hb1 : depositAuxLogMintPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk61.drop 251 ++ prorataWethVaultCodeChunk62.take 43 := by
+    rw [depositAuxLogMintPrefix_bytes]
+  have hb2 : depositAuxLogDepositPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 43).take 55 := by
+    rw [depositAuxLogDepositPrefix_bytes]
+  rw [depositAuxWrites]
+  rw [compile_prepend, depositAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, depositAuxLogMintPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, depositAuxLogDepositPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [depositAuxTail_compile, hb0, hb1, hb2]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 230).take 21) ++ (prorataWethVaultCodeChunk61.drop 251) = prorataWethVaultCodeChunk61.drop 230 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 21 (prorataWethVaultCodeChunk61.drop 230)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 230).take 21), hj0]
+  have hj1 : (prorataWethVaultCodeChunk62.take 43) ++ ((prorataWethVaultCodeChunk62.drop 43).take 55) = prorataWethVaultCodeChunk62.take 98 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 43) (j := 55)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 43), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 98) ++ ((prorataWethVaultCodeChunk62.drop 98).take 10) = prorataWethVaultCodeChunk62.take 108 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 98) (j := 10)).symm
+  rw [hj2]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxBalance : Func := depositAuxBalancePrefix +++ Func.branch depositAuxWrites Func.revert
+
+private theorem depositAuxBalance_compile :
+    Func.compile vaultTable 15811 (depositAuxBalance) = some (prorataWethVaultCodeChunk61.drop 195 ++ prorataWethVaultCodeChunk62.take 112) := by
+  rw [depositAuxBalance, compile_prepend, depositAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : depositAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 195).take 31 := by
+    rw [depositAuxBalancePrefix_bytes]
+  have hlen : ((prorataWethVaultCodeChunk61.drop 230 ++ prorataWethVaultCodeChunk62.take 108) : Bytes).length = 134 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15842 15980 _ _
+    (prorataWethVaultCodeChunk61.drop 230 ++ prorataWethVaultCodeChunk62.take 108) [0x5f, 0x5f, 0xfd]
+    depositAuxWrites_compile (by rw [hlen]) (by decide) (revert_compile_at 15981)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (15980 >>> 8).toUInt8, Nat.toUInt8 15980, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 226).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 108).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 109).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 195).take 31) ++ ((prorataWethVaultCodeChunk61.drop 226).take 4) = (prorataWethVaultCodeChunk61.drop 195).take 35 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 195) (i := 31) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 195).take 31), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 195).take 35) ++ (prorataWethVaultCodeChunk61.drop 230) = prorataWethVaultCodeChunk61.drop 195 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 35 (prorataWethVaultCodeChunk61.drop 195)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 195).take 35), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 108) ++ ((prorataWethVaultCodeChunk62.drop 108).take 1) = prorataWethVaultCodeChunk62.take 109 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 108) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 108), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 109) ++ ((prorataWethVaultCodeChunk62.drop 109).take 3) = prorataWethVaultCodeChunk62.take 112 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 109) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxTrue : Func := auxTruePrefix +++ Func.branch depositAuxBalance Func.revert
+
+private theorem depositAuxTrue_compile :
+    Func.compile vaultTable 15801 (depositAuxTrue) = some (prorataWethVaultCodeChunk61.drop 185 ++ prorataWethVaultCodeChunk62.take 116) := by
+  rw [depositAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 185).take 6 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk61.drop 195 ++ prorataWethVaultCodeChunk62.take 112) : Bytes).length = 173 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15807 15984 _ _
+    (prorataWethVaultCodeChunk61.drop 195 ++ prorataWethVaultCodeChunk62.take 112) [0x5f, 0x5f, 0xfd]
+    depositAuxBalance_compile (by rw [hlen]) (by decide) (revert_compile_at 15985)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (15984 >>> 8).toUInt8, Nat.toUInt8 15984, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 191).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 112).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 113).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 185).take 6) ++ ((prorataWethVaultCodeChunk61.drop 191).take 4) = (prorataWethVaultCodeChunk61.drop 185).take 10 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 185) (i := 6) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 185).take 6), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 185).take 10) ++ (prorataWethVaultCodeChunk61.drop 195) = prorataWethVaultCodeChunk61.drop 185 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 10 (prorataWethVaultCodeChunk61.drop 185)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 185).take 10), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 112) ++ ((prorataWethVaultCodeChunk62.drop 112).take 1) = prorataWethVaultCodeChunk62.take 113 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 112) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 112), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 113) ++ ((prorataWethVaultCodeChunk62.drop 113).take 3) = prorataWethVaultCodeChunk62.take 116 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 113) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.branch depositAuxTrue Func.revert
+
+private theorem depositAuxReturnSize_compile :
+    Func.compile vaultTable 15792 (depositAuxReturnSize) = some (prorataWethVaultCodeChunk61.drop 176 ++ prorataWethVaultCodeChunk62.take 120) := by
+  rw [depositAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 176).take 5 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk61.drop 185 ++ prorataWethVaultCodeChunk62.take 116) : Bytes).length = 187 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15797 15988 _ _
+    (prorataWethVaultCodeChunk61.drop 185 ++ prorataWethVaultCodeChunk62.take 116) [0x5f, 0x5f, 0xfd]
+    depositAuxTrue_compile (by rw [hlen]) (by decide) (revert_compile_at 15989)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (15988 >>> 8).toUInt8, Nat.toUInt8 15988, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 181).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 116).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 117).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 176).take 5) ++ ((prorataWethVaultCodeChunk61.drop 181).take 4) = (prorataWethVaultCodeChunk61.drop 176).take 9 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 176) (i := 5) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 176).take 5), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 176).take 9) ++ (prorataWethVaultCodeChunk61.drop 185) = prorataWethVaultCodeChunk61.drop 176 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 9 (prorataWethVaultCodeChunk61.drop 176)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 176).take 9), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 116) ++ ((prorataWethVaultCodeChunk62.drop 116).take 1) = prorataWethVaultCodeChunk62.take 117 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 116) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 116), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 117) ++ ((prorataWethVaultCodeChunk62.drop 117).take 3) = prorataWethVaultCodeChunk62.take 120 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 117) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxCall : Func := depositAuxCallPrefix +++ Func.branch depositAuxReturnSize Func.revert
+
+private theorem depositAuxCall_compile :
+    Func.compile vaultTable 15752 (depositAuxCall) = some (prorataWethVaultCodeChunk61.drop 136 ++ prorataWethVaultCodeChunk62.take 124) := by
+  rw [depositAuxCall, compile_prepend, depositAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : depositAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 136).take 36 := by
+    rw [depositAuxCallPrefix_bytes]
+  have hlen : ((prorataWethVaultCodeChunk61.drop 176 ++ prorataWethVaultCodeChunk62.take 120) : Bytes).length = 200 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15788 15992 _ _
+    (prorataWethVaultCodeChunk61.drop 176 ++ prorataWethVaultCodeChunk62.take 120) [0x5f, 0x5f, 0xfd]
+    depositAuxReturnSize_compile (by rw [hlen]) (by decide) (revert_compile_at 15993)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (15992 >>> 8).toUInt8, Nat.toUInt8 15992, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 172).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 120).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 121).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 136).take 36) ++ ((prorataWethVaultCodeChunk61.drop 172).take 4) = (prorataWethVaultCodeChunk61.drop 136).take 40 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 136) (i := 36) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 136).take 36), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 136).take 40) ++ (prorataWethVaultCodeChunk61.drop 176) = prorataWethVaultCodeChunk61.drop 136 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 40 (prorataWethVaultCodeChunk61.drop 136)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 136).take 40), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 120) ++ ((prorataWethVaultCodeChunk62.drop 120).take 1) = prorataWethVaultCodeChunk62.take 121 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 120) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 120), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 121) ++ ((prorataWethVaultCodeChunk62.drop 121).take 3) = prorataWethVaultCodeChunk62.take 124 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 121) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxRoom : Func := depositAuxRoomPrefix +++ Func.branch depositAuxCall Func.revert
+
+private theorem depositAuxRoom_compile :
+    Func.compile vaultTable 15705 (depositAuxRoom) = some (prorataWethVaultCodeChunk61.drop 89 ++ prorataWethVaultCodeChunk62.take 128) := by
+  rw [depositAuxRoom, compile_prepend, depositAuxRoomPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : depositAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 89).take 43 := by
+    rw [depositAuxRoomPrefix_bytes]
+  have hlen : ((prorataWethVaultCodeChunk61.drop 136 ++ prorataWethVaultCodeChunk62.take 124) : Bytes).length = 244 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15748 15996 _ _
+    (prorataWethVaultCodeChunk61.drop 136 ++ prorataWethVaultCodeChunk62.take 124) [0x5f, 0x5f, 0xfd]
+    depositAuxCall_compile (by rw [hlen]) (by decide) (revert_compile_at 15997)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (15996 >>> 8).toUInt8, Nat.toUInt8 15996, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 132).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 124).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 125).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 89).take 43) ++ ((prorataWethVaultCodeChunk61.drop 132).take 4) = (prorataWethVaultCodeChunk61.drop 89).take 47 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 89) (i := 43) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 89).take 43), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 89).take 47) ++ (prorataWethVaultCodeChunk61.drop 136) = prorataWethVaultCodeChunk61.drop 89 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 47 (prorataWethVaultCodeChunk61.drop 89)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 89).take 47), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 124) ++ ((prorataWethVaultCodeChunk62.drop 124).take 1) = prorataWethVaultCodeChunk62.take 125 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 124) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 124), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 125) ++ ((prorataWethVaultCodeChunk62.drop 125).take 3) = prorataWethVaultCodeChunk62.take 128 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 125) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxNonzero : Func := vaultNonzeroPrefix +++ Func.branch depositAuxRoom Func.revert
+
+private theorem depositAuxNonzero_compile :
+    Func.compile vaultTable 15700 (depositAuxNonzero) = some (prorataWethVaultCodeChunk61.drop 84 ++ prorataWethVaultCodeChunk62.take 132) := by
+  rw [depositAuxNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 84).take 1 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk61.drop 89 ++ prorataWethVaultCodeChunk62.take 128) : Bytes).length = 295 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15701 16000 _ _
+    (prorataWethVaultCodeChunk61.drop 89 ++ prorataWethVaultCodeChunk62.take 128) [0x5f, 0x5f, 0xfd]
+    depositAuxRoom_compile (by rw [hlen]) (by decide) (revert_compile_at 16001)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16000 >>> 8).toUInt8, Nat.toUInt8 16000, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 85).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 128).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 129).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 84).take 1) ++ ((prorataWethVaultCodeChunk61.drop 85).take 4) = (prorataWethVaultCodeChunk61.drop 84).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 84) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 84).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 84).take 5) ++ (prorataWethVaultCodeChunk61.drop 89) = prorataWethVaultCodeChunk61.drop 84 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 5 (prorataWethVaultCodeChunk61.drop 84)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 84).take 5), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 128) ++ ((prorataWethVaultCodeChunk62.drop 128).take 1) = prorataWethVaultCodeChunk62.take 129 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 128) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 128), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 129) ++ ((prorataWethVaultCodeChunk62.drop 129).take 3) = prorataWethVaultCodeChunk62.take 132 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 129) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxAddress : Func := auxReceiverPrefix +++ Func.branch depositAuxNonzero Func.revert
+
+private theorem depositAuxAddress_compile :
+    Func.compile vaultTable 15685 (depositAuxAddress) = some (prorataWethVaultCodeChunk61.drop 69 ++ prorataWethVaultCodeChunk62.take 136) := by
+  rw [depositAuxAddress, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 69).take 11 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk61.drop 84 ++ prorataWethVaultCodeChunk62.take 132) : Bytes).length = 304 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15696 16004 _ _
+    (prorataWethVaultCodeChunk61.drop 84 ++ prorataWethVaultCodeChunk62.take 132) [0x5f, 0x5f, 0xfd]
+    depositAuxNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16005)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16004 >>> 8).toUInt8, Nat.toUInt8 16004, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 80).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 132).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 133).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 69).take 11) ++ ((prorataWethVaultCodeChunk61.drop 80).take 4) = (prorataWethVaultCodeChunk61.drop 69).take 15 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 69) (i := 11) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 69).take 11), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 69).take 15) ++ (prorataWethVaultCodeChunk61.drop 84) = prorataWethVaultCodeChunk61.drop 69 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 15 (prorataWethVaultCodeChunk61.drop 69)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 69).take 15), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 132) ++ ((prorataWethVaultCodeChunk62.drop 132).take 1) = prorataWethVaultCodeChunk62.take 133 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 132) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 132), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 133) ++ ((prorataWethVaultCodeChunk62.drop 133).take 3) = prorataWethVaultCodeChunk62.take 136 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 133) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def depositAuxCaller : Func := vaultCallerPrefix +++ Func.branch depositAuxAddress Func.revert
+
+private theorem depositAuxCaller_compile :
+    Func.compile vaultTable 15679 (depositAuxCaller) = some (prorataWethVaultCodeChunk61.drop 63 ++ prorataWethVaultCodeChunk62.take 140) := by
+  rw [depositAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 63).take 2 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk61.drop 69 ++ prorataWethVaultCodeChunk62.take 136) : Bytes).length = 323 := by decide +kernel
+  have hbranch := compile_branch vaultTable 15681 16008 _ _
+    (prorataWethVaultCodeChunk61.drop 69 ++ prorataWethVaultCodeChunk62.take 136) [0x5f, 0x5f, 0xfd]
+    depositAuxAddress_compile (by rw [hlen]) (by decide) (revert_compile_at 16009)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16008 >>> 8).toUInt8, Nat.toUInt8 16008, 0x57] : Bytes) = (prorataWethVaultCodeChunk61.drop 65).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk62.drop 136).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk62.drop 137).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 63).take 2) ++ ((prorataWethVaultCodeChunk61.drop 65).take 4) = (prorataWethVaultCodeChunk61.drop 63).take 6 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 63) (i := 2) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 63).take 2), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 63).take 6) ++ (prorataWethVaultCodeChunk61.drop 69) = prorataWethVaultCodeChunk61.drop 63 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 6 (prorataWethVaultCodeChunk61.drop 63)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 63).take 6), hj1]
+  have hj2 : (prorataWethVaultCodeChunk62.take 136) ++ ((prorataWethVaultCodeChunk62.drop 136).take 1) = prorataWethVaultCodeChunk62.take 137 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 136) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 136), hj2]
+  have hj3 : (prorataWethVaultCodeChunk62.take 137) ++ ((prorataWethVaultCodeChunk62.drop 137).take 3) = prorataWethVaultCodeChunk62.take 140 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62) (i := 137) (j := 3)).symm
+  rw [hj3]
+
+private theorem depositAux_source_cut : ProrataWethVault.depositAfterQuote = auxQuoteStore +++ depositAuxCaller := by rfl
+
+private theorem depositAux_compile :
+    Func.compile vaultTable 15675 (ProrataWethVault.depositAfterQuote) = some (prorataWethVaultCodeChunk61.drop 59 ++ prorataWethVaultCodeChunk62.take 140) := by
+  have hb0 : auxQuoteStore.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk61.drop 59).take 4 := by
+    rfl
+  rw [depositAux_source_cut]
+  rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [depositAuxCaller_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 59).take 4) ++ (prorataWethVaultCodeChunk61.drop 63) = prorataWethVaultCodeChunk61.drop 59 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4 (prorataWethVaultCodeChunk61.drop 59)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 59).take 4), hj0]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxRoomPrefix : Line := loadWord amountWord ++ shareRoom ++ [lt]
+private theorem mintAuxRoomPrefix_size : prefixByteSize mintAuxRoomPrefix = 43 := by
+  simp only [mintAuxRoomPrefix]
+  rfl
+private theorem mintAuxRoomPrefix_bytes : mintAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 171).take 43 := by
+  simp only [mintAuxRoomPrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxCallPrefix : Line := [pushB256 wethTransferFromSelector] ++ mstoreAt 0 ++ [caller] ++ mstoreAt 1 ++ [address] ++ mstoreAt 2 ++ loadWord quoteWord ++ mstoreAt 3 ++ pushList [32, 0, 100, 28, 0] ++ [pushB256 assetAddress, gas, call, iszero]
+private theorem mintAuxCallPrefix_size : prefixByteSize mintAuxCallPrefix = 36 := by
+  simp only [mintAuxCallPrefix, vault_wethTransferFromSelector_value]
+  rfl
+private theorem mintAuxCallPrefix_bytes : mintAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 218).take 36 := by
+  simp only [mintAuxCallPrefix, vault_wethTransferFromSelector_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxBalancePrefix : Line := loadWord receiverWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord amountWord ++ loadWord balanceWord ++ [add] ++ mstoreAt scratchWord ++ loadWord balanceWord ++ loadWord scratchWord ++ [lt]
+private theorem mintAuxBalancePrefix_size : prefixByteSize mintAuxBalancePrefix = 31 := by
+  simp only [mintAuxBalancePrefix]
+  rfl
+private theorem mintAuxBalancePrefix_bytes : mintAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 21).take 31 := by
+  simp only [mintAuxBalancePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxWritePrefix : Line := loadWord scratchWord ++ loadWord receiverWord ++ [sstore] ++ loadWord amountWord ++ loadWord supplyWord ++ [add] ++ pushSupplySlot ++ [sstore]
+private theorem mintAuxWritePrefix_size : prefixByteSize mintAuxWritePrefix = 21 := by
+  simp only [mintAuxWritePrefix]
+  rfl
+private theorem mintAuxWritePrefix_bytes : mintAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 56).take 21 := by
+  simp only [mintAuxWritePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxLogMintPrefix : Line := logMintTransfer (loadWord amountWord)
+private theorem mintAuxLogMintPrefix_size : prefixByteSize mintAuxLogMintPrefix = 48 := by
+  simp only [mintAuxLogMintPrefix, ProrataWethVault.logMintTransfer, vault_transferEvent_value]
+  rfl
+private theorem mintAuxLogMintPrefix_bytes : mintAuxLogMintPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 77).take 48 := by
+  simp only [mintAuxLogMintPrefix, ProrataWethVault.logMintTransfer, vault_transferEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxLogDepositPrefix : Line := logDeposit (loadWord quoteWord) (loadWord amountWord)
+private theorem mintAuxLogDepositPrefix_size : prefixByteSize mintAuxLogDepositPrefix = 55 := by
+  simp only [mintAuxLogDepositPrefix, ProrataWethVault.logDeposit, vault_depositEvent_value]
+  rfl
+private theorem mintAuxLogDepositPrefix_bytes : mintAuxLogDepositPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 125).take 55 := by
+  simp only [mintAuxLogDepositPrefix, ProrataWethVault.logDeposit, vault_depositEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxTail : Func := loadWord quoteWord +++ returnWord
+
+private theorem mintAuxTail_compile : Func.compile vaultTable 16308 (mintAuxTail) = some ((prorataWethVaultCodeChunk63.drop 180).take 10) := by
+  simp only [mintAuxTail, ProrataWethVault.returnWord, ProrataWethVault.loadWord, mstoreAt, returnMemoryRange, prepend, Func.compile]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxWrites : Func := mintAuxWritePrefix +++ mintAuxLogMintPrefix +++ mintAuxLogDepositPrefix +++ mintAuxTail
+
+private theorem mintAuxWrites_compile :
+    Func.compile vaultTable 16184 (mintAuxWrites) = some ((prorataWethVaultCodeChunk63.drop 56).take 134) := by
+  have hb0 : mintAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 56).take 21 := by
+    rw [mintAuxWritePrefix_bytes]
+  have hb1 : mintAuxLogMintPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 77).take 48 := by
+    rw [mintAuxLogMintPrefix_bytes]
+  have hb2 : mintAuxLogDepositPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 125).take 55 := by
+    rw [mintAuxLogDepositPrefix_bytes]
+  rw [mintAuxWrites]
+  rw [compile_prepend, mintAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, mintAuxLogMintPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, mintAuxLogDepositPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [mintAuxTail_compile, hb0, hb1, hb2]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 56).take 21) ++ ((prorataWethVaultCodeChunk63.drop 77).take 48) = (prorataWethVaultCodeChunk63.drop 56).take 69 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 56) (i := 21) (j := 48)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 56).take 21), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 56).take 69) ++ ((prorataWethVaultCodeChunk63.drop 125).take 55) = (prorataWethVaultCodeChunk63.drop 56).take 124 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 56) (i := 69) (j := 55)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 56).take 69), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk63.drop 56).take 124) ++ ((prorataWethVaultCodeChunk63.drop 180).take 10) = (prorataWethVaultCodeChunk63.drop 56).take 134 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 56) (i := 124) (j := 10)).symm
+  rw [hj2]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxBalance : Func := mintAuxBalancePrefix +++ Func.branch mintAuxWrites Func.revert
+
+private theorem mintAuxBalance_compile :
+    Func.compile vaultTable 16149 (mintAuxBalance) = some ((prorataWethVaultCodeChunk63.drop 21).take 173) := by
+  rw [mintAuxBalance, compile_prepend, mintAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : mintAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 21).take 31 := by
+    rw [mintAuxBalancePrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk63.drop 56).take 134) : Bytes).length = 134 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16180 16318 _ _
+    ((prorataWethVaultCodeChunk63.drop 56).take 134) [0x5f, 0x5f, 0xfd]
+    mintAuxWrites_compile (by rw [hlen]) (by decide) (revert_compile_at 16319)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16318 >>> 8).toUInt8, Nat.toUInt8 16318, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 52).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 190).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 191).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 21).take 31) ++ ((prorataWethVaultCodeChunk63.drop 52).take 4) = (prorataWethVaultCodeChunk63.drop 21).take 35 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 21) (i := 31) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 21).take 31), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 21).take 35) ++ ((prorataWethVaultCodeChunk63.drop 56).take 134) = (prorataWethVaultCodeChunk63.drop 21).take 169 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 21) (i := 35) (j := 134)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 21).take 35), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk63.drop 21).take 169) ++ ((prorataWethVaultCodeChunk63.drop 190).take 1) = (prorataWethVaultCodeChunk63.drop 21).take 170 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 21) (i := 169) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 21).take 169), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk63.drop 21).take 170) ++ ((prorataWethVaultCodeChunk63.drop 191).take 3) = (prorataWethVaultCodeChunk63.drop 21).take 173 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 21) (i := 170) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxTrue : Func := auxTruePrefix +++ Func.branch mintAuxBalance Func.revert
+
+private theorem mintAuxTrue_compile :
+    Func.compile vaultTable 16139 (mintAuxTrue) = some ((prorataWethVaultCodeChunk63.drop 11).take 187) := by
+  rw [mintAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 11).take 6 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk63.drop 21).take 173) : Bytes).length = 173 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16145 16322 _ _
+    ((prorataWethVaultCodeChunk63.drop 21).take 173) [0x5f, 0x5f, 0xfd]
+    mintAuxBalance_compile (by rw [hlen]) (by decide) (revert_compile_at 16323)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16322 >>> 8).toUInt8, Nat.toUInt8 16322, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 17).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 194).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 195).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 11).take 6) ++ ((prorataWethVaultCodeChunk63.drop 17).take 4) = (prorataWethVaultCodeChunk63.drop 11).take 10 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 11) (i := 6) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 11).take 6), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 11).take 10) ++ ((prorataWethVaultCodeChunk63.drop 21).take 173) = (prorataWethVaultCodeChunk63.drop 11).take 183 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 11) (i := 10) (j := 173)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 11).take 10), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk63.drop 11).take 183) ++ ((prorataWethVaultCodeChunk63.drop 194).take 1) = (prorataWethVaultCodeChunk63.drop 11).take 184 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 11) (i := 183) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 11).take 183), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk63.drop 11).take 184) ++ ((prorataWethVaultCodeChunk63.drop 195).take 3) = (prorataWethVaultCodeChunk63.drop 11).take 187 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 11) (i := 184) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.branch mintAuxTrue Func.revert
+
+private theorem mintAuxReturnSize_compile :
+    Func.compile vaultTable 16130 (mintAuxReturnSize) = some ((prorataWethVaultCodeChunk63.drop 2).take 200) := by
+  rw [mintAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 2).take 5 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk63.drop 11).take 187) : Bytes).length = 187 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16135 16326 _ _
+    ((prorataWethVaultCodeChunk63.drop 11).take 187) [0x5f, 0x5f, 0xfd]
+    mintAuxTrue_compile (by rw [hlen]) (by decide) (revert_compile_at 16327)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16326 >>> 8).toUInt8, Nat.toUInt8 16326, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 7).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 198).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 199).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 2).take 5) ++ ((prorataWethVaultCodeChunk63.drop 7).take 4) = (prorataWethVaultCodeChunk63.drop 2).take 9 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 2) (i := 5) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 2).take 5), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 2).take 9) ++ ((prorataWethVaultCodeChunk63.drop 11).take 187) = (prorataWethVaultCodeChunk63.drop 2).take 196 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 2) (i := 9) (j := 187)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 2).take 9), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk63.drop 2).take 196) ++ ((prorataWethVaultCodeChunk63.drop 198).take 1) = (prorataWethVaultCodeChunk63.drop 2).take 197 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 2) (i := 196) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 2).take 196), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk63.drop 2).take 197) ++ ((prorataWethVaultCodeChunk63.drop 199).take 3) = (prorataWethVaultCodeChunk63.drop 2).take 200 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 2) (i := 197) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxCall : Func := mintAuxCallPrefix +++ Func.branch mintAuxReturnSize Func.revert
+
+private theorem mintAuxCall_compile :
+    Func.compile vaultTable 16090 (mintAuxCall) = some (prorataWethVaultCodeChunk62.drop 218 ++ prorataWethVaultCodeChunk63.take 206) := by
+  rw [mintAuxCall, compile_prepend, mintAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : mintAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 218).take 36 := by
+    rw [mintAuxCallPrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk63.drop 2).take 200) : Bytes).length = 200 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16126 16330 _ _
+    ((prorataWethVaultCodeChunk63.drop 2).take 200) [0x5f, 0x5f, 0xfd]
+    mintAuxReturnSize_compile (by rw [hlen]) (by decide) (revert_compile_at 16331)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16330 >>> 8).toUInt8, Nat.toUInt8 16330, 0x57] : Bytes) = prorataWethVaultCodeChunk62.drop 254 ++ prorataWethVaultCodeChunk63.take 2 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 202).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 203).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 218).take 36) ++ (prorataWethVaultCodeChunk62.drop 254) = prorataWethVaultCodeChunk62.drop 218 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 36 (prorataWethVaultCodeChunk62.drop 218)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 218).take 36), hj0]
+  have hj1 : (prorataWethVaultCodeChunk63.take 2) ++ ((prorataWethVaultCodeChunk63.drop 2).take 200) = prorataWethVaultCodeChunk63.take 202 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 2) (j := 200)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 2), hj1]
+  have hj2 : (prorataWethVaultCodeChunk63.take 202) ++ ((prorataWethVaultCodeChunk63.drop 202).take 1) = prorataWethVaultCodeChunk63.take 203 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 202) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 202), hj2]
+  have hj3 : (prorataWethVaultCodeChunk63.take 203) ++ ((prorataWethVaultCodeChunk63.drop 203).take 3) = prorataWethVaultCodeChunk63.take 206 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 203) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxRoom : Func := mintAuxRoomPrefix +++ Func.branch mintAuxCall Func.revert
+
+private theorem mintAuxRoom_compile :
+    Func.compile vaultTable 16043 (mintAuxRoom) = some (prorataWethVaultCodeChunk62.drop 171 ++ prorataWethVaultCodeChunk63.take 210) := by
+  rw [mintAuxRoom, compile_prepend, mintAuxRoomPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : mintAuxRoomPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 171).take 43 := by
+    rw [mintAuxRoomPrefix_bytes]
+  have hlen : ((prorataWethVaultCodeChunk62.drop 218 ++ prorataWethVaultCodeChunk63.take 206) : Bytes).length = 244 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16086 16334 _ _
+    (prorataWethVaultCodeChunk62.drop 218 ++ prorataWethVaultCodeChunk63.take 206) [0x5f, 0x5f, 0xfd]
+    mintAuxCall_compile (by rw [hlen]) (by decide) (revert_compile_at 16335)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16334 >>> 8).toUInt8, Nat.toUInt8 16334, 0x57] : Bytes) = (prorataWethVaultCodeChunk62.drop 214).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 206).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 207).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 171).take 43) ++ ((prorataWethVaultCodeChunk62.drop 214).take 4) = (prorataWethVaultCodeChunk62.drop 171).take 47 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62.drop 171) (i := 43) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 171).take 43), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk62.drop 171).take 47) ++ (prorataWethVaultCodeChunk62.drop 218) = prorataWethVaultCodeChunk62.drop 171 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 47 (prorataWethVaultCodeChunk62.drop 171)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 171).take 47), hj1]
+  have hj2 : (prorataWethVaultCodeChunk63.take 206) ++ ((prorataWethVaultCodeChunk63.drop 206).take 1) = prorataWethVaultCodeChunk63.take 207 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 206) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 206), hj2]
+  have hj3 : (prorataWethVaultCodeChunk63.take 207) ++ ((prorataWethVaultCodeChunk63.drop 207).take 3) = prorataWethVaultCodeChunk63.take 210 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 207) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxNonzero : Func := vaultNonzeroPrefix +++ Func.branch mintAuxRoom Func.revert
+
+private theorem mintAuxNonzero_compile :
+    Func.compile vaultTable 16038 (mintAuxNonzero) = some (prorataWethVaultCodeChunk62.drop 166 ++ prorataWethVaultCodeChunk63.take 214) := by
+  rw [mintAuxNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 166).take 1 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk62.drop 171 ++ prorataWethVaultCodeChunk63.take 210) : Bytes).length = 295 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16039 16338 _ _
+    (prorataWethVaultCodeChunk62.drop 171 ++ prorataWethVaultCodeChunk63.take 210) [0x5f, 0x5f, 0xfd]
+    mintAuxRoom_compile (by rw [hlen]) (by decide) (revert_compile_at 16339)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16338 >>> 8).toUInt8, Nat.toUInt8 16338, 0x57] : Bytes) = (prorataWethVaultCodeChunk62.drop 167).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 210).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 211).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 166).take 1) ++ ((prorataWethVaultCodeChunk62.drop 167).take 4) = (prorataWethVaultCodeChunk62.drop 166).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62.drop 166) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 166).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk62.drop 166).take 5) ++ (prorataWethVaultCodeChunk62.drop 171) = prorataWethVaultCodeChunk62.drop 166 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 5 (prorataWethVaultCodeChunk62.drop 166)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 166).take 5), hj1]
+  have hj2 : (prorataWethVaultCodeChunk63.take 210) ++ ((prorataWethVaultCodeChunk63.drop 210).take 1) = prorataWethVaultCodeChunk63.take 211 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 210) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 210), hj2]
+  have hj3 : (prorataWethVaultCodeChunk63.take 211) ++ ((prorataWethVaultCodeChunk63.drop 211).take 3) = prorataWethVaultCodeChunk63.take 214 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 211) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxAddress : Func := auxReceiverPrefix +++ Func.branch mintAuxNonzero Func.revert
+
+private theorem mintAuxAddress_compile :
+    Func.compile vaultTable 16023 (mintAuxAddress) = some (prorataWethVaultCodeChunk62.drop 151 ++ prorataWethVaultCodeChunk63.take 218) := by
+  rw [mintAuxAddress, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 151).take 11 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk62.drop 166 ++ prorataWethVaultCodeChunk63.take 214) : Bytes).length = 304 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16034 16342 _ _
+    (prorataWethVaultCodeChunk62.drop 166 ++ prorataWethVaultCodeChunk63.take 214) [0x5f, 0x5f, 0xfd]
+    mintAuxNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16343)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16342 >>> 8).toUInt8, Nat.toUInt8 16342, 0x57] : Bytes) = (prorataWethVaultCodeChunk62.drop 162).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 214).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 215).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 151).take 11) ++ ((prorataWethVaultCodeChunk62.drop 162).take 4) = (prorataWethVaultCodeChunk62.drop 151).take 15 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62.drop 151) (i := 11) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 151).take 11), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk62.drop 151).take 15) ++ (prorataWethVaultCodeChunk62.drop 166) = prorataWethVaultCodeChunk62.drop 151 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 15 (prorataWethVaultCodeChunk62.drop 151)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 151).take 15), hj1]
+  have hj2 : (prorataWethVaultCodeChunk63.take 214) ++ ((prorataWethVaultCodeChunk63.drop 214).take 1) = prorataWethVaultCodeChunk63.take 215 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 214) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 214), hj2]
+  have hj3 : (prorataWethVaultCodeChunk63.take 215) ++ ((prorataWethVaultCodeChunk63.drop 215).take 3) = prorataWethVaultCodeChunk63.take 218 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 215) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def mintAuxCaller : Func := vaultCallerPrefix +++ Func.branch mintAuxAddress Func.revert
+
+private theorem mintAuxCaller_compile :
+    Func.compile vaultTable 16017 (mintAuxCaller) = some (prorataWethVaultCodeChunk62.drop 145 ++ prorataWethVaultCodeChunk63.take 222) := by
+  rw [mintAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 145).take 2 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk62.drop 151 ++ prorataWethVaultCodeChunk63.take 218) : Bytes).length = 323 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16019 16346 _ _
+    (prorataWethVaultCodeChunk62.drop 151 ++ prorataWethVaultCodeChunk63.take 218) [0x5f, 0x5f, 0xfd]
+    mintAuxAddress_compile (by rw [hlen]) (by decide) (revert_compile_at 16347)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16346 >>> 8).toUInt8, Nat.toUInt8 16346, 0x57] : Bytes) = (prorataWethVaultCodeChunk62.drop 147).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk63.drop 218).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk63.drop 219).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 145).take 2) ++ ((prorataWethVaultCodeChunk62.drop 147).take 4) = (prorataWethVaultCodeChunk62.drop 145).take 6 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk62.drop 145) (i := 2) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 145).take 2), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk62.drop 145).take 6) ++ (prorataWethVaultCodeChunk62.drop 151) = prorataWethVaultCodeChunk62.drop 145 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 6 (prorataWethVaultCodeChunk62.drop 145)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 145).take 6), hj1]
+  have hj2 : (prorataWethVaultCodeChunk63.take 218) ++ ((prorataWethVaultCodeChunk63.drop 218).take 1) = prorataWethVaultCodeChunk63.take 219 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 218) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 218), hj2]
+  have hj3 : (prorataWethVaultCodeChunk63.take 219) ++ ((prorataWethVaultCodeChunk63.drop 219).take 3) = prorataWethVaultCodeChunk63.take 222 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63) (i := 219) (j := 3)).symm
+  rw [hj3]
+
+private theorem mintAux_source_cut : ProrataWethVault.mintAfterQuote = auxQuoteStore +++ mintAuxCaller := by rfl
+
+private theorem mintAux_compile :
+    Func.compile vaultTable 16013 (ProrataWethVault.mintAfterQuote) = some (prorataWethVaultCodeChunk62.drop 141 ++ prorataWethVaultCodeChunk63.take 222) := by
+  have hb0 : auxQuoteStore.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk62.drop 141).take 4 := by
+    rfl
+  rw [mintAux_source_cut]
+  rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [mintAuxCaller_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 141).take 4) ++ (prorataWethVaultCodeChunk62.drop 145) = prorataWethVaultCodeChunk62.drop 141 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4 (prorataWethVaultCodeChunk62.drop 141)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 141).take 4), hj0]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxGuardPrefix : Line := loadWord quoteWord ++ loadWord balanceWord ++ [sub] ++ loadWord ownerWord ++ [sstore] ++ loadWord quoteWord ++ loadWord supplyWord ++ [lt]
+private theorem withdrawBurnAuxGuardPrefix_size : prefixByteSize withdrawBurnAuxGuardPrefix = 23 := by
+  simp only [withdrawBurnAuxGuardPrefix]
+  rfl
+private theorem withdrawBurnAuxGuardPrefix_bytes : withdrawBurnAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 21).take 23 := by
+  simp only [withdrawBurnAuxGuardPrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxWritePrefix : Line := loadWord quoteWord ++ loadWord supplyWord ++ [sub] ++ pushSupplySlot ++ [sstore]
+private theorem withdrawBurnAuxWritePrefix_size : prefixByteSize withdrawBurnAuxWritePrefix = 12 := by
+  simp only [withdrawBurnAuxWritePrefix]
+  rfl
+private theorem withdrawBurnAuxWritePrefix_bytes : withdrawBurnAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 48).take 12 := by
+  simp only [withdrawBurnAuxWritePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxLogBurnPrefix : Line := logBurnTransfer (loadWord quoteWord)
+private theorem withdrawBurnAuxLogBurnPrefix_size : prefixByteSize withdrawBurnAuxLogBurnPrefix = 48 := by
+  simp only [withdrawBurnAuxLogBurnPrefix, ProrataWethVault.logBurnTransfer, vault_transferEvent_value]
+  rfl
+private theorem withdrawBurnAuxLogBurnPrefix_bytes : withdrawBurnAuxLogBurnPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 60).take 48 := by
+  simp only [withdrawBurnAuxLogBurnPrefix, ProrataWethVault.logBurnTransfer, vault_transferEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxCallPrefix : Line := [pushB256 wethTransferSelector] ++ mstoreAt 0 ++ loadWord receiverWord ++ mstoreAt 1 ++ loadWord amountWord ++ mstoreAt 2 ++ pushList [32, 0, 68, 28, 0] ++ [pushB256 assetAddress, gas, call, iszero]
+private theorem withdrawBurnAuxCallPrefix_size : prefixByteSize withdrawBurnAuxCallPrefix = 35 := by
+  simp only [withdrawBurnAuxCallPrefix, vault_wethTransferSelector_value]
+  rfl
+private theorem withdrawBurnAuxCallPrefix_bytes : withdrawBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 108).take 35 := by
+  simp only [withdrawBurnAuxCallPrefix, vault_wethTransferSelector_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxLogWithdrawPrefix : Line := logWithdraw (loadWord amountWord) (loadWord quoteWord)
+private theorem withdrawBurnAuxLogWithdrawPrefix_size : prefixByteSize withdrawBurnAuxLogWithdrawPrefix = 59 := by
+  simp only [withdrawBurnAuxLogWithdrawPrefix, ProrataWethVault.logWithdraw, vault_withdrawEvent_value]
+  rfl
+private theorem withdrawBurnAuxLogWithdrawPrefix_bytes : withdrawBurnAuxLogWithdrawPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 166).take 59 := by
+  simp only [withdrawBurnAuxLogWithdrawPrefix, ProrataWethVault.logWithdraw, vault_withdrawEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxTail : Func := loadWord quoteWord +++ returnWord
+
+private theorem withdrawBurnAuxTail_compile : Func.compile vaultTable 17121 (withdrawBurnAuxTail) = some ((prorataWethVaultCodeChunk66.drop 225).take 10) := by
+  simp only [withdrawBurnAuxTail, ProrataWethVault.returnWord, ProrataWethVault.loadWord, mstoreAt, returnMemoryRange, prepend, Func.compile]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxLog : Func := withdrawBurnAuxLogWithdrawPrefix +++ withdrawBurnAuxTail
+
+private theorem withdrawBurnAuxLog_compile :
+    Func.compile vaultTable 17062 (withdrawBurnAuxLog) = some ((prorataWethVaultCodeChunk66.drop 166).take 69) := by
+  have hb0 : withdrawBurnAuxLogWithdrawPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 166).take 59 := by
+    rw [withdrawBurnAuxLogWithdrawPrefix_bytes]
+  rw [withdrawBurnAuxLog]
+  rw [compile_prepend, withdrawBurnAuxLogWithdrawPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [withdrawBurnAuxTail_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 166).take 59) ++ ((prorataWethVaultCodeChunk66.drop 225).take 10) = (prorataWethVaultCodeChunk66.drop 166).take 69 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 166) (i := 59) (j := 10)).symm
+  rw [hj0]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxTrue : Func := auxTruePrefix +++ Func.branch withdrawBurnAuxLog Func.revert
+
+private theorem withdrawBurnAuxTrue_compile :
+    Func.compile vaultTable 17052 (withdrawBurnAuxTrue) = some ((prorataWethVaultCodeChunk66.drop 156).take 83) := by
+  rw [withdrawBurnAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 156).take 6 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk66.drop 166).take 69) : Bytes).length = 69 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17058 17131 _ _
+    ((prorataWethVaultCodeChunk66.drop 166).take 69) [0x5f, 0x5f, 0xfd]
+    withdrawBurnAuxLog_compile (by rw [hlen]) (by decide) (revert_compile_at 17132)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17131 >>> 8).toUInt8, Nat.toUInt8 17131, 0x57] : Bytes) = (prorataWethVaultCodeChunk66.drop 162).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 235).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 236).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 156).take 6) ++ ((prorataWethVaultCodeChunk66.drop 162).take 4) = (prorataWethVaultCodeChunk66.drop 156).take 10 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 156) (i := 6) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 156).take 6), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 156).take 10) ++ ((prorataWethVaultCodeChunk66.drop 166).take 69) = (prorataWethVaultCodeChunk66.drop 156).take 79 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 156) (i := 10) (j := 69)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 156).take 10), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk66.drop 156).take 79) ++ ((prorataWethVaultCodeChunk66.drop 235).take 1) = (prorataWethVaultCodeChunk66.drop 156).take 80 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 156) (i := 79) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 156).take 79), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk66.drop 156).take 80) ++ ((prorataWethVaultCodeChunk66.drop 236).take 3) = (prorataWethVaultCodeChunk66.drop 156).take 83 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 156) (i := 80) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.branch withdrawBurnAuxTrue Func.revert
+
+private theorem withdrawBurnAuxReturnSize_compile :
+    Func.compile vaultTable 17043 (withdrawBurnAuxReturnSize) = some ((prorataWethVaultCodeChunk66.drop 147).take 96) := by
+  rw [withdrawBurnAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 147).take 5 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk66.drop 156).take 83) : Bytes).length = 83 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17048 17135 _ _
+    ((prorataWethVaultCodeChunk66.drop 156).take 83) [0x5f, 0x5f, 0xfd]
+    withdrawBurnAuxTrue_compile (by rw [hlen]) (by decide) (revert_compile_at 17136)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17135 >>> 8).toUInt8, Nat.toUInt8 17135, 0x57] : Bytes) = (prorataWethVaultCodeChunk66.drop 152).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 239).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 240).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 147).take 5) ++ ((prorataWethVaultCodeChunk66.drop 152).take 4) = (prorataWethVaultCodeChunk66.drop 147).take 9 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 147) (i := 5) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 147).take 5), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 147).take 9) ++ ((prorataWethVaultCodeChunk66.drop 156).take 83) = (prorataWethVaultCodeChunk66.drop 147).take 92 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 147) (i := 9) (j := 83)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 147).take 9), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk66.drop 147).take 92) ++ ((prorataWethVaultCodeChunk66.drop 239).take 1) = (prorataWethVaultCodeChunk66.drop 147).take 93 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 147) (i := 92) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 147).take 92), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk66.drop 147).take 93) ++ ((prorataWethVaultCodeChunk66.drop 240).take 3) = (prorataWethVaultCodeChunk66.drop 147).take 96 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 147) (i := 93) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxCall : Func := withdrawBurnAuxCallPrefix +++ Func.branch withdrawBurnAuxReturnSize Func.revert
+
+private theorem withdrawBurnAuxCall_compile :
+    Func.compile vaultTable 17004 (withdrawBurnAuxCall) = some ((prorataWethVaultCodeChunk66.drop 108).take 139) := by
+  rw [withdrawBurnAuxCall, compile_prepend, withdrawBurnAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : withdrawBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 108).take 35 := by
+    rw [withdrawBurnAuxCallPrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk66.drop 147).take 96) : Bytes).length = 96 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17039 17139 _ _
+    ((prorataWethVaultCodeChunk66.drop 147).take 96) [0x5f, 0x5f, 0xfd]
+    withdrawBurnAuxReturnSize_compile (by rw [hlen]) (by decide) (revert_compile_at 17140)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17139 >>> 8).toUInt8, Nat.toUInt8 17139, 0x57] : Bytes) = (prorataWethVaultCodeChunk66.drop 143).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 243).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 244).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 108).take 35) ++ ((prorataWethVaultCodeChunk66.drop 143).take 4) = (prorataWethVaultCodeChunk66.drop 108).take 39 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 108) (i := 35) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 108).take 35), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 108).take 39) ++ ((prorataWethVaultCodeChunk66.drop 147).take 96) = (prorataWethVaultCodeChunk66.drop 108).take 135 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 108) (i := 39) (j := 96)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 108).take 39), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk66.drop 108).take 135) ++ ((prorataWethVaultCodeChunk66.drop 243).take 1) = (prorataWethVaultCodeChunk66.drop 108).take 136 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 108) (i := 135) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 108).take 135), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk66.drop 108).take 136) ++ ((prorataWethVaultCodeChunk66.drop 244).take 3) = (prorataWethVaultCodeChunk66.drop 108).take 139 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 108) (i := 136) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawBurnAuxWrites : Func := withdrawBurnAuxWritePrefix +++ withdrawBurnAuxLogBurnPrefix +++ withdrawBurnAuxCall
+
+private theorem withdrawBurnAuxWrites_compile :
+    Func.compile vaultTable 16944 (withdrawBurnAuxWrites) = some ((prorataWethVaultCodeChunk66.drop 48).take 199) := by
+  have hb0 : withdrawBurnAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 48).take 12 := by
+    rw [withdrawBurnAuxWritePrefix_bytes]
+  have hb1 : withdrawBurnAuxLogBurnPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 60).take 48 := by
+    rw [withdrawBurnAuxLogBurnPrefix_bytes]
+  rw [withdrawBurnAuxWrites]
+  rw [compile_prepend, withdrawBurnAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, withdrawBurnAuxLogBurnPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [withdrawBurnAuxCall_compile, hb0, hb1]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 48).take 12) ++ ((prorataWethVaultCodeChunk66.drop 60).take 48) = (prorataWethVaultCodeChunk66.drop 48).take 60 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 48) (i := 12) (j := 48)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 48).take 12), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 48).take 60) ++ ((prorataWethVaultCodeChunk66.drop 108).take 139) = (prorataWethVaultCodeChunk66.drop 48).take 199 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 48) (i := 60) (j := 139)).symm
+  rw [hj1]
+
+private theorem withdrawBurnAux_source_cut : ProrataWethVault.withdrawBurn =
+    withdrawBurnAuxGuardPrefix +++ Func.branch withdrawBurnAuxWrites Func.revert := by rfl
+
+private theorem withdrawBurnAux_compile :
+    Func.compile vaultTable 16917 (ProrataWethVault.withdrawBurn) = some ((prorataWethVaultCodeChunk66.drop 21).take 230) := by
+  rw [withdrawBurnAux_source_cut, compile_prepend, withdrawBurnAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : withdrawBurnAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk66.drop 21).take 23 := by
+    rw [withdrawBurnAuxGuardPrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk66.drop 48).take 199) : Bytes).length = 199 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16940 17143 _ _
+    ((prorataWethVaultCodeChunk66.drop 48).take 199) [0x5f, 0x5f, 0xfd]
+    withdrawBurnAuxWrites_compile (by rw [hlen]) (by decide) (revert_compile_at 17144)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17143 >>> 8).toUInt8, Nat.toUInt8 17143, 0x57] : Bytes) = (prorataWethVaultCodeChunk66.drop 44).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 247).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 248).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 21).take 23) ++ ((prorataWethVaultCodeChunk66.drop 44).take 4) = (prorataWethVaultCodeChunk66.drop 21).take 27 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 21) (i := 23) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 21).take 23), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 21).take 27) ++ ((prorataWethVaultCodeChunk66.drop 48).take 199) = (prorataWethVaultCodeChunk66.drop 21).take 226 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 21) (i := 27) (j := 199)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 21).take 27), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk66.drop 21).take 226) ++ ((prorataWethVaultCodeChunk66.drop 247).take 1) = (prorataWethVaultCodeChunk66.drop 21).take 227 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 21) (i := 226) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 21).take 226), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk66.drop 21).take 227) ++ ((prorataWethVaultCodeChunk66.drop 248).take 3) = (prorataWethVaultCodeChunk66.drop 21).take 230 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 21) (i := 227) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxGuardPrefix : Line := loadWord amountWord ++ loadWord balanceWord ++ [sub] ++ loadWord ownerWord ++ [sstore] ++ loadWord amountWord ++ loadWord supplyWord ++ [lt]
+private theorem redeemBurnAuxGuardPrefix_size : prefixByteSize redeemBurnAuxGuardPrefix = 23 := by
+  simp only [redeemBurnAuxGuardPrefix]
+  rfl
+private theorem redeemBurnAuxGuardPrefix_bytes : redeemBurnAuxGuardPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk66.drop 252 ++ prorataWethVaultCodeChunk67.take 19 := by
+  simp only [redeemBurnAuxGuardPrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxWritePrefix : Line := loadWord amountWord ++ loadWord supplyWord ++ [sub] ++ pushSupplySlot ++ [sstore]
+private theorem redeemBurnAuxWritePrefix_size : prefixByteSize redeemBurnAuxWritePrefix = 12 := by
+  simp only [redeemBurnAuxWritePrefix]
+  rfl
+private theorem redeemBurnAuxWritePrefix_bytes : redeemBurnAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 23).take 12 := by
+  simp only [redeemBurnAuxWritePrefix]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxLogBurnPrefix : Line := logBurnTransfer (loadWord amountWord)
+private theorem redeemBurnAuxLogBurnPrefix_size : prefixByteSize redeemBurnAuxLogBurnPrefix = 48 := by
+  simp only [redeemBurnAuxLogBurnPrefix, ProrataWethVault.logBurnTransfer, vault_transferEvent_value]
+  rfl
+private theorem redeemBurnAuxLogBurnPrefix_bytes : redeemBurnAuxLogBurnPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 35).take 48 := by
+  simp only [redeemBurnAuxLogBurnPrefix, ProrataWethVault.logBurnTransfer, vault_transferEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxCallPrefix : Line := [pushB256 wethTransferSelector] ++ mstoreAt 0 ++ loadWord receiverWord ++ mstoreAt 1 ++ loadWord quoteWord ++ mstoreAt 2 ++ pushList [32, 0, 68, 28, 0] ++ [pushB256 assetAddress, gas, call, iszero]
+private theorem redeemBurnAuxCallPrefix_size : prefixByteSize redeemBurnAuxCallPrefix = 35 := by
+  simp only [redeemBurnAuxCallPrefix, vault_wethTransferSelector_value]
+  rfl
+private theorem redeemBurnAuxCallPrefix_bytes : redeemBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 83).take 35 := by
+  simp only [redeemBurnAuxCallPrefix, vault_wethTransferSelector_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxLogWithdrawPrefix : Line := logWithdraw (loadWord quoteWord) (loadWord amountWord)
+private theorem redeemBurnAuxLogWithdrawPrefix_size : prefixByteSize redeemBurnAuxLogWithdrawPrefix = 59 := by
+  simp only [redeemBurnAuxLogWithdrawPrefix, ProrataWethVault.logWithdraw, vault_withdrawEvent_value]
+  rfl
+private theorem redeemBurnAuxLogWithdrawPrefix_bytes : redeemBurnAuxLogWithdrawPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 141).take 59 := by
+  simp only [redeemBurnAuxLogWithdrawPrefix, ProrataWethVault.logWithdraw, vault_withdrawEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxTail : Func := loadWord quoteWord +++ returnWord
+
+private theorem redeemBurnAuxTail_compile : Func.compile vaultTable 17352 (redeemBurnAuxTail) = some ((prorataWethVaultCodeChunk67.drop 200).take 10) := by
+  simp only [redeemBurnAuxTail, ProrataWethVault.returnWord, ProrataWethVault.loadWord, mstoreAt, returnMemoryRange, prepend, Func.compile]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxLog : Func := redeemBurnAuxLogWithdrawPrefix +++ redeemBurnAuxTail
+
+private theorem redeemBurnAuxLog_compile :
+    Func.compile vaultTable 17293 (redeemBurnAuxLog) = some ((prorataWethVaultCodeChunk67.drop 141).take 69) := by
+  have hb0 : redeemBurnAuxLogWithdrawPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 141).take 59 := by
+    rw [redeemBurnAuxLogWithdrawPrefix_bytes]
+  rw [redeemBurnAuxLog]
+  rw [compile_prepend, redeemBurnAuxLogWithdrawPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [redeemBurnAuxTail_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 141).take 59) ++ ((prorataWethVaultCodeChunk67.drop 200).take 10) = (prorataWethVaultCodeChunk67.drop 141).take 69 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 141) (i := 59) (j := 10)).symm
+  rw [hj0]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxTrue : Func := auxTruePrefix +++ Func.branch redeemBurnAuxLog Func.revert
+
+private theorem redeemBurnAuxTrue_compile :
+    Func.compile vaultTable 17283 (redeemBurnAuxTrue) = some ((prorataWethVaultCodeChunk67.drop 131).take 83) := by
+  rw [redeemBurnAuxTrue, compile_prepend, auxTruePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxTruePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 131).take 6 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk67.drop 141).take 69) : Bytes).length = 69 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17289 17362 _ _
+    ((prorataWethVaultCodeChunk67.drop 141).take 69) [0x5f, 0x5f, 0xfd]
+    redeemBurnAuxLog_compile (by rw [hlen]) (by decide) (revert_compile_at 17363)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17362 >>> 8).toUInt8, Nat.toUInt8 17362, 0x57] : Bytes) = (prorataWethVaultCodeChunk67.drop 137).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk67.drop 210).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk67.drop 211).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 131).take 6) ++ ((prorataWethVaultCodeChunk67.drop 137).take 4) = (prorataWethVaultCodeChunk67.drop 131).take 10 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 131) (i := 6) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 131).take 6), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk67.drop 131).take 10) ++ ((prorataWethVaultCodeChunk67.drop 141).take 69) = (prorataWethVaultCodeChunk67.drop 131).take 79 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 131) (i := 10) (j := 69)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 131).take 10), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk67.drop 131).take 79) ++ ((prorataWethVaultCodeChunk67.drop 210).take 1) = (prorataWethVaultCodeChunk67.drop 131).take 80 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 131) (i := 79) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 131).take 79), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk67.drop 131).take 80) ++ ((prorataWethVaultCodeChunk67.drop 211).take 3) = (prorataWethVaultCodeChunk67.drop 131).take 83 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 131) (i := 80) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxReturnSize : Func := maxDepositReturnSizePrefix +++ Func.branch redeemBurnAuxTrue Func.revert
+
+private theorem redeemBurnAuxReturnSize_compile :
+    Func.compile vaultTable 17274 (redeemBurnAuxReturnSize) = some ((prorataWethVaultCodeChunk67.drop 122).take 96) := by
+  rw [redeemBurnAuxReturnSize, compile_prepend, maxDepositReturnSizePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : maxDepositReturnSizePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 122).take 5 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk67.drop 131).take 83) : Bytes).length = 83 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17279 17366 _ _
+    ((prorataWethVaultCodeChunk67.drop 131).take 83) [0x5f, 0x5f, 0xfd]
+    redeemBurnAuxTrue_compile (by rw [hlen]) (by decide) (revert_compile_at 17367)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17366 >>> 8).toUInt8, Nat.toUInt8 17366, 0x57] : Bytes) = (prorataWethVaultCodeChunk67.drop 127).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk67.drop 214).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk67.drop 215).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 122).take 5) ++ ((prorataWethVaultCodeChunk67.drop 127).take 4) = (prorataWethVaultCodeChunk67.drop 122).take 9 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 122) (i := 5) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 122).take 5), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk67.drop 122).take 9) ++ ((prorataWethVaultCodeChunk67.drop 131).take 83) = (prorataWethVaultCodeChunk67.drop 122).take 92 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 122) (i := 9) (j := 83)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 122).take 9), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk67.drop 122).take 92) ++ ((prorataWethVaultCodeChunk67.drop 214).take 1) = (prorataWethVaultCodeChunk67.drop 122).take 93 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 122) (i := 92) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 122).take 92), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk67.drop 122).take 93) ++ ((prorataWethVaultCodeChunk67.drop 215).take 3) = (prorataWethVaultCodeChunk67.drop 122).take 96 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 122) (i := 93) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxCall : Func := redeemBurnAuxCallPrefix +++ Func.branch redeemBurnAuxReturnSize Func.revert
+
+private theorem redeemBurnAuxCall_compile :
+    Func.compile vaultTable 17235 (redeemBurnAuxCall) = some ((prorataWethVaultCodeChunk67.drop 83).take 139) := by
+  rw [redeemBurnAuxCall, compile_prepend, redeemBurnAuxCallPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : redeemBurnAuxCallPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 83).take 35 := by
+    rw [redeemBurnAuxCallPrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk67.drop 122).take 96) : Bytes).length = 96 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17270 17370 _ _
+    ((prorataWethVaultCodeChunk67.drop 122).take 96) [0x5f, 0x5f, 0xfd]
+    redeemBurnAuxReturnSize_compile (by rw [hlen]) (by decide) (revert_compile_at 17371)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17370 >>> 8).toUInt8, Nat.toUInt8 17370, 0x57] : Bytes) = (prorataWethVaultCodeChunk67.drop 118).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk67.drop 218).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk67.drop 219).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 83).take 35) ++ ((prorataWethVaultCodeChunk67.drop 118).take 4) = (prorataWethVaultCodeChunk67.drop 83).take 39 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 83) (i := 35) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 83).take 35), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk67.drop 83).take 39) ++ ((prorataWethVaultCodeChunk67.drop 122).take 96) = (prorataWethVaultCodeChunk67.drop 83).take 135 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 83) (i := 39) (j := 96)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 83).take 39), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk67.drop 83).take 135) ++ ((prorataWethVaultCodeChunk67.drop 218).take 1) = (prorataWethVaultCodeChunk67.drop 83).take 136 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 83) (i := 135) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 83).take 135), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk67.drop 83).take 136) ++ ((prorataWethVaultCodeChunk67.drop 219).take 3) = (prorataWethVaultCodeChunk67.drop 83).take 139 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 83) (i := 136) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemBurnAuxWrites : Func := redeemBurnAuxWritePrefix +++ redeemBurnAuxLogBurnPrefix +++ redeemBurnAuxCall
+
+private theorem redeemBurnAuxWrites_compile :
+    Func.compile vaultTable 17175 (redeemBurnAuxWrites) = some ((prorataWethVaultCodeChunk67.drop 23).take 199) := by
+  have hb0 : redeemBurnAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 23).take 12 := by
+    rw [redeemBurnAuxWritePrefix_bytes]
+  have hb1 : redeemBurnAuxLogBurnPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk67.drop 35).take 48 := by
+    rw [redeemBurnAuxLogBurnPrefix_bytes]
+  rw [redeemBurnAuxWrites]
+  rw [compile_prepend, redeemBurnAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, redeemBurnAuxLogBurnPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [redeemBurnAuxCall_compile, hb0, hb1]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 23).take 12) ++ ((prorataWethVaultCodeChunk67.drop 35).take 48) = (prorataWethVaultCodeChunk67.drop 23).take 60 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 23) (i := 12) (j := 48)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 23).take 12), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk67.drop 23).take 60) ++ ((prorataWethVaultCodeChunk67.drop 83).take 139) = (prorataWethVaultCodeChunk67.drop 23).take 199 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67.drop 23) (i := 60) (j := 139)).symm
+  rw [hj1]
+
+private theorem redeemBurnAux_source_cut : ProrataWethVault.redeemBurn =
+    redeemBurnAuxGuardPrefix +++ Func.branch redeemBurnAuxWrites Func.revert := by rfl
+
+private theorem redeemBurnAux_compile :
+    Func.compile vaultTable 17148 (ProrataWethVault.redeemBurn) = some (prorataWethVaultCodeChunk66.drop 252 ++ prorataWethVaultCodeChunk67.take 226) := by
+  rw [redeemBurnAux_source_cut, compile_prepend, redeemBurnAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : redeemBurnAuxGuardPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk66.drop 252 ++ prorataWethVaultCodeChunk67.take 19 := by
+    rw [redeemBurnAuxGuardPrefix_bytes]
+  have hlen : (((prorataWethVaultCodeChunk67.drop 23).take 199) : Bytes).length = 199 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17171 17374 _ _
+    ((prorataWethVaultCodeChunk67.drop 23).take 199) [0x5f, 0x5f, 0xfd]
+    redeemBurnAuxWrites_compile (by rw [hlen]) (by decide) (revert_compile_at 17375)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17374 >>> 8).toUInt8, Nat.toUInt8 17374, 0x57] : Bytes) = (prorataWethVaultCodeChunk67.drop 19).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk67.drop 222).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk67.drop 223).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : (prorataWethVaultCodeChunk67.take 19) ++ ((prorataWethVaultCodeChunk67.drop 19).take 4) = prorataWethVaultCodeChunk67.take 23 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67) (i := 19) (j := 4)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk67.take 19), hj0]
+  have hj1 : (prorataWethVaultCodeChunk67.take 23) ++ ((prorataWethVaultCodeChunk67.drop 23).take 199) = prorataWethVaultCodeChunk67.take 222 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67) (i := 23) (j := 199)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk67.take 23), hj1]
+  have hj2 : (prorataWethVaultCodeChunk67.take 222) ++ ((prorataWethVaultCodeChunk67.drop 222).take 1) = prorataWethVaultCodeChunk67.take 223 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67) (i := 222) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk67.take 222), hj2]
+  have hj3 : (prorataWethVaultCodeChunk67.take 223) ++ ((prorataWethVaultCodeChunk67.drop 223).take 3) = prorataWethVaultCodeChunk67.take 226 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk67) (i := 223) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxLogPrefix : Line := logStagedTransfer
+private theorem transferAuxLogPrefix_size : prefixByteSize transferAuxLogPrefix = 51 := by
+  simp only [transferAuxLogPrefix, ProrataWethVault.logStagedTransfer, vault_transferEvent_value]
+  rfl
+private theorem transferAuxLogPrefix_bytes : transferAuxLogPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk65.drop 209 ++ prorataWethVaultCodeChunk66.take 4 := by
+  simp only [transferAuxLogPrefix, ProrataWethVault.logStagedTransfer, vault_transferEvent_value]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxWritePrefix : Line := loadWord scratchWord ++ loadWord receiverWord ++ [sstore]
+private theorem transferAuxWritePrefix_size : prefixByteSize transferAuxWritePrefix = 9 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxBalancePrefix : Line := loadWord amountWord ++ loadWord balanceWord ++ [sub] ++ loadWord ownerWord ++ [sstore] ++ loadWord receiverWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord amountWord ++ loadWord balanceWord ++ [add] ++ mstoreAt scratchWord ++ loadWord balanceWord ++ loadWord scratchWord ++ [lt]
+private theorem transferAuxBalancePrefix_size : prefixByteSize transferAuxBalancePrefix = 45 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxGuardPrefix : Line := loadWord ownerWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord amountWord ++ loadWord balanceWord ++ [lt]
+private theorem transferAuxGuardPrefix_size : prefixByteSize transferAuxGuardPrefix = 18 := by rfl
+
+private theorem transferAuxTrue_compile : Func.compile vaultTable 16900 (returnTrue) = some ((prorataWethVaultCodeChunk66.drop 4).take 8) := by
+  simp only [returnTrue, mstoreAt, prepend, Func.compile]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxWrites : Func := transferAuxWritePrefix +++ transferAuxLogPrefix +++ returnTrue
+
+private theorem transferAuxWrites_compile :
+    Func.compile vaultTable 16840 (transferAuxWrites) = some (prorataWethVaultCodeChunk65.drop 200 ++ prorataWethVaultCodeChunk66.take 12) := by
+  have hb0 : transferAuxWritePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 200).take 9 := by
+    rfl
+  have hb1 : transferAuxLogPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk65.drop 209 ++ prorataWethVaultCodeChunk66.take 4 := by
+    rw [transferAuxLogPrefix_bytes]
+  rw [transferAuxWrites]
+  rw [compile_prepend, transferAuxWritePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [compile_prepend, transferAuxLogPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [transferAuxTrue_compile, hb0, hb1]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 200).take 9) ++ (prorataWethVaultCodeChunk65.drop 209) = prorataWethVaultCodeChunk65.drop 200 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 9 (prorataWethVaultCodeChunk65.drop 200)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 200).take 9), hj0]
+  have hj1 : (prorataWethVaultCodeChunk66.take 4) ++ ((prorataWethVaultCodeChunk66.drop 4).take 8) = prorataWethVaultCodeChunk66.take 12 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66) (i := 4) (j := 8)).symm
+  rw [hj1]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def transferAuxBalance : Func := transferAuxBalancePrefix +++ Func.branch transferAuxWrites Func.revert
+
+private theorem transferAuxBalance_compile :
+    Func.compile vaultTable 16791 (transferAuxBalance) = some (prorataWethVaultCodeChunk65.drop 151 ++ prorataWethVaultCodeChunk66.take 16) := by
+  rw [transferAuxBalance, compile_prepend, transferAuxBalancePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferAuxBalancePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 151).take 45 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk65.drop 200 ++ prorataWethVaultCodeChunk66.take 12) : Bytes).length = 68 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16836 16908 _ _
+    (prorataWethVaultCodeChunk65.drop 200 ++ prorataWethVaultCodeChunk66.take 12) [0x5f, 0x5f, 0xfd]
+    transferAuxWrites_compile (by rw [hlen]) (by decide) (revert_compile_at 16909)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16908 >>> 8).toUInt8, Nat.toUInt8 16908, 0x57] : Bytes) = (prorataWethVaultCodeChunk65.drop 196).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 12).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 13).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 151).take 45) ++ ((prorataWethVaultCodeChunk65.drop 196).take 4) = (prorataWethVaultCodeChunk65.drop 151).take 49 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 151) (i := 45) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 151).take 45), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk65.drop 151).take 49) ++ (prorataWethVaultCodeChunk65.drop 200) = prorataWethVaultCodeChunk65.drop 151 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 49 (prorataWethVaultCodeChunk65.drop 151)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 151).take 49), hj1]
+  have hj2 : (prorataWethVaultCodeChunk66.take 12) ++ ((prorataWethVaultCodeChunk66.drop 12).take 1) = prorataWethVaultCodeChunk66.take 13 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66) (i := 12) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk66.take 12), hj2]
+  have hj3 : (prorataWethVaultCodeChunk66.take 13) ++ ((prorataWethVaultCodeChunk66.drop 13).take 3) = prorataWethVaultCodeChunk66.take 16 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66) (i := 13) (j := 3)).symm
+  rw [hj3]
+
+private theorem transferAux_source_cut : ProrataWethVault.transferStaged =
+    transferAuxGuardPrefix +++ Func.branch transferAuxBalance Func.revert := by rfl
+
+private theorem transferAux_compile :
+    Func.compile vaultTable 16769 (ProrataWethVault.transferStaged) = some (prorataWethVaultCodeChunk65.drop 129 ++ prorataWethVaultCodeChunk66.take 20) := by
+  rw [transferAux_source_cut, compile_prepend, transferAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 129).take 18 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk65.drop 151 ++ prorataWethVaultCodeChunk66.take 16) : Bytes).length = 121 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16787 16912 _ _
+    (prorataWethVaultCodeChunk65.drop 151 ++ prorataWethVaultCodeChunk66.take 16) [0x5f, 0x5f, 0xfd]
+    transferAuxBalance_compile (by rw [hlen]) (by decide) (revert_compile_at 16913)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16912 >>> 8).toUInt8, Nat.toUInt8 16912, 0x57] : Bytes) = (prorataWethVaultCodeChunk65.drop 147).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk66.drop 16).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk66.drop 17).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 129).take 18) ++ ((prorataWethVaultCodeChunk65.drop 147).take 4) = (prorataWethVaultCodeChunk65.drop 129).take 22 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 129) (i := 18) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 129).take 18), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk65.drop 129).take 22) ++ (prorataWethVaultCodeChunk65.drop 151) = prorataWethVaultCodeChunk65.drop 129 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 22 (prorataWethVaultCodeChunk65.drop 129)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 129).take 22), hj1]
+  have hj2 : (prorataWethVaultCodeChunk66.take 16) ++ ((prorataWethVaultCodeChunk66.drop 16).take 1) = prorataWethVaultCodeChunk66.take 17 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66) (i := 16) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk66.take 16), hj2]
+  have hj3 : (prorataWethVaultCodeChunk66.take 17) ++ ((prorataWethVaultCodeChunk66.drop 17).take 3) = prorataWethVaultCodeChunk66.take 20 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66) (i := 17) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def maxMintAuxPrefix : Line := mstoreAt quoteWord ++ loadWord quoteWord ++ shareRoom ++ [lt]
+private theorem maxMintAuxPrefix_size : prefixByteSize maxMintAuxPrefix = 47 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def maxMintAuxQuote : Func := loadWord quoteWord +++ Func.call returnWordSlot
+
+private theorem maxMintAuxQuote_compile : Func.compile vaultTable 17430 (maxMintAuxQuote) = some ((prorataWethVaultCodeChunk68.drop 22).take 8) := by
+  simp only [maxMintAuxQuote, ProrataWethVault.loadWord, prepend, Func.compile, vault_table_returnWord]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def maxMintAuxRoom : Func := shareRoom +++ Func.call returnWordSlot
+
+private theorem maxMintAuxRoom_compile : Func.compile vaultTable 17439 (maxMintAuxRoom) = some ((prorataWethVaultCodeChunk68.drop 31).take 42) := by
+  simp only [maxMintAuxRoom, ProrataWethVault.shareRoom, ProrataWethVault.loadWord,
+    List.cons_append, List.nil_append, prepend, Func.compile, vault_table_returnWord]
+  rfl
+
+private theorem maxMintAux_source_cut : ProrataWethVault.maxMintAfterAssetCap =
+    maxMintAuxPrefix +++ Func.branch maxMintAuxQuote maxMintAuxRoom := by rfl
+
+private theorem maxMintAux_compile :
+    Func.compile vaultTable 17379 (ProrataWethVault.maxMintAfterAssetCap) = some (prorataWethVaultCodeChunk67.drop 227 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [maxMintAux_source_cut, compile_prepend, maxMintAuxPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : maxMintAuxPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk67.drop 227 ++ prorataWethVaultCodeChunk68.take 18 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk68.drop 22).take 8) : Bytes).length = 8 := by decide +kernel
+  have hbranch := compile_branch vaultTable 17426 17438 _ _
+    ((prorataWethVaultCodeChunk68.drop 22).take 8) ((prorataWethVaultCodeChunk68.drop 31).take 42)
+    maxMintAuxQuote_compile (by rw [hlen]) (by decide) maxMintAuxRoom_compile
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (17438 >>> 8).toUInt8, Nat.toUInt8 17438, 0x57] : Bytes) = (prorataWethVaultCodeChunk68.drop 18).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk68.drop 30).take 1 := by rfl
+  rw [hheader, hjump]
+  try simp only [List.append_assoc]
+  have hj0 : (prorataWethVaultCodeChunk68.take 18) ++ ((prorataWethVaultCodeChunk68.drop 18).take 4) = prorataWethVaultCodeChunk68.take 22 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk68) (i := 18) (j := 4)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk68.take 18), hj0]
+  have hj1 : (prorataWethVaultCodeChunk68.take 22) ++ ((prorataWethVaultCodeChunk68.drop 22).take 8) = prorataWethVaultCodeChunk68.take 30 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk68) (i := 22) (j := 8)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk68.take 22), hj1]
+  have hj2 : (prorataWethVaultCodeChunk68.take 30) ++ ((prorataWethVaultCodeChunk68.drop 30).take 1) = prorataWethVaultCodeChunk68.take 31 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk68) (i := 30) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk68.take 30), hj2]
+  have hj3 : (prorataWethVaultCodeChunk68.take 31) ++ ((prorataWethVaultCodeChunk68.drop 31).take 42) = prorataWethVaultCodeChunk68.take 73 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk68) (i := 31) (j := 42)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def auxOwnerEqPrefix : Line := loadWord ownerWord ++ [caller, eq]
+private theorem auxOwnerEqPrefix_size : prefixByteSize auxOwnerEqPrefix = 6 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxFinitePrefix : Line := loadWord quoteWord ++ loadWord allowanceWord ++ [lt]
+private theorem withdrawQuoteAuxFinitePrefix_size : prefixByteSize withdrawQuoteAuxFinitePrefix = 9 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxGuardPrefix : Line := loadWord ownerWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord quoteWord ++ loadWord balanceWord ++ [lt]
+private theorem withdrawQuoteAuxGuardPrefix_size : prefixByteSize withdrawQuoteAuxGuardPrefix = 18 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxSubtract : Func := loadWord quoteWord +++ loadWord allowanceWord +++ sub ::: loadWord scratchWord +++ sstore ::: .call withdrawBurnSlot
+
+private theorem withdrawQuoteAuxSubtract_compile : Func.compile vaultTable 16499 withdrawQuoteAuxSubtract = some ((prorataWethVaultCodeChunk64.drop 115).take 18) := by
+  simp only [withdrawQuoteAuxSubtract, ProrataWethVault.loadWord, prepend]
+  simp only [Func.compile, vault_table_withdrawBurn]
+  rfl
+
+private theorem withdrawQuoteAuxCall_16522_compile : Func.compile vaultTable 16522 (Func.call ProrataWethVault.withdrawBurnSlot) = some ((prorataWethVaultCodeChunk64.drop 138).take 4) := by
+  simp only [Func.compile, vault_table_withdrawBurn]
+  rfl
+
+private theorem withdrawQuoteAuxCall_16531_compile : Func.compile vaultTable 16531 (Func.call ProrataWethVault.withdrawBurnSlot) = some ((prorataWethVaultCodeChunk64.drop 147).take 4) := by
+  simp only [Func.compile, vault_table_withdrawBurn]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxFinite : Func := withdrawQuoteAuxFinitePrefix +++ Func.branch withdrawQuoteAuxSubtract Func.revert
+
+private theorem withdrawQuoteAuxFinite_compile :
+    Func.compile vaultTable 16486 (withdrawQuoteAuxFinite) = some ((prorataWethVaultCodeChunk64.drop 102).take 35) := by
+  rw [withdrawQuoteAuxFinite, compile_prepend, withdrawQuoteAuxFinitePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : withdrawQuoteAuxFinitePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 102).take 9 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 115).take 18) : Bytes).length = 18 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16495 16517 _ _
+    ((prorataWethVaultCodeChunk64.drop 115).take 18) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxSubtract_compile (by rw [hlen]) (by decide) (revert_compile_at 16518)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16517 >>> 8).toUInt8, Nat.toUInt8 16517, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 111).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 133).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 134).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 102).take 9) ++ ((prorataWethVaultCodeChunk64.drop 111).take 4) = (prorataWethVaultCodeChunk64.drop 102).take 13 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 102) (i := 9) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 102).take 9), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 102).take 13) ++ ((prorataWethVaultCodeChunk64.drop 115).take 18) = (prorataWethVaultCodeChunk64.drop 102).take 31 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 102) (i := 13) (j := 18)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 102).take 13), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 102).take 31) ++ ((prorataWethVaultCodeChunk64.drop 133).take 1) = (prorataWethVaultCodeChunk64.drop 102).take 32 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 102) (i := 31) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 102).take 31), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 102).take 32) ++ ((prorataWethVaultCodeChunk64.drop 134).take 3) = (prorataWethVaultCodeChunk64.drop 102).take 35 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 102) (i := 32) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxSpend : Func := transferSpendPrefix +++ Func.branch withdrawQuoteAuxFinite (.call withdrawBurnSlot)
+
+private theorem withdrawQuoteAuxSpend_compile :
+    Func.compile vaultTable 16463 (withdrawQuoteAuxSpend) = some ((prorataWethVaultCodeChunk64.drop 79).take 63) := by
+  rw [withdrawQuoteAuxSpend, compile_prepend, transferSpendPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferSpendPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 79).take 19 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 102).take 35) : Bytes).length = 35 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16482 16521 _ _
+    ((prorataWethVaultCodeChunk64.drop 102).take 35) ((prorataWethVaultCodeChunk64.drop 138).take 4)
+    withdrawQuoteAuxFinite_compile (by rw [hlen]) (by decide) withdrawQuoteAuxCall_16522_compile
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16521 >>> 8).toUInt8, Nat.toUInt8 16521, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 98).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 137).take 1 := by rfl
+  rw [hheader, hjump]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 79).take 19) ++ ((prorataWethVaultCodeChunk64.drop 98).take 4) = (prorataWethVaultCodeChunk64.drop 79).take 23 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 79) (i := 19) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 79).take 19), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 79).take 23) ++ ((prorataWethVaultCodeChunk64.drop 102).take 35) = (prorataWethVaultCodeChunk64.drop 79).take 58 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 79) (i := 23) (j := 35)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 79).take 23), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 79).take 58) ++ ((prorataWethVaultCodeChunk64.drop 137).take 1) = (prorataWethVaultCodeChunk64.drop 79).take 59 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 79) (i := 58) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 79).take 58), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 79).take 59) ++ ((prorataWethVaultCodeChunk64.drop 138).take 4) = (prorataWethVaultCodeChunk64.drop 79).take 63 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 79) (i := 59) (j := 4)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxKey : Func := transferKeyPrefix +++ Func.branch withdrawQuoteAuxSpend Func.revert
+
+private theorem withdrawQuoteAuxKey_compile :
+    Func.compile vaultTable 16433 (withdrawQuoteAuxKey) = some ((prorataWethVaultCodeChunk64.drop 49).take 97) := by
+  rw [withdrawQuoteAuxKey, compile_prepend, transferKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 49).take 26 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 79).take 63) : Bytes).length = 63 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16459 16526 _ _
+    ((prorataWethVaultCodeChunk64.drop 79).take 63) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxSpend_compile (by rw [hlen]) (by decide) (revert_compile_at 16527)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16526 >>> 8).toUInt8, Nat.toUInt8 16526, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 75).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 142).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 143).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 49).take 26) ++ ((prorataWethVaultCodeChunk64.drop 75).take 4) = (prorataWethVaultCodeChunk64.drop 49).take 30 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 49) (i := 26) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 49).take 26), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 49).take 30) ++ ((prorataWethVaultCodeChunk64.drop 79).take 63) = (prorataWethVaultCodeChunk64.drop 49).take 93 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 49) (i := 30) (j := 63)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 49).take 30), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 49).take 93) ++ ((prorataWethVaultCodeChunk64.drop 142).take 1) = (prorataWethVaultCodeChunk64.drop 49).take 94 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 49) (i := 93) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 49).take 93), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 49).take 94) ++ ((prorataWethVaultCodeChunk64.drop 143).take 3) = (prorataWethVaultCodeChunk64.drop 49).take 97 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 49) (i := 94) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxOwnerEq : Func := auxOwnerEqPrefix +++ Func.branch withdrawQuoteAuxKey (.call withdrawBurnSlot)
+
+private theorem withdrawQuoteAuxOwnerEq_compile :
+    Func.compile vaultTable 16423 (withdrawQuoteAuxOwnerEq) = some ((prorataWethVaultCodeChunk64.drop 39).take 112) := by
+  rw [withdrawQuoteAuxOwnerEq, compile_prepend, auxOwnerEqPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxOwnerEqPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 39).take 6 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 49).take 97) : Bytes).length = 97 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16429 16530 _ _
+    ((prorataWethVaultCodeChunk64.drop 49).take 97) ((prorataWethVaultCodeChunk64.drop 147).take 4)
+    withdrawQuoteAuxKey_compile (by rw [hlen]) (by decide) withdrawQuoteAuxCall_16531_compile
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16530 >>> 8).toUInt8, Nat.toUInt8 16530, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 45).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 146).take 1 := by rfl
+  rw [hheader, hjump]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 39).take 6) ++ ((prorataWethVaultCodeChunk64.drop 45).take 4) = (prorataWethVaultCodeChunk64.drop 39).take 10 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 39) (i := 6) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 39).take 6), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 39).take 10) ++ ((prorataWethVaultCodeChunk64.drop 49).take 97) = (prorataWethVaultCodeChunk64.drop 39).take 107 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 39) (i := 10) (j := 97)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 39).take 10), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 39).take 107) ++ ((prorataWethVaultCodeChunk64.drop 146).take 1) = (prorataWethVaultCodeChunk64.drop 39).take 108 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 39) (i := 107) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 39).take 107), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 39).take 108) ++ ((prorataWethVaultCodeChunk64.drop 147).take 4) = (prorataWethVaultCodeChunk64.drop 39).take 112 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 39) (i := 108) (j := 4)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxGuard : Func := withdrawQuoteAuxGuardPrefix +++ Func.branch withdrawQuoteAuxOwnerEq Func.revert
+
+private theorem withdrawQuoteAuxGuard_compile :
+    Func.compile vaultTable 16401 (withdrawQuoteAuxGuard) = some ((prorataWethVaultCodeChunk64.drop 17).take 138) := by
+  rw [withdrawQuoteAuxGuard, compile_prepend, withdrawQuoteAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : withdrawQuoteAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 17).take 18 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 39).take 112) : Bytes).length = 112 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16419 16535 _ _
+    ((prorataWethVaultCodeChunk64.drop 39).take 112) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxOwnerEq_compile (by rw [hlen]) (by decide) (revert_compile_at 16536)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16535 >>> 8).toUInt8, Nat.toUInt8 16535, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 35).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 151).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 152).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 17).take 18) ++ ((prorataWethVaultCodeChunk64.drop 35).take 4) = (prorataWethVaultCodeChunk64.drop 17).take 22 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 17) (i := 18) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 17).take 18), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 17).take 22) ++ ((prorataWethVaultCodeChunk64.drop 39).take 112) = (prorataWethVaultCodeChunk64.drop 17).take 134 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 17) (i := 22) (j := 112)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 17).take 22), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 17).take 134) ++ ((prorataWethVaultCodeChunk64.drop 151).take 1) = (prorataWethVaultCodeChunk64.drop 17).take 135 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 17) (i := 134) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 17).take 134), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 17).take 135) ++ ((prorataWethVaultCodeChunk64.drop 152).take 3) = (prorataWethVaultCodeChunk64.drop 17).take 138 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 17) (i := 135) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxOwnerNonzero : Func := vaultNonzeroPrefix +++ Func.branch withdrawQuoteAuxGuard Func.revert
+
+private theorem withdrawQuoteAuxOwnerNonzero_compile :
+    Func.compile vaultTable 16396 (withdrawQuoteAuxOwnerNonzero) = some ((prorataWethVaultCodeChunk64.drop 12).take 147) := by
+  rw [withdrawQuoteAuxOwnerNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 12).take 1 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 17).take 138) : Bytes).length = 138 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16397 16539 _ _
+    ((prorataWethVaultCodeChunk64.drop 17).take 138) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxGuard_compile (by rw [hlen]) (by decide) (revert_compile_at 16540)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16539 >>> 8).toUInt8, Nat.toUInt8 16539, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 13).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 155).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 156).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 12).take 1) ++ ((prorataWethVaultCodeChunk64.drop 13).take 4) = (prorataWethVaultCodeChunk64.drop 12).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 12) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 12).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 12).take 5) ++ ((prorataWethVaultCodeChunk64.drop 17).take 138) = (prorataWethVaultCodeChunk64.drop 12).take 143 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 12) (i := 5) (j := 138)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 12).take 5), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk64.drop 12).take 143) ++ ((prorataWethVaultCodeChunk64.drop 155).take 1) = (prorataWethVaultCodeChunk64.drop 12).take 144 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 12) (i := 143) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 12).take 143), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk64.drop 12).take 144) ++ ((prorataWethVaultCodeChunk64.drop 156).take 3) = (prorataWethVaultCodeChunk64.drop 12).take 147 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 12) (i := 144) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxOwner : Func := auxOwnerPrefix +++ Func.branch withdrawQuoteAuxOwnerNonzero Func.revert
+
+private theorem withdrawQuoteAuxOwner_compile :
+    Func.compile vaultTable 16381 (withdrawQuoteAuxOwner) = some (prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 163) := by
+  rw [withdrawQuoteAuxOwner, compile_prepend, auxOwnerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxOwnerPrefix.flatMap Ninst.toBytes = prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 8 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk64.drop 12).take 147) : Bytes).length = 147 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16392 16543 _ _
+    ((prorataWethVaultCodeChunk64.drop 12).take 147) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxOwnerNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16544)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16543 >>> 8).toUInt8, Nat.toUInt8 16543, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 8).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 159).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 160).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : (prorataWethVaultCodeChunk64.take 8) ++ ((prorataWethVaultCodeChunk64.drop 8).take 4) = prorataWethVaultCodeChunk64.take 12 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 8) (j := 4)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 8), hj0]
+  have hj1 : (prorataWethVaultCodeChunk64.take 12) ++ ((prorataWethVaultCodeChunk64.drop 12).take 147) = prorataWethVaultCodeChunk64.take 159 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 12) (j := 147)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 12), hj1]
+  have hj2 : (prorataWethVaultCodeChunk64.take 159) ++ ((prorataWethVaultCodeChunk64.drop 159).take 1) = prorataWethVaultCodeChunk64.take 160 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 159) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 159), hj2]
+  have hj3 : (prorataWethVaultCodeChunk64.take 160) ++ ((prorataWethVaultCodeChunk64.drop 160).take 3) = prorataWethVaultCodeChunk64.take 163 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 160) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxReceiverNonzero : Func := vaultNonzeroPrefix +++ Func.branch withdrawQuoteAuxOwner Func.revert
+
+private theorem withdrawQuoteAuxReceiverNonzero_compile :
+    Func.compile vaultTable 16376 (withdrawQuoteAuxReceiverNonzero) = some (prorataWethVaultCodeChunk63.drop 248 ++ prorataWethVaultCodeChunk64.take 167) := by
+  rw [withdrawQuoteAuxReceiverNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 248).take 1 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 163) : Bytes).length = 166 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16377 16547 _ _
+    (prorataWethVaultCodeChunk63.drop 253 ++ prorataWethVaultCodeChunk64.take 163) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxOwner_compile (by rw [hlen]) (by decide) (revert_compile_at 16548)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16547 >>> 8).toUInt8, Nat.toUInt8 16547, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 249).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 163).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 164).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 248).take 1) ++ ((prorataWethVaultCodeChunk63.drop 249).take 4) = (prorataWethVaultCodeChunk63.drop 248).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 248) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 248).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 248).take 5) ++ (prorataWethVaultCodeChunk63.drop 253) = prorataWethVaultCodeChunk63.drop 248 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 5 (prorataWethVaultCodeChunk63.drop 248)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 248).take 5), hj1]
+  have hj2 : (prorataWethVaultCodeChunk64.take 163) ++ ((prorataWethVaultCodeChunk64.drop 163).take 1) = prorataWethVaultCodeChunk64.take 164 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 163) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 163), hj2]
+  have hj3 : (prorataWethVaultCodeChunk64.take 164) ++ ((prorataWethVaultCodeChunk64.drop 164).take 3) = prorataWethVaultCodeChunk64.take 167 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 164) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxReceiver : Func := auxReceiverPrefix +++ Func.branch withdrawQuoteAuxReceiverNonzero Func.revert
+
+private theorem withdrawQuoteAuxReceiver_compile :
+    Func.compile vaultTable 16361 (withdrawQuoteAuxReceiver) = some (prorataWethVaultCodeChunk63.drop 233 ++ prorataWethVaultCodeChunk64.take 171) := by
+  rw [withdrawQuoteAuxReceiver, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 233).take 11 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk63.drop 248 ++ prorataWethVaultCodeChunk64.take 167) : Bytes).length = 175 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16372 16551 _ _
+    (prorataWethVaultCodeChunk63.drop 248 ++ prorataWethVaultCodeChunk64.take 167) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxReceiverNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16552)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16551 >>> 8).toUInt8, Nat.toUInt8 16551, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 244).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 167).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 168).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 233).take 11) ++ ((prorataWethVaultCodeChunk63.drop 244).take 4) = (prorataWethVaultCodeChunk63.drop 233).take 15 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 233) (i := 11) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 233).take 11), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 233).take 15) ++ (prorataWethVaultCodeChunk63.drop 248) = prorataWethVaultCodeChunk63.drop 233 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 15 (prorataWethVaultCodeChunk63.drop 233)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 233).take 15), hj1]
+  have hj2 : (prorataWethVaultCodeChunk64.take 167) ++ ((prorataWethVaultCodeChunk64.drop 167).take 1) = prorataWethVaultCodeChunk64.take 168 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 167) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 167), hj2]
+  have hj3 : (prorataWethVaultCodeChunk64.take 168) ++ ((prorataWethVaultCodeChunk64.drop 168).take 3) = prorataWethVaultCodeChunk64.take 171 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 168) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def withdrawQuoteAuxCaller : Func := vaultCallerPrefix +++ Func.branch withdrawQuoteAuxReceiver Func.revert
+
+private theorem withdrawQuoteAuxCaller_compile :
+    Func.compile vaultTable 16355 (withdrawQuoteAuxCaller) = some (prorataWethVaultCodeChunk63.drop 227 ++ prorataWethVaultCodeChunk64.take 175) := by
+  rw [withdrawQuoteAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 227).take 2 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk63.drop 233 ++ prorataWethVaultCodeChunk64.take 171) : Bytes).length = 194 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16357 16555 _ _
+    (prorataWethVaultCodeChunk63.drop 233 ++ prorataWethVaultCodeChunk64.take 171) [0x5f, 0x5f, 0xfd]
+    withdrawQuoteAuxReceiver_compile (by rw [hlen]) (by decide) (revert_compile_at 16556)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16555 >>> 8).toUInt8, Nat.toUInt8 16555, 0x57] : Bytes) = (prorataWethVaultCodeChunk63.drop 229).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk64.drop 171).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk64.drop 172).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 227).take 2) ++ ((prorataWethVaultCodeChunk63.drop 229).take 4) = (prorataWethVaultCodeChunk63.drop 227).take 6 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk63.drop 227) (i := 2) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 227).take 2), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk63.drop 227).take 6) ++ (prorataWethVaultCodeChunk63.drop 233) = prorataWethVaultCodeChunk63.drop 227 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 6 (prorataWethVaultCodeChunk63.drop 227)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 227).take 6), hj1]
+  have hj2 : (prorataWethVaultCodeChunk64.take 171) ++ ((prorataWethVaultCodeChunk64.drop 171).take 1) = prorataWethVaultCodeChunk64.take 172 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 171) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 171), hj2]
+  have hj3 : (prorataWethVaultCodeChunk64.take 172) ++ ((prorataWethVaultCodeChunk64.drop 172).take 3) = prorataWethVaultCodeChunk64.take 175 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64) (i := 172) (j := 3)).symm
+  rw [hj3]
+
+private theorem withdrawQuoteAux_source_cut : ProrataWethVault.withdrawAfterQuote = auxQuoteStore +++ withdrawQuoteAuxCaller := by rfl
+
+private theorem withdrawQuoteAux_compile :
+    Func.compile vaultTable 16351 (ProrataWethVault.withdrawAfterQuote) = some (prorataWethVaultCodeChunk63.drop 223 ++ prorataWethVaultCodeChunk64.take 175) := by
+  have hb0 : auxQuoteStore.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk63.drop 223).take 4 := by
+    rfl
+  rw [withdrawQuoteAux_source_cut]
+  rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [withdrawQuoteAuxCaller_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 223).take 4) ++ (prorataWethVaultCodeChunk63.drop 227) = prorataWethVaultCodeChunk63.drop 223 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4 (prorataWethVaultCodeChunk63.drop 223)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 223).take 4), hj0]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxFinitePrefix : Line := loadWord amountWord ++ loadWord allowanceWord ++ [lt]
+private theorem redeemQuoteAuxFinitePrefix_size : prefixByteSize redeemQuoteAuxFinitePrefix = 9 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxGuardPrefix : Line := loadWord ownerWord ++ [sload] ++ mstoreAt balanceWord ++ loadWord amountWord ++ loadWord balanceWord ++ [lt]
+private theorem redeemQuoteAuxGuardPrefix_size : prefixByteSize redeemQuoteAuxGuardPrefix = 18 := by rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxSubtract : Func := loadWord amountWord +++ loadWord allowanceWord +++ sub ::: loadWord scratchWord +++ sstore ::: .call redeemBurnSlot
+
+private theorem redeemQuoteAuxSubtract_compile : Func.compile vaultTable 16708 redeemQuoteAuxSubtract = some ((prorataWethVaultCodeChunk65.drop 68).take 18) := by
+  simp only [redeemQuoteAuxSubtract, ProrataWethVault.loadWord, prepend]
+  simp only [Func.compile, vault_table_redeemBurn]
+  rfl
+
+private theorem redeemQuoteAuxCall_16731_compile : Func.compile vaultTable 16731 (Func.call ProrataWethVault.redeemBurnSlot) = some ((prorataWethVaultCodeChunk65.drop 91).take 4) := by
+  simp only [Func.compile, vault_table_redeemBurn]
+  rfl
+
+private theorem redeemQuoteAuxCall_16740_compile : Func.compile vaultTable 16740 (Func.call ProrataWethVault.redeemBurnSlot) = some ((prorataWethVaultCodeChunk65.drop 100).take 4) := by
+  simp only [Func.compile, vault_table_redeemBurn]
+  rfl
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxFinite : Func := redeemQuoteAuxFinitePrefix +++ Func.branch redeemQuoteAuxSubtract Func.revert
+
+private theorem redeemQuoteAuxFinite_compile :
+    Func.compile vaultTable 16695 (redeemQuoteAuxFinite) = some ((prorataWethVaultCodeChunk65.drop 55).take 35) := by
+  rw [redeemQuoteAuxFinite, compile_prepend, redeemQuoteAuxFinitePrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : redeemQuoteAuxFinitePrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 55).take 9 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk65.drop 68).take 18) : Bytes).length = 18 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16704 16726 _ _
+    ((prorataWethVaultCodeChunk65.drop 68).take 18) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxSubtract_compile (by rw [hlen]) (by decide) (revert_compile_at 16727)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16726 >>> 8).toUInt8, Nat.toUInt8 16726, 0x57] : Bytes) = (prorataWethVaultCodeChunk65.drop 64).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 86).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 87).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 55).take 9) ++ ((prorataWethVaultCodeChunk65.drop 64).take 4) = (prorataWethVaultCodeChunk65.drop 55).take 13 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 55) (i := 9) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 55).take 9), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk65.drop 55).take 13) ++ ((prorataWethVaultCodeChunk65.drop 68).take 18) = (prorataWethVaultCodeChunk65.drop 55).take 31 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 55) (i := 13) (j := 18)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 55).take 13), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk65.drop 55).take 31) ++ ((prorataWethVaultCodeChunk65.drop 86).take 1) = (prorataWethVaultCodeChunk65.drop 55).take 32 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 55) (i := 31) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 55).take 31), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk65.drop 55).take 32) ++ ((prorataWethVaultCodeChunk65.drop 87).take 3) = (prorataWethVaultCodeChunk65.drop 55).take 35 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 55) (i := 32) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxSpend : Func := transferSpendPrefix +++ Func.branch redeemQuoteAuxFinite (.call redeemBurnSlot)
+
+private theorem redeemQuoteAuxSpend_compile :
+    Func.compile vaultTable 16672 (redeemQuoteAuxSpend) = some ((prorataWethVaultCodeChunk65.drop 32).take 63) := by
+  rw [redeemQuoteAuxSpend, compile_prepend, transferSpendPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferSpendPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 32).take 19 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk65.drop 55).take 35) : Bytes).length = 35 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16691 16730 _ _
+    ((prorataWethVaultCodeChunk65.drop 55).take 35) ((prorataWethVaultCodeChunk65.drop 91).take 4)
+    redeemQuoteAuxFinite_compile (by rw [hlen]) (by decide) redeemQuoteAuxCall_16731_compile
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16730 >>> 8).toUInt8, Nat.toUInt8 16730, 0x57] : Bytes) = (prorataWethVaultCodeChunk65.drop 51).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 90).take 1 := by rfl
+  rw [hheader, hjump]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 32).take 19) ++ ((prorataWethVaultCodeChunk65.drop 51).take 4) = (prorataWethVaultCodeChunk65.drop 32).take 23 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 32) (i := 19) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 32).take 19), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk65.drop 32).take 23) ++ ((prorataWethVaultCodeChunk65.drop 55).take 35) = (prorataWethVaultCodeChunk65.drop 32).take 58 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 32) (i := 23) (j := 35)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 32).take 23), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk65.drop 32).take 58) ++ ((prorataWethVaultCodeChunk65.drop 90).take 1) = (prorataWethVaultCodeChunk65.drop 32).take 59 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 32) (i := 58) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 32).take 58), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk65.drop 32).take 59) ++ ((prorataWethVaultCodeChunk65.drop 91).take 4) = (prorataWethVaultCodeChunk65.drop 32).take 63 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 32) (i := 59) (j := 4)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxKey : Func := transferKeyPrefix +++ Func.branch redeemQuoteAuxSpend Func.revert
+
+private theorem redeemQuoteAuxKey_compile :
+    Func.compile vaultTable 16642 (redeemQuoteAuxKey) = some ((prorataWethVaultCodeChunk65.drop 2).take 97) := by
+  rw [redeemQuoteAuxKey, compile_prepend, transferKeyPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : transferKeyPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk65.drop 2).take 26 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk65.drop 32).take 63) : Bytes).length = 63 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16668 16735 _ _
+    ((prorataWethVaultCodeChunk65.drop 32).take 63) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxSpend_compile (by rw [hlen]) (by decide) (revert_compile_at 16736)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16735 >>> 8).toUInt8, Nat.toUInt8 16735, 0x57] : Bytes) = (prorataWethVaultCodeChunk65.drop 28).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 95).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 96).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 2).take 26) ++ ((prorataWethVaultCodeChunk65.drop 28).take 4) = (prorataWethVaultCodeChunk65.drop 2).take 30 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 2) (i := 26) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 2).take 26), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk65.drop 2).take 30) ++ ((prorataWethVaultCodeChunk65.drop 32).take 63) = (prorataWethVaultCodeChunk65.drop 2).take 93 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 2) (i := 30) (j := 63)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 2).take 30), hj1]
+  have hj2 : ((prorataWethVaultCodeChunk65.drop 2).take 93) ++ ((prorataWethVaultCodeChunk65.drop 95).take 1) = (prorataWethVaultCodeChunk65.drop 2).take 94 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 2) (i := 93) (j := 1)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 2).take 93), hj2]
+  have hj3 : ((prorataWethVaultCodeChunk65.drop 2).take 94) ++ ((prorataWethVaultCodeChunk65.drop 96).take 3) = (prorataWethVaultCodeChunk65.drop 2).take 97 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65.drop 2) (i := 94) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxOwnerEq : Func := auxOwnerEqPrefix +++ Func.branch redeemQuoteAuxKey (.call redeemBurnSlot)
+
+private theorem redeemQuoteAuxOwnerEq_compile :
+    Func.compile vaultTable 16632 (redeemQuoteAuxOwnerEq) = some (prorataWethVaultCodeChunk64.drop 248 ++ prorataWethVaultCodeChunk65.take 104) := by
+  rw [redeemQuoteAuxOwnerEq, compile_prepend, auxOwnerEqPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxOwnerEqPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 248).take 6 := by
+    rfl
+  have hlen : (((prorataWethVaultCodeChunk65.drop 2).take 97) : Bytes).length = 97 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16638 16739 _ _
+    ((prorataWethVaultCodeChunk65.drop 2).take 97) ((prorataWethVaultCodeChunk65.drop 100).take 4)
+    redeemQuoteAuxKey_compile (by rw [hlen]) (by decide) redeemQuoteAuxCall_16740_compile
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16739 >>> 8).toUInt8, Nat.toUInt8 16739, 0x57] : Bytes) = prorataWethVaultCodeChunk64.drop 254 ++ prorataWethVaultCodeChunk65.take 2 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 99).take 1 := by rfl
+  rw [hheader, hjump]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 248).take 6) ++ (prorataWethVaultCodeChunk64.drop 254) = prorataWethVaultCodeChunk64.drop 248 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 6 (prorataWethVaultCodeChunk64.drop 248)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 248).take 6), hj0]
+  have hj1 : (prorataWethVaultCodeChunk65.take 2) ++ ((prorataWethVaultCodeChunk65.drop 2).take 97) = prorataWethVaultCodeChunk65.take 99 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 2) (j := 97)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 2), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 99) ++ ((prorataWethVaultCodeChunk65.drop 99).take 1) = prorataWethVaultCodeChunk65.take 100 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 99) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 99), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 100) ++ ((prorataWethVaultCodeChunk65.drop 100).take 4) = prorataWethVaultCodeChunk65.take 104 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 100) (j := 4)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxGuard : Func := redeemQuoteAuxGuardPrefix +++ Func.branch redeemQuoteAuxOwnerEq Func.revert
+
+private theorem redeemQuoteAuxGuard_compile :
+    Func.compile vaultTable 16610 (redeemQuoteAuxGuard) = some (prorataWethVaultCodeChunk64.drop 226 ++ prorataWethVaultCodeChunk65.take 108) := by
+  rw [redeemQuoteAuxGuard, compile_prepend, redeemQuoteAuxGuardPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : redeemQuoteAuxGuardPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 226).take 18 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 248 ++ prorataWethVaultCodeChunk65.take 104) : Bytes).length = 112 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16628 16744 _ _
+    (prorataWethVaultCodeChunk64.drop 248 ++ prorataWethVaultCodeChunk65.take 104) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxOwnerEq_compile (by rw [hlen]) (by decide) (revert_compile_at 16745)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16744 >>> 8).toUInt8, Nat.toUInt8 16744, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 244).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 104).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 105).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 226).take 18) ++ ((prorataWethVaultCodeChunk64.drop 244).take 4) = (prorataWethVaultCodeChunk64.drop 226).take 22 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 226) (i := 18) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 226).take 18), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 226).take 22) ++ (prorataWethVaultCodeChunk64.drop 248) = prorataWethVaultCodeChunk64.drop 226 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 22 (prorataWethVaultCodeChunk64.drop 226)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 226).take 22), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 104) ++ ((prorataWethVaultCodeChunk65.drop 104).take 1) = prorataWethVaultCodeChunk65.take 105 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 104) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 104), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 105) ++ ((prorataWethVaultCodeChunk65.drop 105).take 3) = prorataWethVaultCodeChunk65.take 108 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 105) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxOwnerNonzero : Func := vaultNonzeroPrefix +++ Func.branch redeemQuoteAuxGuard Func.revert
+
+private theorem redeemQuoteAuxOwnerNonzero_compile :
+    Func.compile vaultTable 16605 (redeemQuoteAuxOwnerNonzero) = some (prorataWethVaultCodeChunk64.drop 221 ++ prorataWethVaultCodeChunk65.take 112) := by
+  rw [redeemQuoteAuxOwnerNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 221).take 1 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 226 ++ prorataWethVaultCodeChunk65.take 108) : Bytes).length = 138 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16606 16748 _ _
+    (prorataWethVaultCodeChunk64.drop 226 ++ prorataWethVaultCodeChunk65.take 108) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxGuard_compile (by rw [hlen]) (by decide) (revert_compile_at 16749)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16748 >>> 8).toUInt8, Nat.toUInt8 16748, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 222).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 108).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 109).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 221).take 1) ++ ((prorataWethVaultCodeChunk64.drop 222).take 4) = (prorataWethVaultCodeChunk64.drop 221).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 221) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 221).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 221).take 5) ++ (prorataWethVaultCodeChunk64.drop 226) = prorataWethVaultCodeChunk64.drop 221 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 5 (prorataWethVaultCodeChunk64.drop 221)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 221).take 5), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 108) ++ ((prorataWethVaultCodeChunk65.drop 108).take 1) = prorataWethVaultCodeChunk65.take 109 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 108) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 108), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 109) ++ ((prorataWethVaultCodeChunk65.drop 109).take 3) = prorataWethVaultCodeChunk65.take 112 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 109) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxOwner : Func := auxOwnerPrefix +++ Func.branch redeemQuoteAuxOwnerNonzero Func.revert
+
+private theorem redeemQuoteAuxOwner_compile :
+    Func.compile vaultTable 16590 (redeemQuoteAuxOwner) = some (prorataWethVaultCodeChunk64.drop 206 ++ prorataWethVaultCodeChunk65.take 116) := by
+  rw [redeemQuoteAuxOwner, compile_prepend, auxOwnerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxOwnerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 206).take 11 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 221 ++ prorataWethVaultCodeChunk65.take 112) : Bytes).length = 147 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16601 16752 _ _
+    (prorataWethVaultCodeChunk64.drop 221 ++ prorataWethVaultCodeChunk65.take 112) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxOwnerNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16753)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16752 >>> 8).toUInt8, Nat.toUInt8 16752, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 217).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 112).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 113).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 206).take 11) ++ ((prorataWethVaultCodeChunk64.drop 217).take 4) = (prorataWethVaultCodeChunk64.drop 206).take 15 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 206) (i := 11) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 206).take 11), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 206).take 15) ++ (prorataWethVaultCodeChunk64.drop 221) = prorataWethVaultCodeChunk64.drop 206 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 15 (prorataWethVaultCodeChunk64.drop 206)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 206).take 15), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 112) ++ ((prorataWethVaultCodeChunk65.drop 112).take 1) = prorataWethVaultCodeChunk65.take 113 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 112) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 112), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 113) ++ ((prorataWethVaultCodeChunk65.drop 113).take 3) = prorataWethVaultCodeChunk65.take 116 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 113) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxReceiverNonzero : Func := vaultNonzeroPrefix +++ Func.branch redeemQuoteAuxOwner Func.revert
+
+private theorem redeemQuoteAuxReceiverNonzero_compile :
+    Func.compile vaultTable 16585 (redeemQuoteAuxReceiverNonzero) = some (prorataWethVaultCodeChunk64.drop 201 ++ prorataWethVaultCodeChunk65.take 120) := by
+  rw [redeemQuoteAuxReceiverNonzero, compile_prepend, vaultNonzeroPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultNonzeroPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 201).take 1 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 206 ++ prorataWethVaultCodeChunk65.take 116) : Bytes).length = 166 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16586 16756 _ _
+    (prorataWethVaultCodeChunk64.drop 206 ++ prorataWethVaultCodeChunk65.take 116) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxOwner_compile (by rw [hlen]) (by decide) (revert_compile_at 16757)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16756 >>> 8).toUInt8, Nat.toUInt8 16756, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 202).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 116).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 117).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 201).take 1) ++ ((prorataWethVaultCodeChunk64.drop 202).take 4) = (prorataWethVaultCodeChunk64.drop 201).take 5 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 201) (i := 1) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 201).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 201).take 5) ++ (prorataWethVaultCodeChunk64.drop 206) = prorataWethVaultCodeChunk64.drop 201 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 5 (prorataWethVaultCodeChunk64.drop 201)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 201).take 5), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 116) ++ ((prorataWethVaultCodeChunk65.drop 116).take 1) = prorataWethVaultCodeChunk65.take 117 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 116) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 116), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 117) ++ ((prorataWethVaultCodeChunk65.drop 117).take 3) = prorataWethVaultCodeChunk65.take 120 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 117) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxReceiver : Func := auxReceiverPrefix +++ Func.branch redeemQuoteAuxReceiverNonzero Func.revert
+
+private theorem redeemQuoteAuxReceiver_compile :
+    Func.compile vaultTable 16570 (redeemQuoteAuxReceiver) = some (prorataWethVaultCodeChunk64.drop 186 ++ prorataWethVaultCodeChunk65.take 124) := by
+  rw [redeemQuoteAuxReceiver, compile_prepend, auxReceiverPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : auxReceiverPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 186).take 11 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 201 ++ prorataWethVaultCodeChunk65.take 120) : Bytes).length = 175 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16581 16760 _ _
+    (prorataWethVaultCodeChunk64.drop 201 ++ prorataWethVaultCodeChunk65.take 120) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxReceiverNonzero_compile (by rw [hlen]) (by decide) (revert_compile_at 16761)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16760 >>> 8).toUInt8, Nat.toUInt8 16760, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 197).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 120).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 121).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 186).take 11) ++ ((prorataWethVaultCodeChunk64.drop 197).take 4) = (prorataWethVaultCodeChunk64.drop 186).take 15 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 186) (i := 11) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 186).take 11), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 186).take 15) ++ (prorataWethVaultCodeChunk64.drop 201) = prorataWethVaultCodeChunk64.drop 186 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 15 (prorataWethVaultCodeChunk64.drop 186)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 186).take 15), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 120) ++ ((prorataWethVaultCodeChunk65.drop 120).take 1) = prorataWethVaultCodeChunk65.take 121 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 120) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 120), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 121) ++ ((prorataWethVaultCodeChunk65.drop 121).take 3) = prorataWethVaultCodeChunk65.take 124 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 121) (j := 3)).symm
+  rw [hj3]
+
+open ProrataWethVault Jaune.Ninst Ninst in
+private def redeemQuoteAuxCaller : Func := vaultCallerPrefix +++ Func.branch redeemQuoteAuxReceiver Func.revert
+
+private theorem redeemQuoteAuxCaller_compile :
+    Func.compile vaultTable 16564 (redeemQuoteAuxCaller) = some (prorataWethVaultCodeChunk64.drop 180 ++ prorataWethVaultCodeChunk65.take 128) := by
+  rw [redeemQuoteAuxCaller, compile_prepend, vaultCallerPrefix_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  have hbytes : vaultCallerPrefix.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 180).take 2 := by
+    rfl
+  have hlen : ((prorataWethVaultCodeChunk64.drop 186 ++ prorataWethVaultCodeChunk65.take 124) : Bytes).length = 194 := by decide +kernel
+  have hbranch := compile_branch vaultTable 16566 16764 _ _
+    (prorataWethVaultCodeChunk64.drop 186 ++ prorataWethVaultCodeChunk65.take 124) [0x5f, 0x5f, 0xfd]
+    redeemQuoteAuxReceiver_compile (by rw [hlen]) (by decide) (revert_compile_at 16765)
+  rw [hbranch, hbytes]
+  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  have hheader : ([0x61, (16764 >>> 8).toUInt8, Nat.toUInt8 16764, 0x57] : Bytes) = (prorataWethVaultCodeChunk64.drop 182).take 4 := by rfl
+  have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk65.drop 124).take 1 := by rfl
+  rw [hheader, hjump]
+  have hqbytes : ([0x5f, 0x5f, 0xfd] : Bytes) = (prorataWethVaultCodeChunk65.drop 125).take 3 := by rfl
+  rw [hqbytes]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 180).take 2) ++ ((prorataWethVaultCodeChunk64.drop 182).take 4) = (prorataWethVaultCodeChunk64.drop 180).take 6 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk64.drop 180) (i := 2) (j := 4)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 180).take 2), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk64.drop 180).take 6) ++ (prorataWethVaultCodeChunk64.drop 186) = prorataWethVaultCodeChunk64.drop 180 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 6 (prorataWethVaultCodeChunk64.drop 180)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 180).take 6), hj1]
+  have hj2 : (prorataWethVaultCodeChunk65.take 124) ++ ((prorataWethVaultCodeChunk65.drop 124).take 1) = prorataWethVaultCodeChunk65.take 125 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 124) (j := 1)).symm
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 124), hj2]
+  have hj3 : (prorataWethVaultCodeChunk65.take 125) ++ ((prorataWethVaultCodeChunk65.drop 125).take 3) = prorataWethVaultCodeChunk65.take 128 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk65) (i := 125) (j := 3)).symm
+  rw [hj3]
+
+private theorem redeemQuoteAux_source_cut : ProrataWethVault.redeemAfterQuote = auxQuoteStore +++ redeemQuoteAuxCaller := by rfl
+
+private theorem redeemQuoteAux_compile :
+    Func.compile vaultTable 16560 (ProrataWethVault.redeemAfterQuote) = some (prorataWethVaultCodeChunk64.drop 176 ++ prorataWethVaultCodeChunk65.take 128) := by
+  have hb0 : auxQuoteStore.flatMap Ninst.toBytes = (prorataWethVaultCodeChunk64.drop 176).take 4 := by
+    rfl
+  rw [redeemQuoteAux_source_cut]
+  rw [compile_prepend, auxQuoteStore_size]
+  all_goals discharge_prepend_acceptance
+  simp only [Nat.reduceAdd]
+  rw [redeemQuoteAuxCaller_compile, hb0]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 176).take 4) ++ (prorataWethVaultCodeChunk64.drop 180) = prorataWethVaultCodeChunk64.drop 176 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4 (prorataWethVaultCodeChunk64.drop 176)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 176).take 4), hj0]
+
+private theorem vaultRevertAux_compile : Func.compile vaultTable 15664 Func.revert = some ((prorataWethVaultCodeChunk61.drop 48).take 3) := by
+  rw [revert_compile_at]
+  rfl
+private theorem vaultReturnWordAux_compile : Func.compile vaultTable 15668 ProrataWethVault.returnWord = some ((prorataWethVaultCodeChunk61.drop 52).take 6) := by
+  rfl
+
+
+theorem vaultFinalChunk_take : prorataWethVaultCodeChunk68.take 73 = prorataWethVaultCodeChunk68 := by rfl
+
+def vaultEntries : List (Nat × Func) := [(0, ProrataWethVault.vault.main), (15663, Func.revert), (15667, ProrataWethVault.returnWord), (15674, ProrataWethVault.depositAfterQuote), (16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)]
+theorem vaultTable_source : vaultTable = vaultEntries := by
+  have hmain : compsize ProrataWethVault.vault.main = 15662 := by
+    rw [← Func.CompileShape.byteSize_compileShape]
+    exact vault_main_size
+  have hrevert : compsize Func.revert = 3 := by rfl
+  have hreturn : compsize ProrataWethVault.returnWord = 6 := by rfl
+  simp only [vaultTable, vaultEntries, vault_aux_source, table, hmain, hrevert, hreturn,
+    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size,
+    aux_redeemAfterQuote_size, aux_transferStaged_size, aux_withdrawBurn_size,
+    aux_redeemBurn_size, Nat.reduceAdd]
+
+private theorem vaultTableTail10_compile :
+    Table.compile vaultTable [(17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk67.drop 226 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [maxMintAux_compile]
+  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk67.drop 226).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk67.drop 226).take 1) ++ (prorataWethVaultCodeChunk67.drop 227) = prorataWethVaultCodeChunk67.drop 226 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk67.drop 226)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk67.drop 226).take 1), hj0]
+
+private theorem vaultTableTail9_compile :
+    Table.compile vaultTable [(17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk66.drop 251 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [redeemBurnAux_compile, vaultTableTail10_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk66.drop 251).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 251).take 1) ++ (prorataWethVaultCodeChunk66.drop 252) = prorataWethVaultCodeChunk66.drop 251 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk66.drop 251)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 251).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk67.take 226) ++ (prorataWethVaultCodeChunk67.drop 226) = prorataWethVaultCodeChunk67 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 226 (prorataWethVaultCodeChunk67)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk67.take 226), hj1]
+
+private theorem vaultTableTail8_compile :
+    Table.compile vaultTable [(16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk66.drop 20 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [withdrawBurnAux_compile, vaultTableTail9_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk66.drop 20).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk66.drop 20).take 1) ++ ((prorataWethVaultCodeChunk66.drop 21).take 230) = (prorataWethVaultCodeChunk66.drop 20).take 231 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk66.drop 20) (i := 1) (j := 230)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 20).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk66.drop 20).take 231) ++ (prorataWethVaultCodeChunk66.drop 251) = prorataWethVaultCodeChunk66.drop 20 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 231 (prorataWethVaultCodeChunk66.drop 20)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk66.drop 20).take 231), hj1]
+
+private theorem vaultTableTail7_compile :
+    Table.compile vaultTable [(16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk65.drop 128 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [transferAux_compile, vaultTableTail8_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk65.drop 128).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk65.drop 128).take 1) ++ (prorataWethVaultCodeChunk65.drop 129) = prorataWethVaultCodeChunk65.drop 128 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk65.drop 128)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk65.drop 128).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk66.take 20) ++ (prorataWethVaultCodeChunk66.drop 20) = prorataWethVaultCodeChunk66 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 20 (prorataWethVaultCodeChunk66)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk66.take 20), hj1]
+
+private theorem vaultTableTail6_compile :
+    Table.compile vaultTable [(16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk64.drop 175 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [redeemQuoteAux_compile, vaultTableTail7_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk64.drop 175).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk64.drop 175).take 1) ++ (prorataWethVaultCodeChunk64.drop 176) = prorataWethVaultCodeChunk64.drop 175 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk64.drop 175)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk64.drop 175).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk65.take 128) ++ (prorataWethVaultCodeChunk65.drop 128) = prorataWethVaultCodeChunk65 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 128 (prorataWethVaultCodeChunk65)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk65.take 128), hj1]
+
+private theorem vaultTableTail5_compile :
+    Table.compile vaultTable [(16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk63.drop 222 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [withdrawQuoteAux_compile, vaultTableTail6_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk63.drop 222).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk63.drop 222).take 1) ++ (prorataWethVaultCodeChunk63.drop 223) = prorataWethVaultCodeChunk63.drop 222 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk63.drop 222)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk63.drop 222).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk64.take 175) ++ (prorataWethVaultCodeChunk64.drop 175) = prorataWethVaultCodeChunk64 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 175 (prorataWethVaultCodeChunk64)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk64.take 175), hj1]
+
+private theorem vaultTableTail4_compile :
+    Table.compile vaultTable [(16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk62.drop 140 ++ prorataWethVaultCodeChunk63 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [mintAux_compile, vaultTableTail5_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk62.drop 140).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk62.drop 140).take 1) ++ (prorataWethVaultCodeChunk62.drop 141) = prorataWethVaultCodeChunk62.drop 140 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk62.drop 140)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk62.drop 140).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk63.take 222) ++ (prorataWethVaultCodeChunk63.drop 222) = prorataWethVaultCodeChunk63 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 222 (prorataWethVaultCodeChunk63)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk63.take 222), hj1]
+
+private theorem vaultTableTail3_compile :
+    Table.compile vaultTable [(15674, ProrataWethVault.depositAfterQuote), (16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk61.drop 58 ++ prorataWethVaultCodeChunk62 ++ prorataWethVaultCodeChunk63 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [depositAux_compile, vaultTableTail4_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 58).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 58).take 1) ++ (prorataWethVaultCodeChunk61.drop 59) = prorataWethVaultCodeChunk61.drop 58 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk61.drop 58)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 58).take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk62.take 140) ++ (prorataWethVaultCodeChunk62.drop 140) = prorataWethVaultCodeChunk62 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 140 (prorataWethVaultCodeChunk62)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk62.take 140), hj1]
+
+private theorem vaultTableTail2_compile :
+    Table.compile vaultTable [(15667, ProrataWethVault.returnWord), (15674, ProrataWethVault.depositAfterQuote), (16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk61.drop 51 ++ prorataWethVaultCodeChunk62 ++ prorataWethVaultCodeChunk63 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [vaultReturnWordAux_compile, vaultTableTail3_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 51).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 51).take 1) ++ ((prorataWethVaultCodeChunk61.drop 52).take 6) = (prorataWethVaultCodeChunk61.drop 51).take 7 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 51) (i := 1) (j := 6)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 51).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 51).take 7) ++ (prorataWethVaultCodeChunk61.drop 58) = prorataWethVaultCodeChunk61.drop 51 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 7 (prorataWethVaultCodeChunk61.drop 51)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 51).take 7), hj1]
+
+private theorem vaultTableTail1_compile :
+    Table.compile vaultTable [(15663, Func.revert), (15667, ProrataWethVault.returnWord), (15674, ProrataWethVault.depositAfterQuote), (16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk61.drop 47 ++ prorataWethVaultCodeChunk62 ++ prorataWethVaultCodeChunk63 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [vaultRevertAux_compile, vaultTableTail2_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 47).take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : ((prorataWethVaultCodeChunk61.drop 47).take 1) ++ ((prorataWethVaultCodeChunk61.drop 48).take 3) = (prorataWethVaultCodeChunk61.drop 47).take 4 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      (List.take_add (l := prorataWethVaultCodeChunk61.drop 47) (i := 1) (j := 3)).symm
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 47).take 1), hj0]
+  have hj1 : ((prorataWethVaultCodeChunk61.drop 47).take 4) ++ (prorataWethVaultCodeChunk61.drop 51) = prorataWethVaultCodeChunk61.drop 47 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 4 (prorataWethVaultCodeChunk61.drop 47)
+  rw [← List.append_assoc ((prorataWethVaultCodeChunk61.drop 47).take 4), hj1]
+
+theorem vaultTableTail0_compile :
+    Table.compile vaultTable [(0, ProrataWethVault.vault.main), (15663, Func.revert), (15667, ProrataWethVault.returnWord), (15674, ProrataWethVault.depositAfterQuote), (16012, ProrataWethVault.mintAfterQuote), (16350, ProrataWethVault.withdrawAfterQuote), (16559, ProrataWethVault.redeemAfterQuote), (16768, ProrataWethVault.transferStaged), (16916, ProrataWethVault.withdrawBurn), (17147, ProrataWethVault.redeemBurn), (17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk0 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3 ++ prorataWethVaultCodeChunk4 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24 ++ prorataWethVaultCodeChunk25 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35 ++ prorataWethVaultCodeChunk36 ++ prorataWethVaultCodeChunk37 ++ prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39 ++ prorataWethVaultCodeChunk40 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++ prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44 ++ prorataWethVaultCodeChunk45 ++ prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++ prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49 ++ prorataWethVaultCodeChunk50 ++ prorataWethVaultCodeChunk51 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55 ++ prorataWethVaultCodeChunk56 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60 ++ prorataWethVaultCodeChunk61 ++ prorataWethVaultCodeChunk62 ++ prorataWethVaultCodeChunk63 ++ prorataWethVaultCodeChunk64 ++ prorataWethVaultCodeChunk65 ++ prorataWethVaultCodeChunk66 ++ prorataWethVaultCodeChunk67 ++ prorataWethVaultCodeChunk68.take 73) := by
+  rw [Table.compile]
+  simp only [Nat.reduceAdd]
+  rw [vaultMain_compile, vaultTableTail1_compile]
+  simp only [bind, Option.bind, pure, Pure.pure]
+  have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = prorataWethVaultCodeChunk0.take 1 := by rfl
+  rw [hmarker]
+  try simp only [List.append_assoc]
+  have hj0 : (prorataWethVaultCodeChunk0.take 1) ++ (prorataWethVaultCodeChunk0.drop 1) = prorataWethVaultCodeChunk0 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 1 (prorataWethVaultCodeChunk0)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk0.take 1), hj0]
+  have hj1 : (prorataWethVaultCodeChunk61.take 47) ++ (prorataWethVaultCodeChunk61.drop 47) = prorataWethVaultCodeChunk61 := by
+    simpa only [List.drop_drop, Nat.reduceAdd] using
+      List.take_append_drop 47 (prorataWethVaultCodeChunk61)
+  rw [← List.append_assoc (prorataWethVaultCodeChunk61.take 47), hj1]
+
+end ProrataWethVaultCodeProof
+end Blanc

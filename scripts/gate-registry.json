@@ -945,6 +945,7 @@
      "scripts/gen-prorata-weth-wrap-proof.py",
      "scripts/prorata-weth-wrap-proof.json",
      "Blanc/ProrataWethVaultCode.lean",
+     "Blanc/ProrataWethVaultCodeData.lean",
      "Blanc/WethCode.lean",
      ".lake/packages/jaune/.lake/build/bin/jaune",
      ".lake/packages/jaune/scripts/sources.json",
@@ -1003,6 +1004,7 @@
    "id": "prorata-weth-vault-differential-self-test",
    "inputs": {
     "files": [
+     "Blanc/ProrataWethVaultCodeData.lean",
      "scripts/check-prorata-weth-vault-differential.sh",
      "scripts/check-prorata-weth-vault-differential.py",
      "scripts/prorata_weth_vault_differential_matrix.py",
@@ -1039,7 +1041,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Harness self-test (evidence economy rule 3): 11 mutants of the kept controls -- the oracle offset and its four rounding directions, the locked reference identity, the committed measurements, the rollback projection, the deposit event order, the zero-receiver guard and selector coverage -- each run the narrowest --only/--side mode and must reach their named diagnostic; restore is byte identity to the committed file, whose green verdict is the prerequisite main row. Inputs are the harness's own files only: the committed Lean literals, reference and measurement data it reads as subjects or mutation carriers are declared under untracked_reads and deliberately not fingerprinted; the Jaune binary it runs is not fingerprinted for this row either, since the read audit excuses every .lake/ read as a Lake-artifact channel and this row declares no Lean root. The self-test therefore reruns when a control changes, not when the subject or the runner binary does.",
+   "note": "Harness self-test (evidence economy rule 3): 11 mutants of the kept controls -- the oracle offset and its four rounding directions, the locked reference identity, the committed measurements, the rollback projection, the deposit event order, the zero-receiver guard and selector coverage -- each run the narrowest --only/--side mode and must reach their named diagnostic; restore is byte identity to the committed file, whose green verdict is the prerequisite main row. Inputs bind the harness and the new fixed vault data-owner layout. The latter is conservatively fingerprinted rather than adding an untracked-read exception. The pre-existing facade/WETH literals, reference and measurement data it reads as subjects or mutation carriers retain their existing untracked_reads disposition; the Jaune binary it runs is not fingerprinted for this row either, since the read audit excuses every .lake/ read as a Lake-artifact channel and this row declares no Lean root. The self-test therefore reruns when a control changes, not when the subject or the runner binary does.",
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [
@@ -2783,7 +2785,9 @@
      "scripts/leaf-count.json",
      "Blanc.lean",
      "scripts/external_uses.py",
-     "scripts/prorata-weth-vault-code-proof.lean.in",
+     "scripts/prorata-weth-vault-code-proof1.lean.in",
+     "scripts/prorata-weth-vault-code-proof2.lean.in",
+     "scripts/prorata-weth-vault-code-proof3.lean.in",
      "Main.lean"
     ],
     "lean_entries": [
@@ -3486,9 +3490,15 @@
      "scripts/check-prorata-weth-vault-artifact.py",
      "scripts/test-prorata-weth-vault-artifact.py",
      "scripts/gen-prorata-weth-vault-code.lean",
-     "scripts/prorata-weth-vault-code-proof.lean.in",
+     "scripts/prorata-weth-vault-code-proof1.lean.in",
+     "scripts/prorata-weth-vault-code-proof2.lean.in",
+     "scripts/prorata-weth-vault-code-proof3.lean.in",
      "Blanc/ProrataWethVault.lean",
-     "Blanc/ProrataWethVaultCode.lean"
+     "Blanc/ProrataWethVaultCode.lean",
+     "Blanc/ProrataWethVaultCodeData.lean",
+     "Blanc/ProrataWethVaultCodeProof1.lean",
+     "Blanc/ProrataWethVaultCodeProof2.lean",
+     "Blanc/ProrataWethVaultCodeProof3.lean"
     ],
     "lean_entries": [
      "Blanc/ProrataWethVaultArtifact.lean"

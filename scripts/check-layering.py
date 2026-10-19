@@ -814,6 +814,10 @@ CONTRACTS = {
                 
                 "ProrataAttackTrace"],
     "prorata-weth-vault": ["ProrataWethVault", "ProrataWethVaultCode",
+                            "ProrataWethVaultCodeData",
+                            "ProrataWethVaultCodeProof1",
+                            "ProrataWethVaultCodeProof2",
+                            "ProrataWethVaultCodeProof3",
                             "ProrataWethVaultArtifact",
                             "ProrataWethVaultArithmetic",
                             "ProrataWethVaultMaxArithmetic",
