@@ -57,20 +57,34 @@ theorem rx_al_feeTest {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : 
   · xr (rx_branch_succ (al_fee_ne hi h2) ·)
     exact kc h2
 
-/-- **The fee coin's first `balanceOf(self)`, forward** (`0x10ce` → the pull; memory `0x520` grows
-to `0x5c0`, or stays at `0x840`). -/
-theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
+/-! ## The fee coin's `balanceOf(self)` reads, exact -/
+
+/-- A `balanceOf(self)` call's input memory: the selector at `o`, `self` at `o + 32`. -/
+def alBalMem (sevm : Sevm) (M : Mem) (o : Nat) : Mem :=
+  (M.write o (Bytes.toB256 [112, 160, 130, 49]).toBytes).write (o + 32) sevm.currentTarget.toB256.toBytes
+
+/-- The memory after a `balanceOf(self)` reply: the reply word at `oi`, the word `v` at
+`0x4e0`. -/
+def alBalPostMem (Ms : Mem) (ii oi : Nat) (out : Bytes) (v : B256) : Mem :=
+  ((Ms.extends [(ii, 36), (oi, 32)]).write oi (out.take 32)).write 1248 v.toBytes
+
+/-- `rx_al_bal1` over a relation premise, the continuation also receiving the call's relation
+at its input, the exact charges and the literal memory. -/
+theorem rx_al_bal1E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {C B1 : B256} {a1 a2 a3 : SFunc}
-    {s c1 c2 s' : Nat}
+    {s c1 c2 s' : Nat} {E : Devm → List B256 → Mem → Nat → Devm → Prop}
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
     (hs : (s = 0x520 ∧ c1 = 6 ∧ c2 = 6 ∧ s' = 0x5c0) ∨ (s = 0x840 ∧ c1 = 3 ∧ c2 = 3 ∧ s' = 0x840))
-    (hc : WordAt img 0x500 C) (hbal : CoinBalOkAt sevm W W C B1 U 0x53c 0x5a0)
+    (hc : WordAt img 0x500 C) (hbal : StaticWordOkAtE sevm W W C (balanceOfData sevm.currentTarget) B1 U 0x53c 0x24 0x5a0 E)
     (hG : 300 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 12 < 1024)
     (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = s' →
       (∀ o w, WordAt img o w → o + 32 ≤ 0x4e0 ∨ 0x4e0 + 32 ≤ o ∧ o + 32 ≤ 0x520 →
         WordAt img' o w) →
       WordAt img' 0x4e0 B1 → R ≤ g → g ≤ G →
+      ∀ (g1 : Nat) (d : Devm), E b (3 :: 0x4c0 :: S) (alBalMem sevm M 1312) g1 d →
+      G = g1 + (31 + c1 + c2) → d.gasLeft = g + 53 → b' = d →
+      M' = alBalPostMem (alBalMem sevm M 1312) 1340 1440 d.returnData B1 →
       SFunc.RunEx cert.prog sevm (St b' (3 :: 0x4c0 :: S) M' g) a3 Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) (alBal1 a1 a2 a3) Q := by
   have hWc := hL.wc
@@ -81,14 +95,14 @@ theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S :
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x520) (c := c1) hR hW hsz rfl
+  refine rxe_mstoreL (o := 0x520) (c := c1) hR hW hsz rfl
     (by rcases hs with ⟨rfl, rfl, -⟩ | ⟨rfl, rfl, -⟩ <;> decide) ?_
-  clear hR hW hsz M; intro M hR hW hsz
+  clear hR hW hsz; rename' M => Mr0x520; intro M hMr0x520 hR hW hsz
   xr (rx_address (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x540) (c := c2) hR hW hsz rfl
+  refine rxe_mstoreL (o := 0x540) (c := c2) hR hW hsz rfl
     (by rcases hs with ⟨rfl, -, rfl, -⟩ | ⟨rfl, -, rfl, -⟩ <;> decide) ?_
-  clear hR hW hsz M; intro M hR hW hsz
+  clear hR hW hsz; rename' M => Mr0x540; intro M hMr0x540 hR hW hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x500) (v := C) hR hsz rfl
@@ -100,11 +114,12 @@ theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S :
   have hin : (M.read (0x53c : B256).toNat (0x24 : B256).toNat).1 = balanceOfData sevm.currentTarget := by
     rw [hR.read, show (0x53c : B256).toNat = 0x53c by decide, show (0x24 : B256).toNat = 0x24 by decide]
     exact al_balanceOf_input _ _
-  refine rxe_staticWord (o := 0x5a0) (s := s') hL hWc hbal (by omega) (by omega) (by hrs) hin hR hW rfl
+  refine rxe_staticWordAlE (o := 0x5a0) (s := s') hL hWc hbal (by omega) (by omega) (by hrs) hin hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; rcases hs with ⟨rfl, -, -, rfl⟩ | ⟨rfl, -, -, rfl⟩ <;> decide)
     (by rcases hs with ⟨-, -, -, rfl⟩ | ⟨-, -, -, rfl⟩ <;> decide) ?_
-  intro d M' out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2
+  intro d Md out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2 hMd hE
   clear hR hW hsz hin hL
+  rename' M => Ms; rename' Md => M
   have hR := hR'; have hW := hW'; have hsz := hsz'; have hL := hLd; clear hR' hW' hsz' hLd
   obtain ⟨g2, hg2⟩ : ∃ g, d.gasLeft = g + 53 := ⟨d.gasLeft - 53, by omega⟩
   rw [hg2]
@@ -124,7 +139,9 @@ theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S :
   xr (rxm_mload (o := 0x5a0) hR hsz rfl ⟨by omega, hs''.2⟩ (by hrs) ·)
   rw [ex_ans_read _ _ _ hlen, hA']
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstoreK (o := 0x4e0) hR hW hsz rfl ⟨by omega, hs''.2⟩ ?_; clear hR hW hsz M; intro M hR hW hsz
+  refine rxe_mstoreKL (o := 0x4e0) hR hW hsz rfl ⟨by omega, hs''.2⟩ ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz
+  have eM : Ms = alBalMem sevm Mr0x520 1312 := by rw [hMr0x540, hMr0x520]; rfl
+  rw [eM] at hE
   exact k d M _ g2 hL hR hW hsz (fun o w hw ho => by
       refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
       refine WordAt.write_other ?_ (by rw [List.length_take]; omega)
@@ -132,7 +149,26 @@ theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S :
       refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
       exact hw)
     (by wauto) (by omega) (by omega)
+    g1 d hE (by omega) (by omega) rfl (by rw [hMq1, hMd, ← eM, ← hrd]; rfl)
 
+/-- **The fee coin's first `balanceOf(self)`, forward** (`0x10ce` → the pull; memory `0x520` grows
+to `0x5c0`, or stays at `0x840`). -/
+theorem rx_al_bal1 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
+    {M : Mem} {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {C B1 : B256} {a1 a2 a3 : SFunc}
+    {s c1 c2 s' : Nat}
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
+    (hs : (s = 0x520 ∧ c1 = 6 ∧ c2 = 6 ∧ s' = 0x5c0) ∨ (s = 0x840 ∧ c1 = 3 ∧ c2 = 3 ∧ s' = 0x840))
+    (hc : WordAt img 0x500 C) (hbal : CoinBalOkAt sevm W W C B1 U 0x53c 0x5a0)
+    (hG : 300 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 12 < 1024)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = s' →
+      (∀ o w, WordAt img o w → o + 32 ≤ 0x4e0 ∨ 0x4e0 + 32 ≤ o ∧ o + 32 ≤ 0x520 →
+        WordAt img' o w) →
+      WordAt img' 0x4e0 B1 → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' (3 :: 0x4c0 :: S) M' g) a3 Q) :
+    SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) (alBal1 a1 a2 a3) Q :=
+  rx_al_bal1E hL hR hW hsz hs hc hbal.withE hG hGb hroom
+    fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ => k b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8
 theorem al_prog_6 : cert.prog[6]? = some t_12d5_c6 := rfl
 
 /-- **After a plain pull, forward** (`t_1271_c5` → the credit `t_12d6_c6`, `i ≠ 2`). -/
@@ -153,20 +189,23 @@ theorem rx_al_joinPlain {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img 
   xr (rx_dest ·)
   exact k
 
-/-- **After the fee coin's pull, forward** (`t_1271_c5` → the credit `t_12d6_c6`, `i = 2`):
-the second `balanceOf(self)` (`CoinBalOkAt`, window `0x87c`/`0x8e0`; memory `0x840` grows to
-`0x900`) and `in_amount = B2 - B1` (checked) at `0x4e0`. -/
-theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
+/-- `rx_al_joinFee` over a relation premise, the continuation also receiving the call's relation
+at its input, the exact charges and the literal memory. -/
+theorem rx_al_joinFeeE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {C B1 B2 : B256}
+    {E : Devm → List B256 → Mem → Nat → Devm → Prop}
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x840)
     (hctr : WordAt img 0x4c0 (Nat.toB256 2)) (hc : WordAt img 0x500 C) (hb1 : WordAt img 0x4e0 B1)
-    (hbal : CoinBalOkAt sevm W W C B2 U 0x87c 0x8e0) (hsub : ¬ B2 < B1)
+    (hbal : StaticWordOkAtE sevm W W C (balanceOfData sevm.currentTarget) B2 U 0x87c 0x24 0x8e0 E) (hsub : ¬ B2 < B1)
     (hG : 400 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 12 < 1024)
     (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x900 →
       (∀ o w, WordAt img o w → o + 32 ≤ 0x4e0 ∨ 0x4e0 + 32 ≤ o ∧ o + 32 ≤ 0x860 →
         WordAt img' o w) →
       WordAt img' 0x4e0 (B2 - B1) → R ≤ g → g ≤ G →
+      ∀ (g1 : Nat) (d : Devm), E b (3 :: 0x4c0 :: S) (alBalMem sevm M 2144) g1 d →
+      G = g1 + 76 → d.gasLeft = g + 105 → b' = d →
+      M' = alBalPostMem (alBalMem sevm M 2144) 2172 2272 d.returnData (B2 - B1) →
       SFunc.RunEx cert.prog sevm (St b' (3 :: 0x4c0 :: S) M' g) t_12d6_c6 Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) t_1271_c5 Q := by
   have hWc := hL.wc
@@ -184,10 +223,10 @@ theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x860) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x840 0x860 32 = 0x880 by decide] at hsz
+  refine rxe_mstoreL (o := 0x860) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x840 0x860 32 = 0x880 by decide] at hsz
   xr (rx_address (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x880) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x880 0x880 32 = 0x8a0 by decide] at hsz
+  refine rxe_mstoreL (o := 0x880) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x880 0x880 32 = 0x8a0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x500) (v := C) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hc) (by hrs) ·)
@@ -197,10 +236,11 @@ theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   have hin : (M.read (0x87c : B256).toNat (0x24 : B256).toNat).1 = balanceOfData sevm.currentTarget := by
     rw [hR.read, show (0x87c : B256).toNat = 0x87c by decide, show (0x24 : B256).toNat = 0x24 by decide]
     exact al_balanceOf_input2 _ _
-  refine rxe_staticWord (o := 0x8e0) (s := 0x900) hL hWc hbal (by omega) (by omega) (by hrs) hin hR hW rfl
+  refine rxe_staticWordAlE (o := 0x8e0) (s := 0x900) hL hWc hbal (by omega) (by omega) (by hrs) hin hR hW rfl
     (by show memExtsSize M.size _ = _; rw [hsz]; decide) (by decide) ?_
-  intro d M' out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2
+  intro d Md out hLd hR' hW' hsz' hlen hlt hA' hrd hgd1 hgd2 hMd hE
   clear hR hW hsz hin hL
+  rename' M => Ms; rename' Md => M
   have hR := hR'; have hW := hW'; have hsz := hsz'; have hL := hLd; clear hR' hW' hsz' hLd
   obtain ⟨g2, hg2⟩ : ∃ g, d.gasLeft = g + 105 := ⟨d.gasLeft - 105, by omega⟩
   rw [hg2]
@@ -235,8 +275,10 @@ theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
   xr (rx_swap1 ·)
   xr (rx_pop ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_mstore (o := 0x4e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x900 0x4e0 32 = 0x900 by decide] at hsz
+  refine rxe_mstoreL (o := 0x4e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x900 0x4e0 32 = 0x900 by decide] at hsz
   xr (rx_dest ·)
+  have eM : Ms = alBalMem sevm Mq1 2144 := by rw [hMq2, hMq1]; rfl
+  rw [eM] at hE
   exact k d M _ g2 hL hR hW hsz (fun o w hw ho => by
       refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
       refine WordAt.write_other ?_ (by rw [List.length_take]; omega)
@@ -244,5 +286,24 @@ theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
       refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
       exact hw)
     (by wauto) (by omega) (by omega)
+    g1 d hE (by omega) (by omega) rfl (by rw [hMq3, hMd, ← eM, ← hrd]; rfl)
 
+/-- **After the fee coin's pull, forward** (`t_1271_c5` → the credit `t_12d6_c6`, `i = 2`):
+the second `balanceOf(self)` (`CoinBalOkAt`, window `0x87c`/`0x8e0`; memory `0x840` grows to
+`0x900`) and `in_amount = B2 - B1` (checked) at `0x4e0`. -/
+theorem rx_al_joinFee {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
+    {M : Mem} {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {C B1 B2 : B256}
+    (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x840)
+    (hctr : WordAt img 0x4c0 (Nat.toB256 2)) (hc : WordAt img 0x500 C) (hb1 : WordAt img 0x4e0 B1)
+    (hbal : CoinBalOkAt sevm W W C B2 U 0x87c 0x8e0) (hsub : ¬ B2 < B1)
+    (hG : 400 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 12 < 1024)
+    (k : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W b' σ →
+      Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x900 →
+      (∀ o w, WordAt img o w → o + 32 ≤ 0x4e0 ∨ 0x4e0 + 32 ≤ o ∧ o + 32 ≤ 0x860 →
+        WordAt img' o w) →
+      WordAt img' 0x4e0 (B2 - B1) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm (St b' (3 :: 0x4c0 :: S) M' g) t_12d6_c6 Q) :
+    SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) t_1271_c5 Q :=
+  rx_al_joinFeeE hL hR hW hsz hctr hc hb1 hbal.withE hsub hG hGb hroom
+    fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ => k b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8
 end Blanc.Lift.Curve3Pool
