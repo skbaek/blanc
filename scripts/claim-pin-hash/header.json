@@ -2,7 +2,7 @@
  "schema": 2,
  "digest": "sha256",
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
- "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon, repeated labels numbered #2.. in file order)",
+ "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
  "pins": 961,
  "entries": 16224,
  "kinds": {
