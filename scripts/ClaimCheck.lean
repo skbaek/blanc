@@ -192,6 +192,16 @@ import Blanc.Lift.Token.Supply
 import Blanc.Composition.Curve3CrvTokenCore
 import Blanc.Composition.Curve3CrvPositional
 import Blanc.Lift.Curve3Pool.Creation.Deploy
+import Blanc.Lift.StaticGasMessage
+import Blanc.Lift.Curve3Pool.RemoveLiquidityExactFrame
+import Blanc.Lift.Curve3Pool.ExchangeExactLive
+import Blanc.Lift.Curve3Pool.AddLiquidityExactFrame
+import Blanc.Lift.Curve3Pool.RemoveLiquidityImbalanceExactFrame
+import Blanc.Lift.Curve3Pool.OneCoinExactFrame
+import Blanc.Lift.Curve3Pool.ExactMessage
+import Blanc.Lift.Curve3Pool.HistoryLiveExact
+import Blanc.Composition.Curve3Pool3CrvHeadlinesExact
+import Blanc.Composition.Curve3Pool3CrvExactWitness
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -16747,3 +16757,986 @@ example : ∀ {t fee' : Nat} {s : State} (hfee : fee' ≠ 4000000) (u : B256) (h
   @Blanc.Lift.Curve3Pool.Creation.deployedStor_wrong_fee
 
 end Blanc.Lift.Curve3Pool.Creation
+
+-- curve-3pool-stableswap-v1: the exact-gas liveness headlines (frame, message entry, history,
+-- composed with 3Crv) and their premise-bundle witnesses, with the message grant `Msg.withGas`
+-- and the word pin `RliWordsPin` they are stated through, pinned by unfolding.
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.StableSwapNewton
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLExactCalls) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidity) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hWc : ∀ k, k ≤ 3 → WClosed sevm (W k)) (hWb : W 0 pre) (hP : RLExactPremises sevm pre T W U P),
+        ∀ R, 167000 + 5 * U ≤ R →
+      (St pre [] Mem.empty (R + rlExactCost sevm pre T P)).gasMeasure < 2 ^ 256 →
+      (∀ post (exc : Exec 0 sevm (St pre [] Mem.empty (R + rlExactCost sevm pre T P)) (.ok post)),
+        PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + rlExactCost sevm pre T P), .ok post, exc⟩ ∧
+          ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty (R + rlExactCost sevm pre T P)) (.ok post),
+        post.gasLeft = R ∧
+        RawEffect ⟨0, sevm, St pre [] Mem.empty (R + rlExactCost sevm pre T P), .ok post, exc⟩
+          post (rlEnv sevm T) o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.removeLiquidity_live_exact
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : ExchangeExactCalls) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selExchange) (hi : i.val = (exI sevm).toNat) (hj : j.val = (exJ sevm).toNat) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) (decodeCall sevm) = some o) (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre) (hbal : i = feeIndex → StaticWordCallProfile sevm W W ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget) B1 U 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧ StaticWordCallProfile sevm W' W' ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget) B2 U 0x71c 0x24 0x780 P.balD2 P.balN2) (hpull : MutableCallProfile sevm W W' ((pre.getStor sevm.currentTarget).get (coinSlot i)) (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes) RawCallOk U 0x600 0x64 0x6c0 P.pullD P.pullN) (hW''c : WClosed sevm W'') (hpush : MutableCallProfile sevm W' W'' ((pre.getStor sevm.currentTarget).get (coinSlot j)) (transferSel ++ sevm.caller.toB256.toBytes ++ (Nat.toB256 (exPushAmt o)).toBytes) RawCallOk U 0xb60 0x44 0xc00 P.pushD P.pushN),
+        ∃ (x0 x1 x2 : B256) (amp v : Nat),
+      xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+        (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+        (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+      aChk s sevm.benvStat.time.toNat = some amp ∧
+      (∃ (hi3 : (exI sevm).toNat < 3) (hj3 : (exJ sevm).toNat < 3),
+        getYChk amp ⟨(exI sevm).toNat, hi3⟩ ⟨(exJ sevm).toNat, hj3⟩
+          (exW3 x0 x1 x2 (exI sevm).toNat + exCred sevm B1 B2 * exRate (exI sevm).toNat /
+            exR0).toNat (V3.mk x0.toNat x1.toNat x2.toNat).get = some v) ∧
+      ∀ R, 60000 + U ≤ R →
+        costExchange sevm pre s (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i j
+          (exDx sevm).toNat + 4 * U ≤ R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v →
+        (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v)).gasMeasure <
+          2 ^ 256 →
+        (∀ post (exc : Exec 0 sevm
+            (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v)) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty
+            (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v), .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+        ∃ post, ∃ exc : Exec 0 sevm
+            (St pre [] Mem.empty (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v)) (.ok post),
+          ∃ bp bq,
+          pullIn (exEnv sevm i j bp bq) i (exDx sevm).toNat =
+            pullIn (exEnv sevm i j (exBalOpt i B1) (exBalOpt i B2)) i (exDx sevm).toNat ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty
+            (R + exExactCost sevm pre P x0 x1 x2 B1 B2 amp v), .ok post, exc⟩ post
+            (exEnv sevm i j bp bq) o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post ∧ post.gasLeft = R :=
+  @Blanc.Lift.Curve3Pool.exchange_live_exact
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U : Nat} (P : ALExactCalls) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selAddLiquidity) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre) (hskip : ∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, W k b → W (k + 1) b) (hP : ALExactPremises sevm (pre.getStor sevm.currentTarget) T B1 B2 (Nat.toB256 (alMintAmt o)) W U P),
+        ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
+      aChk s sevm.benvStat.time.toNat = some amp ∧
+      xpChk ⟨(alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0).toNat,
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1).toNat,
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2).toNat⟩ = some xb ∧
+      getDChk xb.get amp 1 = some v1 ∧
+      (T ≠ 0 →
+        xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+          (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+          (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some xa ∧
+        getDChk xa.get amp 1 = some v0 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 0)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0) f0 s0 x0 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 1)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1) f1 s1 x1 ∧
+        RliFeeIter (cwFee ((pre.getStor sevm.currentTarget).get feeSlot))
+          ((pre.getStor sevm.currentTarget).get adminFeeSlot) (Nat.toB256 v0) (Nat.toB256 v1)
+          (balAt (pre.getStor sevm.currentTarget) 2)
+          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2) f2 s2 x2 ∧
+        xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
+      ∀ R, 100000 + 5 * U ≤ R →
+      costAddLiquidity s (alEnvW sevm T.toNat B1.toNat B2.toNat) (argV3 sevm 0) + 7 * U ≤
+        R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 →
+      (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)).gasMeasure + 6000 < 2 ^ 256 →
+      (∀ post (exc : Exec 0 sevm (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) (.ok post)),
+        PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2), .ok post, exc⟩ ∧
+          ∀ c' ∈ Exec.childFrames exc, c'.post.getCode 4 = c'.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 sevm (St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) (.ok post),
+        post.gasLeft = R ∧
+        ∃ e : Env, e.supply = some T.toNat ∧ step s e (decodeCall sevm) = some o ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty (R + alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2), .ok post, exc⟩ post e o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.addLiquidity_live_exact
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLIExactCalls) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre) (hP : RLIExactPremises sevm (pre.getStor sevm.currentTarget) T (Nat.toB256 (rliBurnAmt o)) W U P) (hskip : ∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b),
+        ∃ w : RliWords, RliWordsPin sevm pre s w ∧
+      ∀ R, 66000 + 3 * U ≤ R →
+        costImbalance s (rliEnvW sevm T.toNat) (argV3 sevm 0) + 5 * U ≤
+          R + rliExactCost sevm pre P T w →
+        (St pre [] Mem.empty (R + rliExactCost sevm pre P T w)).gasMeasure + 3000 < 2 ^ 256 →
+        (∀ post (exc : Exec 0 sevm
+            (St pre [] Mem.empty (R + rliExactCost sevm pre P T w)) (.ok post)),
+          PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty (R + rliExactCost sevm pre P T w), .ok post,
+            exc⟩ ∧ ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+        ∃ post, ∃ exc : Exec 0 sevm
+            (St pre [] Mem.empty (R + rliExactCost sevm pre P T w)) (.ok post),
+          post.gasLeft = R ∧
+          RawEffect ⟨0, sevm, St pre [] Mem.empty (R + rliExactCost sevm pre P T w), .ok post, exc⟩
+            post (rliEnvW sevm T.toNat) o ∧
+          Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W 4 post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact
+
+example : ∀ {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : OCExactCalls) (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin) (hi : i.val = (ocI sevm).toNat) (hck : Checkpoint (pre.getStor sevm.currentTarget) s) (hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o) (htok : ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr) (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre) (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre) (hW''c : WClosed sevm W'') (hP : OCExactPremises sevm pre T (Nat.toB256 (ocPushAmt o)) W W' W'' U P),
+        ∃ (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI sevm).toNat < 3),
+      aChk s sevm.benvStat.time.toNat = some amp ∧
+      xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+      getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1 = some D0.toNat ∧
+      getYDChk amp ⟨(ocI sevm).toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get
+        (D0 - ocAmt sevm * D0 / T).toNat = some y.toNat ∧
+      CwStep (Bytes.toB256 [0] = ocI sevm) x0 (D0 - ocAmt sevm * D0 / T) D0 y
+        (cwFee ((pre.getStor sevm.currentTarget).get feeSlot)) x0 r0 ∧
+      CwStep (Bytes.toB256 [1] = ocI sevm) x1 (D0 - ocAmt sevm * D0 / T) D0 y
+        (cwFee ((pre.getStor sevm.currentTarget).get feeSlot)) x1 r1 ∧
+      CwStep (Bytes.toB256 [2] = ocI sevm) x2 (D0 - ocAmt sevm * D0 / T) D0 y
+        (cwFee ((pre.getStor sevm.currentTarget).get feeSlot)) x2 r2 ∧
+      getYDChk amp ⟨(ocI sevm).toNat, hi3⟩ (V3.mk r0.toNat r1.toNat r2.toNat).get
+        (D0 - ocAmt sevm * D0 / T).toNat = some y2.toNat ∧
+      ∀ R, 131000 + 3 * U ≤ R →
+      (St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2)).gasMeasure +
+        2000 < 2 ^ 256 →
+      (∀ post (exc : Exec 0 sevm
+          (St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2))
+          (.ok post)),
+        PoolCallsKeep ⟨0, sevm,
+          St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2), .ok post,
+          exc⟩ ∧
+          ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 sevm
+          (St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2))
+          (.ok post), ∃ T' : Nat,
+        post.gasLeft = R ∧
+        RawEffect ⟨0, sevm,
+          St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2), .ok post,
+          exc⟩ post (ocEnv sevm i T') o ∧
+        Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact
+
+example : ∀ {msg : Msg} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLExactCalls) (hcode : (initSevm msg).code = code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false) (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256) (hsel : Sevm.selector (initSevm msg) = selRemoveLiquidity) (hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s) (hstep : step s (rlEnv (initSevm msg) T) (decodeCall (initSevm msg)) = some o) (htok : ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr) (hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty) (hid : IdReady (initSevm msg) (initDevm msg)) (hWc : ∀ k, k ≤ 3 → WClosed (initSevm msg) (W k)) (hWb : W 0 (initDevm msg)) (hP : RLExactPremises (initSevm msg) (initDevm msg) T W U P),
+        ∀ R, 167000 + 5 * U ≤ R →
+      R + rlExactCost (initSevm msg) (initDevm msg) T P < 2 ^ 256 →
+      (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P)))
+          (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) (.ok post)),
+        PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+          ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P)))
+          (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) (.ok post),
+        exec (initEvm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) =
+          .ok post ∧
+        post.gasLeft = R ∧
+        RawEffect ⟨0, _, _, .ok post, exc⟩ post (rlEnv (initSevm msg) T) o ∧
+        Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact
+
+example : ∀ {msg : Msg} {s : State} {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : ExchangeExactCalls) (hcode : (initSevm msg).code = code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false) (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256) (hsel : Sevm.selector (initSevm msg) = selExchange) (hi : i.val = (exI (initSevm msg)).toNat) (hj : j.val = (exJ (initSevm msg)).toNat) (hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s) (hstep : step s (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) (decodeCall (initSevm msg)) = some o) (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr) (hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty) (hid : IdReady (initSevm msg) (initDevm msg)) (hWc : WClosed (initSevm msg) W) (hW'c : WClosed (initSevm msg) W') (hWb : W (initDevm msg)) (hbal : i = feeIndex → StaticWordCallProfile (initSevm msg) W W (((initDevm msg).getStor msg.currentTarget).get (coinSlot i)) (balanceOfData msg.currentTarget) B1 U 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧ StaticWordCallProfile (initSevm msg) W' W' (((initDevm msg).getStor msg.currentTarget).get (coinSlot i)) (balanceOfData msg.currentTarget) B2 U 0x71c 0x24 0x780 P.balD2 P.balN2) (hpull : MutableCallProfile (initSevm msg) W W' (((initDevm msg).getStor msg.currentTarget).get (coinSlot i)) (transferFromSel ++ msg.caller.toB256.toBytes ++ msg.currentTarget.toB256.toBytes ++ (exDx (initSevm msg)).toBytes) RawCallOk U 0x600 0x64 0x6c0 P.pullD P.pullN) (hW''c : WClosed (initSevm msg) W'') (hpush : MutableCallProfile (initSevm msg) W' W'' (((initDevm msg).getStor msg.currentTarget).get (coinSlot j)) (transferSel ++ msg.caller.toB256.toBytes ++ (Nat.toB256 (exPushAmt o)).toBytes) RawCallOk U 0xb60 0x44 0xc00 P.pushD P.pushN),
+        ∃ (x0 x1 x2 : B256) (amp v : Nat),
+      xpChk ⟨(balAt ((initDevm msg).getStor msg.currentTarget) 0).toNat,
+        (balAt ((initDevm msg).getStor msg.currentTarget) 1).toNat,
+        (balAt ((initDevm msg).getStor msg.currentTarget) 2).toNat⟩ =
+          some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+      aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+      (∃ (hi3 : (exI (initSevm msg)).toNat < 3) (hj3 : (exJ (initSevm msg)).toNat < 3),
+        getYChk amp ⟨(exI (initSevm msg)).toNat, hi3⟩ ⟨(exJ (initSevm msg)).toNat, hj3⟩
+          (exW3 x0 x1 x2 (exI (initSevm msg)).toNat + exCred (initSevm msg) B1 B2 *
+            exRate (exI (initSevm msg)).toNat / exR0).toNat (V3.mk x0.toNat x1.toNat x2.toNat).get =
+          some v) ∧
+      ∀ R, 60000 + U ≤ R →
+        costExchange (initSevm msg) (initDevm msg) s
+          (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i j
+          (exDx (initSevm msg)).toNat + 4 * U ≤
+            R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v →
+        R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v < 2 ^ 256 →
+        (∀ post (exc : Exec 0 (initSevm (msg.withGas
+              (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v)))
+            (initDevm (msg.withGas
+              (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) (.ok post)),
+          PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+        ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas
+              (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v)))
+            (initDevm (msg.withGas
+              (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) (.ok post),
+          exec (initEvm (msg.withGas
+            (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) = .ok post ∧
+          post.gasLeft = R ∧ ∃ bp bq,
+          pullIn (exEnv (initSevm msg) i j bp bq) i (exDx (initSevm msg)).toNat =
+            pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i
+              (exDx (initSevm msg)).toNat ∧
+          RawEffect ⟨0, _, _, .ok post, exc⟩ post (exEnv (initSevm msg) i j bp bq) o ∧
+          Checkpoint (post.getStor msg.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.exchange_msg_exact
+
+example : ∀ {msg : Msg} {s : State} {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U : Nat} (P : ALExactCalls) (hcode : (initSevm msg).code = code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false) (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256) (hsel : Sevm.selector (initSevm msg) = selAddLiquidity) (hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s) (hstep : step s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (decodeCall (initSevm msg)) = some o) (htok : ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr) (hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty) (hid : IdReady (initSevm msg) (initDevm msg)) (hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j)) (hWb : W 0 (initDevm msg)) (hskip : ∀ k : Fin 3, alAmt (initSevm msg) k.val = 0 → ∀ b, W k b → W (k + 1) b) (hP : ALExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T B1 B2 (Nat.toB256 (alMintAmt o)) W U P),
+        ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
+      aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+      xpChk ⟨(alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+          0).toNat,
+        (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1).toNat,
+        (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+          2).toNat⟩ = some xb ∧
+      getDChk xb.get amp 1 = some v1 ∧
+      (T ≠ 0 →
+        xpChk ⟨(balAt ((initDevm msg).getStor msg.currentTarget) 0).toNat,
+          (balAt ((initDevm msg).getStor msg.currentTarget) 1).toNat,
+          (balAt ((initDevm msg).getStor msg.currentTarget) 2).toNat⟩ = some xa ∧
+        getDChk xa.get amp 1 = some v0 ∧
+        RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+          (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+          (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 0)
+          (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 0)
+          f0 s0 x0 ∧
+        RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+          (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+          (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 1)
+          (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1)
+          f1 s1 x1 ∧
+        RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+          (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+          (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 2)
+          (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 2)
+          f2 s2 x2 ∧
+        xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
+      ∀ R, 100000 + 5 * U ≤ R →
+      costAddLiquidity s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (argV3 (initSevm msg) 0) +
+          7 * U ≤
+        R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0
+          s1 s2 x0 x1 x2 →
+      R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1
+          s2 x0 x1 x2 + 6000 < 2 ^ 256 →
+      (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P
+            amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+          (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb
+            xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post)),
+        PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+          ∀ c' ∈ Exec.childFrames exc, c'.post.getCode 4 = c'.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P
+            amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+          (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb
+            xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post),
+        exec (initEvm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa
+          xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) = .ok post ∧
+        post.gasLeft = R ∧
+        ∃ e : Env, e.supply = some T.toNat ∧ step s e (decodeCall (initSevm msg)) = some o ∧
+          RawEffect ⟨0, _, _, .ok post, exc⟩ post e o ∧
+          Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.addLiquidity_msg_exact
+
+example : ∀ {msg : Msg} {s : State} {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLIExactCalls) (hcode : (initSevm msg).code = code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false) (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256) (hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityImbalance) (hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s) (hstep : step s (rliEnvW (initSevm msg) T.toNat) (decodeCall (initSevm msg)) = some o) (htok : ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr) (hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty) (hid : IdReady (initSevm msg) (initDevm msg)) (hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j)) (hWb : W 0 (initDevm msg)) (hP : RLIExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T (Nat.toB256 (rliBurnAmt o)) W U P) (hskip : ∀ k : Fin 3, rliAmt (initSevm msg) k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b),
+        ∃ w : RliWords, RliWordsPin (initSevm msg) (initDevm msg) s w ∧
+      ∀ R, 66000 + 3 * U ≤ R →
+        costImbalance s (rliEnvW (initSevm msg) T.toNat) (argV3 (initSevm msg) 0) + 5 * U ≤
+          R + rliExactCost (initSevm msg) (initDevm msg) P T w →
+        R + rliExactCost (initSevm msg) (initDevm msg) P T w + 3000 < 2 ^ 256 →
+        (∀ post (exc : Exec 0
+            (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+            (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+            (.ok post)),
+          PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+            ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+        ∃ post, ∃ exc : Exec 0
+            (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+            (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+            (.ok post),
+          exec (initEvm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w))) =
+            .ok post ∧
+          post.gasLeft = R ∧
+          RawEffect ⟨0, _, _, .ok post, exc⟩ post (rliEnvW (initSevm msg) T.toNat) o ∧
+          Checkpoint (post.getStor msg.currentTarget) o.state ∧ W 4 post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact
+
+example : ∀ {msg : Msg} {s : State} {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : OCExactCalls) (hcode : (initSevm msg).code = code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false) (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256) (hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityOneCoin) (hi : i.val = (ocI (initSevm msg)).toNat) (hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s) (hstep : step s (ocEnv (initSevm msg) i T.toNat) (decodeCall (initSevm msg)) = some o) (htok : ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr) (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr) (hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty) (hid : IdReady (initSevm msg) (initDevm msg)) (hWc : WClosed (initSevm msg) W) (hW'c : WClosed (initSevm msg) W') (hWb : W (initDevm msg)) (hW''c : WClosed (initSevm msg) W'') (hP : OCExactPremises (initSevm msg) (initDevm msg) T (Nat.toB256 (ocPushAmt o)) W W' W'' U P),
+        ∃ (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI (initSevm msg)).toNat < 3),
+      aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+      xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+      getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1 = some D0.toNat ∧
+      getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get
+        (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y.toNat ∧
+      CwStep (Bytes.toB256 [0] = ocI (initSevm msg)) x0 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+        (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x0 r0 ∧
+      CwStep (Bytes.toB256 [1] = ocI (initSevm msg)) x1 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+        (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x1 r1 ∧
+      CwStep (Bytes.toB256 [2] = ocI (initSevm msg)) x2 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+        (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x2 r2 ∧
+      getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk r0.toNat r1.toNat r2.toNat).get
+        (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y2.toNat ∧
+      ∀ R, 131000 + 3 * U ≤ R →
+      R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2 + 2000 <
+        2 ^ 256 →
+      (∀ post (exc : Exec 0 (initSevm (msg.withGas
+            (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+          (initDevm (msg.withGas
+            (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+          (.ok post)),
+        PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+          ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+      ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas
+            (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+          (initDevm (msg.withGas
+            (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+          (.ok post),
+        exec (initEvm (msg.withGas
+          (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2))) =
+          .ok post ∧
+        post.gasLeft = R ∧ ∃ T' : Nat,
+        RawEffect ⟨0, _, _, .ok post, exc⟩ post (ocEnv (initSevm msg) i T') o ∧
+        Checkpoint (post.getStor msg.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.StableSwapNewton
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLExactCalls)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false)
+        (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length)
+        (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidity)
+        (_hstep : step s (rlEnv (initSevm msg) T) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hWc : ∀ k, k ≤ 3 → WClosed (initSevm msg) (W k))
+        (_hWb : W 0 (initDevm msg))
+        (_hP : RLExactPremises (initSevm msg) (initDevm msg) T W U P),
+        ∀ R, 167000 + 5 * U ≤ R →
+          R + rlExactCost (initSevm msg) (initDevm msg) T P < 2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P)))
+              (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P)))
+              (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) (.ok post),
+            exec (initEvm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) =
+              .ok post ∧
+            post.gasLeft = R ∧
+            RawEffect ⟨0, _, _, .ok post, exc⟩ post (rlEnv (initSevm msg) T) o ∧
+            Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {i j : Fin 3} {B1 B2 : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : ExchangeExactCalls)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false)
+        (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length)
+        (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selExchange)
+        (_hi : i.val = (exI (initSevm msg)).toNat)
+        (_hj : j.val = (exJ (initSevm msg)).toNat)
+        (_hstep : step s (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2))
+          (decodeCall (initSevm msg)) = some o)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hWc : WClosed (initSevm msg) W)
+        (_hW'c : WClosed (initSevm msg) W')
+        (_hWb : W (initDevm msg))
+        (_hbal : i = feeIndex →
+          StaticWordCallProfile (initSevm msg) W W
+            (((initDevm msg).getStor msg.currentTarget).get (coinSlot i))
+            (balanceOfData msg.currentTarget) B1 U 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧
+          StaticWordCallProfile (initSevm msg) W' W'
+            (((initDevm msg).getStor msg.currentTarget).get (coinSlot i))
+            (balanceOfData msg.currentTarget) B2 U 0x71c 0x24 0x780 P.balD2 P.balN2)
+        (_hpull : MutableCallProfile (initSevm msg) W W'
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot i))
+          (transferFromSel ++ msg.caller.toB256.toBytes ++ msg.currentTarget.toB256.toBytes ++
+            (exDx (initSevm msg)).toBytes) RawCallOk U 0x600 0x64 0x6c0 P.pullD P.pullN)
+        (_hW''c : WClosed (initSevm msg) W'')
+        (_hpush : MutableCallProfile (initSevm msg) W' W''
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot j))
+          (transferSel ++ msg.caller.toB256.toBytes ++ (Nat.toB256 (exPushAmt o)).toBytes) RawCallOk U
+          0xb60 0x44 0xc00 P.pushD P.pushN),
+        ∃ (x0 x1 x2 : B256) (amp v : Nat),
+          xpChk ⟨(balAt ((initDevm msg).getStor msg.currentTarget) 0).toNat,
+            (balAt ((initDevm msg).getStor msg.currentTarget) 1).toNat,
+            (balAt ((initDevm msg).getStor msg.currentTarget) 2).toNat⟩ =
+              some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+          aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+          (∃ (hi3 : (exI (initSevm msg)).toNat < 3) (hj3 : (exJ (initSevm msg)).toNat < 3),
+            getYChk amp ⟨(exI (initSevm msg)).toNat, hi3⟩ ⟨(exJ (initSevm msg)).toNat, hj3⟩
+              (exW3 x0 x1 x2 (exI (initSevm msg)).toNat + exCred (initSevm msg) B1 B2 *
+                exRate (exI (initSevm msg)).toNat / exR0).toNat (V3.mk x0.toNat x1.toNat x2.toNat).get =
+              some v) ∧
+          ∀ R, 60000 + U ≤ R →
+            costExchange (initSevm msg) (initDevm msg) s
+              (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i j
+              (exDx (initSevm msg)).toNat + 4 * U ≤
+                R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v →
+            R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v < 2 ^ 256 →
+            (∀ post (exc : Exec 0 (initSevm (msg.withGas
+                  (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v)))
+                (initDevm (msg.withGas
+                  (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) (.ok post)),
+              PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+                ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+            ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas
+                  (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v)))
+                (initDevm (msg.withGas
+                  (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) (.ok post),
+              exec (initEvm (msg.withGas
+                (R + exExactCost (initSevm msg) (initDevm msg) P x0 x1 x2 B1 B2 amp v))) = .ok post ∧
+              post.gasLeft = R ∧ ∃ bp bq,
+              pullIn (exEnv (initSevm msg) i j bp bq) i (exDx (initSevm msg)).toNat =
+                pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i
+                  (exDx (initSevm msg)).toNat ∧
+              RawEffect ⟨0, _, _, .ok post, exc⟩ post (exEnv (initSevm msg) i j bp bq) o ∧
+              Checkpoint (post.getStor msg.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T B1 B2 : B256} {W : Nat → Devm → Prop} {U : Nat} (P : ALExactCalls)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false)
+        (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length)
+        (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selAddLiquidity)
+        (_hstep : step s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (decodeCall (initSevm msg)) =
+          some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j))
+        (_hWb : W 0 (initDevm msg))
+        (_hskip : ∀ k : Fin 3, alAmt (initSevm msg) k.val = 0 → ∀ b, W k b → W (k + 1) b)
+        (_hP : ALExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T B1 B2
+          (Nat.toB256 (alMintAmt o)) W U P),
+        ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
+          aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+          xpChk ⟨(alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+              0).toNat,
+            (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1).toNat,
+            (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+              2).toNat⟩ = some xb ∧
+          getDChk xb.get amp 1 = some v1 ∧
+          (T ≠ 0 →
+            xpChk ⟨(balAt ((initDevm msg).getStor msg.currentTarget) 0).toNat,
+              (balAt ((initDevm msg).getStor msg.currentTarget) 1).toNat,
+              (balAt ((initDevm msg).getStor msg.currentTarget) 2).toNat⟩ = some xa ∧
+            getDChk xa.get amp 1 = some v0 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 0)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 0)
+              f0 s0 x0 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 1)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1)
+              f1 s1 x1 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 2)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 2)
+              f2 s2 x2 ∧
+            xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
+          ∀ R, 100000 + 5 * U ≤ R →
+          costAddLiquidity s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (argV3 (initSevm msg) 0) +
+              7 * U ≤
+            R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0
+              s1 s2 x0 x1 x2 →
+          R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1
+              s2 x0 x1 x2 + 6000 < 2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P
+                amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+              (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb
+                xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c' ∈ Exec.childFrames exc, c'.post.getCode 4 = c'.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P
+                amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+              (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa xb
+                xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post),
+            exec (initEvm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) P amp T B1 B2 xa
+              xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) = .ok post ∧
+            post.gasLeft = R ∧
+            ∃ e : Env, e.supply = some T.toNat ∧ step s e (decodeCall (initSevm msg)) = some o ∧
+              RawEffect ⟨0, _, _, .ok post, exc⟩ post e o ∧
+              Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat} (P : RLIExactCalls)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false)
+        (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length)
+        (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityImbalance)
+        (_hstep : step s (rliEnvW (initSevm msg) T.toNat) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j))
+        (_hWb : W 0 (initDevm msg))
+        (_hP : RLIExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T
+          (Nat.toB256 (rliBurnAmt o)) W U P)
+        (_hskip : ∀ k : Fin 3, rliAmt (initSevm msg) k.val = 0 → ∀ b, W (k + 1) b → W (k + 2) b),
+        ∃ w : RliWords, RliWordsPin (initSevm msg) (initDevm msg) s w ∧
+          ∀ R, 66000 + 3 * U ≤ R →
+            costImbalance s (rliEnvW (initSevm msg) T.toNat) (argV3 (initSevm msg) 0) + 5 * U ≤
+              R + rliExactCost (initSevm msg) (initDevm msg) P T w →
+            R + rliExactCost (initSevm msg) (initDevm msg) P T w + 3000 < 2 ^ 256 →
+            (∀ post (exc : Exec 0
+                (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+                (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+                (.ok post)),
+              PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+                ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+            ∃ post, ∃ exc : Exec 0
+                (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+                (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w)))
+                (.ok post),
+              exec (initEvm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) P T w))) =
+                .ok post ∧
+              post.gasLeft = R ∧
+              RawEffect ⟨0, _, _, .ok post, exc⟩ post (rliEnvW (initSevm msg) T.toNat) o ∧
+              Checkpoint (post.getStor msg.currentTarget) o.state ∧ W 4 post :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact
+
+example : ∀ {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {s₀ : State} (trace : ConfiguredHistoryTrace cfg checkpoint future) (installed : some (checkpoint.state.getCode pool).toList = poolSem.image) (initial : Checkpoint (checkpoint.state.getStor pool) s₀) (env : PoolTraceEnv trace pool s₀.coins s₀.token) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool s₀ s ∧
+      ∀ {o : Out} {i : Fin 3} {T : B256} {W W' W'' : Devm → Prop} {U : Nat} (P : OCExactCalls)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false)
+        (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length)
+        (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityOneCoin)
+        (_hi : i.val = (ocI (initSevm msg)).toNat)
+        (_hstep : step s (ocEnv (initSevm msg) i T.toNat) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hWc : WClosed (initSevm msg) W)
+        (_hW'c : WClosed (initSevm msg) W')
+        (_hWb : W (initDevm msg))
+        (_hW''c : WClosed (initSevm msg) W'')
+        (_hP : OCExactPremises (initSevm msg) (initDevm msg) T (Nat.toB256 (ocPushAmt o)) W W' W'' U P),
+        ∃ (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI (initSevm msg)).toNat < 3),
+          aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+          xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+          getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1 = some D0.toNat ∧
+          getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get
+            (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y.toNat ∧
+          CwStep (Bytes.toB256 [0] = ocI (initSevm msg)) x0 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x0 r0 ∧
+          CwStep (Bytes.toB256 [1] = ocI (initSevm msg)) x1 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x1 r1 ∧
+          CwStep (Bytes.toB256 [2] = ocI (initSevm msg)) x2 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x2 r2 ∧
+          getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk r0.toNat r1.toNat r2.toNat).get
+            (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y2.toNat ∧
+          ∀ R, 131000 + 3 * U ≤ R →
+          R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2 + 2000 <
+            2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (initDevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (initDevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (.ok post),
+            exec (initEvm (msg.withGas
+              (R + ocExactCost (initSevm msg) (initDevm msg) T P amp x0 x1 x2 D0 y r0 r1 r2 y2))) =
+              .ok post ∧
+            post.gasLeft = R ∧ ∃ T' : Nat,
+            RawEffect ⟨0, _, _, .ok post, exc⟩ post (ocEnv (initSevm msg) i T') o ∧
+            Checkpoint (post.getStor msg.currentTarget) o.state ∧ W'' post :=
+  @Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact
+
+end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Composition.Curve3Pool3CrvHeadlinesExact
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ExecutionTrace Blanc.StableSwapNewton
+open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+open Blanc.Composition.Curve3PoolCalleeLive
+open Blanc.Composition.Curve3Pool3CrvHeadlines (C3Ready C3With C3Blind c3Ready_of_history
+  c3With_wClosed)
+open Blanc.Composition.Curve3Pool3CrvExactAssembly
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U : Nat}
+        (pushD : Nat → Devm → List B256 → Mem → Nat) (pushN : Nat → Devm → List B256 → Mem → Devm)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false) (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidity)
+        (_hstep : step s (rlEnv (initSevm msg) T) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor (initDevm msg) c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
+          (rlAmt (initSevm msg)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed (initSevm msg) (V k)) (_hVb : V 0 (initDevm msg))
+        (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hpush : ∀ i, i < 3 → MutableCallProfile (initSevm msg)
+          (C3With c3 (Devm.getStor (initDevm msg) c3) (V i))
+          (C3With c3 (Devm.getStor (initDevm msg) c3) (V (i + 1)))
+          (coinAt ((initDevm msg).getStor msg.currentTarget) i)
+          (transferSel ++ msg.caller.toB256.toBytes ++
+            (balAt ((initDevm msg).getStor msg.currentTarget) i * rlAmt (initSevm msg) / T).toBytes)
+          RawCallOk U 0x520 0x44 0x5c0 (pushD i) (pushN i)),
+        ∀ R, 167000 + 5 * U ≤ R →
+          R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN) < 2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN))))
+              (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN)))) (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN))))
+              (initDevm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN)))) (.ok post),
+            exec (initEvm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN)))) =
+              .ok post ∧
+            post.gasLeft = R ∧
+            RawEffect ⟨0, _, _, .ok post, exc⟩ post (rlEnv (initSevm msg) T) o ∧
+            Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
+      ∀ {o : Out} {T B1 B2 : B256} {V : Nat → Devm → Prop} {U : Nat}
+        (pullD : Nat → Devm → List B256 → Mem → Nat) (pullN : Nat → Devm → List B256 → Mem → Devm)
+        (balBD balAD : Devm → List B256 → Mem → Nat) (balBN balAN : Devm → List B256 → Mem → Devm)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false) (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selAddLiquidity)
+        (_hstep : step s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat)
+          (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor (initDevm msg) c3).get Curve3Crv.vySupplySlot = T)
+        (_hmint : MintFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
+          (Nat.toB256 (alMintAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed (initSevm msg) (V k)) (_hVb : V 0 (initDevm msg))
+        (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hskip : ∀ k : Fin 3, alAmt (initSevm msg) k.val = 0 → ∀ b, V k b → V (k + 1) b)
+        (_hpull : ∀ k, k < 3 → alAmt (initSevm msg) k ≠ 0 →
+          MutableCallProfile (initSevm msg) (C3With c3 (Devm.getStor (initDevm msg) c3) (V k))
+            (C3With c3 (Devm.getStor (initDevm msg) c3) (V (k + 1)))
+            (coinAt ((initDevm msg).getStor msg.currentTarget) k)
+            (transferFromSel ++ msg.caller.toB256.toBytes ++ msg.currentTarget.toB256.toBytes ++
+              (alAmt (initSevm msg) k).toBytes) RawCallOk U 0x760 0x64 0x820 (pullD k) (pullN k))
+        (_hbalB : alAmt (initSevm msg) 2 ≠ 0 →
+          StaticWordCallProfile (initSevm msg) (C3With c3 (Devm.getStor (initDevm msg) c3) (V 2))
+            (C3With c3 (Devm.getStor (initDevm msg) c3) (V 2))
+            (coinAt ((initDevm msg).getStor msg.currentTarget) 2)
+            (balanceOfData msg.currentTarget) B1 U 0x53c 0x24 0x5a0 balBD balBN)
+        (_hbalA : alAmt (initSevm msg) 2 ≠ 0 →
+          StaticWordCallProfile (initSevm msg) (C3With c3 (Devm.getStor (initDevm msg) c3) (V 3))
+            (C3With c3 (Devm.getStor (initDevm msg) c3) (V 3))
+            (coinAt ((initDevm msg).getStor msg.currentTarget) 2)
+            (balanceOfData msg.currentTarget) B2 U 0x87c 0x24 0x8e0 balAD balAN),
+        ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
+          aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+          xpChk ⟨(alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+              0).toNat,
+            (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1).toNat,
+            (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2
+              2).toNat⟩ = some xb ∧
+          getDChk xb.get amp 1 = some v1 ∧
+          (T ≠ 0 →
+            xpChk ⟨(balAt ((initDevm msg).getStor msg.currentTarget) 0).toNat,
+              (balAt ((initDevm msg).getStor msg.currentTarget) 1).toNat,
+              (balAt ((initDevm msg).getStor msg.currentTarget) 2).toNat⟩ = some xa ∧
+            getDChk xa.get amp 1 = some v0 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 0)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 0)
+              f0 s0 x0 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 1)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 1)
+              f1 s1 x1 ∧
+            RliFeeIter (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot))
+              (((initDevm msg).getStor msg.currentTarget).get adminFeeSlot) (Nat.toB256 v0)
+              (Nat.toB256 v1) (balAt ((initDevm msg).getStor msg.currentTarget) 2)
+              (alLiveNew (initSevm msg) (alOld ((initDevm msg).getStor msg.currentTarget)) B1 B2 2)
+              f2 s2 x2 ∧
+            xpChk ⟨x0.toNat, x1.toNat, x2.toNat⟩ = some xc ∧ getDChk xc.get amp 1 = some v2) ∧
+          ∀ R, 100000 + 5 * U ≤ R →
+          costAddLiquidity s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (argV3 (initSevm msg) 0) +
+              7 * U ≤
+            R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0
+              s1 s2 x0 x1 x2 →
+          R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1
+              s2 x0 x1 x2 + 6000 < 2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN)
+                amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+              (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) amp T B1 B2 xa xb
+                xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c' ∈ Exec.childFrames exc, c'.post.getCode 4 = c'.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN)
+                amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)))
+              (initDevm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) amp T B1 B2 xa xb
+                xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) (.ok post),
+            exec (initEvm (msg.withGas (R + alExactCost (initSevm msg) (initDevm msg) (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) amp T B1 B2 xa
+              xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))) = .ok post ∧
+            post.gasLeft = R ∧
+            ∃ e : Env, e.supply = some T.toNat ∧ step s e (decodeCall (initSevm msg)) = some o ∧
+              RawEffect ⟨0, _, _, .ok post, exc⟩ post e o ∧
+              Checkpoint (post.getStor msg.currentTarget) o.state :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
+      ∀ {o : Out} {T : B256} {V : Nat → Devm → Prop} {U : Nat}
+        (pushD : Nat → Devm → List B256 → Mem → Nat) (pushN : Nat → Devm → List B256 → Mem → Devm)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false) (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityImbalance)
+        (_hstep : step s (rliEnvW (initSevm msg) T.toNat) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor (initDevm msg) c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
+          (Nat.toB256 (rliBurnAmt o)))
+        (_hVc : ∀ k, k ≤ 3 → WClosed (initSevm msg) (V k)) (_hVb : V 0 (initDevm msg))
+        (_hVs : ∀ k, C3Blind c3 (V k))
+        (_hskip : ∀ k : Fin 3, rliAmt (initSevm msg) k.val = 0 → ∀ b, V k b → V (k + 1) b)
+        (_hpush : ∀ k, k < 3 → rliAmt (initSevm msg) k ≠ 0 →
+          MutableCallProfile (initSevm msg)
+            (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V k))
+            (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+              (Nat.toB256 (rliBurnAmt o))) (V (k + 1)))
+            (((initDevm msg).getStor msg.currentTarget).get (coinsBase + Nat.toB256 k))
+            (transferSel ++ msg.caller.toB256.toBytes ++ (rliAmt (initSevm msg) k).toBytes)
+            RawCallOk U 0xaa0 0x44 0xb40 (pushD k) (pushN k)),
+        ∃ w : RliWords, RliWordsPin (initSevm msg) (initDevm msg) s w ∧
+          ∀ R, 66000 + 3 * U ≤ R →
+            costImbalance s (rliEnvW (initSevm msg) T.toNat) (argV3 (initSevm msg) 0) + 5 * U ≤
+              R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w →
+            R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w + 3000 < 2 ^ 256 →
+            (∀ post (exc : Exec 0
+                (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w)))
+                (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w)))
+                (.ok post)),
+              PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+                ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+            ∃ post, ∃ exc : Exec 0
+                (initSevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w)))
+                (initDevm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w)))
+                (.ok post),
+              exec (initEvm (msg.withGas (R + rliExactCost (initSevm msg) (initDevm msg) (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) T w))) =
+                .ok post ∧
+              post.gasLeft = R ∧
+              RawEffect ⟨0, _, _, .ok post, exc⟩ post (rliEnvW (initSevm msg) T.toNat) o ∧
+              Checkpoint (post.getStor msg.currentTarget) o.state ∧ C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+                (Nat.toB256 (rliBurnAmt o))) (V 3) post :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact
+
+example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop} (trace : ConfiguredHistoryTrace cfg checkpoint future) (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image) (c3Installed : some (checkpoint.state.getCode c3).toList = Curve3Crv.c3crvSem.image) (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state) (fresh : Curve3Crv.FreshKeys K₀ (Curve3Crv.historyTouchedKeys c3 trace)) (env : PoolTraceEnv trace pool ps₀.coins ps₀.token) (notSystem : pool ≠ systemAddress) {msg : Msg} (target : msg.currentTarget = pool) (state : msg.benv.state = future.state),
+        ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
+      ∀ {o : Out} {i : Fin 3} {T : B256} {V : Nat → Devm → Prop} {U : Nat}
+        (pushD : Devm → List B256 → Mem → Nat) (pushN : Devm → List B256 → Mem → Devm)
+        (_hcode : (initSevm msg).code = code)
+        (_hfork : CoveredFork (initSevm msg).benvStat.fork)
+        (_hstatic : (initSevm msg).isStatic = false) (_hdepth : (initSevm msg).depth ≠ 0)
+        (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
+        (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityOneCoin)
+        (_hi : i.val = (ocI (initSevm msg)).toNat)
+        (_hstep : step s (ocEnv (initSevm msg) i T.toNat) (decodeCall (initSevm msg)) = some o)
+        (_htok : ¬ (initSevm msg).benvStat.rules.isPrecomp c3)
+        (_hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
+          (((initDevm msg).getStor msg.currentTarget).get (coinSlot k)).toAdr)
+        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
+        (_hid : IdReady (initSevm msg) (initDevm msg))
+        (_hU : 70000 ≤ U)
+        (_hT : (Devm.getStor (initDevm msg) c3).get Curve3Crv.vySupplySlot = T)
+        (_hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
+          (ocAmt (initSevm msg)))
+        (_hVc : ∀ k, k ≤ 1 → WClosed (initSevm msg) (V k)) (_hVb : V 0 (initDevm msg))
+        (_hVs : C3Blind c3 (V 0))
+        (_hpush : MutableCallProfile (initSevm msg)
+          (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+            (ocAmt (initSevm msg))) (V 0))
+          (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+            (ocAmt (initSevm msg))) (V 1))
+          (((initDevm msg).getStor msg.currentTarget).get (coinsBase + ocI (initSevm msg)))
+          (transferSel ++ msg.caller.toB256.toBytes ++ (Nat.toB256 (ocPushAmt o)).toBytes) RawCallOk
+          U 0x540 0x44 0x5e0 pushD pushN),
+        ∃ (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI (initSevm msg)).toNat < 3),
+          aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
+          xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
+          getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1 = some D0.toNat ∧
+          getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk x0.toNat x1.toNat x2.toNat).get
+            (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y.toNat ∧
+          CwStep (Bytes.toB256 [0] = ocI (initSevm msg)) x0 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x0 r0 ∧
+          CwStep (Bytes.toB256 [1] = ocI (initSevm msg)) x1 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x1 r1 ∧
+          CwStep (Bytes.toB256 [2] = ocI (initSevm msg)) x2 (D0 - ocAmt (initSevm msg) * D0 / T) D0 y
+            (cwFee (((initDevm msg).getStor msg.currentTarget).get feeSlot)) x2 r2 ∧
+          getYDChk amp ⟨(ocI (initSevm msg)).toNat, hi3⟩ (V3.mk r0.toNat r1.toNat r2.toNat).get
+            (D0 - ocAmt (initSevm msg) * D0 / T).toNat = some y2.toNat ∧
+          ∀ R, 131000 + 3 * U ≤ R →
+          R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2 + 2000 <
+            2 ^ 256 →
+          (∀ post (exc : Exec 0 (initSevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (initDevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (.ok post)),
+            PoolCallsKeep ⟨0, _, _, .ok post, exc⟩ ∧
+              ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) →
+          ∃ post, ∃ exc : Exec 0 (initSevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (initDevm (msg.withGas
+                (R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2)))
+              (.ok post),
+            exec (initEvm (msg.withGas
+              (R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) amp x0 x1 x2 D0 y r0 r1 r2 y2))) =
+              .ok post ∧
+            post.gasLeft = R ∧ ∃ T' : Nat,
+            RawEffect ⟨0, _, _, .ok post, exc⟩ post (ocEnv (initSevm msg) i T') o ∧
+            Checkpoint (post.getStor msg.currentTarget) o.state ∧ C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
+              (ocAmt (initSevm msg))) (V 1) post :=
+  @Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact
+
+end Blanc.Composition.Curve3Pool3CrvHeadlinesExact
+
+namespace Blanc.Composition.Curve3Pool3CrvInstance
+open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
+open Blanc.Composition.Curve3PoolCalleeLive Blanc.Composition.Curve3PoolCalleeExactProfiles
+open Blanc.Composition.Curve3Pool3CrvHeadlines (C3At c3At_burn c3At_mint precomp_false)
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 (rlAmt sevm)) (hfits : ∀ k : Fin 3, T20MoveFits (pre.getStor (coinOf sevm pre k)) sevm.currentTarget sevm.caller (balAt (pre.getStor sevm.currentTarget) k * rlAmt sevm / T)),
+        (∀ k, k ≤ 3 → WClosed sevm (rlWorld sevm pre k)) ∧ rlWorld sevm pre 0 pre ∧
+      ∃ P : RLExactCalls, RLExactPremises sevm pre T (rlWorld sevm pre) 80000 P :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hmint : MintFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 m) (hfits : ∀ k : Fin 3, alAmt sevm k.val ≠ 0 → T20PullFits (pre.getStor (coinOf sevm pre k)) sevm.caller sevm.currentTarget sevm.currentTarget (alAmt sevm k.val)),
+        (∀ k, k ≤ 4 → WClosed sevm (alWorld sevm pre m k)) ∧ alWorld sevm pre m 0 pre ∧
+      (∀ k : Fin 3, alAmt sevm k.val = 0 → ∀ b, alWorld sevm pre m k b →
+        alWorld sevm pre m (k + 1) b) ∧
+      ∃ P : ALExactCalls, ALExactPremises sevm (pre.getStor sevm.currentTarget) T
+        ((pre.getStor (coinOf sevm pre 2)).get
+          (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+        ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+        m (alWorld sevm pre m) 80000 P :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 m) (hfits : ∀ k : Fin 3, rliAmt sevm k.val ≠ 0 → T20MoveFits (pre.getStor (coinOf sevm pre k)) sevm.currentTarget sevm.caller (rliAmt sevm k.val)),
+        (∀ j, j ≤ 4 → WClosed sevm (rliWorld sevm pre m j)) ∧ rliWorld sevm pre m 0 pre ∧
+      (∀ k : Fin 3, rliAmt sevm k.val = 0 → ∀ b, rliWorld sevm pre m (k + 1) b →
+        rliWorld sevm pre m (k + 2) b) ∧
+      ∃ P : RLIExactCalls, RLIExactPremises sevm (pre.getStor sevm.currentTarget) T m
+        (rliWorld sevm pre m) 80000 P :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hi : i.val = (ocI sevm).toNat) (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 (ocAmt sevm)) (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller v),
+        WClosed sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i) ∧
+      WClosed sevm (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre))
+        sevm.caller.toB256 (ocAmt sevm)) i) ∧
+      ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i pre ∧ WClosed sevm (fun _ => True) ∧
+      ∃ P : OCExactCalls, OCExactPremises sevm pre T v
+        (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i)
+        (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre)) sevm.caller.toB256
+          (ocAmt sevm)) i) (fun _ => True) 80000 P :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable
+
+example : ∀ {sevm : Sevm} {pre : Devm} {i j : Fin 3} {v : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hcoins : T20Coins sevm pre) (hij : i ≠ j) (hpullFits : T20PullFits (pre.getStor (coinOf sevm pre i)) sevm.caller sevm.currentTarget sevm.currentTarget (exDx sevm)) (hpushFits : T20MoveFits (pre.getStor (coinOf sevm pre j)) sevm.currentTarget sevm.caller v),
+        WClosed sevm (exWorld0 sevm pre i j) ∧ WClosed sevm (exWorld1 sevm pre i j) ∧
+      WClosed sevm (fun _ => True) ∧ exWorld0 sevm pre i j pre ∧
+      ∃ P : ExchangeExactCalls,
+        (i = feeIndex →
+          StaticWordCallProfile sevm (exWorld0 sevm pre i j) (exWorld0 sevm pre i j)
+            ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
+            ((pre.getStor (coinOf sevm pre i)).get
+              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+            80000 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧
+          StaticWordCallProfile sevm (exWorld1 sevm pre i j) (exWorld1 sevm pre i j)
+            ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
+            ((exPulledStor sevm pre i).get
+              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+            80000 0x71c 0x24 0x780 P.balD2 P.balN2) ∧
+        MutableCallProfile sevm (exWorld0 sevm pre i j) (exWorld1 sevm pre i j)
+          ((pre.getStor sevm.currentTarget).get (coinSlot i))
+          (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++
+            (exDx sevm).toBytes) RawCallOk 80000 0x600 0x64 0x6c0 P.pullD P.pullN ∧
+        MutableCallProfile sevm (exWorld1 sevm pre i j) (fun _ => True)
+          ((pre.getStor sevm.currentTarget).get (coinSlot j))
+          (transferSel ++ sevm.caller.toB256.toBytes ++ v.toBytes) RawCallOk 80000 0xb60 0x44 0xc00
+          P.pushD P.pushN :=
+  @Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable
+
+end Blanc.Composition.Curve3Pool3CrvInstance
+
+namespace Blanc.Lift
+open Jaune
+
+example (msg : Msg) (G : Nat) : msg.withGas G = {msg with gas := G} := by
+  unfold Jaune.Msg.withGas
+  rfl
+
+end Blanc.Lift
+
+namespace Blanc.Lift.Curve3Pool
+open Jaune Blanc.Lift Blanc.StableSwapNewton
+
+example (sevm : Sevm) (pre : Devm) (s : State) (w : RliWords) : RliWordsPin sevm pre s w = (
+  aChk s sevm.benvStat.time.toNat = some w.amp ∧
+    xpChk ⟨(balAt (rliσ sevm pre) 0).toNat, (balAt (rliσ sevm pre) 1).toNat,
+      (balAt (rliσ sevm pre) 2).toNat⟩ = some w.xa ∧
+    getDChk w.xa.get w.amp 1 = some w.v0 ∧
+    xpChk ⟨(rliNew sevm pre 0).toNat, (rliNew sevm pre 1).toNat,
+      (rliNew sevm pre 2).toNat⟩ = some w.xb ∧
+    getDChk w.xb.get w.amp 1 = some w.v1 ∧
+    RliFeeIter (cwFee ((rliσ sevm pre).get feeSlot)) ((rliσ sevm pre).get adminFeeSlot)
+      (Nat.toB256 w.v0) (Nat.toB256 w.v1) (balAt (rliσ sevm pre) 0) (rliNew sevm pre 0) w.f0 w.s0
+      w.x0 ∧
+    RliFeeIter (cwFee ((rliσ sevm pre).get feeSlot)) ((rliσ sevm pre).get adminFeeSlot)
+      (Nat.toB256 w.v0) (Nat.toB256 w.v1) (balAt (rliσ sevm pre) 1) (rliNew sevm pre 1) w.f1 w.s1
+      w.x1 ∧
+    RliFeeIter (cwFee ((rliσ sevm pre).get feeSlot)) ((rliσ sevm pre).get adminFeeSlot)
+      (Nat.toB256 w.v0) (Nat.toB256 w.v1) (balAt (rliσ sevm pre) 2) (rliNew sevm pre 2) w.f2 w.s2
+      w.x2 ∧
+    xpChk ⟨w.x0.toNat, w.x1.toNat, w.x2.toNat⟩ = some w.xc ∧
+    getDChk w.xc.get w.amp 1 = some w.v2
+    ) := by
+  unfold RliWordsPin
+  rfl
+
+end Blanc.Lift.Curve3Pool
