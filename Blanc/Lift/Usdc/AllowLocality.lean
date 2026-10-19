@@ -18,11 +18,9 @@ Per version, `SelTable` lists the selectors; the structural check `allowSiteOk` 
 is decided by the kernel, so a wrong table fails the build.
 
 - **V1** (`0x3357162b` initialize only): `approve` is caller-keyed.  Its `transferFrom` write
-  `allowed[cd4][caller]` is *not* certified non-increasing: solc 0.4.24's `SafeMath.sub` guard is
-  `ISZERO ISZERO ISZERO (GT b a)`, one comparison level deeper than `WSt.prune` (two closures) and
-  `refineFacts` (three rounds) follow, so the summary carries no order fact.  It therefore stands in
-  V1's owner-word row, where the never-signer argument does not apply: the consumer must exclude
-  it (or the checker must follow the chain; the H3 report has the change).
+  `allowed[cd4][caller]` is certified non-increasing: the write-site checker follows solc
+  0.4.24's `ISZERO ISZERO ISZERO (GT b a)` guard through three live-symbol closures and a fourth
+  learning round (A12).  V1 therefore has no owner-word exception.
 - **V2**: caller-keyed `approve`, `increaseAllowance`, `decreaseAllowance`; owner-word (signed)
   `permit` and `approve`/`increase`/`decreaseAllowanceWithAuthorization`; initializers
   `initialize`, `initializeV2`; `transferFrom` is certified non-increasing.
@@ -137,9 +135,9 @@ def selV1T : Term :=
 /-- solc 0.6.12's selector word: `shr(0xe0, cd0)`. -/
 def selV2T : Term := .op2 .shr (.const 0xe0) (.cd (.const 0x0))
 
-/-- FiatTokenV1: `approve` caller-keyed; `transferFrom` (`allowed[cd4][caller]`, not certified
-non-increasing) owner-word keyed; `initialize`. -/
-def selV1 : SelTable := ⟨selV1T, [0x095ea7b3], [0x23b872dd], [0x3357162b]⟩
+/-- FiatTokenV1: `approve` caller-keyed; `transferFrom` certified non-increasing;
+`initialize`. -/
+def selV1 : SelTable := ⟨selV1T, [0x095ea7b3], [], [0x3357162b]⟩
 
 /-- FiatTokenV2: `approve`, `increaseAllowance`, `decreaseAllowance`; `permit` and the three
 `*AllowanceWithAuthorization`; `initialize`, `initializeV2`. -/
@@ -163,7 +161,7 @@ theorem implV2_1_allowSitesOk :
 
 /-- **Allowance locality, FiatTokenV1**: in an ok run of V1's code, every `SSTORE` to a tracked
 allowance row `allowSlot pair g` is non-increasing, or its frame is `approve` called by the Pair,
-`transferFrom` with owner word the Pair, or `initialize`. -/
+or `initialize`. -/
 theorem implV1_allowLocality {pair : Adr} {Tr : Adr → Prop} {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = ImplV1.code)
     (fork : CoveredFork sevm.benvStat.fork)

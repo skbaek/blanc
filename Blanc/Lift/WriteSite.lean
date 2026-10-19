@@ -180,10 +180,11 @@ def closeLive (fs : List Fact) (L : List Nat) : List Nat :=
     | .orr r x y => if L.contains r then [x, y] else []
     | _ => []
 
-/-- Drop what speaks of dead symbols (comparison chains closed twice; `refineFacts` learns in
-three rounds, and a fact dropped here is only forgotten). -/
+/-- Drop what speaks of dead symbols (comparison chains closed three times, so solc 0.4's
+`ISZERO ISZERO ISZERO (GT b a)` guard keeps its comparison, amendment A12; `refine` learns in four
+rounds, and a fact dropped here is only forgotten). -/
 def WSt.prune (σ : WSt) : WSt :=
-  let L := closeLive σ.facts (closeLive σ.facts σ.liveSyms)
+  let L := closeLive σ.facts (closeLive σ.facts (closeLive σ.facts σ.liveSyms))
   { σ with
     facts := σ.facts.filter fun f => f.syms.all (L.contains ·)
     prov := σ.prov.filter fun p => L.contains p.1
@@ -332,11 +333,17 @@ def eqGuard (t u : Term) : Option (Term × B256) :=
   | .const k, t => if t.known then some (t, k) else none
   | _, _ => none
 
-/-- A `JUMPI` on condition symbol `c`, on its zero (`zero = true`) or nonzero arm. -/
+/-- A `JUMPI` on condition symbol `c`, on its zero (`zero = true`) or nonzero arm: the free-pointer
+checker's three learning rounds, then a fourth from every zero and nonzero bound they hold
+(amendment A12). -/
 def refine (σ : WSt) (c : Nat) (kv : List Nat) (zero : Bool) : WSt :=
   let g := if zero then [] else
     σ.eqs.filterMap fun e => if e.1 = c then eqGuard e.2.1 e.2.2 else none
-  WSt.prune { σ with kv := kv, facts := FreePtr.refineFacts σ.facts c zero, guards := g ++ σ.guards }
+  let fs := FreePtr.refineFacts σ.facts c zero
+  WSt.prune { σ with
+    kv := kv
+    facts := FreePtr.learn1 fs (FreePtr.zeros fs) (FreePtr.ones fs) ++ fs
+    guards := g ++ σ.guards }
 
 def popped (σ : WSt) (kv : List Nat) : WSt := WSt.prune { σ with kv := kv }
 

@@ -41,6 +41,7 @@ sys.path.insert(0, str(SCRIPT.parent))
 import lockann
 from symcore import (
     MAXW, Reject, bnd2, entails, op_facts, refine_facts, goto_compat,
+    learn1, zeros, nonzeros,
     ninst_kind,
     WIDEN_AFTER, widen_hull, components, comp_rets,
     load_cert, check_alignment,
@@ -331,9 +332,10 @@ def close_live_w(fs, alive_list):
 
 def prune(st: WSt) -> WSt:
     """WSt.prune: drop what speaks of dead symbols (comparison chains closed
-    twice; `cur`/`ub`/`mem`/`guards` are never pruned)."""
+    three times, amendment A12; `cur`/`ub`/`mem`/`guards` are never pruned)."""
     from symcore import syms as fact_syms
-    live = set(close_live_w(st.facts, close_live_w(st.facts, live_syms(st))))
+    live = set(close_live_w(st.facts, close_live_w(
+        st.facts, close_live_w(st.facts, live_syms(st)))))
     facts = frozenset(f for f in st.facts
                       if all(s in live for s in fact_syms(f)))
     prov = tuple(p for p in st.prov if p[0] in live)
@@ -548,7 +550,10 @@ def refine_w(st: WSt, c: int, kv, zero: bool) -> WSt:
     g = [] if zero else \
         [gg for e in st.eqs if e[0] == c
          for gg in [eq_guard(e[1], e[2])] if gg is not None]
-    return prune(WSt(kv, st.args, refine_facts(st.facts, c, zero), st.prov,
+    fs = refine_facts(st.facts, c, zero)
+    # amendment A12: a fourth round from every zero/nonzero bound the three hold
+    fs = learn1(fs, zeros(fs), nonzeros(fs)) | fs
+    return prune(WSt(kv, st.args, fs, st.prov,
                      st.mem, st.cur, st.ub, st.eqs,
                      tuple(g) + st.guards))
 

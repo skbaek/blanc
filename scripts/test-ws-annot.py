@@ -436,6 +436,18 @@ require(not ret_arg_free(WRet([], frozenset(), True,
 require(not ret_arg_free(WRet([TOP], frozenset({(0, 0)}), True, frozenset())),
         "order fact")
 
+# -- A12: a three-ISZERO comparison guard (solc 0.4 SafeMath.sub) is learned --
+# c = ISZERO(w2), w2 = ISZERO(w1), w1 = ISZERO(g), g = LT(x, y): the nonzero arm of
+# c gives g = 0, hence y <= x. Needs prune's third closure (keep isz(w1, g)) and
+# refine's fourth round (from g's zero bound to the order fact).
+chain = frozenset({('isz', 9, 8), ('isz', 8, 7), ('isz', 7, 6), ('ltr', 6, 1, 2)})
+st_chain = WSt((9, 1, 2), (), chain, (), (), (), (), (), ())
+pruned = popped_w(st_chain, (9, 1, 2))
+require(('isz', 7, 6) in pruned.facts and ('ltr', 6, 1, 2) in pruned.facts,
+        "A12: prune keeps a three-deep comparison chain")
+arm = refine_w(st_chain, 9, (1, 2), False)
+require(('le', 2, 1) in arm.facts, "A12: the nonzero arm learns the order fact")
+
 # -- inference: sites are re-collected under the settled annotations --
 # An early round may observe a write before its order fact settles (here: a
 # non-increasing write first seen as a plain write). The listed site must be

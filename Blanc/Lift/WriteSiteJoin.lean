@@ -82,8 +82,9 @@ theorem refine_sound {t c : Nat} {kv : List Nat} {dw cw : B256} {zero : Bool}
   have hp' := h.popBurn hp
   refine ⟨ν, kv.map ν, hrest.symm, WSt.Holds.prune ⟨forall₂_map_self ν kv, hp'.args, ?_, hp'.prov, hp'.mem, hp'.cur,
     hp'.ub, hp'.eqs, ?_⟩⟩
-  · exact FreePtr.refineFacts_sound h.facts (fun hz' => by rw [hc]; exact hz hz')
+  · have hr := FreePtr.refineFacts_sound h.facts (fun hz' => by rw [hc]; exact hz hz')
       (fun hnz' => by rw [hc]; exact hnz hnz')
+    exact (FreePtr.learn1_sound hr (FreePtr.zeros_sound hr) (FreePtr.ones_sound hr)).append hr
   · intro g hg
     rcases List.mem_append.mp hg with hg | hg
     · cases zero with

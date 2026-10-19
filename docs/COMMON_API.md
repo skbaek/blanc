@@ -4514,6 +4514,10 @@ contract-neutral.
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
   `resume_sound` and `callNext_obs` (joins, calls and returns); `map_of_zip_prefix` (an
   annotation's entry words name a prefix of the incoming ones).
+  Write-site refinement keeps comparison chains through three live-symbol closures and
+  applies one learning round after `FreePtr.refineFacts`; `refine_sound` reuses
+  `learn1_sound`, `zeros_sound` and `ones_sound` for that additional round without changing
+  the free-pointer checker.
 - For the write-site checker's run-level soundness, use
   [`Blanc/Lift/WriteSiteSound.lean`](../Blanc/Lift/WriteSiteSound.lean): `wsRun_sound`
   (every run of an accepted certificate's entry `0` is a `WsStep` run), `lift_sound_ws` (the
