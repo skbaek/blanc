@@ -121,6 +121,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 1) → R ≤ g → g ≤ G →
       G = g + 114 → b' = b → M' = M.write 0x900 (Bytes.toB256 [1] + Nat.toB256 0).toBytes →
+      rliAmt sevm 0 = 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c1037 Q)
     (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
@@ -133,6 +134,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
       d.gasLeft = g + 46 + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) d.memory rliPushSite) →
       M' = (vyRawMem d.memory 0xb20 0x920 (min d.returnData.length 32)).write 0x900 (Bytes.toB256 [1] + Nat.toB256 0).toBytes →
+      rliAmt sevm 0 ≠ 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c48 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -175,7 +177,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c1037) rli_prog_1037 ·)
     exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
-      (by omega) rfl hMq1
+      (by omega) rfl hMq1 hz
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -424,7 +426,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c48) rli_prog_48 ·)
     refine kT _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH (hk6 o v h ho.1 ho.2)) (by wauto)
-      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7
+      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7 hz
     · rw [hMq5, hMq4, hMq3, hMqA, hMq2, hMq1] at hcan2
       rw [hMq2, hMq1] at hcan1
       exact hcan2.trans (identityCallNext_congr sevm _ _ _ _ _ _ hcan1)
@@ -448,6 +450,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
       G = g + 114 → b' = b → M' = M.write 0x900 (Bytes.toB256 [1] + Nat.toB256 1).toBytes →
+      rliAmt sevm 1 = 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c1045 Q)
     (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
@@ -460,6 +463,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       d.gasLeft = g + 46 + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) d.memory rliPushSite) →
       M' = (vyRawMem d.memory 0xb20 0x920 (min d.returnData.length 32)).write 0x900 (Bytes.toB256 [1] + Nat.toB256 1).toBytes →
+      rliAmt sevm 1 ≠ 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c48 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -502,7 +506,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c1045) rli_prog_1045 ·)
     exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
-      (by omega) rfl hMq1
+      (by omega) rfl hMq1 hz
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -751,7 +755,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c48) rli_prog_48 ·)
     refine kT _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH (hk6 o v h ho.1 ho.2)) (by wauto)
-      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7
+      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7 hz
     · rw [hMq5, hMq4, hMq3, hMqA, hMq2, hMq1] at hcan2
       rw [hMq2, hMq1] at hcan1
       exact hcan2.trans (identityCallNext_congr sevm _ _ _ _ _ _ hcan1)
@@ -775,6 +779,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 2) → R ≤ g → g ≤ G →
       G = g + 114 → b' = b → M' = M.write 0x900 (Bytes.toB256 [1] + Nat.toB256 1).toBytes →
+      rliAmt sevm 1 = 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c48 Q)
     (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
@@ -787,6 +792,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       d.gasLeft = g + 46 + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) d.memory rliPushSite) →
       M' = (vyRawMem d.memory 0xb20 0x920 (min d.returnData.length 32)).write 0x900 (Bytes.toB256 [1] + Nat.toB256 1).toBytes →
+      rliAmt sevm 1 ≠ 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) t_3769_c48 Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -829,7 +835,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c48) rli_prog_48 ·)
     exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
-      (by omega) rfl hMq1
+      (by omega) rfl hMq1 hz
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 682 := ⟨G - 682, by omega⟩
     xr (rx_dest ·)
@@ -1078,7 +1084,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_3769_c48) rli_prog_48 ·)
     refine kT _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH (hk6 o v h ho.1 ho.2)) (by wauto)
-      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7
+      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7 hz
     · rw [hMq5, hMq4, hMq3, hMqA, hMq2, hMq1] at hcan2
       rw [hMq2, hMq1] at hcan1
       exact hcan2.trans (identityCallNext_congr sevm _ _ _ _ _ _ hcan1)
@@ -1102,6 +1108,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
       G = g + 114 → b' = b → M' = M.write 0x900 (Bytes.toB256 [1] + Nat.toB256 2).toBytes →
+      rliAmt sevm 2 = 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q)
     (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
@@ -1114,6 +1121,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       d.gasLeft = g + 46 + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) d.memory rliPushSite) →
       M' = (vyRawMem d.memory 0xb20 0x920 (min d.returnData.length 32)).write 0x900 (Bytes.toB256 [1] + Nat.toB256 2).toBytes →
+      rliAmt sevm 2 ≠ 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -1157,7 +1165,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_branch_zero' (by decide) ·)
     rw [rli_end_1045]
     exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
-      (by omega) rfl hMq1
+      (by omega) rfl hMq1 hz
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 732 := ⟨G - 732, by omega⟩
     xr (rx_dest ·)
@@ -1406,7 +1414,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
     refine kT _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH (hk6 o v h ho.1 ho.2)) (by wauto)
-      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7
+      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7 hz
     · rw [hMq5, hMq4, hMq3, hMqA, hMq2, hMq1] at hcan2
       rw [hMq2, hMq1] at hcan1
       exact hcan2.trans (identityCallNext_congr sevm _ _ _ _ _ _ hcan1)
@@ -1430,6 +1438,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
       WordAt img' 0x900 (Nat.toB256 3) → R ≤ g → g ≤ G →
       G = g + 114 → b' = b → M' = M.write 0x900 (Bytes.toB256 [1] + Nat.toB256 2).toBytes →
+      rliAmt sevm 2 = 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q)
     (kT : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
@@ -1442,6 +1451,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       d.gasLeft = g + 46 + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [9, 0] :: S) d.memory rliPushSite) →
       M' = (vyRawMem d.memory 0xb20 0x920 (min d.returnData.length 32)).write 0x900 (Bytes.toB256 [1] + Nat.toB256 2).toBytes →
+      rliAmt sevm 2 ≠ 0 →
       SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
         Bytes.toB256 [9, 0] :: S) M' g) rliEnd Q) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -1485,7 +1495,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_branchTo_zero' (by decide) ·)
     rw [rli_end_48]
     exact kS _ M _ _ (hL.mono hW'c (hskip hz)) hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by omega) (by omega)
-      (by omega) rfl hMq1
+      (by omega) rfl hMq1 hz
   · -- the transfer
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 682 := ⟨G - 682, by omega⟩
     xr (rx_dest ·)
@@ -1734,7 +1744,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
     refine kT _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH (hk6 o v h ho.1 ho.2)) (by wauto)
-      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7
+      (by omega) (by omega) bI2 g3 d ?_ ?_ (by omega) (by omega) hcanT hMq7 hz
     · rw [hMq5, hMq4, hMq3, hMqA, hMq2, hMq1] at hcan2
       rw [hMq2, hMq1] at hcan1
       exact hcan2.trans (identityCallNext_congr sevm _ _ _ _ _ _ hcan1)
@@ -1767,8 +1777,8 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) t_3769_c1368 Q :=
   rx_rli_push0E hfork hdepth hL hR hW hsz hc (fun h => (hpush h).withE) hW'c hskip hG hGb hroom
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 
 /-- Transfer iteration 1 at `t_3769_c1037`, forward. -/
 theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
@@ -1795,8 +1805,8 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) t_3769_c1037 Q :=
   rx_rli_push1aE hfork hdepth hL hR hW hsz hc (fun h => (hpush h).withE) hW'c hskip hG hGb hroom
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 
 /-- Transfer iteration 1 at `t_3769_c48`, forward. -/
 theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
@@ -1823,8 +1833,8 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) t_3769_c48 Q :=
   rx_rli_push1bE hfork hdepth hL hR hW hsz hc (fun h => (hpush h).withE) hW'c hskip hG hGb hroom
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 
 /-- Transfer iteration 2 at `t_3769_c1045`, forward. -/
 theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
@@ -1851,8 +1861,8 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) t_3769_c1045 Q :=
   rx_rli_push2aE hfork hdepth hL hR hW hsz hc (fun h => (hpush h).withE) hW'c hskip hG hGb hroom
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 
 /-- Transfer iteration 2 at `t_3769_c48`, forward. -/
 theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
@@ -1879,7 +1889,7 @@ theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) t_3769_c48 Q :=
   rx_rli_push2bE hfork hdepth hL hR hW hsz hc (fun h => (hpush h).withE) hW'c hskip hG hGb hroom
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
-    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ => kS b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
+    (fun b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ _ _ _ _ _ _ _ _ => kT b' M' img' g h1 h2 h3 h4 h5 h6 h7 h8)
 
 end Blanc.Lift.Curve3Pool

@@ -393,9 +393,9 @@ theorem rx_rli_fee0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
     refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_left hlt]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_pos hlt]; rfl
+    unfold rliFeeMem; rw [ite_eq_left hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 868 := ⟨G - 868, by omega⟩
     xr (rx_dest ·)
@@ -706,9 +706,9 @@ theorem rx_rli_fee0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1048) rli_prog_1048 ·)
     refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_right hge]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_neg hge]; rfl
+    unfold rliFeeMem; rw [ite_eq_right hge]; rfl
 
 /-- Fee iteration 1 at `t_336e_c1048`, forward. -/
 theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
@@ -1060,9 +1060,9 @@ theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
     refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_left hlt]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_pos hlt]; rfl
+    unfold rliFeeMem; rw [ite_eq_left hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -1373,9 +1373,9 @@ theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
     refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_right hge]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_neg hge]; rfl
+    unfold rliFeeMem; rw [ite_eq_right hge]; rfl
 
 /-- Fee iteration 1 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
@@ -1727,9 +1727,9 @@ theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
     refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_left hlt]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_pos hlt]; rfl
+    unfold rliFeeMem; rw [ite_eq_left hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -2040,9 +2040,9 @@ theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (by decide) (g := t_336e_c1055) rli_prog_1055 ·)
     refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_right hge]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_neg hge]; rfl
+    unfold rliFeeMem; rw [ite_eq_right hge]; rfl
 
 /-- Fee iteration 2 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
@@ -2395,9 +2395,9 @@ theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_branchTo_zero' (by decide) ·)
     rw [rli_exit63]
     refine kZ _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_pos hlt]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_left hlt]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_pos hlt]; rfl
+    unfold rliFeeMem; rw [ite_eq_left hlt]; rfl
   · -- `ideal ≤ new`
     obtain ⟨g1, rfl⟩ : ∃ g, G = g + 861 := ⟨G - 861, by omega⟩
     xr (rx_dest ·)
@@ -2708,9 +2708,9 @@ theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_zero' (by decide) ·)
     refine kS _ M _ _ hL hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by wauto)
-      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [if_neg hge]; omega) hb2 ?_
+      (by omega) (by omega) (by unfold rliFeeCost rliDen; rw [ite_eq_right hge]; omega) hb2 ?_
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]
-    unfold rliFeeMem; rw [if_neg hge]; rfl
+    unfold rliFeeMem; rw [ite_eq_right hge]; rfl
 
 /-- Fee iteration 0 at `t_336e_c1039`, forward. -/
 theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
