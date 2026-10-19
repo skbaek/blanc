@@ -1904,10 +1904,13 @@ several pins share that name, so adding a pin adds one entry, while re-proving a
 pin through a different constant shows as one pin removed and one added. It
 reads the built Lean artifacts and refuses to run unless they are certified
 current for the sources.
-The hash stops at the pinned dependencies: a constant from the Lean toolchain,
-Batteries, Mathlib or Jaune counts as its name together with the toolchain in
-`lean-toolchain` or the package revision in `lake-manifest.json`, so its body is
-fixed by that pin rather than by the hash. A hash records change, not
+Jaune's definitions are hashed in full like Blanc's, because its EVM semantics
+are part of what every claim means: a change of the Jaune revision moves exactly
+the pins whose meaning changed, and the check names the Jaune definitions that
+moved. The hash stops at the other pinned dependencies: a constant from the Lean
+toolchain, Batteries or Mathlib counts as its name together with the toolchain
+in `lean-toolchain` or the package revision in `lake-manifest.json`, so its body
+is fixed by that pin rather than by the hash. A hash records change, not
 weakening: a mismatch says that the meaning of those claims moved and must be
 reviewed, not that they became weaker.
 
