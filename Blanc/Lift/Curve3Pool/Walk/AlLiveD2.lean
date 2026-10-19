@@ -122,7 +122,7 @@ theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.
   xr (rx_dup rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x460) (v := nv 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.n0) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 21 := ⟨g2 - 21, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -131,7 +131,7 @@ theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.
   xr (rx_push rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 21 := ⟨g4 - 21, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
@@ -140,7 +140,7 @@ theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.
   xr (rx_push rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_add (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g6 b6 hb6 hg61 hg62 g6x; replace hL := hL.sstoreE hb6
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g6 b6 hb6 hg61 hg62 g6x; replace hL := hL.sstoreE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 4 := ⟨g6 - 4, by omega⟩
   xr (rx_pop ·)
   xr (rx_pop ·)

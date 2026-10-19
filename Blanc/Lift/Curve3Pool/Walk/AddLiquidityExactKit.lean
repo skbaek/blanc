@@ -3,11 +3,12 @@ import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveKit
 /-!
 # Exact-gas step twins for `add_liquidity`'s stage cores
 
-The forward walk's storage and call steps (`rxe_sloadV`, `rxe_sstoreV`, `rxe_staticWord`) hand
-their continuations bounds only. The twins below hand on, in addition, the exact charge at the
-actual world (`G = G' + sloadCost …`, `G = G' + sstoreCost …`), the literal memory a call or an
-expansion leaves, and an exact call's relation `E` (`StaticWordOkAtE`), so a stage core can
-report its exact cost and its literal memory while the bounded stage stays its projection.
+The forward walk's memory and call steps (`rxe_mloadX`, `rxe_staticWord`) hand their
+continuations bounds only. The twins below hand on, in addition, the literal memory a call or an
+expansion leaves and an exact call's relation `E` (`StaticWordOkAtE`), so a stage core can report
+its exact cost and its literal memory while the bounded stage stays its projection. The exact
+storage steps (`G = G' + sloadCost …`, `G = G' + sstoreCost …`) are exchange's `rxe_sloadVX` and
+`rxe_sstoreVX` (`ExchangeLiveKit`).
 
 `Mem.EqExcept M N (fun _ => False)` (one logical size, both well formed, every byte equal) is
 what a crossed callee that keeps its scratch to itself (`get_D_mem`, `getDMem_exactL`) leaves
@@ -23,32 +24,6 @@ section Fwd
 
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   {f : SFunc} {img : Bytes}
-
-/-- **`SLOAD` within a gas budget**, the base, the word read and the exact charge named. -/
-theorem rxe_sloadVE {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hroom : S.length < 1024) (hG : 2100 ≤ G)
-    (k : ∀ G' b' v, b' = afterSload sevm b k' → v = b.getStorVal sevm.currentTarget k' →
-      G ≤ G' + 2100 → G' ≤ G → G = G' + sloadCost sevm b k' →
-      SFunc.RunEx fs sevm (St b' (v :: S) M G') f Q) :
-    SFunc.RunEx fs sevm (St b (k' :: S) M G) (.next (.reg .sload) f) Q := by
-  have hc := sloadCost_le sevm b k'
-  have e1 : gasColdSload = 2100 := rfl
-  obtain ⟨r, hr, hq⟩ := k (G - sloadCost sevm b k') _ _ rfl rfl (by omega) (by omega) (by omega)
-  refine ⟨r, ?_, hq⟩
-  rw [show G = (G - sloadCost sevm b k') + sloadCost sevm b k' by omega]
-  exact rx_sload_sel hfork hroom hr
-
-/-- **`SSTORE` within a gas budget**, the base and the exact charge named. -/
-theorem rxe_sstoreVE {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
-    (k : ∀ G' b', b' = afterSstore sevm b k' v → G ≤ G' + 22100 → G' ≤ G →
-      G = G' + sstoreCost sevm b k' v → SFunc.RunEx fs sevm (St b' S M G') f Q) :
-    SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q := by
-  have hc := sstoreCost_le_22100 sevm b k' v
-  obtain ⟨r, hr, hq⟩ := k (G - sstoreCost sevm b k' v) _ rfl (by omega) (by omega) (by omega)
-  refine ⟨r, ?_, hq⟩
-  rw [show G = (G - sstoreCost sevm b k' v) + sstoreCost sevm b k' v by omega]
-  exact rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic hr
 
 /-- `MLOAD` past the memory's end over the image carrier, to some outcome, at the literal
 extended memory (`rxe_mloadX` with the memory named). -/

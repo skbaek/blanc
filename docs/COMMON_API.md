@@ -1789,8 +1789,9 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   since the callee's scratch writes are not materialised alike; the caller's next growing
   store makes it literal (`eqB_write_word_grow` in
   [`Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/AddLiquidityExactKit.lean),
-  with the exact `SLOAD`/`SSTORE`/`MLOAD`/`STATICCALL` twins `rxe_sloadVE`, `rxe_sstoreVE`,
-  `rxe_mloadXE`, `rxe_staticWordAlE`). The frame save/restore loops around them are literal
+  with the exact `MLOAD`/`STATICCALL` twins `rxe_mloadXE`, `rxe_staticWordAlE`; the exact
+  `SLOAD`/`SSTORE` steps are exchange's `rxe_sloadVX`, `rxe_sstoreVX` in
+  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean)). The frame save/restore loops around them are literal
   through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
   [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
   The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.

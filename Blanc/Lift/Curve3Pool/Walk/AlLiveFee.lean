@@ -436,7 +436,7 @@ theorem rx_al_feeTlE {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 182 := ⟨g2 - 182, by omega⟩
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)

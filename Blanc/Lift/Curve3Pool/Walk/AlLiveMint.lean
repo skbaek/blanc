@@ -249,7 +249,7 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro gT bT vT hbT hvT hgT1 hgT2 gTx; replace hvT := hL.val hvT; replace hL := hL.sloadE hbT
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro gT bT vT hbT hvT hgT1 hgT2 gTx; replace hvT := hL.val hvT; replace hL := hL.sloadE hbT
   rw [show Bytes.toB256 [5] = tokenSlot by decide] at hvT; subst hvT
   obtain ⟨g3, rfl⟩ : ∃ g, gT = g + 2 := ⟨gT - 2, by omega⟩
   xr (rx_gas (by hrs) ·)
@@ -362,7 +362,7 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  refine rxe_sstoreVE hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
+  refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hLd.addLogE _).sstoreE hb2
   have eM : Mq8 = alMintMem sevm Mq1 mint := by
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]; rfl

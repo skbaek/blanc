@@ -160,7 +160,7 @@ theorem rx_al_headE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by omega, hs32⟩ (by hrs) (by decide) ·)
     rw [keccak_zero]
     xr (rx_add (by hrs) ·)
-    refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+    refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 34 := ⟨g2 - 34, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     refine rxe_mstoreKL (o := 0x500) hR hW hsz rfl ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz
@@ -221,7 +221,7 @@ theorem rx_al_headE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by omega, hs32⟩ (by hrs) (by decide) ·)
     rw [keccak_zero]
     xr (rx_add (by hrs) ·)
-    refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+    refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
     obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 34 := ⟨g2 - 34, by omega⟩
     xr (rx_push rfl (by hrs) ·)
     refine rxe_mstoreKL (o := 0x500) hR hW hsz rfl ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz
@@ -460,7 +460,7 @@ theorem rx_al_head0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hrs) ·)
-  refine rxe_sloadVE hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
+  refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 37 := ⟨g2 - 37, by omega⟩
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x500) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x500 0x500 32 = 0x520 by decide] at hsz
