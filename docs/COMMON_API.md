@@ -1758,6 +1758,24 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   different dynamic gas values still needs the following gas-erasure branch.
   Existing recipe triggers cannot distinguish this static-coordinate update
   from ordinary run construction, so discovery remains in this registry.
+- For the canonical successor of a value-0 identity-precompile copy (a gas-normalized
+  data form of the resumed caller, at the copy's explicit stack tail, memory and windows),
+  use `identityCallNext` in
+  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean), with its literal
+  `_memory`/`_stack`/`_returnData`/`_gasLeft` facts, `identityCallNext_congr` (the base modulo
+  gas, `S`/`M` literal) and `identityCallNext_withStaticGas`.
+  `call_identity_step_canonical` / `rxc_call_identity_canonical` and the `RunExCut` twin
+  `rxce_call_identity_canonical` in [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean) add
+  `Devm.EqModGas b' (identityCallNext …)` to the old step's post; the old statements are
+  their projections. For Vyper's `raw_call` join and tail, `rawJoinBaseNext` (explicit clamped
+  length `n`) and `rawTailBaseNext` (the original base's clamped return-data length) in
+  [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean) name the copy's canonical
+  base, with congruence and static-gas lemmas; `rxc_vyRawCallJoin_canonical` /
+  `rxc_vyRawCallTail_canonical` and their `RunExCut` twins `rxce_vyRawCallJoin_canonical` /
+  `rxce_vyRawCallTail_canonical` hand it to the continuation, keeping the literal `vyRawMem`
+  memory and the exact charge. These carry no new charge, world premise or gas quantifier.
+  No registered trigger distinguishes these from the bounded steps, so discovery remains in
+  this registry.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
