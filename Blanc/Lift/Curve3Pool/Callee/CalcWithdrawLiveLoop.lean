@@ -46,8 +46,20 @@ theorem cw_loop_ne {k : Nat} (hk : k + 1 < 3) :
 theorem cw_loop_eq : B256.eqCheck (B256.eqCheck (Nat.toB256 (2 + 1))
     (Bytes.toB256 [3] + Bytes.toB256 [0])) 0 = 0 := by decide
 
-/-- One fee-loop iteration, forward (the generated steps of both arms). -/
-theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+/-- A fee iteration's `dx_expected`: `xp[k] · D1 / D0 - new_y` at `k = i`, else
+`xp[k] - xp[k] · D1 / D0`. -/
+def cwItDx (eqk : Prop) [Decidable eqk] (x D1 D0 y : B256) : B256 :=
+  if eqk then x * D1 / D0 - y else x - x * D1 / D0
+
+/-- A fee iteration's memory: `dx_expected` zeroed then set at `0x740`, `xp_reduced[k]` at
+`0x540 + 32 k`, the counter `k + 1` at `0x720`. -/
+def cwItMem (M : Mem) (k : Nat) (dx r' : B256) : Mem :=
+  (((M.write 0x740 (Bytes.toB256 [0]).toBytes).write 0x740 dx.toBytes).write (0x540 + 32 * k)
+    r'.toBytes).write 0x720 (Nat.toB256 (k + 1)).toBytes
+
+/-- Fee-loop iteration 0, forward, exactly (core): the charge by whether `0 = i`, the
+literal memory `cwItMem`. -/
+theorem rx_cw_it0E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
     {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x740)
     (hc : WordAt img 0x720 (Nat.toB256 0)) (hi : WordAt img 0x160 iw)
@@ -60,6 +72,8 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
       (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 0 ∨ (0x560 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x720) →
         WordAt img' o v) →
       WordAt img' (0x540 + 32 * 0) r' → WordAt img' 0x720 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      G = g + (if Bytes.toB256 [0] = iw then 546 else 576) →
+      M' = cwItMem M 0 (cwItDx (Bytes.toB256 [0] = iw) x D1 D0 y) r' →
       SFunc.RunEx cert.prog sevm
         (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
         t_405e_c50 Q) :
@@ -79,7 +93,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x740 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x740 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -154,7 +168,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_415f_c20) rfl ·)
     xr (rx_dest ·)
@@ -224,7 +238,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 0) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 0) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 0) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 0) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -234,14 +248,15 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 0) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (cw_loop_ne (k := 0) (by decide)) (g := t_405e_c50) rfl ·)
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_left he])
+      (by unfold cwItMem cwItDx; rw [ite_eq_left he])
   · -- `k ≠ i`
     have hik : iw.toNat ≠ 0 := fun h => hne (by rw [← toB256_toNat iw, h]; decide)
     have hle : ¬ x < x * D1 / D0 := fun h =>
@@ -250,7 +265,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x740 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x740 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -337,7 +352,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -405,7 +420,7 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 0) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 0) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 0) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 0) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -415,20 +430,46 @@ theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 0) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (cw_loop_ne (k := 0) (by decide)) (g := t_405e_c50) rfl ·)
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_right hne])
+      (by unfold cwItMem cwItDx; rw [ite_eq_right hne])
+
+
+/-- One fee-loop iteration, forward (the generated steps of both arms). -/
+theorem rx_cw_it0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+    {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x740)
+    (hc : WordAt img 0x720 (Nat.toB256 0)) (hi : WordAt img 0x160 iw)
+    (hx : WordAt img (0x320 + 32 * 0) x) (hD1 : WordAt img 0x520 D1) (hD0w : WordAt img 0x400 D0)
+    (hy : WordAt img 0x5a0 y) (hF : WordAt img 0x200 F) (hr : WordAt img (0x540 + 32 * 0) r)
+    (hstep : CwStep (Bytes.toB256 [0] = iw) x D1 D0 y F r r')
+    (hG : 576 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x760 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 0 ∨ (0x560 + 32 * 0 ≤ o ∧ o + 32 ≤ 0x720) →
+        WordAt img' o v) →
+      WordAt img' (0x540 + 32 * 0) r' → WordAt img' 0x720 (Nat.toB256 1) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm
+        (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
+        t_405e_c50 Q) :
+    SFunc.RunEx cert.prog sevm
+      (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M G)
+      t_405e_c1348 Q :=
+  rx_cw_it0E hi3 hR hW hsz hc hi hx hD1 hD0w hy hF hr hstep hG hroom
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7 h8
 
 /-- The loop's two exits (`i = 2` or not) are the same code. -/
 theorem cw_exit_eq : t_41db_c100 = t_41db_c79 := rfl
 
-/-- Fee-loop iteration 1, forward. -/
-theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+/-- Fee-loop iteration 1, forward, exactly (core): the charge by whether `1 = i`, the
+literal memory `cwItMem`. -/
+theorem rx_cw_it1E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
     {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x760)
     (hc : WordAt img 0x720 (Nat.toB256 1)) (hi : WordAt img 0x160 iw)
@@ -441,6 +482,8 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
       (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 1 ∨ (0x560 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x720) →
         WordAt img' o v) →
       WordAt img' (0x540 + 32 * 1) r' → WordAt img' 0x720 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      G = g + (if Bytes.toB256 [1] = iw then 543 else 573) →
+      M' = cwItMem M 1 (cwItDx (Bytes.toB256 [1] = iw) x D1 D0 y) r' →
       SFunc.RunEx cert.prog sevm
         (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
         t_405e_c79 Q) :
@@ -460,7 +503,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -535,7 +578,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_415f_c78) rfl ·)
     xr (rx_dest ·)
@@ -605,7 +648,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 1) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 1) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 1) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 1) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -615,14 +658,15 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 1) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (cw_loop_ne (k := 1) (by decide)) (g := t_405e_c79) rfl ·)
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_left he])
+      (by unfold cwItMem cwItDx; rw [ite_eq_left he])
   · -- `k ≠ i`
     have hik : iw.toNat ≠ 1 := fun h => hne (by rw [← toB256_toNat iw, h]; decide)
     have hle : ¬ x < x * D1 / D0 := fun h =>
@@ -631,7 +675,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -718,7 +762,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -786,7 +830,7 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 1) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 1) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 1) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 1) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -796,17 +840,43 @@ theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 1) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branchTo_succ (cw_loop_ne (k := 1) (by decide)) (g := t_405e_c79) rfl ·)
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_right hne])
+      (by unfold cwItMem cwItDx; rw [ite_eq_right hne])
 
-/-- Fee-loop iteration 2, forward. -/
-theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+
+/-- Fee-loop iteration 1, forward. -/
+theorem rx_cw_it1 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+    {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x760)
+    (hc : WordAt img 0x720 (Nat.toB256 1)) (hi : WordAt img 0x160 iw)
+    (hx : WordAt img (0x320 + 32 * 1) x) (hD1 : WordAt img 0x520 D1) (hD0w : WordAt img 0x400 D0)
+    (hy : WordAt img 0x5a0 y) (hF : WordAt img 0x200 F) (hr : WordAt img (0x540 + 32 * 1) r)
+    (hstep : CwStep (Bytes.toB256 [1] = iw) x D1 D0 y F r r')
+    (hG : 573 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x760 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 1 ∨ (0x560 + 32 * 1 ≤ o ∧ o + 32 ≤ 0x720) →
+        WordAt img' o v) →
+      WordAt img' (0x540 + 32 * 1) r' → WordAt img' 0x720 (Nat.toB256 2) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm
+        (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
+        t_405e_c79 Q) :
+    SFunc.RunEx cert.prog sevm
+      (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M G)
+      t_405e_c50 Q :=
+  rx_cw_it1E hi3 hR hW hsz hc hi hx hD1 hD0w hy hF hr hstep hG hroom
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7 h8
+
+/-- Fee-loop iteration 2, forward, exactly (core): the charge by whether `2 = i`, the
+literal memory `cwItMem`. -/
+theorem rx_cw_it2E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
     {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x760)
     (hc : WordAt img 0x720 (Nat.toB256 2)) (hi : WordAt img 0x160 iw)
@@ -819,6 +889,8 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
       (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 2 ∨ (0x560 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x720) →
         WordAt img' o v) →
       WordAt img' (0x540 + 32 * 2) r' → WordAt img' 0x720 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      G = g + (if Bytes.toB256 [2] = iw then 543 else 573) →
+      M' = cwItMem M 2 (cwItDx (Bytes.toB256 [2] = iw) x D1 D0 y) r' →
       SFunc.RunEx cert.prog sevm
         (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
         t_41db_c79 Q) :
@@ -838,7 +910,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -913,7 +985,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rx_jump (g := t_415f_c100) rfl ·)
     xr (rx_dest ·)
@@ -983,7 +1055,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 2) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 2) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 2) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 2) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -993,15 +1065,16 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 2) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branch_zero' cw_loop_eq ·)
     rw [cw_exit_eq]
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_left he])
+      (by unfold cwItMem cwItDx; rw [ite_eq_left he])
   · -- `k ≠ i`
     have hik : iw.toNat ≠ 2 := fun h => hne (by rw [← toB256_toNat iw, h]; decide)
     have hle : ¬ x < x * D1 / D0 := fun h =>
@@ -1010,7 +1083,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_push rfl (by hrs) ·)
     xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1097,7 +1170,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_push rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x740) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x740 32 = 0x760 by decide] at hsz
     xr (rx_dest ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
@@ -1165,7 +1238,7 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     xr (rx_swap1 ·)
     xr (rx_pop ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x540 + 32 * 2) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 2) 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x540 + 32 * 2) (c := 3) hR hW hsz (cw_idx (by decide) (B256.toNat_toB256_of_lt (by decide)) (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 (0x540 + 32 * 2) 32 = 0x760 by decide] at hsz
     xr (rx_pop ·)
     xr (rx_dest ·)
     xr (rx_dup rfl (by hrs) ·)
@@ -1175,13 +1248,38 @@ theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     rw [cw_inc (k := 2) (by decide)]
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_dup rfl (by hrs) ·)
-    refine rxe_mstore (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
+    refine rxe_mstoreW (o := 0x720) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x720 32 = 0x760 by decide] at hsz
     xr (rx_dup rfl (by hrs) ·)
     xr (rx_eq rfl (by hrs) ·)
     xr (rx_iszero rfl (by hrs) ·)
     xr (rx_push rfl (by hrs) ·)
     xr (rx_branch_zero' cw_loop_eq ·)
-    exact k M _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
-      (by omega)
+    refine k _ _ g1 hR hW hsz (fun o v h ho => by wautoH h) (by wauto) (by wauto) (by omega)
+      (by omega) (by rw [ite_eq_right hne])
+      (by unfold cwItMem cwItDx; rw [ite_eq_right hne])
+
+
+/-- Fee-loop iteration 2, forward. -/
+theorem rx_cw_it2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Bytes} {G R : Nat}
+    {Q : Outcome → Prop} {iw x D1 D0 y F r r' : B256} (hi3 : iw.toNat < 3)
+    (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x760)
+    (hc : WordAt img 0x720 (Nat.toB256 2)) (hi : WordAt img 0x160 iw)
+    (hx : WordAt img (0x320 + 32 * 2) x) (hD1 : WordAt img 0x520 D1) (hD0w : WordAt img 0x400 D0)
+    (hy : WordAt img 0x5a0 y) (hF : WordAt img 0x200 F) (hr : WordAt img (0x540 + 32 * 2) r)
+    (hstep : CwStep (Bytes.toB256 [2] = iw) x D1 D0 y F r r')
+    (hG : 573 + R ≤ G) (hroom : S.length + 20 < 1024)
+    (k : ∀ (M' : Mem) (img' : Bytes) (g : Nat), Mem.Reads M' img' → Mem.Wf M' →
+      M'.size = 0x760 →
+      (∀ o v, WordAt img o v → o + 32 ≤ 0x540 + 32 * 2 ∨ (0x560 + 32 * 2 ≤ o ∧ o + 32 ≤ 0x720) →
+        WordAt img' o v) →
+      WordAt img' (0x540 + 32 * 2) r' → WordAt img' 0x720 (Nat.toB256 3) → R ≤ g → g ≤ G →
+      SFunc.RunEx cert.prog sevm
+        (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M' g)
+        t_41db_c79 Q) :
+    SFunc.RunEx cert.prog sevm
+      (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) :: Bytes.toB256 [7, 32] :: S) M G)
+      t_405e_c79 Q :=
+  rx_cw_it2E hi3 hR hW hsz hc hi hx hD1 hD0w hy hF hr hstep hG hroom
+    fun M' img' g h1 h2 h3 h4 h5 h6 h7 h8 _ _ => k M' img' g h1 h2 h3 h4 h5 h6 h7 h8
 
 end Blanc.Lift.Curve3Pool
