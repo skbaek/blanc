@@ -129,9 +129,10 @@ theorem Ninst.RunCompiled.childless_of_not_exec
       exact steps
   | push bytes length =>
       have stepRun := steps 0
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
-      rw [stepRun.1] at steps
-      exact steps
+      by_cases disabled : (decide (bytes = []) && !sevm.benvStat.rules.op.push0) = true <;>
+        simp only [Ninst.StepRun, Ninst.step_push, disabled, Bool.false_eq_true,
+          ↓reduceIte, Step.run_ofExecution] at stepRun <;>
+        rw [stepRun.1] at steps <;> exact steps
   | dupn imm =>
       have stepRun := steps 0
       rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at stepRun
@@ -255,10 +256,10 @@ lemma Ninst.runCompiled_sload_of {sevm : Sevm} {devm base : Devm} {k v : B256}
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
   · rw [ite_eq_left h] at h_base h_cost
     subst h_base; subst h_cost
-    exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none h_stk h h_val h_gas h_room
+    exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none hfork.rules_access h_stk h h_val h_gas h_room
   · rw [ite_eq_right h] at h_base h_cost
     subst h_base; subst h_cost
-    exact Ninst.runCompiled_sload_cold hfork.rules_stateGas_none h_stk h h_val h_gas h_room
+    exact Ninst.runCompiled_sload_cold hfork.rules_stateGas_none hfork.rules_access h_stk h h_val h_gas h_room
 
 /-- The key an `SLOAD` read is warm afterwards, whichever arm was taken. -/
 lemma mem_accessedStorageKeys_sload_of {sevm : Sevm} {devm base : Devm}
@@ -380,7 +381,7 @@ theorem Ninst.runCompiled_sload_selected
   · rw [sloadCost, ite_eq_left hwarm, afterSload, ite_eq_left hwarm]
     exact Ninst.runCompiled_sload_warm
       (k := key) (v := value) (s := stack) (G := G)
-      hfork.rules_stateGas_none rfl hwarm hvalue
+      hfork.rules_stateGas_none hfork.rules_access rfl hwarm hvalue
       (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
       hroom
   · rw [sloadCost, ite_eq_right hwarm, afterSload, ite_eq_right hwarm]
@@ -391,7 +392,7 @@ theorem Ninst.runCompiled_sload_selected
         (devm := base.setMach
           ⟨key :: stack, memory, G + gasColdSload, base.stateGas⟩)
         (k := key) (v := value) (s := stack) (G := G)
-        hfork.rules_stateGas_none rfl hwarm
+        hfork.rules_stateGas_none hfork.rules_access rfl hwarm
         (by simpa only [Devm.getStorVal_setMach] using hvalue)
         (by simp only [Devm.gasLeft_setMach, gasColdSload])
         hroom)
@@ -442,10 +443,10 @@ theorem Ninst.runCompiled_sstore_selected
         devm.accessedStorageKeys
   · simp only [sstoreCost, ite_eq_left hwarm, Nat.zero_add,
       afterSstore] at hgas ⊢
-    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm hsentry hstatic
+    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore hstack hwarm hsentry hstatic
       rfl rfl hgas
   · simp only [sstoreCost, ite_eq_right hwarm, afterSstore] at hgas ⊢
-    exact Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hstack hwarm hsentry hstatic
+    exact Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore hstack hwarm hsentry hstatic
       rfl rfl hgas
 
 theorem sstoreCost_setMach
@@ -603,7 +604,7 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
       (G := devm.gasLeft - sstoreValueCost
         (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
-      hfork.rules_stateGas_none h_stk h_warm
+      hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore h_stk h_warm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
       h_static rfl rfl (by omega)) ?_
   refine h_next _ _ _ ?_ (fun a k' h_ne => ?_) (fun a => ?_)
@@ -623,9 +624,7 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
             (devm.getStorVal sevm.currentTarget k)
             devm.refundCounter)).setStorVal sevm.currentTarget k v) a
             = Devm.getStor devm a := by
-        simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-          Devm.withStorageWrites, Devm.setWorld, State.setStorVal]
-        simp only [Devm.state, State.get_set_ne _ h_adr]
+        rw [setStorVal_getStor_ne h_adr]
         rfl
       rw [h_off]
       rfl
@@ -926,6 +925,7 @@ lemma Func.runCompiledTo_mstoreAt
     {G pushGas extGas : Nat} {body : Func} {ex : Execution}
     (hpushCost : pushCost (word * 32).toBytes.sig = pushGas)
     (hroom : stack.length < 1023)
+    (h_push0 : (word * 32).toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true)
     (hext : ∀ (S : List B256) (G' : Nat),
       (base.setMach ⟨S, memory, G', base.stateGas⟩).extCost
         [⟨(word * 32).toNat, 32⟩] = extGas)
@@ -944,7 +944,7 @@ lemma Func.runCompiledTo_mstoreAt
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by
         simp only [Devm.stack_setMach, List.length_cons]
-        omega)) ?_
+        omega) h_push0) ?_
   simp only [Devm.setMach_setMach, Devm.stack_setMach,
     Devm.memory_setMach, Devm.stateGas_setMach]
   refine Func.runCompiledTo_mstore_step
@@ -1142,9 +1142,13 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
   subst h_ext; subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨callee, d⟩ ← d.popToAdr
@@ -1262,9 +1266,13 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨callee, d⟩ ← d.popToAdr
@@ -1397,9 +1405,13 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   change ∃ post, XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨callee, d⟩ ← d.popToAdr
@@ -1548,9 +1560,13 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨target, d⟩ ← d.popToAdr
@@ -1647,9 +1663,13 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
-  simp only [Xinst.step]
-  rw [hfork.rules_stateGas_none, hgas]
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
     let ⟨codeAddress, d⟩ ← d.popToAdr
@@ -2735,10 +2755,14 @@ lemma Ninst.exec_of_stepRun_error {pc : Nat} {sevm : Sevm} {devm : Devm}
     rw [hstep, Ninst.step_reg, ← h_step.2]
     rfl
   | push xs le =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
-    refine ⟨Exec.halt ?_⟩
-    rw [hstep, Ninst.step_push, ← h_step.2]
-    rfl
+    by_cases disabled : (decide (xs = []) && !sevm.benvStat.rules.op.push0) = true <;>
+      simp only [Ninst.StepRun, Ninst.step_push, disabled, Bool.false_eq_true,
+        ↓reduceIte, Step.run_ofExecution] at h_step
+    all_goals
+      refine ⟨Exec.halt ?_⟩
+      simp only [hstep, Ninst.step_push, disabled, Bool.false_eq_true, ↓reduceIte]
+      rw [← h_step.2]
+      rfl
   | dupn imm =>
     rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at h_step
     refine ⟨Exec.halt ?_⟩
@@ -2972,6 +2996,7 @@ theorem Func.ExecWitness.prepend_fsig
     (hstack : entry.stack = tail)
     (hgas : entry.gasLeft = G + fsigCost)
     (hroom : tail.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
     (hbody : Func.ExecWitness fs sevm
       (entry.setMach ⟨Sevm.selector sevm :: tail, entry.memory, G, entry.stateGas⟩)
       body ex) :
@@ -2997,7 +3022,7 @@ theorem Func.ExecWitness.prepend_fsig
         rfl (by
           dsimp only [fsigCost, push224Cost] at hgas ⊢
           omega)
-        (by rw [hstack]; omega))
+        (by rw [hstack]; omega) (fun _ => h_push0))
   have hload : Ninst.RunCompiled sevm afterPush0 Ninst.calldataload
       afterLoad := by
     simpa only [afterPush0, afterLoad, Devm.setMach_setMach,
@@ -3019,7 +3044,16 @@ theorem Func.ExecWitness.prepend_fsig
         (by
           dsimp only [afterLoad]
           simp only [Devm.stack_setMach, List.length_cons]
-          omega))
+          omega) (by
+          intro empty
+          have nonempty : (224 : B256).toBytes.sig ≠ [] := by decide
+          exact (nonempty empty).elim))
+  have shifts : sevm.benvStat.rules.op.shifts = true := by
+    have key : ∀ f : Fork, (Fork.ruleSet f).op.push0 = true →
+        (Fork.ruleSet f).op.shifts = true := by
+      intro f enabled
+      cases f <;> first | rfl | exact absurd enabled (by decide)
+    exact key sevm.benvStat.fork h_push0
   have hshr : Ninst.RunCompiled sevm afterPush224 Ninst.shr afterShr := by
     simpa only [afterPush224, afterShr, Devm.setMach_setMach,
       Devm.stack_setMach, Devm.memory_setMach,
@@ -3028,7 +3062,8 @@ theorem Func.ExecWitness.prepend_fsig
         (r := .shr) (f := (fun x y => y >>> x.toNat))
         (cost := gVerylow) (x := (224 : B256))
         (y := Sevm.dataWord sevm 0) (v := Sevm.selector sevm)
-        (s := tail) (G := G) (by rintro ⟨⟩) rfl rfl
+        (s := tail) (G := G) (by rintro ⟨⟩)
+        (by simp only [Rinst.runCore, shifts, ↓reduceIte]) rfl
         (by rfl) (by
           dsimp only [afterPush224]
           simp only [Devm.gasLeft_setMach]) (by omega))
@@ -3255,9 +3290,7 @@ lemma Func.execSat_sstore_warm_step_with_nonce {fs : List Func} {sevm : Sevm}
             (devm.getStorVal sevm.currentTarget k)
             devm.refundCounter)).setStorVal sevm.currentTarget k v) a
             = Devm.getStor devm a := by
-        simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-          Devm.withStorageWrites, Devm.setWorld, State.setStorVal]
-        simp only [Devm.state, State.get_set_ne _ h_adr]
+        rw [setStorVal_getStor_ne h_adr]
         rfl
       rw [h_off]
       rfl
@@ -3276,8 +3309,8 @@ lemma Func.execSat_sstore_warm_step_with_nonce {fs : List Func} {sevm : Sevm}
           (devm.state.get a).nonce
         by_cases ha : sevm.currentTarget = a
         · subst a
-          simp only [State.setStorVal, State.get_set_self]
-        · simp only [State.setStorVal, State.get_set_ne _ ha])
+          rw [State.setStorVal_get_self]
+        · rw [State.setStorVal_get_ne _ ha])
       rfl rfl rfl rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
@@ -3286,7 +3319,7 @@ lemma Func.execSat_sstore_warm_step_with_nonce {fs : List Func} {sevm : Sevm}
       (G := devm.gasLeft - sstoreValueCost
         (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
-      hfork.rules_stateGas_none h_stk h_warm
+      hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore h_stk h_warm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
       h_static rfl rfl (by omega)) hto, hp⟩
 
@@ -3604,12 +3637,14 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     exact h_code
   have hexec : exec child = .ok child.dyna :=
     exec_empty_code child h_child_code
-  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
+  let settled := child.dyna.recordTouch msg.benv.stat.rules true msg.currentTarget
+  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok settled := by
     rw [hexec]
     rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
-    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm, Bool.false_eq_true, ↓reduceIte, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok, ite_eq_right_iff, Except.ok.injEq]
-    intro h
-    cases h
+    have clean : child.dyna.error = none := rfl
+    simp only [Frame.ofCall, Frame.settleMsg, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, Except.bind_ok, clean, Option.isSome_none]
+    rfl
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -3632,10 +3667,10 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     change d1.stack.length < 1024
     rw [hd1stack]
     exact h_room
-  let post := (((incorporateChildOnSuccess p child.dyna child.dyna.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + child.dyna.gasLeft,
-      (incorporateChildOnSuccess p child.dyna child.dyna.output).stateGas⟩).memWrite
-      oiw.toNat (child.dyna.output.take osw.toNat))
+  let post := (((incorporateChildOnSuccess p settled settled.output).setMach
+    ⟨1 :: p.stack, p.memory, p.gasLeft + settled.gasLeft,
+      (incorporateChildOnSuccess p settled settled.output).stateGas⟩).memWrite
+      oiw.toNat (settled.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rfl) hpstack]
@@ -3643,7 +3678,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     Ninst.runCompiled_call_nonzero hfork h_stk h_value h_ext h_del h_acc h_create
       h_split h_gas h_dynamic h_sender h_depth
         (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
-  have hout : child.dyna.output = [] := rfl
+  have hout : settled.output = [] := rfl
   have hpostError : post.error = p.error := by
     dsimp only [post]
     rw [hout, List.take_nil, Devm.memWrite_nil]
@@ -3674,8 +3709,15 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
   have hpostDelete :
       post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
     dsimp only [post, child, initEvm, initDevm]
-    change (p.accountsToDelete.union
-      Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
+    have refund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
+        rfl rfl rfl rfl
+    have inherited : msg.inheritedDeletions = .emptyWithCapacity := by
+      change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then _ else _) = _
+      rw [refund, if_pos rfl]
+    change (p.accountsToDelete.union msg.inheritedDeletions).isEmpty =
+      p.accountsToDelete.isEmpty
+    rw [inherited]
     simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
       Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have hpostState : post.state = stmid.addBal cw.toAdr vw := by
@@ -3685,7 +3727,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
       post.stack = 1 :: p.stack ∧ post.memory = p.memory ∧
         post.gasLeft = p.gasLeft + mcs := by
     dsimp only [post]
-    have hchildgas : child.dyna.gasLeft = mcs := rfl
+    have hchildgas : settled.gasLeft = mcs := rfl
     simp only [hout, List.take_nil, Devm.memWrite_nil, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hchildgas]
     exact ⟨trivial, trivial, trivial⟩
@@ -3766,12 +3808,14 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     exact h_code
   have hexec : exec child = .ok child.dyna :=
     exec_empty_code child h_child_code
-  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
+  let settled := child.dyna.recordTouch msg.benv.stat.rules true msg.currentTarget
+  have hsettle : (Frame.ofCall msg).settle (exec child) = .ok settled := by
     rw [hexec]
     rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
-    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm, Bool.false_eq_true, ↓reduceIte, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok, ite_eq_right_iff, Except.ok.injEq]
-    intro h
-    cases h
+    have clean : child.dyna.error = none := rfl
+    simp only [Frame.ofCall, Frame.settleMsg, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, Except.bind_ok, clean, Option.isSome_none]
+    rfl
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -3794,17 +3838,17 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     change d1.stack.length < 1024
     rw [hd1stack]
     exact h_room
-  let post := (((incorporateChildOnSuccess p child.dyna child.dyna.output).setMach
-    ⟨1 :: p.stack, p.memory, p.gasLeft + child.dyna.gasLeft,
-      (incorporateChildOnSuccess p child.dyna child.dyna.output).stateGas⟩).memWrite
-      oiw.toNat (child.dyna.output.take osw.toNat))
+  let post := (((incorporateChildOnSuccess p settled settled.output).setMach
+    ⟨1 :: p.stack, p.memory, p.gasLeft + settled.gasLeft,
+      (incorporateChildOnSuccess p settled settled.output).stateGas⟩).memWrite
+      oiw.toNat (settled.output.take osw.toNat))
   have hres : Resume.run (.call p oiw.toNat osw.toNat)
       ((Frame.ofCall msg).settle (exec child)) = .ok post := by
     rw [hsettle, Resume.run_call_ok (by rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
       h_depth (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
-  have hout : child.dyna.output = [] := rfl
+  have hout : settled.output = [] := rfl
   have hpostError : post.error = p.error := by
     dsimp only [post]
     rw [hout, List.take_nil, Devm.memWrite_nil]
@@ -3835,8 +3879,15 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
   have hpostDelete :
       post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
     dsimp only [post, child, initEvm, initDevm]
-    change (p.accountsToDelete.union
-      Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
+    have refund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
+        rfl rfl rfl rfl
+    have inherited : msg.inheritedDeletions = .emptyWithCapacity := by
+      change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then _ else _) = _
+      rw [refund, if_pos rfl]
+    change (p.accountsToDelete.union msg.inheritedDeletions).isEmpty =
+      p.accountsToDelete.isEmpty
+    rw [inherited]
     simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
       Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have hpostState : post.state = d1.state := by
@@ -3846,7 +3897,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
       post.stack = 1 :: p.stack ∧ post.memory = p.memory ∧
         post.gasLeft = p.gasLeft + mcs := by
     dsimp only [post]
-    have hchildgas : child.dyna.gasLeft = mcs := rfl
+    have hchildgas : settled.gasLeft = mcs := rfl
     simp only [hout, List.take_nil, Devm.memWrite_nil, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hchildgas]
     exact ⟨trivial, trivial, trivial⟩

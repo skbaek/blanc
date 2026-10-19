@@ -410,7 +410,14 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 - `Prog.ExecWitness.intro` pays the compiled program's leading `JUMPDEST` for
   a caller-named success or fatal-error witness; use
   `Func.ExecWitness.prepend_fsig` and `fsigCost` to construct the shared
-  four-instruction selector prefix before the residual function.
+  four-instruction selector prefix before the residual function. The prefix
+  requires the actual `rules.op.push0 = true` flag; its SHR availability is
+  derived from that flag under the named fork rules.
+- `Func.runCompiledTo_mstoreAt` keeps the continuation over an abstract memory
+  image. Its availability premise is conditional on the actual
+  `(word * 32).toBytes.sig` immediate being empty; nonempty pushes need no
+  PUSH0 flag. Derive the flag from the actual rules or
+  `CoveredFork.rules_push0`, rather than from state-gas absence.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - `Func.execSat_sload_step_with_nonce`,
   `Func.execSat_sstore_warm_step_with_nonce`, and
@@ -780,7 +787,10 @@ and exact insufficient-gas inequality.
 
 For a nonzero branch flag that tail-calls an empty-revert auxiliary, use
 `emptyRevertGuardCost` and `Func.runCompiledTo_emptyRevertGuard` in
-[`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+[`Blanc/Reverts.lean`](../Blanc/Reverts.lean). Both this guard helper and
+`Func.runCompiledTo_revert_func` require the actual
+`sevm.benvStat.rules.op.push0 = true` flag for their two zero pushes;
+state-gas absence alone does not enable PUSH0.
 
 For a nonzero branch flag that tail-calls a constant `Error(string)`
 auxiliary, use `errorBodyCost`, `errorCallCost`, `errorGuardCost`, and

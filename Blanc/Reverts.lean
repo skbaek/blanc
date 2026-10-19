@@ -516,7 +516,7 @@ pinned to `[]`.
 Every target in the `error-genre` arc ends here, so this is the lemma a walk
 hands its deferred `.last` goal to.
 
-Two premises, and both are tight:
+The gas and headroom premises are tight:
 
 * **`h_gas`** is the relation's additive form, and `gBase + gBase` is the whole
   cost — `pushCost_zero` gives each `PUSH0` `gBase`, and the `REVERT`'s empty
@@ -527,23 +527,27 @@ Two premises, and both are tight:
   stack that already carries the first, and `Devm.push` guards headroom on the
   stack it is pushing onto.  It implies the first push's `< 1024`.
 
+The two zero pushes require the actual `rules.op.push0` availability flag;
+gas and headroom alone do not enable them before Shanghai.
 The post-state's gas account is `G` — the frame reverts with its remaining gas
 intact at this altitude. This says nothing about a *transaction*'s gas: refunds
 and the 63/64 rule are a further layer. -/
 lemma Func.runCompiledTo_revert_func {fs : List Func} {sevm : Sevm} {devm : Devm}
     {G : Nat} (h_gas : devm.gasLeft = G + (gBase + gBase))
-    (h_room : devm.stack.length < 1023) :
+    (h_room : devm.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm devm Func.revert
       (.error (.revert,
         (devm.setMach ⟨devm.stack, devm.memory, G, devm.stateGas⟩).withOutput [])) := by
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 pushCost_zero (G := G + gBase) (by omega)
-      (by omega)) ?_
+      (by omega) (fun _ => h_push0)) ?_
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (devm := devm.setMach
         ⟨(0 : B256) :: devm.stack, devm.memory, G + gBase, devm.stateGas⟩)
       pushCost_zero (G := G) rfl
-      (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
+      (by simp only [Devm.stack_setMach, List.length_cons]; omega)
+      (fun _ => h_push0)) ?_
   simp only [Devm.setMach_setMach]
   exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := devm.stack)
     rfl Devm.extCost_empty_window rfl Devm.memRead_zero
@@ -565,7 +569,8 @@ theorem Func.runCompiledTo_emptyRevertGuard
     (h_get : fs[slot]? = some Func.revert)
     (h_ne : w ≠ 0) (h_stack : devm.stack = w :: stack)
     (h_gas : devm.gasLeft = G + emptyRevertGuardCost)
-    (h_room : devm.stack.length < 1024) :
+    (h_room : devm.stack.length < 1024)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm devm ((.call slot) <?> otherwise)
       (.error (.revert,
         (devm.setMach ⟨stack, devm.memory, G, devm.stateGas⟩).withOutput [])) := by
@@ -586,6 +591,6 @@ theorem Func.runCompiledTo_emptyRevertGuard
       omega
     · simp only [Devm.setMach_setMach]
       exact Func.runCompiledTo_revert_func rfl
-        (by simpa only [Devm.stack_setMach] using h_room_tail)
+        (by simpa only [Devm.stack_setMach] using h_room_tail) h_push0
 
 end Blanc
