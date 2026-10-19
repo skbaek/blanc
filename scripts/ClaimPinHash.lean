@@ -4,7 +4,7 @@ import Lean.Elab.Frontend
 /-!
 # Closure serializer for the ClaimCheck pins
 
-Driver for `scripts/claim_pin_hash.py`; run through `lake env lean --run`, never
+Driver for `scripts/check-claim-hash.py`; run through `lake env lean --run`, never
 imported by `Blanc`, so no module or audited-theorem count moves.
 
 `scripts/ClaimCheck.lean` pins each claim as an `example`.  An `example` leaves
@@ -22,21 +22,38 @@ list of constants that serialization refers to.  The Python step turns these
 records into a Merkle SHA-256 table with its own in-run memo.
 
 What each constant contributes:
-* definitions: kind, universe arity, type and value;
+* definitions: kind, universe arity, type and value (content-addressed: the
+  definition's own name is not part of it);
 * theorems: universe arity and type (proof irrelevance);
 * opaque constants (including `partial` definitions) and axioms: name and type;
-* inductive types, constructors and recursors: the whole mutual block (universe
-  arity, parameters, indices, every type and every constructor type), with
-  references into the block written as block-local indices; each member is
-  then attributed to its block;
+* inductive types, constructors and recursors (generative constants): the whole
+  mutual block (universe arity, parameters, indices, every type and every
+  constructor with its full name and type), with references into the block
+  written as block-local indices; each member record carries its own full name
+  and is attributed to its block.  Two isomorphic but distinct types therefore
+  never share a digest, and renaming a generative constant is a change;
 * constants whose defining module is outside `Blanc` (Lean core, Std, Batteries,
   Mathlib, Jaune and every other dependency): the boundary; name, module and
   owning package only, the package being resolved from the `.olean` location
   and later bound by Python to the pinned toolchain or `lake-manifest.json` rev.
+  A shallow serialization of the boundary constant's own content (references by
+  name) is emitted beside it for diagnostics only.
 
 Binder names, binder info and `mdata` are not serialized, universe parameters
 are written by position, and every subterm is hash-consed on its canonical
 line, so the bytes depend only on the normalized term.
+
+Each pin is keyed by a label that does not depend on its position: `thm:N` for a
+pin whose proof is the constant `N` applied (`:= @N`), `iff:N` / `eq:N` for an
+unfolding pin whose statement is `N … ↔ …` / `N … = …`, `stmt:N` for a pin whose
+statement's head is `N`, and `anon` otherwise; a label that repeats gets `#2`,
+`#3`, … in file order.
+
+Every run also builds a fixture of declaration pairs that differ in exactly one
+feature (or, for the equality controls, only in what must be ignored), each side
+added to its own copy of the environment under the same names, and emits both
+sides' closure records; the Python step requires every differing pair to get
+different digests and every equality pair equal ones.
 -/
 
 namespace BlancClaimPinHash
@@ -188,6 +205,7 @@ def Record.toJson (r : Record) : Json :=
     ("p", Json.str r.package), ("s", Json.str r.ser),
     ("r", Json.arr (r.refs.map Json.str))] ++ r.extra)
 
+
 def runRec (selfIdx : Std.HashMap Name Nat) (body : RecM String) :
     Except String (String × Array Name × Nat) :=
   let ((head, st)) := (body.run {}).run (selfIdx, {}) |>.run
@@ -197,16 +215,8 @@ def runRec (selfIdx : Std.HashMap Name Nat) (body : RecM String) :
 
 def blockName (n : Name) : String := s!"block:{n}"
 
-structure Stats where
-  constants : Nat := 0
-  blanc : Nat := 0
-  local_ : Nat := 0
-  boundary : Nat := 0
-  blocks : Nat := 0
-  exprHits : Nat := 0
-  refEdges : Nat := 0
-  visitHits : Nat := 0
-  serBytes : Nat := 0
+/-- A length-prefixed name, so a name never runs into the next field. -/
+def lp (n : Name) : String := let s := toString n; s!"{s.utf8ByteSize}:{s}"
 
 /-- Kind-specific serialization of a non-boundary constant. -/
 def serializeConst (env : Environment) (ci : ConstantInfo) :
@@ -229,32 +239,28 @@ def serializeConst (env : Environment) (ci : ConstantInfo) :
   | .opaqueInfo v =>
     let (s, r, h) ← runRec {} do
       let t ← ser ps v.type
-      return s!"opaque name={(toString ci.name).utf8ByteSize}:{ci.name} u={arity} type={t}"
+      return s!"opaque name={lp ci.name} u={arity} type={t}"
     return ("opaque", s, r, h)
   | .axiomInfo v =>
     let (s, r, h) ← runRec {} do
       let t ← ser ps v.type
-      return s!"axiom name={(toString ci.name).utf8ByteSize}:{ci.name} u={arity} type={t}"
+      return s!"axiom name={lp ci.name} u={arity} type={t}"
     return ("axiom", s, r, h)
   | .quotInfo _ => throw s!"quotient constant outside the core boundary: {ci.name}"
   | .inductInfo v =>
-    -- the block record is emitted separately; the member points at it
     let some j := v.all.idxOf? ci.name | throw s!"inductive not in its block: {ci.name}"
-    return ("inductive", s!"member type={j}", #[], 0)
+    return ("inductive", s!"member type={j} name={lp ci.name}", #[], 0)
   | .ctorInfo v =>
     let some ind := env.find? v.induct | throw s!"missing inductive {v.induct}"
     let .inductInfo iv := ind | throw s!"constructor of non-inductive {ci.name}"
     let some j := iv.all.idxOf? v.induct | throw s!"inductive not in its block: {v.induct}"
-    return ("ctor", s!"member type={j} ctor={v.cidx}", #[], 0)
+    return ("ctor", s!"member type={j} ctor={v.cidx} name={lp ci.name}", #[], 0)
   | .recInfo v =>
-    let suffix := match ci.name with
-      | .str _ s => s
-      | _ => toString ci.name
     let major := ci.name.getPrefix
     let some j := v.all.idxOf? major | throw s!"recursor outside its block: {ci.name}"
-    return ("rec", s!"member type={j} rec={suffix.utf8ByteSize}:{suffix}", #[], 0)
+    return ("rec", s!"member type={j} name={lp ci.name}", #[], 0)
 
-/-- The whole mutual block, self references as block-local indices. -/
+/-- The whole mutual block, self references as block-local indices, every member named. -/
 def serializeBlock (env : Environment) (all : List Name) :
     Except String (String × Array Name × Nat) := do
   let mut selfIdx : Std.HashMap Name Nat := {}
@@ -277,42 +283,397 @@ def serializeBlock (env : Environment) (all : List Name) :
   let selfIdx' := selfIdx
   let vals' := vals
   let ctorInfos' := ctorInfos
-  let (s, r, h) ← runRec selfIdx' do
+  runRec selfIdx' do
     let mut parts : Array String := #[]
     for i in [0:vals'.size] do
       let v := vals'[i]!
       let t ← ser ps v.type
       parts := parts.push
-        s!"type {i} params={v.numParams} indices={v.numIndices} nested={v.numNested} unsafe={v.isUnsafe} type={t} ctors={v.ctors.length}"
+        s!"type {i} name={lp v.name} params={v.numParams} indices={v.numIndices} nested={v.numNested} unsafe={v.isUnsafe} type={t} ctors={v.ctors.length}"
       for cv in ctorInfos'[i]! do
         let ct ← ser ps cv.type
-        parts := parts.push s!"ctor {cv.cidx} params={cv.numParams} fields={cv.numFields} type={ct}"
+        parts := parts.push
+          s!"ctor {cv.cidx} name={lp cv.name} params={cv.numParams} fields={cv.numFields} type={ct}"
     return s!"block u={ps.length} types={vals'.size} " ++ " ".intercalate parts.toList
-  return (s, r, h)
+
+/-- Diagnostic-only shallow serialization of a boundary constant: its own content,
+references by name.  Never part of any digest the verdict reads. -/
+def shallowBoundary (env : Environment) (ci : ConstantInfo) : Option (String × Array Name) :=
+  let r : Except String (String × String × Array Name × Nat) := match ci with
+    | .inductInfo v => do
+      let (s, r, h) ← serializeBlock env v.all
+      return ("block", s!"member name={lp ci.name}\n{s}", r, h)
+    | .quotInfo _ => do
+      let (s, r, h) ← runRec {} do
+        let t ← ser ci.levelParams ci.type
+        return s!"quot name={lp ci.name} type={t}"
+      return ("quot", s, r, h)
+    | .defnInfo v => if v.safety == .unsafe then throw "unsafe" else serializeConst env ci
+    | _ => serializeConst env ci
+  match r with
+  | .ok (k, s, refs, _) => some (k ++ "\n" ++ s, refs)
+  | .error _ => none
 
 /-- Package of a boundary module, from where its `.olean` lives. -/
 def packageOf (sysroot : System.FilePath) (mod : Name) : IO String := do
   let path := (← findOLean mod).toString
   if path.startsWith sysroot.toString then return "@toolchain"
-  match (path.splitOn "/.lake/packages/").getLast? with
-  | some tail =>
-    if (path.splitOn "/.lake/packages/").length < 2 then
-      throw <| IO.userError s!"HASH boundary module outside every pinned package: {mod} at {path}"
-    return (tail.splitOn "/").head!
-  | none => throw <| IO.userError s!"HASH boundary module unresolved: {mod}"
+  let parts := path.splitOn "/.lake/packages/"
+  if parts.length < 2 then
+    throw <| IO.userError s!"HASH boundary module outside every pinned package: {mod} at {path}"
+  return (parts.getLast!.splitOn "/").head!
 
+/-- Peak resident set, best effort: `/proc` exists on Linux only; elsewhere 0. -/
 def peakRssKiB : IO Nat := do
-  let status ← IO.FS.readFile "/proc/self/status"
-  for line in status.splitOn "\n" do
-    if line.startsWith "VmHWM:" then
-      let digits := line.toList.filter Char.isDigit
-      return (String.ofList digits).toNat!
-  return 0
+  try
+    let status ← IO.FS.readFile "/proc/self/status"
+    for line in status.splitOn "\n" do
+      if line.startsWith "VmHWM:" then
+        let digits := line.toList.filter Char.isDigit
+        return (String.ofList digits).toNat!
+    return 0
+  catch _ => return 0
 
-unsafe def generate (claimCheck output : System.FilePath) : IO UInt32 := do
+structure Stats where
+  constants : Nat := 0
+  blanc : Nat := 0
+  local_ : Nat := 0
+  boundary : Nat := 0
+  blocks : Nat := 0
+  exprHits : Nat := 0
+  refEdges : Nat := 0
+  visitHits : Nat := 0
+  serBytes : Nat := 0
+
+/-- Which constants are fully hashed. -/
+inductive Scope where
+  /-- the claim run: modules under `Blanc`, and the file being elaborated -/
+  | blanc
+  /-- the fixture: only the constants the fixture added (no defining module) -/
+  | fixture
+
+/-- Walk the closure of `roots`, emitting one record per reached constant. -/
+def walk (env : Environment) (sysroot : System.FilePath) (scope : Scope)
+    (roots : Array Name) (moduleCache : IO.Ref (Std.HashMap Name String))
+    (emitRec : Record → IO Unit) (stats : IO.Ref Stats) : IO Unit := do
+  let mut visited : Std.HashSet Name := {}
+  let mut blocksDone : Std.HashSet Name := {}
+  let mut queue : Array Name := #[]
+  for x in roots do
+    if visited.contains x then stats.modify fun s => { s with visitHits := s.visitHits + 1 }
+    else
+      visited := visited.insert x
+      queue := queue.push x
+  let mut qi := 0
+  while qi < queue.size do
+    let n := queue[qi]!
+    qi := qi + 1
+    let some ci := env.find? n | throw <| IO.userError s!"HASH unknown constant {n}"
+    stats.modify fun s => { s with constants := s.constants + 1 }
+    let mod? := (env.getModuleIdxFor? n).map fun idx => env.header.moduleNames[idx.toNat]!
+    let internal := match scope, mod? with
+      | _, none => true
+      | .blanc, some m => m.getRoot == `Blanc
+      | .fixture, some _ => false
+    let modStr := match mod? with
+      | none => "scripts.ClaimCheck"
+      | some m => m.toString
+    if !internal then
+      let some m := mod? | throw <| IO.userError "HASH unreachable"
+      let pkg ← match (← moduleCache.get)[m]? with
+        | some p => pure p
+        | none => do
+          let p ← packageOf sysroot m
+          moduleCache.modify (·.insert m p)
+          pure p
+      stats.modify fun s => { s with boundary := s.boundary + 1 }
+      let diag : List (String × Json) := match shallowBoundary env ci with
+        | some (s, r) => [("d", Json.str s), ("dr", Json.arr (r.map fun x => Json.str x.toString))]
+        | none => []
+      emitRec { name := n.toString, kind := "boundary", module := modStr, package := pkg,
+                extra := diag }
+      continue
+    if mod?.isNone then stats.modify fun s => { s with local_ := s.local_ + 1 }
+    else stats.modify fun s => { s with blanc := s.blanc + 1 }
+    let blockAll? : Option (List Name) := match ci with
+      | .inductInfo v => some v.all
+      | .ctorInfo v => match env.find? v.induct with
+        | some (.inductInfo iv) => some iv.all
+        | _ => none
+      | .recInfo v => some v.all
+      | _ => none
+    let mut refs : Array Name := #[]
+    let mut blockRef : Option String := none
+    if let some all := blockAll? then
+      let head := all.head!
+      blockRef := some (blockName head)
+      if !blocksDone.contains head then
+        blocksDone := blocksDone.insert head
+        match serializeBlock env all with
+        | .error e => throw <| IO.userError s!"HASH {e}"
+        | .ok (s, r, h) =>
+          stats.modify fun st => { st with blocks := st.blocks + 1, exprHits := st.exprHits + h, refEdges := st.refEdges + r.size, serBytes := st.serBytes + s.utf8ByteSize }
+          emitRec { name := blockName head, kind := "block", module := modStr, ser := s,
+                    refs := r.map toString }
+          refs := r
+    match serializeConst env ci with
+    | .error e => throw <| IO.userError s!"HASH {e}"
+    | .ok (kind, s, r, h) =>
+      stats.modify fun st => { st with exprHits := st.exprHits + h, refEdges := st.refEdges + r.size, serBytes := st.serBytes + s.utf8ByteSize }
+      let recRefs := match blockRef with
+        | some b => #[b]
+        | none => r.map toString
+      emitRec { name := n.toString, kind, module := modStr, ser := s, refs := recRefs }
+      refs := refs ++ r
+    for x in refs do
+      if visited.contains x then stats.modify fun s => { s with visitHits := s.visitHits + 1 }
+      else
+        visited := visited.insert x
+        queue := queue.push x
+
+/-! ## Pin labels -/
+
+/-- Proof plumbing that says nothing about which claim a pin pins. -/
+def plumbing : List Name :=
+  [`Iff.rfl, `rfl, `Eq.refl, `Eq.mpr, `Eq.mp, `id, `Iff.intro, `propext, `cast,
+   `Eq.symm, `Eq.trans, `Iff.of_eq, `of_eq_true, `HEq.refl, `Eq.ndrec, `Eq.rec,
+   `Iff.mpr, `Iff.mp, `trivial, `True.intro, `And.intro, `Exists.intro, `id_eq,
+   `Iff.refl, `Eq.mpr_prop, `Eq.mpr_not, `letFun]
+
+partial def stripLam : Expr → Expr
+  | .lam _ _ b _ => stripLam b
+  | .mdata _ e => stripLam e
+  | e => e
+
+partial def stripForall : Expr → Expr
+  | .forallE _ _ b _ => stripForall b
+  | .mdata _ e => stripForall e
+  | e => e
+
+def headConst? (e : Expr) : Option Name :=
+  match e.consumeMData.getAppFn.consumeMData with
+  | .const c _ => some c
+  | _ => none
+
+def isBlanc (env : Environment) (c : Name) : Bool :=
+  match env.getModuleIdxFor? c with
+  | some idx => env.header.moduleNames[idx.toNat]!.getRoot == `Blanc
+  | none => false
+
+/-- The position-independent label of one pin (before de-duplication): the Blanc
+constant the proof applies, else the Blanc head of an unfolding equation's left
+side, else the Blanc head of the statement, else the first Blanc constant the
+statement uses. -/
+def pinLabel (env : Environment) (ci : ConstantInfo) : String := Id.run do
+  let blanc? : Option Name → Option Name := fun c? => c?.filter (isBlanc env)
+  if let .defnInfo d := ci then
+    if let some c := blanc? (headConst? (stripLam d.value)) then
+      if !plumbing.contains c then return s!"thm:{c}"
+  let t := stripForall ci.type
+  match headConst? t with
+  | some `Iff =>
+    if let some c := blanc? (headConst? t.appFn!.appArg!) then return s!"iff:{c}"
+  | some `Eq =>
+    if let some c := blanc? (headConst? t.appFn!.appArg!) then return s!"eq:{c}"
+  | _ => pure ()
+  if let some c := blanc? (headConst? t) then return s!"stmt:{c}"
+  if let some c := ci.type.getUsedConstants.find? (isBlanc env) then return s!"uses:{c}"
+  return "anon"
+
+/-! ## The serializer fixture -/
+
+def fx (s : String) : Name := (`ClaimPinHashFixture).str s
+
+def nat : Expr := .const ``Nat []
+def str : Expr := .const ``String []
+
+def sortDef (name : Name) (lps : List Name) (l : Level) : Declaration :=
+  .defnDecl { name, levelParams := lps, type := .sort l.succ, value := .sort l,
+              hints := .abbrev, safety := .safe, all := [name] }
+
+def natDef (name : Name) (type value : Expr) : Declaration :=
+  .defnDecl { name, levelParams := [], type, value, hints := .abbrev, safety := .safe,
+              all := [name] }
+
+/-- A structure-like inductive `name : Type` with one constructor of the given fields. -/
+def structDecl (name ctor : Name) (fields : List Expr) : Declaration :=
+  let ty := fields.foldr (fun f acc => .forallE `x f acc .default) (.const name [])
+  .inductDecl [] 0 [{ name, type := .sort 1, ctors := [{ name := ctor, type := ty }] }] false
+
+def enumDecl (name : Name) (ctors : List Name) : Declaration :=
+  let ty : InductiveType :=
+    { name, type := .sort 1, ctors := ctors.map fun c => { name := c, type := .const name [] } }
+  .inductDecl [] 0 [ty] false
+
+/-- `I : Type → Type 1` with constructor `∀ (α : Type), α → I α`, `n` parameters. -/
+def paramDecl (nparams : Nat) : Declaration :=
+  let i := fx "I"
+  let ctorTy : Expr := .forallE `α (.sort 1)
+    (.forallE `a (.bvar 0) (.app (.const i []) (.bvar 1)) .default) .default
+  let ty : InductiveType :=
+    { name := i, type := .forallE `α (.sort 1) (.sort 2) .default,
+      ctors := [{ name := i.str "mk", type := ctorTy }] }
+  .inductDecl [] nparams [ty] false
+
+def projDef (s : Name) (k : Nat) : Declaration :=
+  natDef (fx "pj") (.forallE `s (.const s []) nat .default)
+    (.lam `s (.const s []) (.proj s k (.bvar 0)) .default)
+
+def opaqueNat (name : Name) : Declaration :=
+  .opaqueDecl { name, levelParams := [], type := nat, value := .lit (.natVal 1),
+                isUnsafe := false, all := [name] }
+
+structure Pair where
+  label : String
+  expect : String  -- "differ" or "equal"
+  a : List Declaration
+  rootA : Name
+  b : List Declaration
+  rootB : Name
+
+def fixturePairs : List Pair :=
+  let u : Level := .param `u
+  let v : Level := .param `v
+  let s := fx "S"
+  let s' := fx "S'"
+  let sFields := [nat, nat]
+  let one : Expr := .lit (.natVal 1)
+  let two : Expr := .lit (.natVal 2)
+  [ { label := "level succ", expect := "differ",
+      a := [sortDef (fx "lv") [`u] u], rootA := fx "lv",
+      b := [sortDef (fx "lv") [`u] u.succ], rootB := fx "lv" },
+    { label := "level max vs imax", expect := "differ",
+      a := [sortDef (fx "lv") [`u, `v] (.max u v)], rootA := fx "lv",
+      b := [sortDef (fx "lv") [`u, `v] (.imax u v)], rootB := fx "lv" },
+    { label := "level param position", expect := "differ",
+      a := [sortDef (fx "lv") [`u, `v] (.max u v)], rootA := fx "lv",
+      b := [sortDef (fx "lv") [`u, `v] (.max v u)], rootB := fx "lv" },
+    { label := "universe parameter order", expect := "differ",
+      a := [sortDef (fx "lv") [`u, `v] (.max u v)], rootA := fx "lv",
+      b := [sortDef (fx "lv") [`v, `u] (.max u v)], rootB := fx "lv" },
+    { label := "proj index", expect := "differ",
+      a := [structDecl s (s.str "mk") sFields, projDef s 0], rootA := fx "pj",
+      b := [structDecl s (s.str "mk") sFields, projDef s 1], rootB := fx "pj" },
+    { label := "proj struct name (isomorphic structures)", expect := "differ",
+      a := [structDecl s (s.str "mk") sFields, projDef s 0], rootA := fx "pj",
+      b := [structDecl s' (s'.str "mk") sFields, projDef s' 0], rootB := fx "pj" },
+    { label := "let value", expect := "differ",
+      a := [natDef (fx "le") nat (.letE `x nat one (.bvar 0) false)], rootA := fx "le",
+      b := [natDef (fx "le") nat (.letE `x nat two (.bvar 0) false)], rootB := fx "le" },
+    { label := "literal Nat vs String", expect := "differ",
+      a := [natDef (fx "li") nat (.lit (.natVal 3))], rootA := fx "li",
+      b := [natDef (fx "li") str (.lit (.strVal "3"))], rootB := fx "li" },
+    { label := "constructor order", expect := "differ",
+      a := [enumDecl (fx "T") [fx "T" |>.str "a", fx "T" |>.str "b"]], rootA := fx "T",
+      b := [enumDecl (fx "T") [fx "T" |>.str "b", fx "T" |>.str "a"]], rootB := fx "T" },
+    { label := "field order", expect := "differ",
+      a := [structDecl (fx "T") (fx "T" |>.str "mk") [nat, str]], rootA := fx "T",
+      b := [structDecl (fx "T") (fx "T" |>.str "mk") [str, nat]], rootB := fx "T" },
+    { label := "numParams vs numIndices", expect := "differ",
+      a := [paramDecl 1], rootA := fx "I", b := [paramDecl 0], rootB := fx "I" },
+    { label := "definition value", expect := "differ",
+      a := [natDef (fx "d") nat one], rootA := fx "d",
+      b := [natDef (fx "d") nat two], rootB := fx "d" },
+    { label := "definition type", expect := "differ",
+      a := [natDef (fx "d") nat (.const ``Nat.zero [])], rootA := fx "d",
+      b := [natDef (fx "d") (mkApp2 (.const ``id [2]) (.sort 1) nat) (.const ``Nat.zero [])],
+      rootB := fx "d" },
+    { label := "opaque name", expect := "differ",
+      a := [opaqueNat (fx "o1")], rootA := fx "o1",
+      b := [opaqueNat (fx "o2")], rootB := fx "o2" },
+    { label := "inductive name (isomorphic types)", expect := "differ",
+      a := [structDecl s (s.str "mk") sFields], rootA := s,
+      b := [structDecl s' (s'.str "mk") sFields], rootB := s' },
+    { label := "constructor name", expect := "differ",
+      a := [structDecl s (s.str "mk") sFields], rootA := s.str "mk",
+      b := [structDecl s (s.str "mk2") sFields], rootB := s.str "mk2" },
+    { label := "use of isomorphic types in a definition", expect := "differ",
+      a := [structDecl s (s.str "mk") sFields, structDecl s' (s'.str "mk") sFields,
+            natDef (fx "use") (.forallE `x (.const s []) nat .default)
+              (.lam `x (.const s []) one .default)], rootA := fx "use",
+      b := [structDecl s (s.str "mk") sFields, structDecl s' (s'.str "mk") sFields,
+            natDef (fx "use") (.forallE `x (.const s' []) nat .default)
+              (.lam `x (.const s' []) one .default)], rootB := fx "use" },
+    { label := "binder name (must be equal)", expect := "equal",
+      a := [natDef (fx "f") (.forallE `x nat nat .default) (.lam `x nat (.bvar 0) .default)],
+      rootA := fx "f",
+      b := [natDef (fx "f") (.forallE `y nat nat .default) (.lam `y nat (.bvar 0) .default)],
+      rootB := fx "f" },
+    { label := "binder info (must be equal)", expect := "equal",
+      a := [natDef (fx "f") (.forallE `x nat nat .default) (.lam `x nat (.bvar 0) .default)],
+      rootA := fx "f",
+      b := [natDef (fx "f") (.forallE `x nat nat .implicit) (.lam `x nat (.bvar 0) .implicit)],
+      rootB := fx "f" },
+    { label := "metadata (must be equal)", expect := "equal",
+      a := [natDef (fx "d") nat one], rootA := fx "d",
+      b := [natDef (fx "d") nat (.mdata (KVMap.empty.insert `note (.ofBool true)) one)],
+      rootB := fx "d" },
+    { label := "definition name (content-addressed, must be equal)", expect := "equal",
+      a := [natDef (fx "d1") nat one], rootA := fx "d1",
+      b := [natDef (fx "d2") nat one], rootB := fx "d2" } ]
+
+def addAll (env : Environment) (decls : List Declaration) : Except String Environment := do
+  let mut e := env
+  for d in decls do
+    match e.addDeclCore 0 512 d none with
+    | .ok e' => e := e'
+    | .error _ => throw s!"fixture declaration rejected by the kernel: {decl_names d}"
+  return e
+where decl_names (d : Declaration) : String := toString d.getTopLevelNames
+
+/-- Serialize both sides of every fixture pair into `out`, one JSON line per pair. -/
+def runFixture (base : Environment) (sysroot : System.FilePath)
+    (moduleCache : IO.Ref (Std.HashMap Name String)) (out : IO.FS.Handle) : IO Nat := do
+  let mut count := 0
+  for p in fixturePairs do
+    let mut sides : Array Json := #[]
+    for (decls, root) in [(p.a, p.rootA), (p.b, p.rootB)] do
+      let env ← match addAll base decls with
+        | .ok e => pure e
+        | .error e => throw <| IO.userError s!"HASH fixture {p.label}: {e}"
+      let recs ← IO.mkRef (#[] : Array Json)
+      let stats ← IO.mkRef ({} : Stats)
+      walk env sysroot .fixture #[root] moduleCache (fun r => recs.modify (·.push r.toJson)) stats
+      sides := sides.push (Json.mkObj [("root", Json.str root.toString),
+        ("records", Json.arr (← recs.get))])
+    out.putStrLn (Json.mkObj [("label", Json.str p.label), ("expect", Json.str p.expect),
+      ("a", sides[0]!), ("b", sides[1]!)]).compress
+    count := count + 1
+  return count
+
+/-- Exact single-feature checks on the serializer itself, independent of digests. -/
+def serializerChecks : List (String × Expr × Expr × Bool) :=
+  [ ("literal Nat vs String", .lit (.natVal 3), .lit (.strVal "3"), false),
+    ("string length prefix", .lit (.strVal "ab"), .lit (.strVal "a"), false),
+    ("binder name ignored", .lam `x nat (.bvar 0) .default, .lam `y nat (.bvar 0) .default, true),
+    ("binder info ignored", .lam `x nat (.bvar 0) .default, .lam `x nat (.bvar 0) .instImplicit, true),
+    ("mdata ignored", .lit (.natVal 1), .mdata (KVMap.empty.insert `k (.ofBool true)) (.lit (.natVal 1)), true),
+    ("let value", .letE `x nat (.lit (.natVal 1)) (.bvar 0) false,
+      .letE `x nat (.lit (.natVal 2)) (.bvar 0) false, false),
+    ("proj index", .proj ``Prod 0 (.bvar 0), .proj ``Prod 1 (.bvar 0), false),
+    ("bound variable index", .lam `x nat (.lam `y nat (.bvar 0) .default) .default,
+      .lam `x nat (.lam `y nat (.bvar 1) .default) .default, false) ]
+
+def checkSerializer : Except String Nat := do
+  let mut n := 0
+  for (label, x, y, same) in serializerChecks do
+    let sx ← runRec {} (do return s!"{← ser [] x}")
+    let sy ← runRec {} (do return s!"{← ser [] y}")
+    let eq := sx.1 == sy.1 && sx.2.1 == sy.2.1
+    if eq != same then
+      throw s!"serializer check failed: {label} ({if same then "differs" else "collides"})"
+    n := n + 1
+  return n
+
+/-! ## The run -/
+
+unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32 := do
   let t0 ← IO.monoMsNow
   let source ← IO.FS.readFile claimCheck
   let (rewritten, pinLines) := rewrite source
+  let serializerOk ← match checkSerializer with
+    | .ok n => pure n
+    | .error e => IO.eprintln s!"HASH {e}"; return 1
   let sysroot ← findSysroot
   initSearchPath sysroot
   enableInitializersExecution
@@ -335,16 +696,20 @@ unsafe def generate (claimCheck output : System.FilePath) : IO UInt32 := do
     IO.eprintln s!"HASH pin count mismatch: {pinLines.size} pin lines, {pinDecl.size} pin declarations"
     return 1
   let out ← IO.FS.Handle.mk output .write
-  let mut stats : Stats := {}
-  let mut visited : Std.HashSet Name := {}
-  let mut blocksDone : Std.HashSet Name := {}
-  let mut moduleCache : Std.HashMap Name String := {}
-  let mut queue : Array Name := #[]
-  -- pin roots
+  let stats ← IO.mkRef ({} : Stats)
+  let moduleCache ← IO.mkRef ({} : Std.HashMap Name String)
+  let emitRec (r : Record) : IO Unit := out.putStrLn r.toJson.compress
+  -- pin roots, labelled independently of position
+  let mut labelCount : Std.HashMap String Nat := {}
+  let mut roots : Array Name := #[]
   for i in [0:pinLines.size] do
     let some n := pinDecl[pinName (i + 1)]? |
       IO.eprintln s!"HASH missing pin declaration {pinName (i+1)}"; return 1
     let some ci := env.find? n | IO.eprintln s!"HASH missing {n}"; return 1
+    let base := pinLabel env ci
+    let k := labelCount.getD base 0 + 1
+    labelCount := labelCount.insert base k
+    let label := if k == 1 then base else s!"{base}#{k}"
     let ps := ci.levelParams
     let pinSer := runRec {} do
       let t ← ser ps ci.type
@@ -352,90 +717,34 @@ unsafe def generate (claimCheck output : System.FilePath) : IO UInt32 := do
     let (s, r, h) ← match pinSer with
       | .ok v => pure v
       | .error e => IO.eprintln s!"HASH pin {i+1}: {e}"; return 1
-    stats := { stats with exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
-    let ns := n.getPrefix
+    stats.modify fun st => { st with exprHits := st.exprHits + h, refEdges := st.refEdges + r.size, serBytes := st.serBytes + s.utf8ByteSize }
     let pinRec : Record := {
-      name := s!"pin:{pad4 (i+1)}", kind := "pin", module := "scripts.ClaimCheck",
+      name := s!"pin:{label}", kind := "pin", module := "scripts.ClaimCheck",
       ser := s, refs := r.map toString,
-      extra := [("line", toJson pinLines[i]!), ("ns", Json.str ns.toString)] }
-    out.putStrLn pinRec.toJson.compress
-    for x in r do
-      if visited.contains x then stats := { stats with visitHits := stats.visitHits + 1 }
-      else
-        visited := visited.insert x
-        queue := queue.push x
-  -- closure walk
-  let mut qi := 0
-  while qi < queue.size do
-    let n := queue[qi]!
-    qi := qi + 1
-    let some ci := env.find? n | IO.eprintln s!"HASH unknown constant {n}"; return 1
-    stats := { stats with constants := stats.constants + 1 }
-    let modIdx? := env.getModuleIdxFor? n
-    let mod? := modIdx?.map fun idx => env.header.moduleNames[idx.toNat]!
-    let internal := match mod? with
-      | none => true
-      | some m => m.getRoot == `Blanc
-    let modStr := match mod? with
-      | none => "scripts.ClaimCheck"
-      | some m => m.toString
-    if !internal then
-      let some m := mod? | return 1
-      let pkg ← match moduleCache[m]? with
-        | some p => pure p
-        | none => do
-          let p ← packageOf sysroot m
-          moduleCache := moduleCache.insert m p
-          pure p
-      stats := { stats with boundary := stats.boundary + 1 }
-      out.putStrLn (Record.toJson { name := n.toString, kind := "boundary", module := modStr, package := pkg }).compress
-      continue
-    if mod?.isNone then stats := { stats with local_ := stats.local_ + 1 }
-    else stats := { stats with blanc := stats.blanc + 1 }
-    -- the block record, once per mutual block
-    let blockAll? : Option (List Name) := match ci with
-      | .inductInfo v => some v.all
-      | .ctorInfo v => match env.find? v.induct with
-        | some (.inductInfo iv) => some iv.all
-        | _ => none
-      | .recInfo v => some v.all
-      | _ => none
-    let mut refs : Array Name := #[]
-    let mut blockRef : Option String := none
-    if let some all := blockAll? then
-      let head := all.head!
-      blockRef := some (blockName head)
-      if !blocksDone.contains head then
-        blocksDone := blocksDone.insert head
-        match serializeBlock env all with
-        | .error e => IO.eprintln s!"HASH {e}"; return 1
-        | .ok (s, r, h) =>
-          stats := { stats with blocks := stats.blocks + 1, exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
-          out.putStrLn (Record.toJson { name := blockName head, kind := "block", module := modStr, ser := s, refs := r.map toString }).compress
-          refs := r
-    match serializeConst env ci with
-    | .error e => IO.eprintln s!"HASH {e}"; return 1
-    | .ok (kind, s, r, h) =>
-      stats := { stats with exprHits := stats.exprHits + h, refEdges := stats.refEdges + r.size, serBytes := stats.serBytes + s.utf8ByteSize }
-      let recRefs := match blockRef with
-        | some b => #[b]
-        | none => r.map toString
-      out.putStrLn (Record.toJson { name := n.toString, kind, module := modStr, ser := s, refs := recRefs }).compress
-      refs := refs ++ r
-    for x in refs do
-      if visited.contains x then stats := { stats with visitHits := stats.visitHits + 1 }
-      else
-        visited := visited.insert x
-        queue := queue.push x
+      extra := [("line", toJson pinLines[i]!), ("ordinal", toJson (i + 1)),
+                ("ns", Json.str n.getPrefix.toString)] }
+    emitRec pinRec
+    roots := roots ++ r
+  try
+    walk env sysroot .blanc roots moduleCache emitRec stats
+  catch e => IO.eprintln e.toString; return 1
   let tEnd ← IO.monoMsNow
+  -- the serializer fixture, on every run
+  let fixtureHandle ← IO.FS.Handle.mk fixtureOut .write
+  let fixturePairsN ← try runFixture env sysroot moduleCache fixtureHandle
+    catch e => IO.eprintln e.toString; return 1
+  fixtureHandle.flush
   let rss ← peakRssKiB
+  let st ← stats.get
   out.putStrLn (Json.mkObj [("k", Json.str "stats"), ("pins", toJson pinLines.size),
-    ("constants", toJson stats.constants), ("blanc", toJson stats.blanc),
-    ("local", toJson stats.local_), ("boundary", toJson stats.boundary),
-    ("blocks", toJson stats.blocks), ("expr_memo_hits", toJson stats.exprHits),
-    ("ref_edges", toJson stats.refEdges), ("visit_memo_hits", toJson stats.visitHits),
-    ("serialized_bytes", toJson stats.serBytes),
+    ("constants", toJson st.constants), ("blanc", toJson st.blanc),
+    ("local", toJson st.local_), ("boundary", toJson st.boundary),
+    ("blocks", toJson st.blocks), ("expr_memo_hits", toJson st.exprHits),
+    ("ref_edges", toJson st.refEdges), ("visit_memo_hits", toJson st.visitHits),
+    ("serialized_bytes", toJson st.serBytes),
     ("elab_ms", toJson (tElab - t0)), ("walk_ms", toJson (tEnd - tElab)),
+    ("fixture_pairs", toJson fixturePairsN), ("serializer_checks", toJson serializerOk),
+    ("lean_version", Json.str Lean.versionString),
     ("peak_rss_kib", toJson rss)]).compress
   out.flush
   return 0
@@ -444,9 +753,9 @@ end BlancClaimPinHash
 
 unsafe def main (args : List String) : IO UInt32 := do
   match args with
-  | [claimCheck, output] =>
-    try BlancClaimPinHash.generate claimCheck output
+  | [claimCheck, output, fixtureOut] =>
+    try BlancClaimPinHash.generate claimCheck output fixtureOut
     catch e => IO.eprintln s!"HASH {e}"; return 1
   | _ =>
-    IO.eprintln "usage: lake env lean --run scripts/ClaimPinHash.lean CLAIMCHECK OUTPUT_JSONL"
+    IO.eprintln "usage: lake env lean --run scripts/ClaimPinHash.lean CLAIMCHECK OUTPUT_JSONL FIXTURE_JSONL"
     return 2
