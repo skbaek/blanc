@@ -111,6 +111,13 @@ theorem rinst_runCore_withFork {s : Sevm} {g : Fork} (hf : CoveredFork s.benvSta
   by_cases hb : r = .blobbasefee
   · subst hb
     have hx := h2 rfl
+    have hbg : (s.withFork g).benvStat.rules.op.blobBaseFee = true :=
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.op.blobBaseFee = true)
+        rfl rfl rfl rfl
+    have hbf : s.benvStat.rules.op.blobBaseFee = true := by
+      exact hf.cases (motive := fun f => (Fork.ruleSet f).op.blobBaseFee = true)
+        rfl rfl rfl rfl
+    simp only [Rinst.runCore, hbg, hbf, ↓reduceIte]
     show pushItem (calculateBlobGasPrice (Fork.ruleSet g).blob s.benvStat.excessBlobGas).toB256
         gBase d = pushItem (calculateBlobGasPrice s.benvStat.rules.blob
           s.benvStat.excessBlobGas).toB256 gBase d
@@ -148,28 +155,43 @@ theorem XStep.withFork_ofExcept (g : Fork) (m : Except (EvmError × Devm) XStep)
 theorem XStep.withFork_done (g : Fork) (ex : Execution) :
     (XStep.done ex).withFork g = .done ex := rfl
 
-theorem genericCall_step_withFork (s : Sevm) (g : Fork) (d : Devm) (gas : Nat) (value : B256)
+theorem genericCall_step_withFork {s : Sevm} {g : Fork}
+    (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (d : Devm) (gas : Nat) (value : B256)
     (caller target codeAddress : Adr) (stv isStaticcall : Bool)
     (ii is oi os : Nat) (code : ByteArray) (dp : Bool) :
     genericCall.step (s.withFork g) d gas value caller target codeAddress stv isStaticcall
         ii is oi os code dp =
       (genericCall.step s d gas value caller target codeAddress stv isStaticcall
         ii is oi os code dp).withFork g := by
+  have hrefund : (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+      s.benvStat.rules.settle.selfdestructRefund :=
+    eq_of_prague (fun s => s.benvStat.rules.settle.selfdestructRefund) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+        (s.withFork .prague).benvStat.rules.settle.selfdestructRefund) rfl rfl rfl rfl
   unfold genericCall.step
   simp only [Sevm.withFork_depth]
   by_cases h : s.depth = 0
   · simp only [h, ↓reduceIte, XStep.withFork_ofExcept, except_map_bind, except_map_pure,
       XStep.withFork_done]
   · simp only [h, ↓reduceIte]
+    simp only [Frame.ofCall, callMsg, hrefund]
     rfl
 
 theorem assertDynamic_withFork (s : Sevm) (g : Fork) (d : Devm) :
     assertDynamic (s.withFork g) d = assertDynamic s d := rfl
 
-theorem spawn_ofCreate_withFork (s : Sevm) (g : Fork) (d : Devm) (cg : Nat) (e : B256)
+theorem spawn_ofCreate_withFork {s : Sevm} {g : Fork}
+    (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (d : Devm) (cg : Nat) (e : B256)
     (a : Adr) (cd : Bytes) (r : Resume) :
     (XStep.spawn (Frame.ofCreate (createMsg s d cg e a cd)) r).withFork g =
-      .spawn (Frame.ofCreate (createMsg (s.withFork g) d cg e a cd)) r := rfl
+      .spawn (Frame.ofCreate (createMsg (s.withFork g) d cg e a cd)) r := by
+  have hrefund : (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+      s.benvStat.rules.settle.selfdestructRefund :=
+    eq_of_prague (fun s => s.benvStat.rules.settle.selfdestructRefund) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+        (s.withFork .prague).benvStat.rules.settle.selfdestructRefund) rfl rfl rfl rfl
+  simp only [XStep.withFork, Frame.ofCreate, createMsg, hrefund]
+  rfl
 
 theorem genericCreate_step_withFork {s : Sevm} {g : Fork} (hf : CoveredFork s.benvStat.fork)
     (hg : CoveredFork g) (d : Devm) (endowment : B256) (newAddress : Adr) (mi ms : Nat) :
@@ -179,11 +201,15 @@ theorem genericCreate_step_withFork {s : Sevm} {g : Fork} (hf : CoveredFork s.be
     eq_of_prague (fun s => s.benvStat.rules.code) hf hg fun _ hg =>
       hg.cases (motive := fun g => (s.withFork g).benvStat.rules.code =
         (s.withFork .prague).benvStat.rules.code) rfl rfl rfl rfl
+  have hcreation : (s.withFork g).benvStat.rules.creation = s.benvStat.rules.creation :=
+    eq_of_prague (fun s => s.benvStat.rules.creation) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.creation =
+        (s.withFork .prague).benvStat.rules.creation) rfl rfl rfl rfl
   unfold genericCreate.step
   rw [XStep.withFork_ofExcept]
-  simp only [hcode, except_map_bind, except_map_pure, XStep.withFork_done,
+  simp only [hcode, hcreation, except_map_bind, except_map_pure, XStep.withFork_done,
     apply_ite (Except.map _), assertDynamic_withFork, Sevm.withFork_currentTarget,
-    Sevm.withFork_depth, spawn_ofCreate_withFork]
+    Sevm.withFork_depth, spawn_ofCreate_withFork hf hg]
   rfl
 
 theorem rules_gas_withFork {s : Sevm} {g : Fork} (hf : CoveredFork s.benvStat.fork)
@@ -199,10 +225,28 @@ theorem xinst_step_withFork {s : Sevm} {g : Fork} (hf : CoveredFork s.benvStat.f
     CoveredFork.rules_stateGas_none (s := (s.withFork g).benvStat) hg
   have hsf : s.benvStat.rules.stateGas = none := hf.rules_stateGas_none
   have hgas := rules_gas_withFork hf hg
-  cases x <;> simp only [Xinst.step, hsg, hsf] <;> rw [XStep.withFork_ofExcept] <;>
-    simp only [hgas, except_map_bind, except_map_pure, XStep.withFork_done,
+  have haccess : (s.withFork g).benvStat.rules.access = s.benvStat.rules.access :=
+    eq_of_prague (fun s => s.benvStat.rules.access) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.access =
+        (s.withFork .prague).benvStat.rules.access) rfl rfl rfl rfl
+  have hdelegation : (s.withFork g).benvStat.rules.delegationEnabled =
+      s.benvStat.rules.delegationEnabled :=
+    eq_of_prague (fun s => s.benvStat.rules.delegationEnabled) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.delegationEnabled =
+        (s.withFork .prague).benvStat.rules.delegationEnabled) rfl rfl rfl rfl
+  have hcreation : (s.withFork g).benvStat.rules.creation = s.benvStat.rules.creation :=
+    eq_of_prague (fun s => s.benvStat.rules.creation) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.creation =
+        (s.withFork .prague).benvStat.rules.creation) rfl rfl rfl rfl
+  have hc2g : (s.withFork g).benvStat.rules.op.create2 = true :=
+    hg.cases (motive := fun g => (s.withFork g).benvStat.rules.op.create2 = true)
+      rfl rfl rfl rfl
+  have hc2f : s.benvStat.rules.op.create2 = true :=
+    hf.cases (motive := fun f => (Fork.ruleSet f).op.create2 = true) rfl rfl rfl rfl
+  cases x <;> simp only [Xinst.step, hsg, hsf, hc2g, hc2f, ↓reduceIte] <;> rw [XStep.withFork_ofExcept] <;>
+    simp only [hgas, haccess, hcreation, ForkRules.accessDelegation, hdelegation, except_map_bind, except_map_pure, XStep.withFork_done,
       apply_ite (Except.map _), Sevm.withFork_currentTarget, Sevm.withFork_isStatic,
-      genericCall_step_withFork, genericCreate_step_withFork hf hg] <;> rfl
+      genericCall_step_withFork hf hg, genericCreate_step_withFork hf hg] <;> rfl
 
 /-! ### One driver step -/
 
@@ -249,7 +293,13 @@ theorem evm_step_withFork {e : Evm} {g : Fork} (hf : CoveredFork e.sta.benvStat.
   | next n =>
     simp only
     cases n with
-    | push xs h => exact (Step.withFork_ofExecution g _ _).symm
+    | push xs h =>
+      have hp : (e.sta.withFork g).benvStat.rules.op.push0 = e.sta.benvStat.rules.op.push0 :=
+        eq_of_prague (fun s => s.benvStat.rules.op.push0) hf hg fun _ hg =>
+          hg.cases (motive := fun g => (e.sta.withFork g).benvStat.rules.op.push0 =
+            (e.sta.withFork .prague).benvStat.rules.op.push0) rfl rfl rfl rfl
+      simp only [Ninst.step, Evm.withFork, hp]
+      split <;> exact (Step.withFork_ofExecution g _ _).symm
     | reg r =>
       show Step.ofExecution _ (Rinst.runCore e.pc e.dyna (e.sta.withFork g) r) = _
       rw [rinst_runCore_withFork hf hg e.pc e.dyna r (by rintro rfl; exact hn.1 hget')
@@ -279,11 +329,18 @@ theorem evm_step_withFork {e : Evm} {g : Fork} (hf : CoveredFork e.sta.benvStat.
 
 /-! ### Frame entry and settlement -/
 
-theorem executePrecomp_withFork (e : Evm) (g : Fork) (adr : Adr) (h5 : adr ≠ 5) :
+theorem executePrecomp_withFork {e : Evm} {g : Fork}
+    (hf : CoveredFork e.sta.benvStat.fork) (hg : CoveredFork g) (adr : Adr) (h5 : adr ≠ 5) :
     executePrecomp (e.withFork g) adr = executePrecomp e adr := by
+  have hbn : (e.sta.withFork g).benvStat.rules.bn254 = e.sta.benvStat.rules.bn254 :=
+    eq_of_prague (fun s => s.benvStat.rules.bn254) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (e.sta.withFork g).benvStat.rules.bn254 =
+        (e.sta.withFork .prague).benvStat.rules.bn254) rfl rfl rfl rfl
   have hrun : precompileRun (e.withFork g) adr = precompileRun e adr := by
     unfold precompileRun
-    split <;> first | exact absurd rfl h5 | rfl
+    split <;> first | exact absurd rfl h5 | rfl |
+      simp only [executeEcadd, executeEcmul, executePairingCheck, PrecompResult.chargeGas, Evm.withFork,
+        Sevm.withFork_data, hbn]
   unfold executePrecomp
   rw [hrun]
   rfl
@@ -316,9 +373,15 @@ theorem processCreateMessage_settle_withFork {m : Msg} {g : Fork}
       processCreateMessage.settle (m.withFork .prague) r) rfl rfl rfl rfl
 
 theorem settleMsg_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.benv.stat.fork)
-    (hg : CoveredFork g) (r : Except (EvmError × State × AdrSet × Tra) Devm) :
+    (hi : CoveredFork f.inner.benv.stat.fork) (hg : CoveredFork g) (r : Except (EvmError × State × AdrSet × Tra) Devm) :
     (f.withFork g).settleMsg r = f.settleMsg r := by
+  have hinner : processMessage.settle (f.inner.withFork g) r =
+      processMessage.settle f.inner r :=
+    msg_eq_of_prague (fun m => processMessage.settle m r) hi hg fun _ hg =>
+      hg.cases (motive := fun g => processMessage.settle (f.inner.withFork g) r =
+        processMessage.settle (f.inner.withFork .prague) r) rfl rfl rfl rfl
   unfold Frame.settleMsg
+  simp only [Frame.withFork, hinner]
   show (if f.isCreate then processCreateMessage.settle (f.outer.withFork g)
       (processMessage.settle f.inner r) else processMessage.settle f.inner r) = _
   rw [processCreateMessage_settle_withFork ho hg]
@@ -330,7 +393,7 @@ theorem settle_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.benv.st
   unfold Frame.settle
   have h1 : (f.withFork g).inner.benv.stat.rules.stateGas = none :=
     CoveredFork.rules_stateGas_none (s := (f.withFork g).inner.benv.stat) hg
-  rw [h1, hi.rules_stateGas_none, settleMsg_withFork ho hg]
+  rw [h1, hi.rules_stateGas_none, settleMsg_withFork ho hi hg]
 
 section msgWithFork
 variable (m : Msg) (g : Fork)
@@ -393,7 +456,7 @@ theorem executeCode_enter_withFork {m : Msg} {g : Fork} (hf : CoveredFork m.benv
           ↓reduceIte, Sum.map_inl]
         · have hr : m.benv.stat.rules.isPrecomp adr := hpre
           simp only [ExceptT.stM_eq, hdp, Bool.not_false, hpre', decide_true, Bool.and_self,
-            ↓reduceIte, executePrecomp_withFork _ _ _ h5, hr, Sum.map_inr, id_eq]
+            ↓reduceIte, executePrecomp_withFork (e := initEvm m) hf hg _ h5, hr, Sum.map_inr, id_eq]
       · have hpre' : ¬ (Fork.ruleSet g).isPrecomp adr := fun h => hpre (hiff.mp h)
         have hr : ¬ m.benv.stat.rules.isPrecomp adr := hpre
         simp only [ExceptT.stM_eq, hpre', decide_false, Bool.and_false, Bool.false_eq_true,
@@ -424,7 +487,7 @@ theorem enterVia_withFork {T : Msg → Except (EvmError × State × AdrSet × Tr
   cases hb : T f.inner with
   | error e =>
     show FrameEntry.done ((f.withFork g).settleMsg (.error e)) = _
-    rw [settleMsg_withFork ho hg]
+    rw [settleMsg_withFork ho hi hg]
     rfl
   | ok benv =>
     have hstat := hstat benv hb

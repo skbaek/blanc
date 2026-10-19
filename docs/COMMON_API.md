@@ -79,6 +79,12 @@ registry has identified the likely vocabulary.
   `exec_withFork`, `exec_out_withFork`, `runFrame_withFork`, `processMessage_withFork`,
   `processCreateMessage_withFork` (same outcome). A closed `*_deploy` instance needs none of
   this when its general `*_create` already quantifies `CoveredFork`.
+  The lower `genericCall_step_withFork`, `spawn_ofCreate_withFork`, and
+  `executePrecomp_withFork` helpers also require both source and destination
+  coverage: inherited deletion snapshots and BN254 gas are historical rule
+  reads. `settleMsg_withFork` requires coverage of both saved messages as
+  well as the destination. These are covered-fork transports, with no claim
+  of equality across arbitrary historical forks.
 - Build a configured block *forward* from proof-produced evidence about its
   parts (a reachable history, a counterexample, a liveness witness): go to
   [T7](#t7-i-must-construct-a-configured-block-forward-from-its-parts).
@@ -87,6 +93,16 @@ registry has identified the likely vocabulary.
 
 ### E1. I need to construct a source or compiled execution term
 
+- Stack/gas frame composition in
+  [`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean):
+  `Devm.popBurn_of_pop_of_burn`, `pushBurn_cons_popBurn_cons`,
+  `burn_of_popBurn_nil`, `burn_of_pushBurn_nil`, `burn_trans`,
+  `popBurn_of_burn_of_popBurn`, and `popBurn_of_popBurn_of_pop` retain
+  every canonical `Devm.Rel` field, including `touchedAccounts`.
+  `push_of_pushAt` inverts a successful execution at a retained PUSH;
+  the invalid-PUSH0 availability branch cannot be that execution.
+  Choose the composition by its premises; a shared `Devm.Rel` conclusion
+  alone does not distinguish these routes.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
@@ -1157,16 +1173,28 @@ and constructor families cover every modelled wrapper layer:
   exact deterministic wrapper equations retained by those carriers.
 - `ExecutionTrace.messageCreateCollision`, `messageCallDelegation`, and
   `messageCallExecutionMessage` name the three message-call routing cuts.
+  Authorization and resolution use Jaune's actual fork-gated helpers rather
+  than an unconditional EIP-7702 lookup.
 - `ExecutionTrace.transactionPreludeBout`, `transactionBlobGasFee`, and
   `transactionTenv` expose transaction preparation;
   `TransactionTrace`, `exists_transactionTrace`, and
   `TransactionTrace.exists_finalStateForm` retain the whole transaction.
+  `transactionTenv` follows the selected rules' coinbase-warming flag;
+  the final-state form's covered-fork premise supplies refund quotient 5
+  and the absence of a touched-account sweep.
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
   block body. `RequestsTrace.state_eq_consolidationState` identifies the final
   request state, and `AppliedBodyTrace.decodedTxs_nil` / `AppliedBodyTrace.decodedTxs_of_mapM`
-  decode `trace.decodedTxs` from empty or mapped `txs.mapM decodeTx` runs.
+  decode `trace.decodedTxs` from empty or mapped
+  `txs.mapM (decodeTx benv.stat.rules)` runs. The body carrier retains its
+  explicit ommer input. Its existing constructor theorem requires
+  `CoveredFork`: the beacon/history calls, withdrawals and requests are on,
+  and proof-of-work rewards are absent under that premise. This does not
+  give unconditional system-call traces or reward-free bodies on historical
+  forks. These retained wrappers are selected by their replay equations;
+  the broad `Nonempty` conclusion alone is not a reliable recipe trigger.
 
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
@@ -1611,6 +1639,21 @@ and closes at the following `SSTORE` without changing or duplicating the body.
 
 ### I1. One instruction/line/function preserves an observation
 
+- Coarse outcome-aware instruction frames in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+  `processCreateMessage.chargeCodeGas_instructionFrame` covers code-deposit
+  charging on both outcomes, including optional EF rejection and state-gas
+  charges. `ForkRules.accessDelegation_instructionFrame` covers the activated
+  facade, including disabled delegation. The coarse frame preserves state,
+  deletion and created-account sets, transient storage, and storage-write
+  annotations; it leaves touched-account metadata unobserved. Exact
+  `Pop`/`Burn` and Mach-only frames retain touched-account equality.
+  `Rinst.sstore_runCore_stateWriteFrame` and the `of_run_sstore*` inversions
+  cover the actual SSTORE regime and access schedule, including flat access;
+  the SLOAD/EXTCODESIZE observation and prefix helpers cover both schedules.
+  These operation-specific relations occur inside the shared outcome carrier;
+  no existing registered single goal-head trigger distinguishes them, so use
+  this branch and the exact operation declaration before unfolding its walk.
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
   `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
@@ -1680,6 +1723,14 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   gas-independence of the forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
   two-run walk to the selected entry first.
+
+`Linst.selfdestruct_preserves_getCode` and `Linst.selfdestruct_balance_effect`
+cover the actual beneficiary credit and refund hooks across historical rules.
+The `Linst.selfdestruct_preserves_noDel`, `Linst.run_noDel` and
+`Linst.inv_noDel` helpers instead require
+`rules.settle.selfdestructOnlyCreated = true`: before that activation, an
+existing coded account can schedule itself for deletion. These helpers do not
+assert a historical-uniform NoDel invariant.
 
 ### I2. The property concerns a complete execution or child frames
 
@@ -1837,6 +1888,18 @@ unfolding a concrete state tower. Examples include:
   `Devm.withOutput_transientStorage`, and sibling projections.
 - `Devm.memWrite_gasLeft` in Jaune and `Devm.memWrite_memory` /
   `Devm.memWrite_stack` in `Blanc/CommonProofs.lean`.
+
+- `Devm.creditBeneficiary_getCode` and `Devm.creditBeneficiary_delSets` in
+  `Blanc/CommonProofs.lean` preserve code and the deletion sets under either
+  presence-preserving historical credits or ordinary credits.
+  `Devm.creditBeneficiary_getBal` compares their balance maps with `addBal`;
+  it does not equate account presence or storage-write annotations.
+  `creditSelfdestructRefund_getCode` and `creditSelfdestructRefund_delSets`
+  isolate the refund hook's unchanged observations.
+- For persistent storage setters, use Jaune's
+  `State.setStorVal_get_self` / `State.setStorVal_get_ne`, which handle the
+  existing-account `setPresent` branch, and Blanc's
+  `setStorVal_getStor_self` / `Devm.getStorVal_setStorVal_self` projections.
 
 If several updates form a familiar semantic post-state, continue to S2.
 
@@ -2484,7 +2547,11 @@ apply Jaune's actual parser equations while keeping payload bytes abstract.
 `decode_bytes_three` cover the small field headers; `parse_cons` composes
 the actual first-item and remaining-list equations.
 `decode_hash` proves the fixed-width header-word roundtrip, including leading
-zero bytes. The list lemma requires the actual recursive child parse. These
+zero bytes. `header21_roundtrip` keeps the requests commitment and requires
+explicit present base fee, withdrawals root, both blob-gas fields and parent
+beacon root, plus the scalar decoder equations. Absent access-list hash and
+slot number delimit the 21-field shape; partial optional tails are not covered.
+The list lemma requires the actual recursive child parse. These
 equations do not assert whole-envelope canonicality or strict transaction acceptance.
 Select by the known header and payload length; the common equality head also
 covers unrelated encode/decode goals, so this remains a manual registry route.
@@ -2857,6 +2924,11 @@ Use Jaune's `Jaune/MessageExecution.lean`, imported by
 - `Msg.initDevm_*` and `Msg.initSevm_*` (Jaune's
   `Jaune/MessageExecution.lean`) expose canonical message-entry fields.
 
+`Msg.NoDel.initDevm` in `Blanc/CommonProofs.lean` requires the exact additional
+fact `wa ∉ msg.inheritedDeletions`; message NoDel alone constrains code and the
+created-account set, not the inherited deletion snapshot. Derive this fact
+from the actual message producer. It is not a default-empty assumption.
+
 ### T2. I need to know which child effects survive settlement
 
 Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`
@@ -2864,6 +2936,11 @@ Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`
 and [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean)) and
 Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 
+- `processMessage.settle_ok_cases` in `Blanc/CommonProofs.lean` retains the
+  actual `Devm.recordTouch` wrapper on both clean and rolled-back machines.
+  Use its exact machine equations, then project unchanged observations.
+  Rollback restores entry state, transient storage and storage-write
+  annotations before recording the rules-selected touch.
 - `Execution.commits` and `Frame.settlementCommits` distinguish raw success
   from complete frame settlement.
 - `Exec.storageReplay_committedPost` supplies `Exec.StorageReplay`: at each
@@ -3746,6 +3823,14 @@ by `clearIfEmpty`. A balance write can clear an unprotected storage-only
 account, so its full-account equation must retain that normalization.
 
 ### T4. The wrapper is a message call and I must see through delegation
+
+For a whole-state balance preorder under `stateGas = none`,
+`processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
+`legacyAuthorization` and `Msg.resolveCodeDelegation`, preserving the actual
+activation facade and the authorization prefix's balance sum.
+`ForkRules.accessDelegation_of_not_delegation` and
+`ForkRules.delegationCost_of_not_delegation` give the facade's no-designator
+identity without assuming delegation is enabled.
 
 Use
 [`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean):

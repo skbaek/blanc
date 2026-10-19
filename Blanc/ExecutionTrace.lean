@@ -121,24 +121,13 @@ only storage is deployable and its storage is wiped on entry. -/
 def messageCreateCollision (msg : Msg) : Bool :=
   accountHasCodeOrNonce msg.benv.state msg.currentTarget
 
-/-- The exact EIP-7702 preparation prefix used by the call arm. -/
+/-- The exact fork-gated authorization prefix used by the call arm. -/
 def messageCallDelegation (msg : Msg) : Except EvmError (Msg × Nat) :=
-  if msg.tenv.stat.auths.isEmpty then
-    .ok ⟨msg, 0⟩
-  else do
-    let ⟨delegated, refund⟩ ← setDelegation msg
-    .ok ⟨delegated, refund.toNat⟩
+  processMessageCall.legacyAuthorization msg
 
-/-- The actual message executed after resolving an EIP-7702 code delegation. -/
+/-- The actual message executed after fork-gated code delegation resolution. -/
 def messageCallExecutionMessage (msg : Msg) : Msg :=
-  match getDelegatedCodeAddress msg.code with
-  | none => msg
-  | some dca =>
-      { msg with
-        disablePrecompiles := true
-        accessedAddresses := msg.accessedAddresses.insert dca
-        code := msg.benv.state.getCode dca
-        codeAddress := some dca }
+  msg.resolveCodeDelegation
 
 /-- Proof-carrying trace of Jaune's settled message-call wrapper.  The three
 constructors match its collision, create-execution, and call-execution arms;
@@ -203,63 +192,13 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
     unfold processMessageCall.call at h
     rw [hsg] at h
     dsimp only at h
-    split at h
-    · rename_i hauth
-      obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
-      cases hx0
-      dsimp only at h
-      split at h
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore :
-            processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa only [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse msg 0 (by
-          simp only [messageCallDelegation, hauth, ↓reduceIte])
-          (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore :
-            processMessage (messageCallExecutionMessage msg) = .ok evm := by
-          simpa only [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse msg 0 (by
-          simp only [messageCallDelegation, hauth, ↓reduceIte])
-          (messageCallExecutionMessage msg) rfl evm hcore trace h_result⟩
-    · rename_i hauth
-      obtain ⟨w, hw, h⟩ := Except.bind_eq_ok h
-      obtain ⟨delegated, refundWord⟩ := w
-      obtain ⟨x0, hx0, h⟩ := Except.bind_eq_ok h
-      cases hx0
-      dsimp only at h
-      split at h
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore : processMessage
-            (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa only [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
-          unfold messageCallDelegation
-          rw [ite_eq_right hauth, hw]
-          rfl)
-          (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
-      · rename_i hcode
-        obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
-        have hcore0 := Except.bimap_id_eq_ok hevm
-        have hcore : processMessage
-            (messageCallExecutionMessage delegated) = .ok evm := by
-          simpa only [messageCallExecutionMessage, hcode] using hcore0
-        rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
-        exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
-          unfold messageCallDelegation
-          rw [ite_eq_right hauth, hw]
-          rfl)
-          (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
+    obtain ⟨⟨delegated, refund⟩, hdelegated, h⟩ := Except.bind_eq_ok h
+    obtain ⟨evm, hevm, _⟩ := Except.bind_eq_ok h
+    have hcore : processMessage (messageCallExecutionMessage delegated) = .ok evm :=
+      Except.bimap_id_eq_ok hevm
+    rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
+    exact ⟨.callRun htargetFalse delegated refund hdelegated
+      (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
 
 /-- Recover the exact deterministic wrapper equation retained by a message
 trace. -/
@@ -291,7 +230,9 @@ def transactionTenv (benv : Benv) (tx : Tx) (index : Nat)
         gasPrice := effectiveGasPrice
         gas := tx.gas - intrinsicGas
         accessListAddresses :=
-          .ofList (benv.stat.coinbase :: tx.accessList.map Prod.fst)
+          if benv.stat.rules.txr.warmCoinbase then
+            .ofList (benv.stat.coinbase :: tx.accessList.map Prod.fst)
+          else .ofList (tx.accessList.map Prod.fst)
         accessListStorageKeys :=
           .ofList (tx.accessList.map (fun ⟨adr, keys⟩ =>
             keys.map (⟨adr, ·⟩))).flatten
@@ -484,7 +425,12 @@ theorem TransactionTrace.exists_finalStateForm
   rcases hmessageEq with ⟨rfl, rfl⟩
   rcases Except.bind_eq_ok hrun with ⟨refundCounter, hrefund, hrun⟩
   have hrefundSome := Option.toExcept_eq_ok hrefund
-  simp only [settleTransactionGas, settleSelfdestructs, hsg] at hrun
+  have hrefundQuotient : benv.stat.fork.ruleSet.settle.refundQuotient = 5 :=
+    hfork.cases (motive := fun f => f.ruleSet.settle.refundQuotient = 5) rfl rfl rfl rfl
+  have hsweep : benv.stat.fork.ruleSet.settle.touchedSweep = false :=
+    hfork.cases (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+  simp only [settleTransactionGas, settleSelfdestructs, hsg, hrefundQuotient,
+    sweepTouchedAccounts, hsweep, Bool.false_eq_true, ↓reduceIte] at hrun
   have hfinal := Except.ok.inj hrun
   exact ⟨refundCounter, hrefundSome, (Prod.mk.inj hfinal).1.symm⟩
 
@@ -673,8 +619,8 @@ currently modelled body semantics.  This includes the two pre-transaction
 system calls, every decoded normal transaction, and the two checked
 request-system calls. -/
 structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
-    (wds : List Withdrawal) (state : State) (bout : BlockOutput) where
-  run : applyBody benv txs wds = .ok (state, bout)
+    (ommers : List Header) (wds : List Withdrawal) (state : State) (bout : BlockOutput) where
+  run : applyBody benv txs ommers wds = .ok (state, bout)
   beaconState : State
   beaconOut : MsgCallOutput
   beacon : SystemMessageTrace benv beaconRootsAddress
@@ -689,7 +635,7 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
   history : SystemMessageTrace (benv.withState beaconState)
     historyStorageAddress lastHash.toBytes historyState historyOut
   decodedTxs : List Tx
-  decodeRun : txs.mapM decodeTx = .ok decodedTxs
+  decodeRun : txs.mapM (decodeTx benv.stat.rules) = .ok decodedTxs
   transactionBenv : Benv
   transactionBout : BlockOutput
   transactions : ApplyTransactionsTrace decodedTxs.putIndex
@@ -713,23 +659,35 @@ structure AppliedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
 only post-request body operation in the covered legacy lane normalizes the
 block access-list output. -/
 theorem AppliedBodyTrace.state_eq_consolidationState
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     state = trace.requests.consolidationState :=
   trace.requestState_eq.symm.trans
     trace.requests.state_eq_consolidationState
 theorem exists_appliedBodyTrace
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (h : applyBody benv txs wds = .ok (state, bout))
+    (h : applyBody benv txs ommers wds = .ok (state, bout))
     (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (AppliedBodyTrace benv txs wds state bout) := by
+    Nonempty (AppliedBodyTrace benv txs ommers wds state bout) := by
   have h_result := h
   have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
+  have hbeaconRules : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistoryRules : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawalsRules : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequestsRules : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hpow : benv.stat.rules.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
   rw [applyBody] at h
-  simp only [BalBuilder.incorporateSystem, hbal,
-    checkBlockAccessListGasLimit] at h
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte,
+    BalBuilder.incorporateSystem, hbal, checkBlockAccessListGasLimit, bind_assoc] at h
+  simp only [bind, Except.bind] at h
   rcases Except.bind_eq_ok h with
     ⟨⟨beaconState, beaconOut⟩, hbeacon, h⟩
   rcases Except.bind_eq_ok h with ⟨lastHash, hlastHash, h⟩
@@ -765,16 +723,16 @@ theorem exists_appliedBodyTrace
     hfinal'.1, hfinal'.2⟩⟩
 
 theorem AppliedBodyTrace.decodedTxs_nil {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (htxs : txs = []) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) (htxs : txs = []) :
     trace.decodedTxs = [] := by
-  have hdecode : txs.mapM decodeTx = .ok [] := by rw [htxs]; rfl
+  have hdecode : txs.mapM (decodeTx benv.stat.rules) = .ok [] := by rw [htxs]; rfl
   exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
 
 theorem AppliedBodyTrace.decodedTxs_of_mapM {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {l : List Tx}
-    (h : txs.mapM decodeTx = .ok l) : trace.decodedTxs = l :=
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) {l : List Tx}
+    (h : txs.mapM (decodeTx benv.stat.rules) = .ok l) : trace.decodedTxs = l :=
   Except.ok.inj (trace.decodeRun.symm.trans h)
 
 end ExecutionTrace
