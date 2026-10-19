@@ -59,6 +59,26 @@ section Fwd
 
 variable {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
+/-- An identity-precompile copy, forward, to some outcome, whose continuation also receives the
+canonical successor (`rxc_call_identity_canonical`'s twin). -/
+theorem rxce_call_identity_canonical {f : SFunc} {Q : Seg → Prop}
+    {g ii is oi os : B256} {ext : Nat} (hid : IdReady sevm b)
+    (hdepth : sevm.depth ≠ 0) (hg : g = Nat.toB256 G)
+    (hext : (St b S M G).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] = ext)
+    (hfund : 100 + ext + 64 * idCost is.toNat ≤ G) (hbound : G < 2 ^ 256)
+    (hroom : S.length < 1024)
+    (k : ∀ b', ShaCallPost b b' (M.read ii.toNat is.toNat).1 →
+      Devm.EqModGas b' (identityCallNext sevm b S M ii is oi os) →
+      SFunc.RunExCut fs sevm C
+        (St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat
+          ((M.read ii.toNat is.toNat).1.take os.toNat)) (G - (100 + ext + idCost is.toNat))) f Q) :
+    SFunc.RunExCut fs sevm C (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G)
+      (.next (.exec .call) f) Q := by
+  obtain ⟨b', hpost, hcan, hrun⟩ :=
+    call_identity_step_canonical hid hdepth hg hext hfund hbound hroom
+  obtain ⟨r, hr, hq⟩ := k b' hpost hcan
+  exact ⟨r, .next hrun hr, hq⟩
+
 /-- An identity-precompile copy, forward, to some outcome (`rxc_call_identity`'s twin). -/
 theorem rxce_call_identity {f : SFunc} {Q : Seg → Prop}
     {g ii is oi os : B256} {ext : Nat} (hid : IdReady sevm b)
@@ -71,18 +91,17 @@ theorem rxce_call_identity {f : SFunc} {Q : Seg → Prop}
         (St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat
           ((M.read ii.toNat is.toNat).1.take os.toNat)) (G - (100 + ext + idCost is.toNat))) f Q) :
     SFunc.RunExCut fs sevm C (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G)
-      (.next (.exec .call) f) Q := by
-  obtain ⟨b', hpost, hrun⟩ := call_identity_step hid hdepth hg hext hfund hbound hroom
-  obtain ⟨r, hr, hq⟩ := k b' hpost
-  exact ⟨r, .next hrun hr, hq⟩
+      (.next (.exec .call) f) Q :=
+  rxce_call_identity_canonical hid hdepth hg hext hfund hbound hroom fun b' hpost _ => k b' hpost
 
 variable {Q : Seg → Prop}
 
-/-- **The join, forward, to some outcome** (`rxc_vyRawCallJoin`'s twin): over a word-aligned memory covering `[L, L + 64)` and
+/-- **The join, forward, to some outcome, with its canonical identity base**: `rxce_vyRawCallJoin`, whose continuation also
+receives `rawJoinBaseNext`. As `rxce_vyRawCallJoin`: over a word-aligned memory covering `[L, L + 64)` and
 `[B, B + 64)` with the first `len` returned bytes at `L + 32`, and a `raw_call` result that
 passes (`len = 0`, or a nonzero number), the join runs to `K` over the identity copy's base,
 with the memory `vyRawMem`. -/
-theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd : Bytes}
+theorem rxce_vyRawCallJoin_canonical {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd : Bytes}
     {rds c : B256} (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0)
     (hn32 : n ≤ 32) (hnrd : n ≤ rd.length) (hok : n = 0 ∨ Bytes.toNat (rd.take n) ≠ 0)
     (hrd : ∀ j, j < n →
@@ -90,7 +109,8 @@ theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd
     (h32 : M.size % 32 = 0) (hcovL : (Bytes.toB256 [p.lh, p.ll]).toNat + 64 ≤ M.size)
     (hcovB : (Bytes.toB256 [p.bh, p.bl]).toNat + 64 ≤ M.size)
     (hG : 1444 ≤ G) (hbound : G + 1000 < 2 ^ 256) (hroom : S.length + 10 < 1024)
-    (k : ∀ b' rd', ShaCallPost b b' rd' → SFunc.RunExCut fs sevm C
+    (k : ∀ b' rd', ShaCallPost b b' rd' → Devm.EqModGas b' (rawJoinBaseNext sevm b S M p n) →
+      SFunc.RunExCut fs sevm C
       (St b' S (vyRawMem M (Bytes.toB256 [p.lh, p.ll]).toNat (Bytes.toB256 [p.bh, p.bl]).toNat n)
         G) K Q) :
     SFunc.RunExCut fs sevm C (St b (Nat.toB256 n :: rds :: c :: S) M (G + rawJoinCost n))
@@ -177,9 +197,9 @@ theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd
   xrc (rxc_push (G := G + X + ic + 48) rfl (by (try simp only [List.length_cons]); omega) ·)
   xrc (rxc_gas (G := G + X + ic + 46) (by (try simp only [List.length_cons]); omega) ·)
   rw [show Bytes.toB256 [0x04] = 4 by decide, show Bytes.toB256 [0x00] = 0 by decide]
-  refine rxce_call_identity (G := G + X + ic + 46) hid hdepth rfl
+  refine rxce_call_identity_canonical (G := G + X + ic + 46) hid hdepth rfl
     (Devm.extCost_covered hcovI) (by omega) (by omega) (by (try simp only [List.length_cons]); omega) ?_
-  intro b' hpost
+  intro b' hpost hcan
   rw [show G + X + ic + 46 - (100 + 0 + idCost nw.toNat) = G + X + 46 by omega,
     Mem.extends_covered hcovI, ← hinput, List.take_of_length_le (by rw [hinlen, hnw']), ← hM2]
   have hmB : (M2.read Bw.toNat 32).2 = M2 :=
@@ -203,7 +223,7 @@ theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd
     xrc (rxc_push (G := G + X + 10) rfl (by (try simp only [List.length_cons]); omega) ·)
     xrc (rxc_branch_succ (G := G + X) (by decide) ·)
     rw [hX0, Nat.add_zero, hmem2]
-    exact k b' _ hpost
+    exact k b' _ hpost hcan
   · -- `len > 0`: the tested tail
     have hX1 : X = rawCheckCost n := by rw [hX, ite_eq_right (by omega)]
     have hgt : len > Bytes.toB256 [0x00] := by
@@ -218,13 +238,35 @@ theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd
     xrc (rxc_vyRawCallCheck hpos hn32 hnrd (hok.resolve_left (by omega)) hlenB hrdB
       (by rw [hs2]; exact h32) (by rw [hs2]; exact hcovB) (by omega) ·)
     rw [hmem2]
-    exact k b' _ hpost
+    exact k b' _ hpost hcan
 
-/-- **The `raw_call(…, max_outsize=32)` tail, forward, to some outcome** (`rxc_vyRawCallTail`'s twin): after a successful `CALL` whose returned
+/-- **The join, forward, to some outcome** (`rxc_vyRawCallJoin`'s twin): over a word-aligned memory covering `[L, L + 64)` and
+`[B, B + 64)` with the first `len` returned bytes at `L + 32`, and a `raw_call` result that
+passes (`len = 0`, or a nonzero number), the join runs to `K` over the identity copy's base,
+with the memory `vyRawMem`. -/
+theorem rxce_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {n : Nat} {rd : Bytes}
+    {rds c : B256} (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0)
+    (hn32 : n ≤ 32) (hnrd : n ≤ rd.length) (hok : n = 0 ∨ Bytes.toNat (rd.take n) ≠ 0)
+    (hrd : ∀ j, j < n →
+      M.data.getD ((Bytes.toB256 [p.lh, p.ll]).toNat + 32 + j) 0 = rd.getD j 0)
+    (h32 : M.size % 32 = 0) (hcovL : (Bytes.toB256 [p.lh, p.ll]).toNat + 64 ≤ M.size)
+    (hcovB : (Bytes.toB256 [p.bh, p.bl]).toNat + 64 ≤ M.size)
+    (hG : 1444 ≤ G) (hbound : G + 1000 < 2 ^ 256) (hroom : S.length + 10 < 1024)
+    (k : ∀ b' rd', ShaCallPost b b' rd' → SFunc.RunExCut fs sevm C
+      (St b' S (vyRawMem M (Bytes.toB256 [p.lh, p.ll]).toNat (Bytes.toB256 [p.bh, p.bl]).toNat n)
+        G) K Q) :
+    SFunc.RunExCut fs sevm C (St b (Nat.toB256 n :: rds :: c :: S) M (G + rawJoinCost n))
+      (vyRawCallJoin p f2 f3 f4 f5 K) Q :=
+  rxce_vyRawCallJoin_canonical hid hdepth hn32 hnrd hok hrd h32 hcovL hcovB hG hbound hroom
+    fun b' rd' hpost _ => k b' rd' hpost
+
+/-- **The `raw_call(…, max_outsize=32)` tail, forward, to some outcome, with its canonical identity
+base**: `rxce_vyRawCallTail`, whose continuation also receives `rawTailBaseNext`. As
+`rxce_vyRawCallTail`: after a successful `CALL` whose returned
 data passes `RawCallOk` and whose returned prefix sits at `L + 32`, over a word-aligned memory
 covering `[L, L + 64)` and `[B, B + 64)`, the tail runs to `K` over the identity copy's base, at
 gas `rawTailCost (min len 32)`. -/
-theorem rxce_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} {flag : B256}
+theorem rxce_vyRawCallTail_canonical {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} {flag : B256}
     (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0) (hflag : flag ≠ 0)
     (hk : fs[k]? = some (vyRawCallJoin p f2 f3 f4 f5 K)) (hkC : k ∉ C)
     (hrdlt : b.returnData.length < 2 ^ 256) (hok : RawCallOk b.returnData)
@@ -233,7 +275,8 @@ theorem rxce_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} 
     (h32 : M.size % 32 = 0) (hcovL : (Bytes.toB256 [p.lh, p.ll]).toNat + 64 ≤ M.size)
     (hcovB : (Bytes.toB256 [p.bh, p.bl]).toNat + 64 ≤ M.size)
     (hG : 1444 ≤ G) (hbound : G + 1000 < 2 ^ 256) (hroom : S.length + 10 < 1024)
-    (kk : ∀ b' rd', ShaCallPost b b' rd' → SFunc.RunExCut fs sevm C
+    (kk : ∀ b' rd', ShaCallPost b b' rd' → Devm.EqModGas b' (rawTailBaseNext sevm b S M p) →
+      SFunc.RunExCut fs sevm C
       (St b' S (vyRawMem M (Bytes.toB256 [p.lh, p.ll]).toNat (Bytes.toB256 [p.bh, p.bl]).toNat
         (min b.returnData.length 32)) G) K Q) :
     SFunc.RunExCut fs sevm C (St b (flag :: S) M (G + rawTailCost (min b.returnData.length 32)))
@@ -269,7 +312,7 @@ theorem rxce_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} 
     xrc (rxc_push (G := G + J + 8) rfl (by (try simp only [List.length_cons]); omega) ·)
     xrc (rxc_jump (G := G + J) hk hkC ·)
     rw [← hnl]
-    exact rxce_vyRawCallJoin hid hdepth (by omega) (by omega) hok' hrd h32 hcovL hcovB hG hbound
+    exact rxce_vyRawCallJoin_canonical hid hdepth (by omega) (by omega) hok' hrd h32 hcovL hcovB hG hbound
       (by omega) kk
   · rw [show G + rawTailCost n = G + J + 48 by rw [rawTailCost, ite_eq_right (by omega)]; omega]
     have hn32 : n = 32 := by omega
@@ -289,8 +332,29 @@ theorem rxce_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} 
     xrc (fun h => rxc_branch_succ (G := G + J + 4) (by decide) (rxc_dest h))
     xrc (rxc_dup (G := G + J) (n := 1) (w := Bytes.toB256 [0x20]) rfl (by (try simp only [List.length_cons]); omega) ·)
     rw [show Bytes.toB256 [0x20] = Nat.toB256 n by rw [hn32]; decide]
-    exact rxce_vyRawCallJoin hid hdepth (by omega) (by omega) hok' hrd h32 hcovL hcovB hG hbound
+    exact rxce_vyRawCallJoin_canonical hid hdepth (by omega) (by omega) hok' hrd h32 hcovL hcovB hG hbound
       (by omega) kk
+
+/-- **The `raw_call(…, max_outsize=32)` tail, forward, to some outcome** (`rxc_vyRawCallTail`'s twin): after a successful `CALL` whose returned
+data passes `RawCallOk` and whose returned prefix sits at `L + 32`, over a word-aligned memory
+covering `[L, L + 64)` and `[B, B + 64)`, the tail runs to `K` over the identity copy's base, at
+gas `rawTailCost (min len 32)`. -/
+theorem rxce_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} {flag : B256}
+    (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0) (hflag : flag ≠ 0)
+    (hk : fs[k]? = some (vyRawCallJoin p f2 f3 f4 f5 K)) (hkC : k ∉ C)
+    (hrdlt : b.returnData.length < 2 ^ 256) (hok : RawCallOk b.returnData)
+    (hrd : ∀ j, j < min b.returnData.length 32 →
+      M.data.getD ((Bytes.toB256 [p.lh, p.ll]).toNat + 32 + j) 0 = b.returnData.getD j 0)
+    (h32 : M.size % 32 = 0) (hcovL : (Bytes.toB256 [p.lh, p.ll]).toNat + 64 ≤ M.size)
+    (hcovB : (Bytes.toB256 [p.bh, p.bl]).toNat + 64 ≤ M.size)
+    (hG : 1444 ≤ G) (hbound : G + 1000 < 2 ^ 256) (hroom : S.length + 10 < 1024)
+    (kk : ∀ b' rd', ShaCallPost b b' rd' → SFunc.RunExCut fs sevm C
+      (St b' S (vyRawMem M (Bytes.toB256 [p.lh, p.ll]).toNat (Bytes.toB256 [p.bh, p.bl]).toNat
+        (min b.returnData.length 32)) G) K Q) :
+    SFunc.RunExCut fs sevm C (St b (flag :: S) M (G + rawTailCost (min b.returnData.length 32)))
+      (vyRawCallTail p k f1 f2 f3 f4 f5 K) Q :=
+  rxce_vyRawCallTail_canonical hid hdepth hflag hk hkC hrdlt hok hrd h32 hcovL hcovB hG hbound
+    hroom fun b' rd' hpost _ => kk b' rd' hpost
 
 end Fwd
 
