@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveFrame
 import Blanc.Lift.Curve3Pool.ExactLivePremises
+import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityExactSchedule
 import Blanc.Lift.GasErasureRun
 
 /-!
@@ -7,43 +8,15 @@ import Blanc.Lift.GasErasureRun
 
 The exact walk fixes, before any residual gas, the four coin calls' independently supplied
 debits and canonical successors (`ExchangeExactCalls`) and prices every later stage at the
-canonical base, memory and stack the stage cores expose. This module holds the data, the
-premises connecting it to the shared exact profiles, and the congruences the walk needs to move
-a stage's charge from an actual base to its canonical one. It proves nothing about a run.
+canonical base, memory and stack the stage cores expose. The profiles enter the cores through
+`StaticWordCallProfile.okE`/`MutableCallProfile.okE` with relation `ExactE`
+(`RemoveLiquidityExactSchedule`). This module holds the data and the congruences the walk needs
+to move a stage's charge from an actual base to its canonical one.
 -/
 
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
-
-/-! ## Exact profiles as relation-carrying call premises -/
-
-/-- The relation an exact profile carries for one call: its debit and canonical successor. -/
-def ExactCallRel (debit : Devm → List B256 → Mem → Nat) (next : Devm → List B256 → Mem → Devm) :
-    Devm → List B256 → Mem → Nat → Devm → Prop :=
-  fun b S M G d => G = d.gasLeft + debit b S M ∧ Devm.EqModGas d (next b S M)
-
-/-- An exact static profile is a relation-carrying static premise. -/
-theorem StaticWordCallProfile.okE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
-    {A : B256} {U : Nat} {ii is oi : B256} {debit : Devm → List B256 → Mem → Nat}
-    {next : Devm → List B256 → Mem → Devm}
-    (h : StaticWordCallProfile sevm W W' t data A U ii is oi debit next) :
-    StaticWordOkAtE sevm W W' t data A U ii is oi (ExactCallRel debit next) := by
-  intro b S M G hW hU hG hin hroom
-  obtain ⟨hc, d, hrun, hgas, hnext, out, hpost, hlen, hlt, hA, hW', hid⟩ :=
-    h.sound b S M G ⟨hW, hU, hG, hin, hroom⟩
-  exact ⟨d, out, hrun, hpost, hlen, hlt, hA, by omega, by omega, hW', hid, hgas, hnext⟩
-
-/-- An exact mutable profile is a relation-carrying mutable premise. -/
-theorem MutableCallProfile.okE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
-    {ok : Bytes → Prop} {U : Nat} {ii is oi : B256} {debit : Devm → List B256 → Mem → Nat}
-    {next : Devm → List B256 → Mem → Devm}
-    (h : MutableCallProfile sevm W W' t data ok U ii is oi debit next) :
-    MutCallOkAtE sevm W W' t data ok U ii is oi (ExactCallRel debit next) := by
-  intro b S M G hW hU hG hin hroom
-  obtain ⟨hc, d, hrun, hgas, hnext, hpost, hok, hlt, hstor, hW', hid⟩ :=
-    h.sound b S M G ⟨hW, hU, hG, hin, hroom⟩
-  exact ⟨d, hrun, hpost, hok, hlt, by omega, by omega, hstor, hW', hid, hgas, hnext⟩
 
 /-! ## `_A`'s and `get_y`'s charges at a base modulo gas -/
 

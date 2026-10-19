@@ -251,48 +251,6 @@ theorem mono {W' : Devm → Prop} (h : ExLive sevm W b σ) (hc : WClosed sevm W'
 
 end ExLive
 
-/-- `StaticWordOkAt`, the call also relating its input and post by `E` (the old premise is
-`E = True`; an exact profile supplies its debit and canonical successor). -/
-def StaticWordOkAtE (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes) (A : B256)
-    (U : Nat) (ii is oi : B256) (E : Devm → List B256 → Mem → Nat → Devm → Prop) : Prop :=
-  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
-    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
-    ∃ d out, Ninst.RunCompiled sevm
-        (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .staticcall) d ∧
-      StaticCallPost b d S M ii is oi 0x20 1 out ∧ 32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      Bytes.toB256 (out.take 32) = A ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧ W' d ∧
-      (IdReady sevm b → IdReady sevm d) ∧ E b S M G d
-
-/-- The bounded premise, with no extra relation. -/
-theorem StaticWordOkAt.withE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
-    {A : B256} {U : Nat} {ii is oi : B256} (h : StaticWordOkAt sevm W W' t data A U ii is oi) :
-    StaticWordOkAtE sevm W W' t data A U ii is oi (fun _ _ _ _ _ => True) := by
-  intro b S M G hW hU hG hin hroom
-  obtain ⟨d, out, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := h b S M G hW hU hG hin hroom
-  exact ⟨d, out, h1, h2, h3, h4, h5, h6, h7, h8, h9, trivial⟩
-
-/-- `MutCallOkAt`, the call also relating its input and post by `E`. -/
-def MutCallOkAtE (sevm : Sevm) (W W' : Devm → Prop) (t : B256) (data : Bytes)
-    (ok : Bytes → Prop) (U : Nat) (ii is oi : B256)
-    (E : Devm → List B256 → Mem → Nat → Devm → Prop) : Prop :=
-  ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b → U ≤ G → G < 2 ^ 256 →
-    (M.read ii.toNat is.toNat).1 = data → S.length < 1024 →
-    ∃ d, Ninst.RunCompiled sevm
-        (St b (Nat.toB256 G :: t :: 0 :: ii :: is :: oi :: 0x20 :: S) M G) (.exec .call) d ∧
-      MutableCallPost b d S M ii is oi 0x20 1 ∧ ok d.returnData ∧
-      d.returnData.length < 2 ^ 256 ∧ G ≤ d.gasLeft + U ∧ d.gasLeft ≤ G ∧
-      d.getStor sevm.currentTarget = b.getStor sevm.currentTarget ∧ W' d ∧
-      (IdReady sevm b → IdReady sevm d) ∧ E b S M G d
-
-/-- The bounded premise, with no extra relation. -/
-theorem MutCallOkAt.withE {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes}
-    {ok : Bytes → Prop} {U : Nat} {ii is oi : B256}
-    (h : MutCallOkAt sevm W W' t data ok U ii is oi) :
-    MutCallOkAtE sevm W W' t data ok U ii is oi (fun _ _ _ _ _ => True) := by
-  intro b S M G hW hU hG hin hroom
-  obtain ⟨d, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := h b S M G hW hU hG hin hroom
-  exact ⟨d, h1, h2, h3, h4, h5, h6, h7, h8, h9, trivial⟩
-
 /-- **A one-word `STATICCALL` answered by its premise, forward, with its relation**:
 `rxe_staticWord` over `StaticWordOkAtE`, the continuation also receiving the literal post
 memory and `E` at the call's input. -/
