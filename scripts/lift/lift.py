@@ -14,6 +14,10 @@ analyzed normally; the kernel certificate checks the referenced definition.
 Both names use unquoted ASCII Lean identifier components; the reference must
 be qualified. Omitting the pair preserves the historical literal output.
 
+`--tries-out FILE` (registry `tries.path`/`tries.header`) emits checked literal
+tries under the certificate namespace's `TrieData` subnamespace, independently
+of a handwritten Check/Jumps pair. Omitted by default; existing outputs do not change.
+
 Provenance.  This file is the union of the historical producer forks kept as
 Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/lift.py`,
 `vyper-3crv-bytecode-v1/v1/lift.py`) and the deployed Lido adaptation
@@ -355,6 +359,14 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv.append("--check-literal-tries")
                 if check.get("assembly") in ("seven", "two", "chain"):
                     argv += ["--check-assembly", check["assembly"]]
+            tries = row.get("tries")
+            if tries:
+                if check and check.get("parts", 0) >= 2:
+                    print(f"FAIL {ident}: standalone tries and split Check both own CheckTries.lean")
+                    failures += 1
+                    continue
+                argv += ["--tries-out", str(out / "CheckTries.lean"),
+                         "--tries-header", tries["header"]]
             jumps = row.get("jumps")
             if jumps:
                 argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
@@ -372,6 +384,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 continue
             summary = next((l for l in proc.stdout.splitlines() if l.startswith("Counts:")), "")
             pairs = [(out / "Cert.lean", root / row["cert"])]
+            if tries:
+                pairs.append((out / "CheckTries.lean", root / tries["path"]))
             if check:
                 pairs.append((out / "Check.lean", root / check["path"]))
                 if "parts" in check:
@@ -435,6 +449,9 @@ parser.add_argument("--cert-out", type=Path, default=None, help="Cert.lean to wr
 parser.add_argument("--check-out", type=Path, default=None, help="per-entry Check.lean to write (optional)")
 parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lean generator comment")
 parser.add_argument("--check-header", type=str, default=DEFAULT_HEADER, help="Check.lean generator comment")
+parser.add_argument("--tries-out", type=Path, default=None,
+                    help="standalone literal code tries in the namespace's TrieData subnamespace (registry tries.path); leaves handwritten Check/Jumps unchanged")
+parser.add_argument("--tries-header", type=str, default=DEFAULT_HEADER, help="standalone tries generator comment")
 parser.add_argument("--jumps-out", type=Path, default=None,
                     help="optional regular Cert.jumpsOk per-entry proof module (requires --check-out)")
 parser.add_argument("--jumps-header", type=str, default=DEFAULT_HEADER, help="Jumps.lean generator comment")
@@ -500,6 +517,9 @@ if args.hex is None or args.sha256 is None or args.namespace is None or args.cer
 
 if args.jumps_out is not None and (args.check_out is None or MEMRET):
     parser.error("regular jumps mode needs --check-out and --memret off")
+
+if args.tries_out is not None and args.check_parts >= 2:
+    parser.error("standalone tries and split Check both own CheckTries.lean")
 
 # 1. Load bytecode
 code_hex = args.hex.read_text().strip()
@@ -2183,6 +2203,26 @@ def literal_tries_lines(depth: int) -> List[str]:
     return out
 
 
+def standalone_tries_source() -> str:
+    """Checked literal payloads for a handwritten checker, without regenerating its proofs."""
+    depth = max(1, (len(code) - 1).bit_length())
+    ns = args.namespace
+    lines = [
+        f"import {ns}.Cert",
+        "import Blanc.Lift.CodeTriesData",
+        "import Blanc.ConcreteRun",
+        "",
+        f"/-! {args.tries_header}",
+        "Literal byte and instruction-start tries, checked against the pinned code. -/",
+        "",
+        f"namespace {ns}.TrieData",
+        "",
+        "open Jaune",
+        "",
+    ] + literal_tries_lines(depth)
+    return "\n".join(lines + [f"end {ns}.TrieData", ""])
+
+
 # Kernel-decision node budget for `--check-split-nodes`/registry `check.split_nodes`: a
 # `decide +kernel` over roughly this many SFunc tree nodes peaks under the ~4 GiB host
 # admission norm (the frame-4 precedent measured ~900 steps per decision at that peak,
@@ -2697,6 +2737,10 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
             files[name] = "import Blanc.Lift.KernelBatch\n" + files[name]
     return files
 
+
+if args.tries_out is not None:
+    args.tries_out.parent.mkdir(parents=True, exist_ok=True)
+    args.tries_out.write_text(standalone_tries_source())
 
 if args.check_out is not None:
     args.check_out.parent.mkdir(parents=True, exist_ok=True)
