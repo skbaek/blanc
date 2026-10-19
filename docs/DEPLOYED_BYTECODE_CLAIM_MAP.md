@@ -1894,10 +1894,12 @@ pinned layer change. `scripts/check-claim-hash.sh` covers that layer: in one run
 it hashes with SHA-256 the full definitional closure of every pinned statement
 and every unfolding pin in `scripts/ClaimCheck.lean` (a definition by its type
 and body, a theorem by its statement only, an inductive type by its whole mutual
-block with its constructor types; binder names and annotations are ignored, and
-a referenced constant contributes its own hash, not its name) and compares each
-pin's root hash with the manifest committed in `scripts/claim-pin-hash/`; a
-mismatch names the definitions whose content changed and the pins they reach.
+block with the names of its types and constructors and its constructor types;
+binder names and annotations are ignored, and a referenced constant contributes
+its own hash, not its name) and compares each pin's root hash with the manifest
+committed in `scripts/claim-pin-hash/`; a mismatch names the definitions whose
+content changed and the pins they reach. It reads the built Lean artifacts and
+refuses to run unless they are certified current for the sources.
 The hash stops at the pinned dependencies: a constant from the Lean toolchain,
 Batteries, Mathlib or Jaune counts as its name together with the toolchain in
 `lean-toolchain` or the package revision in `lake-manifest.json`, so its body is
