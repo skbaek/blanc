@@ -37,8 +37,9 @@ them, and the pins whose roots they reach, and fails; the readable ``example``
 pins in ClaimCheck stay the reviewed statement.
 
 Modes:
-  (default)          regenerate into a temporary directory and compare with
-                     the committed manifest in scripts/claim-pin-hash/
+  (default)          run the in-memory controls, regenerate into a temporary
+                     directory and compare with the committed manifest in
+                     scripts/claim-pin-hash/
   --generate DIR     regenerate and write the manifest files into DIR
   --records FILE     use an existing driver output instead of running Lean
   --self-test        in-memory controls of the Merkle and comparison logic
@@ -343,7 +344,7 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
 # ---------------------------------------------------------------- self-test
 
 
-def self_test() -> int:
+def self_test(quiet: bool = False) -> int:
     """In-memory controls for the Merkle table and the comparison."""
     deps = {"@toolchain": "lean4:test", "mathlib": "mathlib@abc"}
 
@@ -362,7 +363,8 @@ def self_test() -> int:
     failures = []
 
     def check(label: str, ok: bool) -> None:
-        print(("PASS " if ok else "FAIL ") + label)
+        if not quiet or not ok:
+            print(("PASS " if ok else "FAIL ") + label)
         if not ok:
             failures.append(label)
 
@@ -429,7 +431,8 @@ def self_test() -> int:
     if failures:
         print(f"FAIL — claim-hash self-test: {len(failures)} control(s) did not bite")
         return 1
-    print("OK — claim-hash self-test: all controls bite")
+    if not quiet:
+        print("OK — claim-hash self-test: all controls bite")
     return 0
 
 
@@ -487,6 +490,11 @@ def main(argv: list[str]) -> int:
     if args.self_test:
         return self_test()
     start = time.monotonic()
+    # Every run first executes the in-memory controls, so a comparison that has
+    # stopped biting cannot report a pass.
+    if self_test(quiet=True) != 0:
+        print("REGRESSION — claim closure hash: the in-memory controls did not bite")
+        return 1
     try:
         with tempfile.TemporaryDirectory(prefix="claim-hash-", dir=os.environ.get("CLAIM_HASH_TMPDIR")) as tmp:
             work = Path(tmp)
