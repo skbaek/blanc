@@ -188,13 +188,34 @@ def artifact_currency(root: Path) -> str:
         spec.loader.exec_module(module)
     finally:
         sys.dont_write_bytecode = previous
-    current, reason, _ = module.build_certificate_status(root)
+    current, reason, certificate = module.build_certificate_status(root)
     if not current:
         raise GateError(
             "the Lean artifacts are not certified current for these sources "
             f"({reason}); run the authoritative lake build through the owned build path, then "
             "scripts/certify-checked-build.sh, and rerun")
-    return reason
+    return reason, certificate
+
+
+def check_fully_hashed_currency(certificate: dict) -> dict[str, int]:
+    """Hashing a package in full is only meaningful if its artifacts were proven
+    current: every FULLY_HASHED package must be among the certificate's checked
+    dependencies with a nonzero module count and have no unchecked modules."""
+    currency = (certificate or {}).get("currency") or {}
+    checked = currency.get("dependencies")
+    unchecked = currency.get("unchecked")
+    if not isinstance(checked, dict) or not isinstance(unchecked, dict):
+        raise GateError("the build certificate records no dependency currency (schema v4 required)")
+    counts = {}
+    for package in FULLY_HASHED:
+        if unchecked.get(package, 0):
+            raise GateError(f"fully hashed package {package} has {unchecked[package]} module(s) the "
+                            "build certificate does not prove current")
+        if not checked.get(package, 0):
+            raise GateError(f"fully hashed package {package} is not among the build certificate's "
+                            "checked dependencies")
+        counts[package] = checked[package]
+    return counts
 
 
 def check_pin_binding(expected: int, by_regex: int, by_driver: int | None = None) -> None:
@@ -769,6 +790,22 @@ def self_test(quiet: bool = False) -> int:
         (repo / "g").write_text("untracked\n")
         refuses("an untracked file in an installed package refuses", lambda: check_installed_packages(pkgroot))
 
+        # fully hashed packages must be proven current by the certificate
+        def cert(dependencies, unchecked):
+            return {"currency": {"dependencies": dependencies, "unchecked": unchecked}}
+        check("a certificate proving every fully hashed package current passes",
+              check_fully_hashed_currency(cert({p: 3 for p in FULLY_HASHED}, {"proofwidgets": 10}))
+              == {p: 3 for p in FULLY_HASHED})
+        refuses("a fully hashed package with unchecked modules refuses",
+                lambda: check_fully_hashed_currency(cert({p: 3 for p in FULLY_HASHED},
+                                                         {p: 1 for p in FULLY_HASHED})))
+        refuses("a fully hashed package missing from the checked dependencies refuses",
+                lambda: check_fully_hashed_currency(cert({"mathlib": 9}, {})))
+        refuses("a fully hashed package with zero checked modules refuses",
+                lambda: check_fully_hashed_currency(cert({p: 0 for p in FULLY_HASHED}, {})))
+        refuses("a certificate without dependency currency refuses",
+                lambda: check_fully_hashed_currency({"currency": {}}))
+
         # the fully hashed guards
         refuses("a driver whose fully hashed list differs refuses",
                 lambda: check_fully_hashed(records, {"fully_hashed_packages": []}))
@@ -806,7 +843,8 @@ def generate(root: Path, work: Path, records_file: Path | None, fixture_file: Pa
     deps = dependency_identities(root)
     result: dict = {"deps": deps, "lean_wall": None, "verified": records_file is None}
     if records_file is None:
-        result["currency"] = artifact_currency(root)
+        result["currency"], certificate = artifact_currency(root)
+        result["currency_counts"] = check_fully_hashed_currency(certificate)
         result["packages"] = check_installed_packages(root)
         records_file = work / "records.jsonl"
         fixture_file = work / "fixture.jsonl"
@@ -836,6 +874,7 @@ def report_stats(r: dict, total_wall: float) -> str:
         f"subterm memo hits={s['expr_memo_hits']}",
         f"digests computed={m['digests_computed']}, digest memo hits={m['memo_hits']}",
         f"serializer fixture pairs={r['fixture_pairs']}, serializer checks={s['serializer_checks']}",
+        "certificate-checked fully hashed modules=" + ",".join(f"{k}:{v}" for k, v in r.get("currency_counts", {}).items()),
         "fully hashed=" + ",".join(f"{k}:{v}" for k, v in r["fully_hashed_counts"].items()),
         "real-record controls: " + "; ".join(f"{k} {v}" for k, v in r["real_controls"].items()),
         f"serialized={s['serialized_bytes']} bytes",

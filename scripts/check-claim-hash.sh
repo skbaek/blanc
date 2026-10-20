@@ -14,7 +14,7 @@
 # kind of constant contributes.
 #
 # It reads the built .olean artifacts and never builds: it first requires the
-# exact build certificate (.lake/blanc-build-certificate-v3.json, written after
+# exact build certificate (.lake/blanc-build-certificate-v4.json, written after
 # an authoritative lake build by scripts/certify-checked-build.sh or the full
 # set's lake build row) to match the current sources, and fails otherwise.
 #
