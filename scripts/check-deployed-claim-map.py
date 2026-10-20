@@ -353,7 +353,8 @@ NONCLAIM_PHRASES = [
     "not the recorded constructor arguments",
     # The Curve 3pool exact-gas rows (Section 5.11, Section 6 [ah], Section 7 items 48 and 53).
     "no exact-gas theorem is instantiated end to end",
-    "the composed headlines' coin-chain and 3crv hypotheses as stated",
+    "the composed headlines' coin-chain hypotheses as stated",
+    "taken as world conditions, not discharged",
     "no composed headline is instantiated end to end",
     "a coin's gas use is the coin's, not a blanc fact",
     "headroom and the no-wrap bound are separate premises",
