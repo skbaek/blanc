@@ -157,6 +157,8 @@ theorem constructorRuntimeOffset_exact :
 provisional offset embedded into it. -/
 theorem constructorInitPrefix_length_eq_provisionalOffset :
     constructorInitPrefix.length = constructorRuntimeOffset := by
+  rw [Prog.length_compile constructorInitPrefix_compile]
+  simp only [constructorProgram, constructorRuntimeOffset_exact, codeSize_exact]
   decide +kernel
 
 theorem constructorInitPrefix_length_exact :
