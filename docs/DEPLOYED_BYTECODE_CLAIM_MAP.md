@@ -1888,6 +1888,33 @@ the other definitions written there (`U3Ledger`, `U3Step`, `ClosedExchangeOutcom
 exact costs) and the Curve 3pool names of Section 9 are not pinned. The remaining rows, among them the WETH9 liveness rows of Section 5.1, are held here
 by name and line only.
 
+Each of those pins is a definitional-equality check against the current
+definitions it mentions, so on its own it does not see a definition below the
+pinned layer change. `scripts/check-claim-hash.sh` covers that layer: in one run
+it hashes with SHA-256 the full definitional closure of every pinned statement
+and every unfolding pin in `scripts/ClaimCheck.lean` (a definition by its type
+and body, a theorem by its statement only so that changing the proof of any theorem it reaches changes nothing, an inductive type by its whole mutual
+block with the names of its types and constructors and its constructor types;
+binder names and annotations are ignored, and a referenced constant contributes
+its own hash, not its name) and compares each pin's root hash with the manifest
+committed in `scripts/claim-pin-hash/`; a mismatch names the definitions whose
+content changed and the pins they reach. Each pin is keyed by the constant its
+proof applies or the definition it unfolds, with the statement's hash added when
+several pins share that name, so adding a pin adds one entry, while re-proving a
+pin through a different constant shows as one pin removed and one added. It
+reads the built Lean artifacts and refuses to run unless they are certified
+current for the sources.
+Jaune's definitions are hashed in full like Blanc's, because its EVM semantics
+are part of what every claim means: a change of the Jaune revision moves exactly
+the pins whose meaning changed, and the check names the Jaune definitions that
+moved; a Jaune revision change that moves no pin passes with a note only, and
+the recorded Jaune revision is then refreshed in a reviewed update. The hash stops at the other pinned dependencies: a constant from the Lean
+toolchain, Batteries or Mathlib counts as its name together with the toolchain
+in `lean-toolchain` or the package revision in `lake-manifest.json`, so its body
+is fixed by that pin rather than by the hash. A hash records change, not
+weakening: a mismatch says that the meaning of those claims moved and must be
+reviewed, not that they became weaker.
+
 Every run also executes in-memory falsifiers, each of which must be rejected: a
 misspelled declaration, a stale line, a wrong file, an orphan line reference, a
 missing cited file, a stale bare name, a wrong leaf count, an extra, a missing and a wrong stricter

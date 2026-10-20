@@ -664,6 +664,19 @@
    ]
   },
   {
+   "id": "claim-hash",
+   "work": [
+    "candidate-positive",
+    "static-corpus",
+    "harness-self-test"
+   ],
+   "resource_class": "elaboration",
+   "prerequisites": [
+    "lake-build"
+   ],
+   "historical_catches": []
+  },
+  {
    "id": "elab",
    "work": [
     "candidate-positive",
