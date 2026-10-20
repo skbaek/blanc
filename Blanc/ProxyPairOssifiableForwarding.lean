@@ -243,7 +243,8 @@ theorem forwardingCleanTailRun_of_budget
       Func.branch (Func.last .revert) (Func.last .return_)) _
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
-      (G := gas + (25 + copyCost)) pushCost_zero ?_ ?_) ?_
+      (G := gas + (25 + copyCost)) pushCost_zero ?_ ?_
+      (fun _ => d.covered.rules_push0)) ?_
   · have budget' : resume.gasLeft =
         gas + forwardingCleanTailCost resume := budget
     have returnData : resume.returnData = child.output := by
@@ -274,7 +275,8 @@ theorem forwardingCleanTailRun_of_budget
           (G := gas + (21 + copyCost)) pushCost_zero
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingCleanResume_stack,
-            Devm.stack_setMach, List.length_cons]; omega)) ?_
+            Devm.stack_setMach, List.length_cons]; omega)
+          (fun _ => d.covered.rules_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
@@ -282,7 +284,8 @@ theorem forwardingCleanTailRun_of_budget
           (G := gas + (19 + copyCost)) pushCost_zero
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingCleanResume_stack,
-            Devm.stack_setMach, List.length_cons]; omega)) ?_
+            Devm.stack_setMach, List.length_cons]; omega)
+          (fun _ => d.covered.rules_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
@@ -407,7 +410,8 @@ theorem forwardingFailedTailRun_of_budget
       Func.branch (Func.last .revert) (Func.last .return_)) _
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
-      (G := gas + (24 + copyCost)) pushCost_zero ?_ ?_) ?_
+      (G := gas + (24 + copyCost)) pushCost_zero ?_ ?_
+      (fun _ => d.covered.rules_push0)) ?_
   · have budget' : resume.gasLeft =
         gas + forwardingFailedTailCost resume := budget
     have returnData : resume.returnData = child.output := by
@@ -438,7 +442,8 @@ theorem forwardingFailedTailRun_of_budget
           (G := gas + (20 + copyCost)) pushCost_zero
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingFailedResume_stack,
-            Devm.stack_setMach, List.length_cons]; omega)) ?_
+            Devm.stack_setMach, List.length_cons]; omega)
+          (fun _ => d.covered.rules_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
@@ -446,7 +451,8 @@ theorem forwardingFailedTailRun_of_budget
           (G := gas + (18 + copyCost)) pushCost_zero
           (by simp only [Devm.gasLeft_setMach]; unfold gBase; omega)
           (by simp only [resume, forwardingFailedResume_stack,
-            Devm.stack_setMach, List.length_cons]; omega)) ?_
+            Devm.stack_setMach, List.length_cons]; omega)
+          (fun _ => d.covered.rules_push0)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
         Devm.stack_setMach]
       refine Func.RunCompiledTo.next
@@ -567,8 +573,12 @@ private theorem clean_tail_relation
       (Frame.ofCall outer).settle
           (.ok (forwardingCleanPost d child gas)) =
         .ok (forwardingCleanPost d child gas) := by
+    have hsweep : outer.benv.stat.rules.settle.touchedSweep = false :=
+      context.covered.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, processMessage.settle]
+      executeCode.handleErrorWith_ok, processMessage.settle,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
     change (if (forwardingCleanPost d child gas).error.isSome = true then
       Except.ok (((forwardingCleanPost d child gas).rollback
         outer.benv.state outer.tenv.transientStorage).withStorageWrites
@@ -614,8 +624,13 @@ private theorem failed_tail_relation
           (.error (.revert, forwardingFailedPost d child gas)) =
         .ok (MessageExecution.settledRevert outer
           (forwardingFailedPost d child gas)) := by
+    have hsweep : outer.benv.stat.rules.settle.touchedSweep = false :=
+      context.covered.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
     simp only [Frame.settle_eq_settleMsg_handleErrorWith, Frame.ofCall,
       context.covered.rules_stateGas_none]
+    simp only [Frame.settleMsg, processMessage.settle,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
     rfl
   rw [settledEq]
   change ChildToWrapperOkAt outer.currentTarget child _
@@ -879,7 +894,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           dsimp only [s1]
           simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   have h3 : Ninst.RunCompiled sevm s2 (pushB256 0) s3 := by
     simpa only [s2, s3, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
@@ -893,7 +909,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           dsimp only [s2]
           simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   have h4 : Ninst.RunCompiled sevm s3 calldatacopy s4 := by
     simpa only [s3, s4, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
@@ -920,7 +937,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
         (by
           dsimp only [s4]
           simp only [Devm.stack_setMach, List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   have h6 : Ninst.RunCompiled sevm s5 (pushB256 0) s6 := by
     simpa only [s5, s6, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
@@ -934,7 +952,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           dsimp only [s5]
           simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   have h7 : Ninst.RunCompiled sevm s6 calldatasize s7 := by
     simpa only [s6, s7, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
@@ -961,7 +980,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           dsimp only [s7]
           simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   have h9 : Ninst.RunCompiled sevm s8
       (pushB256 implementationSlotLit) budget.beforeSload := by
     simpa only [s8, OssifiableFallbackPrefixBudget.beforeSload,
@@ -976,7 +996,8 @@ theorem OssifiableFallbackPrefixBudget.execWitness_proxyFallback
           dsimp only [s8]
           simp only [Devm.stack_setMach, List.length_cons,
             List.length_nil]
-          omega))
+          omega)
+        (fun _ => hfork.rules_push0))
   let afterSload := budget.afterSloadBase.setMach
     ⟨entry.getStorVal sevm.currentTarget implementationSlotLit :: 0 ::
         sizeWord :: 0 :: 0 :: [], budget.beforeSload.memory, r10, budget.afterSloadBase.stateGas⟩
@@ -1227,6 +1248,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
     apply Func.execWitness_linearDispatchWith_fallback
       (G := route.fallbackGas) (tail := [])
       (fallbackBody := proxyFallback)
+      (h_push0 := fun _ _ _ => hfork.rules_push0)
     · decide
     · exact hmiss
     · dsimp only [afterFsig]
@@ -1245,6 +1267,7 @@ theorem OssifiableForwardingRoute.compiledPrefix
       (entry := afterJump) (tail := [])
       (body := linearDispatchWith fallbackSlot runtimeBaselineEntries)
       (G := route.fallbackGas + dispatchCost)
+      (h_push0 := hfork.rules_push0)
       (by dsimp only [afterJump]; simp only [Devm.stack_setMach])
       (by dsimp only [afterJump]; simp only [Devm.gasLeft_setMach])
       (by decide)
