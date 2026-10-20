@@ -1902,8 +1902,8 @@ content changed and the pins they reach. Each pin is keyed by the constant its
 proof applies or the definition it unfolds, with the statement's hash added when
 several pins share that name, so adding a pin adds one entry, while re-proving a
 pin through a different constant shows as one pin removed and one added. It
-reads the built Lean artifacts and refuses to run unless they are certified
-current for the sources.
+reads the built Lean artifacts and refuses to run unless they, Jaune's
+included, are certified current for the sources.
 Jaune's definitions are hashed in full like Blanc's, because its EVM semantics
 are part of what every claim means: a change of the Jaune revision moves exactly
 the pins whose meaning changed, and the check names the Jaune definitions that
