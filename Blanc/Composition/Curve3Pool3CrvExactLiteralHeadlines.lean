@@ -443,7 +443,6 @@ section Bounded
 
 variable {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop}
-  {sevm : Sevm} {pre : Devm}
 
 /-- **`pool_3crv_removeLiquidity_live_entry` with its coin and 3Crv hypotheses discharged.** -/
 theorem pool_3crv_removeLiquidity_live_entry_literal
