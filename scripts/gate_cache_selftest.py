@@ -1504,7 +1504,7 @@ def control_build_certificate_report_sanitizes_its_host_field() -> None:
     with scratch() as s:
         s.write("scripts/x.txt", "one\n")
         s.git_init()
-        certificate = {"identity": "a" * 64, "host": hostile}
+        certificate = {"identity": "a" * 64, "host": hostile, "currency": dict(_STUB_CURRENCY)}
         out = io.StringIO()
         with patched(gc, "ROOT", s.root), \
                 patched(gc, "write_build_certificate", lambda root: certificate):
@@ -3916,7 +3916,8 @@ def control_certification_is_not_blocked_by_another_worktree() -> None:
     with scratch() as s:
         s.write("scripts/x.txt", "one\n")
         s.git_init()
-        certificate = {"identity": "a" * 64, "host": "darwin-arm64-v2-1111222233334444"}
+        certificate = {"identity": "a" * 64, "host": "darwin-arm64-v2-1111222233334444",
+                       "currency": dict(_STUB_CURRENCY)}
         require(gc.acquire_lock(gc.lock_path(s.root)), "another worktree holds the store lock")
         try:
             out = io.StringIO()
@@ -4956,6 +4957,344 @@ def control_negative_frozen_tracked_selection_is_caught() -> None:
             raise ControlFailure("frozen Git selection escaped its index-transition control")
 
 
+# --- controls: build source currency ----------------------------------------
+#
+# The real check runs the toolchain's own Lake/Lean code through
+# SOURCE_CURRENCY_HELPER.  These controls are in-memory: a stand-in answers
+# for that helper (a CRLF-normalizing SHA-256 in place of Lean's string hash),
+# and a fixture writes Lake-format traces consistent with it.  What they test
+# is the certifier's reading of Lake's record -- which edit it must refuse,
+# which it must accept -- not Lake's hash itself, whose equality with the
+# recorded traces is shown on the real tree.
+
+_REAL_BUILD_SOURCE_CURRENCY = gc.build_source_currency
+_STUB_CURRENCY = {"checker": "stand-in", "modules": 0, "built": 0, "restored": 0, "imported": 0}
+
+
+def _stand_in_hash(text: str) -> int:
+    return int(gc.sha256_bytes(text.encode("utf-8"))[:16], 16)
+
+
+_FAKE_LEAN = _stand_in_hash("lean githash")
+_FAKE_IS_MODULE = _stand_in_hash("isModule: false")
+
+
+def _fake_facts(root: Path, requests: list[tuple[str, str, Path]]):
+    facts: dict[str, dict[str, Any]] = {}
+    for kind, module, path in requests:
+        text = Path(path).read_text(encoding="utf-8")
+        imports = [line.split()[1] for line in text.splitlines() if line.startswith("import ")]
+        facts[module] = {
+            # Lake hashes the text after `String.crlfToLf`; so does the stand-in.
+            "source": _stand_in_hash(text.replace("\r\n", "\n")) if kind == "src" else None,
+            "name": _stand_in_hash("name " + module) if kind == "src" else None,
+            "is_module_hash": _FAKE_IS_MODULE,
+            "is_module": False,
+            "imports": ["Init", *imports],
+        }
+    return _FAKE_LEAN, facts
+
+
+def _hex(value: int) -> str:
+    return f"{value:016x}"
+
+
+class LakeFixture:
+    """A scratch workspace whose traces Lake would have written for it.
+
+    `Blanc` imports `Blanc.A` and `Blanc.B`; `Blanc.A` imports the dependency
+    module `Dep.Base`; `Blanc.B` imports `Blanc.A`.  `Blanc` and `Blanc.A` were
+    built (full traces); `Blanc.B` and `Dep.Base` were restored from the
+    artifact cache (synthetic traces).  `Dep.Audit` is the library's extraDep.
+    """
+
+    SOURCES = {
+        "Blanc": "import Blanc.A\nimport Blanc.B\n",
+        "Blanc.A": "import Dep.Base\ntheorem a : True := trivial\n",
+        "Blanc.B": "import Blanc.A\ntheorem b : True := trivial\n",
+    }
+    RESTORED = {"Blanc.B"}
+
+    def __init__(self, s: Scratch) -> None:
+        self.s = s
+        self.lake = s.root / ".lake"
+        self.dep = self.lake / "packages/dep"
+        self.outputs: dict[str, int] = {}
+        self.audit_hash = _stand_in_hash("audit dep hash")
+        # The certificate records the helper's digest; the stand-in answers for it.
+        s.write(gc.SOURCE_CURRENCY_HELPER, "-- stand-in for the toolchain helper\n")
+        for module, text in self.SOURCES.items():
+            s.write(module.replace(".", "/") + ".lean", text)
+        (self.dep / "Dep").mkdir(parents=True, exist_ok=True)
+        (self.dep / "Dep/Base.lean").write_text("def base := 1\n", encoding="utf-8")
+        (self.dep / "Audit.lean").write_text("def audit := 1\n", encoding="utf-8")
+        self.write_dep("Dep.Base", _stand_in_hash("base olean"))
+        self.write_dep("Audit", _stand_in_hash("audit olean"), dep_hash=self.audit_hash)
+        for module in ("Blanc.A", "Blanc.B", "Blanc"):
+            self.build(module, restored=module in self.RESTORED)
+
+    def trace_path(self, module: str) -> Path:
+        base = self.dep / ".lake/build/lib/lean" if module in {"Dep.Base", "Audit"} \
+            else self.lake / "build/lib/lean"
+        return base / (module.replace(".", "/") + ".trace")
+
+    def write_dep(self, module: str, olean: int, dep_hash: int | None = None) -> None:
+        self.outputs[module] = olean
+        path = self.trace_path(module)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "schemaVersion": gc.LAKE_TRACE_SCHEMA, "synthetic": True, "log": [], "inputs": [],
+            "outputs": {"o": [_hex(olean) + ".olean"], "m": False},
+            "depHash": _hex(dep_hash if dep_hash is not None else _stand_in_hash(module)),
+        }), encoding="utf-8")
+
+    def legacy(self, module: str) -> int:
+        parts: list[int] = []
+        for name in self.imports(module):
+            parts.extend((self.legacy(name), gc.lake_fold([self.outputs[name]])))
+        return gc.lake_fold(parts)
+
+    def imports(self, module: str) -> list[str]:
+        if module == "Dep.Base":
+            return []
+        text = (self.s.root / (module.replace(".", "/") + ".lean")).read_text(encoding="utf-8")
+        return [line.split()[1] for line in text.splitlines() if line.startswith("import ")]
+
+    def build(self, module: str, restored: bool = False) -> None:
+        """What a Lake build (or restore) of `module` writes for current inputs."""
+
+        source_path = self.s.root / (module.replace(".", "/") + ".lean")
+        text = source_path.read_text(encoding="utf-8")
+        imports = [
+            entry for name in self.imports(module) for entry in (
+                [f"{name} transitive imports (legacy)", _hex(self.legacy(name))],
+                [f"{name}:importAllArts", _hex(gc.lake_fold([self.outputs[name]]))],
+            )
+        ]
+        inputs = [
+            ["deps", [
+                ["blanc/Blanc:extraDep", [
+                    ["@blanc:extraDep", _hex(gc.LAKE_HASH_NIL)],
+                    ["<collection>", [["<nil>", [["Audit", _hex(self.audit_hash)]]]]],
+                ]],
+                ["imports", imports],
+            ]],
+            ["libs", [[name, _hex(gc.LAKE_HASH_NIL)] for name in (
+                "import dynlibs", "package external libraries", "module dynlibs", "module plugins")]],
+            ["Lean 4.35.0, commit fixture", _hex(_FAKE_LEAN)],
+            [str(source_path), _hex(_stand_in_hash(text.replace("\r\n", "\n")))],
+            ["options", [["-Dpp.unicode.fun=true", _hex(_stand_in_hash("option"))]]],
+            ["isModule: false", _hex(_FAKE_IS_MODULE)],
+            [f"Module.name: {module}", _hex(_stand_in_hash("name " + module))],
+            ["Package.id?: (some blanc)", _hex(_stand_in_hash("package"))],
+            ["Module.leanArgs: #[]", _hex(gc.LAKE_HASH_NIL)],
+        ]
+        dep_hash = gc.lake_trace_node(inputs, module)
+        olean = _stand_in_hash(f"olean {module} {dep_hash}")
+        self.outputs[module] = olean
+        path = self.trace_path(module)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "schemaVersion": gc.LAKE_TRACE_SCHEMA, "synthetic": restored, "log": [],
+            "inputs": [] if restored else inputs,
+            "outputs": {"o": [_hex(olean) + ".olean"], "m": False},
+            "depHash": _hex(dep_hash),
+        }), encoding="utf-8")
+
+    def check(self) -> tuple[bool, str]:
+        try:
+            with patched(gc, "lake_module_facts", _fake_facts):
+                summary = gc.build_source_currency(self.s.root)
+        except gc.Unresolvable as error:
+            return False, str(error)
+        return True, json.dumps(summary, sort_keys=True)
+
+
+@contextmanager
+def lake_fixture():
+    with scratch() as s:
+        yield LakeFixture(s)
+
+
+def control_source_currency_accepts_exactly_current_lake_records() -> None:
+    with lake_fixture() as f:
+        current, clean = f.check()
+        require(current, f"a just-built fixture must be current: {clean}")
+        summary = json.loads(clean)
+        require(
+            (summary["modules"], summary["built"], summary["restored"]) == (3, 2, 1),
+            f"every covered module, built and restored, must be counted: {summary}",
+        )
+
+        a = f.s.root / "Blanc/A.lean"
+        original = a.read_bytes()
+        a.write_text("import Dep.Base\ntheorem a : True := by trivial\n", encoding="utf-8")
+        current, reason = f.check()
+        require(not current and "Blanc.A" in reason and "source changed" in reason,
+                f"an edited, unbuilt built-trace module must be refused by name: {reason}")
+        f.build("Blanc.A")
+        current, reason = f.check()
+        require(not current and "Blanc.B" in reason and "source changed" not in reason,
+                f"rebuilding only the edited module leaves its importers stale: {reason}")
+        f.build("Blanc.B", restored=True)
+        f.build("Blanc")
+        require(f.check()[0], "after building every stale module the record is current")
+
+        a.write_bytes(original)
+        require(not f.check()[0], "reverting a rebuilt source without building is stale again")
+        for module in ("Blanc.A", "Blanc.B", "Blanc"):
+            f.build(module, restored=module in f.RESTORED)
+        require(f.check() == (True, clean), "restored bytes and build restore the original record")
+
+        a.write_bytes(original.replace(b"\n", b"\r\n"))
+        require(f.check() == (True, clean), "a CRLF-only edit is current, as Lake normalizes it")
+        a.write_bytes(original + b" \n")
+        require(not f.check()[0], "a whitespace edit is a source edit to Lake")
+        a.write_bytes(original)
+        require(f.check() == (True, clean), "restoring the bytes restores currency")
+
+
+def control_source_currency_replays_restored_traces() -> None:
+    with lake_fixture() as f:
+        b = f.s.root / "Blanc/B.lean"
+        original = b.read_text(encoding="utf-8")
+        b.write_text(original + "theorem c : True := trivial\n", encoding="utf-8")
+        current, reason = f.check()
+        require(not current and "Blanc.B" in reason,
+                f"an edit to a module restored from the cache must be refused: {reason}")
+        b.write_text(original, encoding="utf-8")
+        require(f.check()[0], "restoring the restored module's source restores currency")
+
+        b.write_text("import Blanc.A\nimport Dep.Base\ntheorem b : True := trivial\n", encoding="utf-8")
+        require(not f.check()[0], "a header edit (a new import) must be refused")
+        b.write_text(original, encoding="utf-8")
+
+        f.write_dep("Dep.Base", _stand_in_hash("another base olean"))
+        current, reason = f.check()
+        require(not current and "Blanc.A" in reason,
+                f"an imported artifact rebuilt under the importer must be refused: {reason}")
+        f.write_dep("Dep.Base", _stand_in_hash("base olean"))
+        require(f.check()[0], "restoring the imported artifact restores currency")
+
+        f.write_dep("Audit", _stand_in_hash("audit olean"), dep_hash=_stand_in_hash("moved"))
+        current, reason = f.check()
+        require(not current and "Audit" in reason, f"a moved extraDep must be refused: {reason}")
+
+
+def control_source_currency_refuses_tampered_or_unknown_traces() -> None:
+    with lake_fixture() as f:
+        path = f.trace_path("Blanc.A")
+        good = path.read_text(encoding="utf-8")
+
+        def refused(mutate: Callable[[dict[str, Any]], Any], label: str, needle: str) -> None:
+            trace = json.loads(good)
+            mutate(trace)
+            path.write_text(json.dumps(trace), encoding="utf-8")
+            current, reason = f.check()
+            require(not current and needle in reason, f"{label} must be refused: {reason}")
+            path.write_text(good, encoding="utf-8")
+            require(f.check()[0], f"restoring the trace after {label} restores currency")
+
+        def forge_source(trace: dict[str, Any]) -> None:
+            trace["inputs"][3][1] = _hex(_stand_in_hash("an edited source"))
+
+        refused(forge_source, "a forged source entry", "does not hash to its recorded depHash")
+        refused(lambda t: t.update(schemaVersion="2099-01-01"), "an unknown trace format", "known format")
+        refused(lambda t: t.update(depHash="12"), "a non-hex depHash", "16-digit")
+        refused(lambda t: t.update(synthetic="no"), "a non-Boolean synthetic flag", "synthetic flag")
+        refused(lambda t: t.update(inputs=t["inputs"][:8]), "a truncated input list", "input shape")
+        refused(lambda t: t["inputs"].reverse(), "a reordered input list", "input shape")
+
+        def hollow(trace: dict[str, Any]) -> None:
+            trace["inputs"] = []
+
+        refused(hollow, "a built trace without inputs", "records no inputs")
+        path.write_text("{not json", encoding="utf-8")
+        require(not f.check()[0], "an unparseable trace must be refused")
+        path.unlink()
+        current, reason = f.check()
+        require(not current and "no Lake trace for Blanc.A" in reason,
+                f"a missing trace must be refused: {reason}")
+        path.write_text(good, encoding="utf-8")
+
+        for module in ("Blanc", "Blanc.A"):
+            f.build(module, restored=True)
+        current, reason = f.check()
+        require(not current and "no built Lake trace" in reason,
+                f"package-level inputs need at least one built trace: {reason}")
+
+
+def control_build_certificate_requires_source_currency() -> None:
+    with scratch() as s:
+        prepare_build_state(s)
+        stub = {"verdict": "current"}
+
+        def currency(root: Path, lake_root: Path | None = None) -> dict[str, Any]:
+            if stub["verdict"] != "current":
+                raise gc.Unresolvable(stub["verdict"])
+            return dict(_STUB_CURRENCY)
+
+        with patched(gc, "component_tools",
+                     lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"})), \
+                patched(gc, "build_source_currency", currency):
+            stub["verdict"] = "source changed since its last build: Blanc.A"
+            try:
+                gc.write_build_certificate(s.root)
+            except gc.Unresolvable as error:
+                require("Blanc.A" in str(error), f"refusal must name the module: {error}")
+            else:
+                raise ControlFailure("certification must refuse a stale Lake record")
+            require(not gc.build_certificate_path(s.root).exists(),
+                    "a refused certification must write no certificate")
+            stub["verdict"] = "current"
+            gc.write_build_certificate(s.root)
+            require(gc.build_certificate_status(s.root)[0], "a current record certifies")
+            stub["verdict"] = "source changed since its last build: Blanc.A"
+            current, reason, _ = gc.build_certificate_status(s.root)
+            require(not current and "Blanc.A" in reason,
+                    f"status must apply the same check: {reason}")
+            stub["verdict"] = "current"
+            certificate = json.loads(gc.build_certificate_path(s.root).read_text(encoding="utf-8"))
+            certificate.pop("currency")
+            gc.atomic_json(gc.build_certificate_path(s.root), certificate)
+            require(not gc.build_certificate_status(s.root)[0],
+                    "a certificate without a currency record must be refused")
+
+
+def control_negative_trusting_only_built_source_entries() -> None:
+    """The obvious reading of "compare the trace's source hash" checks only
+    traces that record one -- and so certifies every module Lake restored from
+    its artifact cache whatever its source now says."""
+
+    def built_only(root: Path, lake_root: Path | None = None) -> dict[str, Any]:
+        lake_root = lake_root or root / ".lake"
+        _, facts = gc.lake_module_facts(root, [
+            ("src", module, root / (module.replace(".", "/") + ".lean"))
+            for module in gc.build_covered_modules(root)
+        ])
+        for module in gc.build_covered_modules(root):
+            trace = gc.read_lake_trace(
+                lake_root / "build/lib/lean" / (module.replace(".", "/") + ".trace"), module)
+            if not trace["synthetic"]:
+                recorded = gc.lake_hash(trace["inputs"][3][1], module)
+                if recorded != facts[module]["source"]:
+                    raise gc.Unresolvable(f"source changed since its last build: {module}")
+        return {"checker": "built-only"}
+
+    with patched(gc, "build_source_currency", built_only):
+        must_fail(control_source_currency_replays_restored_traces,
+                  "restored traces certified without replay")
+
+
+CURRENCY_CONTROLS = frozenset({
+    "control_source_currency_accepts_exactly_current_lake_records",
+    "control_source_currency_replays_restored_traces",
+    "control_source_currency_refuses_tampered_or_unknown_traces",
+    "control_build_certificate_requires_source_currency",
+    "control_negative_trusting_only_built_source_entries",
+})
+
+
 NEGATIVE_CONTROLS = (
     control_negative_ignoring_pinned_dependency_trace_movement,
     control_negative_ignoring_dependency_package_pin,
@@ -4977,6 +5316,7 @@ NEGATIVE_CONTROLS = (
     control_negative_shell_short_circuits_its_own_escalation,
     control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold,
     control_negative_name_only_authority_walk_misses_import_bindings,
+    control_negative_trusting_only_built_source_entries,
 )
 
 CONTROLS = (
@@ -5052,6 +5392,10 @@ CONTROLS = (
     control_shell_reasks_before_escalating_its_own_hold,
     control_beacon_current_mainnet_releases_after_its_final_child,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
+    control_build_certificate_requires_source_currency,
+    control_source_currency_accepts_exactly_current_lake_records,
+    control_source_currency_replays_restored_traces,
+    control_source_currency_refuses_tampered_or_unknown_traces,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
     control_worktree_seed_previews_then_publishes_isolated_exact_state,
@@ -5116,7 +5460,14 @@ def self_test() -> int:
         for control in CONTROLS:
             name = control.__name__.removeprefix("control_")
             try:
-                control()
+                if control.__name__ in CURRENCY_CONTROLS:
+                    control()
+                else:
+                    # Scratch trees carry stand-in traces, not Lake's format;
+                    # the source-currency check has its own controls above.
+                    with patched(gc, "build_source_currency",
+                                 lambda root, lake_root=None: dict(_STUB_CURRENCY)):
+                        control()
             except Exception as error:  # noqa: BLE001 - a control fault is a failure
                 failures.append(f"{name}: {error}")
                 print(f"  FAIL {name}: {error}", file=sys.stderr)

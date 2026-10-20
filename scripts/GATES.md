@@ -421,10 +421,10 @@ aliases, unreadable populations and malformed existing Lake traces refuse
 identity. The population snapshot is discarded before post-execution drift
 checks. Version text alone never substitutes for artifact identity.
 
-The local `.lake/blanc-build-certificate-v3.json` may satisfy the build
+The local `.lake/blanc-build-certificate-v4.json` may satisfy the build
 prerequisite without rebuilding only when its host, all Lean sources, Lake
 configuration, toolchain and package pins, trace population, trace `depHash`
-values, and the exact Jaune fixture-runner bytes match. A certifiable local
+values, Lake source currency, and the exact Jaune fixture-runner bytes match. A certifiable local
 setup therefore runs both the repository-prescribed host-safe authoritative
 build and its `jaune/jaune` target before `--certify-build`; CI's setup already
 builds that target explicitly. Missing, stale, foreign, or corrupt certificates
@@ -432,6 +432,44 @@ force the authoritative build before Lean-dependent planning, and certification
 then refuses until the fixture runner exists; `--fresh` always forces the build.
 Source/configuration, toolchain, package-pin, trace, and runner-artifact movement
 are independently controlled.
+
+Lake source currency answers whether each covered `.olean` was compiled from
+the current `.lean`, from Lake's own record rather than by trust. Certification
+and every certificate status check refuse unless, for `Blanc` and every
+`Blanc/**` module, the module's Lake trace is in the pinned toolchain's format
+(`2025-09-10`) and describes the current inputs. A trace written by a build
+records the source hash Lake computed (`computeTextFileHash`: the Lean string
+hash of the text after CRLF-to-LF normalization); it must equal the toolchain's
+own hash of the current source, so an edit without a build is refused by module
+name, and its recorded input tree must hash to its recorded `depHash`, so an
+edited source entry is refused as tampering. A trace written when Lake restored
+the module from its artifact cache records only that input hash, so for every
+module, built or restored, the check replays the whole input hash from the
+current source and header, the imported modules' recorded output hashes, the
+current `depHash` of each `extraDep` module and the Lean githash, and the
+package-level options, arguments and identity read from the built traces, and
+requires it to equal the recorded `depHash`. A CRLF-only edit is current, as it
+is to Lake; any other byte edit is not. Missing, unparseable, unknown-format or
+mis-shaped traces refuse. `scripts/build-source-currency.lean` supplies the
+hashes Python cannot reproduce from shipped sources (Lean's string and `Name`
+hashes) by calling the toolchain's `computeTextFileHash`, `pureHash` and
+`Lean.parseImports'`; Lake's mixing function is the `lean_uint64_mix_hash` the
+toolchain ships in `lean.h`. A replay defect can only make the values differ,
+so it refuses rather than certifies. On the full tree it takes seconds, most
+of it the helper's toolchain start.
+
+A module's `depHash` binds its own source and the *artifacts* it imported, not
+those artifacts' sources: Lake mixes an import's output hashes and transitive
+import trace, never its source hash or `depHash`. Currency therefore holds
+only because every covered module is checked itself. Not covered: modules of
+pinned dependency packages are bound by their clean pinned checkouts and their
+recorded output hashes, not by a source replay; the package-level options,
+`leanArgs`, package identity and library-level `extraDep` leaf are read from
+the built traces and required to agree, so a Lake-configuration edit without a
+build is caught only by the configuration identity once certified; the Jaune
+runner binary is bound by bytes, not by a Lake record; and all hashes are
+Lake's 64-bit non-cryptographic hashes, so a deliberately forged trace with a
+recomputed `depHash` is outside this check, as it is outside Lake's.
 
 ### Local Lake artifact-cache trust boundary
 
@@ -467,7 +505,8 @@ this same adjacent sequence after the exact authoritative build and
 explicit absolute `LAKE_CACHE_DIR` with nonempty regular artifact entries,
 reports that precheck as presence only, and then preserves the integrity
 checker's actual counts and verdict. It refuses certification on an absent or
-empty cache, a non-regular entry, or checker failure. It never selects another
+empty cache, a non-regular entry, or checker failure, and the certificate
+writer it ends with refuses a Lake record that is not source-current. It never selects another
 cache, rebuilds, repairs artifacts, or bypasses the certificate writer. This
 helper is not an additional full-set gate or an integrated certificate property.
 

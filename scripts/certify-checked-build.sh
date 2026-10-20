@@ -2,6 +2,9 @@
 # Procedural composition of GATES.md's adjacent integrity/certification commands.
 # Prerequisite: the exact authoritative build and jaune/jaune completed through
 # the owned build capability. This wrapper neither builds nor repairs artifacts.
+# The final certificate writer refuses unless every covered module's Lake trace
+# is current for its source (scripts/GATES.md, Lake source currency), so a
+# certification attempted without that build fails there, naming the module.
 set -euo pipefail
 
 if [ "$#" -ne 0 ]; then
