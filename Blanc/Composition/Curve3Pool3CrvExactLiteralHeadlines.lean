@@ -10,7 +10,7 @@ witnesses (`Token20` coins whose ledgers cover the calls, 3Crv's code with suppl
 accepting the burn or mint), there is a coin chain `V`, `U = 80000` and coin debit/next functions
 meeting the headline's callee and coin-chain hypotheses as stated (the conjunction is restated in
 the headline's text), and the headline's conclusion then holds under only the hypotheses this file
-does not discharge: `_hcode`, `_hlen`, `_hcd`, `_hsel`, the model step `_hstep`, `_hpc`, `_hid`,
+does not discharge: `_hcode`, `_hlen`, `_hcd`, `_hsel`, the model step `_hstep`, `_hid`,
 the residual-gas headroom on `R`, the no-wrap bound and the per-execution keep premise. `_hfork`,
 `_hstatic`, `_hdepth` are world conditions here.
 
@@ -19,7 +19,7 @@ the residual-gas headroom on `R`, the no-wrap bound and the per-execution keep p
   `pool_3crv_removeLiquidityOneCoin_live_exact_literal`;
 * `pool_3crv_*_live_entry_literal`: the same for the sufficient-gas composed rows
   (`Curve3Pool3CrvHeadlines.pool_3crv_*_live_entry`), whose remaining hypotheses are `_hcode`,
-  `_hlen`, `_hcd`, `_hsel`, `_hstep`, `_hpc`, `_hid`, `_hkeep` and the gas bounds `_hG`, `_hGm`.
+  `_hlen`, `_hcd`, `_hsel`, `_hstep`, `_hid`, `_hkeep` and the gas bounds `_hG`, `_hGm`.
 
 For `remove_liquidity_one_coin`, `_hi` (which coin the call data names) also stays a premise; it
 fixes the coin `i` whose `Token20` facts are assumed.
@@ -39,6 +39,26 @@ section Joint
 
 variable {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop}
+
+/-- **The pool's code is at the frame's target after the history** (`_hpc`): the history keeps the
+installed pool code (`pool_history_reached`), and that code is not empty. -/
+theorem pool_code_ne_of_history (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
+    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
+    (env : PoolTraceEnv trace pool ps₀.coins ps₀.token)
+    {sevm : Sevm} {pre : Devm} (target : sevm.currentTarget = pool)
+    (state : pre.state = future.state) : pre.getCode sevm.currentTarget ≠ .empty := by
+  obtain ⟨hc, -⟩ := pool_history_reached trace poolInstalled joint.poolCk env target state
+  have e : pre.getCode sevm.currentTarget = future.state.getCode pool := by
+    rw [target]
+    show pre.state.getCode pool = _
+    rw [state]
+  intro h
+  rw [← e, h] at hc
+  have he : ByteArray.empty = Curve3Pool.code := code_eq_of_toList hc
+  have hl := code_toList_length
+  rw [← he, ByteArray.toList_eq_toList_data, Array.length_toList] at hl
+  exact absurd hl (by decide)
 
 /-- **`pool_3crv_removeLiquidity_live_exact` with its coin and 3Crv hypotheses discharged.** -/
 theorem pool_3crv_removeLiquidity_live_exact_literal
@@ -83,7 +103,6 @@ theorem pool_3crv_removeLiquidity_live_exact_literal
         (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
         (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidity)
         (_hstep : step s (rlEnv (initSevm msg) T) (decodeCall (initSevm msg)) = some o)
-        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
         (_hid : IdReady (initSevm msg) (initDevm msg)),
         ∀ R, 167000 + 5 * U ≤ R →
           R + rlExactCost (initSevm msg) (initDevm msg) T (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN) < 2 ^ 256 →
@@ -102,11 +121,13 @@ theorem pool_3crv_removeLiquidity_live_exact_literal
     c3Installed joint fresh env notSystem target state
   have ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history (sevm := initSevm msg) (pre := initDevm msg) trace
+    poolInstalled joint env target state
   obtain ⟨V, U, pushD, pushN, htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
     removeLiquidity_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
   exact ⟨s, hs, ready, V, U, pushD, pushN,
     ⟨htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush⟩,
-    fun hcode hlen hcd hsel hstep hpc hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
+    fun hcode hlen hcd hsel hstep hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
       hsel hstep htok hcoin hpc hid hU hT hburn' hVc hVb hVs hpush⟩
 
 /-- **`pool_3crv_addLiquidity_live_exact` with its coin and 3Crv hypotheses discharged**; the
@@ -164,7 +185,6 @@ theorem pool_3crv_addLiquidity_live_exact_literal
         (_hsel : Sevm.selector (initSevm msg) = selAddLiquidity)
         (_hstep : step s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat)
           (decodeCall (initSevm msg)) = some o)
-        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
         (_hid : IdReady (initSevm msg) (initDevm msg)),
         ∃ (amp v0 v1 v2 : Nat) (xa xb xc : V3) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256),
           aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
@@ -222,13 +242,15 @@ theorem pool_3crv_addLiquidity_live_exact_literal
     c3Installed joint fresh env notSystem target state
   have ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history (sevm := initSevm msg) (pre := initDevm msg) trace
+    poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o} hmint => ?_⟩
   obtain ⟨B1, B2, V, U, pullD, pullN, balBD, balAD, balBN, balAN, htok, hcoin, hU, hT, hmint',
     hVc, hVb, hVs, hskip, hpull, hbalB, hbalA⟩ :=
     addLiquidity_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hmint hfits
   exact ⟨B1, B2, V, U, pullD, pullN, balBD, balAD, balBN, balAN,
     ⟨htok, hcoin, hU, hT, hmint', hVc, hVb, hVs, hskip, hpull, hbalB, hbalA⟩,
-    fun hcode hlen hcd hsel hstep hpc hid => hlive pullD pullN balBD balAD balBN balAN hcode hfork
+    fun hcode hlen hcd hsel hstep hid => hlive pullD pullN balBD balAD balBN balAN hcode hfork
       hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hU hT hmint' hVc hVb hVs hskip hpull
       hbalB hbalA⟩
 
@@ -278,7 +300,6 @@ theorem pool_3crv_removeLiquidityImbalance_live_exact_literal
         (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
         (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityImbalance)
         (_hstep : step s (rliEnvW (initSevm msg) T.toNat) (decodeCall (initSevm msg)) = some o)
-        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
         (_hid : IdReady (initSevm msg) (initDevm msg)),
         ∃ w : RliWords, RliWordsPin (initSevm msg) (initDevm msg) s w ∧
           ∀ R, 66000 + 3 * U ≤ R →
@@ -305,11 +326,13 @@ theorem pool_3crv_removeLiquidityImbalance_live_exact_literal
     poolInstalled c3Installed joint fresh env notSystem target state
   have ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history (sevm := initSevm msg) (pre := initDevm msg) trace
+    poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o} hburn => ?_⟩
   obtain ⟨V, U, pushD, pushN, htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hskip, hpush⟩ :=
     removeLiquidityImbalance_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
   exact ⟨V, U, pushD, pushN, ⟨htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hskip, hpush⟩,
-    fun hcode hlen hcd hsel hstep hpc hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
+    fun hcode hlen hcd hsel hstep hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
       hsel hstep htok hcoin hpc hid hU hT hburn' hVc hVb hVs hskip hpush⟩
 
 /-- **`pool_3crv_removeLiquidityOneCoin_live_exact` with its coin and 3Crv hypotheses
@@ -361,7 +384,6 @@ theorem pool_3crv_removeLiquidityOneCoin_live_exact_literal
         (_hlen : 4 ≤ (initSevm msg).data.length) (_hcd : (initSevm msg).data.length < 2 ^ 256)
         (_hsel : Sevm.selector (initSevm msg) = selRemoveLiquidityOneCoin)
         (_hstep : step s (ocEnv (initSevm msg) i T.toNat) (decodeCall (initSevm msg)) = some o)
-        (_hpc : (initDevm msg).getCode msg.currentTarget ≠ .empty)
         (_hid : IdReady (initSevm msg) (initDevm msg)),
         ∃ (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI (initSevm msg)).toNat < 3),
           aChk s (initSevm msg).benvStat.time.toNat = some amp ∧
@@ -403,12 +425,14 @@ theorem pool_3crv_removeLiquidityOneCoin_live_exact_literal
     poolInstalled c3Installed joint fresh env notSystem target state
   have ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history (sevm := initSevm msg) (pre := initDevm msg) trace
+    poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o i} hi hcode hpool htc hfits => ?_⟩
   obtain ⟨V, U, pushD, pushN, htok, hcoin', hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
     removeLiquidityOneCoin_exact_literal_witness ht hfork hstatic hdepth hc3 hi hcoin hcode hpool
       htc hburn hfits
   exact ⟨V, U, pushD, pushN, ⟨htok, hcoin', hU, hT, hburn', hVc, hVb, hVs, hpush⟩,
-    fun hcode' hlen hcd hsel hstep hpc hid => hlive pushD pushN hcode' hfork hstatic hdepth hlen
+    fun hcode' hlen hcd hsel hstep hid => hlive pushD pushN hcode' hfork hstatic hdepth hlen
       hcd hsel hi hstep htok hcoin' hpc hid hU hT hburn' hVc hVb hVs hpush⟩
 
 end Joint
@@ -456,7 +480,6 @@ theorem pool_3crv_removeLiquidity_live_entry_literal
         (_hcd : sevm.data.length < 2 ^ 256)
         (_hsel : Sevm.selector sevm = selRemoveLiquidity)
         (_hstep : step s (rlEnv sevm T) (decodeCall sevm) = some o)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty)
         (_hid : IdReady sevm pre)
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
@@ -471,10 +494,11 @@ theorem pool_3crv_removeLiquidity_live_entry_literal
     c3Installed joint fresh env notSystem target state
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history trace poolInstalled joint env target state
   obtain ⟨V, U, htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
     removeLiquidity_entry_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
   exact ⟨s, hs, ready, V, U, ⟨htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush⟩,
-    fun hcode hlen hcd hsel hstep hpc hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
+    fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hburn' hVc hVb hVs hpush hG hGm⟩
 
 /-- **`pool_3crv_addLiquidity_live_entry` with its coin and 3Crv hypotheses discharged**; the fee
@@ -525,7 +549,6 @@ theorem pool_3crv_addLiquidity_live_entry_literal
         (_hcd : sevm.data.length < 2 ^ 256)
         (_hsel : Sevm.selector sevm = selAddLiquidity)
         (_hstep : step s (alEnvW sevm T.toNat B1.toNat B2.toNat) (decodeCall sevm) = some o)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty)
         (_hid : IdReady sevm pre)
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
@@ -542,11 +565,12 @@ theorem pool_3crv_addLiquidity_live_entry_literal
     c3Installed joint fresh env notSystem target state
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history trace poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o} hmint => ?_⟩
   obtain ⟨B1, B2, V, U, htok, hcoin, hU, hT, hmint', hVc, hVb, hVs, hpull, hskip, hfee⟩ :=
     addLiquidity_entry_literal_witness ht hfork hstatic hdepth hc3 hcoins hmint hfits
   exact ⟨B1, B2, V, U, ⟨htok, hcoin, hU, hT, hmint', hVc, hVb, hVs, hpull, hskip, hfee⟩,
-    fun hcode hlen hcd hsel hstep hpc hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
+    fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hmint' hVc hVb hVs hpull hskip hfee hG hGm⟩
 
 /-- **`pool_3crv_removeLiquidityImbalance_live_entry` with its coin and 3Crv hypotheses
@@ -590,7 +614,6 @@ theorem pool_3crv_removeLiquidityImbalance_live_entry_literal
         (_hcd : sevm.data.length < 2 ^ 256)
         (_hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
         (_hstep : step s (rliEnvW sevm T.toNat) (decodeCall sevm) = some o)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty)
         (_hid : IdReady sevm pre)
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
@@ -608,11 +631,12 @@ theorem pool_3crv_removeLiquidityImbalance_live_entry_literal
     c3Installed joint fresh env notSystem target state
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history trace poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o} hburn => ?_⟩
   obtain ⟨V, U, htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush, hskip⟩ :=
     removeLiquidityImbalance_entry_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
   exact ⟨V, U, ⟨htok, hcoin, hU, hT, hburn', hVc, hVb, hVs, hpush, hskip⟩,
-    fun hcode hlen hcd hsel hstep hpc hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
+    fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hburn' hVc hVb hVs hpush hskip hG hGm⟩
 
 /-- **`pool_3crv_removeLiquidityOneCoin_live_entry` with its coin and 3Crv hypotheses discharged**,
@@ -655,7 +679,6 @@ theorem pool_3crv_removeLiquidityOneCoin_live_entry_literal
         (_hcd : sevm.data.length < 2 ^ 256)
         (_hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
         (_hstep : step s (ocEnv sevm i T.toNat) (decodeCall sevm) = some o)
-        (_hpc : pre.getCode sevm.currentTarget ≠ .empty)
         (_hid : IdReady sevm pre)
         (_hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
           PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
@@ -672,11 +695,12 @@ theorem pool_3crv_removeLiquidityOneCoin_live_entry_literal
     c3Installed joint fresh env notSystem target state
   have ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3 := by
     rw [target]; exact ready.2.2
+  have hpc := pool_code_ne_of_history trace poolInstalled joint env target state
   refine ⟨s, hs, ready, fun {o i} hi hcode hpool htc hfits => ?_⟩
   obtain ⟨V, U, htok, hcoin', hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
     removeLiquidityOneCoin_entry_literal_witness ht hfork hstatic hdepth hc3 hcoin hcode hpool htc hburn hfits
   exact ⟨V, U, ⟨htok, hcoin', hU, hT, hburn', hVc, hVb, hVs, hpush⟩,
-    fun hcode' hlen hcd hsel hstep hpc hid hkeep hG hGm => hlive hcode' hfork hstatic hdepth hlen
+    fun hcode' hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode' hfork hstatic hdepth hlen
       hcd hsel hi hstep htok hcoin' hpc hid hkeep hU hT hburn' hVc hVb hVs hpush hG hGm⟩
 
 end Bounded
