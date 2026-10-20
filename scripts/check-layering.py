@@ -123,7 +123,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
-          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
@@ -141,7 +141,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "TaggedStorage",
            "DelegatecallEnvelope",
            "StaticStores",
-           "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionHistoryFrameTime", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
            "ExecutionTransactionPrefix", "ExecutionTransactionPrefixAdmission",
            "ExecutionBodyAdmission", "ExecutionBodyPrefixAdmission", "ExecutionHistoryAdmission",
@@ -173,7 +173,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
-SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
 # Parameterized free-pointer memory for lifted walks.
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
 # Free-pointer and write-site checker kits (usdc-neversigner-freepointer-v1):
@@ -202,8 +202,27 @@ SHARED += ["BlockForward", "Lift.ExactWalkCallChild"]
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
+# StableSwap (n = 3) Newton loops for D and y, plain and checked: contract-neutral.
+SHARED += ["Lift.StableSwapNewton.Defs", "Lift.StableSwapNewton.Root",
+           "Lift.StableSwapNewton.D", "Lift.StableSwapNewton.Y",
+           "Lift.StableSwapNewton.Fuel"]
+# Fuel-bounded loop heads (Newton loops) walked to a fuel-loop model: contract-neutral.
+SHARED += ["Lift.FuelLoopWalk"]
+# Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
+# contract-neutral.
+SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
+           "Lift.VyperRawCall", "Lift.RunEx", "Lift.FrameWalkAligned"]
+# Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
+SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
+SHARED += ["Lift.ThreeWordFrame"]
+# Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
+SHARED += ["Lift.VyperCallee", "Lift.VyperCheckedArith"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
+# Walking a successful frame's own derivation with its direct children: contract-neutral.
+SHARED += ["Lift.FrameWalk"]
+# Crossing certified exec-free callees from walked states, and memory glue: contract-neutral.
+SHARED += ["Lift.SoundSpan", "Lift.FrameWalkNode", "Lift.FrameWalkCut", "Lift.MemGlue", "Lift.FrameWalkKit", "Lift.IdentityCallGas"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -211,9 +230,15 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
+# Spawn kinds from code bytes (curve-3pool-stableswap-v1): contract-neutral.
+SHARED += ["Lift.SpawnKindsM"]
+SHARED += ["Lift.GuardedCalls"]
+SHARED += ["Lift.ChildFrameCode"]
+SHARED += ["Lift.ChildFrameDepth"]
+SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn", "Lift.CursorJump", "Lift.CursorOccurrenceRoots"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -226,7 +251,7 @@ SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
 # (eip7002-system-paths): contract-neutral.
 SHARED += ["SystemCallForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
-SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
+SHARED += ["ExecutionWarmth", "ExecutionErrorKeep", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
 # Reachable program counters, the canonical consensus system-contract code and system frames that
 # run it (beacon-env-v2): contract-neutral (the four system contracts are protocol, not a Blanc contract).
 SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "ExecutionTraceSystemCode"]
@@ -238,6 +263,9 @@ SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.W
 SHARED += ["Lift.ExactLeaf"]
 # A forall kernel batch (vyper-minus-reachable-reentrancy-v1).
 SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
+# Generic entry-gas bound, child code-at keep and system-size exclusion of a configured history
+# (curve-3pool-stableswap-v1 packet G): contract-neutral.
+SHARED += ["ExecutionTraceFrameEnv"]
 
 SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
 
@@ -248,6 +276,8 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 SHARED += ["Lift.PairCode", "Lift.StaticSilent"]
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
+# Outermost settled frames at an address (committed-replay histories): contract-neutral.
+SHARED += ["Lift.OutermostFrames"]
 
 # The positional frame ladder, root-frame caller facts, the generic token core over a settled
 # history, finite checkpoints, retained-target completeness and the EIP-7702 designator length
@@ -265,6 +295,8 @@ SHARED += [
     "Lift.Token.SelfCaller",
     "CodeDelegation",
 ]
+# The minter/supply facet of the token core (curve-3pool-stableswap-v1 U8a): contract-neutral.
+SHARED += ["Lift.Token.Supply"]
 
 # The settled-forest positional facts, own-code persistence at settled frames, certificate windows
 # and the exact-word prefix stack transfer (uniswap-weth9-composition-v1, final integration):
@@ -764,7 +796,274 @@ CONTRACTS = {
                    "Lift.Curve3Crv.Exec", "Lift.Curve3Crv.Slots", "Lift.Curve3Crv.Ladder",
                    "Lift.Curve3Crv.HistoryKeys", "Lift.Curve3Crv.CarriedHistory",
                    "Lift.Curve3Crv.CommittedReplay", "Lift.Curve3Crv.CommittedExec",
-                   "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness"],
+                   "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness",
+                   "Lift.Curve3Crv.CostBounds"],
+    # The Curve 3pool StableSwap (StableSwap3Pool.vy, Vyper 0.2.4): the deployed creation input,
+    # lifted runtime and creation input, its functional model, U5, the U3 refutation and bounds, the storage
+    # abstraction and checkpoint predicate, U7 deployment, and the U2 pure refinement layer (curve-3pool-stableswap-v1).
+    "curve-3pool": ["Lift.Curve3Pool.Creation.Cert",
+                    "Lift.Curve3Pool.Creation.Check",
+                    "Lift.Curve3Pool.Creation.Jumps",
+                    "Lift.Curve3Pool.Model",
+                    "Lift.Curve3Pool.SpawnKinds",
+                    "Lift.Curve3Pool.CallGuards",
+                    "Lift.Curve3Pool.Bridge",
+                    "Lift.Curve3Pool.U5",
+                    "Lift.Curve3Pool.U3Refute",
+                    "Lift.Curve3Pool.U4ExactnessRefute",
+                    "Lift.Curve3Pool.U4GetYRefute",
+                    "Lift.Curve3Pool.U3Observable",
+                    "Lift.Curve3Pool.U3Bounds",
+                    "Lift.Curve3Pool.Layout",
+                    "Lift.Curve3Pool.Creation.Walk",
+                    "Lift.Curve3Pool.Creation.Deploy",
+                    "Lift.Curve3Pool.Decode",
+                    "Lift.Curve3Pool.Observe",
+                    "Lift.Curve3Pool.FrameEnv",
+                    "Lift.Curve3Pool.Spec",
+                    "Lift.Curve3Pool.Refine",
+                    "Lift.Curve3Pool.Walk.Quiet",
+                    "Lift.Curve3Pool.Walk.Admin",
+                    "Lift.Curve3Pool.Walk.AdminBalances",
+                    "Lift.Curve3Pool.Walk.Donate",
+                    "Lift.Curve3Pool.Walk.Getters",
+                    "Lift.Curve3Pool.Cert",
+                    "Lift.Curve3Pool.KitCheck",
+                    "Lift.Curve3Pool.Callee.A",
+                    "Lift.Curve3Pool.Callee.ABase",
+                    "Lift.Curve3Pool.Callee.Xp", "Lift.Curve3Pool.Callee.GetD", "Lift.Curve3Pool.Callee.GetDExact", "Lift.Curve3Pool.Callee.GetDLoop", "Lift.Curve3Pool.Callee.GetDMem", "Lift.Curve3Pool.Callee.GetDMemExact", "Lift.Curve3Pool.Callee.GetY", "Lift.Curve3Pool.Callee.GetYCoins", "Lift.Curve3Pool.Callee.GetYExact", "Lift.Curve3Pool.Callee.GetYLoop", "Lift.Curve3Pool.Callee.GetYTrees", "Lift.Curve3Pool.Callee.GetDTrees", "Lift.Curve3Pool.Callee.GetYD", "Lift.Curve3Pool.Callee.GetYDCoins", "Lift.Curve3Pool.Callee.GetYDExact", "Lift.Curve3Pool.Callee.GetYDLoop", "Lift.Curve3Pool.Callee.GetYDTrees",
+                    "Lift.Curve3Pool.CheckTries",
+                    "Lift.Curve3Pool.Check",
+                    "Lift.Curve3Pool.CheckPart0",
+                    "Lift.Curve3Pool.CheckPart1",
+                    "Lift.Curve3Pool.CheckPart2",
+                    "Lift.Curve3Pool.CheckPart3",
+                    "Lift.Curve3Pool.CheckPart4",
+                    "Lift.Curve3Pool.CheckPart5",
+                    "Lift.Curve3Pool.CheckPart6",
+                    "Lift.Curve3Pool.CheckPart7",
+                    "Lift.Curve3Pool.CheckPart8",
+                    "Lift.Curve3Pool.CheckPart9",
+                    "Lift.Curve3Pool.CheckPart10",
+                    "Lift.Curve3Pool.CheckPart11",
+                    "Lift.Curve3Pool.CheckPart12",
+                    "Lift.Curve3Pool.CheckPart13",
+                    "Lift.Curve3Pool.CheckPart14",
+                    "Lift.Curve3Pool.CheckPart15",
+                    "Lift.Curve3Pool.CheckPart16",
+                    "Lift.Curve3Pool.CheckPart17",
+                    "Lift.Curve3Pool.CheckPart18",
+                    "Lift.Curve3Pool.CheckPart19",
+                    "Lift.Curve3Pool.CheckPart20",
+                    "Lift.Curve3Pool.CheckPart21",
+                    "Lift.Curve3Pool.CheckPart22",
+                    "Lift.Curve3Pool.CheckPart23",
+                    "Lift.Curve3Pool.Creation.Input",
+                    "Lift.Curve3Pool.Creation.Window",
+                    "Lift.Curve3Pool.Walk.Kit",
+                    "Lift.Curve3Pool.Walk.Dispatch",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityPre",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityPost",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidity",
+                    "Lift.Curve3Pool.Walk.RemoveLiquiditySafe",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityRawK",
+                    "Lift.Curve3Pool.Walk.AdminBalancesX",
+                    "Lift.Curve3Pool.Walk.DonateX",
+                    "Lift.Curve3Pool.Walk.WithdrawAdminFeesX",
+                    "Lift.Curve3Pool.Walk.WithdrawAdminFeesRaw",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceModel",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceChecks",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",
+                    "Lift.Curve3Pool.Walk.LiveKit",
+                    "Lift.Curve3Pool.LivePremises",
+                    "Lift.Curve3Pool.ExactLivePremises",
+                    "Lift.Curve3Pool.CalldataWords",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
+                    "Lift.Curve3Pool.RemoveLiquidityLiveness",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityExactSchedule",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityExactWalk",
+                    "Lift.Curve3Pool.RemoveLiquidityExactFrame", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.Fallback", "Lift.Curve3Pool.Walk.AdminRaw",
+                    "Lift.Curve3Pool.Walk.ExchangeDispatch",
+                    "Lift.Curve3Pool.Walk.ExchangeFrame",
+                    "Lift.Curve3Pool.Walk.ExchangePre",
+                    "Lift.Curve3Pool.Walk.ExchangeChecks",
+                    "Lift.Curve3Pool.Walk.ExchangeMid",
+                    "Lift.Curve3Pool.Walk.ExchangePull",
+                    "Lift.Curve3Pool.Walk.ExchangeTail",
+                    "Lift.Curve3Pool.Walk.ExchangeX",
+                    "Lift.Curve3Pool.Walk.ExchangeY",
+                    "Lift.Curve3Pool.Walk.ExchangeDy",
+                    "Lift.Curve3Pool.Walk.ExchangePush",
+                    "Lift.Curve3Pool.Walk.ExchangeFront",
+                    "Lift.Curve3Pool.Walk.Exchange",
+                    "Lift.Curve3Pool.Walk.ExchangeModel",
+                    "Lift.Curve3Pool.Walk.ExchangeObserve",
+                    "Lift.Curve3Pool.Walk.ExchangeSafe",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveKit",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveFront",
+                    "Lift.Curve3Pool.Walk.ExchangeLivePre",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveMid",
+                    "Lift.Curve3Pool.Walk.ExchangeLivePull",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveBal",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveX",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveSave",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveRestore",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveY",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveDy",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveStore",
+                    "Lift.Curve3Pool.Walk.ExchangeLivePush",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveFrame",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveModel",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveWords",
+                    "Lift.Curve3Pool.ExchangeLive",
+                    "Lift.Curve3Pool.ExchangeExactSchedule",
+                    "Lift.Curve3Pool.Walk.ExchangeExactWalk",
+                    "Lift.Curve3Pool.ExchangeExactLive",
+                    "Lift.Curve3Pool.Walk.LiveLoops",
+                    "Lift.Curve3Pool.Callee.AGrow",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveA",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveB",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveC",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveD",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveLoop",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLiveE",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawLive",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveP1",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveP2",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveFront",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveFrame",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveModel",
+                    "Lift.Curve3Pool.Walk.OneCoinLiveWords",
+                    "Lift.Curve3Pool.OneCoinLive",
+                    "Lift.Curve3Pool.Walk.OneCoinExactSchedule",
+                    "Lift.Curve3Pool.Walk.OneCoinExactWalk",
+                    "Lift.Curve3Pool.OneCoinExactFrame",
+                    "Lift.Curve3Pool.Callee.GetDMemGrow",
+                    "Lift.Curve3Pool.Walk.RliLiveFront",
+                    "Lift.Curve3Pool.Walk.RliLiveD",
+                    "Lift.Curve3Pool.Walk.RliLiveD1",
+                    "Lift.Curve3Pool.Walk.RliLiveFee",
+                    "Lift.Curve3Pool.Walk.RliLiveD2",
+                    "Lift.Curve3Pool.Walk.RliLivePush",
+                    "Lift.Curve3Pool.Walk.RliLiveEnd",
+                    "Lift.Curve3Pool.Walk.RliLiveTail",
+                    "Lift.Curve3Pool.Walk.RliLiveFrame",
+                    "Lift.Curve3Pool.Walk.RliLiveModel",
+                    "Lift.Curve3Pool.Walk.RliLiveWords",
+                    "Lift.Curve3Pool.Walk.LiveLink",
+                    "Lift.Curve3Pool.Walk.RliLiveCut",
+                    "Lift.Curve3Pool.RemoveImbalanceLive",
+                    "Lift.Curve3Pool.AddLiquidityLive",
+                    "Lift.Curve3Pool.Walk.AlLiveFront",
+                    "Lift.Curve3Pool.Walk.AlLiveD0",
+                    "Lift.Curve3Pool.Walk.AlLiveHead",
+                    "Lift.Curve3Pool.Walk.AlLiveCredit",
+                    "Lift.Curve3Pool.Walk.AlLivePull",
+                    "Lift.Curve3Pool.Walk.AlLiveBal",
+                    "Lift.Curve3Pool.Walk.AlLiveLoop",
+                    "Lift.Curve3Pool.Walk.AlLiveD1",
+                    "Lift.Curve3Pool.Walk.AlLiveFee",
+                    "Lift.Curve3Pool.Walk.AlLiveD2",
+                    "Lift.Curve3Pool.Walk.AlLiveD2Get",
+                    "Lift.Curve3Pool.Walk.AlLiveMint",
+                    "Lift.Curve3Pool.Walk.AlLiveBack",
+                    "Lift.Curve3Pool.Walk.AlLiveMid",
+                    "Lift.Curve3Pool.Walk.AlLiveFrame",
+                    "Lift.Curve3Pool.Walk.AlLiveCut",
+                    "Lift.Curve3Pool.Walk.AlLiveModel",
+                    "Lift.Curve3Pool.Walk.AlLiveWords",
+                    "Lift.Curve3Pool.Walk.AlLiveUnique",
+                    "Lift.Curve3Pool.Walk.AlLiveLink",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactKit",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactSchedule",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactLoop",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactLoopRun",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactFee",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactBack",
+                    "Lift.Curve3Pool.Walk.AddLiquidityExactWalk",
+                    "Lift.Curve3Pool.AddLiquidityExactFrame",
+                    "Lift.Curve3Pool.Walk.RliExactKit",
+                    "Lift.Curve3Pool.Walk.RliExactSchedule",
+                    "Lift.Curve3Pool.Walk.RliExactWalk",
+                    "Lift.Curve3Pool.RemoveLiquidityImbalanceExactFrame",
+                    "Lift.Curve3Pool.Walk.ViewsDispatch",
+                    "Lift.Curve3Pool.Walk.ViewsLoop",
+                    "Lift.Curve3Pool.Walk.ViewsKit",
+                    "Lift.Curve3Pool.Walk.ViewsGvp",
+                    "Lift.Curve3Pool.Walk.ViewsGvpRaw",
+                    "Lift.Curve3Pool.Walk.ViewsA",
+                    "Lift.Curve3Pool.Walk.BridgeChecks",
+                    "Lift.Curve3Pool.Walk.RampKit",
+                    "Lift.Curve3Pool.Walk.RampStop",
+                    "Lift.Curve3Pool.Walk.RampA",
+                    "Lift.Curve3Pool.Walk.ViewsDy",
+                    "Lift.Curve3Pool.Walk.ViewsDyKit",
+                    "Lift.Curve3Pool.Walk.ViewsDyPost",
+                    "Lift.Curve3Pool.Walk.ViewsDyRaw",
+                    "Lift.Curve3Pool.Walk.ViewsDyu",
+                    "Lift.Curve3Pool.Walk.ViewsDyuPost",
+                    "Lift.Curve3Pool.Walk.ViewsDyuRaw",
+                    "Lift.Curve3Pool.Walk.ViewsCta",
+                    "Lift.Curve3Pool.Walk.ViewsCtaLoop",
+                    "Lift.Curve3Pool.Walk.ViewsCtaD1",
+                    "Lift.Curve3Pool.Walk.ViewsCtaPost",
+                    "Lift.Curve3Pool.Walk.ViewsCtaRaw",
+                    "Lift.Curve3Pool.Walk.ViewsCwo",
+                    "Lift.Curve3Pool.Walk.OneCoinPre",
+                    "Lift.Curve3Pool.Walk.OneCoinBurn",
+                    "Lift.Curve3Pool.Walk.OneCoinCalls",
+                    "Lift.Curve3Pool.Walk.OneCoin",
+                    "Lift.Curve3Pool.Walk.OneCoinRaw",
+                    "Lift.Curve3Pool.Walk.OneCoinChecks",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceFront",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceD0",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceD1",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceFeeLoop",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceD2",
+                    "Lift.Curve3Pool.Walk.RemoveImbalancePush",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceBurn",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceTransfers",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceWalk",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceRaw",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceRawChecks",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawX",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXB",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXC",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXLoop",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXD",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXSpec",
+                    "Lift.Curve3Pool.Callee.CalcWithdrawXFirst",
+                    "Lift.Curve3Pool.CommittedReplay",
+                    "Lift.Curve3Pool.Ladder",
+                    "Lift.Curve3Pool.Safe",
+                    "Lift.Curve3Pool.History",
+                    "Lift.Curve3Pool.AmpHistory",
+                    "Lift.Curve3Pool.U3History",
+                    "Lift.Curve3Pool.HistoryLive",
+                    "Lift.Curve3Pool.ExactStaticGas",
+                    "Lift.Curve3Pool.ExactMessage",
+                    "Lift.Curve3Pool.HistoryLiveExact",
+                    "Lift.Curve3Pool.SupplyMoves",
+                    "Lift.Curve3Pool.U3Ledger",
+                    "Lift.Curve3Pool.U4Frames",
+                    "Lift.Curve3Pool.Walk.AddLiquidityKit",
+                    "Lift.Curve3Pool.Walk.AddLiquidityFrames",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPre",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD0",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull2",
+                    "Lift.Curve3Pool.Walk.AddLiquidityIter",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD1",
+                    "Lift.Curve3Pool.Walk.AddLiquidityFee",
+                    "Lift.Curve3Pool.Walk.AddLiquidityFeeLoop",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD2",
+                    "Lift.Curve3Pool.Walk.AddLiquidityMint",
+                    "Lift.Curve3Pool.Walk.AddLiquidityTail",
+                    "Lift.Curve3Pool.Walk.AddLiquidity",
+                    "Lift.Curve3Pool.Walk.AddLiquidityBack",
+                    "Lift.Curve3Pool.Walk.AddLiquiditySafe",
+                    "Lift.Curve3Pool.Walk.AddLiquidityChecks"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
@@ -1133,6 +1432,7 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal",
 ])
 
+# Recover only the existing checkpoint modules within their established families.
 # Pair-side facts of uniswap-weth9-composition-v1 stay within the Pair family. The deployed
 # UniswapV2Factory joins the same family: its runtime embeds the registered Pair creation code
 # (`Lift.UniswapV2Factory.Input` imports `Lift.UniswapV2Pair.Creation.Cert`), so the factory is
@@ -1172,6 +1472,7 @@ CONTRACTS["weth9"].extend([
 CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
     "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom",
 ])
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
@@ -1223,6 +1524,48 @@ COMPOSITION = [
     "Composition.ProrataWethVaultWithdrawLocator",
     "Composition.ProrataWethVaultLedgerFaithful",
     "Composition.Weth9WethGas",
+    "Composition.Curve3Pool3CrvCheckpoint",
+    "Composition.Curve3CrvTokenCore",
+    "Composition.Curve3CrvPositional",
+    "Composition.Curve3PoolSupplyFrames",
+    "Composition.Curve3PoolSupplyCalls",
+    "Composition.Curve3PoolSupplyStep",
+    "Composition.Curve3PoolSupply",
+    "Composition.Curve3Pool3CrvU3",
+    "Composition.Curve3PoolCalleeLive",
+    "Composition.Curve3PoolCalleeExactProfiles",
+    "Composition.Curve3Pool3CrvHeadlines",
+    "Composition.Curve3Pool3CrvWorld",
+    "Composition.Curve3Pool3CrvTxData",
+    "Composition.Curve3Pool3CrvSigningEncoding",
+    "Composition.Curve3Pool3CrvSigningHash",
+    "Composition.Curve3Pool3CrvSigningRecover",
+    "Composition.Curve3Pool3CrvBlock",
+    "Composition.Curve3Pool3CrvCoinCalls",
+    "Composition.Curve3Pool3CrvExRoot",
+    "Composition.Curve3Pool3CrvTxFrame",
+    "Composition.Curve3Pool3CrvTraceEnv",
+    "Composition.Curve3Pool3CrvCapstoneModel",
+    "Composition.Curve3Pool3CrvWorldAgrees",
+    "Composition.Curve3Pool3CrvCoinExactTransport",
+    "Composition.Curve3Pool3CrvCoinExact",
+    "Composition.Curve3Pool3CrvCoinAnswers",
+    "Composition.Curve3Pool3CrvCapstoneFrame",
+    "Composition.Curve3Pool3CrvCapstoneTx",
+    "Composition.Curve3Pool3CrvCapstone",
+    "Composition.Curve3Pool3CrvLiveWitness",
+    "Composition.Curve3Pool3CrvExactAssembly",
+    "Composition.Curve3Pool3CrvHeadlinesExact",
+    "Composition.Curve3Pool3CrvExactWitness",
+    "Composition.Curve3Pool3CrvLiveConcrete",
+    "Composition.Curve3Pool3CrvLiveEndEntry",
+    "Composition.Curve3Pool3CrvLiveEndRL",
+    "Composition.Curve3Pool3CrvLiveEndOC",
+    "Composition.Curve3Pool3CrvLiveEndKeep",
+    "Composition.Curve3Pool3CrvLiveEndRLI",
+    "Composition.Curve3Pool3CrvLiveEndAL",
+    "Composition.Curve3Pool3CrvLiveEndKeepAL",
+    "Composition.Curve3Pool3CrvLiveEndKeepRLI",
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
     "Composition.PairTokenCallers",
     "Composition.PairTokenJointAt",

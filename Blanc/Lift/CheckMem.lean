@@ -12,9 +12,9 @@ and no maps, and the soundness proofs are stated once, over `checkNodeM`.
 With `b` on:
 
 * `MSTORE` at a constant offset records its value, `CALLDATACOPY` over a
-  constant window forgets the words it overlaps, the instructions of
-  `ninstMemKeeps` keep the map, and every other instruction forgets it
-  (`absMem`);
+  constant window and `STATICCALL` with a constant output window forget the
+  words those windows overlap, the instructions of `ninstMemKeeps` keep the
+  map, and every other instruction forgets it (`absMem`);
 * `MLOAD` at a recorded constant offset pushes the recorded word (`memTop`);
 * a goto (`jump`, the taken side of `branchTo`) requires the target entry's
   declared map to be recorded identically (`memCompat`);
@@ -42,7 +42,7 @@ def rinstMemKeeps : Rinst → Bool
   | .sgt | .eq | .and | .or | .xor | .byte | .shl | .shr | .sar | .iszero | .not
   | .address | .origin | .caller | .callvalue | .calldatasize | .codesize | .gasprice
   | .returndatasize | .coinbase | .timestamp | .number | .prevrandao | .gaslimit | .chainid
-  | .basefee | .blobbasefee | .msize
+  | .basefee | .blobbasefee | .msize | .gas
   | .pop | .calldataload | .mload | .keccak256 | .dup _ | .swap _
   | .sload | .sstore | .tload | .tstore | .log _ => true
   | _ => false
@@ -59,6 +59,8 @@ def absMem (n : Ninst) (a : List AVal) (mem : MemMap) : MemMap :=
   | .reg .mstore, .const o :: v :: _ => (o.toNat, v) :: memKill mem o.toNat (o.toNat + 32)
   | .reg .calldatacopy, .const d :: _ :: .const z :: _ =>
     memKill mem d.toNat (d.toNat + z.toNat)
+  | .exec .staticcall, _ :: _ :: _ :: _ :: .const o :: .const z :: _ =>
+    memKill mem o.toNat (o.toNat + z.toNat)
   | n, _ => if ninstMemKeeps n then mem else []
 
 /-- The word an `MLOAD` at a constant offset reads, when the map records it. -/

@@ -51,7 +51,7 @@ theorem iszero_ne {x : B256} (h : B256.eqCheck x 0 ≠ 0) : x = 0 := by
   · assumption
   · exact (h rfl).elim
 
-theorem eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
+theorem ne_of_eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y := by
   intro hxy
   unfold B256.eqCheck at h
   split at h
@@ -64,7 +64,7 @@ theorem eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
   · assumption
   · exact (h rfl).elim
 
-theorem iszero_eq_zero {x : B256} (h : B256.eqCheck x 0 = 0) : x ≠ 0 := eqCheck_eq_zero h
+theorem iszero_eq_zero {x : B256} (h : B256.eqCheck x 0 = 0) : x ≠ 0 := ne_of_eqCheck_eq_zero h
 
 theorem ff20_caller (a : Adr) :
     Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -164,7 +164,7 @@ theorem willFallback_ret (hfork : CoveredFork sevm.benvStat.fork) {r : B256} {D 
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨-, _, run⟩ | ⟨hc, _, run⟩
   · exact (SFunc.RunP.not_returned_of_haltsOnly run (by decide)).elim
-  refine ⟨fun h => eqCheck_eq_zero (iszero_ne (iszero_eq_zero (iszero_ne hc))) ((masked_eq_iff _ _).mpr h), ?_⟩
+  refine ⟨fun h => ne_of_eqCheck_eq_zero (iszero_ne (iszero_eq_zero (iszero_ne hc))) ((masked_eq_iff _ _).mpr h), ?_⟩
   unfold t_0647_c22 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)

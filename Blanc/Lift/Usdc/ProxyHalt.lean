@@ -656,7 +656,7 @@ theorem dl_tail_halted {d1 post : Devm}
           rw [hs] at hw
           exact ⟨s, by rw [Option.some.inj hw]⟩
     obtain ⟨st, hst⟩ := hstack
-    refine ⟨⟨w, st, hst, eqCheck_eq_zero hz⟩, ?_⟩
+    refine ⟨⟨w, st, hst, ne_of_eqCheck_eq_zero hz⟩, ?_⟩
     unfold t_069f_c23 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)

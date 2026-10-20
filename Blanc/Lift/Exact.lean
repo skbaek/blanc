@@ -796,7 +796,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           exact frameMatches_foldTop hframe hstack ⟨xl, hfilled, pc, hstep0⟩ hinter
             (matches_to_frame hfirst)
         obtain ⟨hframe', hmem'⟩ :=
-          step_mem_sound b hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
+          step_mem_sound b hfork hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
         have hret0 : ∀ {a2 : List AVal}, RetIn (if b then memFold (memTop n0 a μ) a2 else a2)
             (if b then absMem n0 a μ else []) → (AVal.ret ∈ a2 → AVal.ret ∈ a) → RetIn a μ := by
           intro a2 h ha2
@@ -832,7 +832,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hframe hstack hmem hrunN
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem hrunN
           (by rw [hstack']; rfl) hframe0
         have hjump' := hjump
         simp only [jumpsOkNodeM, absNinst] at hjump'

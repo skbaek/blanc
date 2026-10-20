@@ -3,7 +3,8 @@
 
 The map is a claim index over Blanc's results about deployed EVM bytecode (WETH9, the Beacon
 deposit contract, Curve 3Crv, the Lido CircuitBreaker, the Vyper nonreentrancy pair, the EIP-7002
-predeploy, the Uniswap V2 Pair and Factory, and the Pair composed with WETH9), not an
+predeploy, the Uniswap V2 Pair and Factory, the Pair composed with WETH9, and the Curve 3pool
+with 3Crv), not an
 independent theorem authority.  This checker therefore holds it to the repository:
 
 * every fully qualified declaration it writes (``Blanc.…``) resolves, spelled in full, to a public
@@ -79,6 +80,7 @@ H3 = [
     "5.8 Uniswap V2 Pair",
     "5.9 Uniswap V2 Pair × WETH9",
     "5.10 Uniswap V2 Pair × USDC × WETH9",
+    "5.11 Curve 3pool StableSwap",
 ]
 
 # The headline results the map exists to carry.  A row deleted from the document fails here.
@@ -202,6 +204,77 @@ REQUIRED_HEADLINES = [
     "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live_finite",
     "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live_finite",
     "Blanc.Composition.UniswapV2PairUsdcWeth9.u0F_stray_accepted",
+    # The Curve 3pool StableSwap pool and its composition with 3Crv (Section 5.11).
+    "Blanc.Lift.Curve3Pool.pool_frame_refines_env",
+    "Blanc.Lift.Curve3Pool.pool_other_fails",
+    "Blanc.Lift.Curve3Pool.pool_static_noEffect",
+    "Blanc.Lift.Curve3Pool.pool_history_committed_derived",
+    "Blanc.Lift.Curve3Pool.pool_history_initialized",
+    "Blanc.Lift.Curve3Pool.exchange_live",
+    "Blanc.Lift.Curve3Pool.addLiquidity_live",
+    "Blanc.Lift.Curve3Pool.removeLiquidity_live",
+    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live",
+    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live",
+    "Blanc.Lift.Curve3Pool.pool_history_exchange_live",
+    "Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live",
+    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidity_live_entry",
+    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_addLiquidity_live_entry",
+    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityImbalance_live_entry",
+    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityOneCoin_live_entry",
+    "Blanc.Composition.Curve3Pool3CrvInstance.ex_frame_live",
+    "Blanc.Composition.Curve3Pool3CrvInstance.rl_frame_live",
+    "Blanc.Composition.Curve3Pool3CrvInstance.oc_frame_live",
+    "Blanc.Composition.Curve3Pool3CrvInstance.al_frame_live",
+    "Blanc.Composition.Curve3Pool3CrvInstance.rli_frame_live",
+    "Blanc.Composition.Curve3Pool3CrvJoint.checkJoint_sound",
+    "Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_agreeing",
+    "Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_instance",
+    "Blanc.StableSwapNewton.getDChk_lower",
+    "Blanc.StableSwapNewton.getD_not_mono",
+    "Blanc.StableSwapNewton.getYDChk_rootOrSucc",
+    "Blanc.StableSwapNewton.getYChk_rootOrSucc",
+    "Blanc.Lift.Curve3Pool.u3_refuted_exchange",
+    "Blanc.Lift.Curve3Pool.u3_refuted_add_liquidity",
+    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity",
+    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_imbalance",
+    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_one_coin_deployed",
+    "Blanc.Lift.Curve3Pool.u3_refuted_donate_admin_fees",
+    "Blanc.Lift.Curve3Pool.pool_history_u3",
+    "Blanc.Composition.Curve3PoolSupply.pool_3crv_u3",
+    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_u3_deployed",
+    "Blanc.Lift.Curve3Pool.pool_history_amp",
+    "Blanc.Lift.Curve3Pool.dMonoInA",
+    "Blanc.Lift.Curve3Pool.u5_ramp_control",
+    "Blanc.Composition.Curve3PoolSupply.pool_3crv_history",
+    "Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered",
+    # The Curve 3pool exact-gas liveness forms and their premise-bundle witnesses (Section 5.11).
+    "Blanc.Lift.Curve3Pool.removeLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.exchange_live_exact",
+    "Blanc.Lift.Curve3Pool.addLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact",
+    "Blanc.Lift.Curve3Pool.exchange_msg_exact",
+    "Blanc.Lift.Curve3Pool.addLiquidity_msg_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact",
+    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact",
+    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -259,6 +332,25 @@ NONCLAIM_PHRASES = [
     "liveness premises",
     "key universe",
     "the closed single-block usdc instance",
+    # The Curve 3pool (Section 5.11, Section 7 items 42 to 55).
+    "virtual price is not monotone",
+    "only a synthetic coin is shown to satisfy it",
+    "not exact-gas equalities",
+    "jaune counts call depth down",
+    "only `exchange` is shown at a transaction's entry",
+    "the answer is unconstrained",
+    "not pinned to the premised `t`",
+    "no such world is instantiated",
+    "the index-2 path is not instantiated",
+    "not the recorded constructor arguments",
+    # The Curve 3pool exact-gas rows (Section 5.11, Section 6 [ah], Section 7 items 48 and 53).
+    "no exact-gas theorem is instantiated end to end",
+    "not each composed headline's literal hypothesis set",
+    "a coin's gas use is the coin's, not a blanc fact",
+    "headroom and the no-wrap bound are separate premises",
+    "it reads no residual gas and is not an existential cost",
+    "declared in blanc, not by jaune",
+    "the sufficient-gas rows above remain, unchanged",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
@@ -276,6 +368,11 @@ NON_LEAN_IDENTIFIERS = {
     "add_liquidity", "eth_getCode", "AxiomAudit", "collectAxioms", "sorryAx", "native_decide",
     "bv_decide", "processTransaction", "prepareMessage", "accountsToDelete", "TxC", "hP", "hI",
     "MINIMUM_LIQUIDITY", "kLast", "returnedGas",
+    # Curve 3pool source (Vyper) identifiers and one RPC method (Section 5.11).
+    "eth_getProof", "get_D", "get_y", "get_y_D", "D_P", "get_dy", "get_dy_underlying", "raw_call",
+    "calc_withdraw_one_coin", "remove_liquidity_imbalance", "remove_liquidity_one_coin",
+    "donate_admin_fees", "ramp_A", "stop_ramp_A", "kill_me", "initial_A", "future_A",
+    "MIN_RAMP_TIME", "MAX_A_CHANGE",
 }
 
 # The artifacts the map states: address -> (label, lifted input file or None for a proxy,
@@ -294,6 +391,7 @@ ARTIFACTS = {
     "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": ("USDC FiatTokenProxy", "usdc-proxy-runtime.hex", ["usdc-proxy"], None),
     "0x43506849D7C04F9138D1A2050bbF3A0c054402dd": ("USDC FiatTokenV2_2 implementation", "usdc-impl-runtime.hex", ["usdc-impl"], None),
     "0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172": ("USDC SignatureChecker library", "usdc-lib-runtime.hex", ["usdc-lib"], None),
+    "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7": ("Curve 3pool StableSwap", "curve-3pool-runtime.hex", ["curve-3pool", "curve-3pool-creation"], None),
 }
 # The Uniswap V2 Pair runtime is one runtime for every pair: its row records the block at which the
 # exhibit instance's code was read, not a creation transaction, and its creation code is a separate

@@ -60,7 +60,8 @@ registry has identified the likely vocabulary.
   `scripts/check-extraction-ownership.sh` fails if Blanc redeclares a
   relocated declaration. Blanc's own list
   prefix/split algebra (`Split`, `Pref`, `Frel`) lives in
-  [`Blanc/Basic.lean`](../Blanc/Basic.lean). Both are the substrate the
+  [`Blanc/Basic.lean`](../Blanc/Basic.lean), which also holds
+  `Blanc.getElem?_append_mid` (an element of a middle block at `A.length + j`). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
 - Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
@@ -233,6 +234,14 @@ registry has identified the likely vocabulary.
   bounds the charge at a zero (created-account) original by the charge at a
   `RefundSafe` snapshot original, so a snapshot-priced bound remains an upper
   bound.
+- To show a frame ends with a nonnegative refund counter when its own `SSTORE`s are arbitrary
+  (a world invariant closed under every step), track the refund potential
+  `refundPotential sevm b a K` (counter less the clear refund per currently cleared slot of `a`
+  over a key set `K` covering the nonzero originals): `refundPotential_afterSstore` (never lowered
+  by an `SSTORE` at `a`), `refundPotential_add` / `refundPotential_congr`, `clearedCount_eq_zero`
+  and `refundCounter_nonneg_of_potential` in
+  [`Blanc/StorageRefundPotential.lean`](../Blanc/StorageRefundPotential.lean). `ShaCallPost`
+  (precompile calls) keeps the refund counter (`ShaCallPost.refund`).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -386,6 +395,33 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   to the continuation, immediately after code equality. Use them when a walk
   must transport nonce-based account protection. The original step helpers
   retain their signatures as wrappers that discard this additional fact.
+- For one external call with a gas-independent exact debit and canonical
+  successor, use `ExactCallProfile` in
+  [`Blanc/Lift/ExactCallProfile.lean`](../Blanc/Lift/ExactCallProfile.lean).
+  Its `entry_gas` identifies the metered input gas; `congr` fixes the debit
+  and every successor column except gas, including returndata and access
+  sets. `sound` keeps the exact debit equation. `runExact`, `runEx`, and
+  `runExact_residual` prepend the call while retaining that equation and
+  successor for the continuation. Headroom is a separate `Ready` condition.
+  `allGasStaticCallEntry`, `allGasZeroCallEntry`, `CallWindowReady`,
+  `StaticWordCallProfile`, and `MutableCallProfile` specialize this interface
+  to all-gas word-reply windows, preserving world transitions, result-stack
+  room, and identity-precompile readiness. These are per-call premises;
+  constructing a profile still requires the callee's exact run and stability.
+- For an all-gas, zero-value call site with a one-word output window, use
+  `Blanc.Lift.AllGasCall` in
+  [`Blanc/Lift/CallProfileTransport.lean`](../Blanc/Lift/CallProfileTransport.lean):
+  `ext`, `access`, `forwarded`, `warmed`, `parent`, `message`, and `resume`
+  name the priced site and its child message; `forwarded_le` and `cross`
+  construct the existing clean call crossing from the callee's actual execution.
+  `message_sevm_reframe` and `message_devm_reframe` expose complete child
+  initialization at normalized parent gas, with the actual forwarded gas restored;
+  the latter preserves the state-gas grant and every world/metadata field.
+  `resume_debit` cancels funded forwarding against returned child gas, leaving
+  exactly access + expansion + child consumption as the parent debit.
+  The forwarding fraction is returned through `resume`; it is not an extra
+  consumed charge. Supply the fork, nondelegation, depth, non-precompile,
+  funding, input-gas bound and result-stack-room hypotheses explicitly.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
 - When the walk already holds the callee's own exact run, use
   [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean):
@@ -568,6 +604,23 @@ entered-frame STATICCALL has no `runCompiled` constructor — assemble those
 crossings per consumer from `Xinst.step_staticcall_spawn` composed with
 `Ninst.runCompiled_exec_run`.
 
+When the walk must name the frame's **exact ordered direct children** (an environment or
+call list read off `Exec.childFrames`), walk the actual derivation instead of a lifted run:
+[`Blanc/Lift/FrameWalk.lean`](../Blanc/Lift/FrameWalk.lean) gives the walk state
+`XAt sevm post pc d L` (a derivation from `d` at `pc` whose remaining children are `L`, gas a
+word), one-step lemmas `xa_next`, `xa_jumpdest`/`xa_jump`/`xa_jumpi` (and `_St` forms),
+`xa_halt`, `xa_revert`, and the spawning steps `xa_call`/`xa_staticcall`, which peel the next
+child as `ChildOf` (target, calldata, value, static flag, output, logs, storage and code at
+entry and exit, warm growth) unless the target is an undelegated precompile.
+[`Blanc/Lift/FrameWalkKit.lean`](../Blanc/Lift/FrameWalkKit.lean) carries memory as a byte
+image (`ri_*_img`, `xa_call_img`, `xa_staticcall_img`, `xa_identity_img`), normalizes the next
+pc (`xa_nextAt`, `xa_jumpiAt`, …), and states image facts as `WordAt`/`Region` with the
+`Mem.Reads.forget` cut and the `wchain` tactic (a memory word read off its image is
+`WordAt.of_memWord`); it also holds the branch-condition lemmas,
+Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`. The 3pool's
+`remove_liquidity` walk (`Blanc/Lift/Curve3Pool/Walk/RemoveLiquidity*.lean`) is the worked
+example.
+
 If the property concerns which child roots were entered rather than only the
 terminal result, continue to E3.
 
@@ -695,6 +748,23 @@ image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the 
 message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
 (`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
 
+For a committed-replay history that takes one step per *outermost* settled,
+non-static frame at an address (a re-entered frame consumed inside its
+ancestor), use [`Blanc/Lift/OutermostFrames.lean`](../Blanc/Lift/OutermostFrames.lean):
+`Exec.Frame.obsAt` / `Exec.Frame.subtreeAt` (the Pair's `pairFrameObs` /
+`pairSubtreeFrames` shape), `ConfiguredHistoryTrace.committedFramesAt` (all
+settled non-static frames at `ca`, in trace order) and
+`ConfiguredHistoryTrace.outermostFramesAt` (the outermost ones, via
+`Exec.outermostDescAt` / `Exec.Frame.outermostAt`). Facts:
+`mem_outermostFramesAt` (settled, at `ca`, non-static),
+`outermostFramesAt_sublist` (trace order), `outermostFramesAt_partition`
+(non-nesting: the outermost frames' subtrees flatten to exactly
+`committedFramesAt`), `eq_outermostFramesAt_of_partition` (any non-static `ca`
+frame list with that partition, e.g. a ladder's step frames, *is* the outermost
+list), and `outermostFramesAt_step` / `committedFramesAt_step`. The generic
+list facts behind them are `List.sublist_flatMap_of_headed` and
+`List.eq_of_flatMap_headed` (in namespace `Blanc`).
+
 To show that every direct child of a certified frame comes from one of a few
 call sites, use [`Blanc/Lift/CallSiteChildren.lean`](../Blanc/Lift/CallSiteChildren.lean)
 with the vocabulary of [`Blanc/Lift/CallSite.lean`](../Blanc/Lift/CallSite.lean).
@@ -712,6 +782,11 @@ tree's straight prefix with `SFunc.lineDrop n t` (`SFunc.lineSuffix_lineDrop`).
 `Xinst.step_call_spawn_stack` is used by
 `Blanc/Composition/Weth9TokenFramesNode.lean`.
 
+For a contract address that must originate no settled message root, use
+[`Blanc/ExecutionTraceRootCallers.lean`](../Blanc/ExecutionTraceRootCallers.lean).
+`ConfiguredHistoryTrace.settledRoots_caller_ne` derives the caller exclusion from
+an admitted preserved contract invariant at the checkpoint and `ca ≠ systemAddress`.
+The transaction case uses EIP-3607; the system-root cases retain the system caller.
 To prove a property of every committed descendant of a run from the spawns of the run's own chain,
 use [`Blanc/ExecutionSpawnFrames.lean`](../Blanc/ExecutionSpawnFrames.lean): `Exec.descendantFrames_of_spawns` reduces it to each
 spawning node of the chain whose child settles, for that child and its committed descendants, with
@@ -1647,7 +1722,7 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   (`of_memWrite`, `of_addAccessedStorageKey`, `of_withRefundCounter`,
   `of_setStorVal`, `of_withMemory`, `of_withStack`), and read congruences
   (`extCost_congr`, `getStorVal_congr`, `memRead_congr`, `of_popToNat`).
-  `Rinst.gasFree` whitelists the `regularTransfer` opcode family minus `gas`;
+  `Rinst.gasFree` covers the `regularTransfer` opcode family minus `gas`, plus XOR;
   `Ninst.gasFree` adds `push` and `Line.gasFree` covers lines.
   `Rinst.run_eqModGas` replays two successful per-op runs against each other,
   `Ninst.run_eqModGas` lifts that to instructions, and `Line.run_eqModGas`
@@ -1659,6 +1734,102 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   at any such bump. Existing suggestion facilities were checked and no
   registered trigger matches the two-run congruence goal shape, so discovery
   remains in this registry.
+- For literal equality after choosing a common execution-gas value, use
+  `Devm.EqModGas.withGasLeft_eq` in
+  [`Blanc/Lift/CallProfileTransport.lean`](../Blanc/Lift/CallProfileTransport.lean).
+  `of_normalized_eq` proves the converse relation from equality at gas zero;
+  `.st`, `.addAccessedAddress`, `.callSpawnParent`, and `.callChildPost`
+  transport every column except execution gas through caller preparation and
+  clean child resumption. The resume theorem needs both parent and child
+  agreement, and retains returndata, access sets, refunds, state-gas and read/
+  write metadata. These lemmas do not assert equal debit or callee liveness.
+- To change only a frame's initial-gas environment coordinate while retaining
+  the complete dynamic machine and outcome, use
+  [`Blanc/Lift/StaticGasTransport.lean`](../Blanc/Lift/StaticGasTransport.lean).
+  `ninstRunCompiled_withStaticGas` retains the same child-execution slot for
+  every instruction, including external calls; `linstRun_withStaticGas`
+  covers terminal instructions. `SFunc.RunExact.withStaticGas` transports the
+  full exact derivation, including program references and PC nodes.
+  `ExactCallProfile.withStaticGas` preserves the literal debit and successor
+  functions; `StaticWordCallProfile.withStaticGas` and
+  `MutableCallProfile.withStaticGas` also transport their indexed identity
+  readiness postconditions via `IdReady.withStaticGas`. `sloadCost_withStaticGas`,
+  `sstoreCost_withStaticGas`, `afterSload_withStaticGas`, `afterSstore_withStaticGas` and
+  `dataWord_withStaticGas` (all `rfl`) are the storage-charge, post-world and calldata-word
+  facts an exact schedule's cost transport unfolds to. These theorems update
+  `Sevm.gas`, leaving dynamic `Devm.gasLeft` unchanged.
+- To state a frame theorem (given at an arbitrary static machine and entry
+  `St pre [] Mem.empty G`) for a message entered with an execution grant, use
+  [`Blanc/Lift/StaticGasMessage.lean`](../Blanc/Lift/StaticGasMessage.lean): `Msg.withGas`,
+  `initSevm_withGas` (`{initSevm msg with gas := G}`), `initDevm_withGas`
+  (`St (initDevm msg) [] Mem.empty G`), `initDevm_gasMeasure` and `exec_withGas_of_frame` (a frame
+  `Exec` at the grant is `exec (initEvm (msg.withGas G)) = .ok post`). Fix the cost at the base
+  message, instantiate the frame theorem at a fresh gas variable `F` with the premises transported
+  by `*.withStaticGas F`, rewrite the cost back with the schedule's `*_withStaticGas`, and only
+  then relate `F` to `R + c` (rewriting `← hF` rather than substituting, so no definitional check
+  unfolds the closed cost). The Curve 3pool instances are
+  `Blanc/Lift/Curve3Pool/ExactMessage.lean` (`*_msg_exact`), with the exchange/add_liquidity
+  stage transports in `Blanc/Lift/Curve3Pool/ExactStaticGas.lean`. Comparing runs from
+  different dynamic gas values still needs the following gas-erasure branch.
+  Existing recipe triggers cannot distinguish this static-coordinate update
+  from ordinary run construction, so discovery remains in this registry.
+- For the canonical successor of a value-0 identity-precompile copy (a gas-normalized
+  data form of the resumed caller, at the copy's explicit stack tail, memory and windows),
+  use `identityCallNext` in
+  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean), with its literal
+  `_memory`/`_stack`/`_returnData`/`_gasLeft` facts, `identityCallNext_congr` (the base modulo
+  gas, `S`/`M` literal) and `identityCallNext_withStaticGas`.
+  `call_identity_step_canonical` / `rxc_call_identity_canonical` and the `RunExCut` twin
+  `rxce_call_identity_canonical` in [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean) add
+  `Devm.EqModGas b' (identityCallNext …)` to the old step's post; the old statements are
+  their projections. For Vyper's `raw_call` join and tail, `rawJoinBaseNext` (explicit clamped
+  length `n`) and `rawTailBaseNext` (the original base's clamped return-data length) in
+  [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean) name the copy's canonical
+  base, with congruence and static-gas lemmas; `rxc_vyRawCallJoin_canonical` /
+  `rxc_vyRawCallTail_canonical` and their `RunExCut` twins `rxce_vyRawCallJoin_canonical` /
+  `rxce_vyRawCallTail_canonical` hand it to the continuation, keeping the literal `vyRawMem`
+  memory and the exact charge. These carry no new charge, world premise or gas quantifier.
+  No registered trigger distinguishes these from the bounded steps, so discovery remains in
+  this registry.
+- For the literal memory the 3pool's crossed callees leave (exact walks of `add_liquidity`,
+  `remove_liquidity_imbalance`, `remove_liquidity_one_coin`): `_A()`'s is `aMemNext` (`a_exactL`
+  in [`Blanc/Lift/Curve3Pool/Callee/A.lean`](../Blanc/Lift/Curve3Pool/Callee/A.lean), the
+  `0x1e0` variant `a_exact_1e0L` in
+  [`Blanc/Lift/Curve3Pool/Callee/AGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/AGrow.lean));
+  `get_D_mem`'s is `getDMemNext` up to bytes (`Mem.EqExcept … fun _ => False`: one logical
+  size, every byte equal; `getDMem_exactL` in
+  [`Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemExact.lean),
+  `getDMem_exact_400L` in
+  [`Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean`](../Blanc/Lift/Curve3Pool/Callee/GetDMemGrow.lean)),
+  since the callee's scratch writes are not materialised alike; the caller's next growing
+  store makes it literal (`eqB_write_word_grow` in
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean), below). The pool's literal-memory
+  forward steps are one kit: `rxe_mstoreL`, `rxe_calldatacopyL`, `rxe_identityL` (with the
+  identity call's canonical successor) and `rxe_sstoreX` (exact `SSTORE` charge) in
+  [`Blanc/Lift/Curve3Pool/Walk/LiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveKit.lean), whose
+  bounded twins `rxe_mstore`, `rxe_calldatacopy`, `rxe_identity`, `rxe_sstore_le` are
+  projections; `rxe_mloadXL`, `rxe_sloadVX`, `rxe_staticWordE` (and the projections
+  `rxe_mloadX`, `rxe_sloadB`/`rxe_sloadV`, `rxe_sstoreB`/`rxe_sstoreV`/`rxe_sstoreVX`,
+  `rxe_mstoreW`, `rxe_staticWord`) in
+  [`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`](../Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean);
+  `add_liquidity`'s `rxe_mloadXE`/`rxe_staticWordAlE` are their projections. A fee iteration's
+  words are functions of its inputs (`RliDif.unique`, `RliFeeIter.unique` in
+  [`Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean`](../Blanc/Lift/Curve3Pool/Walk/RliExactKit.lean)). The frame save/restore loops around them are literal
+  through `rx_svFromLM` / `rx_rsFromLM` (`saveMem`/`restoreMem`) in
+  [`Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean`](../Blanc/Lift/Curve3Pool/Walk/LiveLoops.lean).
+  The bounded statements (`a_exact`, `getDMem_exact`, `rx_svFromL`, …) are their projections.
+- For the 3pool's exact-gas entry frames and their stage cores (an exact walk to reuse or extend):
+  `removeLiquidity_live_exact`, `exchange_live_exact`, `addLiquidity_live_exact`,
+  `removeLiquidityImbalance_live_exact`, `removeLiquidityOneCoin_live_exact` in
+  `Blanc/Lift/Curve3Pool/{RemoveLiquidityExactFrame,ExchangeExactLive,AddLiquidityExactFrame,RemoveLiquidityImbalanceExactFrame,OneCoinExactFrame}.lean`,
+  each over a schedule with call data, premise bundle, closed cost and static-gas transport
+  (`Walk/{RemoveLiquidity,AddLiquidity,Rli,OneCoin}ExactSchedule.lean`,
+  `ExchangeExactSchedule.lean`, `ExactStaticGas.lean`) and relation-parametric stage cores (the
+  `*E`/`*_core` walks in `Walk/RemoveLiquidityLive.lean`, `Walk/ExchangeLive*.lean`,
+  `Walk/AlLive*.lean`, `Walk/RliLive*.lean`, `Callee/CalcWithdrawLive*.lean` (`rx_cw_*E`) and
+  `Walk/OneCoinLive*.lean` (`rx_oc_*E`)), whose bounded statements are projections; the
+  message-entry, history and composed twins are `ExactMessage.lean`, `HistoryLiveExact.lean`
+  and `Blanc/Composition/Curve3Pool3CrvHeadlinesExact.lean`.
 - For equality modulo `gasLeft` across two successful runs of a whole lifted
   tree (`SFunc.RunP`), use
   [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
@@ -2067,6 +2238,40 @@ cancels a positive scale from an accepted adjusted product bounded above by
 the scaled observed balances. These are unbounded Nat facts; callers supply
 word-overflow, source-local/observation and callee-acceptance connections.
 
+For the integer Newton loops of a three-coin StableSwap pool (Curve Vyper
+0.2.4 `get_D`, `get_y`, `get_y_D`), use
+[`Blanc/Lift/StableSwapNewton/Defs.lean`](../Blanc/Lift/StableSwapNewton/Defs.lean),
+namespace `Blanc.StableSwapNewton`. `dP`, `bodyD`, `loopD`, `getD`, `bodyY`,
+`loopY`, `cOf`, `bOf`, `getY` and `getYD` are the unbounded `Nat` arithmetic
+in the source's order of operations, with fuel and stopping tolerance as
+parameters; the `Chk` variants return `Option Nat` and revert (`none`) exactly
+where the source's checked `uint256` arithmetic does (`chkAdd`, `chkSub`,
+`chkMul`, `chkDiv`). `aboveRoot`, `floorRoot` and `rootQ` name the exact roots
+the loops approximate, for statements only.
+[`Blanc/Lift/StableSwapNewton/Root.lean`](../Blanc/Lift/StableSwapNewton/Root.lean)
+proves `floorRoot` monotone in each balance (`floorRoot_mono`) and in `ann`
+(`floorRoot_mono_ann`) and pins it by one point (`floorRoot_eq`).
+[`Blanc/Lift/StableSwapNewton/D.lean`](../Blanc/Lift/StableSwapNewton/D.lean)
+bridges the checked `get_D` to the plain one (`getDChk_some`) and proves
+`getD_lower` / `floorRoot_le_getD`: for positive balances and `A ≥ 1`, `getD` is
+never below `⌊D*⌋`, at every tolerance, stopped or capped; it also holds the cap,
+non-monotonicity and ceil-mutation witnesses.
+[`Blanc/Lift/StableSwapNewton/Fuel.lean`](../Blanc/Lift/StableSwapNewton/Fuel.lean)
+identifies the checked loops with the neutral fuel loop
+(`loopDChk_eq_fuelLoop`, `loopYChk_eq_fuelLoop`), so the `FuelLoopWalk`
+bridges apply to their compiled heads.
+[`Blanc/Lift/StableSwapNewton/Y.lean`](../Blanc/Lift/StableSwapNewton/Y.lean)
+bridges `get_y` / `get_y_D` (`getYChk_some`, `getYDChk_some`) and proves the
+tolerance-1 `y` loop returns exactly `rootQ` (`loopY_eq_rootQ`,
+`loopY_eq_rootQ_of_le` with its `k + 1`-body bound, `loopY_eq_rootQ_of_lt` for a
+start below the root, `getY_eq_rootQ`, `getYD_eq_rootQ`) under the
+non-degeneracy `rootGap`. Without it the loop returns `rootOrSucc`: the floor
+root, or one above it only when `rootGap` fails (`loopY_rootOrSucc_of_le`,
+`loopY_rootOrSucc_of_lt`, `loopY_rootOrSucc`). For every non-reverting checked
+call, with no start premise, use `getYChk_rootOrSucc` and
+`getYDChk_rootOrSucc`; `getY_start_below_root` and `getYD_start_below_root`
+show reachable calls start below the root.
+
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
 destructing a `B256`: `B256.mul_comm` covers word multiplication, including
@@ -2303,6 +2508,14 @@ segment `Core.segment`; [`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Alon
 `Erc20Abi` ([`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean)) and `SelfCaller`
 ([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)). Worked instance:
 WETH9 (`Blanc/Composition/Weth9TokenCore.lean`, `weth9Core`).
+For a token with a privileged minter, the minter/supply facet `SupplyFacet B`
+([`Blanc/Lift/Token/Supply.lean`](../Blanc/Lift/Token/Supply.lean)) reads a book's supply and minter
+and classifies mint and burn messages (zero amounts included); `SupplyFacet.run_supply` says that
+along an accepted run whose minter-sent messages keep the minter (`KeepsMinter`), the minter persists
+and the final supply plus `burned` equals the initial supply plus `minted`; `SupplyFacet.run_keep`
+says that a run none of whose messages the minter sends keeps supply and minter. Worked instance: 3Crv
+(`Blanc/Composition/Curve3CrvTokenCore.lean`, `c3crvSupply`, `c3crv_history_supply`), composed with
+the Curve 3pool over one history in `Blanc/Composition/Curve3PoolSupply.lean` (`pool_3crv_history`).
 The Uniswap V2 pair's composition with any token given by such a core is generic:
 `pair_token_joint` and `pair_token_noShrinkSide` (`Blanc/Composition/PairTokenJoint.lean`) and the
 share-value rows `pair_token_feeOff_product`/`pair_token_feeOn_product`
@@ -2698,6 +2911,32 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   use [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean).
   `Devm.popToNat_memory` says `popToNat` leaves `memory` unchanged, and
   `Mem.write_size_le_ext` bounds a write's size by the charged extension.
+- When a later step is priced or forwarded on the **whole** memory (an exact
+  call profile's debit or successor is an arbitrary function of `Mem`),
+  `Mem.Reads`, `Mem.Wf` and the logical size do not determine it: the
+  materialised array may stop short of the logical size. Use
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean):
+  `Mem.eq_of_size_dataSize_getD` is the extensional base; `Mem.EqExcept M N D`
+  (one logical size, both well formed, equal bytes outside `D`) is seeded from a
+  callee export by `Mem.KeepsOff.eqExcept` and shrunk by the *same* literal
+  `.write`, `.extend`, `.writeWords` (word stores in order, `Mem.writeWords`) and
+  `.restoreMem` on both sides; `Mem.Full` (array materialised to the logical
+  size) comes from `Mem.full_write_of_grow`, `Mem.full_write_word_of_grow` or
+  `Mem.full_writeWords_of_grow` and is kept by `.write`, `.writeWords` and
+  `.restoreMem`; `.eq` and `.writeWords_eq` conclude literal equality.
+  `Mem.write_getD`, `Mem.size_write_eq`, `Mem.getD_eq_of_memWord_eq` and
+  `saveMem_succ_left` are the byte, size and save-chain facts underneath.
+  `Mem.EqExcept.trans` composes two agreements (exceptions joined); `.writeD`, `.restoreMemD`
+  and `.saveMemD` keep one exception set through the same store, restore chain or frame save.
+  For memories equal at every byte (`D := fun _ => False`, what a crossed callee that keeps its
+  scratch to itself leaves), `eqB_write`, `eqB_saveMem`, `eqB_memWord` carry the agreement and
+  `eqB_write_grow` / `eqB_write_word_grow` conclude literal equality at the next growing store;
+  `slice_memWord` / `slice_memWord_fun` name a word read off an image carrier as the literal
+  memory's `memWord`. A callee export in `ScratchOut` form gives the agreement directly by
+  `ScratchOut.eqExcept` in [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  `sstoreCost_addLog` (`rfl`) prices an `SSTORE` after a `LOG` as before it.
+  Boundary: coverage only discharges bytes both sides overwrite with the same
+  literal values; it never compares independently computed stores.
 
 A scratch-word walk that writes several fixed slots and reads them back needs
 three window cases.  `Bytes.sliceD_writeAt_inside` projects a subwindow wholly
@@ -3080,6 +3319,16 @@ consumer needs canonical interpreter ingress as one conjunct:
   the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
   block strictly after its parent from Jaune's header validation
   (`ConfiguredBlockTrace.parent_timestamp_lt`).
+  For the *settled* frames of a block or history, import
+  [`Blanc/ExecutionHistoryFrameTime.lean`](../Blanc/ExecutionHistoryFrameTime.lean):
+  `ConfiguredBlockTrace.settledFrames_time` (every settled frame reads the
+  block's header timestamp), `ConfiguredHistoryTrace.blockFrames` (settled
+  frames in trace order, each paired with its retaining block;
+  `blockFrames_map_snd`), `blockFrames_time` and
+  `ConfiguredHistoryTrace.settledFrames_time` (each settled frame of a history
+  reads its own block's header timestamp), and the control
+  `ConfiguredBlockTrace.settledFrame_time_ne_parent` (under the wire bound, no
+  settled frame reads the parent's timestamp).
 - `Exec.FrameAdmitted ca entry run` requires `entry` exactly at those roots
   whose `currentTarget = ca`. Its `root`, `mono`, `cont_of_ne`,
   `doneOk_of_ne`, `runErr_child`, `runOk_child`, and `runOk_next_of_ne`
@@ -3129,7 +3378,11 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionCodeAt.lean`](../Blanc/ExecutionCodeAt.lean),
   [`Blanc/ExecutionTraceCodeAt.lean`](../Blanc/ExecutionTraceCodeAt.lean)) keep the
   code at an address empty through a trace given no CREATE frame targets it and no
-  authorization recovers to it (`NoAuthorityAt`). For transaction caller
+  authorization recovers to it (`NoAuthorityAt`). To settle a callee frame known only by an
+  `Exec` derivation (a `CALL`/`STATICCALL` crossing needs `cpost.error = none`):
+  `Exec.ok_error_eq` ([`Blanc/ExecutionErrorKeep.lean`](../Blanc/ExecutionErrorKeep.lean))
+  says an execution ending `.ok post` keeps the error field it started with (the
+  `ExecutionWarmth` walk for `Devm.ErrKeep`); `initDevm` starts at `none`. For transaction caller
   exclusion, `Exec.rawFrameRoots_caller_excluded` in
   [`Blanc/ExecutionCallerExclusion.lean`](../Blanc/ExecutionCallerExclusion.lean)
   tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code.
@@ -3176,6 +3429,33 @@ consumer needs canonical interpreter ingress as one conjunct:
   `callOnlyReach_of_spawnFreeReach`. `Xinst.step_call_spawn` is the per-`CALL` fact: the child
   has a code address and runs the callee's own code when it holds no designator.
   `Lift.WithdrawalRequest.FeeCounterexample.blockOk_of` is the worked consumer.
+- To discharge the frame walks' entry premise `pre.gasMeasure < 2 ^ 256` for every raw frame of
+  a configured history with no premise at all: `ConfiguredHistoryTrace.gas_bound` (`< 2 ^ 64`)
+  and `ConfiguredHistoryTrace.frameAdmitted_gas`
+  ([`Blanc/ExecutionTraceFrameEnv.lean`](../Blanc/ExecutionTraceFrameEnv.lean)).
+  `Exec.rawFrameRoots_gas_le` is the execution-level fact (no entered frame starts with more gas
+  than the execution's root); message roots start with the message grant
+  (`MessageCallTrace.rawFrames_gas_le`, which uses the now-public `messageCallDelegation_gas` and
+  `messageCallExecutionMessage_gas` of `Blanc/ExecutionMessageGas.lean`), transaction grants are
+  below the block gas limit (`TransactionTrace.rawFrames_gas_lt`). The same file holds
+  `Exec.childFrames_codeAt_keep` (every committed direct child keeps the code at an address no
+  entered CREATE frame targets, from `Exec.codeAt_avoid`) and
+  `ExecutionTrace.not_mem_systemTargets_of_size` /
+  `ConfiguredHistoryTrace.system_ne_of_size` (under the canonical system code and the trace-local
+  system exclusions, no system frame targets a contract whose installed code differs in size from
+  every canonical system code; hoisted from the Beacon deposit contract, whose
+  `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
+  (curve-3pool-stableswap-v1).
+- To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
+  to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
+  a history are closed under descent, `RawFramesClosed`, layer by layer from
+  `Exec.rawFrameRoots_trans`), and its trace-level consumer
+  `ConfiguredHistoryTrace.childFrames_codeAt_keep` (every committed direct child of every raw
+  frame keeps the code at `a`). For a precompile's readiness at every transaction frame (warm and
+  undelegated, under empty code at the checkpoint, `NoAuthorityAt a` and no CREATE frame at `a`):
+  `ConfiguredHistoryTrace.precompileReady`, the generic form of the Beacon `beaconEntry_of_env`
+  route (all in [`Blanc/ExecutionTraceFrameEnv.lean`](../Blanc/ExecutionTraceFrameEnv.lean)).
+  Worked use: `Lift.Curve3Pool.pool_trace_admitted`.
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and
@@ -3502,6 +3782,14 @@ by `STATICCALL` shares one descendant argument,
 descendant of a target frame from that restriction and the ladder's lower-depth
 hypothesis. The static callee may be the contract itself; it is then a static
 lower-depth target frame closed by the same hypothesis.
+The raw (all entered frames, committed or not) form is
+[`Blanc/Lift/StaticOnlyRoots.lean`](../Blanc/Lift/StaticOnlyRoots.lean): a static frame is
+never a CREATE frame (`Xinst.step_spawn_codeAddress_of_static`), every frame a static execution
+enters is static with a code address (`Exec.static_rawFrameRoots`), and every frame entered
+below a frame of such static-only certified code has a code address
+(`Exec.staticOnly_rawFrameDescendants`), which is `Exec.codeAt_avoid`'s premise for every
+address. Worked use: the 3Crv callee crossing in
+`Blanc/Composition/Curve3PoolCalleeLive.lean` (`c3crv_msg_run`).
 Its node-level companions are in [`Blanc/Lift/StaticOnlyPrefix.lean`](../Blanc/Lift/StaticOnlyPrefix.lean):
 `Exec.Deriv.ParentStep.getStor_of_quiet` and `Exec.Deriv.ParentPrefix.getStor_of_quiet` (every
 node of the chain of a frame that never decodes `SSTORE` and spawns only by `STATICCALL` carries the
@@ -4563,11 +4851,15 @@ contract-neutral.
   maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
   off) in [`Blanc/Lift/CheckMem.lean`](../Blanc/Lift/CheckMem.lean); the invariant
   `MemMatches`, the return address in frame or map (`RetIn`) and the
-  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (and
-  `Mem.write_agree`, which needs no `Mem.Wf`) in
+  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (covered
+  fork), `staticcall_run_memory` (a `STATICCALL` changes memory only inside its
+  output window), `Mem.write_agree` (needs no `Mem.Wf`), `Mem.extends_agree` and
+  `Mem.AgreeOutside.trans`/`.mono` in
   [`Blanc/Lift/MemMap.lean`](../Blanc/Lift/MemMap.lean); `lift_soundM` in Sound,
   `lift_exactM`/`Cert.jumpsOkM` in Exact, trie mirrors `checkNodeMT`/`jumpsOkNodeMT`
-  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`.
+  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
+  (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
+  map across `GAS` and constant-window `STATICCALL`).
 - Every execution prefix to a certificate node (all outcomes, no success
   premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
   (checked node, pc, stack segments matched per pending function), the
@@ -4578,6 +4870,37 @@ contract-neutral.
   `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
   `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+- To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
+  certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
+  `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):
+  `Exec.Deriv.ParentPrefix.noPush` keeps every same-frame chain node at a position no
+  `PUSH` immediate covers, and `callKinds_of_check` refuses every external instruction but
+  `CALL`/`STATICCALL` there; the walk reads `code.data.toList`, so the kernel decision is
+  linear, in [`Blanc/Lift/SpawnKindsM.lean`](../Blanc/Lift/SpawnKindsM.lean).
+- To show that every raw frame a successful frame enters lies under a direct *committed*
+  child (no failed or reverted child frames), when its code tests every call's success flag,
+  decide `guardCheck code` for the runtime bytes (each `CALL`/`STATICCALL` at an instruction
+  start is followed by `PUSH2; JUMPI` falling through to `PUSH1 0; DUP1; REVERT`, or is an
+  identity copy `PUSH1 4; GAS; CALL`) and apply `Exec.rawFrameDescendants_of_guardCheck_entry`
+  (premises: covered fork, `4` a precompile and undelegated at entry, committed children keep the
+  code at `4`), in [`Blanc/Lift/GuardedCalls.lean`](../Blanc/Lift/GuardedCalls.lean).  The same
+  module proves the linear walk's predecessors unique (`PushReach.succ_inj`) and where a continued
+  step lands (`Evm.step_cont_succ`).
+- To know what a direct committed child of a call-only frame runs, use
+  `Exec.childFrames_code` (a child at an address holding nonempty undelegated code at the frame's
+  entry runs that code; `Xinst.step_staticcall_spawn` is the `STATICCALL` sibling of
+  `Xinst.step_call_spawn`), and for a child of spawn-free code `Exec.Frame.keeps_of_spawnFree`
+  (it keeps every other address's code and the storage of every other address with code), in
+  [`Blanc/Lift/ChildFrameCode.lean`](../Blanc/Lift/ChildFrameCode.lean).
+- To know what a direct committed child of a depth-`1` frame keeps whatever code it runs, use
+  `Exec.childFrames_keeps_of_depth_one` (it keeps every other address's code and the storage of
+  every other address with code: a depth-`0` frame enters no frame,
+  `Exec.rawFrameDescendants_eq_nil_of_depth_zero`; `Exec.childFrames_depth` bounds a child's depth),
+  in [`Blanc/Lift/ChildFrameDepth.lean`](../Blanc/Lift/ChildFrameDepth.lean).
+- To know where every log of a committed execution came from, use `Exec.log_addresses` (each
+  post log is an entry log or was emitted at the current target of one of the execution's raw
+  frames), e.g. to show no log comes from the deposit contract when the raw frames' targets are
+  known, in [`Blanc/Lift/LogAddresses.lean`](../Blanc/Lift/LogAddresses.lean).
 - A frame predicate at every reachable cursor node: [`Blanc/Lift/CursorFrames.lean`](../Blanc/Lift/CursorFrames.lean).
   `SFunc.framesSat es P` walks a tree with the abstract frames the checker computes and checks
   `P n a` at every straight-line node; `Cert.framesSat` over every entry gives
@@ -5148,6 +5471,149 @@ contract-neutral.
   nests because the outer cut list is a parameter; liveness:
   `SFunc.RunExactCut.iterate` builds a whole loop run from per-iteration cut
   runs; both in [`Blanc/Lift/Loop.lean`](../Blanc/Lift/Loop.lean).
+- Fuel-bounded loops (a `range(cap)` loop that stops early on a test and
+  otherwise returns its last iterate, e.g. Newton loops): the model
+  `fuelLoop body close fuel D` and its gas `fuelCost`; safety
+  `RunCut_fuelLoop_sound` from a per-pass inversion `FuelStep` at the head
+  (`At n D` with counter `n < cap`; leaving runs satisfy `Out`), liveness
+  `RunExactCut_fuelLoop_exact` from per-branch exact passes (`cStep`, `cStop`,
+  `cCap`); peeled head copies whose back edge targets the next copy via
+  `RunCut_fuelLoop_peel` / `RunExactCut_fuelLoop_peel`; the inversion split
+  `SFunc.RunCutP.split_at`; all in
+  [`Blanc/Lift/FuelLoopWalk.lean`](../Blanc/Lift/FuelLoopWalk.lean).
+- Internal calls (`callNext`): `ric_callNext` removes `ric_call`'s halting arm under the
+  kernel scan `calleeNeverHalts fs k fuel` (`decide`: the callee's entry closure
+  `entryReach` is a `NoHaltSet`); the `PC` node `ric_pcAt`/`rxc_pcAt`; the Vyper call idiom
+  `PUSH1 6; PC; ADD; PUSH2 t; JUMP` as `pcCallTree p t0 t1 k f`, inverted by `ric_pcCall` (a
+  callee run from return address `p + 6` and the continuation) and built by `rxc_pcCall`
+  (cost 19); all in [`Blanc/Lift/InvWalkCallNext.lean`](../Blanc/Lift/InvWalkCallNext.lean).
+- Unrolled Vyper frame save/restore chains (a counter word walks a frame `[lo, lo + 32 n)`,
+  pushing or popping one word per copy): templates `frameSaveIter`/`frameRestoreIter`,
+  constants `FrameLoopTpl`, one-`rfl` chain facts `FrameSaveChain`/`FrameRestoreChain`;
+  safety `ric_frameSave_chain`/`ric_frameRestore_chain`, liveness
+  `rxc_frameSave_chain`/`rxc_frameRestore_chain` (cost `67 (n-1) + 56`, `70 (n-1) + 59`);
+  memory `saveMem`, `restoreMem` and `restoreMem_frameWords` (the restored frame reads as the
+  saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
+  `memWord`/`Mem.AgreeOutside`; all in
+  [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Vyper 0.2.x checked `uint256` arithmetic and word-slot frames: the idiom trees
+  `vyMulT`/`vyAddT`/`vySubT`/`vyDivT` (guard, `PUSH2 ok JUMPI` over `vyRevertT`, clean-up),
+  inverted by `ric_vyMulT`/`ric_vyAddT`/`ric_vySubT`/`ric_vyDivT` (the guard as a `Nat` fact:
+  `B256.Nofm`, no-wrap sum, no underflow, nonzero divisor) and built by
+  `rxc_vyMulT`/`rxc_vyAddT`/`rxc_vySubT`/`rxc_vyDivT` (69/51/45/38 gas); the bridges to the
+  checked naturals of `StableSwapNewton/Defs.lean` (`chkMul_toNat_of_nofm`, `chkAdd_toNat_of_lt`,
+  `chkSub_toNat_of_le`, `chkDiv_toNat_of_ne` and their inverses `chkMul_inv` … `chkDiv_inv`);
+  the frame carrier `WordFrame M0 M lo ws` (`ws` at `lo + 32 j`, `M0`'s size, agreement off the
+  window, `Mem.Wf` kept) with `ric_mloadF`/`ric_mstoreF` (and `PUSH2` forms) and their forward
+  `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
+  (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
+  `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
+  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`,
+  `iszero_eq3_ne` / `iszero_eq3_eq` for a three-iteration word counter, …) and the
+  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
+  frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
+  save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
+  `MemTrack.withWords`), the bridges `WordFrame.keepsOff`/`WordFrame.memTrack`/
+  `WordFrame.words1`, the untracked load `ric_mloadU` (`imloadU`), `isltV`, the forward
+  `rxc_slt`/`rxc_xor`, and `xname` (name the tracked memory of a forward walk); all in
+  [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
+  whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
+- Indexed loads from three consecutive carried words: `pickWord3` selects the word,
+  `word3_indexAddr` converts `32 * i + base` to its natural offset under the explicit
+  index/base bounds, and `ri_mloadWord3` inverts the actual `MLOAD` over `Words` plus
+  aligned allocation. It requires all three membership facts and the exact address
+  equation; it does not prove the index or any contract's array layout. Owner:
+  [`Blanc/Lift/ThreeWordFrame.lean`](../Blanc/Lift/ThreeWordFrame.lean).
+- Walking a successful frame along its own derivation (`XAt sevm post pc d L`: the actual state
+  at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
+  `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps
+  that peel one child, in [`Blanc/Lift/FrameWalk.lean`](../Blanc/Lift/FrameWalk.lean).
+  `StaticWordChild` records an exact target/calldata, staticness, at least one return
+  word and no child logs. It is an observation carrier; use the actual `XAt`/`ChildOf`
+  derivation separately to establish parent-child provenance.
+- Crossing a certified tree (callee) from a walked state: `xa_node` (any checked node; the walk
+  resumes at the return address in the actual returned state) and `xa_node_span` (an exec-free
+  tree, `ExecFreeSet`/`SFunc.execFreeIn`: the remaining children `L` are kept, a halt leaves
+  `L = []`), with gas monotonicity `Exec.Deriv.Prec.gasMeasure_lt`/`lt.gasMeasure_lt`/
+  `ParentPrefix.gasMeasure_le`, in
+  [`Blanc/Lift/FrameWalkNode.lean`](../Blanc/Lift/FrameWalkNode.lean); the span-strengthened
+  lifting recursion `node_spanM` (returned node reached by an `Exec.Deriv.ExecFreeUntil` span;
+  halting chain `ChainFree`), `node_span_childFrames`, `prec_parentStep_of_free`,
+  `SpanOut.back` and `SilentSet.execFreeSet` in
+  [`Blanc/Lift/SoundSpan.lean`](../Blanc/Lift/SoundSpan.lean).
+- Matching a gas-exact forward run's states and call steps with the actual derivation (so a
+  reply a forward run consumed is the reply `Exec.childFrames` records): the walk invariant
+  `WalkAt` (derivation at `pc`, subtree checked over a matched frame and memory map) with its
+  step lemmas `WalkAt.next`/`.dest`/`.zero`/`.succ`/`.toZero`/`.toSucc`/`.jump`/`.pcAt`/`.ret`/
+  `.call`; `xa_retExact` (a walked exec-free tree whose gas-exact run returns puts the walk at
+  the return address in the returned state, same remaining children: an internal callee crossed
+  on the actual derivation); `xa_cutAt` / `xa_cutAt_start` (a walked checked node and a
+  `SFunc.RunExact` run of a cut of its tree, `SFunc.CutCall`, halting in `s` put the walk at the
+  cut subtree in state `s`, same remaining children; the cut may cross internal calls into an
+  `ExecFreeSet` that is also a `NoHaltSet`), the cut-by-steps helpers `CutStep` (`.cl` crosses a
+  call, `.pc` a return-address `PC` push), `SFunc.cutPath`, `SFunc.subAt`, `SFunc.cutPathOk`, `SFunc.cutCall_of_cutPathOk`, the
+  checked-step invariant `checkNodeM_next_step` / `checkNodeM_next_at`, `NoHaltSet.lookup`, and
+  `xa_staticcall_runCompiled` (a compiled `STATICCALL` from a walked state is the frame's step;
+  the head child's output is its return data), in
+  [`Blanc/Lift/FrameWalkCut.lean`](../Blanc/Lift/FrameWalkCut.lean). The 3pool's
+  `remove_liquidity_imbalance` liveness (`RliLiveCut`, `LiveLink`) is the worked example.
+- Memory across a crossed callee: `Mem.KeepsOff M M' W` (no shrink; every byte off the windows
+  `W` kept) with `refl`/`trans`/`mono`/`of_agreeOutside`, the image transport
+  `Mem.Reads.keepsOff`, `Words.keepsOff`, `MemMatches.keepsOff`, `memWord_keepsOff`, and the
+  read algebra `Mem.read_split`, `Mem.read_split64`, `Mem.read_two_word_writes_wf`,
+  `Mem.read_write_word_disjoint`, `Mem.read_write_word_inside`, in
+  [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean).
+- Vyper 0.2.x internal-callee walks (a callee's value contract without concrete memory
+  terms, windows as `Mem.KeepsOff` of `Blanc/Lift/MemGlue.lean`): the tracked walk memory
+  `MemTrack M₀ M W L` (kept off the windows `W`, carrying the words `L`, well formed) with the
+  steps `ric_mloadT`/`ric_mstoreT`/`ric_mstoreO` (overwrite, `wordsOff`)/`ric_keccakT` (tactics
+  `imload`/`imstore`/`imstoreO`/`ikeccak`, `wmem`, `iassert`) and the
+  node-directed inversion step `istep`; load-only bases `SloadsOnly sevm b B` (`.state`,
+  `.getStor`, `.logs`, `.output`, `.getCode` in `VyperCallee.lean`; `.idReady` in
+  `IdentityCallGas.lean`); the checked-arithmetic guards read back as
+  `chkSub`/`chkAdd`/`chkMul`/`chkDiv` (`vyChkSub`, `vyChkAdd`, `vyChkMul`, `vyChkDiv`) and the
+  `ISZERO (LT …)`/`ISZERO (GT …)` branch readings; forward twins over a covered memory with the
+  final memory named at the return (`∃ M', RunExactCut … ∧ facts`): `xlift`, `rxc_mloadT`,
+  `rxc_mstoreT`, `rxc_keccakT`, `rxc_retT`, the guards forward (`fwdChkSub`/`Add`/`Mul`/`Div`),
+  and the node-directed forward tactic `xstep` (`xmload`, `xmstore`, `xkeccak`, `xassert`,
+  `xzero`, `xjump`, `xgoto`, `xret`); all in
+  [`Blanc/Lift/VyperCallee.lean`](../Blanc/Lift/VyperCallee.lean).
+- Vyper 0.2.x walk kit (inversion `ric_*`/`ri_*` over cut runs, forward `rxc_*` over exact
+  cut runs):
+  fixed-array storage slots `mstore(0xc0, s); sha3(0xc0, 0x20) + i` (`vyArrayBase`,
+  `vyArraySlot`; pushed word `Bytes.keccak s.toBytes + i`) in
+  [`Blanc/Lift/VyperArraySlot.lean`](../Blanc/Lift/VyperArraySlot.lean);
+  a value-0 `CALL` of the identity precompile (`IdReady`, `processMessage_identity_clean`,
+  `ri_call_identity`, `call_identity_step` / `rxc_call_identity` at cost
+  `100 + memExp + 15 + 3·⌈is/32⌉`, world relation `ShaCallPost`) in
+  [`Blanc/Lift/IdentityCall.lean`](../Blanc/Lift/IdentityCall.lean); an unchecked identity
+  copy that forwarded `gas()` and failed at a nonzero depth leaves no gas
+  (`ri_call_identity_gas_fail`, `gasLeft_of_run_pop`), and `IdReady` survives `SLOAD`/`SSTORE`
+  bases (`IdReady.afterSload`/`afterSstore`; `SloadsOnly.idReady` across a load-only base), in
+  [`Blanc/Lift/IdentityCallGas.lean`](../Blanc/Lift/IdentityCallGas.lean);
+  a one-word `STATICCALL` reply with its `RETURNDATASIZE > 31` check (`vyReplyWord`,
+  `ric_vyStaticReply` / `rxc_vyStaticReply`) and a checked subtraction from a saved word
+  (`vyChkSubMem`, `ric_vyChkSubMem` / `rxc_vyChkSubMem`, `chkSub_of_le`) — the fee-on-transfer
+  balance difference — in
+  [`Blanc/Lift/BalanceDiffCall.lean`](../Blanc/Lift/BalanceDiffCall.lean);
+  the `raw_call(…, max_outsize=32)` tail (`VyRawSite`, `vyRawCallTail`/`vyRawCallJoin`/
+  `vyRawCallCheck`, `RawCallOk`, `ric_vyRawCall`, `ric_vyRawCallTail`, forward
+  `rxc_vyRawCallTail` at `rawTailCost (min len 32)` with memory `vyRawMem`), with the
+  byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
+  no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
+  [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
+- Forward runs to *some* outcome, for walks through a call answered only by an `∃ d` premise
+  (the outcome is learned midway, so it cannot be fixed up front): `SFunc.RunEx` /
+  `SFunc.RunExCut` (`∃ r, RunExact … r ∧ Q r`), the lift `SFunc.RunEx.of` with the tactics
+  `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
+  and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
+  [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
+- Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
+  `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
+  `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
+  spawning steps `xa_staticcall_imgA`/`xa_call_imgA`/`xa_identity_imgA` in
+  [`Blanc/Lift/FrameWalkAligned.lean`](../Blanc/Lift/FrameWalkAligned.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile

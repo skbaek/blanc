@@ -173,6 +173,18 @@ def BodyLive (sevm : Sevm) (b : Devm) (f : SFunc) (r : Raw) : Prop :=
     SFunc.RunExact prog sevm (entrySt sevm b (G + c)) f (.halted post) ∧ post.gasLeft = G ∧
       Lands sevm b post r
 
+/-- **`BodyLive` with its cost bounded by `U`.** -/
+def BodyLiveLe (sevm : Sevm) (b : Devm) (f : SFunc) (r : Raw) (U : Nat) : Prop :=
+  ∃ c ≤ U, ∀ G, gCallStipend < G → ∃ post,
+    SFunc.RunExact prog sevm (entrySt sevm b (G + c)) f (.halted post) ∧ post.gasLeft = G ∧
+      Lands sevm b post r
+
+/-- A bounded body is live. -/
+theorem BodyLiveLe.live {sevm : Sevm} {b : Devm} {f : SFunc} {r : Raw} {U : Nat}
+    (h : BodyLiveLe sevm b f r U) : BodyLive sevm b f r := by
+  obtain ⟨c, -, hc⟩ := h
+  exact ⟨c, hc⟩
+
 /-- The thirteen bodies inside the dispatcher (entry 0), in dispatcher order. -/
 def bodies : List SFunc :=
   [t_00b0_c0, t_00f1_c0, t_0240_c0, t_0267_c0, t_02ce_c0, t_0390_c0, t_04ab_c0, t_056e_c0,

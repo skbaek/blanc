@@ -76,8 +76,26 @@ abbrev tx2P : B256 := swapMovedPointer 128 (B256.toBytes 1)
 /-- The words under the first query's operands. -/
 abbrev tx2S0 : List B256 := tx2W.token1 :: tx2W.token0 :: 0 :: 0 :: swapCutTail tx2W 0x257 [0x022c0d9f]
 
-theorem tx2M_wf : Mem.Wf tx2M := by unfold Mem.Wf; decide +kernel
-theorem tx2M_size : tx2M.size = 416 := by decide +kernel
+theorem tx2M_wf : Mem.Wf tx2M := by
+  have wf : Mem.Wf (safeTransfer_dynamicCallMemory getterInitMemory 128 swapOut trader.toB256) :=
+    (safeTransfer_callMemory_ptr getterInitMemory_ptr (by decide) (by decide)).wf
+  unfold tx2M swapTransferMemory
+  split
+  · exact wf
+  · unfold bytesArrayMemory
+    apply Mem.Wf.write
+    apply Mem.Wf.write
+    apply Mem.Wf.write
+    exact wf
+theorem tx2M_size : tx2M.size = 416 := by
+  have hs : (safeTransfer_dynamicCallMemory getterInitMemory 128 swapOut trader.toB256).size = 416 := by
+    rw [(safeTransfer_copySizes getterInitMemory_ptr (by decide) (by decide)).1]
+    decide +kernel
+  unfold tx2M swapTransferMemory
+  rw [ite_eq_right (by decide)]
+  unfold bytesArrayMemory
+  rw [Mem.size_write_word_at, Mem.size_write_word_at, Mem.size_write_word_at, hs]
+  decide +kernel
 theorem tx2P_width : tx2P.toNat + 260 < 2 ^ 256 := by decide +kernel
 
 theorem balTok_tx2W0 : balTok tx2W.token0 = tokenX := by decide +kernel
@@ -129,6 +147,7 @@ theorem tx2_xExt : balExt sevm D tx2S0 tx2M tx2P tx2W.token0 = 0 := by
   unfold balExt balPopped Devm.extCost
   rw [Devm.setMach_memory, h.target]
   dsimp only
+  simp only [swapBalanceRequest, Mem.size_write_word_at, tx2M_size]
   decide +kernel
 
 theorem tx2_xUsed : xBalUsed sevm D tx2S0 tx2M tx2P tx2W.token0 = 2206 := by
@@ -138,6 +157,9 @@ theorem tx2_xUsed : xBalUsed sevm D tx2S0 tx2M tx2P tx2W.token0 = 2206 := by
   rw [boHolder, balMsg_holder 0 0 0 tx2M_wf tx2P_width, h.target,
     v.sloadCost (balMsg_sevm_target (sevm := sevm) (B := D) (T := tx2S0) (M := tx2M) (p := tx2P)
       (t := tx2W.token0) 0 0 0)]
+  simp only [balTok_tx2W0, tx2KD, tx2PrefixKeys, wethTransferKeys, List.mem_append,
+    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, Ne.symm pair_ne_tokenX,
+    Ne.symm weth_ne_tokenX, false_and, false_or, ite_false]
   decide +kernel
 
 /-- The first query's warm keys. -/
@@ -213,6 +235,8 @@ theorem tx2_wExt : balExt sevm d0 (readStack tx2W 0x257 [0x022c0d9f] d0) (readMe
   unfold balExt balPopped Devm.extCost readMem
   rw [Devm.setMach_memory, h.target, r0]
   dsimp only
+  have ht : (1001000 : B256).toBytes.take 32 = (1001000 : B256).toBytes := by decide +kernel
+  simp only [swapBalanceRequest, swapBalanceReply, ht, Mem.size_write_word_at, Mem.extends, tx2M_size]
   decide +kernel
 
 theorem tx2_wUsed : readUsed sevm tx2M tx2P tx2W 0x257 [0x022c0d9f] d0 = 534 := by
@@ -222,7 +246,9 @@ theorem tx2_wUsed : readUsed sevm tx2M tx2P tx2W 0x257 [0x022c0d9f] d0 = 534 := 
   have wf : Mem.Wf (readMem sevm tx2M tx2P d0) := swapBalanceReply_wf tx2M_wf
   rw [balMsg_holder 0 0 0 wf tx2P_width, h.target]
   simp only [v.keys, balMsg_sevm_target, balTok_tx2W1]
-  decide +kernel
+  have hk : (weth, Weth9.balSlot pair) ∈ tx2K0 := by
+    simp only [tx2K0, tx2KD, wethTransferKeys, List.mem_append, List.mem_cons, true_or, or_true]
+  rw [ite_eq_left hk]
 
 theorem tx2_wAt_view (g k f r : Nat) :
     DView b (callChildPost (balParent sevm d0 (readStack tx2W 0x257 [0x022c0d9f] d0)

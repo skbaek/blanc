@@ -1,4 +1,6 @@
 import Blanc.ProofRecipeTactic
+import Blanc.Lift.CallProfileTransport
+import Blanc.Lift.FrameWalk
 import Blanc.MachineDataFacts
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.NodeWalkOrig
@@ -171,6 +173,21 @@ example (cp : Lift.Witness.CallPrep) (g h : Fork) (O : State)
       Lift.Witness.resumeCallB cp.p cp.oi cp.os r := by
   expect_no_recipe_trigger "goal-shape:changed-frame-projection"
   rfl
+
+-- EXPECT: static-word-child
+example {t : Adr} {input : Bytes} {c : Exec.Frame}
+    (ht : c.sevm.currentTarget = t) (hd : c.sevm.data = input)
+    (hs : c.sevm.isStatic = true) (hl : 32 ≤ c.post.output.length)
+    (hg : c.post.logs = []) : Lift.StaticWordChild t input c := by
+  expect_recipe_trigger "goal-head:Lift.StaticWordChild"
+  expect_recipe_offered "static-word-child"
+  blanc_suggest
+  exact ⟨ht, hd, hs, hl, hg⟩
+
+example {t : Adr} {input : Bytes} {c : Exec.Frame} : True ∨ Lift.StaticWordChild t input c := by
+  expect_no_recipe_trigger "goal-head:Lift.StaticWordChild"
+  expect_no_recipe_offered "static-word-child"
+  exact Or.inl trivial
 
 -- EXPECT: machine-state-debit
 example {before after : Devm} {address : Adr} {value : B256}
@@ -1111,5 +1128,19 @@ theorem intended_relation_with_memory_shape
     (window : MemWordAt pre offset word) :
     MemWordAt post offset word := by
   exact MemWordAt.applyStage stage source shape miss window
+
+
+-- EXPECT: normalized-call-world-transport
+example (a b c d : Devm) (hp : Devm.EqModGas a b) (hc : Devm.EqModGas c d)
+    (oi os : Nat) :
+    Devm.EqModGas (Lift.callChildPost a c oi os) (Lift.callChildPost b d oi os) := by
+  expect_recipe_trigger "goal-head:Devm.EqModGas"
+  blanc_suggest
+  exact hp.callChildPost hc oi os
+
+-- A gas equality is outside the relation's guarantee and must not receive this advice.
+example (a : Devm) : a.gasLeft = a.gasLeft := by
+  expect_no_recipe_trigger "goal-head:Devm.EqModGas"
+  rfl
 
 end Blanc

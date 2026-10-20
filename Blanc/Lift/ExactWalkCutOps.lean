@@ -59,7 +59,7 @@ theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
 /-! ## What the SHA-256 precompile call leaves -/
 
 /-- The world after a successful precompile call, relative to the one before:
-storage, code, access sets, logs, output, error and the created-account set
+storage, code, access sets, logs, output, error, the created-account set and the refund counter
 unchanged, and the return data set to `rd`.  The created-account set matters
 because Jaune prices `SSTORE` from the machine original read
 `Devm.getOrigStorVal`, which consults it (master-authorized core-b CR1). -/
@@ -73,6 +73,7 @@ structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   error : b'.error = b.error
   returnData : b'.returnData = rd
   created : b'.createdAccounts = b.createdAccounts
+  refund : b'.refundCounter = b.refundCounter
 
 /-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
 world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
@@ -89,8 +90,8 @@ theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
   ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.fork⟩
 
 /-- What a step that writes no storage and emits no log leaves of the world: storage, code, the
-warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data and the
-key set). -/
+warm accounts, logs, output and error unchanged (`ShaCallPost` without the return data, the key
+set, the created-account set, and the refund counter). -/
 structure BaseRel (b b' : Devm) : Prop where
   stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
   code : ∀ a, b'.getCode a = b.getCode a
@@ -139,7 +140,7 @@ theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List 
         (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M
           (G + 184)).stateGas⟩).extCost [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
     Devm.extCost_covered hcov
-  obtain ⟨post, hrun, hstack, hmem, hgas, hrd, hstor, hcode, haddr, hkeys, hlogs, -, -, hout,
+  obtain ⟨post, hrun, hstack, hmem, hgas, hrd, hstor, hcode, haddr, hkeys, hlogs, hrefund, -, hout,
       herr, -, hcreated⟩ :=
     Blanc.Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (sevm := sevm)
@@ -150,7 +151,7 @@ theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List 
   simp only [Nat.add_zero] at hgas
   rw [show (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M
       (G + 184)).memory = M from rfl, Mem.extends_covered hcov] at hmem
-  refine ⟨post, ⟨hstor, hcode, haddr, hkeys, hlogs, hout, herr, hrd, hcreated⟩, ?_⟩
+  refine ⟨post, ⟨hstor, hcode, haddr, hkeys, hlogs, hout, herr, hrd, hcreated, hrefund⟩, ?_⟩
   have hG' : G + 184 - 184 = G := by omega
   rw [hG'] at hgas
   have := St.self (d := post) hstack hmem
