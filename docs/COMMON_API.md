@@ -1212,7 +1212,9 @@ and constructor families cover every modelled wrapper layer:
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
-  block body. `RequestsTrace.state_eq_consolidationState` identifies the final
+  block body. `ApplyTransactionsTrace.run`, beside its carrier in
+  `ExecutionTrace.lean`, recovers the exact fold equation from the supplied
+  retained transaction evidence. `RequestsTrace.state_eq_consolidationState` identifies the final
   request state, and `AppliedBodyTrace.decodedTxs_nil` / `AppliedBodyTrace.decodedTxs_of_mapM`
   decode `trace.decodedTxs` from empty or mapped
   `txs.mapM (decodeTx benv.stat.rules)` runs. The body carrier retains its
@@ -1250,9 +1252,24 @@ check and output. `StagedBodyTrace.state_eq_rewardState` includes PoW credits;
 `state_eq_requestState_of_pow_none` requires their absence.
 `withdrawals_disabled` proves the disabled withdrawal identity, and
 `finalBout_of_bal_none` identifies the final empty-access-list normalization.
-Historical extraction, modern adapters, descendant-frame enumeration, reward
-budgets and configured-history transport remain separate obligations. These
-carriers do not widen `CoveredFork` or change modern `AppliedBodyTrace`.
+Successful extraction uses `exists_beaconStageTrace` and
+`exists_historyStageTrace` under the actual input's `stateGas = none`,
+`exists_requestStageTrace` under the conditional capability
+`requestsHash = true → CoveredFork`, and `exists_stagedBodyTrace` under both
+conditions. These constructors retain the actual skipped or called stage and
+the successful wrapper's endpoints; state-gas absence alone does not imply
+that a request pass is enabled.
+
+For an actually covered fork, `AppliedBodyTrace.toStaged` embeds the supplied
+modern body and `StagedBodyTrace.toModern` recovers the modern carrier. The
+embedding's `toStaged_transactions`, `toStaged_beacon`, `toStaged_history` and
+`toStaged_requests` laws retain the original transaction fold and system-call
+data; `StagedBodyTrace.toModern_preserves` retains all four components on the
+return path. These adapters use the supplied witnesses. They neither select a
+fresh execution trace nor infer modern coverage from historical membership.
+Descendant-frame enumeration, historical balance and contract-invariant
+transport remain separate obligations. These carriers do not widen
+`CoveredFork` or change modern `AppliedBodyTrace`.
 
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
@@ -4104,8 +4121,40 @@ the history-level sibling of T5.  The carriers themselves
 (`ExecutionTrace.ConfiguredBlockTrace`, `ExecutionTrace.ConfiguredHistoryTrace`
 and their existence theorems) live in
 [`Blanc/ExecutionHistory.lean`](../Blanc/ExecutionHistory.lean); both layers are
-schedule-parametric, so a history crossing fork activations is one derivation
-and no fork is hard-coded anywhere:
+schedule-parametric over `CoveredFork`, so a history crossing covered fork
+activations is one derivation. The carrier retains the actual block number and
+timestamp in both `forkAt` and `rulesAt`, and its explicit ommers in the body.
+`ExecutionTrace.exists_configuredBody_of_transition` extracts the selected
+fork, rule lookup, exact body run and post-state from the actual scheduled
+transition, without a coverage premise. The modern carrier adds its own
+`CoveredFork` evidence and unconditional modern body trace.
+
+For a selected historical domain `F`, use `ConfiguredBlockTraceIn F` and
+`ConfiguredHistoryTraceIn F` in the same owner. They retain the selected fork,
+rule lookup, explicit ommers, staged body and exact post-state, with the bound
+`sum pre.state.bal + wdsum block.wds + cfg.rewardAt block < 2^256`.
+`BodyStageCapabilities F` names the state-gas absence and conditional request
+coverage needed by `exists_configuredBlockTraceIn_of_transition`; domain
+lemmas must establish these capabilities. `ConfiguredBlockTraceIn.withdrawalsBound`
+and `ConfiguredHistoryTraceIn.toReachUsing` forget the nonnegative reward
+term without changing `ReachUsing`. The converse
+`exists_configuredHistoryTraceIn_of_reachUsing` additionally requires
+`ConfiguredRewardBudget cfg checkpoint`: the reward-inclusive bound for every
+successful extension of a reachable prefix satisfying the old bound. It does
+not infer that stronger budget from reachability alone. These carriers retain
+execution; historical balance and contract-invariant transport are separate
+proof obligations.
+
+`BodyStageCapabilities.covered` supplies the extraction capabilities for the
+unchanged modern domain. `ConfiguredBlockTrace.toIn` and
+`ConfiguredHistoryTrace.toIn` embed supplied modern traces in that domain;
+`ConfiguredBlockTrace.rewardAt_eq_zero` discharges the added reward term from
+the actual selected fork. `ConfiguredBlockTraceIn.toModern` takes explicit
+coverage of its selected fork, while `ConfiguredHistoryTraceIn.toModern`
+consumes a history in the covered domain. Both block conversions' `bodyTrace`
+projection laws identify the supplied body's adapter exactly.
+
+The following effects APIs consume the modern covered carrier:
 
 - Entering a block's body: `ExecutionTrace.ConfiguredBlockTrace.openingState`
   says block preparation copies the parent chain's world state verbatim, so the
@@ -4140,9 +4189,9 @@ the schedule-neutral spine and make the local extension follow its fields:
 
 1. Replace the local `chainId`/fixed-fork parameter with `cfg : ChainConfig`.
    Each block retains its selected `rules`, the equation
-   `cfg.rulesAt block.header.timestamp = .ok rules`, the
+   `cfg.rulesAt block.header.number block.header.timestamp = .ok rules`, the
    `stateTransitionUsing cfg` result, and the body trace produced from
-   `initBenv rules`. Project literally to `ConfiguredBlockTrace cfg`; recurse
+   `initBenv fork` for the retained selected fork. Project literally to `ConfiguredBlockTrace cfg`; recurse
    over those projections for `ConfiguredHistoryTrace cfg` and derive the
    inverse local history by recomputing only contract-owned ledgers.
 2. Parameterize a deployment root and every constructor/result carrier by

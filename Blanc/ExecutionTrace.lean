@@ -479,6 +479,19 @@ theorem ApplyTransactionsTrace.stat_eq
   | nil => rfl
   | cons _ tail ih => simpa only [Benv.withState] using ih
 
+/-- The transaction list the trace retains is exactly the one the semantics
+ran, so every list-level ladder rung applies to a trace unchanged. -/
+theorem ApplyTransactionsTrace.run
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    applyTransactions txs benv bout = .ok (finalBenv, finalBout) := by
+  induction trace with
+  | nil => rfl
+  | cons head tail ih =>
+      rw [applyTransactions, head.result]
+      exact ih
+
 theorem exists_applyTransactionsTrace_of_stateGas_none
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}

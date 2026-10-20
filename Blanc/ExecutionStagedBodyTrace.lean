@@ -87,8 +87,8 @@ def RequestStageTrace.systemRootCount {rules : ForkRules} {benv : Benv}
   | .called .. => 2
 
 /-- Exact body-stage data, including frame-free withdrawals and PoW credits.
-Ommers remain the actual body input. This carrier supplies no historical
-extraction theorem or unconditional modern system-call projection. -/
+Ommers remain the actual body input. Successful extraction below uses explicit
+selected-rule capabilities; modern system-call projections require coverage. -/
 structure StagedBodyTrace (benv : Benv) (txs : List (Bytes ⊕ Tx))
     (ommers : List Header) (wds : List Withdrawal)
     (state : State) (bout : BlockOutput) where
@@ -382,6 +382,273 @@ theorem exists_stagedBodyTrace
     accessList_eq := rfl
     accessListRun := hcheck
     finalBout_eq := endpoints.2 }⟩
+
+/-- Embed a modern trace by retaining its supplied executions. Coverage
+normalizes the optional-stage builders and frame-free endpoints; no execution
+witness is re-extracted from the body run. -/
+def AppliedBodyTrace.toStaged
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    StagedBodyTrace benv txs ommers wds state bout := by
+  have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
+  have hbeacon : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistory : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawals : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequests : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hpow : benv.stat.rules.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
+  have beaconRun : beaconRootsCall benv.stat.rules benv =
+      .ok (trace.beaconState, {}) := by
+    simp only [beaconRootsCall, hbeacon, ↓reduceIte, trace.beacon.run,
+      Except.mapError, bind, Except.bind, BalBuilder.incorporateSystem, hbal]
+  have historyRun : historyStorageCall benv.stat.rules
+      (benv.withState trace.beaconState) {} = .ok (trace.historyState, {}) := by
+    simp only [historyStorageCall, hhistory, ↓reduceIte, trace.lastHashRun,
+      trace.history.run, Except.mapError, bind, Except.bind,
+      BalBuilder.incorporateSystem, hbal]
+  refine {
+    run := trace.run
+    beaconState := trace.beaconState
+    beaconBal := {}
+    beacon := .called hbeacon trace.beaconOut trace.beacon
+      (by simp only [BalBuilder.incorporateSystem, hbal]) beaconRun
+    historyState := trace.historyState
+    historyBal := {}
+    history := .called hhistory trace.lastHash trace.lastHashRun
+      trace.historyOut trace.history
+      (by simp only [BalBuilder.incorporateSystem, hbal]) historyRun
+    decodedTxs := trace.decodedTxs
+    decodeRun := trace.decodeRun
+    transactionBenv := trace.transactionBenv
+    transactionBout := trace.transactionBout
+    transactions := trace.transactions
+    transactionRun := trace.transactions.run
+    withdrawalState := processWithdrawalsState trace.transactionBenv.state wds
+    withdrawalBout := trace.transactionBout.withWithdrawalsTrie
+      (processWithdrawalsTrie trace.transactionBout.withdrawalsTrie wds)
+    withdrawalsRun := ?_
+    requestState := trace.requestState
+    requestBout := trace.requestBout
+    requests := .called hrequests trace.requests ?_
+    rewardState := trace.requestState
+    rewardState_eq := ?_
+    finalState_eq := trace.requestState_eq.symm
+    accessList := []
+    accessList_eq := ?_
+    accessListRun := ?_
+    finalBout_eq := trace.requestBout_eq
+  }
+  · simp only [withdrawalsPass, hwithdrawals, ↓reduceIte, processWithdrawals,
+      BalBuilder.incorporateSystem, hbal]
+  · simpa only [requestsPass, hrequests, ↓reduceIte] using trace.requests.run
+  · simp only [hpow]
+  · simp only [hbal]
+  · simp only [checkBlockAccessListGasLimit, hbal]
+
+/-- The modern embedding retains the exact transaction-fold evidence. -/
+theorem AppliedBodyTrace.toStaged_transactions
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    HEq (trace.toStaged hfork).transactions trace.transactions := HEq.rfl
+
+/-- The called beacon arm contains the supplied modern message trace.
+Only proof fields of the called constructor are existentially hidden. -/
+theorem AppliedBodyTrace.toStaged_beacon
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    ∃ (enabled : benv.stat.rules.sys.beaconRoots = true)
+      (incorporated : ({} : BalBuilder) = BalBuilder.incorporateSystem {}
+        benv.stat.rules 0 benv.state trace.beaconState
+        (beaconRootsAddress :: trace.beaconOut.accountReads.toList)
+        trace.beaconOut.storageReads.toList trace.beaconOut.storageWrites.toList)
+      (run : beaconRootsCall benv.stat.rules benv = .ok (trace.beaconState, {})),
+      HEq (trace.toStaged hfork).beacon
+        (BeaconStageTrace.called enabled trace.beaconOut trace.beacon incorporated run) := by
+  exact ⟨hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true)
+      rfl rfl rfl rfl,
+    by simp only [BalBuilder.incorporateSystem, hfork.rules_bal_none],
+    (trace.toStaged hfork).beacon.result, HEq.rfl⟩
+
+/-- History keeps the actual last hash, lookup proof and supplied message. -/
+theorem AppliedBodyTrace.toStaged_history
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    ∃ (enabled : benv.stat.rules.sys.historyStorage = true)
+      (incorporated : ({} : BalBuilder) = BalBuilder.incorporateSystem {}
+        benv.stat.rules 0 (benv.withState trace.beaconState).state trace.historyState
+        (historyStorageAddress :: trace.historyOut.accountReads.toList)
+        trace.historyOut.storageReads.toList trace.historyOut.storageWrites.toList)
+      (run : historyStorageCall benv.stat.rules (benv.withState trace.beaconState)
+        {} = .ok (trace.historyState, {})),
+      HEq (trace.toStaged hfork).history
+        (HistoryStageTrace.called enabled trace.lastHash trace.lastHashRun
+          trace.historyOut trace.history incorporated run) := by
+  exact ⟨hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true)
+      rfl rfl rfl rfl,
+    by simp only [BalBuilder.incorporateSystem, hfork.rules_bal_none],
+    (trace.toStaged hfork).history.result, HEq.rfl⟩
+
+/-- The called request arm retains the same RequestsTrace, hence both
+supplied checked withdrawal/consolidation message executions. -/
+theorem AppliedBodyTrace.toStaged_requests
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    ∃ (enabled : benv.stat.rules.header.requestsHash = true)
+      (run : requestsPass benv.stat.rules
+        (trace.transactionBenv.withState
+          (processWithdrawalsState trace.transactionBenv.state wds))
+        (trace.transactionBout.withWithdrawalsTrie
+          (processWithdrawalsTrie trace.transactionBout.withdrawalsTrie wds)) =
+        .ok (trace.requestState, trace.requestBout)),
+      HEq (trace.toStaged hfork).requests
+        (RequestStageTrace.called enabled trace.requests run) := by
+  exact ⟨hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true)
+      rfl rfl rfl rfl,
+    (trace.toStaged hfork).requests.result, HEq.rfl⟩
+
+/-- Recover the modern carrier from the supplied called-stage executions.
+Coverage excludes skipped stages, rewards and BAL builders; the message and
+transaction evidence itself is retained rather than re-extracted. -/
+def StagedBodyTrace.toModern
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    AppliedBodyTrace benv txs ommers wds state bout := by
+  have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
+  have hbeacon : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistory : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawals : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequests : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hpow : benv.stat.rules.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
+  rcases trace with ⟨run, beaconState, beaconBal, beacon,
+    historyState, historyBal, history, decodedTxs, decodeRun,
+    transactionBenv, transactionBout, transactions, transactionRun,
+    withdrawalState, withdrawalBout, withdrawalsRun, requestState, requestBout,
+    requests, rewardState, rewardState_eq, finalState_eq,
+    accessList, accessList_eq, accessListRun, finalBout_eq⟩
+  cases beacon with
+  | skipped disabled _ => rw [hbeacon] at disabled; cases disabled
+  | called _ beaconOut beacon beaconBal_eq _ =>
+    simp only [BalBuilder.incorporateSystem, hbal] at beaconBal_eq
+    subst beaconBal
+    cases history with
+    | skipped disabled _ => rw [hhistory] at disabled; cases disabled
+    | called _ lastHash lastHashRun historyOut history historyBal_eq _ =>
+      simp only [BalBuilder.incorporateSystem, hbal] at historyBal_eq
+      subst historyBal
+      have hWithdrawal := withdrawalsRun
+      simp only [withdrawalsPass, hwithdrawals, ↓reduceIte, processWithdrawals,
+        BalBuilder.incorporateSystem, hbal] at hWithdrawal
+      rcases Prod.mk.inj hWithdrawal with ⟨hWithdrawalState, hWithdrawalBout⟩
+      subst withdrawalState
+      subst withdrawalBout
+      cases requests with
+      | skipped disabled _ => rw [hrequests] at disabled; cases disabled
+      | called _ requests _ =>
+        simp only [hpow] at rewardState_eq
+        have requestState_eq : requestState = state :=
+          rewardState_eq.symm.trans finalState_eq.symm
+        simp only [hbal] at accessList_eq
+        subst accessList
+        exact {
+          run := run
+          beaconState := beaconState
+          beaconOut := beaconOut
+          beacon := beacon
+          lastHash := lastHash
+          lastHashRun := lastHashRun
+          historyState := historyState
+          historyOut := historyOut
+          history := history
+          decodedTxs := decodedTxs
+          decodeRun := decodeRun
+          transactionBenv := transactionBenv
+          transactionBout := transactionBout
+          transactions := transactions
+          requestState := requestState
+          requestBout := requestBout
+          requests := requests
+          requestState_eq := requestState_eq
+          requestBout_eq := finalBout_eq
+        }
+
+/-- Projecting to modern data and embedding it back preserves the supplied
+beacon, history, transaction and request evidence, including all four system
+messages. This compares retained fields, not whole body-carrier types. -/
+theorem StagedBodyTrace.toModern_preserves
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) :
+    HEq ((trace.toModern hfork).toStaged hfork).beacon trace.beacon ∧
+    HEq ((trace.toModern hfork).toStaged hfork).history trace.history ∧
+    HEq ((trace.toModern hfork).toStaged hfork).transactions trace.transactions ∧
+    HEq ((trace.toModern hfork).toStaged hfork).requests trace.requests := by
+  have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
+  have hbeacon : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistory : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawals : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequests : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  rcases trace with ⟨run, beaconState, beaconBal, beacon,
+    historyState, historyBal, history, decodedTxs, decodeRun,
+    transactionBenv, transactionBout, transactions, transactionRun,
+    withdrawalState, withdrawalBout, withdrawalsRun, requestState, requestBout,
+    requests, rewardState, rewardState_eq, finalState_eq,
+    accessList, accessList_eq, accessListRun, finalBout_eq⟩
+  cases beacon with
+  | skipped disabled _ => rw [hbeacon] at disabled; cases disabled
+  | called _ beaconOut beacon beaconBal_eq _ =>
+    simp only [BalBuilder.incorporateSystem, hbal] at beaconBal_eq
+    subst beaconBal
+    cases history with
+    | skipped disabled _ => rw [hhistory] at disabled; cases disabled
+    | called _ lastHash lastHashRun historyOut history historyBal_eq _ =>
+      simp only [BalBuilder.incorporateSystem, hbal] at historyBal_eq
+      subst historyBal
+      have hWithdrawal := withdrawalsRun
+      simp only [withdrawalsPass, hwithdrawals, ↓reduceIte, processWithdrawals,
+        BalBuilder.incorporateSystem, hbal] at hWithdrawal
+      rcases Prod.mk.inj hWithdrawal with ⟨hWithdrawalState, hWithdrawalBout⟩
+      subst withdrawalState
+      subst withdrawalBout
+      cases requests with
+      | skipped disabled _ => rw [hrequests] at disabled; cases disabled
+      | called _ requests _ =>
+        simp only [hbal] at accessList_eq
+        subst accessList
+        cases benv with
+        | mk initialState createdAccounts stat storageWrites =>
+          cases stat with
+          | mk fork =>
+            refine hfork.cases (motive := fun f => fork = f → _) ?_ ?_ ?_ ?_ rfl
+            all_goals
+              intro hf
+              subst fork
+              exact ⟨HEq.rfl, HEq.rfl, HEq.rfl, HEq.rfl⟩
 
 end ExecutionTrace
 
