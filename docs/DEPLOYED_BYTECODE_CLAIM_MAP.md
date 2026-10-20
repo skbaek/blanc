@@ -1907,7 +1907,8 @@ current for the sources.
 Jaune's definitions are hashed in full like Blanc's, because its EVM semantics
 are part of what every claim means: a change of the Jaune revision moves exactly
 the pins whose meaning changed, and the check names the Jaune definitions that
-moved. The hash stops at the other pinned dependencies: a constant from the Lean
+moved; a Jaune revision change that moves no pin passes with a note only, and
+the recorded Jaune revision is then refreshed in a reviewed update. The hash stops at the other pinned dependencies: a constant from the Lean
 toolchain, Batteries or Mathlib counts as its name together with the toolchain
 in `lean-toolchain` or the package revision in `lake-manifest.json`, so its body
 is fixed by that pin rather than by the hash. A hash records change, not
