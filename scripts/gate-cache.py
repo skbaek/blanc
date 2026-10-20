@@ -4003,7 +4003,9 @@ def main(argv: list[str]) -> int:
                     f"{certificate['identity'][:16]} on "
                     f"{_safe_host_label(certificate.get('host'))}; "
                     f"Lake records current for {currency['modules']} modules "
-                    f"({currency['built']} built, {currency['restored']} restored)"
+                    f"({currency['built']} built, {currency['restored']} restored) and "
+                    f"{sum(currency['dependencies'].values())} dependency modules; "
+                    f"unchecked: {currency['unchecked'] or 'none'}"
                 )
                 return 0
             return run(root, arguments)
