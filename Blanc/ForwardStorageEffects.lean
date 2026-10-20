@@ -216,6 +216,7 @@ theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
                   ite_not, Devm.balReadStorage_getStorVal, ne_eq, assertDynamic,
                   Bool.not_eq_eq_eq_not, Bool.not_true, Except.bind_ok, Except.bind_error,
                   reduceCtorEq] at hrun
+                split at hrun <;> cases hrun
             | some state =>
                 simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, assertDynamic,
                   Except.assert, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.pop_def, Devm.stack,
@@ -235,6 +236,7 @@ theorem Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil
                       Devm.balReadStorage_accessedStorageKeys, ite_not,
                       Devm.balReadStorage_getStorVal, ne_eq, assertDynamic, Bool.not_eq_eq_eq_not,
                       Bool.not_true, Except.bind_ok, Except.bind_error, reduceCtorEq] at hrun
+                    split at hrun <;> cases hrun
                 | some state =>
                     simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, hstate, assertDynamic,
                       Except.assert, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.pop_def, Devm.stack,
@@ -742,15 +744,20 @@ private theorem Ninst.exists_exec_storageEffects
       Ninst.successfulSstore_effectTriples tail instructionAt,
       tailEffects]
   | push bytes bound =>
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
-      have step : Evm.step ⟨pc, sevm, pre⟩ =
-          .cont (pc + Ninst.size (.push bytes bound)) nextPre := by
-        rw [evmStep, Ninst.step_push, ← stepRun.2]
-        rfl
-      refine ⟨.cont step tail, ?_⟩
-      rw [Exec.retainedStorageEffectTriples_cont tail committed,
-        Ninst.successfulSstore_effectTriples tail instructionAt,
-        tailEffects]
+      simp only [Ninst.StepRun, Ninst.step_push] at stepRun
+      split at stepRun
+      · cases (Step.run_ofExecution.mp stepRun).2
+      · rename_i enabled
+        rw [Step.run_ofExecution] at stepRun
+        have step : Evm.step ⟨pc, sevm, pre⟩ =
+            .cont (pc + Ninst.size (.push bytes bound)) nextPre := by
+          simp only [evmStep, Ninst.step_push, enabled]
+          rw [← stepRun.2]
+          rfl
+        refine ⟨.cont step tail, ?_⟩
+        rw [Exec.retainedStorageEffectTriples_cont tail committed,
+          Ninst.successfulSstore_effectTriples tail instructionAt,
+          tailEffects]
   | dupn immediate =>
       rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at stepRun
       have step : Evm.step ⟨pc, sevm, pre⟩ =

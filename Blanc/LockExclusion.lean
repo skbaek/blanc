@@ -228,8 +228,10 @@ theorem Evm.step_spawn_enter_getStor
             prepared.state.get owner := by
         dsimp only [Frame.ofCreate, createMsg, processCreateMessage.msg, Msg.withBenv,
           Benv.setStor, Benv.incrNonce, Benv.clearStorageWritesIfEmpty, addCreatedAccount]
-        rw [State.incrNonce, State.setAccount_get_ne _ targetNe,
-          State.setStor, State.get_set_ne _ targetNe]
+        rw [State.incrNonce, State.setAccount_get_ne _ targetNe, State.setStor]
+        split
+        · rw [State.get_setPresent_ne _ targetNe]
+        · rw [State.get_set_ne _ targetNe]
       refine ⟨(congrArg Acct.stor preparedGet).trans (preparedStor.trans ?_), ?_⟩
       · exact (hprefix.getStor owner).symm
       · change State.Protected
@@ -317,7 +319,8 @@ theorem Rinst.get_nonce_eq_of_ok {pc : Nat} {sevm : Sevm} {pre post : Devm} {r :
     (post.state.get owner).nonce = (pre.state.get owner).nonce := by
   by_cases store : r = .sstore
   · subst r
-    simp only [Rinst.run, Rinst.runCore, fork.rules_stateGas_none] at run
+    simp only [Rinst.run, Rinst.runCore, fork.rules_stateGas_none,
+      fork.rules_sstore, fork.rules_access] at run
     rcases Except.bind_eq_ok run with ⟨⟨key, first⟩, popKey, rest⟩
     rcases Except.bind_eq_ok rest with ⟨⟨value, second⟩, popValue, rest⟩
     rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
@@ -341,12 +344,11 @@ theorem Rinst.get_nonce_eq_of_ok {pc : Nat} {sevm : Sevm} {pre post : Devm} {r :
     have eq : pre.state = fifth.state := eq1.trans (eq2.trans (eq3.trans (eq4.trans eq5)))
     rw [← Except.ok.inj final]
     change ((fifth.state.setStorVal sevm.currentTarget key value).get owner).nonce = _
-    dsimp only [State.setStorVal]
     by_cases equal : sevm.currentTarget = owner
     · subst owner
-      rw [State.get_set_self]
+      rw [State.setStorVal_get_self]
       exact congrArg (fun st : State => (st.get sevm.currentTarget).nonce) eq.symm
-    · rw [State.get_set_ne _ equal]
+    · rw [State.setStorVal_get_ne _ equal]
       exact congrArg (fun st : State => (st.get owner).nonce) eq.symm
   · by_cases transient : r = .tstore
     · subst r
@@ -422,9 +424,16 @@ theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
     (owner : Adr) : (post.state.get owner).nonce = (pre.state.get owner).nonce := by
   by_cases destroy : last = .selfdestruct
   · subst last
+    have herase : sevm.benvStat.rules.settle.eraseEmptyOnModify = true :=
+      fork.cases (motive := fun f => f.ruleSet.settle.eraseEmptyOnModify = true)
+        rfl rfl rfl rfl
+    have honly : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true :=
+      fork.cases (motive := fun f => f.ruleSet.settle.selfdestructOnlyCreated = true)
+        rfl rfl rfl rfl
     simp only [Linst.Run, Linst.run, fork.rules_stateGas_none,
-      Devm.balReadAccount_of_bal_none fork.rules_bal_none,
-      ne_eq, Except.bind_ok, ite_not] at run
+      Devm.balReadAccount_of_bal_none fork.rules_bal_none, fork.rules_access,
+      Devm.creditBeneficiary_of_eraseEmptyOnModify herase, honly,
+      Bool.true_eq_false, or_false, ne_eq, Except.bind_ok, ite_not] at run
     rcases Except.bind_eq_ok run with ⟨⟨donee, first⟩, pop, rest⟩
     rcases Except.bind_eq_ok rest with ⟨second, charge, rest⟩
     rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
@@ -463,7 +472,7 @@ theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
       by_cases deleted : sevm.currentTarget ∈
           (third.addBal donee (first.getAcct sevm.currentTarget).bal).createdAccounts
       · simp only [deleted, ite_eq_left] at final
-        rw [← Except.ok.inj final]
+        rw [← Except.ok.inj final, creditSelfdestructRefund_state]
         exact State.setBal_get_nonce
       · simp only [deleted] at final
         rw [← Except.ok.inj final]

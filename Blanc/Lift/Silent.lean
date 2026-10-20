@@ -82,8 +82,8 @@ private theorem ninst_state_of_silent {sevm : Sevm} {pre post : Devm} {n : Ninst
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
-        simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hrun
-        exact hrun.1
+        simp only [Ninst.StepRun, Ninst.step_push] at hrun
+        split at hrun <;> exact (Step.run_ofExecution.mp hrun).1
       subst xl
       have hrel := Ninst.push_effectRec_of_instructionFrame
         (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
