@@ -531,7 +531,7 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
             shown = ", ".join(f"{keys[p]} (line {records[p]['line']})" for p in reached[:8])
             more = f", +{len(reached) - 8} more" if len(reached) > 8 else ""
             state = "new" if name in added else "changed"
-            lines.append(f"  {state} {kind} {name} [{module}] -> {len(reached)} pin(s): {shown}{more}")
+            lines.append(f"  {state} {kind} {name} [{module}, scope {scope_of(records[name])}] -> {len(reached)} pin(s): {shown}{more}")
         if len(origins) > limit:
             lines.append(f"  ... {len(origins) - limit} more")
         further = sorted(moved - set(origins))
@@ -546,6 +546,53 @@ def compare(committed: Path, records, pins, digest, deps, limit: int = 40) -> tu
                      + ", ".join(f"{l} (line {new_roots[l][0]})" for l in pins_moved[:limit])
                      + (" ..." if len(pins_moved) > limit else ""))
     return lines, notes
+
+
+# ---------------------------------------------------------------- guards on a real run
+
+
+def check_fully_hashed(records: dict[str, dict], lean_stats: dict) -> dict[str, int]:
+    """The driver's fully hashed package list equals FULLY_HASHED, every such
+    package contributed hashed constants, and none of them appears as boundary."""
+    driver = tuple(lean_stats.get("fully_hashed_packages", ()))
+    if driver != FULLY_HASHED:
+        raise GateError(f"fully hashed packages differ: driver {list(driver)}, checker {list(FULLY_HASHED)}")
+    counts = {p: 0 for p in FULLY_HASHED}
+    for name, rec in records.items():
+        if rec["k"] == "boundary" and rec["p"] in counts:
+            raise GateError(f"{name} of fully hashed package {rec['p']} was treated as boundary")
+        if rec.get("sc") in counts and rec["k"] != "block":
+            counts[rec["sc"]] += 1
+    for package, n in counts.items():
+        if n == 0:
+            raise GateError(f"fully hashed package {package} contributed no hashed constant")
+    return counts
+
+
+def real_record_controls(records, pins, digest, deps, work: Path) -> dict[str, str]:
+    """On the real driver output: perturb the serialization of one jaune-scoped
+    and one blanc-scoped definition (the first by name), recompute the Merkle
+    table, and require that some pin root moves and that the comparison names
+    the perturbed constant with its scope."""
+    base = work / "control-base"
+    write_manifest(base, records, pins, digest, deps)
+    results = {}
+    for scope in ("jaune", "blanc"):
+        candidates = sorted(n for n, r in records.items() if r.get("sc") == scope and r["k"] == "def")
+        if not candidates:
+            raise GateError(f"real-record control: no {scope}-scoped definition to perturb")
+        name = candidates[0]
+        perturbed = dict(records)
+        perturbed[name] = dict(records[name], s=records[name]["s"] + "\nperturbed")
+        p_digest, _ = merkle(perturbed, deps)
+        moved = sum(1 for p in pins if p_digest[p["n"]] != digest[p["n"]])
+        report, _ = compare(base, perturbed, pins, p_digest, deps)
+        named = any(f"changed def {name} [" in l and f"scope {scope}]" in l for l in report)
+        if moved == 0 or not named:
+            raise GateError(f"real-record control did not bite for {scope} constant {name} "
+                            f"({moved} roots moved, named={named})")
+        results[scope] = f"{name} moved {moved} root(s)"
+    return results
 
 
 # ---------------------------------------------------------------- self-test
@@ -696,6 +743,42 @@ def self_test(quiet: bool = False) -> int:
         r_fail, r_notes = compare(base, renamed, pins_of(renamed), r_digest, deps)
         check("a definition rename alone is a note, not a failure", r_fail == [] and len(r_notes) == 1)
 
+        # check_installed_packages on a throwaway git repository
+        pkgroot = Path(tmp) / "pkgroot"
+        repo = pkgroot / ".lake" / "packages" / "p"
+        repo.mkdir(parents=True)
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@localhost", "-C", str(repo)]
+        subprocess.run(git + ["init", "-q"], check=True)
+        (repo / "f").write_text("x\n")
+        subprocess.run(git + ["add", "f"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "c"], check=True)
+        head = subprocess.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+        def manifest(rev: str) -> None:
+            (pkgroot / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "p", "rev": rev}]}))
+
+        manifest(head)
+        check("an installed package at its rev and clean passes", check_installed_packages(pkgroot) == 1)
+        manifest("0" * 40)
+        refuses("an installed package at another rev than the manifest refuses",
+                lambda: check_installed_packages(pkgroot))
+        manifest(head)
+        (repo / "f").write_text("y\n")
+        refuses("a dirty installed package refuses", lambda: check_installed_packages(pkgroot))
+        (repo / "f").write_text("x\n")
+        (repo / "g").write_text("untracked\n")
+        refuses("an untracked file in an installed package refuses", lambda: check_installed_packages(pkgroot))
+
+        # the fully hashed guards
+        refuses("a driver whose fully hashed list differs refuses",
+                lambda: check_fully_hashed(records, {"fully_hashed_packages": []}))
+        jrec = dict(records)
+        jrec["Jaune.x"] = {"n": "Jaune.x", "k": "boundary", "m": "Jaune.X", "p": "jaune", "s": "", "r": []}
+        refuses("a boundary record of a fully hashed package refuses",
+                lambda: check_fully_hashed(jrec, {"fully_hashed_packages": list(FULLY_HASHED)}))
+        refuses("a fully hashed package with no hashed constant refuses",
+                lambda: check_fully_hashed(records, {"fully_hashed_packages": list(FULLY_HASHED)}))
+
         old_head = json.loads((base / "header.json").read_text())
         (base / "header.json").write_text(json.dumps(dict(old_head, schema=SCHEMA - 1)))
         check("a schema move fails", any("schema moved" in l for l in compare(base, records, pins, digest, deps)[0]))
@@ -737,6 +820,8 @@ def generate(root: Path, work: Path, records_file: Path | None, fixture_file: Pa
     result["fixture_pairs"] = verify_fixture(fixture_file, deps)
     t0 = time.monotonic()
     digest, merkle_stats = merkle(records, deps)
+    result["fully_hashed_counts"] = check_fully_hashed(records, lean_stats)
+    result["real_controls"] = real_record_controls(records, pins, digest, deps, work)
     result.update(records=records, pins=pins, digest=digest, lean_stats=lean_stats,
                   merkle_stats=merkle_stats, merkle_wall=time.monotonic() - t0)
     return result
@@ -751,6 +836,8 @@ def report_stats(r: dict, total_wall: float) -> str:
         f"subterm memo hits={s['expr_memo_hits']}",
         f"digests computed={m['digests_computed']}, digest memo hits={m['memo_hits']}",
         f"serializer fixture pairs={r['fixture_pairs']}, serializer checks={s['serializer_checks']}",
+        "fully hashed=" + ",".join(f"{k}:{v}" for k, v in r["fully_hashed_counts"].items()),
+        "real-record controls: " + "; ".join(f"{k} {v}" for k, v in r["real_controls"].items()),
         f"serialized={s['serialized_bytes']} bytes",
         f"elaboration={s['elab_ms'] / 1000:.1f}s walk={s['walk_ms'] / 1000:.1f}s"
         + (f" driver-wall={r['lean_wall']:.1f}s" if r["lean_wall"] is not None else "")

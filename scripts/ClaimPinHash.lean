@@ -352,7 +352,11 @@ structure Stats where
 
 /-- Lake packages whose constants are hashed in full, like Blanc's own (user
 decision 2026-10-20: Jaune's EVM semantics are part of every claim's meaning).
-Every other package, and the toolchain, stays nominal. -/
+Every other package, and the toolchain, stays nominal.  The driver reports this
+list and `FULLY_HASHED` in `scripts/check-claim-hash.py` must equal it.
+The fixture pair "a Jaune constant is hashed by content" names
+`Jaune.gCallStipend`; a Jaune bump that removes or renames it fails the run
+closed ("unknown constant") until the fixture is edited. -/
 def fullyHashedPackages : List String := ["jaune"]
 
 /-- Walk the closure of `roots`, emitting one record per reached constant.
@@ -802,6 +806,7 @@ unsafe def generate (claimCheck output fixtureOut : System.FilePath) : IO UInt32
     ("elab_ms", toJson (tElab - t0)), ("walk_ms", toJson (tEnd - tElab)),
     ("fixture_pairs", toJson fixturePairsN), ("serializer_checks", toJson serializerOk),
     ("lean_version", Json.str Lean.versionString),
+    ("fully_hashed_packages", toJson fullyHashedPackages),
     ("peak_rss_kib", toJson rss)]).compress
   out.flush
   return 0
