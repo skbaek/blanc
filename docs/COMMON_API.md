@@ -1223,6 +1223,24 @@ and constructor families cover every modelled wrapper layer:
   forks. These retained wrappers are selected by their replay equations;
   the broad `Nonempty` conclusion alone is not a reliable recipe trigger.
 
+For fork-dependent body stages, use
+[`Blanc/ExecutionStagedBodyTrace.lean`](../Blanc/ExecutionStagedBodyTrace.lean):
+`ExecutionTrace.BeaconStageTrace`, `HistoryStageTrace`, and `RequestStageTrace`
+distinguish skipped stages from actual retained system calls. Each `result`
+theorem recovers the exact wrapper equation; `disabled_endpoints` proves the
+state/output or BAL-builder identities and zero direct system-message roots.
+`systemRootCount` counts only these direct roots, excluding their descendants.
+The called request arm reuses `RequestsTrace` and its existing ordered calls.
+`ExecutionTrace.StagedBodyTrace` retains the exact decoded transaction fold,
+withdrawal pair, explicit ommers, reward-state equation, final access-list
+check and output. `StagedBodyTrace.state_eq_rewardState` includes PoW credits;
+`state_eq_requestState_of_pow_none` requires their absence.
+`withdrawals_disabled` proves the disabled withdrawal identity, and
+`finalBout_of_bal_none` identifies the final empty-access-list normalization.
+Historical extraction, modern adapters, descendant-frame enumeration, reward
+budgets and configured-history transport remain separate obligations. These
+carriers do not widen `CoveredFork` or change modern `AppliedBodyTrace`.
+
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
 `ExecutionTrace.RequestsTrace.requests_eq` preserves the arbitrary incoming
