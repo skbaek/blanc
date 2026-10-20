@@ -125,11 +125,14 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
       (Frame.ofCall msg).settle (.ok child) = .ok child := by
     rw [Frame.settle_eq_settleMsg_handleErrorWith,
       executeCode.handleErrorWith_ok]
-    simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
-      initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok,
-      ite_eq_right_iff, Except.ok.injEq, child, cev]
-    intro h
-    cases h
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
+      change sevm.benvStat.rules.settle.touchedSweep = false
+      exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+    have hchildError : child.error = none := rfl
+    simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, Except.bind_ok, hchildError, Option.isSome_none,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   have hroom : p.stack.length < 1024 := by
     simpa only [p] using h_room
   let post :=
@@ -507,11 +510,16 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     simp only [add_zero]
   have hdeletePost :
       post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty := by
-    dsimp only [post, child, cev, initEvm, initDevm]
-    change (p.accountsToDelete.union
-      Std.HashSet.emptyWithCapacity).isEmpty =
-        devm.accountsToDelete.isEmpty
-    rw [show p.accountsToDelete = devm.accountsToDelete from rfl]
+    change (p.accountsToDelete.union child.accountsToDelete).isEmpty =
+      devm.accountsToDelete.isEmpty
+    have hrefund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
+      hfork.cases
+        (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl
+    have hchildDelete : child.accountsToDelete = .emptyWithCapacity := by
+      change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then
+        .emptyWithCapacity else p.accountsToDelete) = .emptyWithCapacity
+      rw [ite_eq_left hrefund]
+    rw [hchildDelete, show p.accountsToDelete = devm.accountsToDelete from rfl]
     simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
       Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have houtputPost : post.output = devm.output := by

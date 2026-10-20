@@ -25,15 +25,15 @@ theorem St.of_stackRel {R1 : List B256 → List B256 → Prop} {R3 : Nat → Nat
     (h : Devm.Rel {Devm.Rels.eq with stack := R1, gasLeft := R3} (St b S M G) d) :
     d = St b d.stack M d.gasLeft := by
   obtain ⟨_, hmem, _, hlogs, hrc, hout, hdel, hrd, herr, haddr, hkeys, hstate, hcre, htr, hsg,
-    hacc, hsto, hwrite⟩ := h
-  rcases d with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr, sw⟩⟩
-  rcases b with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0⟩,
+    hacc, hsto, hwrite, htouch⟩ := h
+  rcases d with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr, touch⟩, ⟨st, tr, sw⟩⟩
+  rcases b with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0, touch0⟩,
     ⟨st0, tr0, sw0⟩⟩
   simp only [St, Devm.setMach, Devm.memory, Devm.logs, Devm.refundCounter, Devm.output,
     Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
     Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage,
     Devm.stateGas, Devm.Rels.eq] at *
-  subst hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite
+  subst hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite htouch
   rfl
 
 section Steps
@@ -257,15 +257,15 @@ section World
 theorem Devm.eq_setGas_of_burn {a c : Devm} (h : Devm.Burn a c) :
     c = a.setMach ⟨a.stack, a.memory, c.gasLeft, a.stateGas⟩ := by
   obtain ⟨hs, hmem, _, hlogs, hrc, hout, hdel, hrd, herr, haddr, hkeys, hstate, hcre, htr, hsg,
-    hacc, hsto, hwrite⟩ := h
-  rcases c with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr, sw⟩⟩
-  rcases a with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0⟩,
+    hacc, hsto, hwrite, htouch⟩ := h
+  rcases c with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr, touch⟩, ⟨st, tr, sw⟩⟩
+  rcases a with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0, touch0⟩,
     ⟨st0, tr0, sw0⟩⟩
   simp only [Devm.stack, Devm.memory, Devm.logs, Devm.refundCounter, Devm.output,
     Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
     Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage,
     Devm.stateGas, Devm.Rels.eq] at *
-  subst hs hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite
+  subst hs hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite htouch
   rfl
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -282,6 +282,7 @@ theorem ri_sstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.for
     ∃ G', d = St (afterSstore sevm b k v) S M G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none,
+    hfork.rules_sstore, hfork.rules_access,
     Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
     Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
   rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
@@ -313,6 +314,7 @@ theorem ri_sstore_nonstatic {k v : B256} {d : Devm} (hfork : CoveredFork sevm.be
     exfalso
     rcases of_run_reg h with ⟨pc, run⟩
     simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none,
+    hfork.rules_sstore, hfork.rules_access,
       Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
       Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
     rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
