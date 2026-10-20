@@ -71,7 +71,11 @@ theorem wstep_next_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork
     wstep fs (s.withFork g) (c.cfg (.next n k)) = wstep fs s (c.cfg (.next n k)) := by
   cases n with
   | exec x => exact absurd rfl (hn x)
-  | push xs h => rfl
+  | push xs h =>
+    simp only [PCfg.cfg, wstep, ninstAccKeeps, Ninst.step,
+      CoveredFork.rules_push0 hf,
+      CoveredFork.rules_push0 (s := (s.withFork g).benvStat) hg,
+      Bool.not_true, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
   | dupn _ => rfl
   | swapn _ => rfl
   | exchange _ => rfl
@@ -159,7 +163,13 @@ theorem resumeCallB_withFork (cp : CallPrep) (g : Fork)
 theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
     scallPrep (s.withFork g) d adrs acs = (scallPrep s d adrs acs).map (·.withFork g) := by
-  unfold scallPrep
+  have hrefund : (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+      s.benvStat.rules.settle.selfdestructRefund :=
+    eq_of_prague (fun s => s.benvStat.rules.settle.selfdestructRefund) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+        (s.withFork .prague).benvStat.rules.settle.selfdestructRefund) rfl rfl rfl rfl
+  unfold scallPrep staticcallSpawnMsg callMsg
+  simp only [hrefund]
   generalize d.stack = st
   rcases st with _ | ⟨gw, _ | ⟨tw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩ <;> try rfl
   simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
@@ -177,7 +187,13 @@ theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
 theorem dcallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
     dcallPrep (s.withFork g) d adrs acs = (dcallPrep s d adrs acs).map (·.withFork g) := by
-  unfold dcallPrep
+  have hrefund : (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+      s.benvStat.rules.settle.selfdestructRefund :=
+    eq_of_prague (fun s => s.benvStat.rules.settle.selfdestructRefund) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+        (s.withFork .prague).benvStat.rules.settle.selfdestructRefund) rfl rfl rfl rfl
+  unfold dcallPrep delegatecallSpawnMsg callMsg
+  simp only [hrefund]
   generalize d.stack = st
   rcases st with _ | ⟨gw, _ | ⟨cw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩ <;> try rfl
   simp only [Sevm.withFork_fork, Sevm.withFork_depth, hg, hf, decide_true, true_and]
@@ -195,7 +211,13 @@ theorem dcallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
 changed. -/
 theorem callPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g) (c : Cfg) :
     callPrep (s.withFork g) c = (callPrep s c).map (·.withFork g) := by
-  unfold callPrep
+  have hrefund : (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+      s.benvStat.rules.settle.selfdestructRefund :=
+    eq_of_prague (fun s => s.benvStat.rules.settle.selfdestructRefund) hf hg fun _ hg =>
+      hg.cases (motive := fun g => (s.withFork g).benvStat.rules.settle.selfdestructRefund =
+        (s.withFork .prague).benvStat.rules.settle.selfdestructRefund) rfl rfl rfl rfl
+  unfold callPrep callSpawnMsg valueCallSpawnMsg callMsg
+  simp only [hrefund]
   generalize c.devm.stack = st
   rcases st with _ | ⟨gw, _ | ⟨cw, _ | ⟨vw, _ | ⟨iiw, _ | ⟨isw, _ | ⟨oiw, _ | ⟨osw, rest⟩⟩⟩⟩⟩⟩⟩ <;>
     try rfl
@@ -517,7 +539,11 @@ theorem wstep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     cases l <;> simp only [wstep, linst_run_withFork hf hg]
   | next n k =>
     cases n with
-    | push xs h => rfl
+    | push xs h =>
+      simp only [wstep, ninstAccKeeps, Ninst.step,
+        CoveredFork.rules_push0 hf,
+        CoveredFork.rules_push0 (s := (s.withFork g).benvStat) hg,
+        Bool.not_true, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
     | dupn _ => rfl
     | swapn _ => rfl
     | exchange _ => rfl

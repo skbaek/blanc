@@ -112,7 +112,9 @@ theorem ri_shl {x y : B256} {d : Devm}
     ∃ G', d = St b ((y <<< x.toNat) :: S) M G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact St.of_diff (v := fun x y => y <<< x.toNat) (Devm.diffBurn_of_applyBinary run)
+  split at run
+  · exact St.of_diff (v := fun x y => y <<< x.toNat) (Devm.diffBurn_of_applyBinary run)
+  · cases run
 
 /-- `SHR`, inverted. -/
 theorem ri_shr {x y : B256} {d : Devm}
@@ -120,7 +122,9 @@ theorem ri_shr {x y : B256} {d : Devm}
     ∃ G', d = St b ((y >>> x.toNat) :: S) M G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact St.of_diff (v := fun x y => y >>> x.toNat) (Devm.diffBurn_of_applyBinary run)
+  split at run
+  · exact St.of_diff (v := fun x y => y >>> x.toNat) (Devm.diffBurn_of_applyBinary run)
+  · cases run
 
 /-- `BYTE`, inverted. -/
 theorem ri_byte {x y : B256} {d : Devm}
