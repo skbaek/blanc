@@ -6174,7 +6174,8 @@ example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = selector)
     (hmiss : selector ∉ beaconSelectors)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
@@ -6191,7 +6192,7 @@ example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime :=
   unmatched_selector_noRawSstore sevm base G selector hnonempty hselector
-    hmiss hcode
+    hmiss hcode h_push0
 
 example (sevm : Sevm) (base : Devm) (G : Nat)
     (hdataLength : 36 ≤ sevm.data.length)

@@ -4,11 +4,12 @@ import Blanc.ForwardDispatchMiss
 /-!
 # Universal Beacon selector misses
 
-Every nonempty selector-dispatch input outside the four-entry ABI census
-reaches the inline empty revert.  The top-level empty-calldata branch is proved
-separately by `empty_calldata_runCompiledTo`.  The exact gas depends on the
-binary-search path; the identical compiled proof carries raw-SSTORE freedom
-and both empty retained chronologies.
+With selected PUSH0 availability, every nonempty selector-dispatch input
+outside the four-entry ABI census reaches the inline empty revert.  The
+separate `empty_calldata_runCompiledTo` theorem proves the top-level
+empty-calldata branch.  The exact gas depends on the binary-search path;
+the identical compiled proof carries raw-SSTORE freedom and both empty
+retained chronologies.
 -/
 
 namespace Blanc.BeaconDeposit
@@ -64,7 +65,8 @@ def unmatchedSelectorRuntimeGas (selector : B256) : Nat :=
 private theorem unmatchedSelectorMain_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {G : Nat} {selector : B256}
     (hselector : Sevm.selector sevm = selector)
-    (hmiss : selector ∉ beaconSelectors) :
+    (hmiss : selector ∉ beaconSelectors)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach
           ⟨[], Mem.empty, G + tree.dispatchMissGas selector + 11, base.stateGas⟩)
@@ -77,7 +79,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     exact hmiss ((tree_hasSelector_iff selector).1 member)
   obtain ⟨hdispatch, hdispatchSafe⟩ :=
     tree.dispatchMiss_runCompiledTo_with_path selector
-      (program := runtime) (sevm := sevm) (base := base) G htreeMiss
+      (program := runtime) (sevm := sevm) (base := base) G htreeMiss h_push0
   let D := tree.dispatchMissGas selector
   let afterPushZero :=
     base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9, base.stateGas⟩
@@ -91,7 +93,8 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         (w := (0 : B256)) (c := gBase) (G := G + D + 9)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
-        (by simp only [Devm.stack_setMach, List.length_nil]; omega))
+        (by simp only [Devm.stack_setMach, List.length_nil]; omega)
+        (fun _ => h_push0))
   let afterLoad := base.setMach
     ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
@@ -117,7 +120,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         (by simp only [afterLoad, Devm.gasLeft_setMach,
           gVerylow])
         (by simp only [afterLoad, Devm.stack_setMach, List.length_cons,
-          List.length_nil]; omega))
+          List.length_nil]; omega) (fun _ => h_push0))
   let afterShr := base.setMach ⟨[selector], Mem.empty, G + D, base.stateGas⟩
   have h224 : (224 : B256).toNat = 224 := by decide +kernel
   have hselector' :
@@ -163,16 +166,17 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
             (by simpa only [afterShr, D, prepend] using hdispatchSafe))))
   simpa only [D, Nat.add_assoc] using ⟨run, runSafe⟩
 
-/-- Every nonempty selector-dispatch input outside the four-entry ABI surface
-reaches the inline empty revert without a raw SSTORE.  The empty-calldata
-branch is the separate `empty_calldata_runCompiledTo` theorem.  Gas is recorded
-by the selected tree walk. -/
+/-- With selected PUSH0 availability, every nonempty selector-dispatch input
+outside the four-entry ABI surface reaches the inline empty revert without a
+raw SSTORE.  The separate `empty_calldata_runCompiledTo` theorem proves the
+empty-calldata branch.  Gas is recorded by the selected tree walk. -/
 theorem unmatched_selector_noRawSstore
     (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = selector)
     (hmiss : selector ∉ beaconSelectors)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
@@ -199,7 +203,7 @@ theorem unmatched_selector_noRawSstore
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
     unmatchedSelectorMain_runCompiledTo_with_path
-      (sevm := sevm) (base := base) (G := G) hselector hmiss
+      (sevm := sevm) (base := base) (G := G) hselector hmiss h_push0
   have hroom : afterSize.stack.length < 1024 := by
     simp only [afterSize, Devm.stack_setMach, List.length_cons,
       List.length_nil]
