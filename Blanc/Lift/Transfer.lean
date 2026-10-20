@@ -687,9 +687,12 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
     sf.stack = 0 :: xs := by
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
+  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
     simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error_stateGas h_run
@@ -891,9 +894,12 @@ private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
     sf.stack = 0 :: xs := by
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind] at h_run
+  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
     simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error_stateGas h_run
@@ -1120,9 +1126,11 @@ private theorem create2_run_stack {sevm : Sevm} {s sf : Devm} {v i sz salt : B25
     (h_run : Ninst.Run sevm s Ninst.create2 sf)
     (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ w, sf.stack = w :: xs := by
+  have henabled : sevm.benvStat.rules.op.create2 = true :=
+    hfork.cases (motive := fun f => f.ruleSet.op.create2 = true) rfl rfl rfl rfl
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
+    hfork.rules_stateGas_none, henabled, ↓reduceIte, Bind.bind, Except.bind] at h_run
   rcases eq1 : Devm.pop s with _ | ⟨v1, s1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
   have e1 := (Devm.pop_of_pop eq1).stack
@@ -1198,9 +1206,12 @@ private theorem delegatecall_run_stack {sevm : Sevm} {s sf : Devm}
     (h_run : Ninst.Run sevm s (.exec .delegatecall) sf)
     (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ w, sf.stack = w :: xs := by
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
+  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
   rcases eq1 : Devm.pop s with _ | ⟨x1, s1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
   have e1 := (Devm.pop_of_pop eq1).stack
@@ -1278,6 +1289,10 @@ theorem run_extcodehash_val {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
       r.memory = s.memory := by
   rcases of_run_reg run with ⟨pc, hrun⟩
   simp only [Rinst.run, Rinst.runCore] at hrun
+  have henabled : sevm.benvStat.rules.op.extCodeHash = true := by
+    by_contra disabled
+    simp only [disabled, ↓reduceIte, reduceCtorEq] at hrun
+  rw [ite_eq_left henabled] at hrun
   rcases Except.bind_eq_ok hrun with ⟨⟨adr, d0⟩, hpopAdr, hrun⟩
   rcases Devm.pop_of_popToAdr hpopAdr with ⟨word, hadr, hpop⟩
   have hp := Devm.pop_of_pop hpop
@@ -1287,7 +1302,8 @@ theorem run_extcodehash_val {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
   subst hadr
   dsimp only at hrun
   have hd0 : s.state = d0.state := hp.state
-  split at hrun
+  cases haccess : sevm.benvStat.rules.access <;> simp only [haccess] at hrun
+  all_goals try (split at hrun)
   all_goals
     rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
     have hb := Devm.burn_of_chargeGas hgas
@@ -1321,7 +1337,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       simp only [ninstTransfer] at checked
       simp only [liftRegularTransfer] at checked
       cases r with
-      | add | mul | sub | div | lt | gt | slt | eq | and | shr =>
+      | add | mul | sub | div | lt | gt | slt | eq | and =>
           simp only [regularTransfer] at checked
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
@@ -1399,12 +1415,21 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           rw [← dropTransfer_eq_drop checked]
           rw [← hlen]
           simpa only using hd
-      | mod | or | xor | byte | shl | sdiv | signextend | sgt =>
+      | mod | or | xor | byte | sdiv | signextend | sgt =>
           rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
           simp only [Rinst.run, Rinst.runCore] at hr
           rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hd⟩
           exact matches_diff matched hd.stack
+      | shr | shl =>
+          simp only [regularTransfer] at checked
+          rcases binary_checked checked with ⟨head, head', tail, rfl, rfl⟩
+          rcases of_run_reg run with ⟨pc, hr⟩
+          simp only [Rinst.run, Rinst.runCore] at hr
+          split at hr
+          · rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hd⟩
+            exact matches_diff matched hd.stack
+          · cases hr
       | calldatacopy =>
           rcases of_run_calldatacopy run with ⟨x, y, z, hp⟩
           rw [← dropTransfer_eq_drop checked]
@@ -1467,18 +1492,25 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | address =>
           cases checked
           exact matches_diff matched (diff_of_push (of_run_address run).stack)
-      | origin | chainid | codesize | number =>
+      | origin | codesize | number =>
           cases checked
           rcases of_run_reg run with ⟨pc, hr⟩
           simp only [Rinst.run, Rinst.runCore] at hr
           exact matches_diff matched (diff_of_push (Devm.pushBurn_of_pushItem hr).stack)
+      | chainid =>
+          cases checked
+          rcases of_run_reg run with ⟨pc, hr⟩
+          simp only [Rinst.run, Rinst.runCore] at hr
+          split at hr
+          · exact matches_diff matched (diff_of_push (Devm.pushBurn_of_pushItem hr).stack)
+          · cases hr
       | selfbalance =>
           cases checked
           exact matches_diff matched (diff_of_push (of_run_selfbalance_stack run))
       | balance =>
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
           rcases of_run_reg run with ⟨pc, hr⟩
-          simp only [Rinst.run, Rinst.runCore, Rinst.balanceCore,
+          simp only [Rinst.run, Rinst.runCore, Rinst.balanceCore, hfork.rules_access,
             liftMachMetaWorldExecution, liftMachMetaExecution, liftMachMeta,
             Footprint.toExecution, Footprint.liftOutcome] at hr
           cases hpop : devm.mach.pop with
@@ -1542,7 +1574,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                   (by rw [hstack]; simpa only [List.append_nil] using pref_append (address :: xs) []) run).1
               have sameLength : devm'.stack.length = (address :: xs).length := by
                 rcases of_run_reg run with ⟨pc, hr⟩
-                simp only [Rinst.run, Rinst.runCore] at hr
+                simp only [Rinst.run, Rinst.runCore, hfork.rules_access] at hr
                 rcases Except.bind_eq_ok hr with ⟨⟨adr, d0⟩, hpop, hr⟩
                 rcases Devm.pop_of_popToAdr hpop with ⟨word, _, hp⟩
                 have hpStack := (Devm.pop_of_pop hp).stack

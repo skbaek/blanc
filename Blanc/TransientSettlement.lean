@@ -80,6 +80,10 @@ theorem tstore_run_cell
   simp only [Rinst.run, Rinst.runCore, Devm.pop_def, stack, bind,
     Except.bind] at hr
   simp only [Devm.stack, Devm.setMach] at hr
+  have enabled : sevm.benvStat.rules.op.transient = true := by
+    by_contra disabled
+    simp only [disabled, ↓reduceIte, reduceCtorEq] at hr
+  rw [ite_eq_left enabled] at hr
   let d0 : Devm := {
     mach := ⟨tail, pre.mach.memory, pre.mach.gasLeft, pre.stateGas⟩,
     «meta» := pre.meta,
@@ -170,6 +174,10 @@ theorem tload_run_cell
   simp only [Rinst.run, Rinst.runCore, Devm.pop_def, stack, bind,
     Except.bind] at hr
   simp only [Devm.setMach] at hr
+  have enabled : sevm.benvStat.rules.op.transient = true := by
+    by_contra disabled
+    simp only [disabled, ↓reduceIte, reduceCtorEq] at hr
+  rw [ite_eq_left enabled] at hr
   let d0 : Devm := {
     mach := ⟨tail, pre.mach.memory, pre.mach.gasLeft, pre.stateGas⟩,
     «meta» := pre.meta,
@@ -453,8 +461,10 @@ structure PreparedTransactionMessage
           stateGasReservoir :=
             (allocateEvmGas benv.beginTransaction.stat.rules tx.gas intrinsicGas).stateGasReservoir
           accessListAddresses :=
-            .ofList (benv.beginTransaction.stat.coinbase ::
-              tx.accessList.map Prod.fst)
+            if benv.beginTransaction.stat.rules.txr.warmCoinbase then
+              .ofList (benv.beginTransaction.stat.coinbase ::
+                tx.accessList.map Prod.fst)
+            else .ofList (tx.accessList.map Prod.fst)
           accessListStorageKeys :=
             .ofList (tx.accessList.map (fun ⟨adr, keys⟩ =>
               keys.map (⟨adr, ·⟩))).flatten
@@ -597,31 +607,19 @@ private theorem processMessageCall_call_error_logs
   unfold processMessageCall.call at run
   dsimp only at run
   split at run
-  · split at run
-    · simp only [bind, Except.bind] at run
-      rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
-      by_cases clean : evm.error.isNone
-      · rw [ite_eq_left clean] at hrest
-        rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
-        cases hfinal
-        simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
-          Bool.false_eq_true]
-      · rw [ite_eq_right clean] at hrest
-        cases hrest
-        simp only [ite_eq_right clean]
-    · rcases Except.bind_eq_ok run with
-        ⟨⟨delegated, setValue⟩, hdelegated, hrest⟩
-      simp only [bind, Except.bind] at hrest
-      rcases Except.bind_eq_ok hrest with ⟨evm, hprocess, hrest⟩
-      by_cases clean : evm.error.isNone
-      · rw [ite_eq_left clean] at hrest
-        rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
-        cases hfinal
-        simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
-          Bool.false_eq_true]
-      · rw [ite_eq_right clean] at hrest
-        cases hrest
-        simp only [ite_eq_right clean]
+  · rcases Except.bind_eq_ok run with
+      ⟨⟨delegated, refundDelegation⟩, hdelegated, hrest⟩
+    simp only [bind, Except.bind] at hrest
+    rcases Except.bind_eq_ok hrest with ⟨evm, hprocess, hrest⟩
+    by_cases clean : evm.error.isNone
+    · rw [ite_eq_left clean] at hrest
+      rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
+      cases hfinal
+      simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
+        Bool.false_eq_true]
+    · rw [ite_eq_right clean] at hrest
+      cases hrest
+      simp only [ite_eq_right clean]
   · exact processTopLevelAmsterdam_error_logs run herr
 
 /-- An errored top-level message exposes no logs. Its `returnData` remains an
