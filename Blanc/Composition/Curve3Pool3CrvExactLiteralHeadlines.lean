@@ -2,17 +2,21 @@ import Blanc.Composition.Curve3Pool3CrvHeadlinesExact
 import Blanc.Composition.Curve3Pool3CrvExactLiteralWitness
 
 /-!
-# The composed exact headlines with their coin and 3Crv hypotheses discharged
+# The composed exact headlines applied to the coin-chain witnesses
 
 Each composed exact headline (`Curve3Pool3CrvHeadlinesExact.lean`) applied to the witness data of
-`Curve3Pool3CrvExactLiteralWitness.lean`: over the same history, under the world conditions of the
-witnesses (`Token20` coins whose ledgers cover the calls, 3Crv's code with supply `T`, 3Crv
-accepting the burn or mint), there is a coin chain `V`, `U = 80000` and coin debit/next functions
-meeting the headline's callee and coin-chain hypotheses as stated (the conjunction is restated in
-the headline's text), and the headline's conclusion then holds under only the hypotheses this file
-does not discharge: `_hcode`, `_hlen`, `_hcd`, `_hsel`, the model step `_hstep`, `_hid`,
-the residual-gas headroom on `R`, the no-wrap bound and the per-execution keep premise. `_hfork`,
-`_hstatic`, `_hdepth` are world conditions here.
+`Curve3Pool3CrvExactLiteralWitness.lean`. Over the same history there is a coin chain `V`,
+`U = 80000` and `Token20`'s own coin debit/next functions meeting the headline's coin-chain
+hypotheses as stated (`_hU`, `_hVc`, `_hVb`, `_hVs`, `_hskip`, the coin profiles; the conjunction
+is restated in the headline's text), and `_hpc` follows from the history. The rest of the
+headline's callee hypotheses are taken from world conditions, not discharged: the frame is not
+static, not at depth `0`, at a covered fork (`_hfork`, `_hstatic`, `_hdepth`); 3Crv holds its code
+with supply `T` and is neither the pool nor a precompile (`C3Entry`, giving `_htok` and `_hT`); the
+coins hold `Token20`'s code and are not precompiles (`T20Coins`, giving `_hcoin`); their ledgers
+cover the calls (`T20MoveFits`, `T20PullFits`); 3Crv accepts the burn or mint (`_hburn`/`_hmint`,
+stated as `BurnFits`/`MintFits` world conditions). The headline's conclusion then holds under the
+hypotheses this file leaves open: `_hcode`, `_hlen`, `_hcd`, `_hsel`, the model step `_hstep`,
+`_hid`, the residual-gas headroom on `R`, the no-wrap bound and the per-execution keep premise.
 
 * `pool_3crv_removeLiquidity_live_exact_literal`, `pool_3crv_addLiquidity_live_exact_literal`,
   `pool_3crv_removeLiquidityImbalance_live_exact_literal`,
@@ -22,7 +26,8 @@ the residual-gas headroom on `R`, the no-wrap bound and the per-execution keep p
   `_hlen`, `_hcd`, `_hsel`, `_hstep`, `_hid`, `_hkeep` and the gas bounds `_hG`, `_hGm`.
 
 For `remove_liquidity_one_coin`, `_hi` (which coin the call data names) also stays a premise; it
-fixes the coin `i` whose `Token20` facts are assumed.
+fixes the coin `i` whose `Token20` facts are assumed, and `_hcoin` stays a hypothesis for all three
+coin words (`hcoin`), since only coin `i` is assumed to run `Token20`.
 -/
 
 namespace Blanc.Composition.Curve3Pool3CrvLiteralWitness
@@ -41,7 +46,7 @@ variable {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop}
 
 /-- **The pool's code is at the frame's target after the history** (`_hpc`): the history keeps the
-installed pool code (`pool_history_reached`), and that code is not empty. -/
+installed pool code (`pool_history_reached`), which is not empty (`code_ne_empty_of_image`). -/
 theorem pool_code_ne_of_history (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
     (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ checkpoint.state)
@@ -53,14 +58,11 @@ theorem pool_code_ne_of_history (trace : ConfiguredHistoryTrace cfg checkpoint f
     rw [target]
     show pre.state.getCode pool = _
     rw [state]
-  intro h
-  rw [← e, h] at hc
-  have he : ByteArray.empty = Curve3Pool.code := code_eq_of_toList hc
-  have hl := code_toList_length
-  rw [← he, ByteArray.toList_eq_toList_data, Array.length_toList] at hl
-  exact absurd hl (by decide)
+  rw [e]
+  exact code_ne_empty_of_image hc
 
-/-- **`pool_3crv_removeLiquidity_live_exact` with its coin and 3Crv hypotheses discharged.** -/
+/-- **`pool_3crv_removeLiquidity_live_exact` applied to its coin-chain witness**;
+`C3Entry`, `T20Coins`, the ledger fits, `_hburn` and fork/static/depth are world conditions. -/
 theorem pool_3crv_removeLiquidity_live_exact_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -130,8 +132,9 @@ theorem pool_3crv_removeLiquidity_live_exact_literal
     fun hcode hlen hcd hsel hstep hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
       hsel hstep htok hcoin hpc hid hU hT hburn' hVc hVb hVs hpush⟩
 
-/-- **`pool_3crv_addLiquidity_live_exact` with its coin and 3Crv hypotheses discharged**; the
-world after the mint, `C3With σm (V 3)`, carries the fee coin's pulled ledger. -/
+/-- **`pool_3crv_addLiquidity_live_exact` applied to its coin-chain witness**; the
+world after the mint, `C3With σm (V 3)`, carries the fee coin's pulled ledger;
+`C3Entry`, `T20Coins`, the ledger fits, `_hmint` and fork/static/depth are world conditions. -/
 theorem pool_3crv_addLiquidity_live_exact_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -254,8 +257,8 @@ theorem pool_3crv_addLiquidity_live_exact_literal
       hstatic hdepth hlen hcd hsel hstep htok hcoin hpc hid hU hT hmint' hVc hVb hVs hskip hpull
       hbalB hbalA⟩
 
-/-- **`pool_3crv_removeLiquidityImbalance_live_exact` with its coin and 3Crv hypotheses
-discharged.** -/
+/-- **`pool_3crv_removeLiquidityImbalance_live_exact` applied to its coin-chain
+witness**; `C3Entry`, `T20Coins`, the ledger fits, `_hburn` and fork/static/depth are world conditions. -/
 theorem pool_3crv_removeLiquidityImbalance_live_exact_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -335,8 +338,10 @@ theorem pool_3crv_removeLiquidityImbalance_live_exact_literal
     fun hcode hlen hcd hsel hstep hid => hlive pushD pushN hcode hfork hstatic hdepth hlen hcd
       hsel hstep htok hcoin hpc hid hU hT hburn' hVc hVb hVs hskip hpush⟩
 
-/-- **`pool_3crv_removeLiquidityOneCoin_live_exact` with its coin and 3Crv hypotheses
-discharged**, for the coin `i` the call data names (`_hi` stays a premise: it fixes `i`). -/
+/-- **`pool_3crv_removeLiquidityOneCoin_live_exact` applied to its coin-chain
+witness**, for the coin `i` the call data names (`_hi` stays a premise: it fixes `i`);
+`C3Entry`, coin `i`'s `Token20` facts and ledger fit, `_hburn` and fork/static/depth are world
+conditions, and `_hcoin` stays a hypothesis for all three coin words. -/
 theorem pool_3crv_removeLiquidityOneCoin_live_exact_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -444,7 +449,8 @@ section Bounded
 variable {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Curve3Crv.Key → Prop}
 
-/-- **`pool_3crv_removeLiquidity_live_entry` with its coin and 3Crv hypotheses discharged.** -/
+/-- **`pool_3crv_removeLiquidity_live_entry` applied to its coin-chain witness**;
+`C3Entry`, `T20Coins`, the ledger fits, `_hburn` and fork/static/depth are world conditions. -/
 theorem pool_3crv_removeLiquidity_live_entry_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -500,8 +506,9 @@ theorem pool_3crv_removeLiquidity_live_entry_literal
     fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hburn' hVc hVb hVs hpush hG hGm⟩
 
-/-- **`pool_3crv_addLiquidity_live_entry` with its coin and 3Crv hypotheses discharged**; the fee
-coin's pulled ledger is carried in `V 3`. -/
+/-- **`pool_3crv_addLiquidity_live_entry` applied to its coin-chain witness**; the fee
+coin's pulled ledger is carried in `V 3`;
+`C3Entry`, `T20Coins`, the ledger fits, `_hmint` and fork/static/depth are world conditions. -/
 theorem pool_3crv_addLiquidity_live_entry_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -572,8 +579,8 @@ theorem pool_3crv_addLiquidity_live_entry_literal
     fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hmint' hVc hVb hVs hpull hskip hfee hG hGm⟩
 
-/-- **`pool_3crv_removeLiquidityImbalance_live_entry` with its coin and 3Crv hypotheses
-discharged.** -/
+/-- **`pool_3crv_removeLiquidityImbalance_live_entry` applied to its coin-chain
+witness**; `C3Entry`, `T20Coins`, the ledger fits, `_hburn` and fork/static/depth are world conditions. -/
 theorem pool_3crv_removeLiquidityImbalance_live_entry_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)
@@ -638,8 +645,10 @@ theorem pool_3crv_removeLiquidityImbalance_live_entry_literal
     fun hcode hlen hcd hsel hstep hid hkeep hG hGm => hlive hcode hfork hstatic hdepth hlen
       hcd hsel hstep htok hcoin hpc hid hkeep hU hT hburn' hVc hVb hVs hpush hskip hG hGm⟩
 
-/-- **`pool_3crv_removeLiquidityOneCoin_live_entry` with its coin and 3Crv hypotheses discharged**,
-for the coin `i` the call data names (`_hi` stays a premise: it fixes `i`). -/
+/-- **`pool_3crv_removeLiquidityOneCoin_live_entry` applied to its coin-chain witness**,
+for the coin `i` the call data names (`_hi` stays a premise: it fixes `i`);
+`C3Entry`, coin `i`'s `Token20` facts and ledger fit, `_hburn` and fork/static/depth are world
+conditions, and `_hcoin` stays a hypothesis for all three coin words. -/
 theorem pool_3crv_removeLiquidityOneCoin_live_entry_literal
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (poolInstalled : some (checkpoint.state.getCode pool).toList = poolSem.image)

@@ -3,30 +3,33 @@ import Blanc.Composition.Curve3Pool3CrvCoinExact
 import Blanc.Composition.Curve3Pool3CrvExactAssembly
 
 /-!
-# The composed exact headlines' coin and 3Crv hypotheses, witnessed as stated
+# The composed exact headlines' coin-chain hypotheses, witnessed as stated
 
 `Curve3Pool3CrvExactWitness.lean` shows each exact premise bundle holds along the bounded witness
 worlds (`rlWorld`, `alWorld`, …) with a hand-built call data `P`. The composed exact headlines
 (`Curve3Pool3CrvHeadlinesExact.lean`) instead take a caller's coin chain `V`, state the coin
 profiles over `C3With c3 σ (V k)`, and consume the bundle through `*ExactPremises_c3crv` at
 `rlC3W c3 σ σb V`/`alC3W`/`rliC3W` with `P := rlC3Calls …`/`alC3Calls …`/…. Here, for each of the
-four entries, under the same world conditions the bounded witnesses use (`Token20` coins whose
-ledgers cover the calls, `T20Coins`; 3Crv with its code and supply `T`, `C3Entry`; 3Crv accepting
-the burn or mint), a concrete coin chain `V` that never mentions 3Crv's storage, `U = 80000` and
-the coin debit/next functions satisfy, jointly and in the headline's own text, every hypothesis of
-the headline's inner binder about the callees and the coin chain:
-`_htok`, `_hcoin`, `_hU`, `_hT`, `_hburn`/`_hmint`, `_hVc`, `_hVb`, `_hVs`, `_hskip` (where present)
-and the coin profiles `_hpush`/`_hpull`/`_hbalB`/`_hbalA`.
+four entries, a concrete coin chain `V` that never mentions 3Crv's storage, `U = 80000` and
+`Token20`'s own coin debit/next functions are exhibited meeting, in the headline's own text, the
+coin-chain hypotheses `_hU`, `_hVc`, `_hVb`, `_hVs`, `_hskip` (where present) and the coin profiles
+`_hpush`/`_hpull`/`_hbalB`/`_hbalA`. They are exhibited under world conditions, the ones the
+bounded witnesses use, which are taken as hypotheses, not discharged: the frame is not static, not
+at depth `0`, at a covered fork; 3Crv holds its code with supply `T` and is neither the pool nor a
+precompile (`C3Entry`); the coins hold `Token20`'s code (`T20Coins`) and their ledgers cover the
+calls (`T20MoveFits`, `T20PullFits`); 3Crv accepts the burn or mint (`BurnFits`, `MintFits`). The
+conjunction restates from those conditions, in the headline's text, the 3Crv and precompile facts
+`_htok`, `_hcoin`, `_hT` and `_hburn`/`_hmint`, so it is the headline's whole callee and coin-chain
+hypothesis set. For `remove_liquidity_one_coin`, `_hcoin` (all three coin words) is itself a
+world condition.
 
 * `coinsFrom`: coins `k, …, 2` as at the entry (the chain of `remove_liquidity` and
   `remove_liquidity_imbalance`);
 * `alCoins`: `coinsFrom` plus, at `k = 3`, the fee coin's ledger as its pull leaves it, so
   `C3With σm (alCoins 3)` (the world after the mint) carries the fee-ledger clause by construction;
 * `ocCoins`: coin `i` as at the entry, then anything;
-* `<entry>_exact_literal_witness`: the headline's hypotheses as a conjunction;
-* `<entry>_exact_literal_premises`: that witness fed through `*ExactPremises_c3crv`, giving the
-  exact bundle at the headline's own world chain and call data, with the chain's closedness and
-  entry world;
+* `<entry>_exact_literal_witness`: the headline's hypotheses as a conjunction (applied to the
+  headline itself in `Curve3Pool3CrvExactLiteralHeadlines.lean`);
 * `<entry>_entry_literal_witness`: the same chains meeting the sufficient-gas composed rows'
   (`pool_3crv_*_live_entry`) coin and 3Crv hypotheses, the exact `Token20` profiles forgotten to
   bounded success.
@@ -166,10 +169,10 @@ end CoinCallsAL
 
 /-! ## `remove_liquidity` -/
 
-/-- **`pool_3crv_removeLiquidity_live_exact`'s coin and 3Crv hypotheses, witnessed as stated**:
+/-- **`pool_3crv_removeLiquidity_live_exact`'s coin-chain hypotheses, witnessed as stated**:
 the chain `V := coinsFrom` (coins `k, …, 2` as at the entry), `U = 80000` and `Token20`'s own
-transfer debits and successors satisfy `_htok`, `_hcoin`, `_hU`, `_hT`, `_hburn`, `_hVc`, `_hVb`,
-`_hVs` and `_hpush` in the headline's text. -/
+transfer debits and successors satisfy `_hU`, `_hVc`, `_hVb`, `_hVs` and `_hpush` in the headline's
+text; `_htok`, `_hcoin`, `_hT` and `_hburn` are restated from the world conditions. -/
 theorem removeLiquidity_exact_literal_witness {msg : Msg} {pool c3 : Adr} {T : B256}
     (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
@@ -226,49 +229,14 @@ theorem removeLiquidity_exact_literal_witness {msg : Msg} {pool c3 : Adr} {T : B
   · exact p1
   · exact p2
 
-/-- **The headline's premise route at the witness**: `rlExactPremises_c3crv` applied to
-`removeLiquidity_exact_literal_witness`'s data gives the exact bundle at the headline's own world
-chain `rlC3W c3 σ σb V` and call data `rlC3Calls … pushD pushN`, with the chain's closedness and
-entry world as the headline derives them. -/
-theorem removeLiquidity_exact_literal_premises {msg : Msg} {pool c3 : Adr} {T : B256}
-    (target : msg.currentTarget = pool)
-    (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
-    (hdepth : (initSevm msg).depth ≠ 0) (hc3 : C3Entry (initSevm msg) (initDevm msg) T)
-    (hcoins : T20Coins (initSevm msg) (initDevm msg))
-    (hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
-      (rlAmt (initSevm msg)))
-    (hfits : ∀ k : Fin 3, T20MoveFits
-      ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) k)) msg.currentTarget
-      msg.caller (balAt ((initDevm msg).getStor msg.currentTarget) k * rlAmt (initSevm msg) / T)) :
-    ∃ (V : Nat → Devm → Prop) (U : Nat) (pushD : Nat → Devm → List B256 → Mem → Nat)
-      (pushN : Nat → Devm → List B256 → Mem → Devm),
-      (∀ k, k ≤ 4 → WClosed (initSevm msg) (rlC3W c3 (Devm.getStor (initDevm msg) c3)
-        (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (rlAmt (initSevm msg))) V
-        k)) ∧
-      rlC3W c3 (Devm.getStor (initDevm msg) c3)
-        (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (rlAmt (initSevm msg))) V 0
-        (initDevm msg) ∧
-      RLExactPremises (initSevm msg) (initDevm msg) T (rlC3W c3 (Devm.getStor (initDevm msg) c3)
-        (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (rlAmt (initSevm msg))) V) U
-        (rlC3Calls (initSevm msg) (initDevm msg) pushD pushN) := by
-  obtain ⟨V, U, pushD, pushN, htok, -, hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
-    removeLiquidity_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
-  have hne : (initSevm msg).currentTarget ≠ c3 := fun h => hc3.pool (ht.trans h.symm)
-  subst target
-  refine ⟨V, U, pushD, pushN, fun k hk => ?_, ⟨⟨by rw [← ht]; exact hc3.code, rfl⟩, hVb⟩,
-    rlExactPremises_c3crv ht hne hfork hstatic hdepth htok hU hT hburn' hVs hpush⟩
-  rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
-  all_goals exact Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc _ (by decide))
-
 /-! ## `add_liquidity` -/
 
-/-- **`pool_3crv_addLiquidity_live_exact`'s coin and 3Crv hypotheses, witnessed as stated**: the
+/-- **`pool_3crv_addLiquidity_live_exact`'s coin-chain hypotheses, witnessed as stated**: the
 chain `V := alCoins` (coins `k, …, 2` as at the entry, and the fee coin's pulled ledger in `V 3`,
 hence in `C3With σm (V 3)` after the mint), the fee coin's two `balanceOf(self)` answers `B1`, `B2`
 (its ledger before and after its pull), `U = 80000` and `Token20`'s own debits and successors
-satisfy `_htok`, `_hcoin`, `_hU`, `_hT`, `_hmint`, `_hVc`, `_hVb`, `_hVs`, `_hskip`, `_hpull`,
-`_hbalB` and `_hbalA` in the headline's text. -/
+satisfy `_hU`, `_hVc`, `_hVb`, `_hVs`, `_hskip`, `_hpull`, `_hbalB` and `_hbalA` in the headline's
+text; `_htok`, `_hcoin`, `_hT` and `_hmint` are restated from the world conditions. -/
 theorem addLiquidity_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr} {T : B256}
     (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
@@ -385,65 +353,12 @@ theorem addLiquidity_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr}
     · exact p1 ha
     · exact p2 ha
 
-/-- **The headline's premise route at the witness**: `alExactPremises_c3crv` applied to
-`addLiquidity_exact_literal_witness`'s data gives the exact bundle at the headline's own world
-chain `alC3W c3 σ σm V` and call data `alC3Calls …`, with the chain's closedness, entry world and
-skips as the headline derives them. The world after the mint is `C3With σm (V 3)`, which carries
-the fee coin's pulled ledger. -/
-theorem addLiquidity_exact_literal_premises {msg : Msg} {o : Out} {pool c3 : Adr} {T : B256}
-    (target : msg.currentTarget = pool)
-    (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
-    (hdepth : (initSevm msg).depth ≠ 0) (hc3 : C3Entry (initSevm msg) (initDevm msg) T)
-    (hcoins : T20Coins (initSevm msg) (initDevm msg))
-    (hmint : MintFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
-      (Nat.toB256 (alMintAmt o)))
-    (hfits : ∀ k : Fin 3, alAmt (initSevm msg) k.val ≠ 0 → T20PullFits
-      ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) k)) msg.caller
-      msg.currentTarget msg.currentTarget (alAmt (initSevm msg) k.val)) :
-    ∃ (B1 B2 : B256) (V : Nat → Devm → Prop) (U : Nat)
-      (pullD : Nat → Devm → List B256 → Mem → Nat) (pullN : Nat → Devm → List B256 → Mem → Devm)
-      (balBD balAD : Devm → List B256 → Mem → Nat) (balBN balAN : Devm → List B256 → Mem → Devm),
-      (∀ k, k ≤ 4 → WClosed (initSevm msg) (alC3W c3 (Devm.getStor (initDevm msg) c3)
-        (mintStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (Nat.toB256 (alMintAmt o)))
-        V k)) ∧
-      alC3W c3 (Devm.getStor (initDevm msg) c3)
-        (mintStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (Nat.toB256 (alMintAmt o)))
-        V 0 (initDevm msg) ∧
-      (∀ k : Fin 3, alAmt (initSevm msg) k.val = 0 → ∀ b,
-        alC3W c3 (Devm.getStor (initDevm msg) c3)
-          (mintStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (alMintAmt o))) V k b →
-        alC3W c3 (Devm.getStor (initDevm msg) c3)
-          (mintStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (alMintAmt o))) V (k + 1) b) ∧
-      ALExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T B1 B2
-        (Nat.toB256 (alMintAmt o))
-        (alC3W c3 (Devm.getStor (initDevm msg) c3)
-          (mintStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (alMintAmt o))) V) U
-        (alC3Calls (initSevm msg) (initDevm msg) pullD pullN balBD balAD balBN balAN) := by
-  obtain ⟨B1, B2, V, U, pullD, pullN, balBD, balAD, balBN, balAN, htok, -, hU, hT, hmint', hVc,
-    hVb, hVs, hskip, hpull, hbalB, hbalA⟩ :=
-    addLiquidity_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hmint hfits
-  have hne : (initSevm msg).currentTarget ≠ c3 := fun h => hc3.pool (ht.trans h.symm)
-  subst target
-  refine ⟨B1, B2, V, U, pullD, pullN, balBD, balAD, balBN, balAN, fun k hk => ?_,
-    ⟨⟨by rw [← ht]; exact hc3.code, rfl⟩, hVb⟩,
-    fun k hz b hb => match k, hz, hb with
-      | ⟨0, _⟩, hz, hb => ⟨hb.1, hskip 0 hz b hb.2⟩
-      | ⟨1, _⟩, hz, hb => ⟨hb.1, hskip 1 hz b hb.2⟩
-      | ⟨2, _⟩, hz, hb => ⟨hb.1, hskip 2 hz b hb.2⟩,
-    alExactPremises_c3crv ht hne hfork hstatic hdepth htok hU hT hmint' hVs hpull hbalB hbalA⟩
-  rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
-  all_goals exact Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc _ (by decide))
-
 /-! ## `remove_liquidity_imbalance` -/
 
-/-- **`pool_3crv_removeLiquidityImbalance_live_exact`'s coin and 3Crv hypotheses, witnessed as
+/-- **`pool_3crv_removeLiquidityImbalance_live_exact`'s coin-chain hypotheses, witnessed as
 stated**: the chain `V := coinsFrom`, `U = 80000` and `Token20`'s own transfer debits and
-successors satisfy `_htok`, `_hcoin`, `_hU`, `_hT`, `_hburn`, `_hVc`, `_hVb`, `_hVs`, `_hskip` and
-`_hpush` in the headline's text. -/
+successors satisfy `_hU`, `_hVc`, `_hVb`, `_hVs`, `_hskip` and `_hpush` in the headline's text;
+`_htok`, `_hcoin`, `_hT` and `_hburn` are restated from the world conditions. -/
 theorem removeLiquidityImbalance_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr}
     {T : B256} (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
@@ -514,59 +429,14 @@ theorem removeLiquidityImbalance_exact_literal_witness {msg : Msg} {o : Out} {po
   · exact p1 ha
   · exact p2 ha
 
-/-- **The headline's premise route at the witness**: `rliExactPremises_c3crv` applied to
-`removeLiquidityImbalance_exact_literal_witness`'s data gives the exact bundle at the headline's
-own world chain `rliC3W c3 σ σb V` and call data `rliC3Calls … pushD pushN`, with the chain's
-closedness, entry world and skips as the headline derives them. -/
-theorem removeLiquidityImbalance_exact_literal_premises {msg : Msg} {o : Out} {pool c3 : Adr}
-    {T : B256} (target : msg.currentTarget = pool)
-    (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
-    (hdepth : (initSevm msg).depth ≠ 0) (hc3 : C3Entry (initSevm msg) (initDevm msg) T)
-    (hcoins : T20Coins (initSevm msg) (initDevm msg))
-    (hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
-      (Nat.toB256 (rliBurnAmt o)))
-    (hfits : ∀ k : Fin 3, rliAmt (initSevm msg) k.val ≠ 0 → T20MoveFits
-      ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) k)) msg.currentTarget
-      msg.caller (rliAmt (initSevm msg) k.val)) :
-    ∃ (V : Nat → Devm → Prop) (U : Nat) (pushD : Nat → Devm → List B256 → Mem → Nat)
-      (pushN : Nat → Devm → List B256 → Mem → Devm),
-      (∀ j, j ≤ 4 → WClosed (initSevm msg) (rliC3W c3 (Devm.getStor (initDevm msg) c3)
-        (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (Nat.toB256 (rliBurnAmt o)))
-        V j)) ∧
-      rliC3W c3 (Devm.getStor (initDevm msg) c3)
-        (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256 (Nat.toB256 (rliBurnAmt o)))
-        V 0 (initDevm msg) ∧
-      (∀ k : Fin 3, rliAmt (initSevm msg) k.val = 0 → ∀ b,
-        rliC3W c3 (Devm.getStor (initDevm msg) c3)
-          (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (rliBurnAmt o))) V (k + 1) b →
-        rliC3W c3 (Devm.getStor (initDevm msg) c3)
-          (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (rliBurnAmt o))) V (k + 2) b) ∧
-      RLIExactPremises (initSevm msg) ((initDevm msg).getStor msg.currentTarget) T
-        (Nat.toB256 (rliBurnAmt o))
-        (rliC3W c3 (Devm.getStor (initDevm msg) c3)
-          (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-            (Nat.toB256 (rliBurnAmt o))) V) U
-        (rliC3Calls (initSevm msg) (initDevm msg) pushD pushN) := by
-  obtain ⟨V, U, pushD, pushN, htok, -, hU, hT, hburn', hVc, hVb, hVs, hskip, hpush⟩ :=
-    removeLiquidityImbalance_exact_literal_witness ht hfork hstatic hdepth hc3 hcoins hburn hfits
-  have hne : (initSevm msg).currentTarget ≠ c3 := fun h => hc3.pool (ht.trans h.symm)
-  subst target
-  refine ⟨V, U, pushD, pushN, fun k hk => ?_, ⟨⟨by rw [← ht]; exact hc3.code, rfl⟩, hVb⟩,
-    fun k hz b hb => ⟨hb.1, hskip k hz b hb.2⟩,
-    rliExactPremises_c3crv ht hne hfork hstatic hdepth htok hU hT hburn' hVs hpush⟩
-  rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
-  all_goals exact Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc _ (by decide))
-
 /-! ## `remove_liquidity_one_coin` -/
 
-/-- **`pool_3crv_removeLiquidityOneCoin_live_exact`'s coin and 3Crv hypotheses, witnessed as
+/-- **`pool_3crv_removeLiquidityOneCoin_live_exact`'s coin-chain hypotheses, witnessed as
 stated**: the chain `V := ocCoins i` (coin `i` as at the entry, then anything), `U = 80000` and
-`Token20`'s own transfer debit and successor satisfy `_htok`, `_hcoin`, `_hU`, `_hT`, `_hburn`,
-`_hVc`, `_hVb`, `_hVs` and `_hpush` in the headline's text. Only coin `i` is called, so only coin
-`i` is required to run `Token20`; `_hcoin` is a fact about all three coin words. -/
+`Token20`'s own transfer debit and successor satisfy `_hU`, `_hVc`, `_hVb`, `_hVs` and `_hpush` in
+the headline's text; `_htok`, `_hT` and `_hburn` are restated from the world conditions. Only coin
+`i` is called, so only coin `i` is required to run `Token20`; `_hcoin`, a fact about all three
+coin words, is itself a world condition (`hcoin`). -/
 theorem removeLiquidityOneCoin_exact_literal_witness {msg : Msg} {o : Out} {i : Fin 3}
     {pool c3 : Adr} {T : B256}
     (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
@@ -622,52 +492,6 @@ theorem removeLiquidityOneCoin_exact_literal_witness {msg : Msg} {o : Out} {i : 
     hc3.supply, hburn, fun k _ => ocCoins_wClosed hpool k, ⟨hcode, rfl⟩,
     ocCoins_blind htc, pP⟩
 
-/-- **The headline's premise route at the witness**: `ocExactPremises_c3crv` applied to
-`removeLiquidityOneCoin_exact_literal_witness`'s data gives the exact bundle along the headline's
-own chain `C3With c3 σ (V 0) → C3With c3 σb (V 0) → C3With c3 σb (V 1)` and call data
-`ocC3Calls … pushD pushN`, with the chain's closedness and entry world. -/
-theorem removeLiquidityOneCoin_exact_literal_premises {msg : Msg} {o : Out} {i : Fin 3}
-    {pool c3 : Adr} {T : B256} (target : msg.currentTarget = pool)
-    (ht : (((initDevm msg).getStor msg.currentTarget).get tokenSlot).toAdr = c3)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
-    (hdepth : (initSevm msg).depth ≠ 0) (hc3 : C3Entry (initSevm msg) (initDevm msg) T)
-    (hi : i.val = (ocI (initSevm msg)).toNat)
-    (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
-      (coinOf (initSevm msg) (initDevm msg) k))
-    (hcode : (initDevm msg).getCode (coinOf (initSevm msg) (initDevm msg) i) =
-      VyperNonreentrantDeployed.Token20.code)
-    (hpool : coinOf (initSevm msg) (initDevm msg) i ≠ msg.currentTarget)
-    (htc : coinOf (initSevm msg) (initDevm msg) i ≠ c3)
-    (hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
-      (ocAmt (initSevm msg)))
-    (hfits : T20MoveFits ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i))
-      msg.currentTarget msg.caller (Nat.toB256 (ocPushAmt o))) :
-    ∃ (V : Nat → Devm → Prop) (U : Nat) (pushD : Devm → List B256 → Mem → Nat)
-      (pushN : Devm → List B256 → Mem → Devm),
-      WClosed (initSevm msg) (C3With c3 (Devm.getStor (initDevm msg) c3) (V 0)) ∧
-      WClosed (initSevm msg) (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3)
-        msg.caller.toB256 (ocAmt (initSevm msg))) (V 0)) ∧
-      C3With c3 (Devm.getStor (initDevm msg) c3) (V 0) (initDevm msg) ∧
-      WClosed (initSevm msg) (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3)
-        msg.caller.toB256 (ocAmt (initSevm msg))) (V 1)) ∧
-      OCExactPremises (initSevm msg) (initDevm msg) T (Nat.toB256 (ocPushAmt o))
-        (C3With c3 (Devm.getStor (initDevm msg) c3) (V 0))
-        (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-          (ocAmt (initSevm msg))) (V 0))
-        (C3With c3 (burnStor (Devm.getStor (initDevm msg) c3) msg.caller.toB256
-          (ocAmt (initSevm msg))) (V 1)) U
-        (ocC3Calls (initSevm msg) (initDevm msg) pushD pushN) := by
-  obtain ⟨V, U, pushD, pushN, htok, -, hU, hT, hburn', hVc, hVb, hVs, hpush⟩ :=
-    removeLiquidityOneCoin_exact_literal_witness ht hfork hstatic hdepth hc3 hi hcoin hcode hpool
-      htc hburn hfits
-  have hne : (initSevm msg).currentTarget ≠ c3 := fun h => hc3.pool (ht.trans h.symm)
-  subst target
-  exact ⟨V, U, pushD, pushN, Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc 0 (by decide)),
-    Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc 0 (by decide)),
-    ⟨⟨by rw [← ht]; exact hc3.code, rfl⟩, hVb⟩,
-    Curve3Pool3CrvHeadlines.c3With_wClosed hne (hVc 1 (by decide)),
-    ocExactPremises_c3crv ht hne hfork hstatic hdepth htok hU hT hburn' hVs hpush⟩
-
 /-! ## The sufficient-gas composed rows
 
 The bounded composed entries (`Curve3Pool3CrvHeadlines.pool_3crv_*_live_entry`) take the same coin
@@ -679,7 +503,8 @@ section Bounded
 
 variable {sevm : Sevm} {pre : Devm} {pool c3 : Adr} {T : B256}
 
-/-- **`pool_3crv_removeLiquidity_live_entry`'s coin and 3Crv hypotheses, witnessed as stated.** -/
+/-- **`pool_3crv_removeLiquidity_live_entry`'s coin-chain hypotheses, witnessed as stated**, with
+`_htok`, `_hcoin`, `_hT` and `_hburn` restated from the world conditions. -/
 theorem removeLiquidity_entry_literal_witness
     (ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -706,8 +531,9 @@ theorem removeLiquidity_entry_literal_witness
       (coinsFrom_pushExact hfork hstatic hdepth hcoins (hcoins.tok k) (by decide) (by decide)
         (hfits k))⟩
 
-/-- **`pool_3crv_addLiquidity_live_entry`'s coin and 3Crv hypotheses, witnessed as stated**,
-the fee coin's pulled ledger carried in `V 3`. -/
+/-- **`pool_3crv_addLiquidity_live_entry`'s coin-chain hypotheses, witnessed as stated**,
+the fee coin's pulled ledger carried in `V 3`, with `_htok`, `_hcoin`, `_hT` and `_hmint` restated
+from the world conditions. -/
 theorem addLiquidity_entry_literal_witness {o : Out}
     (ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -759,8 +585,8 @@ theorem addLiquidity_entry_literal_witness {o : Out}
   subst hk
   exact absurd hz ha
 
-/-- **`pool_3crv_removeLiquidityImbalance_live_entry`'s coin and 3Crv hypotheses, witnessed as
-stated.** -/
+/-- **`pool_3crv_removeLiquidityImbalance_live_entry`'s coin-chain hypotheses, witnessed as
+stated**, with `_htok`, `_hcoin`, `_hT` and `_hburn` restated from the world conditions. -/
 theorem removeLiquidityImbalance_entry_literal_witness {o : Out}
     (ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -792,8 +618,9 @@ theorem removeLiquidityImbalance_entry_literal_witness {o : Out}
         (hfits k ha)),
     fun k _ b hb j hj => hb j (by omega)⟩
 
-/-- **`pool_3crv_removeLiquidityOneCoin_live_entry`'s coin and 3Crv hypotheses, witnessed as
-stated**, only coin `i` running `Token20`. -/
+/-- **`pool_3crv_removeLiquidityOneCoin_live_entry`'s coin-chain hypotheses, witnessed as
+stated**, only coin `i` running `Token20`; `_htok`, `_hT` and `_hburn` are restated from the world
+conditions and `_hcoin` (all three coin words) is itself one. -/
 theorem removeLiquidityOneCoin_entry_literal_witness {o : Out} {i : Fin 3}
     (ht : ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr = c3)
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
