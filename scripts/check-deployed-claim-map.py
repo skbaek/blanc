@@ -275,6 +275,14 @@ REQUIRED_HEADLINES = [
     "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable",
     "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable",
     "Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_exact_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_exact_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_exact_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_exact_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_entry_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_entry_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_entry_literal",
+    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_entry_literal",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -345,7 +353,8 @@ NONCLAIM_PHRASES = [
     "not the recorded constructor arguments",
     # The Curve 3pool exact-gas rows (Section 5.11, Section 6 [ah], Section 7 items 48 and 53).
     "no exact-gas theorem is instantiated end to end",
-    "not each composed headline's literal hypothesis set",
+    "the composed headlines' coin-chain and 3crv hypotheses as stated",
+    "no composed headline is instantiated end to end",
     "a coin's gas use is the coin's, not a blanc fact",
     "headroom and the no-wrap bound are separate premises",
     "it reads no residual gas and is not an existential cost",
