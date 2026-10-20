@@ -144,7 +144,7 @@ the resumed configuration (the child's shadows appended), and its raw descendant
 the child's, and the successor's. -/
 theorem spawn_resume_ok {sevm : Sevm} {c cl : PCfg} {cp : CallPrep} {cevm : Evm}
     {dch d' : Devm} {node : Exec.Deriv}
-    (hn : NodeAt sevm c node) (hag : PAgree c) (hF : PrepFacts c cp)
+    (hn : NodeAt sevm c node) (hag : PAgree c) (hF : PrepFacts c cp) (hsweep : cp.f.inner.benv.stat.rules.settle.touchedSweep = false)
     (hstep : Evm.step ⟨c.pc, sevm, c.devm⟩ = .spawn cp.f (.call cp.p cp.oi cp.os) (c.pc + 1))
     (hent : cp.f.enter = .run cevm)
     (hce : dch.error = none) (hr : resumeCallB cp.p cp.oi cp.os (.ok dch) = some d')
@@ -165,7 +165,7 @@ theorem spawn_resume_ok {sevm : Sevm} {c cl : PCfg} {cp : CallPrep} {cevm : Evm}
     ⟨hpc, hs', hd⟩
   obtain ⟨hex, hcl⟩ := hchild ch hch
   obtain ⟨x', e, hpc', hs'', hd', hexn, hdesc⟩ := okc d' (by
-    rw [hex, PrepFacts.settle_ok hF hce]; exact resumeCallB_sound hr)
+    rw [hex, PrepFacts.settle_ok hF hsweep hce]; exact resumeCallB_sound hr)
   exact ⟨ch, x', sp, hch, e, ⟨hpc', hs''.trans hn.2.1, hd'⟩, hexn, hdesc,
     resume_agree_ok_of hag hF (by rw [hce]; rfl) hcl hr⟩
 

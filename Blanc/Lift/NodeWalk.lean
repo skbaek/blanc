@@ -234,7 +234,7 @@ theorem jrunT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) {pc : Nat} 
 
 /-- `SELFBALANCE` with the balance read from the account shadow (no EIP-7928 read set). -/
 def selfbalanceP (sevm : Sevm) (c : PCfg) : Option Devm :=
-  if sevm.benvStat.rules.bal.isNone then
+  if sevm.benvStat.rules.op.selfBalance && sevm.benvStat.rules.bal.isNone then
     match chargeGas gLow c.devm with
     | .ok d =>
       match d.push (lookupA c.acs sevm.currentTarget).bal with
@@ -318,8 +318,8 @@ theorem ninst_step_of_runCompiled {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
   | exec x => exact absurd rfl (hn x)
   | _ =>
     simp only [Ninst.step] at h ⊢
-    obtain ⟨-, he⟩ := Step.run_ofExecution.mp h
-    rw [← he]; rfl
+    try (split at h <;> simp_all only [↓reduceIte])
+    all_goals (obtain ⟨-, he⟩ := Step.run_ofExecution.mp h; rw [← he]; rfl)
 
 /-- A witness-engine step from `.next n (.last .stop)` to `.last .stop` is one compiled
 run of `n`. -/
@@ -357,7 +357,7 @@ theorem selfbalanceP_sound {sevm : Sevm} {c : PCfg} {d' : Devm} (hag : PAgree c)
     Rinst.runCore pc c.devm sevm .selfbalance = .ok d' ∧ AccKeep c.devm d' := by
   unfold selfbalanceP at h
   split at h
-  · rename_i hbal
+  · rename_i hbal; simp only [Bool.and_eq_true] at hbal; obtain ⟨hop, hbal⟩ := hbal
     split at h
     · rename_i d hd
       split at h
@@ -373,7 +373,7 @@ theorem selfbalanceP_sound {sevm : Sevm} {c : PCfg} {d' : Devm} (hag : PAgree c)
           show (d.state.get _).bal = _
           rw [hk.2.2]; exact bal_eq_lookupA hag.2.2.2 _
         refine ⟨?_, hk.trans (accKeep_push hp)⟩
-        simp only [Rinst.runCore, bind, Except.bind, hd, hb, hv, hp]
+        simp only [Rinst.runCore, hop, ↓reduceIte, bind, Except.bind, hd, hb, hv, hp]
       · cases h
     · cases h
   · cases h
@@ -939,7 +939,7 @@ theorem frame_settle_error {f : Frame} {e : EvmError} {d : Devm} (hcr : f.isCrea
       child.state = f.inner.benv.state := by
   rcases hk with rfl | ⟨r, rfl⟩
   · refine ⟨((d.withError (some .revert)).rollback f.inner.benv.state
-      f.inner.tenv.transientStorage).withStorageWrites f.inner.benv.storageWrites, ?_, rfl, rfl⟩
+      f.inner.tenv.transientStorage).withStorageWrites f.inner.benv.storageWrites |>.recordTouch f.inner.benv.stat.rules (f.inner.currentTarget == ripemd160Address) f.inner.currentTarget, ?_, rfl, rfl⟩
     simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
       executeCode.handleError]
@@ -947,7 +947,7 @@ theorem frame_settle_error {f : Frame} {e : EvmError} {d : Devm} (hcr : f.isCrea
   · refine ⟨((let evm := d.withGasLeft 0
       evm.setMeta {evm.meta with output := [], error := some (.halt r)}).rollback
       f.inner.benv.state f.inner.tenv.transientStorage).withStorageWrites
-        f.inner.benv.storageWrites, ?_, rfl, rfl⟩
+        f.inner.benv.storageWrites |>.recordTouch f.inner.benv.stat.rules (f.inner.currentTarget == ripemd160Address) f.inner.currentTarget, ?_, rfl, rfl⟩
     simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
       executeCode.handleError]
@@ -1022,8 +1022,8 @@ theorem PrepFacts.settle_error {c : PCfg} {cp : CallPrep} {e : EvmError} {d : De
 
 /-- A successful call child settles to itself (`frame_settle_ok` for a prepared frame). -/
 theorem PrepFacts.settle_ok {c : PCfg} {cp : CallPrep} {post : Devm}
-    (hF : PrepFacts c cp) (he : post.error = none) : cp.f.settle (.ok post) = .ok post :=
-  frame_settle_ok hF.create hF.stateGas he
+    (hF : PrepFacts c cp) (hsweep : cp.f.inner.benv.stat.rules.settle.touchedSweep = false) (he : post.error = none) : cp.f.settle (.ok post) = .ok post :=
+  frame_settle_ok hF.create hF.stateGas hsweep he
 
 /-- An agreeing configuration's shadows describe its machine as a child. -/
 theorem childAgree_of_pagree {c : PCfg} (h : PAgree c) :

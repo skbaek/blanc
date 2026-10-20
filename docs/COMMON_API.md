@@ -982,7 +982,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   witness engine's shadows (`PAgree`) and a hash policy `HashPol` (`.refuse`: stop at
   `KECCAK256`; `.avoid slot`: run it through `keccakStep` and refuse a digest equal to
   `slot`); `pwalk` is the `.refuse` walk. `pstepH_cont`/`pstepH_halt` make each walk step
-  the real `Evm.step`. `pwalkH_cont` and `pwalkH_halt` then hold for *any* derivation node
+  the real `Evm.step`. The `SELFBALANCE` shadow step requires the selected
+  `op.selfBalance` capability as well as absence of a balance access list; it refuses
+  the step when the opcode is unavailable. `pwalkH_cont` and `pwalkH_halt` then hold for *any* derivation node
   at the start configuration: a `ParentPrefix` successor at the end configuration, every
   node in between passing a pc check and satisfying the policy (`NodeOKH`; at `.refuse` it
   is `NodeOK`: no `KECCAK256`), unchanged `Exec.rawFrameDescendants`, and for a halting
@@ -991,13 +993,15 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `hashAvoid_of_noKeccak` close chain arguments with `parentPrefix_total`.
   `scallPrep`/`staticcall_node`, `callPrepP`/`call_node` and `dcallPrep`/`delegatecall_node`
   (over `spawn_node`) cross a call-family spawn; `PrepFacts` supplies the settle
-  (`PrepFacts.settle_ok`/`settle_error`) and resume (`resume_agree_ok_of`/
+  (`PrepFacts.settle_ok`, requiring the frame's selected `settle.touchedSweep = false`;
+  `settle_error`) and resume (`resume_agree_ok_of`/
   `resume_agree_error_of`; `resume_agree_ok`/`_error` for `STATICCALL`) facts.
   `scallPrep_value_zero` extracts the zero message value from successful
   `scallPrep`, without a world or shadow agreement premise; use it with exact
   zero-value entry to preserve the unchanged storage shadow of a static call.
   [`Blanc/Lift/NodeWalkFrames.lean`](../Blanc/Lift/NodeWalkFrames.lean) builds on it:
-  `spawn_resume_ok`/`spawn_resume_err` cross a spawn on any derivation (the child's node, the
+  `spawn_resume_ok` (requiring the frame's selected `settle.touchedSweep = false`) and
+  `spawn_resume_err` cross a spawn on any derivation (the child's node, the
   resumed same-frame successor with its agreement, the descendants list), `leaf_frame`/
   `leaf_frame_ok` a frame that walks and halts, `halt1_childAgree` a successful halt's shadows,
   and `chain_trans`, `chain_step`, `interval_trans`, `interval_step` assemble a same-frame chain
