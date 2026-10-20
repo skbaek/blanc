@@ -4384,6 +4384,8 @@ contract-neutral.
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
   (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
+  For an individual destination, `jumpdestOkT` and `jumpdestOkT_eq` in the
+  same module provide the trie-backed check and its equality to `jumpdestOk`.
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
   [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
   existing startup Boolean and sole `checkNode` result; the theorem preserves
