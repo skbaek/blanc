@@ -140,7 +140,7 @@ section Walk
 variable {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome} {v ret pB : B256} {rest : List B256}
   {M : Mem} {S : Nat}
 
-theorem le_half1 {c ib d0 d1 : UInt8} {T : SFunc} {i : Nat} {imgM : Bytes} (hi : i < 8)
+theorem le_half1 {c ib d0 d1 : UInt8} {T : SFunc} {i : Nat} {imgM : Bytes} (h_shifts : sevm.benvStat.rules.op.shifts = true) (hi : i < 8)
     (hc : (Bytes.toB256 [c]).toNat = 7 - i) (hib : (Bytes.toB256 [ib]).toNat = i)
     (hroom : rest.length < 1000) (hr : Mem.Reads M imgM)
     (h8 : imgM.sliceD pB.toNat 32 0 = (8 : B256).toBytes) (hs : M.size = S) (hS : S % 32 = 0)
@@ -157,7 +157,7 @@ theorem le_half1 {c ib d0 d1 : UInt8} {T : SFunc} {i : Nat} {imgM : Bytes} (hi :
     (by simp only [List.length_cons]; omega) ?_
   · rw [hc, shl192_byte v i hi]
   refine rx_push rfl (by simp only [List.getD_eq_getElem?_getD, List.length_cons]; omega) ?_
-  refine rx_shl (v := leB v i) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_shl (h_shifts := h_shifts) (v := leB v i) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
@@ -283,7 +283,7 @@ def leGas (n p : Nat) : Nat :=
 
 theorem le_mid {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome} {v ret pB : B256}
     {rest : List B256} {M : Mem} {Y : Bytes} {S : Nat} {c ib ib' d0 d1 : UInt8} {T : SFunc}
-    {i : Nat} (hi : i + 1 < 8) (hc : (Bytes.toB256 [c]).toNat = 7 - (i + 1))
+    {i : Nat} (h_shifts : sevm.benvStat.rules.op.shifts = true) (hi : i + 1 < 8) (hc : (Bytes.toB256 [c]).toNat = 7 - (i + 1))
     (hib : (Bytes.toB256 [ib]).toNat = i) (hib' : (Bytes.toB256 [ib']).toNat = i + 1)
     (hroom : rest.length < 1000) (hS : S % 32 = 0) (hpS : pB.toNat + 64 ≤ S)
     (hp : pB.toNat + 64 < 2 ^ 256)
@@ -297,15 +297,15 @@ theorem le_mid {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome} {v ret pB : B256
       (St b (Bytes.toB256 [ib] :: pB :: leB v i :: (v <<< 192) :: pB :: v :: ret :: rest)
         (leMem M (pB.toNat + 32) v i) (G + 88)) (leHalf2 (leHalf1 c ib' d0 d1 T)) o :=
   le_half2 (by omega) hib hroom hinv.2.2.1 hS hpS hp
-    (le_half1 hi hc hib' hroom hinv'.2.1 hinv'.2.2.2 hinv'.2.2.1 hS (by omega) k)
+    (le_half1 (h_shifts := h_shifts) hi hc hib' hroom hinv'.2.1 hinv'.2.2.2 hinv'.2.2.1 hS (by omega) k)
 
-/-- **`to_little_endian_64`, gas-exact, for any caller.**  Entry 25 called with `v :: ret :: rest`
+/-- **`to_little_endian_64`, gas-exact with shifts enabled, for any caller.**  Entry 25 called with `v :: ret :: rest`
 over a word-aligned memory of size `n ≥ 96` whose free pointer `pB` (at `0x40`) is word-aligned
 and at least `0x60`, returns `pB :: rest` after exactly `leGas n pB` gas, over a memory of size
 `max n (pB + 64)` reading as `leImg`: the length `8` at `pB`, the free pointer `pB + 64`, and
 `le64 v` at `pB + 32`.  Only the machine state moves (`St b`: world and metadata are `b`'s). -/
 theorem to_little_endian_64_run {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B256}
-    {rest : List B256} {M : Mem} {img : Bytes}
+    {rest : List B256} {M : Mem} {img : Bytes} (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (hroom : rest.length < 1000) (hwf : Mem.Wf M) (hr : Mem.Reads M img)
     (hn32 : M.size % 32 = 0) (hn96 : 96 ≤ M.size)
     (hfp : Bytes.toB256 (img.sliceD 64 32 0) = pB) (hp32 : pB.toNat % 32 = 0)
@@ -412,24 +412,24 @@ theorem to_little_endian_64_run {sevm : Sevm} {b : Devm} {G : Nat} {v ret pB : B
   refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
-  refine rx_shl (v := v <<< 192) (by rw [show (Bytes.toB256 [0xc0]).toNat = 192 by decide])
+  refine rx_shl (h_shifts := h_shifts) (v := v <<< 192) (by rw [show (Bytes.toB256 [0xc0]).toNat = 192 by decide])
     (by simp only [List.length_cons]; omega) ?_
   -- the eight byte stores
-  refine le_half1 (i := 0) (by decide) (by decide) (by decide) hroom (inv 0 (by omega)).2.1
+  refine le_half1 (h_shifts := h_shifts) (i := 0) (by decide) (by decide) (by decide) hroom (inv 0 (by omega)).2.1
     (inv 0 (by omega)).2.2.2 (inv 0 (by omega)).2.2.1 hS32 (by omega) ?_
-  refine le_mid (i := 0) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 0) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 0 (by omega)) (inv 1 (by omega)) ?_
-  refine le_mid (i := 1) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 1) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 1 (by omega)) (inv 2 (by omega)) ?_
-  refine le_mid (i := 2) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 2) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 2 (by omega)) (inv 3 (by omega)) ?_
-  refine le_mid (i := 3) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 3) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 3 (by omega)) (inv 4 (by omega)) ?_
-  refine le_mid (i := 4) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 4) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 4 (by omega)) (inv 5 (by omega)) ?_
-  refine le_mid (i := 5) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 5) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 5 (by omega)) (inv 6 (by omega)) ?_
-  refine le_mid (i := 6) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
+  refine le_mid (h_shifts := h_shifts) (i := 6) (by decide) (by decide) (by decide) (by decide) hroom hS32 (by omega) hp
     (inv 6 (by omega)) (inv 7 (by omega)) ?_
   refine le_half2 (i := 7) (by decide) (by decide) hroom (inv 7 (by omega)).2.2.1 hS32
     (by omega) hp ?_

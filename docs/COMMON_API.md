@@ -5135,8 +5135,13 @@ contract-neutral.
   `sevm.benvStat.rules.access = .eip2929`; flat historical schedules do not
   have their exact 2100/100 charges. More steps
   (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) are in
-  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean), and the
-  cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
+  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean). `rx_shl`/`rx_shr`
+  require the selected `rules.op.shifts = true` capability. Beacon's `le_half1`,
+  `le_mid`, and `to_little_endian_64_run` in
+  [`LittleEndian.lean`](../Blanc/Lift/BeaconDeposit/LittleEndian.lean) carry that
+  condition through their forward walks; arbitrary continuation evidence does
+  not supply it. The generic success-inversion statements remain unchanged.
+  The cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
   also holds the pointer arithmetic the steps take as premises
