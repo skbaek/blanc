@@ -20,16 +20,20 @@ section Steps
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {f g : SFunc} {o : Outcome}
   {S : List B256} {M : Mem} {G : Nat}
 
-theorem rx_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024)
+theorem rx_shl {x y v : B256} (hv : y <<< x.toNat = v)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .shl) f) o :=
-  rx_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
+  rx_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩)
+    (fun _ => by simp only [Rinst.runCore, h_shifts, ↓reduceIte]) hv
     hroom k
 
-theorem rx_shr {x y v : B256} (hv : y >>> x.toNat = v) (hroom : S.length < 1024)
+theorem rx_shr {x y v : B256} (hv : y >>> x.toNat = v)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (v :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (x :: y :: S) M (G + 3)) (.next (.reg .shr) f) o :=
-  rx_binary (fn := fun x y => y >>> x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
+  rx_binary (fn := fun x y => y >>> x.toNat) (c := gVerylow) (by rintro ⟨⟩)
+    (fun _ => by simp only [Rinst.runCore, h_shifts, ↓reduceIte]) hv
     hroom k
 
 theorem rx_byte {x y v : B256} (hv : (List.getD y.toBytes x.toNat 0).toB256 = v)

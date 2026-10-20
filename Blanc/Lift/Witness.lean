@@ -76,7 +76,7 @@ theorem popBurnBy2 {devm : Devm} {x w : B256} {s : List B256} {cost : Nat}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 /-- A step to a configuration: agreement is kept, and a run from the new
 configuration is a run from the old one. -/
@@ -124,10 +124,10 @@ theorem StepOk.of {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} (hk : Agree c →
 
 theorem storOf_setStorVal (st : State) (ct a : Adr) (k k' v : B256) :
     storOf (st.setStorVal ct k v) a k' = if ct = a ∧ k = k' then v else storOf st a k' := by
-  unfold storOf State.setStorVal
+  unfold storOf
   by_cases h : ct = a
-  · subst h; rw [State.get_set_self]; simp only [true_and]; exact Stor.get_set_ite _ _ _ _
-  · rw [State.get_set_ne _ h]; simp only [h, false_and, ↓reduceIte]
+  · subst h; rw [State.setStorVal_get_self]; simp only [true_and]; exact Stor.get_set_ite _ _ _ _
+  · rw [State.setStorVal_get_ne _ h]; simp only [h, false_and, ↓reduceIte]
 
 /-- A storage-empty state agrees with the empty storage shadow `[]`. -/
 theorem storAgree_nil {st : State} (h : ∀ a k, storOf st a k = 0) :
@@ -208,7 +208,7 @@ theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
   · rename_i k s hs
     split at h
     · rename_i hcond
-      obtain ⟨hleg, hroom⟩ := hcond
+      obtain ⟨hleg, h_access, hroom⟩ := hcond
       have hleg' : sevm.benvStat.rules.stateGas = none := Option.isNone_iff_eq_none.mp hleg
       split at h
       · rename_i hw
@@ -216,7 +216,7 @@ theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         · rename_i hgas
           cases h
           exact StepOk.of (fun hc => hc) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sload_warm hleg' hs ((hc.1 _).mpr hw) (hc.2.2.1 _ _)
+            .next (Ninst.runCompiled_sload_warm hleg' h_access hs ((hc.1 _).mpr hw) (hc.2.2.1 _ _)
               (G := devm.gasLeft - gasWarmAccess) (by show devm.gasLeft = _; omega) hroom) r
         · cases h
       · rename_i hw
@@ -224,7 +224,7 @@ theorem sloadStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
         · rename_i hgas
           cases h
           exact StepOk.of (fun hc => ⟨agree_insert hc.1, hc.2.1, hc.2.2⟩) rfl fun hc o r =>
-            .next (Ninst.runCompiled_sload_cold hleg' hs (fun hm => hw ((hc.1 _).mp hm)) (hc.2.2.1 _ _)
+            .next (Ninst.runCompiled_sload_cold hleg' h_access hs (fun hm => hw ((hc.1 _).mp hm)) (hc.2.2.1 _ _)
               (G := devm.gasLeft - gasColdSload) (by show devm.gasLeft = _; omega) hroom) r
         · cases h
     · cases h
@@ -240,7 +240,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
   · rename_i k v s hs
     split at h
     · rename_i hcond
-      obtain ⟨hleg, hsentry, hstatic⟩ := hcond
+      obtain ⟨hleg, h_access, h_sstore, hsentry, hstatic⟩ := hcond
       have hleg' : sevm.benvStat.rules.stateGas = none := Option.isNone_iff_eq_none.mp hleg
       split at h
       · rename_i hw
@@ -251,7 +251,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             acctAgree_setStorVal hc.2.2.2 _ _ _⟩) rfl fun hc o r => .next ?_ r
           have hcur : devm.getStorVal sevm.currentTarget k = lookupS stor sevm.currentTarget k :=
             hc.2.2.1 _ _
-          have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc.1 _).mpr hw) hsentry hstatic
+          have h := Ninst.runCompiled_sstore_warm hleg' h_access h_sstore hs ((hc.1 _).mpr hw) hsentry hstatic
             (congrArg (fun x => sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k) x v) hcur)
             (congrArg (fun x => sstoreNewRefundCounter sevm.benvStat.rules.gas v
               (devm.getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
@@ -267,7 +267,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             fun hc o r => .next ?_ r
           have hcur : devm.getStorVal sevm.currentTarget k = lookupS stor sevm.currentTarget k :=
             hc.2.2.1 _ _
-          have h := Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc.1 _).mp hm)) hsentry
+          have h := Ninst.runCompiled_sstore_cold hleg' h_access h_sstore hs (fun hm => hw ((hc.1 _).mp hm)) hsentry
             hstatic
             (congrArg (fun x => gasColdSload + sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k) x v)
               hcur)

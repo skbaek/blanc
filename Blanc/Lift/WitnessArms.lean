@@ -391,7 +391,8 @@ def sloadStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
   | k :: s =>
     let ct := sevm.currentTarget
     let v := lookupS c.stor ct k
-    if sevm.benvStat.rules.stateGas.isNone ∧ s.length < 1024 then
+    if sevm.benvStat.rules.stateGas.isNone ∧
+        sevm.benvStat.rules.access = .eip2929 ∧ s.length < 1024 then
       if (ct, k) ∈ c.keys then
         if gasWarmAccess ≤ c.devm.gasLeft then
           some ⟨mach' c.devm (v :: s) gasWarmAccess, g, c.K, c.keys, c.adrs, c.stor, c.acs⟩
@@ -438,8 +439,10 @@ def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
     let orig := origReadK c.devm sevm ct k
     let cur := lookupS c.stor ct k
     let rc := sstoreNewRefundCounter sevm.benvStat.rules.gas v orig cur c.devm.refundCounter
-    if sevm.benvStat.rules.stateGas.isNone ∧ gCallStipend < c.devm.gasLeft ∧
-        sevm.isStatic = false then
+    if sevm.benvStat.rules.stateGas.isNone ∧
+        sevm.benvStat.rules.access = .eip2929 ∧
+        sevm.benvStat.rules.sstore = {netMetering := true, stipendSentry := true} ∧
+        gCallStipend < c.devm.gasLeft ∧ sevm.isStatic = false then
       if (ct, k) ∈ c.keys then
         let cost := sstoreValueCost orig cur v
         if cost ≤ c.devm.gasLeft then
