@@ -120,14 +120,19 @@ lemma Ninst.exec_of_stepRun_extend {pc : Nat} {sevm : Sevm}
         simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
       fun node hn => .step (.cont hcont tail) hn⟩
   | push xs le =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
-    have hcont : Evm.step ⟨pc, sevm, devm⟩ =
-        .cont (pc + Ninst.size (.push xs le)) devmMid := by
-      rw [hstep, Ninst.step_push, ← h_step.2]
-      rfl
-    exact ⟨.cont hcont tail, fun node hn => by
-        simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
-      fun node hn => .step (.cont hcont tail) hn⟩
+    simp only [Ninst.StepRun, Ninst.step_push] at h_step
+    split at h_step
+    · cases (Step.run_ofExecution.mp h_step).2
+    · rename_i enabled
+      rw [Step.run_ofExecution] at h_step
+      have hcont : Evm.step ⟨pc, sevm, devm⟩ =
+          .cont (pc + Ninst.size (.push xs le)) devmMid := by
+        simp only [hstep, Ninst.step_push, enabled]
+        rw [← h_step.2]
+        rfl
+      exact ⟨.cont hcont tail, fun node hn => by
+          simp only [Exec.rawNodes, List.mem_cons]; exact Or.inr hn,
+        fun node hn => .step (.cont hcont tail) hn⟩
   | dupn imm =>
     rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at h_step
     have hcont : Evm.step ⟨pc, sevm, devm⟩ =

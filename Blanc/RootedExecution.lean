@@ -85,7 +85,8 @@ theorem ninstAllChildRoots_of_not_exec
       | reg r =>
           cases (Step.run_ofExecution.mp step).1
       | push xs le =>
-          cases (Step.run_ofExecution.mp step).1
+          simp only [Ninst.StepRun, Ninst.step_push] at step
+          split at step <;> cases (Step.run_ofExecution.mp step).1
       | exec x =>
           exact (notExec x rfl).elim
       | dupn imm =>
@@ -213,11 +214,16 @@ theorem Ninst.exec_of_stepRun_with_frameRoots
         rfl
       · simpa only [Exec.rawFrameDescendants] using nextRoots
   | push xs le =>
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at h_step
-      refine ⟨Exec.cont ?_ next, ?_⟩
-      · rw [hstep, Ninst.step_push, ← h_step.2]
-        rfl
-      · simpa only [Exec.rawFrameDescendants] using nextRoots
+      simp only [Ninst.StepRun, Ninst.step_push] at h_step
+      split at h_step
+      · cases (Step.run_ofExecution.mp h_step).2
+      · rename_i enabled
+        rw [Step.run_ofExecution] at h_step
+        refine ⟨Exec.cont ?_ next, ?_⟩
+        · simp only [hstep, Ninst.step_push, enabled]
+          rw [← h_step.2]
+          rfl
+        · simpa only [Exec.rawFrameDescendants] using nextRoots
   | exec x =>
       rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at h_step
       cases hx : Xinst.step sevm devm x with
