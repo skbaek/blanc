@@ -54,7 +54,7 @@ theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   obtain ⟨t1, t2, a0, b1, M1, G1, e, s1⟩ := e112_inv fork hc
   cases e
   clear hc
-  obtain ⟨b2, u0, M2, G2, st2, h⟩ := ric_seg_e90 fork h
+  obtain ⟨b2, u0, M2, G2, st2, h⟩ := ric_seg_e90 id fork h
   have hcode2 : b2.getCode usdcLib = Lib.code := by
     exact (getCode_eq_of_state_eq (st2.trans st1) _).trans hcode
   obtain ⟨b3, M3, G3, s3, -, h⟩ := skip_sigRet fork hcode2 h
@@ -101,7 +101,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   obtain ⟨t1, t2, a0, b1, M1, G1, e, s1⟩ := e112_inv fork hc
   cases e
   clear hc
-  obtain ⟨b2, u0, M2, G2, st2, h⟩ := ric_seg_e95 fork h
+  obtain ⟨b2, u0, M2, G2, st2, h⟩ := ric_seg_e95 id fork h
   have hcode2 : b2.getCode usdcLib = Lib.code := by
     exact (getCode_eq_of_state_eq (st2.trans st1) _).trans hcode
   obtain ⟨b3, M3, G3, s3, -, h⟩ := skip_sigRet fork hcode2 h
@@ -140,7 +140,7 @@ theorem e87_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
       AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
         (Devm.getStor b' sevm.currentTarget) := by
-  obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e87 fork run.cut
+  obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e87 id fork run.cut
   icallA h hc 90 t_4b49_c90
   obtain ⟨b2, M2, G2, e, post⟩ :=
     e90_inv fork ((getCode_eq_of_state_eq st1 _).trans hcode) hc
@@ -162,7 +162,7 @@ theorem e84_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
     sevm.caller = x7.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
       AuthPost sevm (Devm.getStor b sevm.currentTarget) x8.toAdr x7.toAdr x6 x5 x4 x3
         (Devm.getStor b' sevm.currentTarget) := by
-  obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e84 fork run.cut
+  obtain ⟨b1, u0, M1, G1, st1, h⟩ := ric_seg_e84 id fork run.cut
   icallA h hc 95 t_4571_c95
   obtain ⟨cl, b2, M2, G2, e, post⟩ :=
     e95_inv fork ((getCode_eq_of_state_eq st1 _).trans hcode) hc

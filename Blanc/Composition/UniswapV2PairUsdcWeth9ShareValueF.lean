@@ -27,7 +27,6 @@ theorem pair_usdc_weth9_history_feeOn_product_finite {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -44,7 +43,7 @@ theorem pair_usdc_weth9_history_feeOn_product_finite {pair usdc weth : Adr}
             after.reserve0.val * after.reserve1.val *
               (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 := by
   obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet neverSigner usdcFresh
+    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet usdcFresh
   obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
   exact pair_two_token_feeOn_product (usdcCoreF usdc KU) (weth9Core weth KW).weak
     (usdcBook_erc20Abi usdc) weth9Book_erc20Abi (usdcSelfCallerF usdc KU)
@@ -67,7 +66,6 @@ theorem pair_usdc_weth9_history_feeOff_product_finite {pair usdc weth : Adr}
     (wethFresh : Weth9.KeysFresh KW (Weth9.historyTouchedKeys weth trace))
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (factoryInstalled :
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
@@ -84,7 +82,7 @@ theorem pair_usdc_weth9_history_feeOff_product_finite {pair usdc weth : Adr}
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
   obtain ⟨hist0, answerable0, start0, laws0⟩ :=
-    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet neverSigner usdcFresh
+    JointCheckpoint2F.toUsdcCoreF trace joint governance quiet usdcFresh
   obtain ⟨hist1, answerable1, start1⟩ := JointCheckpoint.toCore trace joint.weth9 wethFresh
   exact pair_two_token_feeOff_product (usdcCoreF usdc KU) (weth9Core weth KW).weak
     (usdcBook_erc20Abi usdc) weth9Book_erc20Abi (usdcSelfCallerF usdc KU)

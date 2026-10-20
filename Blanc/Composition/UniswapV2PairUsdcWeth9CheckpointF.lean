@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UsdcTokenF
+import Blanc.Lift.UniswapV2Pair.StaticSilent
 
 /-!
 # The support-free two-token joint checkpoint of the USDC/WETH9 Pair
@@ -41,6 +42,7 @@ structure JointCheckpoint2F (pair usdc weth : Adr) (KU : Usdc.Key → Prop) (KW 
   reserve : st₀.reserve0.val ≤ Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pair))
   apart : pair ≠ usdc
   usdcNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp usdc
+  pairNotPrecompile : ∀ s : BenvStat, CoveredFork s.fork → ¬ s.rules.isPrecomp pair
 
 /-- Every full joint checkpoint is a support-free one: the twin proof reads only
 `inj`/`apart`/`good` of the checkpoint `FootInv`. -/
@@ -50,7 +52,7 @@ theorem JointCheckpoint2.toF {pair usdc weth : Adr} {KU : Usdc.Key → Prop}
     JointCheckpoint2F pair usdc weth KU KW KP st₀ w :=
   ⟨h.weth9, h.usdcInstalled, ⟨h.usdcFoot.inj, h.usdcFoot.apart, h.usdcFoot.good⟩,
     h.token0, h.tracked, h.notFrozen, h.noAllowance, h.reserve, h.apart,
-    h.usdcNotPrecompile⟩
+    h.usdcNotPrecompile, h.pairNotPrecompile⟩
 
 /-- **The full checkpoint's support and `noAllowance` give the quiet premise**: a
 touched allowance row is tracked (then `noAllowance` applies) or fresh (then support
@@ -83,7 +85,8 @@ theorem JointCheckpoint2F.frozen_control {pair usdc weth : Adr} {KU : Usdc.Key �
 
 /-- The support-free checkpoint and the trace-local premises supply USDC's support-free
 core slot, the Pair's answerable row, the joint relation and the holder laws (twin of
-`JointCheckpoint2.toUsdcCore`). -/
+`JointCheckpoint2.toUsdcCore`; the Pair never signs by `Usdc.usdc_neverSigner_pairCode` at
+`pairSem`, from the support-free `UsdcHistF`). -/
 theorem JointCheckpoint2F.toUsdcCoreF {pair usdc weth : Adr} {KU : Usdc.Key → Prop}
     {KW : Weth9.Key → Prop} {KP : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
     {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -91,13 +94,14 @@ theorem JointCheckpoint2F.toUsdcCoreF {pair usdc weth : Adr} {KU : Usdc.Key → 
     (h : JointCheckpoint2F pair usdc weth KU KW KP st₀ checkpoint.state)
     (governance : Usdc.UsdcGovernance usdc trace)
     (quiet : PairUsdcAllowQuiet pair usdc trace)
-    (neverSigner : Blanc.Lift.Token.NeverSigner usdc (Usdc.usdcBookS usdc) trace pair)
     (fresh : Usdc.KeysFresh KU (Usdc.historyTouchedKeys usdc trace)) :
     (usdcCoreF usdc KU).Hist trace ∧ (usdcCoreF usdc KU).Answerable trace pair ∧
       JointAtW (usdcCoreF usdc KU) trace pair .zero st₀ checkpoint.state ∧
       HolderLaws usdc (Usdc.usdcBookS usdc).toBook trace pair := by
-  refine ⟨⟨h.usdcInstalled, governance, h.usdcFoot, fresh⟩, Or.inl h.tracked, ⟨?_, ?_⟩,
-    (Usdc.usdcBook_lawsS usdc).holderLaws usdc neverSigner⟩
+  have hist : Usdc.UsdcHistF usdc KU trace := ⟨h.usdcInstalled, governance, h.usdcFoot, fresh⟩
+  refine ⟨hist, Or.inl h.tracked, ⟨?_, ?_⟩, (Usdc.usdcBook_lawsS usdc).holderLaws usdc
+    (Usdc.usdc_neverSigner_pairCode trace hist rfl h.weth9.pairCode h.pairNotPrecompile
+      not_staticAnswered_pair)⟩
   · change st₀.reserve0.val ≤
       (Usdc.ledger (Usdc.historyKeyUniverse usdc trace KU) (checkpoint.state.getStor usdc)).bal pair
     rw [Usdc.historyKeyUniverse, Usdc.ledger_bal (Or.inl h.tracked)]

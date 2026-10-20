@@ -2293,6 +2293,9 @@ For the converse direction, a comparison flag discharged from values,
 [`Blanc/B256CheckFacts.lean`](../Blanc/B256CheckFacts.lean) has
 `B256.gtCheck_eq_zero_of_toNat_le` (`GT` is `0` when the left operand's
 value is at most the right's), the step a walk needs at a solc range check.
+For a logical shift right that never grows its shifted operand, use
+`B256.shr_toNat_le` in
+[`Blanc/Lift/FreePtrFacts.lean`](../Blanc/Lift/FreePtrFacts.lean).
 
 Use the fixed-width arithmetic declarations in
 [`Blanc/WordArithmetic.lean`](../Blanc/WordArithmetic.lean) and the basic word
@@ -2914,6 +2917,10 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
 - For calldata copies with all three operands already known on the stack,
   `prefix_of_calldatacopy_val` consumes that prefix and exposes the exact
   `Sevm.data.sliceD` memory write.
+- For stack operations that preserve memory and a size bound on memory growth,
+  use [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean).
+  `Devm.popToNat_memory` says `popToNat` leaves `memory` unchanged, and
+  `Mem.write_size_le_ext` bounds a write's size by the charged extension.
 - When a later step is priced or forwarded on the **whole** memory (an exact
   call profile's debit or successor is an arbitrary function of `Mem`),
   `Mem.Reads`, `Mem.Wf` and the logical size do not determine it: the
@@ -3182,6 +3189,13 @@ frame occurrences plus returned execution gas by the message grant plus one
 on covered forks. Its `ProcessMessageTrace` and `ProcessCreateMessageTrace`
 companions use the settled machine's gas measure. The call wrapper follows
 delegation and the create wrapper includes code-deposit settlement.
+For the memory/gas potential along synthetic runs, use
+[`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean): `Pot`
+(the gas measure plus the memory cost already paid is below one word) and
+`memCap` (the word-size allowance); `Exec.pot_le` (a complete derivation
+never raises it), `Ninst.Run.pot` (one lifted step never raises it), and
+`Pot.step`/`SFunc.RunP.withPot` (a run from a bounded-potential state
+records it at every step).
 
 ### T2a. I need a frame invariant under trace-local entry premises
 
@@ -4062,7 +4076,12 @@ Use
   preserves the whole balance map, and `_benv_stat` the static environment.
   `_nonce_ne_zero` keeps every nonzero nonce nonzero (unconditionally: the
   only nonce write is a guarded authority increment), with the same law at
-  `setDelegationStep`, `setDelegationLoop`, and `setDelegation`.
+  `setDelegationStep`, `setDelegationLoop`, and `setDelegation`. The matching
+  gas preservations — `setDelegationStep_gas`, `setDelegationLoop_gas`,
+  `setDelegation_gas`, `messageCallDelegation_gas` (the delegation prefix
+  hands the call its original grant) — live beside those `*_fields` lemmas in
+  [`Blanc/MessageDelegationGas.lean`](../Blanc/MessageDelegationGas.lean) as the one public copy
+  shared by message-call and history gas bounds.
 - `Blanc.getDelegatedCodeAddress_eq_none_of_size_ne` in
   [`Blanc/CodeDelegation.lean`](../Blanc/CodeDelegation.lean) discharges a
   wrapper's `getDelegatedCodeAddress code = none` obligation from the code's
@@ -4200,6 +4219,12 @@ and no fork is hard-coded anywhere:
 - Whole histories: `ExecutionTrace.ConfiguredHistoryTrace.stateInv` carries an
   arbitrary preserved `ContractSpec` invariant from a checkpoint to every
   configured continuation, over `ConfiguredHistoryTrace.toReachUsing`.
+- For the gas measure of every frame a configured history enters, use
+  [`Blanc/Lift/HistoryGas.lean`](../Blanc/Lift/HistoryGas.lean):
+  `MessageCallTrace.rawFrames_gasMeasure_le` (every entered frame starts at
+  or below the message's grant), with the transaction, body, and history
+  companions (`TransactionTrace`, `ApplyTransactionsTrace`,
+  `SystemMessageTrace`, `RequestsTrace`, and `AppliedBodyTrace` forms).
 
 For schedule-parametric block/history state boundaries and replay, use
 `ExecutionTrace.ConfiguredBlockStateChronology` and
@@ -4715,6 +4740,19 @@ contract-neutral.
   in [`Blanc/Lift/CheckChain.lean`](../Blanc/Lift/CheckChain.lean), emitted by the registered producer in its opt-in `chain`
   assembly mode (`check.assembly`/`jumps.assembly`); the non-memory counterparts of
   `Cert.checkEntriesM_drop`/`Cert.jumpsEntriesM_drop`. Worked use: `Blanc/Lift/Usdc/Impl/Check.lean`.
+- Assemble the free-pointer check of a long certificate from per-entry kernel decisions: `fpEntry`
+  (entry `k` under its annotation, `false` past either end), `fpFrom` over the tails
+  `(c.zip ann).drop k`, the step `fpFrom_step`, the end `fpFrom_of_le` and the assembly
+  `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
+  the registered `scripts/lift/fp_annot.py` (registry key `fp`). Worked use:
+  `Blanc/Lift/Usdc/ImplFp/Check.lean`, `Blanc/Lift/Usdc/ImplFp.lean`. For any other annotated
+  per-entry check, instantiate the generic kit there: `chainEntry`/`chainFrom` over a check
+  function, with `chainFrom_step` and `chainFrom_of_le`.
+- Assemble the write-site check of a long certificate the same way: `wsEntry`, `wsFrom`,
+  `wsFrom_step`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
+  [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
+  `scripts/lift/ws_annot.py` (registry key `ws`). Worked use: `Blanc/Lift/Usdc/ImplWs/Check.lean`,
+  `Blanc/Lift/Usdc/ImplWs.lean`.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
@@ -4726,6 +4764,102 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+- For one lifted step's effect on memory, use
+  [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
+  forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
+  `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
+  `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
+  `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
+  `Mem.write_size_ge` (a write never shrinks memory).
+- For crossing solc's word-copy loop without knowing the copied bytes, use
+  [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
+  `copy_loop_keep` (under the memory potential the loop leaves every byte below
+  the destination alone and exits with `len ≤ i'`).
+- For the free-pointer checker's memory effect, use
+  [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
+  (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
+  `memEff_obs` and `memEff_mload_top`.
+- For the static code an instruction reads, use
+  [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
+  `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),
+  `codeAt`/`codeAt_at`/`codeAt_size` (the code that decodes to one
+  instruction at `pc` and to the implicit `STOP` after it),
+  `getInst_of_size_le` (past the end of the code the decoder yields that
+  `STOP`), and `Evm.step_stop_of_size_le` (the implicit `STOP` halts with
+  the machine unchanged).
+- For the free-pointer checker's facts and their soundness, use
+  [`Blanc/Lift/FreePtr.lean`](../Blanc/Lift/FreePtr.lean),
+  [`Blanc/Lift/SymTransfer.lean`](../Blanc/Lift/SymTransfer.lean), and
+  [`Blanc/Lift/FreePtrFacts.lean`](../Blanc/Lift/FreePtrFacts.lean):
+  `Fact.Holds`/`AllHold` (the meaning of facts under a symbol valuation),
+  `bnd2_sound`/`entails_sound` (the interval reading and entailment),
+  `opFacts_sound` (the facts about an instruction's fresh result),
+  `learn1_sound` (what a `JUMPI` arm learns), and `transfer_val` (symbols
+  through an instruction's stack transfer). The interval folds both bound
+  checkers share (`bndOf` over `bnd` facts, `bnd2` refined once through
+  `lt`/`le` facts) live in
+  [`Blanc/Lift/BndInterval.lean`](../Blanc/Lift/BndInterval.lean):
+  `bndOfG`/`bnd2G` over a small projection interface, with the shared fold
+  inductions `bndOfG_sound`/`bnd2G_sound`; each checker's `bndOf_sound`/
+  `bnd2_sound` keeps its statement, discharging one per-fact bridge over its
+  own `Fact` type.
+- For the free-pointer checker's soundness, use
+  [`Blanc/Lift/FreePtrSound.lean`](../Blanc/Lift/FreePtrSound.lean) and
+  [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
+  `fpRun_sound` (every run of an accepted certificate reads a good free
+  pointer, `FpStep`), `lift_sound_fp` (the same from `Cert.check` and a
+  successful frame), `fp_run` (the big-step recursion), `fstep_sound`
+  (one accepted step keeps the invariant `FpInv`), and the frame-length facts
+  `mapM_length` (an `Option` `mapM` keeps length), `foldTop_length` and
+  `transfer_length_mono`.
+- For the write-site checker's step and join soundness, use
+  [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
+  [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`
+  (an abstract state's meaning), `wstep_sound` and `wstep_nonpush` (one step),
+  `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
+  `resume_sound` and `callNext_obs` (joins, calls and returns); `map_of_zip_prefix` (an
+  annotation's entry words name a prefix of the incoming ones).
+- For the write-site checker's run-level soundness, use
+  [`Blanc/Lift/WriteSiteSound.lean`](../Blanc/Lift/WriteSiteSound.lean): `wsRun_sound`
+  (every run of an accepted certificate's entry `0` is a `WsStep` run), `lift_sound_ws` (the
+  same from `Cert.check` and a successful frame), `ws_run` (the big-step recursion: `WsStep`
+  steps, `RetObs` at a return), `goto_run` (an accepted goto: `compat` or a tail call, under a
+  summary below the jumper's, via `retLe_steps`, `argFree_steps`, `RetObs.of_retLe`,
+  `RetObs.of_callee` and `tail_entry`), `Term.eval_argFree` (an entry-word-free term reads the
+  same in every environment of a frame), and `SFunc.RunP.mono_at` (a run under a step relation
+  implied at the run's own frame).
+- For which bytes one lifted step wrote, use
+  [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
+  and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
+  `CALL`/`DELEGATECALL`/`STATICCALL` (every outcome, including a failed call).
+- For the stack top after one lifted step of an environment or hashing instruction, use
+  [`Blanc/Lift/StepTops.lean`](../Blanc/Lift/StepTops.lean): `run_{caller,address,not,shl,exp,
+  calldataload,keccak256,sload}_top`, `Ninst.Run.getStor_of_storKeep` and `getStor_push`.
+- For the return-data buffer across one lifted step, use
+  [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
+  `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
+- For a `DELEGATECALL` whose child must be inspected, use
+  [`Blanc/Lift/DelegateCallChild.lean`](../Blanc/Lift/DelegateCallChild.lean): `ri_delegatecall_child`
+  (after a lifted `DELEGATECALL` step: the success flag, and when set a successful child `Exec 0` that runs
+  the target's code on the input window from an empty machine with the parent's code and `benvStat`, its
+  output written into the output window), `delegatecall_generic` and `Frame.ofCall_enter_not_done`.
+- For crossing a silent internal call under any step relation, use
+  [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
+  of `ric_call_silent`, with a no-halt set so the callee must return.
+- For a callee that cannot return, use
+  [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
+  predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
+  returning run starts from a frame holding `.ret`) and
+  `SFunc.RunP.not_returned_of_noRet` (a callee whose frame has no `.ret` never
+  returns), bytes-free and for any step relation.
+- For write-site provenance terms and the generic locality corollary, use
+  [`Blanc/Lift/WriteSite.lean`](../Blanc/Lift/WriteSite.lean),
+  [`Blanc/Lift/WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean),
+  [`Blanc/Lift/WriteSiteObs.lean`](../Blanc/Lift/WriteSiteObs.lean), and
+  [`Blanc/Lift/WriteSiteLocality.lean`](../Blanc/Lift/WriteSiteLocality.lean):
+  `Term.den_subst` (instantiating a callee's term at a call site is sound)
+  and `ws_locality_keys` (every `SSTORE` at a protected slot is
+  non-increasing or happens in an allowed frame).
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
@@ -5197,6 +5331,17 @@ contract-neutral.
   `StaticAnswered` witness a successful-flag `STATICCALL` inversion retains. Use it for
   failing-callee (callee-premise) controls, in
   [`Blanc/Lift/RevertingCallee.lean`](../Blanc/Lift/RevertingCallee.lean).
+- A callee silent on one selector, whatever its code: `NoStaticAnswer code sel` (no
+  static child message to a non-precompile account holding `code` answers calldata
+  with selector `sel`), which refutes the same `StaticAnswered` witness. The Pair
+  proves the `0x1626ba7e` instance in its own stratum; the USDC library side takes it
+  as a hypothesis. Use it for selector-silence (answered-call) refutations, in
+  [`Blanc/Lift/StaticSilent.lean`](../Blanc/Lift/StaticSilent.lean).
+- The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
+  `UniswapV2Pair.code`, emitted by the registered certificate generator from the
+  `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
+  Both contract strata name the same bytes through this module; `Check.cert_check`
+  checks them.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message

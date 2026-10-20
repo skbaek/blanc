@@ -13,6 +13,11 @@ instead of emitting another byte literal. The hex input is still checked and
 analyzed normally; the kernel certificate checks the referenced definition.
 Both names use unquoted ASCII Lean identifier components; the reference must
 be qualified. Omitting the pair preserves the historical literal output.
+With `--code-out FILE --code-header TEXT --omit-code-def` (paired registry
+options `code_out`/`code_header`/`omit_code_def`, only together with the
+reference pair) the literal bytes move to the emitted code-data module under
+the row's namespace, and the certificate only imports it. The registry
+byte-compares the data module the same way.
 
 Provenance.  This file is the union of the historical producer forks kept as
 Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/lift.py`,
@@ -318,6 +323,13 @@ def run_registry(args: argparse.Namespace) -> int:
             error = ("code_import/code_ref registry options must be strings"
                      if any(not isinstance(opts[option], str) for option in supplied)
                      else code_reference_error(opts.get("code_import"), opts.get("code_ref")))
+            if error is None:
+                trio = ("code_out" in opts, "code_header" in opts, opts.get("omit_code_def") is True)
+                if any(trio) and not (all(trio) and "code_import" in opts and "code_ref" in opts):
+                    error = "code_out/code_header/omit_code_def must be supplied together with code_import/code_ref"
+                elif any(not isinstance(opts[option], str)
+                         for option in ("code_out", "code_header") if option in opts):
+                    error = "code_out/code_header registry options must be strings"
             if error is not None:
                 print(f"FAIL {ident}: {error}")
                 failures += 1
@@ -336,6 +348,10 @@ def run_registry(args: argparse.Namespace) -> int:
             for option in ("code_import", "code_ref"):
                 if opts.get(option) is not None:
                     argv += ["--" + option.replace("_", "-"), opts[option]]
+            if opts.get("code_out") is not None:
+                argv += ["--code-out", str(out / "Code.lean"), "--code-header", opts["code_header"]]
+            if opts.get("omit_code_def") is True:
+                argv.append("--omit-code-def")
             if opts.get("join_entries") is False:
                 argv.append("--no-join-entries")
             if "wrapper_order" in opts:
@@ -388,6 +404,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 continue
             summary = next((l for l in proc.stdout.splitlines() if l.startswith("Counts:")), "")
             pairs = [(out / "Cert.lean", root / row["cert"])]
+            if opts.get("code_out") is not None:
+                pairs.append((out / "Code.lean", root / opts["code_out"]))
             if check:
                 pairs.append((out / "Check.lean", root / check["path"]))
                 if "parts" in check:
@@ -406,6 +424,42 @@ def run_registry(args: argparse.Namespace) -> int:
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
+            # annotation producers: the free-pointer annotations (`fp`,
+            # `scripts/lift/fp_annot.py`, checked by `Blanc/Lift/FreePtr.lean`'s
+            # `fpCert`) and the write-site annotations (`ws`,
+            # `scripts/lift/ws_annot.py`, checked by `Blanc/Lift/WriteSite.lean`'s
+            # `wsCert`), each with its kernel-decide modules when `check_dir` is set
+            ann_failed = False
+            for key, what in (("fp", "free-pointer"), ("ws", "write-site")):
+                spec = row.get(key)
+                if not spec:
+                    continue
+                ann_out = out / key
+                ann_argv = [sys.executable, "-B", str(root / spec["producer"]),
+                            "--registry", str(registry_path), "--row", ident,
+                            "--namespace", spec["namespace"],
+                            "--ann-out", str(ann_out / "Ann.lean")]
+                if "check_dir" in spec:
+                    ann_argv += ["--check-dir", str(ann_out), "--check-parts", str(spec["parts"])]
+                ann_proc = subprocess.run(ann_argv, capture_output=True, text=True, timeout=args.timeout)
+                if ann_proc.returncode != 0:
+                    print(f"FAIL {ident}: {what} producer exit {ann_proc.returncode}\n"
+                          f"{ann_proc.stdout}{ann_proc.stderr}")
+                    failures += 1
+                    ann_failed = True
+                    break
+                pairs.append((ann_out / "Ann.lean", root / spec["ann"]))
+                if "check_dir" in spec:
+                    check_dir = root / spec["check_dir"]
+                    produced_ann = sorted(ann_out.glob("Check*.lean"))
+                    pairs += [(q, check_dir / q.name) for q in produced_ann]
+                    names = {q.name for q in produced_ann}
+                    for extra in sorted(check_dir.glob("Check*.lean")):
+                        if extra.name not in names:
+                            print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
+                            failures += 1
+            if ann_failed:
+                continue
             for produced, committed in pairs:
                 rel = committed.relative_to(root)
                 if args.write:
@@ -447,6 +501,12 @@ parser.add_argument("--code-import", type=str, default=None,
                     help="import the module owning an existing ByteArray (paired with --code-ref)")
 parser.add_argument("--code-ref", type=str, default=None,
                     help="qualified canonical ByteArray reference instead of a byte literal (paired with --code-import)")
+parser.add_argument("--code-out", type=Path, default=None,
+                    help="also emit the canonical code-data module here (registry option code_out)")
+parser.add_argument("--code-header", type=str, default=None,
+                    help="header comment for the code-data module (registry option code_header)")
+parser.add_argument("--omit-code-def", action="store_true",
+                    help="emit no code definition in Cert.lean: the bytes live in --code-import (registry option omit_code_def)")
 parser.add_argument("--cert-out", type=Path, default=None, help="Cert.lean to write")
 parser.add_argument("--check-out", type=Path, default=None, help="per-entry Check.lean to write (optional)")
 parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lean generator comment")
@@ -497,6 +557,10 @@ args = parser.parse_args()
 error = code_reference_error(args.code_import, args.code_ref)
 if error is not None:
     parser.error(error)
+if args.omit_code_def and args.code_import is None:
+    parser.error("--omit-code-def needs --code-import and --code-ref")
+if args.code_out is not None and (args.code_header is None or not args.omit_code_def):
+    parser.error("--code-out needs --code-header and --omit-code-def")
 MEMRET = args.memret != "off"
 FOLD_ADD = MEMRET and not args.no_fold_add
 CONST_MEM = MEMRET and args.const_mem
@@ -1885,24 +1949,37 @@ def byte_lines(data: bytes) -> List[str]:
     return out
 
 
-if args.code_ref is not None:
-    lean_lines.append(f"def code : ByteArray := {args.code_ref}")
-elif len(code) <= CODE_LITERAL_MAX:
-    lean_lines.append("def code : ByteArray := ⟨#[")
-    lean_lines.extend(byte_lines(code))
-    lean_lines.append("]⟩")
-else:
-    # One literal of this length exceeds Lean's elaboration recursion depth, so the
-    # bytes are list chunks joined by `++` (definitionally `code.data.toList`).
-    names = []
-    for c, i in enumerate(range(0, len(code), CODE_CHUNK)):
-        name = f"codeChunk{c}"
-        names.append(name)
-        lean_lines.append(f"def {name} : List UInt8 := [")
-        lean_lines.extend(byte_lines(code[i : i + CODE_CHUNK]))
-        lean_lines.append("]")
-        lean_lines.append("")
-    lean_lines.append(f"def code : ByteArray := ⟨({' ++ '.join(names)}).toArray⟩")
+def code_data_lines(*, force_literal: bool = False) -> List[str]:
+    """The canonical runtime-byte definitions (`codeChunk*` chunks, then `code`).
+
+    With a canonical reference this is the single alias line, unless the caller
+    asks for the literal bytes: the shared data module owns them, and the
+    certificate only imports it.
+    """
+    lines = []
+    if args.code_ref is not None and not force_literal:
+        lines.append(f"def code : ByteArray := {args.code_ref}")
+    elif len(code) <= CODE_LITERAL_MAX:
+        lines.append("def code : ByteArray := ⟨#[")
+        lines.extend(byte_lines(code))
+        lines.append("]⟩")
+    else:
+        # One literal of this length exceeds Lean's elaboration recursion depth, so the
+        # bytes are list chunks joined by `++` (definitionally `code.data.toList`).
+        names = []
+        for c, i in enumerate(range(0, len(code), CODE_CHUNK)):
+            name = f"codeChunk{c}"
+            names.append(name)
+            lines.append(f"def {name} : List UInt8 := [")
+            lines.extend(byte_lines(code[i : i + CODE_CHUNK]))
+            lines.append("]")
+            lines.append("")
+        lines.append(f"def code : ByteArray := ⟨({' ++ '.join(names)}).toArray⟩")
+    return lines
+
+
+if not args.omit_code_def:
+    lean_lines.extend(code_data_lines())
 lean_lines.append("")
 
 # Emit definitions in topological dependency order (defs appear before use)
@@ -1979,6 +2056,20 @@ lean_lines.append("")
 lean_file = args.cert_out
 lean_file.parent.mkdir(parents=True, exist_ok=True)
 lean_file.write_text("\n".join(lean_lines))
+
+if args.code_out is not None:
+    data_lines = []
+    data_lines.append(f"/-! {args.code_header} -/")
+    data_lines.append("")
+    data_lines.append(f"namespace {args.namespace}")
+    data_lines.append("")
+    data_lines.append(f"-- Code: {len(code)} bytes, SHA-256: {actual_sha256}")
+    data_lines.extend(code_data_lines(force_literal=True))
+    data_lines.append("")
+    data_lines.append(f"end {args.namespace}")
+    data_lines.append("")
+    args.code_out.parent.mkdir(parents=True, exist_ok=True)
+    args.code_out.write_text("\n".join(data_lines))
 
 # 9. Generate cert.json and cfg.json
 def tree_to_json(t: Any) -> Dict[str, Any]:

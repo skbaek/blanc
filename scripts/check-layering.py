@@ -158,7 +158,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
-SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
+SHARED += ["LadderBase", "MessageDelegationGas", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
            "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
            "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent",
            "Lift.Hoare", "Lift.BookedSpec", "Lift.BookedSupportSpec"]
@@ -176,6 +176,20 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
 # Parameterized free-pointer memory for lifted walks.
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
+# Free-pointer and write-site checker kits (usdc-neversigner-freepointer-v1):
+# each imports only SHARED modules and Jaune, and no statement names a contract.
+SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePtrFacts",
+           "Lift.WriteSite", "Lift.WriteSiteTerm", "Lift.WriteSiteObs", "Lift.WriteSiteLocality",
+           "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem",
+           "Lift.CopyLoopKeep", "Lift.NodeRet", "Lift.FreePtrSoundStep", "Lift.FreePtrSound",
+           "Lift.MemWrites", "Lift.StepTops", "Lift.WriteSiteStep", "Lift.WriteSiteJoin",
+           "Lift.WriteSiteSound"]
+# The shared symbol-interval reading of the bound checkers (ns-h1b): imports
+# nothing but core Lean, so it is contract-neutral.
+SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", "Lift.SilentCallP"]
+# Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
+# Lift.FreePtr; no statement names a contract.
+SHARED += ["Lift.FreePtrChain", "Lift.WriteSiteChain"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
@@ -254,6 +268,12 @@ SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
 SHARED += ["ExecutionTraceFrameEnv"]
 
 SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
+
+# The Pair's deployed runtime bytes as shared data (emitted by the registered
+# certificate generator, amendment A11) and the contract-neutral one-selector
+# silence predicate (amendment A11): both strata name the same bytes and the
+# same predicate, and no contract module imports another contract's.
+SHARED += ["Lift.PairCode", "Lift.StaticSilent"]
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 # Outermost settled frames at an address (committed-replay histories): contract-neutral.
@@ -627,6 +647,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairLockedEntries",
         "Lift.UniswapV2Pair.LockedSupply",
         "Lift.UniswapV2Pair.StaticViewClassify",
+        "Lift.UniswapV2Pair.StaticSilent",
         "Lift.UniswapV2Pair.StaticViewSource",
         "Lift.UniswapV2Pair.StaticViewTurns",
         "Lift.UniswapV2Pair.UpdateWalk",
@@ -1261,6 +1282,28 @@ CONTRACTS = {
     # SignatureChecker library it reaches by DELEGATECALL (usdc-weth9-pair-composition-v1).
     "usdc": [
         "Lift.Usdc.Book",
+        "Lift.Usdc.ImplFp",
+        "Lift.Usdc.ImplFp.Ann",
+        "Lift.Usdc.ImplWs",
+        "Lift.Usdc.ImplWs.Ann",
+        "Lift.Usdc.ImplWs.Check",
+        "Lift.Usdc.ImplWs.Check0",
+        "Lift.Usdc.ImplWs.Check1",
+        "Lift.Usdc.ImplWs.Check2",
+        "Lift.Usdc.ImplWs.Check3",
+        "Lift.Usdc.ImplFp.Check",
+        "Lift.Usdc.ImplFp.Check0",
+        "Lift.Usdc.ImplFp.Check1",
+        "Lift.Usdc.ImplFp.Check2",
+        "Lift.Usdc.ImplFp.Check3",
+        "Lift.Usdc.LibReject",
+        "Lift.Usdc.LibSeam",
+        "Lift.Usdc.SignedSites",
+        "Lift.Usdc.SignedPaths",
+        "Lift.Usdc.SignedPathsAuth",
+        "Lift.Usdc.SignedPathsKit",
+        "Lift.Usdc.SignedPathsPermit",
+        "Lift.Usdc.NeverSigner",
         "Lift.Usdc.CodeImage",
         "Lift.Usdc.Constants",
         "Lift.Usdc.Decode",
@@ -1656,6 +1699,7 @@ COMPOSITION = [
     "Composition.UsdcToken",
     "Composition.UsdcTokenCore",
     "Composition.UsdcTokenLive",
+    "Composition.UsdcNeverSigner",
     "Composition.Weth9TokenSigned",
     "Composition.UniswapV2PairUsdcWeth9BurnEnv",
     "Composition.UniswapV2PairUsdcWeth9BurnLive",

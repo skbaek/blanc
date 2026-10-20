@@ -1,4 +1,5 @@
 import Blanc.Lift.LockCheck
+import Blanc.Lift.SymTransfer
 import Blanc.Lift.Cursor
 import Blanc.LockExclusion
 
@@ -26,7 +27,7 @@ pending `callNext` continuation (`LConts`).
 
 namespace Blanc.Lift.LockCheck
 
-open Jaune AbstractStackSafety Blanc.LockExclusion
+open Jaune AbstractStackSafety Blanc.LockExclusion Blanc.Lift.SymTransfer
 
 local notation "PP" => Exec.Deriv.ParentPrefix
 
@@ -90,95 +91,96 @@ section Entails
 
 variable {sp : Spec} {F n : Exec.Deriv} {ρ : Nat → B256} {fs : List Fact}
 
+/-- A projected `bnd` bound holds under the valuation. -/
+private theorem bndProj_sound (hf : AllHold sp F n ρ fs) {f : Fact}
+    (hmem : f ∈ fs) {s' lo hi : Nat} (h : bndProj f = some (s', lo, hi)) :
+    lo ≤ (ρ s').toNat ∧ (ρ s').toNat ≤ hi := by
+  have hH := hf f hmem
+  cases f with
+  | bnd s'' lo' hi' =>
+    simp only [Fact.Holds] at hH
+    simp only [bndProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact hH
+  | nsl _ =>
+    simp only [bndProj] at h
+    cases h
+  | lt _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | le _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | gt _ _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | isz _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | xor _ _ _ =>
+    simp only [bndProj] at h
+    cases h
+  | lockv _ =>
+    simp only [bndProj] at h
+    cases h
+  | lockeq _ =>
+    simp only [bndProj] at h
+    cases h
+
+/-- A projected order fact holds under the valuation. -/
+private theorem ordProj_sound (hf : AllHold sp F n ρ fs) {f : Fact}
+    (hmem : f ∈ fs) {strict : Bool} {a b : Nat}
+    (h : ordProj f = some (strict, a, b)) :
+    (strict = true → (ρ a).toNat < (ρ b).toNat) ∧
+      (strict = false → (ρ a).toNat ≤ (ρ b).toNat) := by
+  have hH := hf f hmem
+  cases f with
+  | lt a' b' =>
+    simp only [Fact.Holds] at hH
+    simp only [ordProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact ⟨fun _ => hH, fun hcon => absurd hcon (by decide)⟩
+  | le a' b' =>
+    simp only [Fact.Holds] at hH
+    simp only [ordProj] at h
+    obtain ⟨rfl, rfl, rfl⟩ := Option.some.inj h
+    exact ⟨fun hcon => absurd hcon (by decide), fun _ => hH⟩
+  | bnd _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | nsl _ =>
+    simp only [ordProj] at h
+    cases h
+  | gt _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | isz _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | xor _ _ _ =>
+    simp only [ordProj] at h
+    cases h
+  | lockv _ =>
+    simp only [ordProj] at h
+    cases h
+  | lockeq _ =>
+    simp only [ordProj] at h
+    cases h
+
+/-- Every symbol value fits in the checker's largest word. -/
+private theorem val_le_maxW (ρ : Nat → B256) (t : Nat) : (ρ t).toNat ≤ maxW := by
+  have := B256.toNat_lt (ρ t); unfold maxW; omega
+
 theorem bndOf_sound (hf : AllHold sp F n ρ fs) (s : Nat) :
-    (bndOf fs s).1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ (bndOf fs s).2 := by
-  unfold bndOf
-  have key : ∀ (gs : List Fact) (p : Nat × Nat), (∀ g ∈ gs, g ∈ fs) →
-      p.1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ p.2 →
-      (gs.foldl (fun p f => match f with
-        | .bnd s' lo hi => if s' = s then (max p.1 lo, min p.2 hi) else p
-        | _ => p) p).1 ≤ (ρ s).toNat ∧
-      (ρ s).toNat ≤ (gs.foldl (fun p f => match f with
-        | .bnd s' lo hi => if s' = s then (max p.1 lo, min p.2 hi) else p
-        | _ => p) p).2 := by
-    intro gs
-    induction gs with
-    | nil => intro p _ hp; exact hp
-    | cons g gs ih =>
-      intro p hsub hp
-      simp only [List.foldl_cons]
-      apply ih _ (fun x hx => hsub x (List.mem_cons_of_mem _ hx))
-      cases g with
-      | bnd s' lo hi =>
-        by_cases hs : s' = s
-        · subst hs
-          have hg := hf _ (hsub _ List.mem_cons_self)
-          simp only [Fact.Holds] at hg
-          simp only [ite_true]
-          exact ⟨Nat.max_le.mpr ⟨hp.1, hg.1⟩, Nat.le_min.mpr ⟨hp.2, hg.2⟩⟩
-        · simp only [hs, ite_false]; exact hp
-      | _ => exact hp
-  exact key fs _ (fun _ h => h) ⟨Nat.zero_le _, by
-    have := B256.toNat_lt (ρ s); unfold maxW; omega⟩
+    (bndOf fs s).1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ (bndOf fs s).2 :=
+  BndInterval.bndOfG_sound (val_le_maxW ρ)
+    (fun _f hmem _ _ _ h => bndProj_sound hf hmem h) s
 
 theorem bnd2_sound (hf : AllHold sp F n ρ fs) (s : Nat) :
-    (bnd2 fs s).1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ (bnd2 fs s).2 := by
-  unfold bnd2
-  have key : ∀ (gs : List Fact) (p : Nat × Nat), (∀ g ∈ gs, g ∈ fs) →
-      p.1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ p.2 →
-      (gs.foldl (fun p f => match f with
-        | .lt a b =>
-          if a = s then (p.1, min p.2 ((bndOf fs b).2 - 1))
-          else if b = s then (max p.1 ((bndOf fs a).1 + 1), p.2) else p
-        | .le a b =>
-          if a = s then (p.1, min p.2 (bndOf fs b).2)
-          else if b = s then (max p.1 (bndOf fs a).1, p.2) else p
-        | _ => p) p).1 ≤ (ρ s).toNat ∧
-      (ρ s).toNat ≤ (gs.foldl (fun p f => match f with
-        | .lt a b =>
-          if a = s then (p.1, min p.2 ((bndOf fs b).2 - 1))
-          else if b = s then (max p.1 ((bndOf fs a).1 + 1), p.2) else p
-        | .le a b =>
-          if a = s then (p.1, min p.2 (bndOf fs b).2)
-          else if b = s then (max p.1 (bndOf fs a).1, p.2) else p
-        | _ => p) p).2 := by
-    intro gs
-    induction gs with
-    | nil => intro p _ hp; exact hp
-    | cons g gs ih =>
-      intro p hsub hp
-      simp only [List.foldl_cons]
-      apply ih _ (fun x hx => hsub x (List.mem_cons_of_mem _ hx))
-      have hg := hf _ (hsub _ List.mem_cons_self)
-      cases g with
-      | lt a b =>
-        simp only [Fact.Holds] at hg
-        by_cases ha : a = s
-        · subst ha
-          have hb := bndOf_sound hf b
-          simp only [ite_true]
-          exact ⟨hp.1, Nat.le_min.mpr ⟨hp.2, by omega⟩⟩
-        · by_cases hb : b = s
-          · subst hb
-            have ha' := bndOf_sound hf a
-            simp only [ha, ite_false, ite_true]
-            exact ⟨Nat.max_le.mpr ⟨hp.1, by omega⟩, hp.2⟩
-          · simp only [ha, hb, ite_false]; exact hp
-      | le a b =>
-        simp only [Fact.Holds] at hg
-        by_cases ha : a = s
-        · subst ha
-          have hb := bndOf_sound hf b
-          simp only [ite_true]
-          exact ⟨hp.1, Nat.le_min.mpr ⟨hp.2, by omega⟩⟩
-        · by_cases hb : b = s
-          · subst hb
-            have ha' := bndOf_sound hf a
-            simp only [ha, ite_false, ite_true]
-            exact ⟨Nat.max_le.mpr ⟨hp.1, by omega⟩, hp.2⟩
-          · simp only [ha, hb, ite_false]; exact hp
-      | _ => exact hp
-  exact key fs _ (fun _ h => h) (bndOf_sound hf s)
+    (bnd2 fs s).1 ≤ (ρ s).toNat ∧ (ρ s).toNat ≤ (bnd2 fs s).2 :=
+  BndInterval.bnd2G_sound (val_le_maxW ρ)
+    (fun _f hmem _ _ _ h => bndProj_sound hf hmem h)
+    (fun _f hmem _ _ _ h => ordProj_sound hf hmem h) s
 
 theorem entails_sound (hf : AllHold sp F n ρ fs) {g : Fact} (he : entails fs g = true) :
     g.Holds sp F n ρ := by
@@ -234,19 +236,6 @@ end Entails
 
 /-! ## Symbols and valuations -/
 
-theorem le_foldr_max {l : List Nat} {x : Nat} (h : x ∈ l) : x ≤ l.foldr max 0 := by
-  induction l with
-  | nil => cases h
-  | cons y l ih =>
-    simp only [List.foldr_cons]
-    rcases List.mem_cons.mp h with rfl | h
-    · exact Nat.le_max_left _ _
-    · exact Nat.le_trans (ih h) (Nat.le_max_right _ _)
-
-theorem lt_fresh_kv {kv : List Nat} {fs : List Fact} {s : Nat} (h : s ∈ kv) :
-    s < freshSym kv fs :=
-  Nat.lt_succ_of_le (le_foldr_max (List.mem_append_left _ h))
-
 theorem lt_fresh_fact {kv : List Nat} {fs : List Fact} {f : Fact} {s : Nat}
     (hf : f ∈ fs) (hs : s ∈ f.syms) : s < freshSym kv fs :=
   Nat.lt_succ_of_le (le_foldr_max (List.mem_append_right _ (List.mem_flatMap.mpr ⟨f, hf, hs⟩)))
@@ -272,211 +261,17 @@ theorem Val.filter {sp : Spec} {F n : Exec.Deriv} {kv : List Nat} {fs : List Fac
     Val sp F n kv (fs.filter p) S :=
   hv.sub fun _ hg => List.mem_of_mem_filter hg
 
-theorem forall₂_getElem? {ρ : Nat → B256} :
-    ∀ {kv : List Nat} {S : List B256}, List.Forall₂ (fun s w => ρ s = w) kv S →
-      ∀ {j : Nat} {s : Nat}, kv[j]? = some s → S[j]? = some (ρ s)
-  | [], [], _, j, s, h => by simp only [List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, reduceCtorEq] at h
-  | _ :: _, _ :: _, .cons h0 hr, j, s, h => by
-    cases j with
-    | zero => simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at h ⊢; rw [← h, h0]
-    | succ j => simpa only [List.getElem?_cons_succ] using forall₂_getElem? hr (by simpa only [List.getElem?_cons_succ] using h)
-
-theorem forall₂_update_of_not_mem {ρ : Nat → B256} {r : Nat} {w : B256} :
-    ∀ {kv : List Nat} {S : List B256}, r ∉ kv →
-      List.Forall₂ (fun s x => ρ s = x) kv S →
-      List.Forall₂ (fun s x => Function.update ρ r w s = x) kv S
-  | [], [], _, _ => .nil
-  | s :: kv, _ :: _, hr, .cons h0 hrest => by
-    refine .cons ?_ (forall₂_update_of_not_mem (fun h => hr (List.mem_cons_of_mem _ h)) hrest)
-    rw [Function.update_of_ne (by rintro rfl; exact hr List.mem_cons_self), h0]
-
 theorem allHold_update {sp : Spec} {F n : Exec.Deriv} {ρ : Nat → B256} {r : Nat} {w : B256}
     {fs : List Fact} (hr : ∀ f ∈ fs, r ∉ f.syms) (hf : AllHold sp F n ρ fs) :
     AllHold sp F n (Function.update ρ r w) fs := fun f hm =>
   Fact.holds_congr (fun s hs => (Function.update_of_ne
     (by rintro rfl; exact hr f hm hs) _ _).symm) (hf f hm)
 
-/-! ## Moving symbols through an instruction's stack transfer -/
-
-section Transfer
-
-variable {kv : List Nat} {S : List B256} {r : Nat} {ρ : Nat → B256}
-
-/-- Index labels read back as the concrete words. -/
-def wordOf (S : List B256) (l : Option B256) : Option B256 := l.bind fun j => S[j.toNat]?
-
-theorem indexPattern_map_wordOf (hlen : S.length ≤ 1024) :
-    (indexPattern S.length).map (wordOf S) = S.map some := by
-  have hφ : wordOf S = label (S.map AVal.const) 0 := by
-    funext l
-    cases l with
-    | none => rfl
-    | some j =>
-      simp only [wordOf, label, Option.bind_some, List.getElem?_map]
-      cases S[j.toNat]? <;> rfl
-  have h := indexPattern_map_label (a := S.map AVal.const) (ρ := 0) (by simpa only [List.length_map] using
-    hlen)
-  rw [List.length_map] at h
-  rw [hφ, h, List.map_map]
-  rfl
-
-theorem transfer_combine_zero (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : r ∉ kv)
-    (w : B256) :
-    ∀ {out : Pattern} {kv' : List Nat} {S' : List B256},
-      out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv' →
-      AbstractStackSafety.Matches (out.map (wordOf S)) S' → out.count none = 0 →
-      List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S'
-  | [], kv', S', hm, hM, _ => by
-    simp only [List.mapM_nil, Option.pure_def, Option.some.injEq, List.nil_eq] at hm; subst hm
-    cases S' with
-    | nil => exact .nil
-    | cons _ _ => cases hM
-  | l :: out, kv', S', hm, hM, hc => by
-    cases S' with
-    | nil => cases hM
-    | cons x S' =>
-      rw [List.mapM_cons] at hm
-      cases l with
-      | none => simp only [List.count_cons_self, Nat.add_eq_zero_iff, one_ne_zero, and_false] at hc
-      | some j =>
-        simp only [Option.bind_eq_bind] at hm
-        cases hs : kv[j.toNat]? with
-        | none => simp only [hs, Option.pure_def, Option.bind_none, reduceCtorEq] at hm
-        | some s =>
-          cases ht : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
-          | none => simp only [hs, ht, Option.pure_def, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm
-          | some kt =>
-            simp only [hs, ht, Option.pure_def, Option.bind_some, Option.some.injEq] at hm
-            subst hm
-            have hc' : out.count none = 0 := by simpa only [ne_eq, reduceCtorEq, not_false_eq_true,
-              List.count_cons_of_ne] using hc
-            refine .cons ?_ (transfer_combine_zero hS hr w ht hM.2 hc')
-            have hw := hM.1
-            simp only [wordOf, Option.bind_some,
-              forall₂_getElem? hS hs] at hw
-            rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
-            exact (AbstractStackSafety.WordMatches.eq_of_some hw).symm
-
-theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : r ∉ kv) :
-    ∀ {out : Pattern} {kv' : List Nat} {S' : List B256},
-      out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv' →
-      AbstractStackSafety.Matches (out.map (wordOf S)) S' → out.count none ≤ 1 →
-      ∃ w, List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S'
-  | [], kv', S', hm, hM, hc => ⟨0, transfer_combine_zero hS hr 0 hm hM (by simp only [List.count_nil])⟩
-  | l :: out, kv', S', hm, hM, hc => by
-    cases S' with
-    | nil => cases hM
-    | cons x S' =>
-      have hm0 := hm
-      rw [List.mapM_cons] at hm
-      cases ht : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
-      | none => cases l <;> simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm
-      | some kt =>
-        cases l with
-        | none =>
-          simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Option.some.injEq] at hm
-          subst hm
-          have hc' : out.count none = 0 := by simp only [List.count_cons_self, add_le_iff_nonpos_left, nonpos_iff_eq_zero] at hc; omega
-          exact ⟨x, .cons (by simp only [Function.update_self]) (transfer_combine_zero hS hr x ht hM.2 hc')⟩
-        | some j =>
-          cases hs : kv[j.toNat]? with
-          | none => simp only [hs, Option.pure_def, Option.bind_eq_bind, Option.bind_none, reduceCtorEq] at hm
-          | some s =>
-            simp only [hs, ht, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Option.some.injEq] at hm
-            subst hm
-            have hc' : out.count none ≤ 1 := by simp only [ne_eq, reduceCtorEq, not_false_eq_true, List.count_cons_of_ne] at hc; omega
-            obtain ⟨w, hw⟩ := transfer_combine hS hr ht hM.2 hc'
-            refine ⟨w, .cons ?_ hw⟩
-            have hx := hM.1
-            simp only [wordOf, Option.bind_some,
-              forall₂_getElem? hS hs] at hx
-            rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
-            exact (AbstractStackSafety.WordMatches.eq_of_some hx).symm
-
-/-- **Symbols through a transfer.**  A successful instruction whose transfer
-the checker accepted leaves, above the untouched `rest`, words carrying the
-transferred symbols — the one fresh result under a one-point update. -/
-theorem transfer_val {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
-    {kv' : List Nat} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hout : ninstTransfer i (indexPattern kv.length) = some out)
-    (hlen : kv.length ≤ 1024) (hcount : out.count none ≤ 1)
-    (hkv' : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv')
-    (hr : r ∉ kv) (hS : List.Forall₂ (fun s w => ρ s = w) kv S)
-    (hstack : d.stack = S ++ rest) (run : Ninst.Run sevm d i d') :
-    ∃ S' w, d'.stack = S' ++ rest ∧
-      List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S' := by
-  have hSlen : kv.length = S.length := List.Forall₂.length_eq hS
-  rw [hSlen] at hout hlen
-  have h1 := ninstTransfer_map (wordOf S) rfl hout
-  rw [indexPattern_map_wordOf hlen] at h1
-  have h2 := ninstTransfer_append (rest.map some) h1
-  have hin : AbstractStackSafety.Matches (S.map some ++ rest.map some) d.stack := by
-    rw [hstack]; exact matches_append (matches_some_map S) (matches_some_map rest)
-  have h3 := ninstTransfer_run hfork hin h2 run
-  obtain ⟨S', s2, hsp, hM, hrest⟩ := matches_split h3
-  rw [matches_some_map_eq hrest] at hsp
-  obtain ⟨w, hw⟩ := transfer_combine hS hr hkv' hM hcount
-  exact ⟨S', w, hsp, hw⟩
-
-end Transfer
-
 /-! ## Concrete results of the instructions with fact rules -/
 
 section Ops
 
-theorem binary_top {f : B256 → B256 → B256} {c : Nat} {d d' : Devm}
-    (h : applyBinary f c d = .ok d') {x y : B256} {rest : List B256}
-    (hs : d.stack = x :: y :: rest) : d'.stack = f x y :: rest := by
-  obtain ⟨x', y', hd⟩ := Devm.diffBurn_of_applyBinary h
-  obtain ⟨s1, hpop, hpush⟩ := hd.stack
-  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
-  rw [hs] at hpop
-  simp only [List.cons_append, List.nil_append, List.cons.injEq] at hpop
-  obtain ⟨rfl, rfl, rfl⟩ := hpop
-  simpa only [List.cons_append, List.nil_append] using hpush
-
-theorem unary_top {f : B256 → B256} {c : Nat} {d d' : Devm}
-    (h : applyUnary f c d = .ok d') {x : B256} {rest : List B256}
-    (hs : d.stack = x :: rest) : d'.stack = f x :: rest := by
-  obtain ⟨x', hd⟩ := Devm.diffBurn_of_applyUnary h
-  obtain ⟨s1, hpop, hpush⟩ := hd.stack
-  simp only [Stack.Pop, Stack.Push, Split] at hpop hpush
-  rw [hs] at hpop
-  simp only [List.cons_append, List.nil_append, List.cons.injEq] at hpop
-  obtain ⟨rfl, rfl⟩ := hpop
-  simpa only [List.cons_append, List.nil_append] using hpush
-
 variable {sevm : Sevm} {d d' : Devm} {x y : B256} {rest : List B256}
-
-theorem run_add_top (run : Ninst.Run sevm d (.reg .add) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = (x + y) :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
-
-theorem run_gt_top (run : Ninst.Run sevm d (.reg .gt) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.gtCheck x y :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
-
-theorem run_eq_top (run : Ninst.Run sevm d (.reg .eq) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.eqCheck x y :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
-
-theorem run_xor_top (run : Ninst.Run sevm d (.reg .xor) d') (hs : d.stack = x :: y :: rest) :
-    d'.stack = B256.xor x y :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
-
-theorem run_iszero_top (run : Ninst.Run sevm d (.reg .iszero) d') (hs : d.stack = x :: rest) :
-    d'.stack = B256.eqCheck x 0 :: rest := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact unary_top run hs
 
 theorem run_sload_top (run : Ninst.Run sevm d (.reg .sload) d') (hs : d.stack = x :: rest) :
     d'.stack = lockAt sevm.currentTarget x d :: rest := by
@@ -494,9 +289,6 @@ theorem B256.xor_self' (x : B256) : B256.xor x x = 0 := by
   simp only [UInt64.xor_self]
   rfl
 
-theorem B256.one_ne_zero' : (1 : B256) ≠ 0 := by
-  decide
-
 end Ops
 
 /-! ## The fact rules are sound -/
@@ -505,12 +297,6 @@ section OpFacts
 
 variable {sp : Spec} {F n n' : Exec.Deriv} {ρ : Nat → B256} {fs : List Fact} {r : Nat}
   {w : B256}
-
-theorem toNat_add_of_le {x y : B256} {a b : Nat} (hx : x.toNat ≤ a) (hy : y.toNat ≤ b)
-    (hab : a + b ≤ maxW) : (x + y).toNat = x.toNat + y.toNat := by
-  rw [B256.toNat_add, Nat.lo_eq_of_lt]
-  unfold maxW at hab
-  omega
 
 /-- The facts a rule attaches to the fresh result hold once the result is its
 concrete value. -/

@@ -9,7 +9,10 @@
 # pinned by file and runtime SHA-256 in `scripts/lift/certificates.json`.  This
 # gate regenerates every registered certificate from those inputs and requires
 # the committed Lean files to be byte-identical, so a hand edit, a stale
-# regeneration or an unregistered producer change fails here.
+# regeneration or an unregistered producer change fails here.  A row's `fp`
+# key also regenerates its free-pointer annotations and kernel-decide modules
+# with the registered `scripts/lift/fp_annot.py` (run by lift.py's registry
+# mode) and byte-compares them the same way.
 #
 # On each run the producer also checks its supported-opcode table against the
 # arms of `ninstTransfer`/`liftRegularTransfer` (`Blanc/Lift/Transfer.lean`)
