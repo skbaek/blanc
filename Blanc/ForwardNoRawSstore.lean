@@ -480,12 +480,17 @@ private lemma Ninst.exists_exec_noRawSstore
         rfl
       exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
   | push bytes length =>
-      replace stepRun := Step.run_ofExecution.mp stepRun
-      have step : Evm.step ⟨pc, sevm, pre⟩ =
-          .cont (pc + Ninst.size (.push bytes length)) post := by
-        rw [evmStep, Ninst.step_push, ← stepRun.2]
-        rfl
-      exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
+      simp only [Ninst.StepRun, Ninst.step_push] at stepRun
+      split at stepRun
+      · cases (Step.run_ofExecution.mp stepRun).2
+      · rename_i enabled
+        rw [Step.run_ofExecution] at stepRun
+        have step : Evm.step ⟨pc, sevm, pre⟩ =
+            .cont (pc + Ninst.size (.push bytes length)) post := by
+          simp only [evmStep, Ninst.step_push, enabled]
+          rw [← stepRun.2]
+          rfl
+        exact ⟨.cont step tail, .cont rootSafe tailSafe⟩
   | dupn immediate =>
       rw [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at stepRun
       refine ⟨.cont ?_ tail, .cont rootSafe tailSafe⟩

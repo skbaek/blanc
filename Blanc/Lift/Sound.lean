@@ -494,25 +494,27 @@ lemma push_run_stack {sevm : Sevm} {pre inter : Devm} {bs : Bytes}
     (run : Ninst.Run sevm pre (.push bs fits) inter) :
     inter.stack = bs.toB256 :: pre.stack := by
   rcases run with ⟨xl, hfilled, pc, hstep⟩
-  cases xl with
-  | none =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
-    rcases hstep with ⟨_, hstep⟩
-    have hr :
-        (chargeGas (if bs = [] then gBase else gVerylow) pre >>= fun d =>
-          Devm.push bs.toB256 d) = .ok inter := hstep.symm
-    rcases Except.bind_eq_ok hr with ⟨d, hcharge, hpush⟩
-    rw [Devm.push_def] at hpush
-    simp only [Except.assert, bind, Except.bind] at hpush
-    split at hpush
-    · cases hpush
-    · injection hpush with hinter
-      subst inter
-      change bs.toB256 :: d.stack = bs.toB256 :: pre.stack
-      rw [← (Devm.burn_of_chargeGas hcharge).stack]
-  | some child =>
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
-    cases hstep.1
+  simp only [Ninst.StepRun, Ninst.step_push] at hstep
+  split at hstep
+  · cases (Step.run_ofExecution.mp hstep).2
+  · rw [Step.run_ofExecution] at hstep
+    cases xl with
+    | none =>
+      rcases hstep with ⟨_, hstep⟩
+      have hr :
+          (chargeGas (if bs = [] then gBase else gVerylow) pre >>= fun d =>
+            Devm.push bs.toB256 d) = .ok inter := hstep.symm
+      rcases Except.bind_eq_ok hr with ⟨d, hcharge, hpush⟩
+      rw [Devm.push_def] at hpush
+      simp only [Except.assert, bind, Except.bind] at hpush
+      split at hpush
+      · cases hpush
+      · injection hpush with hinter
+        subst inter
+        change bs.toB256 :: d.stack = bs.toB256 :: pre.stack
+        rw [← (Devm.burn_of_chargeGas hcharge).stack]
+    | some child =>
+      cases hstep.1
 
 /-! ### Decided `JUMPI`s -/
 

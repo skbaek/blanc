@@ -72,14 +72,21 @@ theorem Exec.Deriv.ParentStep.exists_of_pushAt_ok
   | halt h => cases Ninst.step_ne_halt_ok (hstatic.symm.trans h)
   | cont h next =>
       have sourceStep := hstatic.symm.trans h
-      rw [Ninst.step_push, ite_eq_right hne] at sourceStep
+      simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+        Bool.false_eq_true, ↓reduceIte] at sourceStep
       obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
       cases hpc
       exact ⟨_, next, .cont h next, Devm.pushBurn_of_run hrun⟩
   | doneOk h henter hresume next =>
-      exact (Step.ofExecution_ne_spawn (hstatic.symm.trans h)).elim
+      have sourceStep := hstatic.symm.trans h
+      simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+        Bool.false_eq_true, ↓reduceIte] at sourceStep
+      exact (Step.ofExecution_ne_spawn sourceStep).elim
   | runOk h henter child hresume next =>
-      exact (Step.ofExecution_ne_spawn (hstatic.symm.trans h)).elim
+      have sourceStep := hstatic.symm.trans h
+      simp only [Ninst.step_push, hne, decide_false, Bool.false_and,
+        Bool.false_eq_true, ↓reduceIte] at sourceStep
+      exact (Step.ofExecution_ne_spawn sourceStep).elim
 
 /-- A successful frame crosses a compiler jump instruction by a childless
 continuation carrying the exact `Jinst.Run`. -/

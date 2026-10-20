@@ -56,7 +56,7 @@ def RequestsTrace.rawFrames
   trace.withdrawal.rawFrames ++ trace.consolidation.rawFrames
 
 def AppliedBodyTrace.rawFrames
-    (trace : AppliedBodyTrace benv txs wds state bout) : List Exec.Deriv :=
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : List Exec.Deriv :=
   trace.beacon.rawFrames ++ trace.history.rawFrames ++
     trace.transactions.rawFrames ++ trace.requests.rawFrames
 

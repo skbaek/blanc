@@ -350,7 +350,10 @@ registry has identified the likely vocabulary.
   `Func.execWitness_linearDispatchWith_fallback`; its
   `linearDispatchFallbackCost` budget pays every `DUP`, `PUSH`, `EQ`, branch,
   and internal-call charge and removes the selector without requiring an
-  already-built dispatcher walk.  When a family builds its own dispatcher
+  already-built dispatcher walk. Supply selected `rules.op.push0 = true` for
+  each entry whose emitted `toBytes.sig` is empty; nonempty immediates need no
+  PUSH0 capability. This per-entry premise preserves historical dispatcher
+  tables with no empty immediate. When a family builds its own dispatcher
   walk it can also consume the frame steps directly:
   `dispatchFrame_of_burnBy`, `dispatchFrame_of_pushBurn`,
   `dispatchFrame_of_popBurnBy`, and `dispatchFrame_of_diffBurn` carry a

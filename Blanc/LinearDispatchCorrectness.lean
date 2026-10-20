@@ -46,6 +46,7 @@ theorem Devm.DispatchFramePreserved.trans {a b c : Devm}
   · exact hab.accountReads.trans hbc.accountReads
   · exact hab.storageReads.trans hbc.storageReads
   · exact hab.storageWrites.trans hbc.storageWrites
+  · exact hab.touchedAccounts.trans hbc.touchedAccounts
 
 /-- A pure gas burn preserves every dispatch-frame field except gas. -/
 theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
@@ -69,6 +70,7 @@ theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
   · exact h.accountReads
   · exact h.storageReads
   · exact h.storageWrites
+  · exact h.touchedAccounts
 
 theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
     (h : Devm.PushBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -91,6 +93,7 @@ theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
   · exact h.accountReads
   · exact h.storageReads
   · exact h.storageWrites
+  · exact h.touchedAccounts
 
 theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
     {a b : Devm} (h : Devm.PopBurnBy xs cost a b) :
@@ -114,6 +117,7 @@ theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
   · exact h.accountReads
   · exact h.storageReads
   · exact h.storageWrites
+  · exact h.touchedAccounts
 
 private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
     (h : Devm.PopBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -136,6 +140,7 @@ private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
   · exact h.accountReads
   · exact h.storageReads
   · exact h.storageWrites
+  · exact h.touchedAccounts
 
 theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
     (h : Devm.DiffBurn xs ys a b) : Devm.DispatchFramePreserved a b := by
@@ -158,6 +163,7 @@ theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
   · exact h.accountReads
   · exact h.storageReads
   · exact h.storageWrites
+  · exact h.touchedAccounts
 
 private theorem dupFrame {e : Sevm} {a b : Devm}
     (h : Ninst.Run e a (Ninst.dup 0) b) : Devm.DispatchFramePreserved a b := by
@@ -639,10 +645,10 @@ def linearDispatchFallbackCost : List (B256 × Func) → Nat
         (gVerylow + gHigh) + linearDispatchFallbackCost rest
 
 /-- Construct an arbitrary-outcome witness for the all-miss route through a
-nonempty linear dispatcher.  The caller supplies only the selector misses,
-the fallback table lookup, and the fallback body's witness at the exact
-post-dispatch state; every dispatcher opcode and its exact gas charge are
-derived here. -/
+nonempty linear dispatcher.  The caller supplies the selector misses,
+the fallback table lookup, the fallback body's witness at the exact
+post-dispatch state, and selected PUSH0 availability for any empty emitted
+immediate; every dispatcher opcode and its exact gas charge are derived here. -/
 theorem Func.execWitness_linearDispatchWith_fallback
     {fs : List Func} {sevm : Sevm} {entry : Devm}
     {fallback : Nat} {entries : List (B256 × Func)}
@@ -655,7 +661,9 @@ theorem Func.execWitness_linearDispatchWith_fallback
     (hroom : tail.length < 1022)
     (hget : fs[fallback]? = some fallbackBody)
     (hbody : Func.ExecWitness fs sevm
-      (entry.setMach ⟨tail, entry.memory, G, entry.stateGas⟩) fallbackBody ex) :
+      (entry.setMach ⟨tail, entry.memory, G, entry.stateGas⟩) fallbackBody ex)
+    (h_push0 : ∀ candidate ∈ entries,
+      candidate.1.toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true) :
     Func.ExecWitness fs sevm entry
       (Blanc.linearDispatchWith fallback entries) ex := by
   induction entries generalizing entry G with
@@ -687,7 +695,8 @@ theorem Func.execWitness_linearDispatchWith_fallback
                   simp only [linearDispatchFallbackCost] at hgas
                   dsimp only [pushGas, branchCost, callCost]
                   omega)
-                (by rw [hstack]; simp only [List.length_cons]; omega))
+                (by rw [hstack]; simp only [List.length_cons]; omega)
+                (h_push0 (word, body) (by simp only [List.mem_cons, true_or])))
           have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
               afterEq := by
             simpa only [afterPush, afterEq, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -769,7 +778,8 @@ theorem Func.execWitness_linearDispatchWith_fallback
                 (by
                   dsimp only [afterDup]
                   simp only [Devm.stack_setMach, List.length_cons]
-                  omega))
+                  omega)
+                (h_push0 (word, body) (by simp only [List.mem_cons, true_or])))
           have heq : Ninst.RunCompiled sevm afterPush (.reg .eq)
               afterEq := by
             simpa only [afterPush, afterEq, Devm.setMach_setMach, Devm.stateGas_setMach,
@@ -800,6 +810,9 @@ theorem Func.execWitness_linearDispatchWith_fallback
             · simpa only [afterBranch, Devm.setMach_setMach, Devm.stateGas_setMach,
                 Devm.stack_setMach, Devm.memory_setMach,
                 Devm.gasLeft_setMach] using hbody
+            · intro candidate hcandidate
+              exact h_push0 candidate
+                (List.mem_cons_of_mem (word, body) hcandidate)
           have hbranch : Func.ExecWitness fs sevm afterEq
               (.branch (Blanc.linearDispatchWith fallback remaining)
                 (Ninst.pop ::: body)) ex := by

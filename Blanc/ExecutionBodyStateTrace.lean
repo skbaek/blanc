@@ -236,35 +236,35 @@ theorem RequestsTrace.stateReplay
 /-- The only additional witness needed above an `AppliedBodyTrace` is the
 successful transaction list's sequence of refund counters. -/
 structure AppliedBodyStateChronology
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) where
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) where
   transactions : ApplyTransactionsStateChronology trace.transactions
 
 inductive AppliedBodyStateBoundaryOrigin where
   | beacon {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      {trace : AppliedBodyTrace benv txs wds state bout}
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      {trace : AppliedBodyTrace benv txs ommers wds state bout}
       (chronology : AppliedBodyStateChronology trace)
       (origin : SystemMessageStateBoundaryOrigin)
   | history {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      {trace : AppliedBodyTrace benv txs wds state bout}
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      {trace : AppliedBodyTrace benv txs ommers wds state bout}
       (chronology : AppliedBodyStateChronology trace)
       (origin : SystemMessageStateBoundaryOrigin)
   | transaction {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      {trace : AppliedBodyTrace benv txs wds state bout}
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      {trace : AppliedBodyTrace benv txs ommers wds state bout}
       (chronology : AppliedBodyStateChronology trace)
       (origin : TransactionStateBoundaryOrigin)
   | withdrawal {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      {trace : AppliedBodyTrace benv txs wds state bout}
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      {trace : AppliedBodyTrace benv txs ommers wds state bout}
       (chronology : AppliedBodyStateChronology trace)
       (origin : DirectWithdrawalStateBoundaryOrigin)
   | request {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      {trace : AppliedBodyTrace benv txs wds state bout}
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      {trace : AppliedBodyTrace benv txs ommers wds state bout}
       (chronology : AppliedBodyStateChronology trace)
       (origin : RequestsStateBoundaryOrigin)
 
@@ -272,9 +272,9 @@ abbrev AppliedBodyStateBoundary :=
   StateTransition AppliedBodyStateBoundaryOrigin
 
 def AppliedBodyStateChronology.stateBoundaries
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    {trace : AppliedBodyTrace benv txs wds state bout}
+    {trace : AppliedBodyTrace benv txs ommers wds state bout}
     (chronology : AppliedBodyStateChronology trace) :
     List AppliedBodyStateBoundary :=
   trace.beacon.stateBoundaries.map
@@ -294,9 +294,9 @@ def AppliedBodyStateChronology.stateBoundaries
         (AppliedBodyStateBoundaryOrigin.request chronology))
 
 theorem AppliedBodyTrace.exists_stateChronology
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) :
     Nonempty (AppliedBodyStateChronology trace) := by
   rcases trace.transactions.exists_stateChronology
@@ -306,9 +306,9 @@ theorem AppliedBodyTrace.exists_stateChronology
 
 /-- Complete successful block-body state replay, in exact semantic order. -/
 theorem AppliedBodyStateChronology.stateReplay
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    {trace : AppliedBodyTrace benv txs wds state bout}
+    {trace : AppliedBodyTrace benv txs ommers wds state bout}
     (chronology : AppliedBodyStateChronology trace) :
     StateReplay benv.state chronology.stateBoundaries state := by
   have beaconReplay := StateReplay.mapOrigin
