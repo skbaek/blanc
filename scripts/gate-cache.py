@@ -142,6 +142,9 @@ LAKE_HASH_NIL = 1723
 # The one helper that asks the toolchain's own Lake/Lean code for the hashes
 # Python cannot reproduce from shipped sources (see build_source_currency).
 SOURCE_CURRENCY_HELPER = "scripts/build-source-currency.lean"
+# The packages directory the helper's Lake workspace load resolves; the
+# certificate's package identity is read from the same place.
+LAKE_PACKAGES_DIR = ".lake/packages"
 
 
 def registry_path(root: Path) -> Path:
@@ -2050,26 +2053,41 @@ def _workspace_configuration_files(root: Path, lake_root: Path) -> list[Path]:
     return files
 
 
-def lake_module_facts(
-    root: Path, roots: list[str], binaries: list[Path]
-) -> dict[str, Any]:
-    """Ask the toolchain's own Lake/Lean code for module input facts.
+def check_lake_manifest(root: Path) -> None:
+    """Refuse a manifest whose load could move a package checkout.
 
-    Memoized per process on the helper's bytes, the requested roots and
-    binaries, and the stat identity of every file the answer was read from,
-    so the several certificate checks of one gate run start Lean once.
+    Lake's loader checks out a git dependency's manifest revision when its
+    HEAD differs (`materializeGitRepo`), and resolves packages under the
+    manifest's `packagesDir`.  The certificate's identity already requires each
+    installed package at its exact manifest revision; this also requires every
+    git entry to name a full 40-hex revision and the packages directory to be
+    `.lake/packages`, so the helper's workspace load can only find what is
+    there and never fetches or checks out anything.
     """
 
-    helper = root / SOURCE_CURRENCY_HELPER
-    if not helper.is_file():
-        raise Unresolvable(f"source-currency helper {SOURCE_CURRENCY_HELPER} is absent")
-    key = (str(root.resolve()), file_digest(helper), tuple(roots),
-           tuple(str(path) for path in binaries))
-    cached = _CURRENCY_MEMO.get(key)
-    if cached is not None:
-        signature, facts = cached
-        if _helper_signature(Path(path) for path, *_ in signature) == signature:
-            return facts
+    try:
+        manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise Unresolvable(f"lake-manifest.json is unreadable: {error}") from error
+    if not isinstance(manifest, dict) or manifest.get("packagesDir") != LAKE_PACKAGES_DIR:
+        raise Unresolvable(f"lake-manifest.json packagesDir is not {LAKE_PACKAGES_DIR}")
+    packages = manifest.get("packages")
+    if not isinstance(packages, list):
+        raise Unresolvable("lake-manifest.json has no package population")
+    for entry in packages:
+        if not isinstance(entry, dict):
+            raise Unresolvable("lake-manifest.json has a malformed package row")
+        if entry.get("type") == "git":
+            rev = entry.get("rev")
+            if not isinstance(rev, str) or not re.fullmatch(r"[0-9a-f]{40}", rev):
+                raise Unresolvable(
+                    f"lake-manifest.json entry {entry.get('name')} has no full 40-hex revision"
+                )
+        elif entry.get("type") != "path":
+            raise Unresolvable(f"lake-manifest.json entry {entry.get('name')} has an unknown type")
+
+
+def _toolchain_lake_library(root: Path) -> Path:
     try:
         prefix = subprocess.run(
             ["lean", "--print-prefix"], cwd=root, capture_output=True, text=True,
@@ -2080,6 +2098,55 @@ def lake_module_facts(
     lake_library = Path(prefix) / "lib/lean/libLake_shared.so"
     if not lake_library.is_file():
         raise Unresolvable(f"the toolchain has no Lake library at {lake_library}")
+    return lake_library
+
+
+def _run_source_currency_helper(root: Path, helper: Path, request: Path) -> str:
+    """One run of SOURCE_CURRENCY_HELPER; its stdout, or a refusal."""
+
+    lake_library = _toolchain_lake_library(root)
+    try:
+        result = subprocess.run(
+            ["lean", f"--load-dynlib={lake_library}", "--run", str(helper), str(request)],
+            cwd=root, capture_output=True, text=True, check=False, timeout=900,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Unresolvable(f"source-currency helper did not run: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()[-1:] or ["no output"]
+        raise Unresolvable(f"source-currency helper failed: {detail[0]}")
+    return result.stdout
+
+
+def lake_module_facts(
+    root: Path, roots: list[str], binaries: list[Path]
+) -> dict[str, Any]:
+    """Ask the toolchain's own Lake/Lean code for module input facts.
+
+    Memoized per process.  The key is the worktree, the helper's bytes, the
+    requested roots and the requested binaries; an entry is reused only while
+    the stat identity (mtime, size, inode) of every file the answer was read
+    from is unchanged.  A run whose inputs moved while it ran is refused: the
+    known inputs are statted before and after the run and must agree, and no
+    file the answer was read from may carry a modification time from after the
+    run started.
+    """
+
+    check_lake_manifest(root)
+    helper = root / SOURCE_CURRENCY_HELPER
+    if not helper.is_file():
+        raise Unresolvable(f"source-currency helper {SOURCE_CURRENCY_HELPER} is absent")
+    key = (str(root.resolve()), file_digest(helper), tuple(roots),
+           tuple(str(path) for path in binaries))
+    cached = _CURRENCY_MEMO.get(key)
+    if cached is not None:
+        signature, facts = cached
+        if _helper_signature(Path(path) for path, *_ in signature) == signature:
+            return facts
+    base = [helper, *binaries, *_workspace_configuration_files(root, root / ".lake")]
+    base.extend(root / (module.replace(".", "/") + ".lean") for module in roots)
+    started = time.time_ns()
+    before = _helper_signature(base)
     with tempfile.TemporaryDirectory(prefix="blanc-source-currency-") as scratch:
         request = Path(scratch) / "request.tsv"
         request.write_text(
@@ -2087,19 +2154,12 @@ def lake_module_facts(
             + "".join(f"bin\t{path}\n" for path in binaries),
             encoding="utf-8",
         )
-        try:
-            result = subprocess.run(
-                ["lean", f"--load-dynlib={lake_library}", "--run", str(helper), str(request)],
-                cwd=root, capture_output=True, text=True, check=False, timeout=900,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
-            raise Unresolvable(f"source-currency helper did not run: {error}") from error
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout).strip().splitlines()[-1:] or ["no output"]
-        raise Unresolvable(f"source-currency helper failed: {detail[0]}")
+        output = _run_source_currency_helper(root, helper, request)
+    if _helper_signature(base) != before:
+        raise Unresolvable("source-currency inputs moved while the helper ran")
     facts: dict[str, Any] = {"lean": None, "modules": {}, "libs": {}, "bins": {}}
     try:
-        for line in result.stdout.splitlines():
+        for line in output.splitlines():
             row = json.loads(line)
             kind = row["kind"]
             if kind == "lean":
@@ -2116,9 +2176,13 @@ def lake_module_facts(
         raise Unresolvable(f"source-currency helper printed a malformed row: {error}") from error
     if facts["lean"] is None:
         raise Unresolvable("source-currency helper printed no Lean trace hash")
-    read = [helper, *binaries, *_workspace_configuration_files(root, root / ".lake")]
+    read = list(base)
     read.extend(Path(row["path"]) for row in facts["modules"].values())
-    _CURRENCY_MEMO[key] = (_helper_signature(read), facts)
+    signature = _helper_signature(read)
+    moved = [path for path, *rest in signature if len(rest) == 3 and rest[0] >= started]
+    if moved:
+        raise Unresolvable(f"source-currency input {moved[0]} moved while the helper ran")
+    _CURRENCY_MEMO[key] = (signature, facts)
     return facts
 
 
@@ -2149,6 +2213,30 @@ _LAKE_IS_MODULE = 5
 _LAKE_NAME = 6
 _LAKE_PACKAGE = 7
 _LAKE_ARGS = 8
+# The only dependency modules the replay may leave unchecked, with the reason
+# and each module's Lake source hash (`computeTextFileHash`) at the pinned
+# revision.  ProofWidgets' library `needs` its JavaScript build target, whose
+# job trace is not a Lean-library trace and so is not replayed.  Pinning the
+# exact sources means any change to these modules (a pin bump, an edit) or to
+# the set (a new module, another package or reason) refuses certification
+# until it is rebuilt, reviewed and re-pinned here.
+PERMITTED_UNCHECKED: dict[str, dict[str, Any]] = {
+    "proofwidgets/ProofWidgets": {
+        "reason": "needs widgetJsAll, not a Lean library",
+        "modules": {
+            "ProofWidgets.Cancellable": "75cb4081505abca9",
+            "ProofWidgets.Compat": "d8efb1d07e7c4193",
+            "ProofWidgets.Component.Basic": "c2583e028a0af8b6",
+            "ProofWidgets.Component.FilterDetails": "1253cc9003b5bbd5",
+            "ProofWidgets.Component.MakeEditLink": "775fcdf9eb52ea19",
+            "ProofWidgets.Component.OfRpcMethod": "d122cc0ed6b217b8",
+            "ProofWidgets.Component.Panel.Basic": "bc4340283a4553e2",
+            "ProofWidgets.Component.RefreshComponent": "f411b1269101b066",
+            "ProofWidgets.Data.Html": "19578a64cbf37be8",
+            "ProofWidgets.Util": "c15dbbc68f903dab",
+        },
+    },
+}
 _LAKE_COMPONENTS = ("deps", "libs", "Lean", "source", "options", "isModule",
                     "Module.name", "Package.id?", "Module.leanArgs")
 
@@ -2355,6 +2443,7 @@ def build_source_currency(
     unchecked: dict[str, int] = {}
     built = restored = 0
     covered_set = set(covered_keys)
+    unchecked_detail: dict[str, dict[str, Any]] = {}
     for key in sorted(modules):
         fact = modules[key]
         module = fact["module"]
@@ -2367,6 +2456,16 @@ def build_source_currency(
             if key in covered_set:
                 raise Unresolvable(f"{module}: Lake input trace not replayed ({reason})")
             unchecked[fact["package"]] = unchecked.get(fact["package"], 0) + 1
+            unchecked_detail.setdefault(library, {"reason": reason, "modules": {}})
+            if unchecked_detail[library]["reason"] != reason:
+                unchecked_detail[library]["reason"] = "mixed reasons"
+            unchecked_detail[library]["modules"][module] = fact["src"]
+            trace = trace_of(key)
+            if trace["recorded"]:
+                # Not replayed, but a built trace still records its source.
+                recorded = _recorded_components(module, trace["inputs"])
+                if recorded[_LAKE_SOURCE] != lake_hash(fact["src"], f"{module} source hash"):
+                    stale_sources.append(module)
             import_info(key)
             continue
         trace = trace_of(key)
@@ -2428,6 +2527,19 @@ def build_source_currency(
             "(replayed input hash differs from the recorded depHash: an edited "
             "source, header, configuration or imported artifact since the last "
             "build or restore)"
+        )
+    if unchecked_detail != PERMITTED_UNCHECKED:
+        moved = sorted(
+            set(unchecked_detail) ^ set(PERMITTED_UNCHECKED)
+        ) or [
+            library for library in sorted(unchecked_detail)
+            if unchecked_detail[library] != PERMITTED_UNCHECKED[library]
+        ]
+        raise Unresolvable(
+            "the dependency modules this check does not replay differ from the "
+            f"pinned permitted set (PERMITTED_UNCHECKED) at {', '.join(moved)}: a "
+            "dependency's sources, membership or shape moved, so a changed "
+            "dependency could go undetected; rebuild-and-review, then re-pin"
         )
     olean_checked = 0
     for key, path in zip(covered_keys, binaries):
@@ -2568,6 +2680,9 @@ def build_certificate_status(
             currency = checked_source_currency(root)
             if currency["checker"] != certificate["currency"].get("checker"):
                 return False, "source-currency checker moved", certificate
+            for field in ("unchecked", "dependencies"):
+                if currency.get(field) != certificate["currency"].get(field):
+                    return False, f"source-currency {field} record moved", certificate
     except (GateCacheError, Unresolvable, OSError, UnicodeError, json.JSONDecodeError) as error:
         return False, str(error), None
     except Exception as error:  # noqa: BLE001 - a defect is a refusal, not a crash

@@ -5045,6 +5045,7 @@ class LakeFixture:
             s.write(self.MODULES[key][3], text)
         for key in self.ORDER:
             self.build(key, restored=key not in self.BUILT)
+        self.pinned = self.permitted()
 
     # -- the stand-in helper --------------------------------------------------
 
@@ -5189,9 +5190,19 @@ class LakeFixture:
         for key in self.ORDER:
             self.build(key, restored=key not in self.BUILT)
 
+    def permitted(self) -> dict[str, dict[str, Any]]:
+        """The fixture's pinned unchecked set, as `PERMITTED_UNCHECKED` pins it."""
+
+        return {"widgets/Widgets": {
+            "reason": "needs widgetJs, not a Lean library",
+            "modules": {"Widgets.W": _hex(_stand_in_hash(
+                self.source_path("widgets/Widgets.W").read_text(encoding="utf-8")))},
+        }}
+
     def check(self) -> tuple[bool, str]:
         try:
-            with patched(gc, "lake_module_facts", self.facts):
+            with patched(gc, "lake_module_facts", self.facts), \
+                    patched(gc, "PERMITTED_UNCHECKED", self.pinned):
                 summary = gc.build_source_currency(self.s.root)
         except gc.Unresolvable as error:
             return False, str(error)
@@ -5294,11 +5305,58 @@ def control_source_currency_checks_dependency_packages() -> None:
         core.write_text("def core := 1\n", encoding="utf-8")
         require(f.check()[0], "restoring the dependency source restores currency")
 
-        w = f.source_path("widgets/Widgets.W")
-        w.write_text("def w := 2\n", encoding="utf-8")
         current, summary = f.check()
         require(current and json.loads(summary)["unchecked"] == {"widgets": 1},
-                f"a library needing a non-library target is reported unchecked: {summary}")
+                f"the pinned unchecked library is reported unchecked: {summary}")
+        w = f.source_path("widgets/Widgets.W")
+        w.write_text("def w := 2\n", encoding="utf-8")
+        current, reason = f.check()
+        require(not current and "PERMITTED_UNCHECKED" in reason and "widgets/Widgets" in reason,
+                f"an edit to a pinned unchecked module (a pin bump) must be refused: {reason}")
+        w.write_text("def w := 1\n", encoding="utf-8")
+        require(f.check()[0], "restoring the pinned source restores currency")
+
+
+def control_source_currency_pins_the_unchecked_set() -> None:
+    """The unreplayed dependency modules are exactly a pinned set: growth, a
+    new package or reason, or a built unchecked module's stale source refuses."""
+
+    with lake_fixture() as f:
+        f.overrides["dep/Dep.Core"] = {"precompile": True}
+        current, reason = f.check()
+        require(not current and "PERMITTED_UNCHECKED" in reason and "dep/Dep" in reason,
+                f"another package joining the unchecked set must be refused: {reason}")
+        f.overrides.clear()
+
+        f.MODULES = dict(f.MODULES, **{"widgets/Widgets.X": (
+            "widgets", "Widgets", "Widgets.X", ".lake/packages/widgets/Widgets/X.lean")})
+        f.s.write(".lake/packages/widgets/Widgets/X.lean", "def x := 1\n")
+        f.build("widgets/Widgets.X", restored=True)
+        base = f.source_path("dep/Dep.Base")
+        base.write_text(base.read_text(encoding="utf-8").replace(
+            "import Widgets.W", "import Widgets.W\nimport Widgets.X"), encoding="utf-8")
+        f.build("dep/Dep.Base")
+        f.rebuild_all()
+        current, reason = f.check()
+        require(not current and "PERMITTED_UNCHECKED" in reason,
+                f"a new module in the unchecked library must be refused: {reason}")
+        f.pinned["widgets/Widgets"]["modules"]["Widgets.X"] = _hex(_stand_in_hash("def x := 1\n"))
+        require(f.check()[0], "re-pinning the reviewed set accepts it")
+
+        f.pinned["widgets/Widgets"]["reason"] = "another reason"
+        current, reason = f.check()
+        require(not current and "PERMITTED_UNCHECKED" in reason,
+                f"a changed reason must be refused: {reason}")
+        f.pinned = f.permitted()
+        f.pinned["widgets/Widgets"]["modules"]["Widgets.X"] = _hex(_stand_in_hash("def x := 1\n"))
+
+        f.build("widgets/Widgets.W")  # a built trace for an unchecked module
+        w = f.source_path("widgets/Widgets.W")
+        f.pinned["widgets/Widgets"]["modules"]["Widgets.W"] = _hex(_stand_in_hash("def w := 2\n"))
+        w.write_text("def w := 2\n", encoding="utf-8")
+        current, reason = f.check()
+        require(not current and "Widgets.W" in reason and "source changed" in reason,
+                f"a built unchecked module's stale source leaf must be refused: {reason}")
 
 
 def control_source_currency_uses_the_evaluated_configuration() -> None:
@@ -5528,7 +5586,105 @@ def control_negative_reading_configuration_from_the_traces() -> None:
                   "package-level inputs read from the checked traces")
 
 
+def _memo_scratch(s: Scratch) -> None:
+    s.write("lake-manifest.json", json.dumps({
+        "packagesDir": ".lake/packages",
+        "packages": [{"name": "dep", "type": "git", "rev": "a" * 40}]}))
+    s.write(gc.SOURCE_CURRENCY_HELPER, "-- stand-in helper\n")
+    s.write("Blanc.lean", "-- root\n")
+
+
+def control_source_currency_helper_memo_and_manifest() -> None:
+    with scratch() as s:
+        _memo_scratch(s)
+        runs: list[str] = []
+        during: dict[str, Callable[[], None]] = {}
+
+        def runner(root: Path, helper: Path, request: Path) -> str:
+            runs.append(request.read_text(encoding="utf-8"))
+            if "action" in during:
+                during.pop("action")()
+            return "\n".join(json.dumps(row) for row in (
+                {"kind": "lean", "hash": "0" * 15 + "1"},
+                {"kind": "module", "key": "blanc/Blanc", "path": str(s.root / "Blanc.lean")},
+            ))
+
+        gc._CURRENCY_MEMO.clear()
+        with patched(gc, "_run_source_currency_helper", runner):
+            gc.lake_module_facts(s.root, ["Blanc"], [])
+            gc.lake_module_facts(s.root, ["Blanc"], [])
+            require(len(runs) == 1, f"an unchanged repeat must reuse the memo: {len(runs)} runs")
+            gc.lake_module_facts(s.root, ["Blanc", "Blanc.A"], [])
+            require(len(runs) == 2, "different roots are a different memo key")
+            s.write("Blanc.lean", "-- root, edited\n")
+            gc.lake_module_facts(s.root, ["Blanc"], [])
+            require(len(runs) == 3, "an edited source must invalidate the memo")
+            s.write(gc.SOURCE_CURRENCY_HELPER, "-- another helper\n")
+            gc.lake_module_facts(s.root, ["Blanc"], [])
+            require(len(runs) == 4, "a changed helper is a different memo key")
+
+            during["action"] = lambda: s.write("Blanc.lean", "-- moved while running\n")
+            try:
+                gc.lake_module_facts(s.root, ["Blanc", "Blanc.B"], [])
+            except gc.Unresolvable as error:
+                require("moved while the helper ran" in str(error), str(error))
+            else:
+                raise ControlFailure("an input moving during the helper run must be refused")
+
+            for manifest, label in (
+                ({"packagesDir": "elsewhere", "packages": []}, "packagesDir"),
+                ({"packagesDir": ".lake/packages",
+                  "packages": [{"name": "dep", "type": "git", "rev": "main"}]}, "40-hex"),
+            ):
+                s.write("lake-manifest.json", json.dumps(manifest))
+                try:
+                    gc.lake_module_facts(s.root, ["Blanc", "Blanc.C"], [])
+                except gc.Unresolvable as error:
+                    require(label in str(error), str(error))
+                else:
+                    raise ControlFailure(f"a manifest without {label} must be refused")
+        gc._CURRENCY_MEMO.clear()
+
+
+def control_certification_admission_nests_and_refuses() -> None:
+    with scratch() as s:
+        prepare_build_state(s)
+        with patched(gc, "component_tools",
+                     lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"})), \
+                patched(gc, "build_source_currency",
+                        lambda root, lake_root=None: dict(_STUB_CURRENCY)), \
+                declared_coordination(None), \
+                patched(gate_semaphore, "ENTRY", s.coordination.entry):
+            s.coordination.answer("admit")
+            gc.certify_admitted(s.root)
+            calls = s.coordination.calls_made()
+            require(len(calls) == 2 and calls[0].startswith("adaptive-acquire")
+                    and f"--memory-gib {gc.CERTIFY_MEMORY_GIB}" in calls[0]
+                    and calls[1].startswith("release"),
+                    f"a standalone certification acquires once and releases: {calls}")
+            s.coordination.forget()
+            s.coordination.answer("already-held")
+            gc.certify_admitted(s.root)
+            calls = s.coordination.calls_made()
+            require(len(calls) == 1 and calls[0].startswith("adaptive-acquire"),
+                    f"under a same-label hold certification proceeds and releases nothing: {calls}")
+            s.coordination.forget()
+            gc.build_certificate_path(s.root).unlink()
+            s.coordination.answer("refuse")
+            try:
+                gc.certify_admitted(s.root)
+            except gate_semaphore.Refused:
+                pass
+            else:
+                raise ControlFailure("a refused admission must refuse certification")
+            require(not gc.build_certificate_path(s.root).exists(),
+                    "a refused admission must write no certificate")
+
+
 CURRENCY_CONTROLS = frozenset({
+    "control_source_currency_pins_the_unchecked_set",
+    "control_source_currency_helper_memo_and_manifest",
+    "control_certification_admission_nests_and_refuses",
     "control_source_currency_accepts_exactly_current_lake_records",
     "control_source_currency_replays_restored_traces",
     "control_source_currency_checks_dependency_packages",
@@ -5646,6 +5802,9 @@ CONTROLS = (
     control_source_currency_uses_the_evaluated_configuration,
     control_source_currency_refuses_tampered_or_unknown_traces,
     control_source_currency_refuses_unreplayable_shapes,
+    control_source_currency_pins_the_unchecked_set,
+    control_source_currency_helper_memo_and_manifest,
+    control_certification_admission_nests_and_refuses,
     control_corrupt_build_certificate_forces_authoritative_build,
     control_material_output_reuses_proof_only_and_refuses_every_material_uncertainty,
     control_worktree_seed_previews_then_publishes_isolated_exact_state,

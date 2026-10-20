@@ -440,10 +440,16 @@ requires the same checker digest) refuse unless every module in scope has a
 Lake trace in the pinned toolchain's format (`2025-09-10`) that describes the
 current inputs. In scope are `Blanc` and every `Blanc/**` module, and every
 workspace-package module (Jaune, Mathlib, Batteries and the rest) in their
-import closure or in a library they `need`, except the modules of a library
-whose `extraDep` trace depends on a non-library target (today ProofWidgets,
-which needs its JavaScript build); those are counted as unchecked in the
-certificate. `Main` and `scripts.SimpCollector` are Lake targets of this
+import closure or in a library they `need`. The only dependency modules left
+unreplayed are a pinned set, `PERMITTED_UNCHECKED` in `scripts/gate-cache.py`:
+today the ten ProofWidgets library modules, whose `extraDep` trace includes
+its JavaScript build target, each pinned with its reason and its Lake source
+hash at the pinned revision. Certification refuses if that set grows,
+shrinks, changes reason, names another package or library, or if any pinned
+module's source moves (a ProofWidgets pin bump or edit), until the change is
+rebuilt, reviewed and re-pinned; a built trace of an unchecked module still
+has its source leaf compared. Status checks also compare the certificate's
+`unchecked` and `dependencies` records. `Main` and `scripts.SimpCollector` are Lake targets of this
 package outside the certificate's scope, as they were before this check.
 
 `scripts/build-source-currency.lean` loads the workspace with Lake's own
@@ -467,9 +473,23 @@ is checked by the replay alone; a tree restored entirely from the cache
 certifies. A CRLF-only edit is current, as it is to Lake; any other byte edit
 is not. Every recorded output hash must equal its artifact's `.hash` sidecar,
 and each covered `.olean`'s bytes must hash (`computeBinFileHash`) to the
-recorded hash. Missing, unparseable, unknown-format or mis-shaped traces,
-ambiguous or cyclic imports, and trace shapes the replay does not model
-(platform-dependent, precompiled, dynlib or plugin modules) refuse.
+recorded hash. Missing, unparseable, unknown-format or mis-shaped traces and
+ambiguous or cyclic imports refuse. A trace shape the replay does not model
+(platform-dependent, precompiled, dynlib, plugin or extern-library modules, or
+a library `needs` that is not a Lean library) refuses for every covered
+`Blanc` module; for a dependency module it is accepted only as part of the
+pinned unchecked set above.
+
+Before the helper runs, every git entry of `lake-manifest.json` must name a
+full 40-hex revision and its `packagesDir` must be `.lake/packages`; the
+certificate's identity separately requires each installed package at that
+exact revision and clean. Lake's loader then finds every package at its
+revision and fetches or checks out nothing. It may still rewrite its cached
+configuration under `.lake/config/` and a package's git remote URL, exactly
+as `lake env` does. Neither is part of the certificate's identity: the
+configuration cache is derived from the `lakefile.lean` bytes the identity
+binds, and a remote URL selects where a later fetch would come from, not what
+is checked out.
 
 The replay and the component comparison are two independent routes to the
 same refusal. Most replay defects make the values differ and so refuse; a
@@ -483,8 +503,10 @@ replaying to its recorded `depHash`, rerun with the disposable-worktree
 controls. Lake's mixing function is the `lean_uint64_mix_hash` the toolchain
 ships in `lean.h`.
 
-Cost on the full tree: one helper run per process (memoized on the helper,
-the requested modules and the stat identity of every file it read), about
+Cost on the full tree: a helper run is memoized per process (keyed on the
+worktree, the helper's bytes and the requested modules and binaries; reused
+only while the stat identity of every file it read is unchanged; a run whose
+inputs moved while it ran is refused), about
 five seconds warm at about 2.0 GiB peak resident memory (loading the
 workspace's configurations accounts for most of it; hashing the covered
 `.olean` bytes adds about one and a half seconds); repeats in the same process
@@ -500,12 +522,20 @@ admission itself; and a selective run certifies inside the hold it already
 took for its `lake build` prerequisite, asking the host nothing more. A nested
 request under a hold of the same label is answered `ALREADY_HELD` at once and
 proceeds under it (the semaphore's nested mode), so certification never waits
-behind its own run. A certificate status check inside a gate row runs under
-that row's hold. Status checks from `scripts/worktree_seed.py` and Creme's
-`blanc-build-certificate` workflow guard, and the runner's own status checks
-before and after its rows, are not admitted: they are a light, transient
-check (about 2.0 GiB peak for about 6 s, at most one helper run per seed,
-guard or runner process because of the memo), accepted as such.
+behind its own run. `ALREADY_HELD` is label-based: the helper's about 2 GiB
+then runs inside whatever hold that label owns, including a heavy build's,
+without enlarging it, and the outer hold is not renewed for the helper's few
+seconds. A certificate status check inside a gate row runs under that row's
+hold. Status checks from `scripts/worktree_seed.py`, Creme's
+`blanc-build-certificate` workflow guard, and the runner's own checks are not
+admitted. That is not a light check: about 2.0 GiB peak for about 6 s per
+helper run. A runner process whose certificate is current runs the helper once
+for its opening check and reuses the memo for its final check; one that
+rebuilds and certifies runs it again for the certification, under its build
+hold. A seed or guard process runs it at most once. Admitting status checks
+is not yet done: the workflow guard runs its own work under a different label
+(`workflow-…`), so a status check made from inside that work could not nest
+under it.
 
 A module's `depHash` binds its own source and the *artifacts* it imported, not
 those artifacts' sources: Lake mixes an import's output hashes and transitive
