@@ -839,7 +839,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "validate_elab_deferral",
     "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
-    "read_build_certificate", "write_build_certificate",
+    "read_build_certificate", "write_build_certificate", "certify_admitted",
+    "CERTIFY_MEMORY_GIB",
     "LAKE_TRACE_SCHEMA", "LAKE_HASH_NIL", "SOURCE_CURRENCY_HELPER",
     "lake_mix", "lake_hash", "lake_fold", "lake_trace_node", "read_lake_trace",
     "lake_module_facts",
@@ -2522,6 +2523,27 @@ def write_build_certificate(root: Path) -> dict[str, Any]:
     return certificate
 
 
+#: Peak estimate, in whole GiB, for certification: the source-currency helper
+#: loads the Lake workspace and measured 2.0-2.1 GiB peak resident memory on
+#: the full tree (evidence/build-certificate-source-currency-v1/round2/F5-cost.txt).
+CERTIFY_MEMORY_GIB = 3
+
+
+def certify_admitted(root: Path) -> dict[str, Any]:
+    """`write_build_certificate` under host admission.
+
+    Uses the gate semaphore's nested mode: a caller that already holds the
+    host under this worktree's label (a certifying wrapper, a gate row, a
+    session) gets `ALREADY_HELD` at once and certification proceeds under that
+    hold, so a catalogue run cannot deadlock behind itself.  Otherwise the
+    hold is taken for certification alone and released before returning.
+    """
+
+    with gate_semaphore.admitted("build certification (Lake source currency)",
+                                 CERTIFY_MEMORY_GIB):
+        return write_build_certificate(root)
+
+
 def build_certificate_status(
     root: Path, lake_root: Path | None = None
 ) -> tuple[bool, str, dict[str, Any] | None]:
@@ -3228,9 +3250,19 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # own process; this one has no wrapper to do it, so the hold is taken
         # here and dropped again before the planned rows start -- a runner that
         # kept it would own the host for the whole selective run.
+        certified: Exception | None = None
         try:
             with gate_semaphore.admitted(f"the {gate['id']} prerequisite", 8):
                 verdict, elapsed = executed(gate, "prerequisite")
+                # Certification runs the source-currency helper (about 2 GiB);
+                # it runs here, under the hold already taken for the build it
+                # certifies, so it asks the host nothing more and cannot wait
+                # behind this run's own hold.
+                if verdict["passed"] and gate["id"] == "lake-build":
+                    try:
+                        write_build_certificate(root)
+                    except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
+                        certified = error
         except gate_semaphore.Refused as refusal:
             for line in gate_semaphore.refusal_lines(
                 gate_semaphore.label(), f"the {gate['id']} prerequisite", refusal
@@ -3245,11 +3277,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             problem = "; ".join(verdict["problems"])
             print(f"         FAILED: {problem}", file=sys.stderr)
             failures.append(f"{command_text(gate)}: {problem}")
-        elif gate["id"] == "lake-build":
-            try:
-                write_build_certificate(root)
-            except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
-                failures.append(f"{command_text(gate)}: could not certify build: {error}")
+        elif certified is not None:
+            failures.append(f"{command_text(gate)}: could not certify build: {certified}")
 
     if failures:
         # Without a current build there is no sound dependency identity for any
@@ -3993,7 +4022,13 @@ def main(argv: list[str]) -> int:
         try:
             if arguments.mode == "certify-build":
                 try:
-                    certificate = write_build_certificate(root)
+                    certificate = certify_admitted(root)
+                except gate_semaphore.Refused as refusal:
+                    for line in gate_semaphore.refusal_lines(
+                        gate_semaphore.label(), "build certification", refusal
+                    ):
+                        print(line)
+                    return 2
                 except Exception as error:  # noqa: BLE001 - every failure refuses
                     print(f"REGRESSION — lake build certificate refused: {error}", file=sys.stderr)
                     return 2

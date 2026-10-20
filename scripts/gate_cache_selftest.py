@@ -1507,11 +1507,17 @@ def control_build_certificate_report_sanitizes_its_host_field() -> None:
         certificate = {"identity": "a" * 64, "host": hostile, "currency": dict(_STUB_CURRENCY)}
         out = io.StringIO()
         with patched(gc, "ROOT", s.root), \
-                patched(gc, "write_build_certificate", lambda root: certificate):
+                patched(gc, "write_build_certificate", lambda root: certificate), \
+                declared_coordination(None), \
+                patched(gate_semaphore, "ENTRY", s.coordination.entry):
             with contextlib.redirect_stdout(out):
                 code = gc.main(["certify-build"])
         printed = out.getvalue()
+        requests = [call for call in s.coordination.calls_made()
+                    if call.startswith("adaptive-acquire")]
     require(code == 0, f"the certify-build report should succeed:\n{printed}")
+    require(len(requests) == 1 and f"--memory-gib {gc.CERTIFY_MEMORY_GIB}" in requests[0],
+            f"certify-build must ask for host admission once: {requests}")
     require(hostile not in printed and "OK — elab:" not in printed,
             "a certificate host field must never reach stdout unsanitized")
     require("<unrecognized>" in printed,
@@ -3923,6 +3929,8 @@ def control_certification_is_not_blocked_by_another_worktree() -> None:
             out = io.StringIO()
             with patched(gc, "ROOT", s.root), \
                     patched(gc, "write_build_certificate", lambda root: certificate), \
+                    declared_coordination(None), \
+                    patched(gate_semaphore, "ENTRY", s.coordination.entry), \
                     contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = gc.main(["certify-build"])
             require(code == 0, f"a held store lock must not block certification:\n{out.getvalue()}")
@@ -3933,6 +3941,8 @@ def control_certification_is_not_blocked_by_another_worktree() -> None:
             out = io.StringIO()
             with patched(gc, "ROOT", s.root), \
                     patched(gc, "write_build_certificate", lambda root: certificate), \
+                    declared_coordination(None), \
+                    patched(gate_semaphore, "ENTRY", s.coordination.entry), \
                     contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
                 code = gc.main(["certify-build"])
             require(code == 2 and "REFUSED" in out.getvalue(),

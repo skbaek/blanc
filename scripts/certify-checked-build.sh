@@ -38,5 +38,15 @@ for artifact in "${artifacts[@]}"; do
 done
 echo "build certification: ${#artifacts[@]} cache artifact entries present (not yet hash-verified)"
 
+# Host admission, as check-claims.sh takes it: the integrity checker and the
+# certificate writer's source-currency helper (about 2 GiB, which loads the Lake
+# workspace) both run under this one hold.  The writer's own admission request
+# is answered ALREADY_HELD for this label and proceeds under it (the
+# semaphore's nested mode), so nothing waits behind this hold.  No `exec`: the
+# EXIT trap must outlive the writer to release the hold.
+. scripts/gate-semaphore.sh
+trap gate_semaphore_release EXIT
+gate_semaphore_acquire "build certification" 3 || exit 2
+
 bash scripts/check-lake-artifact-cache.sh
-exec bash scripts/check-gates.sh --certify-build
+bash scripts/check-gates.sh --certify-build

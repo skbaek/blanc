@@ -488,10 +488,24 @@ the requested modules and the stat identity of every file it read), about
 five seconds warm at about 2.0 GiB peak resident memory (loading the
 workspace's configurations accounts for most of it; hashing the covered
 `.olean` bytes adds about one and a half seconds); repeats in the same process
-take under a second. That is above the roughly 1 GiB of the unadmitted
-`check-lake-artifact-cache.lean`, so the helper currently runs without host
-admission only as an interim state: it should take a light admission before
-it starts.
+take under a second (measured in
+`evidence/build-certificate-source-currency-v1/round2/F5-cost.txt` of the goal
+store: first status call 7.5 s, later calls 0.85 s, helper peak 2,037 MiB).
+
+Admission. Certification is host-admitted with a 3 GiB estimate:
+`scripts/certify-checked-build.sh` takes the `gate-semaphore.sh` hold
+`check-claims.sh` uses, under the worktree's label, for the integrity check
+and the writer together; `check-gates.sh --certify-build` takes the same
+admission itself; and a selective run certifies inside the hold it already
+took for its `lake build` prerequisite, asking the host nothing more. A nested
+request under a hold of the same label is answered `ALREADY_HELD` at once and
+proceeds under it (the semaphore's nested mode), so certification never waits
+behind its own run. A certificate status check inside a gate row runs under
+that row's hold. Status checks from `scripts/worktree_seed.py` and Creme's
+`blanc-build-certificate` workflow guard, and the runner's own status checks
+before and after its rows, are not admitted: they are a light, transient
+check (about 2.0 GiB peak for about 6 s, at most one helper run per seed,
+guard or runner process because of the memo), accepted as such.
 
 A module's `depHash` binds its own source and the *artifacts* it imported, not
 those artifacts' sources: Lake mixes an import's output hashes and transitive
