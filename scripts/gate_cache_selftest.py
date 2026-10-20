@@ -1328,6 +1328,78 @@ def control_registry_declaration_invalidates() -> None:
         require(s.disposition("g") == "fresh", "a widened declaration must force execution")
 
 
+    # The production claim-hash row explicitly owns the exact certificate
+    # prerequisite's source reads; an imported depHash is not a source digest.
+    registry = json.loads((Path(gc.__file__).parent / "gate-registry.json").read_text())
+    claim = next(gate for gate in registry["gates"] if gate["id"] == "claim-hash")
+    required_files = (
+        "Blanc.lean", "Main.lean", "lakefile.lean",
+        "scripts/build-source-currency.lean", ".lake/blanc-build-certificate-v4.json",
+    )
+    for relative in required_files:
+        require(claim["inputs"]["files"].count(relative) == 1,
+                f"claim-hash: exact prerequisite input missing or duplicated: {relative}")
+    population = {"root": "Blanc", "pattern": "**/*.lean"}
+    require(claim["inputs"].get("populations", []).count(population) == 1,
+            "claim-hash: Blanc source content population missing or duplicated")
+    with tempfile.TemporaryDirectory(prefix="claim-hash-input-control-") as temp:
+        root = Path(temp).resolve()
+
+        def put(relative, content):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            return path
+
+        for relative in claim["inputs"]["files"]:
+            put(relative, "fixture input\n")
+        put("scripts/ClaimCheck.lean", "import Blanc.Fixture\n")
+        put(".lake/build/lib/lean/Blanc/Fixture.trace", '{"depHash":"fixture-dep"}')
+        put("Blanc/Fixture.lean", "def fixture := 0\n")
+        put("Blanc/Nested/Other.lean", "def other := 0\n")
+
+        def fixed_tools(fixture_root, names):
+            detail = {name: "fixture-tool" for name in names}
+            return gc.digest_of(detail), detail
+
+        def identity():
+            gc.forget_digests()
+            return gc.fingerprint(root, claim)[0]
+
+        # No interpreter, build, certification, gate command, Git or host hold
+        # is run here. Only tool discovery is fixed; the actual row, registry,
+        # runner, file/population and Lean-entry components remain production.
+        with patched(gc, "component_tools", fixed_tools):
+            baseline = identity()
+            for relative in (*required_files, "Blanc/Fixture.lean", "Blanc/Nested/Other.lean"):
+                path = root / relative
+                original = path.read_bytes()
+                try:
+                    path.write_bytes(original + b"\nchanged\n")
+                    require(identity() != baseline,
+                            f"claim-hash: changed prerequisite must invalidate: {relative}")
+                finally:
+                    path.write_bytes(original)
+                require(identity() == baseline,
+                        f"claim-hash: restored prerequisite must restore identity: {relative}")
+            for relative in ("docs/unrelated.md", "Blanc/unrelated.txt"):
+                put(relative, "unrelated\n")
+                require(identity() == baseline,
+                        f"claim-hash: unrelated file must not invalidate: {relative}")
+            extra = put("Blanc/Nested/New.lean", "def newFixture := 0\n")
+            require(identity() != baseline, "claim-hash: added Lean source must invalidate")
+            extra.unlink()
+            require(identity() == baseline, "claim-hash: removed extra source must restore identity")
+            path = root / "Blanc/Nested/Other.lean"
+            original = path.read_bytes()
+            try:
+                path.unlink()
+                require(identity() != baseline, "claim-hash: removed Lean source must invalidate")
+            finally:
+                path.write_bytes(original)
+            require(identity() == baseline, "claim-hash: restored source population must restore identity")
+
+
 def control_lock_implementation_is_not_gate_evidence_identity() -> None:
     gate = simple_gate("g", ["scripts/g.sh"], {}, "^OK — g: ")
     sources = gc.runner_identity_sources(gate)
@@ -2199,6 +2271,16 @@ def control_symlink_file_target_invalidates() -> None:
 def control_current_mainnet_python_base_is_native() -> None:
     """The CPython root follows the venv selector instead of one OS literal."""
 
+    # Every native consumer must own the optional archive through exact files.
+    registry = json.loads(gc.registry_path(Path(gc.__file__).resolve().parent.parent)
+                          .read_text(encoding="utf-8"))
+    native = [row for row in registry["gates"] if gc.gate_uses_t8n_resolver(row)]
+    require(bool(native), "native ZIP registration control needs a nonempty consumer population")
+    for row in native:
+        require(row["inputs"].get("files", []).count(
+                    "@t8n_python_base/lib/python311.zip") == 1,
+                f"{row['id']}: optional native ZIP input missing or repeated")
+
     with scratch() as s:
         target = s.root / "target"
         selector = target / ".venv/bin/python"
@@ -2225,6 +2307,180 @@ def control_current_mainnet_python_base_is_native() -> None:
                 resolved == (bases[1] / "lib/python3.11").resolve(strict=True),
                 "derived CPython root did not follow a retargeted native selector",
             )
+            # The optional archive is beside, not inside, the stdlib tree.
+            # Exercise the production file/fingerprint path; never execute the
+            # fake interpreter or infer existence from attempted enumeration.
+            archive = resolved.parent / "python311.zip"
+            archive_key = "@t8n_python_base/lib/python311.zip"
+            payload = b"synthetic archive bytes\n"
+
+            def archive_identity():
+                gc.forget_digests()
+                return gc.component_files(s.root, [archive_key])
+
+            def archive_refuses(label: str) -> None:
+                try:
+                    archive_identity()
+                except gc.Unresolvable:
+                    return
+                raise ControlFailure(f"native ZIP {label} must refuse identity")
+
+            absent, detail = archive_identity()
+            require(detail[archive_key] == "<absent>",
+                    "only an absent ZIP leaf may retain the optional absence marker")
+            archive.write_bytes(payload)
+            regular, detail = archive_identity()
+            require(detail[archive_key] == gc.sha256_bytes(payload) and regular != absent,
+                    "ZIP appearance must bind the existing regular-file SHA256 shape")
+            archive.write_bytes(payload + b"changed\n")
+            require(archive_identity()[0] != regular,
+                    "one ZIP content change must invalidate its file identity")
+            archive.unlink()
+            require(archive_identity()[0] == absent,
+                    "ZIP removal must recover the absent-path identity")
+
+            archive.mkdir()
+            archive_refuses("plain directory")
+            (archive / "module.py").write_text("value = 1\n", encoding="utf-8")
+            archive_refuses("nonempty directory")
+            (archive / "module.py").unlink()
+            archive.rmdir()
+
+            first = s.write("archives/first.zip", payload.decode())
+            second = s.write("archives/second.zip", payload.decode())
+            archive.symlink_to(first)
+            linked = archive_identity()[0]
+            require(linked != regular,
+                    "a ZIP file symlink must retain selector identity as well as bytes")
+            archive.unlink()
+            archive.symlink_to(second)
+            require(archive_identity()[0] != linked,
+                    "ZIP retargeting must invalidate even with identical target bytes")
+            linked = archive_identity()[0]
+            second.write_bytes(payload + b"target change\n")
+            require(archive_identity()[0] != linked,
+                    "a ZIP symlink target's byte change must invalidate")
+            archive.unlink()
+            relative = os.path.relpath(first, archive.parent)
+            archive.symlink_to(relative)
+            relative_identity = archive_identity()[0]
+            archive.unlink()
+            archive.symlink_to(first)
+            require(archive_identity()[0] != relative_identity,
+                    "relative and absolute ZIP link selectors remain distinct")
+            archive.unlink()
+            archive.symlink_to(bases[1] / "lib/python3.11", target_is_directory=True)
+            archive_refuses("directory symlink")
+            archive.unlink()
+            archive.symlink_to(s.root / "missing-archive.zip")
+            archive_refuses("dangling symlink")
+            archive.unlink()
+            archive.symlink_to(archive.name)
+            archive_refuses("self-loop symlink")
+            archive.unlink()
+            other_link = archive.with_name("other.zip")
+            archive.symlink_to(other_link.name)
+            other_link.symlink_to(archive.name)
+            archive_refuses("two-link cycle")
+            archive.unlink()
+            other_link.unlink()
+
+            library = archive.parent
+            saved_library = bases[1] / "saved-library"
+            library.rename(saved_library)
+            try:
+                archive_refuses("missing library parent")
+                library.write_text("not a directory\n", encoding="utf-8")
+                archive_refuses("file ancestor")
+                library.unlink()
+                library.symlink_to("missing-library", target_is_directory=True)
+                archive_refuses("dangling library ancestor")
+                library.unlink()
+                library.symlink_to(library.name, target_is_directory=True)
+                archive_refuses("looping library ancestor")
+            finally:
+                if library.is_symlink() or library.exists():
+                    library.unlink()
+                saved_library.rename(library)
+
+            # Inject otherwise privilege-dependent inspection failures only on
+            # this synthetic path. This is error handling, not OS access proof.
+            original_lstat = Path.lstat
+            def unreadable_leaf(path, *args, **kwargs):
+                if path == archive:
+                    raise PermissionError("synthetic ZIP inspection denied")
+                return original_lstat(path, *args, **kwargs)
+            with patched(Path, "lstat", unreadable_leaf):
+                archive_refuses("uninspectable leaf")
+            original_resolve = Path.resolve
+            def unreadable_parent(path, *args, **kwargs):
+                if path == library:
+                    raise PermissionError("synthetic ZIP parent inspection denied")
+                return original_resolve(path, *args, **kwargs)
+            with patched(Path, "resolve", unreadable_parent):
+                archive_refuses("uninspectable parent")
+            archive.write_bytes(payload)
+            original_read = Path.read_bytes
+            def unreadable_contents(path, *args, **kwargs):
+                if path == archive:
+                    raise PermissionError("synthetic ZIP read denied")
+                return original_read(path, *args, **kwargs)
+            with patched(Path, "read_bytes", unreadable_contents):
+                archive_refuses("unreadable regular file")
+            archive.unlink()
+
+            require(hasattr(os, "mkfifo"), "native ZIP controls require supported POSIX FIFO metadata")
+            os.mkfifo(archive)
+            archive_refuses("FIFO")
+            archive.unlink()
+            fifo = s.root / "archive-fifo"
+            os.mkfifo(fifo)
+            archive.symlink_to(fifo)
+            archive_refuses("FIFO symlink")
+            archive.unlink()
+            fifo.unlink()
+
+            gate = simple_gate("zip", ["synthetic-never-executed"],
+                               {"files": [archive_key]}, "^OK — zip: ")
+            def fingerprint(selected):
+                gc.forget_digests()
+                return gc.fingerprint(s.root, selected)[0]
+            def require_transition(selected):
+                before = fingerprint(selected)
+                archive.write_bytes(payload)
+                try:
+                    after = fingerprint(selected)
+                finally:
+                    archive.unlink()
+                require(after != before,
+                        "ZIP entry must invalidate an absent-to-file transition")
+            require_transition(gate)
+            without_entry = copy.deepcopy(gate)
+            without_entry["inputs"]["files"] = []
+            try:
+                require_transition(without_entry)
+            except ControlFailure as error:
+                require(str(error) == "ZIP entry must invalidate an absent-to-file transition",
+                        f"sole ZIP entry loss must bite at transition identity: {error}")
+            else:
+                raise ControlFailure("sole ZIP entry loss escaped its transition control")
+            require(gate["inputs"]["files"] == [archive_key],
+                    "sole-entry counterfactual must not mutate the green declaration")
+
+            archive.write_bytes(payload)
+            fingerprint(gate)
+            archive.unlink()
+            archive.mkdir()
+            try:
+                try:
+                    fingerprint(gate)
+                except gc.Unresolvable:
+                    pass
+                else:
+                    raise ControlFailure("post-change ZIP directory fingerprint was accepted")
+            finally:
+                archive.rmdir()
+
             selector.unlink()
             selector.write_text("not a selector\n", encoding="utf-8")
             try:

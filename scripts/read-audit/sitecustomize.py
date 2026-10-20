@@ -193,6 +193,29 @@ def install(target: str):
             return
         _emit("L", path)
 
+    def _popen_execute_frame(require_spawn=False):
+        """Identify this exact stdlib constructor's active launch, not argv equality."""
+        module = sys.modules.get("subprocess")
+        cls = getattr(module, "Popen", None)
+        codes = {name: getattr(getattr(cls, name, None), "__code__", None)
+                 for name in ("__init__", "_execute_child", "_posix_spawn")}
+        required = ("__init__", "_execute_child", "_posix_spawn") if require_spawn else ("__init__", "_execute_child")
+        if any(codes[name] is None for name in required):
+            return None
+        seen, execute_frame = set(), None
+        try:
+            frame = sys._getframe(1)
+        except (AttributeError, ValueError):
+            return None
+        while frame is not None:
+            for name in required:
+                if frame.f_code is codes[name]:
+                    seen.add(name)
+                    if name == "_execute_child":
+                        execute_frame = id(frame)
+            frame = frame.f_back
+        return execute_frame if set(required) <= seen else None
+
     def _record_process(event, args):
         if event in ("os.system", "os.fork", "os.forkpty"):
             _emit("U", f"opaque process handoff: {event}")
@@ -204,13 +227,23 @@ def install(target: str):
         except (TypeError, IndexError):
             _emit("U", f"unresolved process handoff: {event}")
             return
+        if event == "subprocess.Popen":
+            _LOCAL.popen_event = (_popen_execute_frame(), tuple(command))
+        elif event == "os.posix_spawn":
+            frame = _popen_execute_frame(require_spawn=True)
+            if frame is not None and getattr(_LOCAL, "popen_event", None) == (frame, tuple(command)):
+                # Popen already recorded this same active constructor launch.
+                # A direct posix_spawn, or a separate identical launch, is not
+                # coalesced: neither has this active constructor/frame receipt.
+                _LOCAL.popen_event = None
+                return
         if "--read-audit" in command:
             marker = command.index("--read-audit")
             bootstrap = os.path.join(os.path.dirname(__file__), "bootstrap.py")
             if marker > 0 and os.path.realpath(command[marker - 1]) == os.path.realpath(bootstrap):
                 try:
                     config = json.loads(command[marker + 1])
-                    _emit("T", json.dumps({"nonce": config["nonce"], "parent_pid": os.getpid()}, sort_keys=True))
+                    _emit("T", json.dumps({"nonce": config["nonce"], "parent_pid": os.getpid(), "event": event}, sort_keys=True))
                 except (ValueError, KeyError, IndexError, TypeError):
                     _emit("U", "invalid explicit observer transport")
                 return
@@ -235,15 +268,20 @@ def install(target: str):
                 if first.startswith("#!/") and " " not in first[2:] and re.fullmatch(r"python(?:\d+(?:\.\d+)*)?", os.path.basename(first[2:])):
                     command = [first[2:], *command]
                     python = True
+                elif first == "#!/usr/bin/env python3":
+                    # Recognition only: preserve the kernel/env invocation and
+                    # require its actual child startup/completion receipts.
+                    command = ["python3", *command]
+                    python = True
                 elif first.startswith("#!") and "python" in first:
                     _emit("U", "unsupported Python shebang descendant: " + repr(original))
                     return
             except OSError:
                 pass
         if python:
-            _emit("P", json.dumps({"parent_pid": os.getpid(), "original": command}, sort_keys=True))
+            _emit("P", json.dumps({"parent_pid": os.getpid(), "original": command, "event": event}, sort_keys=True))
         else:
-            _emit("D", json.dumps({"parent_pid": os.getpid(), "command": original}, sort_keys=True))
+            _emit("D", json.dumps({"parent_pid": os.getpid(), "command": original, "event": event}, sort_keys=True))
 
     def _hook(event, args):
         _record(event, args)

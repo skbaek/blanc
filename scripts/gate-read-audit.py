@@ -160,6 +160,12 @@ def declared_coverage(
         except Exception:
             pass
 
+    # Material-output producer sources are independently content-hashed by
+    # component_material_output, even when their emitted bytes stay unchanged.
+    for spec in inputs.get("material_output", []):
+        for given in spec["authority"]:
+            exact.add(gc.resolve_path(ROOT, given).resolve())
+
     for spec in inputs.get("populations", []):
         if spec.get("tracked") is True:
             names = gc.glob_population(ROOT, spec)  # uncertainty must remain visible in every mode

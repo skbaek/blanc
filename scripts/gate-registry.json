@@ -1119,6 +1119,7 @@
    "inputs": {
     "files": [
      "scripts/check-lido-ossifiable-proxy-artifacts.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/lido-ossifiable-proxy-artifacts.py",
      "scripts/lido-ossifiable-proxy-artifacts.json",
      "scripts/test-lido-ossifiable-proxy-artifact-falsifiers.py",
@@ -1699,6 +1700,7 @@
      "scripts/check-runtime-bytes.py",
      "scripts/weth10-reference.json",
      "scripts/fixtures/weth10/manifest.json",
+     "Blanc/Weth10Code.lean",
      "@eels/venv/pyvenv.cfg",
      "@eels/venv/bin/python",
      "scripts/gate-semaphore.sh"
@@ -2241,6 +2243,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git"
@@ -2323,6 +2326,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git",
@@ -2427,6 +2431,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git",
@@ -2658,6 +2663,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git"
@@ -2737,6 +2743,9 @@
      "scripts/lido_ossifiable_proxy_performance_schema.py",
      "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json",
      "scripts/lido-ossifiable-proxy-reference.json",
+     "scripts/reference/lido-ossifiable-proxy/inputs/solc-emscripten-wasm32-list.json",
+     "scripts/reference/lido-ossifiable-proxy/inputs/solc-emscripten-wasm32-v0.8.9+commit.e5eed63a.js",
+     "scripts/reference/lido-ossifiable-proxy/inputs/source/contracts/0.8.9/proxy/OssifiableProxy.sol",
      "scripts/run-lido-ossifiable-proxy-performance.py",
      "scripts/lido-ossifiable-proxy-artifacts.py",
      "Blanc/ProxyPairOssifiableArtifacts.lean",
@@ -2747,6 +2756,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git",
@@ -2941,7 +2951,12 @@
      "scripts/gate_cache_t8n_root.py",
      "scripts/gate_cache_host_identity.py",
      "lean-toolchain",
-     "lake-manifest.json"
+     "lake-manifest.json",
+     "Blanc.lean",
+     "Main.lean",
+     "lakefile.lean",
+     "scripts/build-source-currency.lean",
+     ".lake/blanc-build-certificate-v4.json"
     ],
     "lean_entries": [
      "scripts/ClaimCheck.lean"
@@ -2949,10 +2964,16 @@
     "tools": [
      "lean",
      "python3"
+    ],
+    "populations": [
+     {
+      "pattern": "**/*.lean",
+      "root": "Blanc"
+     }
     ]
    },
    "kind": "cacheable",
-   "note": "The closure hash reads ClaimCheck's elaborated environment, so ClaimCheck is a Lean entry and every artifact it imports is fingerprinted; the driver imports only Lean and is a plain file input. It requires the exact build certificate through scripts/gate-cache.py (imported, with its import closure scripts/gate_semaphore.py, scripts/gate_cache_lock.py, scripts/gate_cache_t8n_root.py and scripts/gate_cache_host_identity.py), so all are inputs; the lake-build prerequisite writes that certificate. scripts/check-claims.sh is an input because its pin-count literal is cross-checked. lean-toolchain and lake-manifest.json are the boundary identities. The three manifest files are the golden compared against.",
+   "note": "The closure hash reads ClaimCheck's elaborated environment, so ClaimCheck is a Lean entry and every artifact it imports is fingerprinted; the driver imports only Lean and is a plain file input. It requires the exact build certificate through scripts/gate-cache.py (imported, with its import closure scripts/gate_semaphore.py, scripts/gate_cache_lock.py, scripts/gate_cache_t8n_root.py and scripts/gate_cache_host_identity.py), so all are inputs; the lake-build prerequisite writes that certificate. scripts/check-claims.sh is an input because its pin-count literal is cross-checked. lean-toolchain and lake-manifest.json are the boundary identities. The three manifest files are the golden compared against. The certificate check also reads all Blanc/**/*.lean source contents, Blanc.lean, optional Main.lean, lakefile.lean and scripts/build-source-currency.lean; those sources and the exact certificate file are fingerprinted here independently of the lake-build prerequisite. Rewriting the certificate conservatively invalidates this row.",
    "order": 60,
    "verdict": {
     "expect_exit": 0,
@@ -3790,6 +3811,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git"
@@ -3873,6 +3895,7 @@
      "@t8n_target/.venv/bin/python",
      "@t8n_target/.venv/bin/ethereum-spec-evm",
      "@t8n_python_base/bin/python3.11",
+     "@t8n_python_base/lib/python311.zip",
      "/bin/bash",
      "/usr/bin/env",
      "/usr/bin/git"

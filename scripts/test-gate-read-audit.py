@@ -646,6 +646,271 @@ def legacy_descendant_controls() -> None:
         print('OK focused actual-core legacy controls')
 
 
+def launch_event_regression_controls() -> None:
+    """Real launch/receipt controls; only unavailable native mechanics may skip."""
+    import ast
+    import hashlib
+    import json
+    import shutil
+
+    with tempfile.TemporaryDirectory(prefix="gate-read-launch-events-") as directory:
+        root = Path(directory).resolve()
+        copied = root / "observer/scripts/read-audit"
+        shutil.copytree(HOOK, copied, ignore=shutil.ignore_patterns("__pycache__"))
+        module = load_audit()
+        module.ROOT, module.gc.ROOT = root, root
+        module.OUT_DIR, module.HOOK_DIR = root / "audit", copied
+        (root / "hidden.txt").write_text("undeclared input\n")
+        # Capability probes must not inherit an outer read observer or ambient
+        # import overrides. This is a declared probe environment, not a claim
+        # that the inherited-hook path preserves native sys.path/sys.modules.
+        native_env = {key: value for key, value in os.environ.items()
+                      if key not in {"GATE_READ_AUDIT", "PYTHONPATH", "PYTHONHOME"}}
+        native_env["PYTHONDONTWRITEBYTECODE"] = "1"
+        clean_expression = ("{key:value for key,value in os.environ.items() "
+                            "if key not in {'GATE_READ_AUDIT','PYTHONPATH','PYTHONHOME'}}")
+
+        def native(code):
+            result = subprocess.run([sys.executable, "-B", "-c", code], cwd=root,
+                                    env=native_env, capture_output=True, text=True, check=True)
+            return json.loads(result.stdout)
+
+        def audit(name, command, files=()):
+            result = module.audit_gate({"id": name, "command": command,
+                                       "inputs": {"files": list(files)}}, [root], set())
+            print("CONTROL " + json.dumps({"name": name, "gate_exit": result["exit"],
+                  "coverage": result["coverage_status"], "holes": result["undeclared"],
+                  "unverified": result["unverified"]}, sort_keys=True))
+            return result
+
+        def python(name, code, files=()):
+            return audit(name, [sys.executable, "-B", "-c", code], files)
+
+        def hole(result):
+            assert result["exit"] == 0 and not result["unverified"], result
+            assert result["coverage_status"] == "observed-python-path", result
+            assert "hidden.txt" in result["undeclared"], result
+
+        def raw(name, kind):
+            return [json.loads(line.partition("\t")[2])
+                    for line in (module.OUT_DIR / (name + ".log")).read_text().splitlines()
+                    if line.startswith(kind + "\t")]
+
+        def sole_mutation(path, before, after, failure):
+            original = path.read_bytes()
+            assert original.count(before) == 1
+            try:
+                path.write_bytes(original.replace(before, after, 1))
+                result = failure()
+                assert result["exit"] == 0 and result["unverified"], result
+            finally:
+                path.write_bytes(original)
+            assert path.read_bytes() == original
+            print("CONTROL restored exact green bytes SHA256 " + hashlib.sha256(original).hexdigest()
+                  + "; no identical restored rerun")
+
+        payload = "assert open('hidden.txt').read()=='undeclared input\\n'"
+        child = [sys.executable, "-B", "-c", payload]
+        prefix = ("import subprocess,sys,os,json\nevents=[]\n"
+                  "sys.addaudithook(lambda event,args:events.append(event) "
+                  "if event in ('subprocess.Popen','os.posix_spawn') else None)\n")
+        one = prefix + f"subprocess.run({child!r},check=True,close_fds=False)\nprint(json.dumps(events))"
+        events = native(one)
+        print("CAPABILITY " + json.dumps({"python": sys.executable, "popen_events": events}, sort_keys=True))
+        # A valid older/platform-specific Popen backend can emit only Popen.
+        # Unknown traces and execution failures are failures, never skips.
+        assert events in (["subprocess.Popen"], ["subprocess.Popen", "os.posix_spawn"]), events
+        hole(python("popen-one", one))
+        assert json.loads((module.OUT_DIR / "popen-one.stdout.log").read_text()) == events
+        assert len(raw("popen-one", "P")) == 1 and len(raw("popen-one", "S")) == 2
+        two = prefix + (f"subprocess.run({child!r},check=True,close_fds=False)\n" * 2) + "print(json.dumps(events))"
+        hole(python("popen-identical-two", two))
+        assert json.loads((module.OUT_DIR / "popen-identical-two.stdout.log").read_text()) == events * 2
+        assert len(raw("popen-identical-two", "P")) == 2 and len(raw("popen-identical-two", "S")) == 3
+        if events == ["subprocess.Popen", "os.posix_spawn"]:
+            sole_mutation(copied / "sitecustomize.py",
+                          b'if frame is not None and getattr(_LOCAL, "popen_event", None) == (frame, tuple(command)):',
+                          b'if False and frame is not None and getattr(_LOCAL, "popen_event", None) == (frame, tuple(command)):',
+                          lambda: python("nested-sole-correlation-removal", one))
+        else:
+            print("SKIP nested-correlation mutation only: native selected Popen backend emitted no nested os.posix_spawn; trace=" + repr(events))
+
+        # Detect actual syscall availability. Only absent API, NotImplemented,
+        # ENOSYS or ENOTSUP are unavailable mechanics; other failures propagate.
+        spawn_probe = (prefix + "import errno\n"
+                       "if not hasattr(os,'posix_spawn'):\n"
+                       " print(json.dumps({'available':False,'reason':'os.posix_spawn absent'}))\n"
+                       "else:\n"
+                       " try:\n"
+                       + f"  pid=os.posix_spawn({sys.executable!r},{child!r},dict(os.environ))\n"
+                       " except NotImplementedError:\n"
+                       "  print(json.dumps({'available':False,'reason':'posix_spawn NotImplementedError'}))\n"
+                       " except OSError as error:\n"
+                       "  if error.errno not in {errno.ENOSYS,getattr(errno,'ENOTSUP',errno.ENOSYS)}: raise\n"
+                       "  print(json.dumps({'available':False,'reason':'posix_spawn errno '+str(error.errno)}))\n"
+                       " else:\n"
+                       "  assert os.waitpid(pid,0)[1]==0\n"
+                       "  print(json.dumps({'available':True,'events':events}))\n")
+        spawn = native(spawn_probe)
+        print("CAPABILITY " + json.dumps({"direct_posix_spawn": spawn}, sort_keys=True))
+        if spawn["available"]:
+            assert spawn["events"] == ["os.posix_spawn"], spawn
+            direct = prefix + f"pid=os.posix_spawn({sys.executable!r},{child!r},dict(os.environ));assert os.waitpid(pid,0)[1]==0\n"
+            hole(python("direct-posix", direct))
+            assert len(raw("direct-posix", "P")) == 1
+            assert raw("direct-posix", "P")[0]["event"] == "os.posix_spawn"
+            missing = (prefix + f"subprocess.run({child!r},check=True,close_fds=False)\n"
+                       + f"pid=os.posix_spawn({sys.executable!r},{child!r},{clean_expression});assert os.waitpid(pid,0)[1]==0\n")
+            result = python("direct-identical-missing-receipt", missing)
+            assert result["exit"] == 0 and result["unverified"] and result["reads_observed"] > 0, result
+            assert len(raw("direct-identical-missing-receipt", "P")) == 2
+        else:
+            print("SKIP direct-posix controls only: " + spawn["reason"])
+
+        # The fixed shebang is the supported subject. Choose this interpreter,
+        # never a host's possibly different /usr/bin/python3. Disposable aliases
+        # also make the unsupported env-python spelling independently runnable.
+        if os.name != "posix" or not os.access("/usr/bin/env", os.X_OK):
+            print("SKIP env-python shebang controls only: POSIX /usr/bin/env execution unavailable")
+        else:
+            binary = root / "selected-native-bin"
+            binary.mkdir()
+            for name in ("python3", "python"):
+                (binary / name).symlink_to(sys.executable)
+            target_path = str(binary) + os.pathsep + os.defpath
+            subject = root / "env-python.py"
+            subject.write_text("#!/usr/bin/env python3\nimport sys,json,os\n" + payload + "\n"
+                               "print(json.dumps({'argv':sys.argv,'orig':sys.orig_argv,'executable':sys.executable,'file':__file__,'cwd':os.getcwd()},sort_keys=True))\n")
+            subject.chmod(0o755)
+            arguments = [str(subject), "unchanged argument"]
+            environment_setup = f"env=dict(os.environ);env['PATH']={target_path!r}"
+            parent = ("import subprocess,os\n" + environment_setup + "\n"
+                      + f"r=subprocess.run({arguments!r},cwd={str(root)!r},env=env,capture_output=True,text=True,check=True);print(r.stdout,end='')")
+            baseline = subprocess.run(arguments, cwd=root, env=dict(native_env, PATH=target_path),
+                                      capture_output=True, text=True, check=True)
+            probe = json.loads(baseline.stdout)
+            assert Path(probe["executable"]).resolve() == Path(sys.executable).resolve(), probe
+            assert probe["orig"] == ["python3", *arguments], probe
+            hole(python("env-python-recognized", parent, [subject.name]))
+            # Inherited hook PYTHONPATH is deliberately an observer intervention;
+            # compare command identity only, not native full env/sys.path parity.
+            assert (module.OUT_DIR / "env-python-recognized.stdout.log").read_text() == baseline.stdout
+            result = python("env-python-missing-receipt", parent.replace(environment_setup, f"env={clean_expression};env['PATH']={target_path!r}"), [subject.name])
+            assert result["exit"] == 0 and result["unverified"], result
+            unsupported = root / "env-python-unsupported.py"
+            unsupported.write_text(subject.read_text().replace("#!/usr/bin/env python3", "#!/usr/bin/env python"))
+            unsupported.chmod(0o755)
+            result = python("env-python-unsupported", parent.replace(str(subject), str(unsupported)), [unsupported.name])
+            assert result["exit"] == 0 and any("unsupported Python shebang" in message for message in result["unverified"]), result
+            sole_mutation(copied / "sitecustomize.py", b'elif first == "#!/usr/bin/env python3":',
+                          b'elif False and first == "#!/usr/bin/env python3":',
+                          lambda: python("env-python-sole-recognition-removal", parent, [subject.name]))
+
+        # Extract the actual helper with a synthetic generator. Its clean child
+        # env strips PYTHONPATH, so full target probe parity is meaningful here.
+        source = Path(__file__).with_name("test-lido-ossifiable-proxy-artifact-falsifiers.py")
+        node = next(node for node in ast.parse(source.read_text()).body
+                    if isinstance(node, ast.FunctionDef) and node.name == "generator_process")
+        generator = root / "generator.py"
+        generator.write_text("import os,sys,json\n" + payload + "\n"
+                             "print(json.dumps({'environment':dict(os.environ),'argv':sys.argv,'orig':sys.orig_argv,'path':sys.path,'flags':repr(sys.flags),'cwd':os.getcwd()},sort_keys=True))\n")
+        parent_file = root / "artifact-parent.py"
+        parent_file.write_text("import os,subprocess,sys\nfrom pathlib import Path\nGENERATOR=Path('generator.py')\n"
+                               + ast.unparse(node) + f"\nr=generator_process(Path({str(root)!r}),'unchanged');assert r.returncode==0,r.stderr;print(r.stdout,end='')\n")
+        shell = 'SCRIPT_DIR="$1"; . "$SCRIPT_DIR/read-audit/launch.sh"; shift; gate_audit_python "$@"'
+        command = ["bash", "-c", shell, "artifact-control", str(copied.parent), sys.executable, str(parent_file)]
+        baseline = subprocess.run([sys.executable, str(parent_file)], cwd=root,
+                                  env=native_env, capture_output=True, text=True, check=True)
+        result = audit("artifact-sanitized-observed", command, [parent_file.name, generator.name])
+        hole(result)
+        output = (module.OUT_DIR / "artifact-sanitized-observed.stdout.log").read_text()
+        assert output == baseline.stdout
+        assert set(json.loads(output)["environment"]) == {"LANG", "LC_ALL", "PATH", "PYTHONDONTWRITEBYTECODE"}
+        assert len(result["explicit_launches"]) == 2
+        sole_mutation(parent_file, b"run = getattr(sys, '_blanc_gate_read_audit_run', subprocess.run)",
+                      b"run = subprocess.run",
+                      lambda: audit("artifact-sole-callback-removal", command, [parent_file.name, generator.name]))
+
+
+def material_authority_coverage_controls() -> None:
+    """Hashed producer authority is covered; adjacent unregistered reads are not."""
+    import ast
+    import hashlib
+
+    module = load_audit()
+    source = SCRIPT.read_bytes()
+    addition = b'''    # Material-output producer sources are independently content-hashed by
+    # component_material_output, even when their emitted bytes stay unchanged.
+    for spec in inputs.get("material_output", []):
+        for given in spec["authority"]:
+            exact.add(gc.resolve_path(ROOT, given).resolve())
+
+'''
+    assert source.count(addition) == 1, "Install exact reviewed material-authority classifier correction first"
+    with tempfile.TemporaryDirectory(prefix="gate-read-material-authority-") as directory:
+        root = Path(directory).resolve()
+        authority = root / "authority.py"
+        original = b"print('constant')\n"
+        authority.write_bytes(original)
+        (root / "neighbor.txt").write_text("independent undeclared input\n")
+        module.ROOT, module.gc.ROOT, module.OUT_DIR = root, root, root / "audit"
+        producer = {"id": "constant-output", "authority": ["authority.py"],
+                    "command": [sys.executable, "authority.py"]}
+        gate = {"id": "material-authority", "command": [sys.executable, "-B", "-c",
+                "open('authority.py').read();open('neighbor.txt').read()"],
+                "inputs": {"material_output": [producer]}}
+
+        def observed(name, selected=gate):
+            result = module.audit_gate(dict(selected, id=name), [root], set())
+            assert result["exit"] == 0 and not result["unverified"], result
+            return result
+
+        def correct(result):
+            assert result["undeclared"] == ["neighbor.txt"] and result["covered"] == 1, result
+
+        correct(observed("authority-green"))
+        baseline, detail = module.gc.component_material_output(root, [producer])
+        try:
+            authority.write_bytes(original + b"# changed authority, identical output\n")
+            changed, changed_detail = module.gc.component_material_output(root, [producer])
+            assert changed != baseline
+            assert changed_detail["constant-output::output"] == detail["constant-output::output"]
+            assert changed_detail["constant-output::authority"] != detail["constant-output::authority"]
+        finally:
+            authority.write_bytes(original)
+        assert authority.read_bytes() == original
+        print("CONTROL material authority fingerprint changes despite identical output; exact original authority restored, no identical restored rerun")
+        assert observed("authority-not-registered", dict(gate, inputs={}))['undeclared'] == ["authority.py", "neighbor.txt"]
+
+        # Remove only the classifier loop, keeping the production parser,
+        # actual observed reads and registered material producer unchanged.
+        parser = root / "classifier.py"
+        parser.write_bytes(source)
+        green_sha = hashlib.sha256(source).hexdigest()
+        mutated = source.replace(addition, b"", 1)
+        parser.write_bytes(mutated)
+        node = next(node for node in ast.parse(mutated).body
+                    if isinstance(node, ast.FunctionDef) and node.name == "declared_coverage")
+        namespace = dict(module.__dict__)
+        exec(compile(ast.Module(body=[node], type_ignores=[]), str(parser), "exec"), namespace)
+        green = module.declared_coverage
+        try:
+            module.declared_coverage = namespace["declared_coverage"]
+            lost = observed("sole-authority-classifier-removal")
+            assert lost["undeclared"] == ["authority.py", "neighbor.txt"]
+            try:
+                correct(lost)
+            except AssertionError:
+                print("CONTROL sole material-authority classifier removal bites at missing coverage")
+            else:
+                raise AssertionError("sole classifier removal escaped regression control")
+        finally:
+            module.declared_coverage = green
+            parser.write_bytes(source)
+        assert module.declared_coverage is green and hashlib.sha256(parser.read_bytes()).hexdigest() == green_sha
+        print("CONTROL exact green classifier/function restored SHA256 " + green_sha + "; no identical restored rerun")
+
+
 def current_wrapper_source_controls() -> None:
     source = Path(__file__).resolve().parent
     wrappers = ("check-current-mainnet.sh", "check-weth10-current-mainnet.sh",
@@ -694,6 +959,8 @@ def main() -> int:
     observer_removal_control()
     descendant_observation_controls()
     legacy_descendant_controls()
+    launch_event_regression_controls()
+    material_authority_coverage_controls()
     tracked_population_coverage_control()
     hook_control()
     declared_untracked_control()
