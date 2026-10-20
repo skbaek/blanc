@@ -241,6 +241,148 @@ theorem StagedBodyTrace.finalBout_of_bal_none
   rw [listEq] at finalEq
   exact finalEq
 
+/-- Extract the actual optional beacon stage under the selected no-state-gas
+rule, without requiring that the beacon call is enabled. -/
+theorem exists_beaconStageTrace {rules : ForkRules} {benv : Benv}
+    {state : State} {bal : BalBuilder}
+    (h : beaconRootsCall rules benv = .ok (state, bal))
+    (hsg : benv.stat.rules.stateGas = none) :
+    Nonempty (BeaconStageTrace rules benv state bal) := by
+  have h_result := h
+  cases enabled : rules.sys.beaconRoots with
+  | false =>
+      simp only [beaconRootsCall, enabled, Bool.false_eq_true, ↓reduceIte] at h
+      rcases Prod.mk.inj (Except.ok.inj h) with ⟨rfl, rfl⟩
+      exact ⟨.skipped enabled h_result⟩
+  | true =>
+      simp only [beaconRootsCall, enabled, ↓reduceIte] at h
+      obtain ⟨⟨callState, out⟩, hcall, hfinal⟩ := Except.bind_eq_ok h
+      rw [Except.mapError_eq_ok_iff] at hcall
+      rcases exists_systemMessageTrace_of_stateGas_none hcall hsg with ⟨trace⟩
+      dsimp only at hfinal
+      rcases Prod.mk.inj (Except.ok.inj hfinal) with ⟨rfl, rfl⟩
+      exact ⟨.called enabled out trace rfl h_result⟩
+
+/-- Extract the actual history stage; only its enabled arm retains the
+successful last-hash lookup and unchecked system-message execution. -/
+theorem exists_historyStageTrace {rules : ForkRules} {benv : Benv}
+    {inputBal : BalBuilder} {state : State} {bal : BalBuilder}
+    (h : historyStorageCall rules benv inputBal = .ok (state, bal))
+    (hsg : benv.stat.rules.stateGas = none) :
+    Nonempty (HistoryStageTrace rules benv inputBal state bal) := by
+  have h_result := h
+  cases enabled : rules.sys.historyStorage with
+  | false =>
+      simp only [historyStorageCall, enabled, Bool.false_eq_true, ↓reduceIte] at h
+      rcases Prod.mk.inj (Except.ok.inj h) with ⟨rfl, rfl⟩
+      exact ⟨.skipped enabled h_result⟩
+  | true =>
+      simp only [historyStorageCall, enabled, ↓reduceIte] at h
+      obtain ⟨lastHash, hlastHash, h⟩ := Except.bind_eq_ok h
+      obtain ⟨⟨callState, out⟩, hcall, hfinal⟩ := Except.bind_eq_ok h
+      rw [Except.mapError_eq_ok_iff] at hcall
+      rcases exists_systemMessageTrace_of_stateGas_none hcall hsg with ⟨trace⟩
+      dsimp only at hfinal
+      rcases Prod.mk.inj (Except.ok.inj hfinal) with ⟨rfl, rfl⟩
+      exact ⟨.called enabled lastHash hlastHash out trace rfl h_result⟩
+
+/-- Requests need covered-fork extraction only when their actual stage is
+enabled; disabled stages retain their literal input endpoints. -/
+theorem exists_requestStageTrace {rules : ForkRules} {benv : Benv}
+    {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (h : requestsPass rules benv bout = .ok (state, bout'))
+    (hcap : rules.header.requestsHash = true → CoveredFork benv.stat.fork) :
+    Nonempty (RequestStageTrace rules benv bout state bout') := by
+  have h_result := h
+  cases enabled : rules.header.requestsHash with
+  | false =>
+      simp only [requestsPass, enabled, Bool.false_eq_true, ↓reduceIte] at h
+      rcases Prod.mk.inj (Except.ok.inj h) with ⟨rfl, rfl⟩
+      exact ⟨.skipped enabled h_result⟩
+  | true =>
+      simp only [requestsPass, enabled, ↓reduceIte] at h
+      rcases exists_requestsTrace h (hcap enabled) with ⟨trace⟩
+      exact ⟨.called enabled trace h_result⟩
+
+/-- Retain every actual body stage under the selected no-state-gas rule.
+The request capability is needed only when the request pass is enabled. -/
+theorem exists_stagedBodyTrace
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (h : applyBody benv txs ommers wds = .ok (state, bout))
+    (hsg : benv.stat.rules.stateGas = none)
+    (hcap : benv.stat.rules.header.requestsHash = true →
+      CoveredFork benv.stat.fork) :
+    Nonempty (StagedBodyTrace benv txs ommers wds state bout) := by
+  have h_result := h
+  rw [applyBody] at h
+  obtain ⟨⟨beaconState, beaconBal⟩, hbeacon, h⟩ := Except.bind_eq_ok h
+  dsimp only at h
+  obtain ⟨⟨historyState, historyBal⟩, hhistory, h⟩ := Except.bind_eq_ok h
+  dsimp only at h
+  obtain ⟨decodedTxs, hdecoded, h⟩ := Except.bind_eq_ok h
+  obtain ⟨⟨transactionBenv, transactionBout⟩, htransactions, h⟩ :=
+    Except.bind_eq_ok h
+  dsimp only at h
+  generalize withdrawalRun :
+    withdrawalsPass benv.stat.rules transactionBenv transactionBout wds =
+      withdrawalPair at h
+  rcases withdrawalPair with ⟨withdrawalState, withdrawalBout⟩
+  dsimp only at h
+  obtain ⟨⟨requestState, requestBout⟩, hrequests, hfinal⟩ := Except.bind_eq_ok h
+  rcases exists_beaconStageTrace hbeacon hsg with ⟨beaconTrace⟩
+  rcases exists_historyStageTrace hhistory hsg with ⟨historyTrace⟩
+  rcases exists_applyTransactionsTrace_of_stateGas_none htransactions hsg with
+    ⟨transactionsTrace⟩
+  have requestCapability : benv.stat.rules.header.requestsHash = true →
+      CoveredFork (transactionBenv.withState withdrawalState).stat.fork := by
+    intro enabled
+    change CoveredFork transactionBenv.stat.fork
+    rw [transactionsTrace.stat_eq]
+    exact hcap enabled
+  rcases exists_requestStageTrace hrequests requestCapability with ⟨requestsTrace⟩
+  let rewardState : State := match benv.stat.rules.pow with
+    | none => requestState
+    | some pow => payRewards pow benv.stat.number benv.stat.coinbase
+        ommers requestState
+  let accessList : BlockAccessList := match benv.stat.rules.bal with
+    | none => []
+    | some _ => requestBout.bal.build
+  change (do
+    checkBlockAccessListGasLimit benv.stat.rules benv.stat.blockGasLimit accessList
+    .ok (rewardState, {requestBout with blockAccessList := accessList})) =
+      .ok (state, bout) at hfinal
+  obtain ⟨checked, hcheck, hfinal⟩ := Except.bind_eq_ok hfinal
+  cases checked
+  have endpoints := Prod.mk.inj (Except.ok.inj hfinal)
+  exact ⟨{
+    run := h_result
+    beaconState := beaconState
+    beaconBal := beaconBal
+    beacon := beaconTrace
+    historyState := historyState
+    historyBal := historyBal
+    history := historyTrace
+    decodedTxs := decodedTxs
+    decodeRun := hdecoded
+    transactionBenv := transactionBenv
+    transactionBout := transactionBout
+    transactions := transactionsTrace
+    transactionRun := htransactions
+    withdrawalState := withdrawalState
+    withdrawalBout := withdrawalBout
+    withdrawalsRun := withdrawalRun
+    requestState := requestState
+    requestBout := requestBout
+    requests := requestsTrace
+    rewardState := rewardState
+    rewardState_eq := rfl
+    finalState_eq := endpoints.1.symm
+    accessList := accessList
+    accessList_eq := rfl
+    accessListRun := hcheck
+    finalBout_eq := endpoints.2 }⟩
+
 end ExecutionTrace
 
 end Blanc
