@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 : "${HOME:?HOME is required}"
@@ -75,9 +76,10 @@ if [[ "${1:-}" == "--static-self-check" ]]; then
     echo "REGRESSION — beacon-deposit current-mainnet: static self-check takes no other arguments" >&2
     exit 1
   fi
-  exec /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
+  gate_audit_exec_python /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
     "$SCRIPT_DIR/gen-beacon-deposit-current-mainnet.py" \
     --static-self-check "${WRAPPER_ARGS[@]}"
+  exit "$?"
 fi
 
 for argument in "$@"; do
@@ -91,7 +93,7 @@ for argument in "$@"; do
 done
 
 # Refuse a coordinated Python-only weakening before any Lean or target work.
-/usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
+gate_audit_python /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
   "$SCRIPT_DIR/gen-beacon-deposit-current-mainnet.py" \
   --static-self-check "${WRAPPER_ARGS[@]}"
 
@@ -138,7 +140,7 @@ if [[ -n "${TMPDIR:-}" ]]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-beacon-deposit-current-mainnet.py" \
   --root "$TARGET_ROOT" --blanc-artifacts "$ARTIFACTS" \
   "${WRAPPER_ARGS[@]}" "$@"

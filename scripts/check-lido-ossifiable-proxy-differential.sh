@@ -4,6 +4,7 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -23,10 +24,10 @@ if [ ! -f "$EVALUATOR" ]; then
   exit 1
 fi
 
-PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/lido_ossifiable_proxy_differential_schema.py" \
   --repo-root "$REPO_ROOT"
-PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/test-lido-ossifiable-proxy-differential-falsifiers.py" \
   --repo-root "$REPO_ROOT"
 
@@ -35,13 +36,13 @@ gate_semaphore_acquire "the OssifiableProxy artifacts" || exit 2
 (cd "$REPO_ROOT" && lake env lean \
   scripts/eval-lido-ossifiable-proxy-artifacts.lean >"$ARTIFACTS")
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/run-lido-ossifiable-proxy-differential.py" \
   --repo-root "$REPO_ROOT" \
   --eels-root "$EELS_ROOT" \
   --blanc-artifacts "$ARTIFACTS" \
   --result-out "$RESULT" >/dev/null
-PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/check-lido-ossifiable-proxy-differential.py" \
   --repo-root "$REPO_ROOT" \
   --require-all-matched \

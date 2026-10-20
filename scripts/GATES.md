@@ -709,10 +709,17 @@ Nothing on this path can turn a failure, a refusal, a missing terminal summary
 or a doubled one into a pass.
 
 **The declarations are measured, not just reviewed.**
-`scripts/gate-read-audit.py` runs cacheable gates under a Python
-audit hook that records each file its whole process tree opens, then reports
-any read the gate's registry entry does not fingerprint. It is an instrument,
-not a gate: it is not in the ordered set above and it seeds no cache record.
+`scripts/gate-read-audit.py` runs cacheable gates with Python read observers,
+then reports reads that the gate's registry entry does not fingerprint.
+Startup and completion receipts identify observed interpreters; explicit
+launch, transport and bootstrap receipts verify Python handoffs across
+sanitized environments, isolated launches and replaced `PYTHONPATH` values.
+An observed parent does not establish descendant coverage. Missing or
+inconsistent receipts, unsupported handoffs and logging failures refuse
+coverage, including a caught transient logging failure. The instrument also
+returns failure when an underlying gate fails. It is not in the ordered set
+above and seeds no cache record.
+
 For an isolated gate implementation or registry-entry change, audit the exact
 affected IDs with `scripts/gate-read-audit.py --only ID...`, including every
 consumer of a changed helper. Run the full audit when shared runner, parser,
@@ -721,11 +728,27 @@ the catalogue, or when the affected set cannot be established. Changes confined
 to audit CLI selection need `python3 scripts/test-gate-read-audit.py`; they do
 not change observed reads.
 
-It cannot see reads by non-Python processes — `grep` and `sed` in the wrappers,
-and everything `lake env lean` touches, the latter being covered by `depHash`
-instead. A clean result means "no undeclared read on the path this gate
-actually took", which is stronger than "nobody spotted one" and weaker than
-"there is none".
+The shell adapter `scripts/read-audit/launch.sh` is an ordinary input of each
+wrapper that sources it. The audit separately binds its measurement script
+and the exact observer closure (`launch.sh`, `launcher.py`, `bootstrap.py`,
+and `sitecustomize.py`) by content before and after execution. An arbitrary
+neighbouring file does not become observation machinery by location. Ordinary
+invocations retain their original commands and environment; explicit audit
+launches use a bootstrap and controller. The bootstrap preserves target
+arguments, Python flags, environment and import search paths, but initializes
+observer modules before the target and changes the OS launch path. Synthetic
+parity controls cover the supported launches; this observation does not
+replace ordinary gate or runtime-identity validation.
+
+The observer records Python audit events after installation. It cannot see
+interpreter startup, its own pre-install imports, native or C-extension reads
+that emit no audit event, or non-Python reads such as `grep` and `sed` in
+wrappers. Everything `lake env lean` touches is covered by `depHash` instead.
+Repository script bytecode caches are cleared; inherited processes and explicit
+bootstraps prevent new bytecode writes. Other ignored runtime bytecode caches
+are not claimed cold. A clean result means no undeclared read on the observed
+Python paths this execution took, subject to these limits; it says nothing
+about untaken branches.
 
 A row may read data it deliberately does not fingerprint: a harness self-test
 cuts its mutants from the committed subject, but its cache inputs are the

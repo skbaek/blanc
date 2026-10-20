@@ -26,6 +26,7 @@ if [ "${1:-}" = "--self-test" ]; then
   echo "OK — Lido CircuitBreaker deployment self-test: 66 source falsifiers each rejected by their named checker control"
   exit 0
 fi
+. "$SCRIPT_DIR/read-audit/launch.sh"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
@@ -70,13 +71,13 @@ if ! (cd "$ROOT" && lake env lean \
     >"$ARTIFACTS" 2>"$LOG"); then
   fail "production artifact evaluation failed"
 fi
-if ! PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+if ! PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
     "$SCRIPT_DIR/gen-lido-circuit-breaker-deployment-fixture.py" \
     --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" \
     --fixture "$FIXTURE" --metadata "$METADATA" >"$LOG" 2>&1; then
   fail "strict pinned-EELS fixture generation or live projection controls failed"
 fi
-if ! "$EELS_PY" -c '
+if ! gate_audit_python "$EELS_PY" -c '
 import json, sys
 m = json.load(open(sys.argv[1]))
 assert m["schema"] == "blanc-lido-circuit-breaker-deployment-fixture-v1"

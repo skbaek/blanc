@@ -1455,6 +1455,7 @@
     ],
     "files": [
      "scripts/check-lido-circuit-breaker-deployment.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-lido-circuit-breaker-deployment-fixture.py",
      "scripts/eels_differential_common.py",
      "scripts/gen-weth-fixtures.py",
@@ -1692,6 +1693,7 @@
     ],
     "files": [
      "scripts/check-weth10-differential.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-weth10-differential.py",
      "scripts/eels_differential_common.py",
      "scripts/check-runtime-bytes.py",
@@ -1760,6 +1762,7 @@
     ],
     "files": [
      "scripts/check-lido-circuit-breaker-dispatchers.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/check-lido-circuit-breaker-dispatchers.py",
      "scripts/gen-lido-circuit-breaker-differential.py",
      "scripts/eels_differential_common.py",
@@ -1817,6 +1820,7 @@
     ],
     "files": [
      "scripts/check-lido-circuit-breaker-differential.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-lido-circuit-breaker-differential.py",
      "scripts/eels_differential_common.py",
      "scripts/lido_circuit_breaker_ac5_shape_schema.py",
@@ -1885,6 +1889,7 @@
     ],
     "files": [
      "scripts/check-lido-twg-differential.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-lido-twg-differential.py",
      "scripts/lido_twg_differential_schema.py",
      "scripts/strict_json.py",
@@ -1960,6 +1965,7 @@
     ],
     "files": [
      "scripts/check-lido-ossifiable-proxy-differential.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/run-lido-ossifiable-proxy-differential.py",
      "scripts/check-lido-ossifiable-proxy-differential.py",
      "scripts/lido_ossifiable_proxy_differential_schema.py",
@@ -2032,6 +2038,7 @@
     ],
     "files": [
      "scripts/check-weth10-redemption.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-weth10-redemption-fixtures.py",
      "scripts/eels_differential_common.py",
      "scripts/gen-weth-fixtures.py",
@@ -2094,6 +2101,7 @@
     ],
     "files": [
      "scripts/check-weth10-deployment.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/check-weth10-deployment.py",
      "scripts/eels_differential_common.py",
      "scripts/gen-weth10-redemption-fixtures.py",
@@ -2218,6 +2226,7 @@
     ],
     "files": [
      "scripts/check-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/current-mainnet-target.json",
      "scripts/current-mainnet-runtime-lock.json",
      "scripts/gen-current-mainnet-runtime-lock.py",
@@ -2288,6 +2297,7 @@
     ],
     "files": [
      "scripts/check-weth10-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-weth10-current-mainnet.py",
      "scripts/check-current-mainnet.sh",
      "scripts/current-mainnet-target.json",
@@ -2396,6 +2406,7 @@
     ],
     "files": [
      "scripts/check-beacon-deposit-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-beacon-deposit-current-mainnet.py",
      "scripts/current-mainnet-target.json",
      "scripts/current-mainnet-runtime-lock.json",
@@ -2488,6 +2499,7 @@
     ],
     "files": [
      "scripts/check-beacon-deposit-differential.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-beacon-deposit-differential.py",
      "scripts/eels_differential_common.py",
      "scripts/reference/beacon-deposit/inputs/deposit_contract.sol",
@@ -2546,6 +2558,7 @@
     ],
     "files": [
      "scripts/check-beacon-deposit-deployment.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-beacon-deposit-deployment-fixture.py",
      "scripts/eels_differential_common.py",
      "scripts/gen-weth-fixtures.py",
@@ -2619,6 +2632,7 @@
     ],
     "files": [
      "scripts/check-prorata-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-prorata-fixtures.py",
      "scripts/gen-prorata-benchmark.py",
      "scripts/check-current-mainnet.sh",
@@ -2707,6 +2721,7 @@
     ],
     "files": [
      "scripts/check-lido-ossifiable-proxy-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-lido-ossifiable-proxy-current-mainnet.py",
      "scripts/strict_json.py",
      "scripts/check-current-mainnet.sh",
@@ -3754,6 +3769,7 @@
     ],
     "files": [
      "scripts/check-drip-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-drip-fixtures.py",
      "scripts/drip_cost_measurements.py",
      "scripts/test-drip-cost-measurements.py",
@@ -3837,6 +3853,7 @@
     ],
     "files": [
      "scripts/check-lido-twg-pinned-target-current-mainnet.sh",
+     "scripts/read-audit/launch.sh",
      "scripts/gen-lido-twg-pinned-target-current-mainnet.py",
      "scripts/keccak.py",
      "scripts/gate-semaphore.sh",

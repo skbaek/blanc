@@ -14,12 +14,14 @@ Deriving is fallible here for a concrete reason: the checkers load helper
 modules by path at run time, so a dependency can be real while appearing in no
 wrapper, no import statement and no grep.  Two of them load each other.
 
-This runs each gate once under an audit hook that records every file its whole
-Python process tree opens, then asks the only question that matters: *did it
-read something the registry does not fingerprint?*
+This runs each gate once under an audit hook with checked Python startup and
+handoff receipts, recording Python open/listing events after hook installation,
+then asks the only question that matters: *did it read something the registry does not fingerprint?*
 
 BLIND SPOTS, STATED RATHER THAN IMPLIED
 
+- Interpreter startup and observer imports before hook installation; native or
+  C-extension reads that emit no Python audit event.
 - Non-Python reads.  `grep` and `sed` in the shell wrappers are invisible here.
   They are few and named in the wrapper text.
 - Everything `lake env lean` reads.  That channel is covered by Lake's own
@@ -38,8 +40,10 @@ reads on purpose without fingerprinting it, with the reason on record --
 is reported as a declared untracked read, not a hole: the declaration is
 what makes the read reviewable, and an undeclared subject still fails.
 The instrument establishes the cold cache itself: it removes
-`scripts/__pycache__` and sets `PYTHONDONTWRITEBYTECODE=1` through the
-whole process tree it measures, so a warm caller cache cannot hide a read.
+repository scripts bytecode caches and sets `PYTHONDONTWRITEBYTECODE=1` in
+inherited measured processes. Explicit isolated bootstraps also set
+`sys.dont_write_bytecode`; other ignored runtime bytecode populations are not
+claimed cold. Uninstrumented Python handoffs are refused rather than credited.
 
 USE
 
@@ -56,6 +60,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -83,7 +88,7 @@ OUT_DIR = ROOT / ".lake/read-audit"
 # -- the Python installation, temporary directories -- is machinery, not input.
 def interesting_roots() -> list[Path]:
     roots = [ROOT]
-    for name in ("eels",):
+    for name in ("eels", "t8n_target", "t8n_python_base"):
         try:
             roots.append(gc.resolve_path(ROOT, f"@{name}"))
         except Exception:
@@ -299,7 +304,54 @@ def ensure_cold_bytecode_cache() -> str:
     )
 
 
+LOST_HOOK_ROWS = frozenset(['lido-deployment', 'weth10-differential', 'lido-dispatchers', 'lido-differential', 'lido-twg-differential', 'lido-ossifiable-proxy-differential', 'weth10-redemption', 'weth10-deployment', 'current-mainnet', 'weth10-current-mainnet', 'beacon-deposit-current-mainnet', 'beacon-deposit-differential', 'beacon-deposit-deployment', 'prorata-current-mainnet', 'lido-ossifiable-proxy-current-mainnet', 'drip-current-mainnet', 'lido-twg-pinned-target-current-mainnet'])
+
+
 LAKE_SUBTREES = (".lake/build", ".lake/packages")
+
+
+OBSERVER_FILES = ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py")
+
+
+def observer_identity() -> dict[str, str]:
+    # A fixed source closure, not a directory-wide read exemption. The parser
+    # itself is measurement authority even when its worktree bytes are dirty.
+    paths = [Path(__file__), *(HOOK_DIR / name for name in OBSERVER_FILES)]
+    return {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in paths}
+
+
+def validate_process_receipt(kind: str, item: dict) -> None:
+    """Reject incomplete receipts instead of treating missing fields as matches."""
+    def integer(field):
+        value = item.get(field)
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"invalid {field}")
+    def strings(field):
+        value = item.get(field)
+        if not isinstance(value, list) or not value or not all(isinstance(x, str) for x in value):
+            raise ValueError(f"invalid {field}")
+    if kind in ("N", "B", "C", "T"):
+        nonce = item.get("nonce")
+        if not isinstance(nonce, str) or len(nonce) != 32 or any(c not in "0123456789abcdef" for c in nonce):
+            raise ValueError("invalid launch nonce")
+    if kind in ("N", "P", "D", "T"):
+        integer("parent_pid")
+    if kind in ("N", "P"):
+        strings("original")
+    if kind == "D":
+        strings("command")
+    if kind == "B":
+        integer("pid")
+        integer("ppid")
+        strings("orig_argv")
+        strings("argv")
+    if kind in ("N", "B"):
+        digest = item.get("environment_sha256")
+        if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError("invalid launch environment digest")
+    if kind == "C" and not (type(item.get("exit")) is int or item.get("interrupted") is True):
+        raise ValueError("invalid launch completion")
 
 
 def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dict:
@@ -321,6 +373,7 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     # subprocess would write the cache the instrument just cleared.
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
 
+    observation_sources = observer_identity()
     started = time.monotonic()
     result = subprocess.run(
         gate["command"], cwd=ROOT, env=environment,
@@ -333,14 +386,35 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     stdout_log.write_text(result.stdout, encoding="utf-8")
     stderr_log.write_text(result.stderr, encoding="utf-8")
 
+    roots = list(roots)
+    required_root_errors = set()
+    inputs_text = json.dumps(gate.get("inputs", {}))
+    if (identifier in LOST_HOOK_ROWS and "current-mainnet" in identifier) or "@t8n_" in inputs_text:
+        for name in ("t8n_target", "t8n_python_base"):
+            try:
+                resolved = gc.resolve_path(ROOT, f"@{name}").resolve()
+                if not resolved.is_dir():
+                    raise ValueError("required input root is absent")
+                if resolved not in roots:
+                    roots.append(resolved)
+            except Exception as error:
+                required_root_errors.add(f"required @{name} root unresolved: {error}")
     reads: set[str] = set()
     writes: set[str] = set()
     listings: set[str] = set()
-    unverified: set[str] = set()
+    unverified: set[str] = set(required_root_errors)
+    starts, ends = {}, set()
+    launches, bootstraps, completions, handoffs, delegated, transports = {}, {}, {}, [], [], []
+    if observer_identity() != observation_sources:
+        unverified.add("observer source changed during measured execution")
     if log.is_file():
-        for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+        log_text = log.read_text(encoding="utf-8", errors="replace")
+        if log_text and not log_text.endswith("\n"):
+            unverified.add("truncated audit log record")
+        for line in log_text.splitlines():
             kind, _, raw = line.partition("\t")
             if not raw:
+                unverified.add("malformed empty audit record")
                 continue
             if kind == "R":
                 reads.add(raw)
@@ -350,6 +424,90 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
                 listings.add(raw)
             elif kind == "U":
                 unverified.add(raw)
+            elif kind == "S":
+                try:
+                    item = json.loads(raw)
+                    pid = item["pid"]
+                    if type(pid) is not int or pid <= 0 or pid in starts:
+                        raise ValueError("duplicate/invalid startup pid")
+                    if type(item.get("ppid")) is not int or item["ppid"] <= 0:
+                        raise ValueError("invalid startup parent pid")
+                    if not isinstance(item.get("orig_argv"), list) or not item["orig_argv"]:
+                        raise ValueError("missing startup original argv")
+                    starts[pid] = item
+                except (ValueError, KeyError, TypeError) as error:
+                    unverified.add(f"invalid startup receipt: {error}")
+            elif kind == "E":
+                try:
+                    pid = int(raw)
+                    if pid <= 0 or pid in ends:
+                        raise ValueError("duplicate completion pid")
+                    ends.add(pid)
+                except ValueError as error:
+                    unverified.add(f"invalid completion receipt: {error}")
+            elif kind in ("N", "B", "C", "P", "D", "T"):
+                try:
+                    item = json.loads(raw)
+                    if not isinstance(item, dict):
+                        raise ValueError("process record is not an object")
+                    validate_process_receipt(kind, item)
+                    if kind in ("N", "B", "C"):
+                        bucket = {"N": launches, "B": bootstraps, "C": completions}[kind]
+                        nonce = item["nonce"]
+                        if not isinstance(nonce, str) or nonce in bucket:
+                            raise ValueError("duplicate/invalid launch nonce")
+                        bucket[nonce] = item
+                    elif kind == "P":
+                        handoffs.append(item)
+                    elif kind == "T":
+                        transports.append(item)
+                    else:
+                        delegated.append(item)
+                except (ValueError, KeyError, TypeError) as error:
+                    unverified.add(f"invalid process receipt: {error}")
+            else:
+                unverified.add(f"unknown audit record kind: {kind!r}")
+    if set(launches) != set(bootstraps) or set(launches) != set(completions):
+        unverified.add("explicit Python launch/bootstrap/completion receipts do not match")
+    for transport in transports:
+        if launches.get(transport["nonce"], {}).get("parent_pid") != transport["parent_pid"]:
+            unverified.add("observer transport has no matching parent-issued launch")
+    for nonce, launch in launches.items():
+        child = bootstraps.get(nonce, {})
+        if (not any(t["nonce"] == nonce and t["parent_pid"] == launch["parent_pid"] for t in transports)
+                or child.get("pid") not in starts or child.get("ppid") != launch.get("parent_pid")
+                or child.get("orig_argv") != launch.get("original")
+                or child.get("cwd") != launch.get("cwd")
+                or child.get("environment_sha256") != launch.get("environment_sha256")
+                or completions.get(nonce, {}).get("interrupted")):
+            unverified.add(f"unverified explicit Python handoff: {nonce}")
+    available = list(starts.values())
+    for handoff in handoffs:
+        match = next((item for item in available if item.get("ppid") == handoff.get("parent_pid")
+                      and item.get("orig_argv") == handoff.get("original")), None)
+        if match is None:
+            unverified.add("Python descendant has no matching observer receipt: " + repr(handoff.get("original")))
+        else:
+            available.remove(match)
+    if identifier in LOST_HOOK_ROWS:
+        if not bootstraps:
+            unverified.add("known sanitized/PYTHONPATH-replaced Python launch has no verified explicit adapter")
+        # Inspect the actual wrapper, not a source-count floor. Every known lost
+        # boundary must visibly pass through the explicit source-owned adapter.
+        wrapper = ROOT / gate["command"][0]
+        try:
+            source = wrapper.read_text(encoding="utf-8")
+            for line in source.replace("\\\n", " ").splitlines():
+                if (("/usr/bin/env -i" in line or ("PYTHONPATH=" in line and "EELS" in line))
+                        and not any(adapter in line for adapter in ("gate_audit_python", "gate_audit_exec_python"))
+                        and not line.lstrip().startswith("#")):
+                    unverified.add("unadapted shell Python boundary: " + line.strip())
+        except OSError as error:
+            unverified.add(f"cannot inspect known Python wrapper: {error}")
+    if not starts:
+        unverified.add("no Python observer startup receipt; observation coverage unverified")
+    if set(starts) != ends:
+        unverified.add("Python observer startup/completion receipts do not match")
     # A gate's own scratch file is an output it happens to read back, not an
     # input: it did not exist before the run and cannot carry information from
     # one candidate to the next.
@@ -382,6 +540,8 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
         if resolved in exact:
             covered += 1
             continue
+        if str(resolved) in observation_sources:
+            continue  # exact observation authority, bound separately from gate inputs
         if resolved in runner_content:
             runner_identity.add(name if label == "repo" else f"{label}::{name}")
             continue
@@ -413,6 +573,13 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
 
     return {
         "id": identifier,
+        "coverage_status": "unverified" if unverified else "observed-python-path",
+        "python_processes": sorted(starts.values(), key=lambda item: item["pid"]),
+        "explicit_launches": list(launches.values()),
+        "bootstrap_receipts": list(bootstraps.values()),
+        "non_python_delegations": delegated,
+        "observer_source_sha256": observation_sources,
+        "transport_receipts": transports,
         "command": " ".join(gate["command"]),
         "exit": result.returncode,
         "elapsed_s": round(elapsed, 1),
@@ -499,7 +666,7 @@ def main(argv: list[str]) -> int:
     print(f"gate read audit: {len(results)} gates executed, "
           f"{sum(r['reads_observed'] for r in results)} reads observed")
     if silent:
-        print(f"  no Python reads observed (shell- or Lean-only): {', '.join(silent)}")
+        print(f"  no Python reads observed (no coverage inferred): {', '.join(silent)}")
     if failures:
         print(f"  gates that did not exit 0: {', '.join(failures)}", file=sys.stderr)
     if holes:
@@ -511,7 +678,7 @@ def main(argv: list[str]) -> int:
               f"unverified file observation: {', '.join(unverified)}",
               file=sys.stderr)
         return 2
-    if holes:
+    if holes or failures:
         return 1
     print("OK — gate read audit: every observed Python read is covered by its "
           "gate's declared inputs, the runner-identity channel, the Lake "

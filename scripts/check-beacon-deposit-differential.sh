@@ -7,6 +7,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -71,7 +72,7 @@ if [ ! -x "$EELS_PY" ]; then
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/gen-beacon-deposit-differential.py" \
   --static-self-check "${WRAPPER_ARGS[@]}"; then
   echo "REGRESSION — beacon-deposit differential: wrapper/Python matrix contract failed" >&2
@@ -88,7 +89,7 @@ if ! (cd "$ROOT" && lake env lean \
   exit 1
 fi
 
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/gen-beacon-deposit-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" \
   "${WRAPPER_ARGS[@]}" "$@"

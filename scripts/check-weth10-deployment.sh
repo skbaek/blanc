@@ -6,6 +6,7 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
@@ -33,5 +34,5 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-deployment-code.lean \
   exit 1
 fi
 
-PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \
+PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \
   --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" --jaune-bin "$JAUNE_BIN"

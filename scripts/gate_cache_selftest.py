@@ -3068,15 +3068,17 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
         (scripts / "gate-semaphore.sh").write_text(
             gate_semaphore_shell_source(), encoding="utf-8"
         )
+        # Copy the production observer closure: the wrapper sources its launch
+        # helper even in ordinary mode, and inherited audit configuration must
+        # still reach real, observable synthetic Python children.
+        observer = scripts / "read-audit"
+        observer.mkdir()
+        for name in ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py"):
+            shutil.copyfile(BEACON_CURRENT_MAINNET_WRAPPER.parent / "read-audit" / name,
+                            observer / name)
         wrapper = scripts / "check-beacon-deposit-current-mainnet.sh"
         wrapper.write_text(beacon_current_mainnet_wrapper_source(), encoding="utf-8")
         wrapper.chmod(0o755)
-        # The wrapper's mandatory static preflight is pure Python.  Its real
-        # semantic body is outside this lifetime control, so a harmless child
-        # lets the production shell advance to the admitted path.
-        (scripts / "gen-beacon-deposit-current-mainnet.py").write_text(
-            "raise SystemExit(0)\n", encoding="utf-8"
-        )
 
         fake_bin = directory / "bin"
         fake_bin.mkdir()
@@ -3092,13 +3094,19 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
         target_python.parent.mkdir(parents=True)
         child_status = directory / "child-status"
         child_status.write_text(f"{child_exit}\n", encoding="utf-8")
-        target_python.write_text(
-            "#!/bin/sh\n"
-            f'printf "%s\\n" "generator-child" >> "{coordination.calls}"\n'
-            f'exit "$(cat "{child_status}")"\n',
+        # The semantic body stays synthetic, but its interpreter must really
+        # be Python so inherited observation can acknowledge the bootstrap.
+        target_python.symlink_to(sys.executable)
+        (scripts / "gen-beacon-deposit-current-mainnet.py").write_text(
+            "import sys\n"
+            'if "--static-self-check" in sys.argv:\n'
+            "    raise SystemExit(0)\n"
+            f'with open({str(coordination.calls)!r}, "a", encoding="utf-8") as stream:\n'
+            '    stream.write("generator-child\\n")\n'
+            f'with open({str(child_status)!r}, encoding="utf-8") as stream:\n'
+            "    raise SystemExit(int(stream.read()))\n",
             encoding="utf-8",
         )
-        target_python.chmod(0o755)
 
         creme = directory / "creme"
         entry = creme / ".semaphore" / "semaphore"
@@ -4939,14 +4947,22 @@ def control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold() -> None:
     """Replacing the final child call with `exec` must fail the lifetime control."""
 
     committed = beacon_current_mainnet_wrapper_source()
-    final_child = '\n/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \\\n'
+    final_child = '\ngate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \\\n'
     require(committed.count(final_child) == 1,
             "the negative control no longer matches the final current-mainnet child")
-    with_exec = committed.replace(final_child, "\nexec" + final_child[1:])
+    with_exec = committed.replace(
+        final_child, final_child.replace("gate_audit_python ", "gate_audit_exec_python ", 1)
+    )
     with patched(sys.modules[__name__], "beacon_current_mainnet_wrapper_source",
                  lambda: with_exec):
-        must_fail(control_beacon_current_mainnet_releases_after_its_final_child,
-                  "an exec that bypasses the wrapper EXIT trap was accepted")
+        try:
+            control_beacon_current_mainnet_releases_after_its_final_child()
+        except ControlFailure as error:
+            require(str(error) ==
+                    "the real wrapper must release exactly once, after its harmless final child",
+                    f"the exec negative must bite at missing release, not setup: {error}")
+        else:
+            raise ControlFailure("an exec that bypasses the wrapper EXIT trap was accepted")
 
 
 def control_negative_frozen_tracked_selection_is_caught() -> None:

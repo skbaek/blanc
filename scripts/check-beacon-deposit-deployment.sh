@@ -5,6 +5,7 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -46,13 +47,13 @@ if ! (cd "$ROOT" && lake env lean \
     >"$ARTIFACTS" 2>"$LOG"); then
   fail "production deployment evaluation failed"
 fi
-if ! PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+if ! PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
     "$SCRIPT_DIR/gen-beacon-deposit-deployment-fixture.py" \
     --eels-root "$EELS_ROOT" --artifacts "$ARTIFACTS" \
     --fixture "$FIXTURE" --metadata "$METADATA" >"$LOG" 2>&1; then
   fail "pinned-EELS fixture generation or mandatory mutants failed"
 fi
-if ! "$EELS_PY" -c '
+if ! gate_audit_python "$EELS_PY" -c '
 import json, sys
 m = json.load(open(sys.argv[1]))
 assert m["schema"] == "blanc-beacon-deposit-deployment-control-v1"

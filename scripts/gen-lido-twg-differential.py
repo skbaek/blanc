@@ -1234,8 +1234,12 @@ def named_gas_rows(resources: Sequence[Mapping], enforce_frozen_shape: bool = Tr
 
 
 def compatibility_contract() -> Mapping[str, object]:
-    raw = subprocess.check_output(
-        [sys.executable, str(COMPATIBILITY_TOOL), "schema"], cwd=REPO)
+    command = [sys.executable, str(COMPATIBILITY_TOOL), "schema"]
+    run = getattr(sys, "_blanc_gate_read_audit_run", None)
+    if run is None:
+        raw = subprocess.check_output(command, cwd=REPO)
+    else:
+        raw = run(command, cwd=REPO, stdout=subprocess.PIPE, check=True).stdout
     value = json.loads(raw)
     expect(set(value) == {"documentFill"}, "compatibility schema command changed shape")
     contract = value["documentFill"]

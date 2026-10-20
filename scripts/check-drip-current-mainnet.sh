@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 : "${HOME:?HOME is required}"
 
 COMPOSED_PREREQUISITES=0
@@ -54,13 +55,13 @@ if [ -n "${TMPDIR:-}" ]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/test-drip-cost-measurements.py"
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/test-drip-supplemental-costs.py"
 
-GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+GENERATOR_OUT="$(gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-drip-fixtures.py" --check-runtime --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$GENERATOR_OUT" >&2
   echo "REGRESSION — DRIP current-mainnet: BPO2 fixture regeneration check failed" >&2

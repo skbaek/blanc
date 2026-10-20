@@ -6,6 +6,7 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
 EELS_PY="$EELS_ROOT/venv/bin/python"
@@ -25,5 +26,5 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-weth10-differential-code.lean >"$
   exit 1
 fi
 
-PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" "$SCRIPT_DIR/gen-weth10-differential.py" \
+PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" "$SCRIPT_DIR/gen-weth10-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-runtimes "$RUNTIMES" "$@"
