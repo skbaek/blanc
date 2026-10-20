@@ -443,12 +443,20 @@ workspace-package module (Jaune, Mathlib, Batteries and the rest) in their
 import closure or in a library they `need`. The only dependency modules left
 unreplayed are a pinned set, `PERMITTED_UNCHECKED` in `scripts/gate-cache.py`:
 today the ten ProofWidgets library modules, whose `extraDep` trace includes
-its JavaScript build target, each pinned with its reason and its Lake source
-hash at the pinned revision. Certification refuses if that set grows,
-shrinks, changes reason, names another package or library, or if any pinned
-module's source moves (a ProofWidgets pin bump or edit), until the change is
-rebuilt, reviewed and re-pinned; a built trace of an unchecked module still
-has its source leaf compared. Status checks also compare the certificate's
+its JavaScript build target (`widgetJsAll`). The pin records the reason, the
+package's manifest revision, and per module the Lake hash of its Lean source
+text and its recorded Lake input hash (`depHash`). Certification refuses if
+that set grows, shrinks, changes reason or names another package or library;
+if the manifest revision differs from the pinned one (so any ProofWidgets bump,
+including one that changes only the `widget/` JavaScript these modules embed
+with `include_str` or its lakefile, refuses until it is rebuilt, reviewed and
+re-pinned); if a module's Lean source moves under the pinned revision; or if a
+module's recorded input hash differs from the pin (artifacts built at another
+revision and left in place). Lake's input hash mixes only content hashes,
+configuration values and the Lean githash, never paths (trace captions are not
+hashed), so it is the same in every worktree; a host whose imported artifacts
+differ computes another value and refuses rather than accepts. A built trace
+of an unchecked module still has its source leaf compared. Status checks also compare the certificate's
 `unchecked` and `dependencies` records. `Main` and `scripts.SimpCollector` are Lake targets of this
 package outside the certificate's scope, as they were before this check.
 
@@ -480,8 +488,9 @@ a library `needs` that is not a Lean library) refuses for every covered
 `Blanc` module; for a dependency module it is accepted only as part of the
 pinned unchecked set above.
 
-Before the helper runs, every git entry of `lake-manifest.json` must name a
-full 40-hex revision and its `packagesDir` must be `.lake/packages`; the
+Before the helper runs, `.lake/package-overrides.json` must not exist (Lake
+applies it over the manifest), every git entry of `lake-manifest.json` must
+name a full 40-hex revision and its `packagesDir` must be `.lake/packages`; the
 certificate's identity separately requires each installed package at that
 exact revision and clean. Lake's loader then finds every package at its
 revision and fetches or checks out nothing. It may still rewrite its cached

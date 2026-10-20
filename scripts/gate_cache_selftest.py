@@ -5045,6 +5045,7 @@ class LakeFixture:
             s.write(self.MODULES[key][3], text)
         for key in self.ORDER:
             self.build(key, restored=key not in self.BUILT)
+        self.write_manifest()
         self.pinned = self.permitted()
 
     # -- the stand-in helper --------------------------------------------------
@@ -5195,9 +5196,22 @@ class LakeFixture:
 
         return {"widgets/Widgets": {
             "reason": "needs widgetJs, not a Lean library",
-            "modules": {"Widgets.W": _hex(_stand_in_hash(
-                self.source_path("widgets/Widgets.W").read_text(encoding="utf-8")))},
+            "package": "widgets",
+            "rev": "b" * 40,
+            "modules": {name: self.pin_entry(key) for key, name in (
+                (key, row[2]) for key, row in self.MODULES.items() if row[1] == "Widgets")},
         }}
+
+    def pin_entry(self, key: str) -> dict[str, str]:
+        text = self.source_path(key).read_text(encoding="utf-8")
+        return {"source": _hex(_stand_in_hash(text.replace("\r\n", "\n"))),
+                "depHash": _hex(self.dep_hash(key))}
+
+    def write_manifest(self, widgets_rev: str = "b" * 40) -> None:
+        self.s.write("lake-manifest.json", json.dumps({
+            "packagesDir": ".lake/packages",
+            "packages": [{"name": "dep", "type": "git", "rev": "a" * 40},
+                         {"name": "widgets", "type": "git", "rev": widgets_rev}]}))
 
     def check(self) -> tuple[bool, str]:
         try:
@@ -5318,10 +5332,18 @@ def control_source_currency_checks_dependency_packages() -> None:
 
 
 def control_source_currency_pins_the_unchecked_set() -> None:
-    """The unreplayed dependency modules are exactly a pinned set: growth, a
-    new package or reason, or a built unchecked module's stale source refuses."""
+    """The unreplayed dependency modules are exactly a pinned set (package
+    revision, each module's Lean source and recorded Lake input hash):
+    growth, another package or reason, a bump, or stale artifacts refuse."""
 
     with lake_fixture() as f:
+        f.write_manifest(widgets_rev="c" * 40)
+        current, reason = f.check()
+        require(not current and "manifest revision" in reason and "widgets" in reason,
+                f"a bump of an unchecked package (any content) must be refused: {reason}")
+        f.write_manifest()
+        require(f.check()[0], "the pinned revision certifies")
+
         f.overrides["dep/Dep.Core"] = {"precompile": True}
         current, reason = f.check()
         require(not current and "PERMITTED_UNCHECKED" in reason and "dep/Dep" in reason,
@@ -5335,12 +5357,11 @@ def control_source_currency_pins_the_unchecked_set() -> None:
         base = f.source_path("dep/Dep.Base")
         base.write_text(base.read_text(encoding="utf-8").replace(
             "import Widgets.W", "import Widgets.W\nimport Widgets.X"), encoding="utf-8")
-        f.build("dep/Dep.Base")
         f.rebuild_all()
         current, reason = f.check()
         require(not current and "PERMITTED_UNCHECKED" in reason,
                 f"a new module in the unchecked library must be refused: {reason}")
-        f.pinned["widgets/Widgets"]["modules"]["Widgets.X"] = _hex(_stand_in_hash("def x := 1\n"))
+        f.pinned = f.permitted()
         require(f.check()[0], "re-pinning the reviewed set accepts it")
 
         f.pinned["widgets/Widgets"]["reason"] = "another reason"
@@ -5348,11 +5369,24 @@ def control_source_currency_pins_the_unchecked_set() -> None:
         require(not current and "PERMITTED_UNCHECKED" in reason,
                 f"a changed reason must be refused: {reason}")
         f.pinned = f.permitted()
-        f.pinned["widgets/Widgets"]["modules"]["Widgets.X"] = _hex(_stand_in_hash("def x := 1\n"))
+
+        # Artifacts built at another revision, the pinned one checked out, no rebuild.
+        w = f.source_path("widgets/Widgets.W")
+        olean = Path(f"{f.trace_path('widgets/Widgets.W').with_suffix('')}.olean")
+        same_artifact = olean.read_bytes().decode("latin-1")
+        w.write_text("def w := 2\n", encoding="utf-8")
+        # Identical output bytes, so no importer moves: only the pin can see it.
+        f.build("widgets/Widgets.W", restored=True, olean_text=same_artifact)
+        w.write_text("def w := 1\n", encoding="utf-8")
+        current, reason = f.check()
+        require(not current and "PERMITTED_UNCHECKED" in reason,
+                f"artifacts built from other sources must be refused by their input hash: {reason}")
+        f.rebuild_all()
+        require(f.check()[0], "rebuilding at the pinned sources restores currency")
 
         f.build("widgets/Widgets.W")  # a built trace for an unchecked module
-        w = f.source_path("widgets/Widgets.W")
-        f.pinned["widgets/Widgets"]["modules"]["Widgets.W"] = _hex(_stand_in_hash("def w := 2\n"))
+        f.pinned["widgets/Widgets"]["modules"]["Widgets.W"]["source"] = \
+            _hex(_stand_in_hash("def w := 2\n"))
         w.write_text("def w := 2\n", encoding="utf-8")
         current, reason = f.check()
         require(not current and "Widgets.W" in reason and "source changed" in reason,
@@ -5630,6 +5664,18 @@ def control_source_currency_helper_memo_and_manifest() -> None:
                 require("moved while the helper ran" in str(error), str(error))
             else:
                 raise ControlFailure("an input moving during the helper run must be refused")
+
+            s.write("lake-manifest.json", json.dumps({
+                "packagesDir": ".lake/packages",
+                "packages": [{"name": "dep", "type": "git", "rev": "a" * 40}]}))
+            s.write(".lake/package-overrides.json", "{}")
+            try:
+                gc.lake_module_facts(s.root, ["Blanc", "Blanc.D"], [])
+            except gc.Unresolvable as error:
+                require("overrides the manifest" in str(error), str(error))
+            else:
+                raise ControlFailure("a package-overrides file must be refused")
+            (s.root / ".lake/package-overrides.json").unlink()
 
             for manifest, label in (
                 ({"packagesDir": "elsewhere", "packages": []}, "packagesDir"),

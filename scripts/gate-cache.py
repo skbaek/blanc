@@ -2065,6 +2065,11 @@ def check_lake_manifest(root: Path) -> None:
     there and never fetches or checks out anything.
     """
 
+    overrides = root / ".lake/package-overrides.json"
+    if overrides.exists() or overrides.is_symlink():
+        # Lake's `materializeDeps` applies these entries over the manifest, so
+        # the checks below would not describe what the helper loads.
+        raise Unresolvable(f"{overrides} overrides the manifest; remove it before certifying")
     try:
         manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -2213,30 +2218,73 @@ _LAKE_IS_MODULE = 5
 _LAKE_NAME = 6
 _LAKE_PACKAGE = 7
 _LAKE_ARGS = 8
-# The only dependency modules the replay may leave unchecked, with the reason
-# and each module's Lake source hash (`computeTextFileHash`) at the pinned
-# revision.  ProofWidgets' library `needs` its JavaScript build target, whose
-# job trace is not a Lean-library trace and so is not replayed.  Pinning the
-# exact sources means any change to these modules (a pin bump, an edit) or to
-# the set (a new module, another package or reason) refuses certification
-# until it is rebuilt, reviewed and re-pinned here.
+# The only dependency modules the replay may leave unchecked.  ProofWidgets'
+# library `needs` its JavaScript build target (`widgetJsAll`), whose job trace
+# is not a Lean-library trace, so these modules' input hash is not replayed.
+# Instead each is pinned to what was reviewed:
+# * `rev`: the package's manifest revision.  Any ProofWidgets bump (Lean
+#   sources, the `widget/` JavaScript these modules `include_str`, or its
+#   lakefile) refuses until it is rebuilt, reviewed and re-pinned here.
+# * `source`: each module's Lean-source hash (`computeTextFileHash` of its
+#   Lean source text), so an edit under an unchanged revision also refuses.
+# * `depHash`: each module's recorded Lake input hash, so artifacts built at
+#   another revision and left in place after checking the pinned one out
+#   refuse.  Lake's input hash mixes only content hashes (sources, the widget
+#   inputs' text, imported artifacts), configuration values and the Lean
+#   githash; paths and host names appear only in trace captions, which are not
+#   hashed (`BuildTrace.mix`).  It is the same in every worktree on this host
+#   (evidence round5/proofwidgets-dephash-paths.txt); another host with the
+#   same toolchain and imported artifacts computes the same value, and one
+#   that does not refuses here rather than accepts.
+# Growth, removal, another package or library, or another reason refuses.
 PERMITTED_UNCHECKED: dict[str, dict[str, Any]] = {
     "proofwidgets/ProofWidgets": {
         "reason": "needs widgetJsAll, not a Lean library",
+        "package": "proofwidgets",
+        "rev": "df72b022e558978a1c50264cfc4d7fec86fa8e04",
         "modules": {
-            "ProofWidgets.Cancellable": "75cb4081505abca9",
-            "ProofWidgets.Compat": "d8efb1d07e7c4193",
-            "ProofWidgets.Component.Basic": "c2583e028a0af8b6",
-            "ProofWidgets.Component.FilterDetails": "1253cc9003b5bbd5",
-            "ProofWidgets.Component.MakeEditLink": "775fcdf9eb52ea19",
-            "ProofWidgets.Component.OfRpcMethod": "d122cc0ed6b217b8",
-            "ProofWidgets.Component.Panel.Basic": "bc4340283a4553e2",
-            "ProofWidgets.Component.RefreshComponent": "f411b1269101b066",
-            "ProofWidgets.Data.Html": "19578a64cbf37be8",
-            "ProofWidgets.Util": "c15dbbc68f903dab",
+            "ProofWidgets.Cancellable": {"source": "75cb4081505abca9", "depHash": "2df47a108059f708"},
+            "ProofWidgets.Compat": {"source": "d8efb1d07e7c4193", "depHash": "c9940a389ce31ede"},
+            "ProofWidgets.Component.Basic": {"source": "c2583e028a0af8b6", "depHash": "f1cbd274f8e6b1a0"},
+            "ProofWidgets.Component.FilterDetails": {"source": "1253cc9003b5bbd5", "depHash": "d8d3f552dd8b6cb0"},
+            "ProofWidgets.Component.MakeEditLink": {"source": "775fcdf9eb52ea19", "depHash": "baf719627b1007cb"},
+            "ProofWidgets.Component.OfRpcMethod": {"source": "d122cc0ed6b217b8", "depHash": "a37272bfcd2c4eca"},
+            "ProofWidgets.Component.Panel.Basic": {"source": "bc4340283a4553e2", "depHash": "e722f0b195de84b1"},
+            "ProofWidgets.Component.RefreshComponent": {"source": "f411b1269101b066", "depHash": "12e64e52cfede32c"},
+            "ProofWidgets.Data.Html": {"source": "19578a64cbf37be8", "depHash": "1ef2533efe62bfb5"},
+            "ProofWidgets.Util": {"source": "c15dbbc68f903dab", "depHash": "e618cc7d3117d0e2"},
         },
     },
 }
+
+
+def check_unchecked_pin(root: Path, detail: dict[str, dict[str, Any]]) -> None:
+    """Refuse unless the unreplayed modules are exactly PERMITTED_UNCHECKED."""
+
+    moved = sorted(set(detail) ^ set(PERMITTED_UNCHECKED)) or [
+        library for library in sorted(detail)
+        if detail[library]["reason"] != PERMITTED_UNCHECKED[library]["reason"]
+        or detail[library]["modules"] != PERMITTED_UNCHECKED[library]["modules"]
+    ]
+    if moved:
+        raise Unresolvable(
+            "the dependency modules this check does not replay differ from the "
+            f"pinned permitted set (PERMITTED_UNCHECKED) at {', '.join(moved)}: their "
+            "membership, reason, Lean source or recorded Lake input hash moved, so a "
+            "changed dependency could go undetected; rebuild, review, then re-pin"
+        )
+    manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    revisions = {entry.get("name"): entry.get("rev") for entry in manifest["packages"]}
+    for library, pin in sorted(PERMITTED_UNCHECKED.items()):
+        if revisions.get(pin["package"]) != pin["rev"]:
+            raise Unresolvable(
+                f"package {pin['package']} is at manifest revision "
+                f"{revisions.get(pin['package'])}, not the revision pinned for its "
+                f"unchecked library {library} ({pin['rev']}); any bump of an unchecked "
+                "package needs a rebuild, review and re-pin"
+            )
+
+
 _LAKE_COMPONENTS = ("deps", "libs", "Lean", "source", "options", "isModule",
                     "Module.name", "Package.id?", "Module.leanArgs")
 
@@ -2459,8 +2507,10 @@ def build_source_currency(
             unchecked_detail.setdefault(library, {"reason": reason, "modules": {}})
             if unchecked_detail[library]["reason"] != reason:
                 unchecked_detail[library]["reason"] = "mixed reasons"
-            unchecked_detail[library]["modules"][module] = fact["src"]
             trace = trace_of(key)
+            unchecked_detail[library]["modules"][module] = {
+                "source": fact["src"], "depHash": f"{trace['dep_hash']:016x}",
+            }
             if trace["recorded"]:
                 # Not replayed, but a built trace still records its source.
                 recorded = _recorded_components(module, trace["inputs"])
@@ -2528,19 +2578,7 @@ def build_source_currency(
             "source, header, configuration or imported artifact since the last "
             "build or restore)"
         )
-    if unchecked_detail != PERMITTED_UNCHECKED:
-        moved = sorted(
-            set(unchecked_detail) ^ set(PERMITTED_UNCHECKED)
-        ) or [
-            library for library in sorted(unchecked_detail)
-            if unchecked_detail[library] != PERMITTED_UNCHECKED[library]
-        ]
-        raise Unresolvable(
-            "the dependency modules this check does not replay differ from the "
-            f"pinned permitted set (PERMITTED_UNCHECKED) at {', '.join(moved)}: a "
-            "dependency's sources, membership or shape moved, so a changed "
-            "dependency could go undetected; rebuild-and-review, then re-pin"
-        )
+    check_unchecked_pin(root, unchecked_detail)
     olean_checked = 0
     for key, path in zip(covered_keys, binaries):
         recorded = arts_of(key)["olean"]
