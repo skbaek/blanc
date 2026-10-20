@@ -1223,6 +1223,19 @@ and constructor families cover every modelled wrapper layer:
   forks. These retained wrappers are selected by their replay equations;
   the broad `Nonempty` conclusion alone is not a reliable recipe trigger.
 
+For successful wrapper extraction under the actual selected rule condition
+`stateGas = none`, use `ExecutionTrace.exists_messageCallTrace_of_stateGas_none`,
+`exists_transactionTrace_of_stateGas_none`,
+`exists_applyTransactionsTrace_of_stateGas_none`, and
+`exists_systemMessageTrace_of_stateGas_none`, respectively for a settled
+message call, a transaction, its indexed transaction-list fold, and an
+unchecked system transaction. Each retains the same existing data carrier.
+The original four entry points retain their exact `CoveredFork` interfaces
+as compatibility wrappers. Raw process/create extraction already needs no
+fork premise. The explicit state-gas condition supports retaining the actual
+execution; it does not provide modern refund/touched-account equations,
+no-deletion facts, request-enablement or a reward-free body.
+
 For fork-dependent body stages, use
 [`Blanc/ExecutionStagedBodyTrace.lean`](../Blanc/ExecutionStagedBodyTrace.lean):
 `ExecutionTrace.BeaconStageTrace`, `HistoryStageTrace`, and `RequestStageTrace`

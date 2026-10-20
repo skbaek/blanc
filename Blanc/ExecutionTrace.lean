@@ -160,13 +160,12 @@ inductive MessageCallTrace (msg : Msg) (state : State)
       MessageCallTrace msg state out
 /-- Every successful settled message-call wrapper admits a retained trace of
 the exact raw execution core it ran. -/
-theorem exists_messageCallTrace {msg : Msg} {state : State}
+theorem exists_messageCallTrace_of_stateGas_none {msg : Msg} {state : State}
     {out : MsgCallOutput}
     (h : processMessageCall msg = .ok ⟨state, out⟩)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     Nonempty (MessageCallTrace msg state out) := by
   have h_result := h
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at h
   split at h
   · rename_i htarget
@@ -199,6 +198,14 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
     rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
     exact ⟨.callRun htargetFalse delegated refund hdelegated
       (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
+
+/-- Compatibility with the existing covered-fork extraction interface. -/
+theorem exists_messageCallTrace {msg : Msg} {state : State}
+    {out : MsgCallOutput}
+    (h : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    Nonempty (MessageCallTrace msg state out) := by
+  exact exists_messageCallTrace_of_stateGas_none h hfork.rules_stateGas_none
 
 /-- Recover the exact deterministic wrapper equation retained by a message
 trace. -/
@@ -302,15 +309,15 @@ structure TransactionTrace (benv : Benv) (bout : BlockOutput)
       Except TransitionError Adr) = .ok validationSender
 
 /-- Every successful transaction admits an exact retained message trace. -/
-theorem exists_transactionTrace
+theorem exists_transactionTrace_of_stateGas_none
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (h : processTransaction benv bout tx index = .ok (state, bout'))
-    (hfork : CoveredFork benv.stat.fork) :
+    (hsg : benv.stat.rules.stateGas = none) :
     Nonempty (TransactionTrace benv bout tx index state bout') := by
   have h_result := h
-  have hsg : benv.stat.fork.ruleSet.stateGas = none := by
-    simpa only [BenvStat.rules] using hfork.rules_stateGas_none
+  have hsg_rules : benv.stat.fork.ruleSet.stateGas = none := by
+    simpa only [BenvStat.rules] using hsg
   unfold processTransaction at h
   dsimp only at h
   obtain ⟨prelude, hprelude, h⟩ := Except.bind_eq_ok h
@@ -328,10 +335,12 @@ theorem exists_transactionTrace
   obtain ⟨messageResult, hmessage, _⟩ := Except.bind_eq_ok h
   obtain ⟨messageState, messageOut⟩ := messageResult
   rw [Except.mapError_eq_ok_iff] at hmessage
-  have hfork_msg : CoveredFork msg.benv.stat.fork := by
+  have hsg_msg : msg.benv.stat.rules.stateGas = none := by
+    change msg.benv.stat.fork.ruleSet.stateGas = none
     rw [prepareMessage_benv_stat_fork hprepared]
-    exact hfork
-  rcases exists_messageCallTrace hmessage hfork_msg with ⟨messageTrace⟩
+    exact hsg
+  rcases exists_messageCallTrace_of_stateGas_none hmessage hsg_msg with
+    ⟨messageTrace⟩
   exact ⟨⟨validationSender, intrinsicGas, calldataFloorGasCost, sender,
     effectiveGasPrice, blobVersionedHashes, txBlobGasUsed, debitState,
     msg, messageState, messageOut,
@@ -340,8 +349,17 @@ theorem exists_transactionTrace
     by simpa only [transactionBlobGasFee, BenvStat.rules, Benv.beginTransaction] using hdebit',
     by
       simpa only [Benv.beginTransaction, transactionTenv, Std.TreeMap.empty_eq_emptyc,
-        allocateEvmGas, BenvStat.rules, hsg] using hprepared,
+        allocateEvmGas, BenvStat.rules, hsg_rules] using hprepared,
     messageTrace, h_result, hrec⟩⟩
+
+/-- Compatibility with the existing covered-fork extraction interface. -/
+theorem exists_transactionTrace
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (h : processTransaction benv bout tx index = .ok (state, bout'))
+    (hfork : CoveredFork benv.stat.fork) :
+    Nonempty (TransactionTrace benv bout tx index state bout') := by
+  exact exists_transactionTrace_of_stateGas_none h hfork.rules_stateGas_none
 
 /-- Exact post-message transaction settlement form.  This exposes the two
 gas credits and the final account-deletion fold without re-executing or
@@ -461,11 +479,11 @@ theorem ApplyTransactionsTrace.stat_eq
   | nil => rfl
   | cons _ tail ih => simpa only [Benv.withState] using ih
 
-theorem exists_applyTransactionsTrace
+theorem exists_applyTransactionsTrace_of_stateGas_none
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout))
-    (hfork : CoveredFork benv.stat.fork) :
+    (hsg : benv.stat.rules.stateGas = none) :
     Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) := by
   induction txs generalizing benv bout with
   | nil =>
@@ -477,11 +495,20 @@ theorem exists_applyTransactionsTrace
       simp only [applyTransactions] at h
       obtain ⟨txResult, htx, htail⟩ := Except.bind_eq_ok h
       obtain ⟨txState, txBout⟩ := txResult
-      rcases exists_transactionTrace htx hfork with ⟨headTrace⟩
-      have hfork_tail : CoveredFork (benv.withState txState).stat.fork :=
-        hfork
-      rcases ih htail hfork_tail with ⟨tailTrace⟩
+      rcases exists_transactionTrace_of_stateGas_none htx hsg with ⟨headTrace⟩
+      have hsg_tail : (benv.withState txState).stat.rules.stateGas = none :=
+        hsg
+      rcases ih htail hsg_tail with ⟨tailTrace⟩
       exact ⟨.cons headTrace tailTrace⟩
+
+/-- Compatibility with the existing covered-fork extraction interface. -/
+theorem exists_applyTransactionsTrace
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (h : applyTransactions txs benv bout = .ok (finalBenv, finalBout))
+    (hfork : CoveredFork benv.stat.fork) :
+    Nonempty (ApplyTransactionsTrace txs benv bout finalBenv finalBout) := by
+  exact exists_applyTransactionsTrace_of_stateGas_none h hfork.rules_stateGas_none
 
 /-! ## System-message and body traces -/
 
@@ -498,6 +525,26 @@ structure SystemMessageTrace (benv : Benv) (target : Adr) (data : Bytes)
     (systemTransactionMessage benv target data) state out
   run : processUncheckedSystemTransaction benv target data = .ok (state, out)
 
+theorem exists_systemMessageTrace_of_stateGas_none
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (h : processUncheckedSystemTransaction benv target data =
+      .ok (state, out))
+    (hsg : benv.stat.rules.stateGas = none) :
+    Nonempty (SystemMessageTrace benv target data state out) := by
+  have hmessage : processMessageCall
+      (systemTransactionMessage benv target data) = .ok (state, out) := by
+    simpa only [systemTransactionMessage, processUncheckedSystemTransaction,
+      processSystemTransaction] using h
+  have hsg_msg :
+      (systemTransactionMessage benv target data).benv.stat.rules.stateGas = none := by
+    unfold systemTransactionMessage processSystemTransactionMsg
+      Benv.beginTransaction
+    exact hsg
+  rcases exists_messageCallTrace_of_stateGas_none hmessage hsg_msg with ⟨trace⟩
+  exact ⟨⟨trace, h⟩⟩
+
+/-- Compatibility with the existing covered-fork extraction interface. -/
 theorem exists_systemMessageTrace
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput}
@@ -505,17 +552,7 @@ theorem exists_systemMessageTrace
       .ok (state, out))
     (hfork : CoveredFork benv.stat.fork) :
     Nonempty (SystemMessageTrace benv target data state out) := by
-  have hmessage : processMessageCall
-      (systemTransactionMessage benv target data) = .ok (state, out) := by
-    simpa only [systemTransactionMessage, processUncheckedSystemTransaction,
-      processSystemTransaction] using h
-  have hfork_msg :
-      CoveredFork (systemTransactionMessage benv target data).benv.stat.fork := by
-    unfold systemTransactionMessage processSystemTransactionMsg
-      Benv.beginTransaction
-    exact hfork
-  rcases exists_messageCallTrace hmessage hfork_msg with ⟨trace⟩
-  exact ⟨⟨trace, h⟩⟩
+  exact exists_systemMessageTrace_of_stateGas_none h hfork.rules_stateGas_none
 
 /-- Retained execution evidence for the two checked request-system calls at
 the tail of `applyBody` on the covered legacy-request lane. -/

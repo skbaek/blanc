@@ -761,8 +761,8 @@ review_date = "2026-08-29"
 id = "retained-wrapper-trace"
 status = "active"
 triggers = ["goal-shape:retained-wrapper-trace"]
-preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state."
-boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay."
+preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state. For a successful message call, transaction, transaction fold or unchecked system transaction with the actual selected rules satisfying `stateGas = none`, use `exists_messageCallTrace_of_stateGas_none`, `exists_transactionTrace_of_stateGas_none`, `exists_applyTransactionsTrace_of_stateGas_none` or `exists_systemMessageTrace_of_stateGas_none`, respectively. The original CoveredFork entry points remain compatibility wrappers."
+boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay. The explicit state-gas premise supports execution extraction only: it does not provide modern refund, touched-account, no-deletion, request-enablement or reward-free conclusions."
 owner_module = "Blanc/ExecutionTrace.lean"
 canonical_example = "Blanc/ExecutionTrace.lean:ExecutionTrace.exists_messageCallTrace"
 symbols = [
@@ -801,6 +801,10 @@ symbols = [
   "declaration:ExecutionTrace.exists_configuredBlockTrace_of_transition",
   "declaration:ExecutionTrace.ConfiguredHistoryTrace",
   "declaration:ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing",
+  "declaration:ExecutionTrace.exists_messageCallTrace_of_stateGas_none",
+  "declaration:ExecutionTrace.exists_transactionTrace_of_stateGas_none",
+  "declaration:ExecutionTrace.exists_applyTransactionsTrace_of_stateGas_none",
+  "declaration:ExecutionTrace.exists_systemMessageTrace_of_stateGas_none",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
