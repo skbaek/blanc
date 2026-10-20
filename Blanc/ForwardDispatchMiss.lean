@@ -56,11 +56,13 @@ private theorem DispatchTree.hasSelector_fork_iff
     · exact ⟨body, .inr member⟩
 
 /-- An exact failed dispatcher walk paired with raw-SSTORE freedom for the
-identical selected proof.  No property of an unselected leaf body is needed. -/
+identical selected proof.  The selected rules must enable the zero pushes in
+the inline revert; no property of an unselected leaf body is needed. -/
 theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
     (tree : DispatchTree) (selector : B256)
     {program : Prog} {sevm : Sevm} {base : Devm} (G : Nat)
-    (hmiss : ¬ tree.HasSelector selector) :
+    (hmiss : ¬ tree.HasSelector selector)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
         (base.setMach
           ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector, base.stateGas⟩)
@@ -88,7 +90,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (devm := revertPre) (G := G)
             (by simp only [revertPre, Devm.gasLeft_setMach, gBase])
             (by simp only [revertPre, Devm.stack_setMach,
-              List.length_nil]; omega))
+              List.length_nil]; omega) h_push0)
       have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev :=
         Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
           (by simp only [Func.revert, Ninst.pushB256, funcExecFree, pushB256])
@@ -127,7 +129,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
             (w := leafSelector) (G := G + 20) rfl
             (by simp only [Devm.gasLeft_setMach]; omega)
             (by simp only [Devm.stack_setMach, List.length_cons,
-              List.length_nil]; omega))
+              List.length_nil]; omega) (fun _ => h_push0))
       have heq : Ninst.RunCompiled sevm afterPush eq branchPre := by
         exact Ninst.runCompiled_binary
           (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
@@ -229,7 +231,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
               (w := pivot) (G := G + childGas + 17) rfl
               (by simp only [afterDup, Devm.gasLeft_setMach]; omega)
               (by simp only [afterDup, Devm.stack_setMach,
-                List.length_cons, List.length_nil]; omega))
+                List.length_cons, List.length_nil]; omega) (fun _ => h_push0))
         have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
           exact Ninst.runCompiled_binary
             (r := .gt) (f := B256.gtCheck) (cost := gVerylow)
@@ -340,7 +342,7 @@ theorem DispatchTree.dispatchMiss_runCompiledTo_with_path
               (w := pivot) (G := G + childGas + 16) rfl
               (by simp only [afterDup, Devm.gasLeft_setMach]; omega)
               (by simp only [afterDup, Devm.stack_setMach,
-                List.length_cons, List.length_nil]; omega))
+                List.length_cons, List.length_nil]; omega) (fun _ => h_push0))
         have hgt : Ninst.RunCompiled sevm afterPush gt branchPre := by
           exact Ninst.runCompiled_binary
             (r := .gt) (f := B256.gtCheck) (cost := gVerylow)

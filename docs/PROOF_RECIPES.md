@@ -343,7 +343,7 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:raw-sstore-free-compiled-path`
-- Preferred path: For an unmatched selector in a `DispatchTree`, prove `¬ tree.HasSelector selector` and apply `DispatchTree.dispatchMiss_runCompiledTo_with_path`. The result is the exact selector-dependent empty-revert `RunCompiledTo` paired with `NoRawSstorePath` for that identical proof; `DispatchTree.dispatchMissGas` names its exact cost.
+- Preferred path: For an unmatched selector in a `DispatchTree`, prove `¬ tree.HasSelector selector`, supply selected PUSH0 availability (`sevm.benvStat.rules.op.push0 = true`), and apply `DispatchTree.dispatchMiss_runCompiledTo_with_path`. The result is the exact selector-dependent empty-revert `RunCompiledTo` paired with `NoRawSstorePath` for that identical proof; `DispatchTree.dispatchMissGas` names its exact cost.
 - Boundary: This follows only the selected miss path. It does not inspect or certify unselected sibling bodies, prove a contract-specific selector census, or add the selector-extraction and program-main prefix around `dispatch tree`.
 - Owner module: [Blanc/ForwardDispatchMiss.lean](../Blanc/ForwardDispatchMiss.lean)
 - Canonical example: [Blanc/ForwardDispatchMiss.lean](../Blanc/ForwardDispatchMiss.lean) — `DispatchTree.dispatchMiss_runCompiledTo_with_path`

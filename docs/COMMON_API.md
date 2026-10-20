@@ -4291,7 +4291,8 @@ current recipe matchers have no forward-transition shape to bind.
   `DispatchTree.dispatchMissGas` records the selector-dependent cost, and
   `DispatchTree.dispatchMiss_runCompiledTo_with_path` constructs the exact
   empty-revert walk together with raw-SSTORE freedom for the identical selected
-  proof.  It deliberately requires no safety property of an unselected sibling.
+  proof. Supply `sevm.benvStat.rules.op.push0 = true` for the zero pushes in
+  the inline revert. No safety property of an unselected sibling is required.
 - EIP-8024 immediates in compiled code: `Func.compile` rejects forbidden
   `DUPN`/`SWAPN`/`EXCHANGE` immediates through `Ninst.immAccepted`
   ([`Blanc/CommonCore.lean`](../Blanc/CommonCore.lean)); the `Ninst.step`
