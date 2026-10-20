@@ -2392,8 +2392,11 @@ def build_certificate_status(
             return False, "Lake trace population or depHash moved", certificate
         # The same Lake-record check as at certification; it costs one
         # toolchain helper run (seconds), so it is repeated rather than argued.
-        if build_source_currency(root, lake_root) != certificate["currency"]:
-            return False, "source-currency record or its checker moved", certificate
+        # Only the checker must be the same: the built/restored split moves
+        # when Lake re-restores an unchanged module, which changes no input.
+        currency = build_source_currency(root, lake_root)
+        if currency["checker"] != certificate["currency"].get("checker"):
+            return False, "source-currency checker moved", certificate
     except (GateCacheError, Unresolvable, OSError, UnicodeError, json.JSONDecodeError) as error:
         return False, str(error), None
     return True, "exact build certificate matches", certificate
@@ -3838,7 +3841,11 @@ def main(argv: list[str]) -> int:
             return 2
         try:
             if arguments.mode == "certify-build":
-                certificate = write_build_certificate(root)
+                try:
+                    certificate = write_build_certificate(root)
+                except (Unresolvable, OSError, UnicodeError) as error:
+                    print(f"REGRESSION — lake build certificate refused: {error}", file=sys.stderr)
+                    return 2
                 currency = certificate["currency"]
                 print(
                     "OK — lake build certificate: "

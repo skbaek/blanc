@@ -5232,7 +5232,7 @@ def control_build_certificate_requires_source_currency() -> None:
         def currency(root: Path, lake_root: Path | None = None) -> dict[str, Any]:
             if stub["verdict"] != "current":
                 raise gc.Unresolvable(stub["verdict"])
-            return dict(_STUB_CURRENCY)
+            return dict(_STUB_CURRENCY, checker=stub.get("checker", "stand-in"))
 
         with patched(gc, "component_tools",
                      lambda root, tools: (gc.digest_of({"tool": "one"}), {"tool": "one"})), \
@@ -5254,6 +5254,12 @@ def control_build_certificate_requires_source_currency() -> None:
             require(not current and "Blanc.A" in reason,
                     f"status must apply the same check: {reason}")
             stub["verdict"] = "current"
+            require(gc.build_certificate_status(s.root)[0], "a current record matches again")
+            stub["checker"] = "another checker"
+            current, reason, _ = gc.build_certificate_status(s.root)
+            require(not current and "checker" in reason,
+                    f"a certificate minted by another checker must be refused: {reason}")
+            stub.pop("checker")
             certificate = json.loads(gc.build_certificate_path(s.root).read_text(encoding="utf-8"))
             certificate.pop("currency")
             gc.atomic_json(gc.build_certificate_path(s.root), certificate)
