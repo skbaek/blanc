@@ -1514,6 +1514,8 @@ COMPOSITION = [
     "Composition.Curve3Pool3CrvExactAssembly",
     "Composition.Curve3Pool3CrvHeadlinesExact",
     "Composition.Curve3Pool3CrvExactWitness",
+    "Composition.Curve3Pool3CrvExactLiteralWitness",
+    "Composition.Curve3Pool3CrvExactLiteralHeadlines",
     "Composition.Curve3Pool3CrvLiveConcrete",
     "Composition.Curve3Pool3CrvLiveEndEntry",
     "Composition.Curve3Pool3CrvLiveEndRL",

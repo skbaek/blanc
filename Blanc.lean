@@ -909,6 +909,8 @@ import Blanc.Composition.Curve3Pool3CrvLiveWitness
 import Blanc.Composition.Curve3Pool3CrvExactAssembly
 import Blanc.Composition.Curve3Pool3CrvHeadlinesExact
 import Blanc.Composition.Curve3Pool3CrvExactWitness
+import Blanc.Composition.Curve3Pool3CrvExactLiteralWitness
+import Blanc.Composition.Curve3Pool3CrvExactLiteralHeadlines
 import Blanc.Composition.Curve3Pool3CrvLiveConcrete
 import Blanc.Composition.Curve3Pool3CrvLiveEndEntry
 import Blanc.Composition.Curve3Pool3CrvLiveEndRL
