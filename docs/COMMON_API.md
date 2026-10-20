@@ -5357,7 +5357,11 @@ contract-neutral.
   own witness run: `childStart`/`childStart_agree`, `childRun`, `childOk_of_start`,
   `childOk_of_childRun`, `frame_of_wrun`, `childAgree_of_halt`, and the DELEGATECALL
   preparation `dcallPrep`/`dcallPrep_spec`, in
-  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). Child starts
+  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). `frame_settle_ok` and
+  `frame_of_wrun` require the frame's selected `settle.touchedSweep = false` capability;
+  `childOk_of_start` and `childOk_of_childRun` derive it from their existing covered-fork
+  evidence. `Witness.wrun_exact` remains generic. Historical settlement still needs a
+  producer that retains `recordTouch` and the touched-account metadata. Child starts
   (`childStart`, `NodeWalk.childCfg`, and explicit `frame_of_wrun` inputs) use
   `storTransfer` alongside `acsTransfer`; reusing the pre-transfer storage
   shadow requires a separate no-change proof. That proof is

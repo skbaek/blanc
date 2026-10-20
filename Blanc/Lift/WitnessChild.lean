@@ -120,11 +120,13 @@ theorem frameEnterS_run {f : Frame} {acs : AcctShadow} {cevm : Evm}
 
 /-- A successful call frame settles to its result. -/
 theorem frame_settle_ok {f : Frame} {post : Devm} (hcr : f.isCreate = false)
-    (hsg : f.inner.benv.stat.rules.stateGas = none) (he : post.error = none) :
+    (hsg : f.inner.benv.stat.rules.stateGas = none)
+    (hsweep : f.inner.benv.stat.rules.settle.touchedSweep = false) (he : post.error = none) :
     f.settle (.ok post) = .ok post := by
   simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
     processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
     executeCode.handleError, he, Option.isSome_none]
+  rw [Devm.recordTouch_of_not_touchedSweep hsweep]
 
 /-- The start configuration of a frame entered with shadows agrees, given that the
 frame's message agrees with them. -/
@@ -171,6 +173,7 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
     (hS : ∀ a k, storOf f.inner.benv.state a k = lookupS stor a k)
     (hC : AcctAgree f.inner.benv.state acs)
     (hcr : f.isCreate = false) (hsg : f.inner.benv.stat.rules.stateGas = none)
+    (hsweep : f.inner.benv.stat.rules.settle.touchedSweep = false)
     (hexact : SProg.RunExact fs cevm.sta cevm.dyna post →
       Nonempty (Exec 0 cevm.sta cevm.dyna (.ok post)))
     (h0 : fs[0]? = some f0)
@@ -183,7 +186,7 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
   obtain ⟨benv, -, hcev⟩ := frameEnterS_run he
   have hpc : cevm.pc = 0 := by rw [hcev]; rfl
   obtain ⟨run, -, -⟩ := wrun_done hrun (hstep.1 hag)
-  refine ⟨hpc ▸ hexact ⟨f0, h0, hstep.2 _ hag run⟩, frame_settle_ok hcr hsg herr,
+  refine ⟨hpc ▸ hexact ⟨f0, h0, hstep.2 _ hag run⟩, frame_settle_ok hcr hsg hsweep herr,
     childAgree_of_halt hrun (hstep.1 hag)⟩
 
 /-! ## Code children of a `CALL` in a witness run -/
@@ -264,10 +267,18 @@ theorem childOk_of_start {fs : List SFunc} {code : ByteArray} {sevm : Sevm} {n :
         subst h1 h2
         obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst⟩ := callPrep_spec hp hagree.2.1 hagree.2.2.2
         have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hagree.2.2.2
+        have hent : cp.f.enter = .run cevm' := by
+          rw [frame_enter_eq_B, frameEnterB_eq_S hC]
+          exact he
+        have hstat := Frame.enter_run_benvStat hent
+        have hsweep : cp.f.inner.benv.stat.rules.settle.touchedSweep = false := by
+          rw [← hstat]
+          exact hfork.cases
+            (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
         obtain ⟨hx, hs, ha⟩ := frame_of_wrun he
           (fun x => by rw [hik, hpk]; exact hagree.1 x)
           (fun a => by rw [hia]; exact hpa a)
-          (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg
+          (fun a k => by rw [hst]; exact hagree.2.2.1 a k) hC hcr hsg hsweep
           (hexact hcode hfork) h0 hstep hrun herr
         refine ⟨fun cp' cevm'' hp' he' => ?_, ha⟩
         rw [hp] at hp'
