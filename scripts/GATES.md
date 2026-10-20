@@ -433,45 +433,81 @@ then refuses until the fixture runner exists; `--fresh` always forces the build.
 Source/configuration, toolchain, package-pin, trace, and runner-artifact movement
 are independently controlled.
 
-Lake source currency answers whether each covered `.olean` was compiled from
-the current `.lean`, from Lake's own record rather than by trust. Certification
-and every certificate status check (which reruns it and requires the same
-checker digest) refuse unless, for `Blanc` and every
-`Blanc/**` module, the module's Lake trace is in the pinned toolchain's format
-(`2025-09-10`) and describes the current inputs. A trace written by a build
-records the source hash Lake computed (`computeTextFileHash`: the Lean string
-hash of the text after CRLF-to-LF normalization); it must equal the toolchain's
-own hash of the current source, so an edit without a build is refused by module
-name, and its recorded input tree must hash to its recorded `depHash`, so an
-edited source entry is refused as tampering. A trace written when Lake restored
-the module from its artifact cache records only that input hash, so for every
-module, built or restored, the check replays the whole input hash from the
-current source and header, the imported modules' recorded output hashes, the
-current `depHash` of each `extraDep` module and the Lean githash, and the
-package-level options, arguments and identity read from the built traces, and
-requires it to equal the recorded `depHash`. A CRLF-only edit is current, as it
-is to Lake; any other byte edit is not. Missing, unparseable, unknown-format or
-mis-shaped traces refuse. `scripts/build-source-currency.lean` supplies the
-hashes Python cannot reproduce from shipped sources (Lean's string and `Name`
-hashes) by calling the toolchain's `computeTextFileHash`, `pureHash` and
-`Lean.parseImports'`; Lake's mixing function is the `lean_uint64_mix_hash` the
-toolchain ships in `lean.h`. A replay defect can only make the values differ,
-so it refuses rather than certifies. On the full tree it takes seconds, most
-of it the helper's toolchain start.
+Lake source currency answers whether each `.olean` the certified build rests
+on was compiled from the current `.lean`, from Lake's own record rather than by
+trust. Certification and every certificate status check (which reruns it and
+requires the same checker digest) refuse unless every module in scope has a
+Lake trace in the pinned toolchain's format (`2025-09-10`) that describes the
+current inputs. In scope are `Blanc` and every `Blanc/**` module, and every
+workspace-package module (Jaune, Mathlib, Batteries and the rest) in their
+import closure or in a library they `need`, except the modules of a library
+whose `extraDep` trace depends on a non-library target (today ProofWidgets,
+which needs its JavaScript build); those are counted as unchecked in the
+certificate. `Main` and `scripts.SimpCollector` are Lake targets of this
+package outside the certificate's scope, as they were before this check.
+
+`scripts/build-source-currency.lean` loads the workspace with Lake's own
+loader (as `lake env` does; it never updates the manifest and never builds)
+and prints, from the toolchain's own code, what Lake mixes into each module's
+input trace from configuration and source: `computeTextFileHash` of the
+source (the Lean string hash of the text after CRLF-to-LF normalization), the
+`Module.name`, `isModule`, `Package.id?`, `leanArgs` and `options` hashes from
+the evaluated configuration, the parsed header with Lake's resolution of each
+import, and each library's `needs` and their module order. From these, the
+imported modules' recorded output hashes and the needed modules' current
+`depHash`, the check replays every in-scope module's whole input hash and
+requires it to equal the recorded `depHash`. A trace written by a build also
+records its inputs: their tree must fold to its `depHash` (an edited entry is
+refused as tampering), its source leaf must equal the current source's hash
+(an edit without a build is refused by module name), and its configuration
+leaves must equal the evaluated configuration (a `leanOptions` or `leanArgs`
+edit without a build is refused). A trace Lake wrote when restoring from its
+artifact cache, or unpacked from an archive, records only the input hash and
+is checked by the replay alone; a tree restored entirely from the cache
+certifies. A CRLF-only edit is current, as it is to Lake; any other byte edit
+is not. Every recorded output hash must equal its artifact's `.hash` sidecar,
+and each covered `.olean`'s bytes must hash (`computeBinFileHash`) to the
+recorded hash. Missing, unparseable, unknown-format or mis-shaped traces,
+ambiguous or cyclic imports, and trace shapes the replay does not model
+(platform-dependent, precompiled, dynlib or plugin modules) refuse.
+
+The replay and the component comparison are two independent routes to the
+same refusal. Most replay defects make the values differ and so refuse; a
+data-flow defect that fed a recorded value into its own comparison could
+accept, which is why configuration and source values come only from the
+helper. The self-test fixture builds its traces with the checker's own
+`lake_fold`, `lake_trace_node`, `lake_add_import` and `lake_export_arts`, so
+it tests which edits are refused, not that those functions match Lake; the
+independent evidence is the real-tree equality, every in-scope trace
+replaying to its recorded `depHash`, rerun with the disposable-worktree
+controls. Lake's mixing function is the `lean_uint64_mix_hash` the toolchain
+ships in `lean.h`.
+
+Cost on the full tree: one helper run per process (memoized on the helper,
+the requested modules and the stat identity of every file it read), about
+five seconds warm at about 2.0 GiB peak resident memory (loading the
+workspace's configurations accounts for most of it; hashing the covered
+`.olean` bytes adds about one and a half seconds); repeats in the same process
+take under a second. That is above the roughly 1 GiB of the unadmitted
+`check-lake-artifact-cache.lean`, so the helper currently runs without host
+admission only as an interim state: it should take a light admission before
+it starts.
 
 A module's `depHash` binds its own source and the *artifacts* it imported, not
 those artifacts' sources: Lake mixes an import's output hashes and transitive
 import trace, never its source hash or `depHash`. Currency therefore holds
-only because every covered module is checked itself. Not covered: modules of
-pinned dependency packages are bound by their clean pinned checkouts and their
-recorded output hashes, not by a source replay; the package-level options,
-`leanArgs`, package identity and library-level `extraDep` leaf are read from
-the built traces and required to agree, so a Lake-configuration edit made
-without a rebuild before certifying is not detected here (after certifying,
-the configuration identity binds `lakefile.lean`); the Jaune
-runner binary is bound by bytes, not by a Lake record; and all hashes are
+only because every in-scope module is checked itself. Not covered: modules of
+an unchecked library (above) are bound only by their clean pinned checkout and
+recorded output hashes; dependency `.olean` bytes are bound to their traces
+through the `.hash` sidecars and the artifact-cache check, not hashed here; the
+Jaune runner binary is bound by bytes, not by a Lake record; and all hashes are
 Lake's 64-bit non-cryptographic hashes, so a deliberately forged trace with a
 recomputed `depHash` is outside this check, as it is outside Lake's.
+
+The certificate protects what consults it: selective catalogue runs and the
+gates that require a current certificate. A script run standalone, such as
+`scripts/check-claims.sh`, does not consult the certificate and reads whatever
+`.olean` files are present.
 
 ### Local Lake artifact-cache trust boundary
 
