@@ -348,9 +348,48 @@ theorem creationBaselineArtifactBytes_length :
   rw [literalEq, creationBaselineBytes_length]
   decide +kernel
 
+-- BEGIN checked SHA continuation support
+private def creationBaselineArtifactSha256Chunks : List (Array UInt8) :=
+  SHA256.Bytes.toChunks
+    (UInt64.toBytes (creationBaselineArtifactBytes.length * 8).toUInt64)
+    (creationBaselineArtifactBytes.length / 64).succ
+    creationBaselineArtifactBytes creationBaselineArtifactBytes.length
+
+private def creationBaselineArtifactSha256PrefixState : Vector UInt32 8 :=
+  #v[0xbd6476a0, 0xc12b3ede, 0x0dea3aeb, 0xb3691933, 0xac1b81ee, 0x8af0d430, 0x7db6e729, 0x3f2bdfba]
+
+private theorem creationBaselineArtifactSha256PrefixState_checked :
+    List.foldl SHA256.consumeChunk SHA256.initChunk
+      (creationBaselineArtifactSha256Chunks.take 19) =
+      creationBaselineArtifactSha256PrefixState := by
+  decide +kernel
+
+private def creationTemplateArtifactSha256Chunks : List (Array UInt8) :=
+  let data := creationBaselineArtifactBytes ++ runtimeBaselineArtifactBytes
+  SHA256.Bytes.toChunks
+    (UInt64.toBytes (data.length * 8).toUInt64)
+    (data.length / 64).succ data data.length
+
+private theorem creationTemplateArtifactSha256Prefix_checked :
+    creationTemplateArtifactSha256Chunks.take 19 =
+      creationBaselineArtifactSha256Chunks.take 19 := by
+  decide +kernel
+
+-- END checked SHA continuation support
+
 theorem creationBaselineArtifactBytes_sha256 :
     creationBaselineArtifactBytes.sha256 =
       (0xe07f2fbf0343cb5dfc3be9a83967e44eb3169374b507ed48ae3d45f942bde219 : B256) := by
+  unfold Bytes.sha256 SHA256.run
+  change (let hash := List.foldl SHA256.consumeChunk SHA256.initChunk creationBaselineArtifactSha256Chunks; B32s.toB256 hash[0] hash[1] hash[2] hash[3] hash[4] hash[5] hash[6] hash[7]) = _
+  have fold_eq :
+      List.foldl SHA256.consumeChunk SHA256.initChunk creationBaselineArtifactSha256Chunks =
+      List.foldl SHA256.consumeChunk creationBaselineArtifactSha256PrefixState
+        (creationBaselineArtifactSha256Chunks.drop 19) := by
+    conv_lhs =>
+      rw [← List.take_append_drop 19 creationBaselineArtifactSha256Chunks,
+        List.foldl_append, creationBaselineArtifactSha256PrefixState_checked]
+  rw [fold_eq]
   decide +kernel
 
 theorem creationBaselineArtifactBytes_keccak256 :
@@ -389,6 +428,17 @@ theorem creationTemplateArtifactBytes_length :
 theorem creationTemplateArtifactBytes_sha256 :
     creationTemplateArtifactBytes.sha256 =
       (0xe466c9e5f98c9bee2062a4b5ddd8a06247fc922e883974289e2ae12777e2c8ff : B256) := by
+  unfold creationTemplateArtifactBytes Bytes.sha256 SHA256.run
+  change (let hash := List.foldl SHA256.consumeChunk SHA256.initChunk creationTemplateArtifactSha256Chunks; B32s.toB256 hash[0] hash[1] hash[2] hash[3] hash[4] hash[5] hash[6] hash[7]) = _
+  have fold_eq :
+      List.foldl SHA256.consumeChunk SHA256.initChunk creationTemplateArtifactSha256Chunks =
+      List.foldl SHA256.consumeChunk creationBaselineArtifactSha256PrefixState
+        (creationTemplateArtifactSha256Chunks.drop 19) := by
+    conv_lhs =>
+      rw [← List.take_append_drop 19 creationTemplateArtifactSha256Chunks,
+        List.foldl_append, creationTemplateArtifactSha256Prefix_checked,
+        creationBaselineArtifactSha256PrefixState_checked]
+  rw [fold_eq]
   decide +kernel
 
 theorem creationTemplateArtifactBytes_keccak256 :

@@ -180,7 +180,7 @@ def b256_literal(data: bytes, algorithm: str) -> str:
     return "0x" + digest
 
 
-def render_lean(artifacts: Artifacts) -> str:
+def render_legacy_lean(artifacts: Artifacts) -> str:
     runtime_sha = b256_literal(artifacts.runtime_baseline, "sha256")
     runtime_keccak = b256_literal(artifacts.runtime_baseline, "keccak256")
     creation_sha = b256_literal(artifacts.creation_baseline, "sha256")
@@ -302,6 +302,213 @@ theorem creationTemplateArtifactBytes_keccak256 :
 
 end Blanc.ProxyPair
 """
+
+
+SHA256_INITIAL_STATE = (
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+)
+SHA256_ROUND_CONSTANTS = (
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+    0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+    0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+    0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+    0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+)
+CONTINUATION_BEGIN = "-- BEGIN checked SHA continuation support\n"
+CONTINUATION_END = "-- END checked SHA continuation support\n\n"
+CONTINUATION_THEOREMS = (
+    "creationBaselineArtifactBytes_sha256",
+    "creationTemplateArtifactBytes_sha256",
+)
+
+
+def sha256_prefix_state(data: bytes, block_count: int) -> tuple[int, ...]:
+    """Supply an untrusted state literal for complete, unpadded SHA blocks.
+
+    The generated Lean state certificate checks the result. This routine has
+    no Lean/package dependency and never supplies a trusted digest premise.
+    """
+    if block_count < 0 or block_count > len(data) // 64:
+        die("SHA continuation requires complete input blocks")
+
+    def ror(value: int, amount: int) -> int:
+        return ((value >> amount) | (value << (32 - amount))) & 0xffffffff
+
+    state = SHA256_INITIAL_STATE
+    for offset in range(0, block_count * 64, 64):
+        block = data[offset : offset + 64]
+        words = [
+            int.from_bytes(block[index : index + 4], "big")
+            for index in range(0, 64, 4)
+        ]
+        for index in range(16, 64):
+            first, second = words[index - 15], words[index - 2]
+            sigma0 = ror(first, 7) ^ ror(first, 18) ^ (first >> 3)
+            sigma1 = ror(second, 17) ^ ror(second, 19) ^ (second >> 10)
+            words.append(
+                (words[index - 16] + sigma0 + words[index - 7] + sigma1)
+                & 0xffffffff
+            )
+        a, b, c, d, e, f, g, h = state
+        for constant, word in zip(SHA256_ROUND_CONSTANTS, words):
+            sigma1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25)
+            choose = (e & f) ^ ((~e) & g)
+            temp1 = (h + sigma1 + choose + constant + word) & 0xffffffff
+            sigma0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22)
+            majority = (a & b) ^ (a & c) ^ (b & c)
+            temp2 = (sigma0 + majority) & 0xffffffff
+            a, b, c, d, e, f, g, h = (
+                (temp1 + temp2) & 0xffffffff, a, b, c,
+                (d + temp1) & 0xffffffff, e, f, g,
+            )
+        state = tuple(
+            (previous + current) & 0xffffffff
+            for previous, current in zip(state, (a, b, c, d, e, f, g, h))
+        )
+    return state
+
+
+def render_continuation_support(artifacts: Artifacts) -> str:
+    blocks = len(artifacts.creation_baseline) // 64
+    state = sha256_prefix_state(artifacts.creation_baseline, blocks)
+    literal = "#v[" + ", ".join(f"0x{word:08x}" for word in state) + "]"
+    return f"""{CONTINUATION_BEGIN}private def creationBaselineArtifactSha256Chunks : List (Array UInt8) :=
+  SHA256.Bytes.toChunks
+    (UInt64.toBytes (creationBaselineArtifactBytes.length * 8).toUInt64)
+    (creationBaselineArtifactBytes.length / 64).succ
+    creationBaselineArtifactBytes creationBaselineArtifactBytes.length
+
+private def creationBaselineArtifactSha256PrefixState : Vector UInt32 8 :=
+  {literal}
+
+private theorem creationBaselineArtifactSha256PrefixState_checked :
+    List.foldl SHA256.consumeChunk SHA256.initChunk
+      (creationBaselineArtifactSha256Chunks.take {blocks}) =
+      creationBaselineArtifactSha256PrefixState := by
+  decide +kernel
+
+private def creationTemplateArtifactSha256Chunks : List (Array UInt8) :=
+  let data := creationBaselineArtifactBytes ++ runtimeBaselineArtifactBytes
+  SHA256.Bytes.toChunks
+    (UInt64.toBytes (data.length * 8).toUInt64)
+    (data.length / 64).succ data data.length
+
+private theorem creationTemplateArtifactSha256Prefix_checked :
+    creationTemplateArtifactSha256Chunks.take {blocks} =
+      creationBaselineArtifactSha256Chunks.take {blocks} := by
+  decide +kernel
+
+{CONTINUATION_END}"""
+
+
+def render_continuation_proof(name: str, blocks: int) -> str:
+    if name == CONTINUATION_THEOREMS[0]:
+        chunks_name = "creationBaselineArtifactSha256Chunks"
+        unfold = "Bytes.sha256 SHA256.run"
+        prefix_rewrite = ""
+    elif name == CONTINUATION_THEOREMS[1]:
+        chunks_name = "creationTemplateArtifactSha256Chunks"
+        unfold = "creationTemplateArtifactBytes Bytes.sha256 SHA256.run"
+        prefix_rewrite = "creationTemplateArtifactSha256Prefix_checked,\n        "
+    else:
+        die(f"unrecognized SHA continuation theorem: {name}")
+    return f"""  unfold {unfold}
+  change (let hash := List.foldl SHA256.consumeChunk SHA256.initChunk {chunks_name}; B32s.toB256 hash[0] hash[1] hash[2] hash[3] hash[4] hash[5] hash[6] hash[7]) = _
+  have fold_eq :
+      List.foldl SHA256.consumeChunk SHA256.initChunk {chunks_name} =
+      List.foldl SHA256.consumeChunk creationBaselineArtifactSha256PrefixState
+        ({chunks_name}.drop {blocks}) := by
+    conv_lhs =>
+      rw [← List.take_append_drop {blocks} {chunks_name},
+        List.foldl_append, {prefix_rewrite}creationBaselineArtifactSha256PrefixState_checked]
+  rw [fold_eq]
+  decide +kernel
+"""
+
+
+def continuation_declaration(text: str, name: str) -> re.Match[str]:
+    anchor = f"theorem {name} :\n"
+    if text.count(anchor) != 1:
+        die(f"SHA continuation theorem anchor count differs from one: {name}")
+    pattern = re.compile(
+        rf"^(?P<header>theorem {re.escape(name)} :\n.*? := by\n)"
+        rf"(?P<body>.*?)(?=\n\S|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        die(f"SHA continuation theorem region is not canonical: {name}")
+    return matches[0]
+
+
+def verify_continuation_fidelity(
+    artifacts: Artifacts, legacy: str, candidate: str
+) -> None:
+    """Inverse the actual candidate, preserving all other source bytes.
+
+    This checker independently derives the permitted support/proof text; it
+    neither accepts replacement regions from the renderer nor re-renders the
+    candidate as its verdict. SHA correctness remains a Lean obligation.
+    """
+    if CONTINUATION_BEGIN in legacy or CONTINUATION_END in legacy:
+        die("SHA continuation support occurs in legacy rendering")
+    if candidate.count(CONTINUATION_BEGIN) != 1 or candidate.count(CONTINUATION_END) != 1:
+        die("SHA continuation support marker count differs from one")
+    support = render_continuation_support(artifacts)
+    first_anchor = f"theorem {CONTINUATION_THEOREMS[0]} :\n"
+    if candidate.count(support + first_anchor) != 1:
+        die("SHA continuation support bytes or placement are noncanonical")
+    inverse = candidate.replace(support, "", 1)
+    blocks = len(artifacts.creation_baseline) // 64
+    for name in CONTINUATION_THEOREMS:
+        original = continuation_declaration(legacy, name)
+        actual = continuation_declaration(inverse, name)
+        if original.group("body") != "  decide +kernel\n":
+            die(f"SHA continuation legacy proof body drifted: {name}")
+        if actual.group("header") != original.group("header"):
+            die(f"SHA continuation public header drifted: {name}")
+        if actual.group("body") != render_continuation_proof(name, blocks):
+            die(f"SHA continuation proof body is noncanonical: {name}")
+        inverse = (
+            inverse[: actual.start("body")]
+            + original.group("body")
+            + inverse[actual.end("body") :]
+        )
+    if inverse != legacy:
+        die("SHA continuation inverse differs from legacy rendering")
+
+
+def render_lean(artifacts: Artifacts) -> str:
+    legacy = render_legacy_lean(artifacts)
+    candidate = legacy
+    blocks = len(artifacts.creation_baseline) // 64
+    for name in CONTINUATION_THEOREMS:
+        original = continuation_declaration(candidate, name)
+        if original.group("body") != "  decide +kernel\n":
+            die(f"SHA continuation legacy proof body drifted: {name}")
+        candidate = (
+            candidate[: original.start("body")]
+            + render_continuation_proof(name, blocks)
+            + candidate[original.end("body") :]
+        )
+    anchor = f"theorem {CONTINUATION_THEOREMS[0]} :\n"
+    if candidate.count(anchor) != 1:
+        die("SHA continuation support insertion anchor differs from one")
+    candidate = candidate.replace(anchor, render_continuation_support(artifacts) + anchor, 1)
+    verify_continuation_fidelity(artifacts, legacy, candidate)
+    return candidate
 
 
 def artifact_row(data: bytes, binding: str, lean_definition: str) -> dict:
