@@ -109,8 +109,8 @@ theorem rxc_push {x : UInt8} {xs : Bytes} {le : (x :: xs).length ≤ 32} {w : B2
     (k : SFunc.RunExactCut fs sevm C (St b (w :: S) M G) f r) :
     SFunc.RunExactCut fs sevm C (St b S M (G + 3)) (.next (.push (x :: xs) le) f) r := by
   subst hw
-  exact .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 3)) (c := gVerylow)
-    (G := G) rfl rfl hroom) k
+  exact .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 3)) (xs := x :: xs)
+    (c := gVerylow) (G := G) rfl rfl hroom (by intro h; cases h)) k
 
 theorem rxc_binary {rr : Rinst} {fn : B256 → B256 → B256} {c : Nat} {x y v : B256}
     (hne : rr ≠ .pc) (hdef : ∀ d : Devm, Rinst.runCore 0 d sevm rr = applyBinary fn c d)
