@@ -435,7 +435,8 @@ are independently controlled.
 
 Lake source currency answers whether each covered `.olean` was compiled from
 the current `.lean`, from Lake's own record rather than by trust. Certification
-and every certificate status check refuse unless, for `Blanc` and every
+and every certificate status check (which reruns it and requires the same
+checker digest) refuse unless, for `Blanc` and every
 `Blanc/**` module, the module's Lake trace is in the pinned toolchain's format
 (`2025-09-10`) and describes the current inputs. A trace written by a build
 records the source hash Lake computed (`computeTextFileHash`: the Lean string
@@ -465,8 +466,9 @@ only because every covered module is checked itself. Not covered: modules of
 pinned dependency packages are bound by their clean pinned checkouts and their
 recorded output hashes, not by a source replay; the package-level options,
 `leanArgs`, package identity and library-level `extraDep` leaf are read from
-the built traces and required to agree, so a Lake-configuration edit without a
-build is caught only by the configuration identity once certified; the Jaune
+the built traces and required to agree, so a Lake-configuration edit made
+without a rebuild before certifying is not detected here (after certifying,
+the configuration identity binds `lakefile.lean`); the Jaune
 runner binary is bound by bytes, not by a Lake record; and all hashes are
 Lake's 64-bit non-cryptographic hashes, so a deliberately forged trace with a
 recomputed `depHash` is outside this check, as it is outside Lake's.
