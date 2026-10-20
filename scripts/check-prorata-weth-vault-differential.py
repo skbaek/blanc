@@ -2858,11 +2858,15 @@ LOCK_REL = "scripts/prorata-weth-vault-reference.json"
 MEASUREMENTS_REL = "scripts/prorata-weth-vault-reference-measurements.json"
 
 # Files the disposable copy needs; everything else is reached through
-# read-only symlinks to the tree under test (Blanc/ and .lake/).
+# the read-only .lake symlink. Copy the named runtime owners so their exact
+# file/owner checks exercise the same layout as production, without aliases.
 SANDBOX_FILES = (
     CHECKER, MATRIX, ORACLE,
     "scripts/evm_tx.py", "scripts/evm_return_capture.py", "scripts/keccak.py",
     "scripts/check-runtime-bytes.py",
+    "Blanc/ProrataWethVaultCode.lean",
+    "Blanc/ProrataWethVaultCodeData.lean",
+    "Blanc/WethCode.lean",
     LOCK_REL, MEASUREMENTS_REL,
     "scripts/reference/prorata-weth-vault/inputs/standard-json-output.json",
 )
@@ -2980,7 +2984,6 @@ def self_test() -> int:
         for rel in SANDBOX_FILES:
             (sandbox / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / rel, sandbox / rel)
-        (sandbox / "Blanc").symlink_to(ROOT / "Blanc", target_is_directory=True)
         (sandbox / ".lake").symlink_to(ROOT / ".lake", target_is_directory=True)
         env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
         for label, rel, patch, only, side, needle in MUTANTS:

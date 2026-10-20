@@ -4462,6 +4462,14 @@ The `compiler-structural-composition` recipe recognizes only an explicit
 unfold a closed function or prove table entries, child bytes, or jump bounds.
 Contract-specific source decompositions and frozen byte slices stay local.
 
+For a closed prefix's immediate-acceptance side condition, `open scoped
+CompiledShape` enables `discharge_prepend_acceptance`. This tactic checks the
+exact `∀ i ∈ (l : List Ninst), Ninst.immAccepted i = true` shape before kernel
+evaluation and leaves other goals untouched. It is useful under `all_goals`
+after compiler composition. The existing compiler recipe remains the route
+for the original compiler equality; this guarded side-condition tactic does
+not introduce another compiler-equation matcher or traverse a closed program.
+
 ### C5. I need to preserve a compile-shape equality under a known prefix
 
 Import [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) and apply

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Complete-expression controls for the compiler-owned byte parser."""
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -74,6 +75,50 @@ class LiteralParserTests(unittest.TestCase):
                                     ("ProrataWethVaultCode", "prorataWethVaultCode", 17481)]:
             with self.subTest(module=module):
                 self.assertEqual(len(parser.parse_lean_literal(root / "Blanc" / (module + ".lean"), name)), count)
+
+    def test_vault_fixed_owner_controls(self):
+        root = Path(__file__).resolve().parent.parent
+        facade_text = (root / "Blanc/ProrataWethVaultCode.lean").read_text()
+        data_text = (root / "Blanc/ProrataWethVaultCodeData.lean").read_text()
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory) / "Blanc"
+            folder.mkdir()
+            facade = folder / "ProrataWethVaultCode.lean"
+            owner = folder / "ProrataWethVaultCodeData.lean"
+            facade.write_text(facade_text)
+            owner.write_text(data_text)
+            self.assertEqual(len(parser.parse_lean_literal(facade, "prorataWethVaultCode")), 17481)
+            mutants = [
+                (facade, facade_text.replace("import Blanc.ProrataWethVaultCodeData", "import Blanc.Other"), "imports differ"),
+                (facade, facade_text.replace("import Blanc.ProrataWethVaultCodeData", "-- import Blanc.ProrataWethVaultCodeData"), "imports differ"),
+                (facade, facade_text.replace("namespace Blanc", "namespace Blanc\ndef prorataWethVaultCodeChunk0 : Bytes := [0x00]"), "shadows"),
+                (facade, facade_text.replace("namespace Blanc", "namespace Other"), "ownership context"),
+                (facade, facade_text.replace("  prorataWethVaultCodeChunk0 ++", "  prorataWethVaultCodeChunk1 ++"), "69 owned chunks"),
+                (owner, data_text.replace("namespace Blanc", "namespace Other"), "ownership context"),
+                (owner, data_text.replace("import Blanc.ProrataWethVault", "import Blanc.Other"), "ownership context"),
+                (owner, data_text.replace("end GeneratedByteChunks", "  ++ [0x00]\nend GeneratedByteChunks"), "not a plain comma-separated list"),
+            ]
+            for path, mutant, diagnostic in mutants:
+                with self.subTest(diagnostic=diagnostic):
+                    original = path.read_bytes()
+                    path.write_text(mutant)
+                    with self.assertRaisesRegex(parser.ParseError, diagnostic):
+                        parser.parse_lean_literal(facade, "prorataWethVaultCode")
+                    path.write_bytes(original)
+                    self.assertEqual(path.read_bytes(), original)
+            original = owner.read_bytes()
+            other = folder / "Other.lean"
+            owner.rename(other)
+            with self.assertRaisesRegex(parser.ParseError, "exact regular file"):
+                parser.parse_lean_literal(facade, "prorataWethVaultCode")
+            for alias in (lambda: owner.symlink_to(other), lambda: os.link(other, owner)):
+                alias()
+                with self.assertRaisesRegex(parser.ParseError, "exact regular file"):
+                    parser.parse_lean_literal(facade, "prorataWethVaultCode")
+                owner.unlink()
+            other.rename(owner)
+            self.assertEqual(owner.read_bytes(), original)
+            self.assertEqual(facade.read_text(), facade_text)
 
 
 if __name__ == "__main__":

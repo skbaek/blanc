@@ -60,6 +60,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 _TOKEN_RE = re.compile(r"0x[0-9a-fA-F]{2}")
 _DOCSTRING_COUNT_RE = re.compile(r"The\s+(\d+)-byte\b")
@@ -138,6 +139,47 @@ def _masked_text(text):
     return masked
 
 
+def _vault_chunk_owner(lean_path, masked):
+    """The vault facade has one fixed data owner, never an import search path."""
+    facade = Path(lean_path)
+    if facade.name != "ProrataWethVaultCode.lean" or facade.parent.name != "Blanc":
+        raise ParseError(f"{lean_path}: vault chunk owner requires the named Blanc facade")
+    imports = re.findall(r"^import[ \t]+([^\n]+)$", masked, re.M)
+    if imports != ["Blanc.ProrataWethVaultCodeData", "Blanc.ProrataWethVaultCodeProof3"]:
+        raise ParseError(f"{lean_path}: vault chunk owner imports differ")
+    if re.search(r"\b(?:def|abbrev|opaque|axiom)\s+prorataWethVaultCodeChunk\d+\b", masked):
+        raise ParseError(f"{lean_path}: vault facade shadows its chunk owner")
+    prefix = masked.split("def prorataWethVaultCode : Bytes :=", 1)[0]
+    if " ".join(prefix.split()) != (
+        "import Blanc.ProrataWethVaultCodeData import Blanc.ProrataWethVaultCodeProof3 "
+        "namespace Blanc open Jaune"
+    ):
+        raise ParseError(f"{lean_path}: vault facade has an unexpected ownership context")
+    owner = facade.parent / "ProrataWethVaultCodeData.lean"
+    # This is an explicitly named sibling, not a general module resolver.
+    # Reject filesystem aliases instead of silently reading a different owner.
+    try:
+        names = set(os.listdir(facade.parent))
+        for path in (facade, owner):
+            if (path.name not in names or path.is_symlink() or
+                    not path.is_file() or path.stat().st_nlink != 1):
+                raise ParseError(f"{path}: vault chunk owner must be an exact regular file")
+        if facade.parent.is_symlink():
+            raise ParseError(f"{facade.parent}: vault chunk owner directory is an alias")
+        data = _masked_text(owner.read_text(encoding="utf-8"))
+        context = re.sub(
+            r"^def prorataWethVaultCodeChunk\d+\s*:\s*Bytes\s*:=.*?"
+            r"(?=^def |^end |\Z)", "", data, flags=re.M | re.S)
+        if " ".join(context.split()) != (
+            "import Blanc.ProrataWethVault namespace Blanc open Jaune "
+            "section GeneratedByteChunks end GeneratedByteChunks end Blanc"
+        ):
+            raise ParseError(f"{owner}: vault data has an unexpected ownership context")
+    except OSError as exc:
+        raise ParseError(f"{owner}: cannot read vault chunk owner: {exc}") from exc
+    return owner
+
+
 def parse_lean_literal(lean_path, name, _resolving=None):
     if _resolving is None:
         _resolving = set()
@@ -172,9 +214,14 @@ def parse_lean_literal(lean_path, name, _resolving=None):
         chunks = re.split(r"\s*\+\+\s*", expression)
         if not all(chunk.isidentifier() for chunk in chunks):
             raise ParseError(f"{lean_path}: `{name}` has a non-identifier chunk")
+        chunk_path = lean_path
+        if name == "prorataWethVaultCode":
+            chunk_path = _vault_chunk_owner(lean_path, masked)
+            if chunks != [f"prorataWethVaultCodeChunk{i}" for i in range(69)]:
+                raise ParseError(f"{lean_path}: vault facade must join its 69 owned chunks in order")
         _resolving.add(name)
         try:
-            data = b"".join(parse_lean_literal(lean_path, chunk, _resolving)
+            data = b"".join(parse_lean_literal(chunk_path, chunk, _resolving)
                             for chunk in chunks)
         finally:
             _resolving.remove(name)
