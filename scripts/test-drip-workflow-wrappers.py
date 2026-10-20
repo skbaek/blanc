@@ -23,10 +23,24 @@ class WorkflowWrappers(unittest.TestCase):
         self.cache = self.root / "cache"
         (self.cache / "artifacts").mkdir(parents=True)
         (self.cache / "artifacts" / "123.olean").write_bytes(b"mock artifact")
-        for name in ("drip-artifact-writer.sh", "certify-checked-build.sh"):
+        for name in ("drip-artifact-writer.sh", "certify-checked-build.sh", "gate-semaphore.sh"):
             shutil.copyfile(SCRIPTS / name, self.scripts / name)
+        # Certification takes host admission through gate-semaphore.sh; a mock
+        # coordination entry point answers it and records the exchange, so no
+        # control here asks the real host.
+        self.semaphore_log = self.root / "semaphore-calls"
+        creme = self.root / "creme"
+        (creme / ".semaphore").mkdir(parents=True)
+        self.mock(creme / ".semaphore" / "semaphore",
+                  'printf "%s\\n" "$*" >> "$MOCK_SEMAPHORE_LOG"\n'
+                  'if [ "$1" = adaptive-acquire ] && [ -n "${MOCK_SEMAPHORE_REFUSE:-}" ]; then\n'
+                  '  echo "REFUSED DEFER_HEAVY: mock host is busy"; exit 3\nfi\necho OK\n')
         self.env = dict(os.environ, PATH=f"{self.bin}:/usr/bin:/bin",
-                        LAKE_CACHE_DIR=str(self.cache), MOCK_LOG=str(self.log))
+                        LAKE_CACHE_DIR=str(self.cache), MOCK_LOG=str(self.log),
+                        CREME_ROOT=str(creme), MOCK_SEMAPHORE_LOG=str(self.semaphore_log))
+        for name in ("BLANC_GATE_SEMAPHORE", "BLANC_GATE_SEMAPHORE_LABEL",
+                     "BLANC_GATE_SEMAPHORE_WAIT", "BLANC_GATE_SEMAPHORE_MEMORY_GIB"):
+            self.env.pop(name, None)
         self.mock(self.bin / "lake", 'printf "lake|%s|%s\\n" "$PWD" "$*" >> "$MOCK_LOG"\nexit "${MOCK_LAKE_EXIT:-0}"\n')
         self.mock(self.scripts / "check-lake-artifact-cache.sh",
                   'printf "integrity|%s|%s\\n" "$PWD" "$LAKE_CACHE_DIR" >> "$MOCK_LOG"\nexit "${MOCK_INTEGRITY_EXIT:-0}"\n')
@@ -104,6 +118,27 @@ class WorkflowWrappers(unittest.TestCase):
         self.assertEqual(self.calls(), [f"integrity|{self.root}|{self.cache}",
                                        f"certificate|{self.root}|--certify-build"])
         self.assertIn("1 cache artifact entries present (not yet hash-verified)", result.stdout)
+
+    def semaphore_calls(self):
+        if not self.semaphore_log.exists():
+            return []
+        return self.semaphore_log.read_text().splitlines()
+
+    def test_certification_is_admitted_and_released(self):
+        result = self.run_wrapper("certify-checked-build.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.semaphore_calls()
+        self.assertEqual(len(calls), 2, calls)
+        self.assertTrue(calls[0].startswith("adaptive-acquire blanc-gates "), calls)
+        self.assertIn("--memory-gib 3", calls[0])
+        self.assertEqual(calls[1], "release blanc-gates")
+
+    def test_refused_admission_runs_nothing(self):
+        self.env["MOCK_SEMAPHORE_REFUSE"] = "1"
+        result = self.run_wrapper("certify-checked-build.sh")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("REFUSED", result.stdout)
+        self.assertEqual(self.calls(), [])
 
     def test_certificate_failure_is_terminal(self):
         self.env["MOCK_CERTIFICATE_EXIT"] = "31"

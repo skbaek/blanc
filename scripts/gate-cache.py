@@ -131,8 +131,20 @@ ADVISORY_LINES = 200
 SHARED_STATE_RELATIVE = "blanc-gate-evidence"
 EVIDENCE_FILENAME_PREFIX = "evidence-v3-"
 LEGACY_EVIDENCE_FILENAME = "evidence.json"
-BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate-v3.json"
-BUILD_CERTIFICATE_SCHEMA = 3
+BUILD_CERTIFICATE_RELATIVE = ".lake/blanc-build-certificate-v4.json"
+BUILD_CERTIFICATE_SCHEMA = 4
+# Lake's trace-file format in the pinned toolchain (`BuildMetadata.schemaVersion`
+# in v4.35.0's `Lake/Build/Common.lean`).  Any other spelling is an unknown
+# format, and the source-currency check refuses it rather than guessing.
+LAKE_TRACE_SCHEMA = "2025-09-10"
+# `Lake.Hash.nil` (`Lake/Build/Trace.lean`): the hash of every `BuildTrace.nil`.
+LAKE_HASH_NIL = 1723
+# The one helper that asks the toolchain's own Lake/Lean code for the hashes
+# Python cannot reproduce from shipped sources (see build_source_currency).
+SOURCE_CURRENCY_HELPER = "scripts/build-source-currency.lean"
+# The packages directory the helper's Lake workspace load resolves; the
+# certificate's package identity is read from the same place.
+LAKE_PACKAGES_DIR = ".lake/packages"
 
 
 def registry_path(root: Path) -> Path:
@@ -830,7 +842,17 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "validate_elab_deferral",
     "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
-    "read_build_certificate", "write_build_certificate",
+    "read_build_certificate", "write_build_certificate", "certify_admitted",
+    "CERTIFY_MEMORY_GIB",
+    "LAKE_TRACE_SCHEMA", "LAKE_HASH_NIL", "SOURCE_CURRENCY_HELPER",
+    "lake_mix", "lake_hash", "lake_fold", "lake_trace_node", "read_lake_trace",
+    "lake_module_facts",
+    "build_covered_modules", "build_source_currency", "checked_source_currency", "_LAKE_NEEDS_FACETS",
+    "_artifact_hash", "lake_module_artifacts", "lake_export_arts", "lake_add_import",
+    "_helper_signature", "_workspace_configuration_files", "_recorded_components",
+    "_shape_unsupported", "_sidecar_hash", "_LAKE_COMPONENTS", "_U64", "_LAKE_HEX", "_LAKE_INPUT_COUNT", "_LAKE_DEPS",
+    "_LAKE_LIBS", "_LAKE_LEAN", "_LAKE_SOURCE", "_LAKE_OPTIONS", "_LAKE_IS_MODULE",
+    "_LAKE_NAME", "_LAKE_PACKAGE", "_LAKE_ARGS",
     "build_certificate_status", "run", "main",
 })
 
@@ -1795,6 +1817,787 @@ def build_trace_state(root: Path, lake_root: Path | None = None) -> dict[str, st
     return detail
 
 
+# --- build source currency ------------------------------------------------
+#
+# The certificate stamps Lake's trace `depHash` values next to the current
+# source identity.  That alone never showed the artifacts were compiled from
+# the current sources: certify without building and the old traces are
+# stamped beside new sources.  `build_source_currency` closes that gap by
+# recomputing, for every module whose artifacts the certified build rests on,
+# the input hash Lake itself would compute now, and refusing unless it equals
+# the hash Lake recorded when it built or restored those artifacts.
+#
+# What Lake records (toolchain v4.35.0; `Lake/Build/Module.lean`,
+# `Lake/Build/Common.lean`, `Lake/Build/Trace.lean`):
+#
+# * A module's input trace is `BuildTrace.nil` mixed, in order, with nine
+#   inputs (`Module.recFetchPreSetup`): `deps` (the library's `extraDep` trace
+#   and the `imports` trace), `libs`, the Lean trace (`pureHash` of the Lean
+#   githash), the source (`recFetchInput`: `Hash.ofText` of `IO.FS.readFile`,
+#   i.e. `computeTextFileHash`, the Lean string hash of the text after
+#   `String.crlfToLf`), `options`, `isModule`, `Module.name`, `Package.id?`
+#   and `Module.leanArgs`.  Every node's hash is `Hash.nil` mixed with its
+#   children's hashes in order (`BuildTrace.mix`), and the trace file's
+#   `depHash` is the root's hash.
+# * A trace written by a build serializes that tree under `inputs`
+#   (`serializeInputs`).  A trace written when Lake restored the outputs from
+#   its artifact cache (`writeFetchTrace`, `synthetic: true`), or unpacked from
+#   a downloaded archive (no `synthetic` key, no `inputs`; Lake reads both
+#   absences as their defaults), records the input hash only.
+# * The `imports` node mixes, per direct import that resolves to a workspace
+#   module, traces built from the imported modules' *output artifact* hashes
+#   (`ModuleImportInfo.addImport`, `Module.computeExportInfo`), never from
+#   their sources or `depHash`es.  So `depHash` binds a module's own source and
+#   the artifacts it imported, not whether those artifacts were compiled from
+#   their current sources: every module has to be checked itself.
+#
+# What this computes.  SOURCE_CURRENCY_HELPER loads the workspace with Lake's
+# own loader and, from the covered modules, walks the import closure with
+# Lake's own resolution, printing per module everything Lake mixes in that
+# comes from configuration or source: the source, name, `isModule`,
+# `Package.id?`, `leanArgs` and `options` hashes, the parsed header with each
+# import's resolution, and per library its `needs` and their module order.
+# Lean's string and `Name` hashes are runtime externs whose C source the
+# toolchain does not ship, so these come from the toolchain's own code.  Here
+# the import traces are built from those headers and the imported modules'
+# recorded output hashes, the `extraDep` trace from the needed modules'
+# current `depHash`, and each module's whole input hash is replayed and
+# compared with its recorded `depHash`.  A built trace's recorded inputs are
+# also compared component by component (its source leaf against the current
+# source, its configuration leaves against the evaluated configuration) and
+# must fold to its `depHash`.  The recorded output hashes must equal the
+# artifacts' `.hash` sidecars.  The mixing function is `lean_uint64_mix_hash`,
+# which the toolchain ships in `include/lean/lean.h`; it is reproduced here.
+#
+# The replay and the per-component comparison are two independent routes to
+# the same refusal.  Most replay defects make the values differ and so refuse;
+# a defect that fed a recorded value back into its own comparison could
+# accept, which is why configuration and source values come only from the
+# helper and the recorded tree is never an input to the replay.
+
+
+_U64 = (1 << 64) - 1
+_LAKE_HEX = re.compile(r"[0-9a-f]{16}")
+_LAKE_NEEDS_FACETS = ["lean_lib.leanArts"]
+_CURRENCY_MEMO: dict[tuple[Any, ...], tuple[tuple[Any, ...], dict[str, Any]]] = {}
+
+
+def lake_mix(h: int, k: int) -> int:
+    """`lean_uint64_mix_hash` (`include/lean/lean.h`), i.e. `Lake.Hash.mix`."""
+
+    m = 0xC6A4A7935BD1E995
+    k = (k * m) & _U64
+    k ^= k >> 47
+    k ^= m
+    h ^= k
+    return (h * m) & _U64
+
+
+def lake_hash(value: Any, what: str) -> int:
+    if not isinstance(value, str) or not _LAKE_HEX.fullmatch(value):
+        raise Unresolvable(f"{what} is not a 16-digit Lake hash")
+    return int(value, 16)
+
+
+def lake_fold(hashes: Iterable[int]) -> int:
+    result = LAKE_HASH_NIL
+    for value in hashes:
+        result = lake_mix(result, value)
+    return result
+
+
+def lake_trace_node(value: Any, what: str) -> int:
+    """Hash of one serialized `BuildTrace` node, exactly as Lake mixed it."""
+
+    if isinstance(value, str):
+        return lake_hash(value, what)
+    if not isinstance(value, list):
+        raise Unresolvable(f"{what} is neither a hash nor a trace list")
+    children = []
+    for child in value:
+        if (
+            not isinstance(child, list)
+            or len(child) != 2
+            or not isinstance(child[0], str)
+        ):
+            raise Unresolvable(f"{what} has a malformed trace entry")
+        children.append(lake_trace_node(child[1], f"{what} / {child[0]}"))
+    return lake_fold(children)
+
+
+def read_lake_trace(path: Path, module: str) -> dict[str, Any]:
+    """One module trace in the pinned toolchain's format, or a refusal.
+
+    Lake's own reader (`BuildMetadata.fromJsonObject?`) defaults an absent
+    `synthetic` flag to false and absent `inputs` to none; a trace without
+    recorded inputs is classified as replay-only, whichever wrote it.
+    """
+
+    try:
+        trace = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise Unresolvable(f"no Lake trace for {module}: {path}") from error
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise Unresolvable(f"unreadable Lake trace for {module}: {error}") from error
+    if not isinstance(trace, dict) or trace.get("schemaVersion") != LAKE_TRACE_SCHEMA:
+        raise Unresolvable(
+            f"Lake trace for {module} is not in the known format {LAKE_TRACE_SCHEMA}"
+        )
+    synthetic = trace.get("synthetic", False)
+    inputs = trace.get("inputs", [])
+    if not isinstance(synthetic, bool) or not isinstance(inputs, list):
+        raise Unresolvable(f"Lake trace for {module} has a malformed synthetic flag or input list")
+    if synthetic and inputs:
+        raise Unresolvable(f"restored Lake trace for {module} unexpectedly records inputs")
+    return {
+        "dep_hash": lake_hash(trace.get("depHash"), f"Lake trace depHash for {module}"),
+        "recorded": bool(inputs),
+        "inputs": inputs,
+        "outputs": trace.get("outputs"),
+        "path": path,
+    }
+
+
+def _artifact_hash(value: Any, extension: str, module: str) -> int:
+    if not isinstance(value, str) or not value.endswith("." + extension):
+        raise Unresolvable(f"Lake trace for {module} has no {extension} output")
+    return lake_hash(value[: -len(extension) - 1], f"{module} {extension} output")
+
+
+def lake_module_artifacts(trace: dict[str, Any], module: str, is_module: bool) -> dict[str, int]:
+    """The recorded output hashes `computeExportInfo` mixes, by extension."""
+
+    outputs = trace.get("outputs")
+    if not isinstance(outputs, dict) or outputs.get("m") is not is_module:
+        raise Unresolvable(
+            f"Lake trace for {module} records no outputs for its current header"
+        )
+    oleans = outputs.get("o")
+    if not isinstance(oleans, list) or len(oleans) != (3 if is_module else 1):
+        raise Unresolvable(f"Lake trace for {module} has a malformed olean list")
+    artifacts = {"olean": _artifact_hash(oleans[0], "olean", module)}
+    if is_module:
+        artifacts["olean.server"] = _artifact_hash(oleans[1], "olean.server", module)
+        artifacts["olean.private"] = _artifact_hash(oleans[2], "olean.private", module)
+        artifacts["ir.sig"] = _artifact_hash(outputs.get("rs"), "ir.sig", module)
+        artifacts["ir"] = _artifact_hash(outputs.get("r"), "ir", module)
+    return artifacts
+
+
+def lake_export_arts(artifacts: dict[str, int], is_module: bool) -> tuple[int, int, int]:
+    """(`artsTrace`, `metaArtsTrace`, `allArtsTrace`) of `computeExportInfo`."""
+
+    if not is_module:
+        olean = lake_fold([artifacts["olean"]])
+        return olean, olean, olean
+    return (
+        lake_fold([artifacts["olean"]]),
+        lake_fold([artifacts["olean"], artifacts["ir.sig"], artifacts["ir"]]),
+        lake_fold([
+            artifacts["olean"], artifacts["olean.server"], artifacts["olean.private"],
+            artifacts["ir.sig"], artifacts["ir"],
+        ]),
+    )
+
+
+def lake_add_import(info: dict[str, int], non_module: bool, flags: dict[str, bool],
+                    export: dict[str, int]) -> dict[str, int]:
+    """`ModuleImportInfo.addImport`, on hashes."""
+
+    info = dict(info)
+    mix = lambda base, a, b: lake_mix(lake_mix(base, a), b)  # noqa: E731
+    if non_module:
+        info["trace"] = mix(info["trace"], export["legacy"], export["allArts"])
+    elif flags["importAll"]:
+        info["trace"] = mix(info["trace"], export["all"], export["allArts"])
+    elif flags["isMeta"]:
+        info["trace"] = mix(info["trace"], export["meta"], export["metaArts"])
+    else:
+        info["trace"] = mix(info["trace"], export["trans"], export["arts"])
+    info["legacy"] = mix(info["legacy"], export["legacy"], export["allArts"])
+    if flags["importAll"]:
+        info["all"] = mix(info["all"], export["all"], export["allArts"])
+    elif flags["isMeta"]:
+        info["all"] = mix(info["all"], export["meta"], export["metaArts"])
+    else:
+        info["all"] = mix(info["all"], export["trans"], export["arts"])
+    info["meta"] = mix(info["meta"], export["meta"], export["metaArts"])
+    if flags["isExported"]:
+        if flags["isMeta"]:
+            info["trans"] = mix(info["trans"], export["meta"], export["metaArts"])
+        else:
+            info["trans"] = mix(info["trans"], export["trans"], export["arts"])
+    return info
+
+
+def _helper_signature(paths: Iterable[Path]) -> tuple[Any, ...]:
+    signature = []
+    for path in sorted(set(paths)):
+        try:
+            stat = path.stat()
+        except OSError:
+            signature.append((str(path), None))
+            continue
+        signature.append((str(path), stat.st_mtime_ns, stat.st_size, stat.st_ino))
+    return tuple(signature)
+
+
+def _workspace_configuration_files(root: Path, lake_root: Path) -> list[Path]:
+    files = [root / name for name in ("lean-toolchain", "lakefile.lean", "lakefile.toml",
+                                       "lake-manifest.json")]
+    packages = lake_root / "packages"
+    if packages.is_dir():
+        for package in sorted(packages.iterdir()):
+            files.extend(package / name for name in (
+                "lakefile.lean", "lakefile.toml", "lake-manifest.json", ".git/HEAD"))
+    return files
+
+
+def check_lake_manifest(root: Path) -> None:
+    """Refuse a manifest whose load could move a package checkout.
+
+    Lake's loader checks out a git dependency's manifest revision when its
+    HEAD differs (`materializeGitRepo`), and resolves packages under the
+    manifest's `packagesDir`.  The certificate's identity already requires each
+    installed package at its exact manifest revision; this also requires every
+    git entry to name a full 40-hex revision and the packages directory to be
+    `.lake/packages`, so the helper's workspace load can only find what is
+    there and never fetches or checks out anything.
+    """
+
+    overrides = root / ".lake/package-overrides.json"
+    if overrides.exists() or overrides.is_symlink():
+        # Lake's `materializeDeps` applies these entries over the manifest, so
+        # the checks below would not describe what the helper loads.
+        raise Unresolvable(f"{overrides} overrides the manifest; remove it before certifying")
+    try:
+        manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise Unresolvable(f"lake-manifest.json is unreadable: {error}") from error
+    if not isinstance(manifest, dict) or manifest.get("packagesDir") != LAKE_PACKAGES_DIR:
+        raise Unresolvable(f"lake-manifest.json packagesDir is not {LAKE_PACKAGES_DIR}")
+    packages = manifest.get("packages")
+    if not isinstance(packages, list):
+        raise Unresolvable("lake-manifest.json has no package population")
+    for entry in packages:
+        if not isinstance(entry, dict):
+            raise Unresolvable("lake-manifest.json has a malformed package row")
+        if entry.get("type") == "git":
+            rev = entry.get("rev")
+            if not isinstance(rev, str) or not re.fullmatch(r"[0-9a-f]{40}", rev):
+                raise Unresolvable(
+                    f"lake-manifest.json entry {entry.get('name')} has no full 40-hex revision"
+                )
+        elif entry.get("type") != "path":
+            raise Unresolvable(f"lake-manifest.json entry {entry.get('name')} has an unknown type")
+
+
+def _toolchain_lake_library(root: Path) -> Path:
+    try:
+        prefix = subprocess.run(
+            ["lean", "--print-prefix"], cwd=root, capture_output=True, text=True,
+            check=True, timeout=120,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Unresolvable(f"cannot locate the toolchain for the helper: {error}") from error
+    lake_library = Path(prefix) / "lib/lean/libLake_shared.so"
+    if not lake_library.is_file():
+        raise Unresolvable(f"the toolchain has no Lake library at {lake_library}")
+    return lake_library
+
+
+def _run_source_currency_helper(root: Path, helper: Path, request: Path) -> str:
+    """One run of SOURCE_CURRENCY_HELPER; its stdout, or a refusal."""
+
+    lake_library = _toolchain_lake_library(root)
+    try:
+        result = subprocess.run(
+            ["lean", f"--load-dynlib={lake_library}", "--run", str(helper), str(request)],
+            cwd=root, capture_output=True, text=True, check=False, timeout=900,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise Unresolvable(f"source-currency helper did not run: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()[-1:] or ["no output"]
+        raise Unresolvable(f"source-currency helper failed: {detail[0]}")
+    return result.stdout
+
+
+def lake_module_facts(
+    root: Path, roots: list[str], binaries: list[Path]
+) -> dict[str, Any]:
+    """Ask the toolchain's own Lake/Lean code for module input facts.
+
+    Memoized per process.  The key is the worktree, the helper's bytes, the
+    requested roots and the requested binaries; an entry is reused only while
+    the stat identity (mtime, size, inode) of every file the answer was read
+    from is unchanged.  A run whose inputs moved while it ran is refused: the
+    known inputs are statted before and after the run and must agree, and no
+    file the answer was read from may carry a modification time from after the
+    run started.
+    """
+
+    check_lake_manifest(root)
+    helper = root / SOURCE_CURRENCY_HELPER
+    if not helper.is_file():
+        raise Unresolvable(f"source-currency helper {SOURCE_CURRENCY_HELPER} is absent")
+    key = (str(root.resolve()), file_digest(helper), tuple(roots),
+           tuple(str(path) for path in binaries))
+    cached = _CURRENCY_MEMO.get(key)
+    if cached is not None:
+        signature, facts = cached
+        if _helper_signature(Path(path) for path, *_ in signature) == signature:
+            return facts
+    base = [helper, *binaries, *_workspace_configuration_files(root, root / ".lake")]
+    base.extend(root / (module.replace(".", "/") + ".lean") for module in roots)
+    started = time.time_ns()
+    before = _helper_signature(base)
+    with tempfile.TemporaryDirectory(prefix="blanc-source-currency-") as scratch:
+        request = Path(scratch) / "request.tsv"
+        request.write_text(
+            "".join(f"root\t{module}\n" for module in roots)
+            + "".join(f"bin\t{path}\n" for path in binaries),
+            encoding="utf-8",
+        )
+        output = _run_source_currency_helper(root, helper, request)
+    if _helper_signature(base) != before:
+        raise Unresolvable("source-currency inputs moved while the helper ran")
+    facts: dict[str, Any] = {"lean": None, "modules": {}, "libs": {}, "bins": {}}
+    try:
+        for line in output.splitlines():
+            row = json.loads(line)
+            kind = row["kind"]
+            if kind == "lean":
+                facts["lean"] = lake_hash(row["hash"], "Lean trace hash")
+            elif kind == "module":
+                facts["modules"][row["key"]] = row
+            elif kind == "lib":
+                facts["libs"][row["key"]] = row
+            elif kind == "bin":
+                facts["bins"][row["path"]] = lake_hash(row["hash"], f"hash of {row['path']}")
+            else:
+                raise Unresolvable(f"source-currency helper printed an unknown row {kind!r}")
+    except (json.JSONDecodeError, KeyError, TypeError) as error:
+        raise Unresolvable(f"source-currency helper printed a malformed row: {error}") from error
+    if facts["lean"] is None:
+        raise Unresolvable("source-currency helper printed no Lean trace hash")
+    read = list(base)
+    read.extend(Path(row["path"]) for row in facts["modules"].values())
+    signature = _helper_signature(read)
+    moved = [path for path, *rest in signature if len(rest) == 3 and rest[0] >= started]
+    if moved:
+        raise Unresolvable(f"source-currency input {moved[0]} moved while the helper ran")
+    _CURRENCY_MEMO[key] = (signature, facts)
+    return facts
+
+
+def build_covered_modules(root: Path) -> list[str]:
+    """The local modules a build certificate covers: `Blanc` and `Blanc.**`.
+
+    `Main` (the `blanc` executable root) and `scripts.SimpCollector` are Lake
+    targets of this package outside that population, before and after this
+    check; they are not covered.
+    """
+
+    modules = {"Blanc"}
+    modules.update(
+        path.relative_to(root).with_suffix("").as_posix().replace("/", ".")
+        for path in (root / "Blanc").rglob("*.lean")
+    )
+    return sorted(modules)
+
+
+# Top-level inputs of a module trace, in `recFetchPreSetup` order.
+_LAKE_INPUT_COUNT = 9
+_LAKE_DEPS = 0
+_LAKE_LIBS = 1
+_LAKE_LEAN = 2
+_LAKE_SOURCE = 3
+_LAKE_OPTIONS = 4
+_LAKE_IS_MODULE = 5
+_LAKE_NAME = 6
+_LAKE_PACKAGE = 7
+_LAKE_ARGS = 8
+# The only dependency modules the replay may leave unchecked.  ProofWidgets'
+# library `needs` its JavaScript build target (`widgetJsAll`), whose job trace
+# is not a Lean-library trace, so these modules' input hash is not replayed.
+# Instead each is pinned to what was reviewed:
+# * `rev`: the package's manifest revision.  Any ProofWidgets bump (Lean
+#   sources, the `widget/` JavaScript these modules `include_str`, or its
+#   lakefile) refuses until it is rebuilt, reviewed and re-pinned here.
+# * `source`: each module's Lean-source hash (`computeTextFileHash` of its
+#   Lean source text), so an edit under an unchanged revision also refuses.
+# * `depHash`: each module's recorded Lake input hash, so artifacts built at
+#   another revision and left in place after checking the pinned one out
+#   refuse.  Lake's input hash mixes only content hashes (sources, the widget
+#   inputs' text, imported artifacts), configuration values and the Lean
+#   githash; paths and host names appear only in trace captions, which are not
+#   hashed (`BuildTrace.mix`).  It is the same in every worktree on this host
+#   (evidence round5/proofwidgets-dephash-paths.txt); another host with the
+#   same toolchain and imported artifacts computes the same value, and one
+#   that does not refuses here rather than accepts.
+# Growth, removal, another package or library, or another reason refuses.
+PERMITTED_UNCHECKED: dict[str, dict[str, Any]] = {
+    "proofwidgets/ProofWidgets": {
+        "reason": "needs widgetJsAll, not a Lean library",
+        "package": "proofwidgets",
+        "rev": "df72b022e558978a1c50264cfc4d7fec86fa8e04",
+        "modules": {
+            "ProofWidgets.Cancellable": {"source": "75cb4081505abca9", "depHash": "2df47a108059f708"},
+            "ProofWidgets.Compat": {"source": "d8efb1d07e7c4193", "depHash": "c9940a389ce31ede"},
+            "ProofWidgets.Component.Basic": {"source": "c2583e028a0af8b6", "depHash": "f1cbd274f8e6b1a0"},
+            "ProofWidgets.Component.FilterDetails": {"source": "1253cc9003b5bbd5", "depHash": "d8d3f552dd8b6cb0"},
+            "ProofWidgets.Component.MakeEditLink": {"source": "775fcdf9eb52ea19", "depHash": "baf719627b1007cb"},
+            "ProofWidgets.Component.OfRpcMethod": {"source": "d122cc0ed6b217b8", "depHash": "a37272bfcd2c4eca"},
+            "ProofWidgets.Component.Panel.Basic": {"source": "bc4340283a4553e2", "depHash": "e722f0b195de84b1"},
+            "ProofWidgets.Component.RefreshComponent": {"source": "f411b1269101b066", "depHash": "12e64e52cfede32c"},
+            "ProofWidgets.Data.Html": {"source": "19578a64cbf37be8", "depHash": "1ef2533efe62bfb5"},
+            "ProofWidgets.Util": {"source": "c15dbbc68f903dab", "depHash": "e618cc7d3117d0e2"},
+        },
+    },
+}
+
+
+def check_unchecked_pin(root: Path, detail: dict[str, dict[str, Any]]) -> None:
+    """Refuse unless the unreplayed modules are exactly PERMITTED_UNCHECKED."""
+
+    moved = sorted(set(detail) ^ set(PERMITTED_UNCHECKED)) or [
+        library for library in sorted(detail)
+        if detail[library]["reason"] != PERMITTED_UNCHECKED[library]["reason"]
+        or detail[library]["modules"] != PERMITTED_UNCHECKED[library]["modules"]
+    ]
+    if moved:
+        raise Unresolvable(
+            "the dependency modules this check does not replay differ from the "
+            f"pinned permitted set (PERMITTED_UNCHECKED) at {', '.join(moved)}: their "
+            "membership, reason, Lean source or recorded Lake input hash moved, so a "
+            "changed dependency could go undetected; rebuild, review, then re-pin"
+        )
+    manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    revisions = {entry.get("name"): entry.get("rev") for entry in manifest["packages"]}
+    for library, pin in sorted(PERMITTED_UNCHECKED.items()):
+        if revisions.get(pin["package"]) != pin["rev"]:
+            raise Unresolvable(
+                f"package {pin['package']} is at manifest revision "
+                f"{revisions.get(pin['package'])}, not the revision pinned for its "
+                f"unchecked library {library} ({pin['rev']}); any bump of an unchecked "
+                "package needs a rebuild, review and re-pin"
+            )
+
+
+_LAKE_COMPONENTS = ("deps", "libs", "Lean", "source", "options", "isModule",
+                    "Module.name", "Package.id?", "Module.leanArgs")
+
+
+def _recorded_components(module: str, inputs: list[Any]) -> list[int]:
+    """A built trace's nine top-level component hashes, shape-checked."""
+
+    if len(inputs) != _LAKE_INPUT_COUNT or not all(
+        isinstance(entry, list) and len(entry) == 2 and isinstance(entry[0], str)
+        for entry in inputs
+    ):
+        raise Unresolvable(f"built Lake trace for {module} has an unknown input shape")
+    captions = [entry[0] for entry in inputs]
+    relative = module.replace(".", "/") + ".lean"
+    expected = (
+        captions[_LAKE_DEPS] == "deps",
+        captions[_LAKE_LIBS] == "libs",
+        captions[_LAKE_LEAN].startswith("Lean "),
+        captions[_LAKE_SOURCE].endswith("/" + relative),
+        captions[_LAKE_OPTIONS] == "options",
+        captions[_LAKE_IS_MODULE].startswith("isModule: "),
+        captions[_LAKE_NAME] == f"Module.name: {module}",
+        captions[_LAKE_PACKAGE].startswith("Package.id?: "),
+        captions[_LAKE_ARGS].startswith("Module.leanArgs: "),
+    )
+    if not all(expected) or not isinstance(inputs[_LAKE_SOURCE][1], str):
+        raise Unresolvable(f"built Lake trace for {module} has an unknown input shape")
+    return [lake_trace_node(entry[1], f"{module} {entry[0]}") for entry in inputs]
+
+
+def _shape_unsupported(fact: dict[str, Any]) -> str | None:
+    """Why Lake's input trace for this module has a shape not replayed here."""
+
+    if fact.get("platformIndependent") is False:
+        return "platform-dependent trace"
+    if fact.get("precompile") or fact.get("dynlibs") or fact.get("plugins") \
+            or fact.get("externLibs"):
+        return "precompiled modules, dynlibs, plugins or extern libraries"
+    return None
+
+
+def _sidecar_hash(path: Path, what: str) -> int:
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as error:
+        raise Unresolvable(f"no hash sidecar for {what}: {path}") from error
+    return lake_hash(text, f"hash sidecar {path}")
+
+
+def build_source_currency(
+    root: Path, lake_root: Path | None = None, *, olean_bytes: bool = True
+) -> dict[str, Any]:
+    """Refuse unless every module the certified build rests on is Lake-current.
+
+    Covers `Blanc`/`Blanc.**` and every workspace-package module in their
+    import closure or `needs`, except modules of a library whose `extraDep`
+    depends on a non-library target (reported as unchecked).  Returns a
+    summary for the certificate; raises `Unresolvable` naming the module(s)
+    whose Lake record does not describe the current inputs.
+    """
+
+    if lake_root is not None and lake_root.resolve() != (root / ".lake").resolve():
+        raise Unresolvable("source currency is evaluated only on a worktree's own .lake")
+    covered = build_covered_modules(root)
+    own_traces = root / ".lake/build/lib/lean"
+    binaries = [own_traces / (module.replace(".", "/") + ".olean") for module in covered] \
+        if olean_bytes else []
+    facts = lake_module_facts(root, covered, binaries)
+    modules: dict[str, dict[str, Any]] = facts["modules"]
+    libs: dict[str, dict[str, Any]] = facts["libs"]
+    lean_hash: int = facts["lean"]
+
+    root_packages = {row["package"] for row in libs.values() if row.get("isRoot")}
+    if len(root_packages) != 1:
+        raise Unresolvable("the helper did not identify exactly one root package")
+    root_package = next(iter(root_packages))
+    covered_keys = [f"{root_package}/{module}" for module in covered]
+    missing = [key for key in covered_keys if key not in modules]
+    if missing:
+        raise Unresolvable(f"Lake does not resolve covered module {missing[0]}")
+
+    traces: dict[str, dict[str, Any]] = {}
+
+    def trace_of(key: str) -> dict[str, Any]:
+        if key not in traces:
+            traces[key] = read_lake_trace(Path(modules[key]["trace"]), modules[key]["module"])
+        return traces[key]
+
+    # Covered traces are read first so a missing or malformed one is named.
+    for key in covered_keys:
+        trace_of(key)
+
+    artifacts: dict[str, dict[str, int]] = {}
+
+    def arts_of(key: str) -> dict[str, int]:
+        if key not in artifacts:
+            fact = modules[key]
+            found = lake_module_artifacts(trace_of(key), fact["module"], fact["isModule"])
+            base = Path(fact["trace"]).with_suffix("")
+            for extension, recorded in found.items():
+                artifact = Path(f"{base}.{extension}")
+                if not artifact.is_file():
+                    raise Unresolvable(f"{fact['module']}: recorded {extension} is absent")
+                if _sidecar_hash(Path(f"{artifact}.hash"), f"{fact['module']} {extension}") \
+                        != recorded:
+                    raise Unresolvable(
+                        f"{fact['module']}: {extension} hash sidecar differs from its Lake trace"
+                    )
+            artifacts[key] = found
+        return artifacts[key]
+
+    def resolved_imports(key: str) -> list[tuple[str, dict[str, bool]]]:
+        result = []
+        for entry in modules[key]["imports"]:
+            targets = entry["resolved"]
+            if not targets:
+                continue
+            if len(targets) != 1:
+                raise Unresolvable(
+                    f"{modules[key]['module']}: import {entry['module']} resolves to "
+                    "more than one Lake package"
+                )
+            if targets[0] == key:
+                raise Unresolvable(f"{modules[key]['module']} imports itself")
+            if targets[0] not in modules:
+                raise Unresolvable(f"helper did not describe imported module {targets[0]}")
+            result.append((targets[0], {
+                flag: bool(entry[flag]) for flag in ("importAll", "isExported", "isMeta")
+            }))
+        return result
+
+    infos: dict[str, dict[str, int]] = {}
+    exports: dict[str, dict[str, int]] = {}
+
+    def import_info(start: str) -> dict[str, int]:
+        stack: list[tuple[str, bool]] = [(start, False)]
+        active: set[str] = set()
+        while stack:
+            key, expanded = stack.pop()
+            if key in infos:
+                continue
+            imports = resolved_imports(key)
+            if not expanded:
+                if key in active:
+                    raise Unresolvable(f"import cycle through {modules[key]['module']}")
+                active.add(key)
+                stack.append((key, True))
+                stack.extend((name, False) for name, _ in imports if name not in infos)
+                continue
+            info = {name: LAKE_HASH_NIL for name in ("trace", "trans", "meta", "all", "legacy")}
+            non_module = not modules[key]["isModule"]
+            for name, flags in imports:
+                info = lake_add_import(info, non_module, flags, export_of(name))
+            infos[key] = info
+            active.discard(key)
+        return infos[start]
+
+    def export_of(key: str) -> dict[str, int]:
+        if key not in exports:
+            info = infos[key]
+            arts, meta_arts, all_arts = lake_export_arts(arts_of(key), modules[key]["isModule"])
+            exports[key] = {
+                "trans": info["trans"], "meta": info["meta"], "all": info["all"],
+                "legacy": info["legacy"], "arts": arts, "metaArts": meta_arts,
+                "allArts": all_arts,
+            }
+        return exports[key]
+
+    def lib_key(key: str) -> str:
+        return f"{modules[key]['package']}/{modules[key]['lib']}"
+
+    extra_deps: dict[str, int | str] = {}
+
+    def extra_dep(library: str) -> int | str:
+        """The library `extraDep` trace hash, or why it is not replayed."""
+
+        if library in extra_deps:
+            return extra_deps[library]
+        row = libs.get(library)
+        if row is None:
+            raise Unresolvable(f"helper did not describe library {library}")
+        if row["libExtraDepTargets"] or row["pkgExtraDepTargets"]:
+            extra_deps[library] = "extra-dep targets"
+            return extra_deps[library]
+        parts = [LAKE_HASH_NIL]  # `@pkg:extraDep`: no package extra-dep targets
+        for need in row["needs"]:
+            if not need.get("supported") or need.get("defaultFacets") != _LAKE_NEEDS_FACETS:
+                extra_deps[library] = f"needs {need.get('key')}, not a Lean library"
+                return extra_deps[library]
+            module_hashes = []
+            for name in need["modules"]:
+                if name not in modules:
+                    raise Unresolvable(f"helper did not describe needed module {name}")
+                module_hashes.append(trace_of(name)["dep_hash"])
+            parts.append(lake_fold([lake_fold(module_hashes)]))
+        extra_deps[library] = lake_fold(parts)
+        return extra_deps[library]
+
+    libs_nil = lake_fold([LAKE_HASH_NIL] * 4)
+    stale_sources: list[str] = []
+    stale_config: list[str] = []
+    stale_inputs: list[str] = []
+    checked: dict[str, int] = {}
+    unchecked: dict[str, int] = {}
+    built = restored = 0
+    covered_set = set(covered_keys)
+    unchecked_detail: dict[str, dict[str, Any]] = {}
+    for key in sorted(modules):
+        fact = modules[key]
+        module = fact["module"]
+        library = lib_key(key)
+        reason = _shape_unsupported(fact)
+        extra = extra_dep(library)
+        if reason is None and isinstance(extra, str):
+            reason = extra
+        if reason is not None:
+            if key in covered_set:
+                raise Unresolvable(f"{module}: Lake input trace not replayed ({reason})")
+            unchecked[fact["package"]] = unchecked.get(fact["package"], 0) + 1
+            unchecked_detail.setdefault(library, {"reason": reason, "modules": {}})
+            if unchecked_detail[library]["reason"] != reason:
+                unchecked_detail[library]["reason"] = "mixed reasons"
+            trace = trace_of(key)
+            unchecked_detail[library]["modules"][module] = {
+                "source": fact["src"], "depHash": f"{trace['dep_hash']:016x}",
+            }
+            if trace["recorded"]:
+                # Not replayed, but a built trace still records its source.
+                recorded = _recorded_components(module, trace["inputs"])
+                if recorded[_LAKE_SOURCE] != lake_hash(fact["src"], f"{module} source hash"):
+                    stale_sources.append(module)
+            import_info(key)
+            continue
+        trace = trace_of(key)
+        arts_of(key)
+        expected = [
+            lake_fold([extra, import_info(key)["trace"]]),
+            libs_nil,
+            lean_hash,
+            lake_hash(fact["src"], f"{module} source hash"),
+            lake_hash(fact["options"], f"{module} options hash"),
+            lake_hash(fact["isModuleHash"], f"{module} isModule hash"),
+            lake_hash(fact["name"], f"{module} name hash"),
+            lake_hash(fact["pkgId"], f"{module} package hash"),
+            lake_hash(fact["leanArgs"], f"{module} leanArgs hash"),
+        ]
+        if trace["recorded"]:
+            recorded = _recorded_components(module, trace["inputs"])
+            if lake_fold(recorded) != trace["dep_hash"]:
+                raise Unresolvable(
+                    f"Lake trace for {module} does not hash to its recorded depHash "
+                    "(tampered or corrupt)"
+                )
+            if recorded[_LAKE_SOURCE] != expected[_LAKE_SOURCE]:
+                stale_sources.append(module)
+            moved = [
+                _LAKE_COMPONENTS[index] for index in
+                (_LAKE_LIBS, _LAKE_LEAN, _LAKE_OPTIONS, _LAKE_PACKAGE, _LAKE_ARGS)
+                if recorded[index] != expected[index]
+            ]
+            if moved:
+                stale_config.append(f"{module} ({', '.join(moved)})")
+        if lake_fold(expected) != trace["dep_hash"]:
+            stale_inputs.append(module)
+        if key in covered_set:
+            if trace["recorded"]:
+                built += 1
+            else:
+                restored += 1
+        else:
+            checked[fact["package"]] = checked.get(fact["package"], 0) + 1
+
+    def listing(names: list[str]) -> str:
+        more = f" and {len(names) - 5} more" if len(names) > 5 else ""
+        return ", ".join(names[:5]) + more
+
+    if stale_sources:
+        raise Unresolvable(
+            f"source changed since its last build: {listing(stale_sources)} "
+            "(Lake trace source hash differs from the current source)"
+        )
+    if stale_config:
+        raise Unresolvable(
+            f"Lake configuration changed since the last build of {listing(stale_config)} "
+            "(recorded inputs differ from the evaluated workspace configuration)"
+        )
+    if stale_inputs:
+        raise Unresolvable(
+            f"Lake trace is not current for {listing(stale_inputs)} "
+            "(replayed input hash differs from the recorded depHash: an edited "
+            "source, header, configuration or imported artifact since the last "
+            "build or restore)"
+        )
+    check_unchecked_pin(root, unchecked_detail)
+    olean_checked = 0
+    for key, path in zip(covered_keys, binaries):
+        recorded = arts_of(key)["olean"]
+        if facts["bins"].get(str(path)) != recorded:
+            raise Unresolvable(
+                f"{modules[key]['module']}: .olean bytes do not hash to its Lake trace output"
+            )
+        olean_checked += 1
+    return {
+        "checker": file_digest(root / SOURCE_CURRENCY_HELPER),
+        "modules": len(covered_keys),
+        "built": built,
+        "restored": restored,
+        "dependencies": dict(sorted(checked.items())),
+        "unchecked": dict(sorted(unchecked.items())),
+        "olean_bytes": olean_checked,
+    }
+
+
 def read_build_certificate(
     root: Path, lake_root: Path | None = None
 ) -> dict[str, Any]:
@@ -1803,7 +2606,7 @@ def read_build_certificate(
         certificate = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise Unresolvable(f"build certificate is missing or corrupt: {error}") from error
-    required = {"schema", "host", "identity", "components", "traces", "provenance"}
+    required = {"schema", "host", "identity", "components", "traces", "currency", "provenance"}
     if not isinstance(certificate, dict) or set(certificate) != required:
         raise Unresolvable("build certificate shape is incompatible")
     if certificate.get("schema") != BUILD_CERTIFICATE_SCHEMA:
@@ -1819,12 +2622,39 @@ def read_build_certificate(
         isinstance(name, str) and isinstance(value, str) for name, value in traces.items()
     ):
         raise Unresolvable("build certificate has no trace map")
+    if not isinstance(certificate.get("currency"), dict):
+        raise Unresolvable("build certificate has no source-currency record")
     return certificate
+
+
+def checked_source_currency(root: Path) -> dict[str, Any]:
+    """`build_source_currency` whose every failure is a refusal, never a crash.
+
+    The check parses helper output and Lake traces and walks thousands of
+    modules; an unexpected shape there (a recursion limit, a missing key, a
+    wrong type) must refuse certification, not escape as a traceback that a
+    caller might misread.
+    """
+
+    try:
+        return build_source_currency(root)
+    except Unresolvable:
+        raise
+    except Exception as error:  # noqa: BLE001 - any defect refuses
+        raise Unresolvable(
+            f"source-currency check failed ({type(error).__name__}): {error}"
+        ) from error
 
 
 def write_build_certificate(root: Path) -> dict[str, Any]:
     identity, components = build_source_identity(root)
     traces = build_trace_state(root)
+    # Refuses unless Lake's own trace of every covered module describes the
+    # current sources; without it the stamp below would certify stale
+    # artifacts beside edited sources.
+    currency = checked_source_currency(root)
+    if build_source_identity(root)[0] != identity or build_trace_state(root) != traces:
+        raise Unresolvable("sources or Lake traces moved while certifying")
     certificate = {
         "schema": BUILD_CERTIFICATE_SCHEMA,
         "host": host_identity(),
@@ -1833,6 +2663,7 @@ def write_build_certificate(root: Path) -> dict[str, Any]:
             name: item["digest"] for name, item in components.items()
         },
         "traces": traces,
+        "currency": currency,
         "provenance": {
             "commit": git_output(root, ["rev-parse", "HEAD"]),
             "recorded_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1840,6 +2671,27 @@ def write_build_certificate(root: Path) -> dict[str, Any]:
     }
     atomic_json(build_certificate_path(root), certificate)
     return certificate
+
+
+#: Peak estimate, in whole GiB, for certification: the source-currency helper
+#: loads the Lake workspace and measured 2.0-2.1 GiB peak resident memory on
+#: the full tree (evidence/build-certificate-source-currency-v1/round2/F5-cost.txt).
+CERTIFY_MEMORY_GIB = 3
+
+
+def certify_admitted(root: Path) -> dict[str, Any]:
+    """`write_build_certificate` under host admission.
+
+    Uses the gate semaphore's nested mode: a caller that already holds the
+    host under this worktree's label (a certifying wrapper, a gate row, a
+    session) gets `ALREADY_HELD` at once and certification proceeds under that
+    hold, so a catalogue run cannot deadlock behind itself.  Otherwise the
+    hold is taken for certification alone and released before returning.
+    """
+
+    with gate_semaphore.admitted("build certification (Lake source currency)",
+                                 CERTIFY_MEMORY_GIB):
+        return write_build_certificate(root)
 
 
 def build_certificate_status(
@@ -1853,8 +2705,26 @@ def build_certificate_status(
         traces = build_trace_state(root, lake_root)
         if certificate["traces"] != traces:
             return False, "Lake trace population or depHash moved", certificate
+        # The same Lake-record check as at certification; it costs one
+        # toolchain helper run per process (memoized), so it is repeated
+        # rather than argued.  Only the checker must be the same: the
+        # built/restored split moves when Lake re-restores an unchanged
+        # module, which changes no input.  A staged copy of another
+        # worktree's `.lake` (worktree seeding) is not a Lake workspace of its
+        # own; the seed validates its source's status, this check included,
+        # before and after copying and requires the staged certificate to
+        # equal it, and the published worktree's next status reruns it.
+        if lake_root is None or lake_root.resolve() == (root / ".lake").resolve():
+            currency = checked_source_currency(root)
+            if currency["checker"] != certificate["currency"].get("checker"):
+                return False, "source-currency checker moved", certificate
+            for field in ("unchecked", "dependencies"):
+                if currency.get(field) != certificate["currency"].get(field):
+                    return False, f"source-currency {field} record moved", certificate
     except (GateCacheError, Unresolvable, OSError, UnicodeError, json.JSONDecodeError) as error:
         return False, str(error), None
+    except Exception as error:  # noqa: BLE001 - a defect is a refusal, not a crash
+        return False, f"certificate check failed ({type(error).__name__}): {error}", None
     return True, "exact build certificate matches", certificate
 
 
@@ -2513,7 +3383,7 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
                     "disposition": "certified",
                     "verdict": {
                         "exit": 0,
-                        "summary": ["OK — lake build certificate: exact identity and traces"],
+                        "summary": ["OK — lake build certificate: exact identity, traces and Lake source currency"],
                         "problems": [],
                         "output_digest": digest_of(certificate),
                         "passed": True,
@@ -2533,9 +3403,19 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         # own process; this one has no wrapper to do it, so the hold is taken
         # here and dropped again before the planned rows start -- a runner that
         # kept it would own the host for the whole selective run.
+        certified: Exception | None = None
         try:
             with gate_semaphore.admitted(f"the {gate['id']} prerequisite", 8):
                 verdict, elapsed = executed(gate, "prerequisite")
+                # Certification runs the source-currency helper (about 2 GiB);
+                # it runs here, under the hold already taken for the build it
+                # certifies, so it asks the host nothing more and cannot wait
+                # behind this run's own hold.
+                if verdict["passed"] and gate["id"] == "lake-build":
+                    try:
+                        write_build_certificate(root)
+                    except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
+                        certified = error
         except gate_semaphore.Refused as refusal:
             for line in gate_semaphore.refusal_lines(
                 gate_semaphore.label(), f"the {gate['id']} prerequisite", refusal
@@ -2550,11 +3430,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
             problem = "; ".join(verdict["problems"])
             print(f"         FAILED: {problem}", file=sys.stderr)
             failures.append(f"{command_text(gate)}: {problem}")
-        elif gate["id"] == "lake-build":
-            try:
-                write_build_certificate(root)
-            except (GateCacheError, Unresolvable, OSError, UnicodeError) as error:
-                failures.append(f"{command_text(gate)}: could not certify build: {error}")
+        elif certified is not None:
+            failures.append(f"{command_text(gate)}: could not certify build: {certified}")
 
     if failures:
         # Without a current build there is no sound dependency identity for any
@@ -3297,11 +4174,26 @@ def main(argv: list[str]) -> int:
             return 2
         try:
             if arguments.mode == "certify-build":
-                certificate = write_build_certificate(root)
+                try:
+                    certificate = certify_admitted(root)
+                except gate_semaphore.Refused as refusal:
+                    for line in gate_semaphore.refusal_lines(
+                        gate_semaphore.label(), "build certification", refusal
+                    ):
+                        print(line)
+                    return 2
+                except Exception as error:  # noqa: BLE001 - every failure refuses
+                    print(f"REGRESSION — lake build certificate refused: {error}", file=sys.stderr)
+                    return 2
+                currency = certificate["currency"]
                 print(
                     "OK — lake build certificate: "
                     f"{certificate['identity'][:16]} on "
-                    f"{_safe_host_label(certificate.get('host'))}"
+                    f"{_safe_host_label(certificate.get('host'))}; "
+                    f"Lake records current for {currency['modules']} modules "
+                    f"({currency['built']} built, {currency['restored']} restored) and "
+                    f"{sum(currency['dependencies'].values())} dependency modules; "
+                    f"unchecked: {currency['unchecked'] or 'none'}"
                 )
                 return 0
             return run(root, arguments)
