@@ -389,8 +389,9 @@ class CostControls(unittest.TestCase):
 
     def test_reporting_cli_is_separate_and_requires_root(self):
         script = str(ROOT / "scripts/gen-drip-fixtures.py")
+        run = getattr(sys, "_blanc_gate_read_audit_run", subprocess.run)
         for arguments in (("--measure-costs",), ("--measure-costs", "--write")):
-            result = subprocess.run([sys.executable, "-B", script, *arguments],
+            result = run([sys.executable, "-B", script, *arguments],
                                     text=True, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 2)
         with patch.object(api, "run_t8n", side_effect=AssertionError("EVM forbidden in pure test")):
