@@ -3,7 +3,7 @@
  "digest": "sha256",
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
  "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
- "pins": 961,
+ "pins": 969,
  "entries": 18657,
  "kinds": {
   "block": 610,
@@ -11,7 +11,7 @@
   "ctor": 933,
   "def": 13120,
   "inductive": 613,
-  "pin": 961,
+  "pin": 969,
   "rec": 131,
   "theorem": 2583
  },
