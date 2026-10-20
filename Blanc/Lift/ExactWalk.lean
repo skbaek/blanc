@@ -114,7 +114,7 @@ theorem popBurnBy_St2 {d w : B256} {c : Nat} :
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl, storageWrites := rfl }
+    storageReads := rfl, storageWrites := rfl, touchedAccounts := rfl }
 
 /-- A `JUMPI` that falls through. -/
 theorem rx_branch_zero {d : B256} (k : SFunc.RunExact fs sevm (St b S M G) f o) :
@@ -153,8 +153,9 @@ theorem rx_push {x : UInt8} {xs : Bytes} {le : (x :: xs).length ≤ 32} {w : B25
     (k : SFunc.RunExact fs sevm (St b (w :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b S M (G + 3)) (.next (.push (x :: xs) le) f) o := by
   subst hw
-  exact .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 3)) (c := gVerylow)
-    (G := G) rfl rfl hroom) k
+  exact .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 3))
+    (xs := x :: xs) (le := le) (c := gVerylow) (G := G) rfl rfl hroom
+    (by intro impossible; cases impossible)) k
 
 theorem rx_binary {r : Rinst} {fn : B256 → B256 → B256} {c : Nat} {x y v : B256}
     (hne : r ≠ .pc) (hdef : ∀ d : Devm, Rinst.runCore 0 d sevm r = applyBinary fn c d)
@@ -281,6 +282,7 @@ theorem rx_exp {x y : B256} (hy : y.bytecount = 0) (hroom : S.length < 1024)
     add_tsub_cancel_right, Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
 theorem rx_sload_cold {k' : B256} (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (hcold : (⟨sevm.currentTarget, k'⟩ : Adr × B256) ∉ b.accessedStorageKeys)
     (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm
@@ -288,15 +290,16 @@ theorem rx_sload_cold {k' : B256} (hlegacy : sevm.benvStat.rules.stateGas = none
         (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (k' :: S) M (G + 2100)) (.next (.reg .sload) f) o :=
   .next (Ninst.runCompiled_sload_cold (devm := St b (k' :: S) M (G + 2100)) (G := G)
-    hlegacy rfl hcold rfl rfl hroom) k
+    hlegacy h_access rfl hcold rfl rfl hroom) k
 
 theorem rx_sload_warm {k' : B256} (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (h_access : sevm.benvStat.rules.access = .eip2929)
     (hwarm : (⟨sevm.currentTarget, k'⟩ : Adr × B256) ∈ b.accessedStorageKeys)
     (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b (k' :: S) M (G + 100)) (.next (.reg .sload) f) o :=
   .next (Ninst.runCompiled_sload_warm (devm := St b (k' :: S) M (G + 100)) (G := G)
-    hlegacy rfl hwarm rfl rfl hroom) k
+    hlegacy h_access rfl hwarm rfl rfl hroom) k
 
 /-- `MSTORE`, with the whole charge `c = 3 + expansion` named. -/
 theorem rx_mstore {i v : B256} {c : Nat} {M' : Mem}

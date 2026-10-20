@@ -5125,8 +5125,12 @@ contract-neutral.
   over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
   word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
   comparison (`cmp_miss`, `cmp_hit`) are in
-  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
-  (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
+  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean). The fixed-cost
+  `rx_sload_cold` and `rx_sload_warm` constructors require both
+  `sevm.benvStat.rules.stateGas = none` and selected access pricing
+  `sevm.benvStat.rules.access = .eip2929`; flat historical schedules do not
+  have their exact 2100/100 charges. More steps
+  (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) are in
   [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean), and the
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and

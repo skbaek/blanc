@@ -3,10 +3,10 @@
 --
 -- Empty calldata is the payable receive: it reaches the runtime's top-level
 -- `STOP` before selector extraction, so no ledger row, index, clock, or log
--- moves.  Every nonempty input whose selector is outside the frozen
--- five-entry census reaches the dispatcher's inline empty revert.  Both
--- witnesses carry raw-chronology `SSTORE` freedom on the exact execution, so
--- neither disposition can hide a rolled-back write.
+-- moves.  With selected PUSH0 availability, every nonempty input whose
+-- selector is outside the frozen five-entry census reaches the dispatcher's
+-- inline empty revert.  Both witnesses carry raw-chronology `SSTORE` freedom
+-- on the exact execution, so neither disposition can hide a rolled-back write.
 
 import Blanc.DripCode
 import Blanc.ForwardDispatchMiss
@@ -162,7 +162,8 @@ def unmatchedSelectorRuntimeGas (sel : B256) : Nat :=
 private theorem unmatchedSelectorMain_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {G : Nat} {sel : B256}
     (hselector : Sevm.selector sevm = sel)
-    (hmiss : sel ∉ selectors) :
+    (hmiss : sel ∉ selectors)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach
           ⟨[], Mem.empty, G + tree.dispatchMissGas sel + 11, base.stateGas⟩)
@@ -175,7 +176,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     exact hmiss ((tree_hasSelector_iff sel).1 member)
   obtain ⟨hdispatch, hdispatchSafe⟩ :=
     tree.dispatchMiss_runCompiledTo_with_path sel
-      (program := runtime) (sevm := sevm) (base := base) G htreeMiss
+      (program := runtime) (sevm := sevm) (base := base) G htreeMiss h_push0
   let D := tree.dispatchMissGas sel
   let afterPushZero :=
     base.setMach ⟨[(0 : B256)], Mem.empty, G + D + 9, base.stateGas⟩
@@ -189,7 +190,8 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         (w := (0 : B256)) (c := gBase) (G := G + D + 9)
         pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
-        (by simp only [Devm.stack_setMach, List.length_nil]; omega))
+        (by simp only [Devm.stack_setMach, List.length_nil]; omega)
+        (fun _ => h_push0))
   let afterLoad := base.setMach
     ⟨[Sevm.dataWord sevm 0], Mem.empty, G + D + 6, base.stateGas⟩
   have hload : Ninst.RunCompiled sevm afterPushZero
@@ -213,18 +215,22 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
         (w := (224 : B256)) (G := G + D + 3) hpush224Cost
         (by simp only [afterLoad, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterLoad, Devm.stack_setMach, List.length_cons,
-          List.length_nil]; omega))
+          List.length_nil]; omega) (fun _ => h_push0))
   let afterShr := base.setMach ⟨[sel], Mem.empty, G + D, base.stateGas⟩
   have h224 : (224 : B256).toNat = 224 := by decide +kernel
   have hselector' :
       Sevm.dataWord sevm 0 >>> (224 : B256).toNat = sel := by
     rw [h224]
     exact hselector
+  have hshifts : sevm.benvStat.rules.op.shifts = true := by
+    cases hfork : sevm.benvStat.fork <;>
+      simp only [BenvStat.rules, hfork] at h_push0 ⊢ <;>
+      first | rfl | cases h_push0
   have hshr : Ninst.RunCompiled sevm afterPush224 shr afterShr :=
     Ninst.runCompiled_binary
       (r := .shr) (f := fun x y => y >>> x.toNat)
       (cost := gVerylow) (G := G + D) (v := sel)
-      (by rintro ⟨⟩) rfl rfl hselector'
+      (by rintro ⟨⟩) (by simp only [Rinst.runCore, hshifts, ↓reduceIte]) rfl hselector'
       (by simp only [afterPush224, Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)
   let run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
@@ -258,15 +264,17 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
             (by simpa only [afterShr, D, prepend] using hdispatchSafe))))
   simpa only [D, Nat.add_assoc] using ⟨run, runSafe⟩
 
-/-- Every nonempty input whose selector is outside DRIP's frozen five-entry
-census reaches the dispatcher's inline empty revert without a raw `SSTORE`.
+/-- With selected PUSH0 availability, every nonempty input whose selector is
+outside DRIP's frozen five-entry census reaches the dispatcher's inline empty
+revert without a raw `SSTORE`.
 The empty-calldata receive is the separate `receive_runCompiledTo`. -/
 theorem unmatched_selector_noRawSstore
     (sevm : Sevm) (base : Devm) (G : Nat) (sel : B256)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = sel)
     (hmiss : sel ∉ selectors)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas sel, base.stateGas⟩)
@@ -293,7 +301,7 @@ theorem unmatched_selector_noRawSstore
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
     unmatchedSelectorMain_runCompiledTo_with_path
-      (sevm := sevm) (base := base) (G := G) hselector hmiss
+      (sevm := sevm) (base := base) (G := G) hselector hmiss h_push0
   have hroom : afterSize.stack.length < 1024 := by
     simp only [afterSize, Devm.stack_setMach, List.length_cons,
       List.length_nil]

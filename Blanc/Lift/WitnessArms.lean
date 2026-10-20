@@ -73,16 +73,24 @@ theorem rinstAccKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
     AccKeep devm devm' := by
   cases r <;> simp only [rinstAccKeeps, Bool.false_eq_true] at hr <;> simp only [Rinst.runCore] at h
   case add | mul | sub | div | sdiv | mod | smod | signextend | lt | gt | slt | sgt | eq
-      | and | or | xor | byte | shl | shr | sar =>
+      | and | or | xor | byte =>
     obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
     exact ⟨hd.accessedAddresses.symm, hd.accessedStorageKeys.symm, hd.state.symm⟩
+  case shl | shr | sar =>
+    split at h
+    · obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
+      exact ⟨hd.accessedAddresses.symm, hd.accessedStorageKeys.symm, hd.state.symm⟩
+    · cases h
   case iszero | not =>
     obtain ⟨_, hd⟩ := Devm.diffBurn_of_applyUnary h
     exact ⟨hd.accessedAddresses.symm, hd.accessedStorageKeys.symm, hd.state.symm⟩
   case address | origin | caller | callvalue | calldatasize | codesize | gasprice
-      | returndatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid
-      | basefee | blobbasefee | msize =>
+      | returndatasize | coinbase | timestamp | number | prevrandao | gaslimit | msize =>
     exact accKeep_pushItem h
+  case chainid | basefee | blobbasefee =>
+    split at h
+    · exact accKeep_pushItem h
+    · cases h
   case gas =>
     obtain ⟨d1, h1, h2⟩ := Except.bind_eq_ok h
     exact (accKeep_chargeGas h1).trans (accKeep_push h2)
@@ -166,13 +174,15 @@ theorem ninstAccKeeps_step {sevm : Sevm} {devm devm' : Devm} {n : Ninst} {pc pc'
   cases n with
   | push bs fits =>
     rw [Ninst.step_push] at h
-    unfold Step.ofExecution at h
     split at h
     · cases h
-    · cases h
-      rename_i hd
-      obtain ⟨d1, h1, h2⟩ := Except.bind_eq_ok hd
-      exact (accKeep_chargeGas h1).trans (accKeep_push h2)
+    · unfold Step.ofExecution at h
+      split at h
+      · cases h
+      · cases h
+        rename_i hd
+        obtain ⟨d1, h1, h2⟩ := Except.bind_eq_ok hd
+        exact (accKeep_chargeGas h1).trans (accKeep_push h2)
   | reg r =>
     rw [Ninst.step_reg] at h
     unfold Step.ofExecution at h
@@ -335,11 +345,11 @@ theorem acctAgree_set {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a 
 /-- A storage write keeps every account view. -/
 theorem acctView_setStorVal (w : State) (adr : Adr) (k v : B256) (b : Adr) :
     acctView ((State.setStorVal w adr k v).get b) = acctView (w.get b) := by
-  unfold State.setStorVal
-  rw [acctView_get_set]
-  split
-  · subst_vars; rfl
-  · rfl
+  by_cases heq : adr = b
+  · subst b
+    rw [State.setStorVal_get_self]
+    rfl
+  · rw [State.setStorVal_get_ne w heq]
 
 theorem acctAgree_setStorVal {w : State} {acs : AcctShadow} (h : AcctAgree w acs)
     (adr : Adr) (k v : B256) : AcctAgree (State.setStorVal w adr k v) acs := by
@@ -1031,11 +1041,13 @@ theorem frameEnterB_done_ok_state {f : Frame} {child : Devm} (hf : f.isCreate = 
               simp only [processMessage.settle, bind, Except.bind, executeCode.handleError, reduceCtorEq] at h <;>
               (try split at h) <;> (try cases h) <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
                 Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
-                Devm.setWorld, Devm.withStorageWrites, Bool.true_eq_false])
+                Devm.setWorld, Devm.withStorageWrites, Devm.recordTouch, Devm.setMeta,
+                Bool.true_eq_false])
           · simp only [processMessage.settle, bind, Except.bind, executeCode.handleError] at h
             split at h <;> cases h <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
               Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
-              Devm.setWorld, Devm.withStorageWrites, Bool.true_eq_false])
+              Devm.setWorld, Devm.withStorageWrites, Devm.recordTouch, Devm.setMeta,
+                Bool.true_eq_false])
         · cases he
 
 /-- A frame whose entry is the same under every covered fork: its code address is neither
