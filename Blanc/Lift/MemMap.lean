@@ -234,16 +234,24 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
     MemKeep devm devm' := by
   cases r <;> simp only [rinstMemKeeps, Bool.false_eq_true] at hr <;> simp only [Rinst.runCore] at h
   case add | mul | sub | div | sdiv | mod | smod | signextend | lt | gt | slt | sgt | eq
-      | and | or | xor | byte | shl | shr | sar =>
+      | and | or | xor | byte =>
     obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
     exact .of_eq hd.memory
+  case shl | shr | sar =>
+    split at h
+    · obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
+      exact .of_eq hd.memory
+    · cases h
   case iszero | not =>
     obtain ⟨_, hd⟩ := Devm.diffBurn_of_applyUnary h
     exact .of_eq hd.memory
   case address | origin | caller | callvalue | calldatasize | codesize | gasprice
-      | returndatasize | coinbase | timestamp | number | prevrandao | gaslimit | chainid
-      | basefee | blobbasefee | msize =>
+      | returndatasize | coinbase | timestamp | number | prevrandao | gaslimit | msize =>
     exact memKeep_pushItem h
+  case chainid | basefee | blobbasefee =>
+    split at h
+    · exact memKeep_pushItem h
+    · cases h
   case keccak256 =>
     obtain ⟨⟨i, d1⟩, h1, h'⟩ := Except.bind_eq_ok h
     obtain ⟨⟨n, d2⟩, h2, h''⟩ := Except.bind_eq_ok h'
@@ -280,21 +288,33 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
       exact (memKeep_chargeGas h1).trans ⟨rfl, Nat.le_refl _⟩
   case sload =>
     obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
-    split at e1
-    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+    cases access : sevm.benvStat.rules.access with
+    | eip2929 =>
+      simp only [access] at e1
+      split at e1
+      · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+        have k3 := memKeep_push h3
+        have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
+          MemKeep.of_eq rfl
+        exact (memKeep_pop h1).trans ((memKeep_chargeGas h2).trans (k2.trans k3))
+      · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+        have k3 := memKeep_push h3
+        have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
+          MemKeep.of_eq rfl
+        have k1 : MemKeep d1 (addAccessedStorageKey d1 sevm.currentTarget x) := MemKeep.of_eq rfl
+        exact (memKeep_pop h1).trans (k1.trans ((memKeep_chargeGas h2).trans (k2.trans k3)))
+    | flat gas =>
+      simp only [access] at e1
+      obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
       have k3 := memKeep_push h3
       have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
         MemKeep.of_eq rfl
       exact (memKeep_pop h1).trans ((memKeep_chargeGas h2).trans (k2.trans k3))
-    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
-      have k3 := memKeep_push h3
-      have k2 : MemKeep d2 (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget x d2) :=
-        MemKeep.of_eq rfl
-      have k1 : MemKeep d1 (addAccessedStorageKey d1 sevm.currentTarget x) := MemKeep.of_eq rfl
-      exact (memKeep_pop h1).trans (k1.trans ((memKeep_chargeGas h2).trans (k2.trans k3)))
   case tload =>
-    obtain ⟨⟨x, d1⟩, h1, h2⟩ := Except.bind_eq_ok h
-    exact (memKeep_pop h1).trans (memKeep_pushItem h2)
+    split at h
+    · obtain ⟨⟨x, d1⟩, h1, h2⟩ := Except.bind_eq_ok h
+      exact (memKeep_pop h1).trans (memKeep_pushItem h2)
+    · cases h
   case log n =>
     obtain ⟨⟨mi, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
     obtain ⟨⟨sz, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
@@ -307,40 +327,73 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
       ((memKeep_chargeGas h4).trans ((MemKeep.memRead d4 mi sz).trans ⟨rfl, Nat.le_refl _⟩))))
   case tstore =>
     split at h
-    · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
-      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
-      obtain ⟨d3, h3, e3⟩ := Except.bind_eq_ok e2
-      obtain ⟨_, _, h5⟩ := Except.bind_eq_ok e3
-      cases h5
-      have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
-      exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
-    · obtain ⟨_, _, e0⟩ := Except.bind_eq_ok h
-      obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok e0
-      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
-      obtain ⟨d3, h3, h5⟩ := Except.bind_eq_ok e2
-      cases h5
-      have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
-      exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
+    · cases stateGas : sevm.benvStat.rules.stateGas with
+      | none =>
+        simp only [stateGas] at h
+        obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+        obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+        obtain ⟨d3, h3, e3⟩ := Except.bind_eq_ok e2
+        obtain ⟨_, _, h5⟩ := Except.bind_eq_ok e3
+        cases h5
+        have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
+        exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
+      | some rules =>
+        simp only [stateGas] at h
+        obtain ⟨_, _, e0⟩ := Except.bind_eq_ok h
+        obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok e0
+        obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+        obtain ⟨d3, h3, h5⟩ := Except.bind_eq_ok e2
+        cases h5
+        have k4 : MemKeep d3 (d3.setTransVal sevm.currentTarget x y) := MemKeep.of_eq rfl
+        exact (memKeep_pop h1).trans ((memKeep_pop h2).trans ((memKeep_chargeGas h3).trans k4))
+    · cases h
   case sstore =>
     split at h
-    · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
-      obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
-      obtain ⟨_, _, e3⟩ := Except.bind_eq_ok e2
-      obtain ⟨⟨d3, g⟩, h4, e4⟩ := Except.bind_eq_ok e3
-      obtain ⟨g3, h5, e5⟩ := Except.bind_eq_ok e4
-      obtain ⟨d4, h6, e6⟩ := Except.bind_eq_ok e5
-      obtain ⟨d5, h7, e7⟩ := Except.bind_eq_ok e6
-      obtain ⟨_, _, h9⟩ := Except.bind_eq_ok e7
-      cases h9
-      have m3 : d3.memory = d2.memory := by
-        injection h4 with eq
-        split at eq <;> (injection eq with eq _; subst eq; rfl)
-      have m4 : d4.memory = d3.memory := by
-        injection h6 with eq; rw [← eq]; rfl
-      apply MemKeep.of_eq
-      show devm.memory = d5.memory
-      rw [← (Devm.burn_of_chargeGas h7).memory, m4, m3, ← (Devm.pop_of_pop h2).memory,
-        ← (Devm.pop_of_pop h1).memory]
+    · split at h
+      · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+        obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+        obtain ⟨_, _, e3⟩ := Except.bind_eq_ok e2
+        obtain ⟨⟨d3, g⟩, h4, e4⟩ := Except.bind_eq_ok e3
+        obtain ⟨g3, h5, e5⟩ := Except.bind_eq_ok e4
+        obtain ⟨d4, h6, e6⟩ := Except.bind_eq_ok e5
+        obtain ⟨d5, h7, e7⟩ := Except.bind_eq_ok e6
+        obtain ⟨_, _, h9⟩ := Except.bind_eq_ok e7
+        cases h9
+        have m3 : d3.memory = d2.memory := by
+          injection h4 with eq
+          split at eq <;> (injection eq with eq _; subst eq; rfl)
+        have m4 : d4.memory = d3.memory := by
+          injection h6 with eq; rw [← eq]; rfl
+        apply MemKeep.of_eq
+        show devm.memory = d5.memory
+        rw [← (Devm.burn_of_chargeGas h7).memory, m4, m3, ← (Devm.pop_of_pop h2).memory,
+          ← (Devm.pop_of_pop h1).memory]
+      · obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
+        obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
+        obtain ⟨_, _, e3⟩ := Except.bind_eq_ok e2
+        obtain ⟨⟨d3, g⟩, h4, e4⟩ := Except.bind_eq_ok e3
+        obtain ⟨g3, h5, e5⟩ := Except.bind_eq_ok e4
+        obtain ⟨d4, h6, e6⟩ := Except.bind_eq_ok e5
+        obtain ⟨d5, h7, e7⟩ := Except.bind_eq_ok e6
+        obtain ⟨_, _, h9⟩ := Except.bind_eq_ok e7
+        cases h9
+        have m3 : d3.memory = d2.memory := by
+          injection h4 with eq
+          cases access : sevm.benvStat.rules.access with
+          | flat gas =>
+              simp only [access] at eq
+              injection eq with eq _
+              subst eq
+              rfl
+          | eip2929 =>
+              simp only [access] at eq
+              split at eq <;> (injection eq with eq _; subst eq; rfl)
+        have m4 : d4.memory = d3.memory := by
+          injection h6 with eq; rw [← eq]; rfl
+        apply MemKeep.of_eq
+        show devm.memory = d5.memory
+        rw [← (Devm.burn_of_chargeGas h7).memory, m4, m3, ← (Devm.pop_of_pop h2).memory,
+          ← (Devm.pop_of_pop h1).memory]
     · obtain ⟨_, _, e0⟩ := Except.bind_eq_ok h
       obtain ⟨⟨x, d1⟩, h1, e1⟩ := Except.bind_eq_ok e0
       obtain ⟨⟨y, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
@@ -371,9 +424,13 @@ theorem ninstMemKeeps_run {sevm : Sevm} {pre post : Devm} {n : Ninst}
   cases n with
   | push bs fits =>
     rcases run with ⟨xl, _, pc, hstep⟩
-    rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
-    obtain ⟨d, h1, h2⟩ := Except.bind_eq_ok hstep.2.symm
-    exact (memKeep_chargeGas h1).trans (memKeep_push h2)
+    rw [Ninst.StepRun, Ninst.step_push] at hstep
+    split at hstep
+    · rw [Step.run_ofExecution] at hstep
+      cases hstep.2
+    · rw [Step.run_ofExecution] at hstep
+      obtain ⟨d, h1, h2⟩ := Except.bind_eq_ok hstep.2.symm
+      exact (memKeep_chargeGas h1).trans (memKeep_push h2)
   | reg r =>
     rcases of_run_reg run with ⟨pc, h⟩
     exact rinstMemKeeps_run hn h
