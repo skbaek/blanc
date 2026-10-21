@@ -122,7 +122,8 @@ theorem exactCodeBase_getStor (n : Nat) :
   change ((((default : State).setStor exactCodeOwner (controlStor n)).get
     exactCodeOwner).stor) = controlStor n
   unfold State.setStor
-  rw [State.get_set_self]
+  dsimp only
+  split <;> simp only [State.get_setPresent_self, State.get_set_self]
 
 def ExactCodeEnumerationControl (n : Nat) : Prop :=
     Prog.RunCompiled exactCodeSevm

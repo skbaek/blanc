@@ -344,6 +344,7 @@ private theorem targetZeroMutant_push9 :
   · decide
   · rfl
   · decide
+  · intro _; rfl
 
 private theorem targetZeroMutant_pushKey :
     Ninst.RunCompiled targetZeroMutantSevm targetZeroMutantD1
@@ -353,6 +354,7 @@ private theorem targetZeroMutant_pushKey :
   · decide
   · rfl
   · decide
+  · intro _; rfl
 
 /-- The mutant creates no account, so the machine original read is the
 transaction-start snapshot read. -/
@@ -392,6 +394,8 @@ private theorem targetZeroMutant_store :
   apply Ninst.runCompiled_sstore_warm
       (c := gasStorageSet) (G := 29994)
   · exact CoveredFork.rules_stateGas_none (by decide)
+  · rfl
+  · rfl
   · rfl
   · change (targetZeroMutantOwner, assignmentSlot 0) ∈
       (default : Devm).accessedStorageKeys.insert
