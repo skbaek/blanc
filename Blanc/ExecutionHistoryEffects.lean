@@ -71,7 +71,7 @@ theorem ConfiguredHistoryTrace.stateInv
     {cfg : ChainConfig} {checkpoint future : BlockChain} {ca : Adr}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (hp : c.Preserves ca) (inv : c.StateInv ca checkpoint.state)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     c.StateInv ca future.state :=
   c.chainUsing_preserves_inv ca hp cfg checkpoint future
     history.toReachUsing inv hcov

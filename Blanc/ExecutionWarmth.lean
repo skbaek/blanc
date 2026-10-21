@@ -268,6 +268,27 @@ macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGro
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply incorporateChildOnError_accGrow)
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply incorporateChildOnSuccess_accGrow)
 
+theorem Devm.AccGrow.creditBeneficiary {pre d : Devm} (h : Devm.AccGrow pre d)
+    (rules : ForkRules) (donee : Adr) (val : B256) :
+    Devm.AccGrow pre (d.creditBeneficiary rules donee val) := by
+  unfold Devm.creditBeneficiary
+  split
+  · exact h.addBal _ _
+  · refine h.keep ?_
+    unfold Devm.recordTouch
+    split <;> rfl
+
+theorem Devm.AccGrow.creditSelfdestructRefund {pre d : Devm} (h : Devm.AccGrow pre d)
+    (rules : ForkRules) (p : Prop) [Decidable p] :
+    Devm.AccGrow pre (Jaune.creditSelfdestructRefund rules p d) := by
+  unfold Jaune.creditSelfdestructRefund
+  split
+  · exact h
+  · exact h.keep (Eq.refl _)
+
+macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGrow.creditBeneficiary)
+macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGrow.creditSelfdestructRefund)
+
 /-- Peel one bind of a success-only growth goal against the reference machine `pre`.  Every
 unification is at reducible transparency: a wrong guess must fail fast instead of unfolding the
 interpreter. -/
@@ -345,20 +366,15 @@ theorem Rinst.balanceCore_acc (rules : ForkRules) (world : World) (mach : Mach) 
   · rw [hp] at h; cases h
   · rw [hp] at h
     dsimp only at h
-    rcases hc : Mach.chargeGas
-        (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
-          else rules.gas.coldAccountAccess) m1 with ⟨err, m2⟩ | ⟨u, m2⟩
-    · rw [hc] at h; cases h
-    · rw [hc] at h
-      dsimp only at h
-      rcases hpu : Mach.push (world.state.get x.toAdr).bal m2 with ⟨err, m3⟩ | ⟨u2, m3⟩
-      · rw [hpu] at h; cases h
-      · rw [hpu] at h
-        dsimp only at h
-        simp only [Except.ok.injEq, Prod.mk.injEq] at h
-        obtain ⟨-, -, rfl⟩ := h
-        intro a ha
-        split <;> (try split) <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, Meta.readAccount, Meta.addAccessedAddress, Std.HashSet.mem_insert, beq_iff_eq, or_true, Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none]
+    rcases hacc : rules.access with _ | g <;> simp only [hacc] at h <;>
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
+          obtain ⟨-, -, rfl⟩ := h
+          intro a ha
+          split <;> (try split) <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, Meta.readAccount, Meta.addAccessedAddress, Std.HashSet.mem_insert, beq_iff_eq, or_true, Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none]
 
 theorem Rinst.balance_okOn (rules : ForkRules) (devm : Devm) :
     Except.OkOn (Devm.AccGrow devm) (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
@@ -466,7 +482,16 @@ theorem Devm.AccGrow.gasAccessDelegation {pre d : Devm} (h : Devm.AccGrow pre d)
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply XStep.AccGrow.done_ok)
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply XStep.AccGrow.spawn_call)
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply XStep.AccGrow.spawn_create)
+theorem Devm.AccGrow.rulesAccessDelegation {pre d : Devm} (h : Devm.AccGrow pre d)
+    (rules : ForkRules) (adr : Adr) :
+    Devm.AccGrow pre (rules.accessDelegation d adr).2.2.2.2 := by
+  unfold ForkRules.accessDelegation
+  split
+  · exact h.gasAccessDelegation _ _
+  · exact h
+
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGrow.accessDelegation)
+macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGrow.rulesAccessDelegation)
 macro_rules | `(tactic| acc_grow1) => `(tactic| with_reducible apply Devm.AccGrow.gasAccessDelegation)
 
 theorem genericCall.step_accGrow {devm d : Devm} (h : Devm.AccGrow devm d)
@@ -498,7 +523,9 @@ theorem Xinst.step_accGrow (sevm : Sevm) (devm : Devm) (x : Xinst)
     XStep.AccGrow devm (Xinst.step sevm devm x) := by
   have h : Devm.AccGrow devm devm := Devm.AccGrow.rfl
   cases x <;> simp only [Xinst.step, hsg]
-  all_goals with_reducible apply XStep.AccGrow.ofExcept
+  all_goals first
+    | with_reducible apply XStep.AccGrow.ofExcept
+    | (split <;> with_reducible apply XStep.AccGrow.ofExcept)
   all_goals acc_walk devm
 
 /-! ### One interpreter step -/
@@ -543,8 +570,7 @@ theorem Ninst.step_accGrow (evm : Evm) (n : Ninst)
     exact Step.AccGrow.toStep (Xinst.step_accGrow _ _ x hsg)
   | push xs hxs =>
     simp only [Ninst.step]
-    apply Step.AccGrow.ofExecution
-    acc_walk evm.dyna
+    split <;> apply Step.AccGrow.ofExecution <;> acc_walk evm.dyna
   | dupn imm =>
     simp only [Ninst.step]
     apply Step.AccGrow.ofExecution
