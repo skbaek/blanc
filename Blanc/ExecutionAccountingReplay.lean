@@ -331,7 +331,10 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor,
         Benv.incrNonce, addCreatedAccount, Benv.clearStorageWritesIfEmpty]
       rw [State.incrNonce, State.setAccount_get_ne _ (targetAway owner observed),
-        State.setStor, State.get_set_ne _ (targetAway owner observed)]
+        State.setStor]
+      split
+      · rw [State.get_setPresent_ne _ (targetAway owner observed)]
+      · rw [State.get_set_ne _ (targetAway owner observed)]
     have preparedStor := fun owner observed => congrArg Acct.stor (preparedGet owner observed)
     have preparedSafe : EntryStorageSafe C.storageOwners (processCreateMessage.msg msg) := by
       intro owner observed transfers nonzero

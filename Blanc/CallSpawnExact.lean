@@ -128,6 +128,10 @@ theorem Ninst.step_call_spawn_exact
       ((f5.memory).trans ((f6.memory).trans f7.memory)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
   clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled delegation] at hx
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
       (addAccessedAddress devm7 c.toAdr) c.toAdr with
     ⟨dp, na, code0, dagc, devm9⟩

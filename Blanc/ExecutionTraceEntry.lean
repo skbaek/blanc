@@ -111,8 +111,8 @@ theorem RequestsTrace.rootEntry {benv : Benv} {bout : BlockOutput} {state : Stat
   · exact trace.consolidation.rootEntry (by simpa only [Benv.withState] using hfork) root member
 
 theorem AppliedBodyTrace.rootEntry {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, RootEntry root := by
   intro root member

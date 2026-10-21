@@ -36,6 +36,24 @@ structure ConfiguredBlockTrace (cfg : ChainConfig)
     block.txs block.ommers block.wds bodyState blockOutput
   postEq : post = ⟨appendBlock pre.blocks block, bodyState, pre.chainId⟩
 
+/-- A successful configured transition is the successful scheduled transition
+at the fork its block selects. -/
+theorem stateTransitionUsing_scheduled_ok
+    {cfg : ChainConfig} {pre post : BlockChain} {block : Block}
+    (h : stateTransitionUsing cfg pre block = .ok post) :
+    ∃ fork : Fork, cfg.forkAt block.header.number block.header.timestamp = .ok fork ∧
+      stateTransitionScheduledE cfg fork pre block = .ok (.ok post) := by
+  have hId := stateTransitionUsing_success_chainId_eq h
+  rw [stateTransitionUsing_eq_of_chainId_eq hId] at h
+  obtain ⟨fork, hFork, hWith⟩ := Except.bind_eq_ok h
+  refine ⟨fork, Except.mapError_eq_ok_iff.mp hFork, ?_⟩
+  cases hs : stateTransitionScheduledE cfg fork pre block with
+  | error err => rw [hs] at hWith; cases hWith
+  | ok result =>
+    rw [hs] at hWith
+    have hResult : result = .ok post := Except.mapError_eq_ok_iff.mp hWith
+    exact congrArg Except.ok hResult
+
 /-- Extract the selected fork and exact body endpoints from the configured
 scheduled transition. Scheduled ommer validation remains in the actual core;
 this theorem neither substitutes a static transition nor assumes coverage. -/
@@ -48,17 +66,7 @@ theorem exists_configuredBody_of_transition
       applyBody (initBenv fork pre block.header)
         block.txs block.ommers block.wds = .ok (bodyState, blockOutput) ∧
       post = ⟨appendBlock pre.blocks block, bodyState, pre.chainId⟩ := by
-  have hId := stateTransitionUsing_success_chainId_eq h
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at h
-  obtain ⟨fork, hFork, hWith⟩ := Except.bind_eq_ok h
-  rw [Except.mapError_eq_ok_iff] at hFork
-  have hScheduled : stateTransitionScheduledE cfg fork pre block = .ok (.ok post) := by
-    cases hs : stateTransitionScheduledE cfg fork pre block with
-    | error err => rw [hs] at hWith; cases hWith
-    | ok result =>
-      rw [hs] at hWith
-      have hResult : result = .ok post := Except.mapError_eq_ok_iff.mp hWith
-      exact congrArg Except.ok hResult
+  obtain ⟨fork, hFork, hScheduled⟩ := stateTransitionUsing_scheduled_ok h
   have hCore := stateTransitionScheduledE_eq_ok_iff.mp hScheduled
   rw [stateTransitionCoreE] at hCore
   obtain ⟨_, _, hCore⟩ := Except.bind_eq_ok hCore

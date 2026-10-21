@@ -1878,9 +1878,12 @@ assert a historical-uniform NoDel invariant.
   template; `forwarderShape_847e`/`_6326` by `decide`), `noSstore_of_scan`
   proves `NoSstore` by a finite scan.  Reusable spawn facts there:
   `Xinst.step_delegatecall_spawn_code` (child code = code at the popped
-  address), `Xinst.step_directCall_spawn_code` (`CALL`/`STATICCALL`, including
-  a call back into the current account), `Xinst.step_create_spawn_fresh`
-  (`CREATE*` only enters a codeless account) and `Jinst.runCore_ok_pc`.
+  address), `Xinst.step_create_spawn_fresh` (`CREATE*` only enters a codeless
+  account) and `Jinst.runCore_ok_pc`; the direct-call facts
+  `Xinst.step_call_spawn_code`, `Xinst.step_staticcall_spawn_code` and
+  `Xinst.step_directCall_spawn_code` (`CALL`/`STATICCALL`, including a call
+  back into the current account) live in
+  [`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean).
 - Storage-owner discipline for a code family closed under delegation, any number of levels
   deep: [`Blanc/OwnerClosure.lean`](../Blanc/OwnerClosure.lean). `Exec.DelegationClosed S` says every committed frame
   owning `P`'s storage that runs a code of `S` decodes no `CALLCODE` and `DELEGATECALL`s only
@@ -3743,7 +3746,9 @@ code-bearing accounts, balance total not growing), `Xinst.step_spawn_world`,
 `Exec.Deriv.ParentStep.balSum_le`, `Exec.Deriv.ParentPrefix.balSum_le_getCode`.
 The same-target direct-code facts are `Xinst.step_call_sameTarget_code` and
 `Xinst.step_staticcall_sameTarget_code` in
-[`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean).
+[`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean), which
+specialize the target-free `Xinst.step_call_spawn_code` and
+`Xinst.step_staticcall_spawn_code` there.
 
 When the same target frame must be *replayed by a pure model* — its own model step
 taken before the steps of the children it settles, as in WETH9 `withdraw`, which
@@ -4133,7 +4138,10 @@ activations is one derivation. The carrier retains the actual block number and
 timestamp in both `forkAt` and `rulesAt`, and its explicit ommers in the body.
 `ExecutionTrace.exists_configuredBody_of_transition` extracts the selected
 fork, rule lookup, exact body run and post-state from the actual scheduled
-transition, without a coverage premise. The modern carrier adds its own
+transition, without a coverage premise; `ExecutionTrace.stateTransitionUsing_scheduled_ok`
+exposes only the selected fork and the successful scheduled transition, for
+inverting header validation or the appended block through Jaune's
+`stateTransitionCoreE_*` facts. The modern carrier adds its own
 `CoveredFork` evidence and unconditional modern body trace.
 
 For a selected historical domain `F`, use `ConfiguredBlockTraceIn F` and

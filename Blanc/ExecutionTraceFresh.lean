@@ -198,9 +198,9 @@ theorem RequestsTrace.freshFrameAdmitted
   consolidation := trace.consolidation.freshFrameAdmitted ca
 
 theorem AppliedBodyTrace.FrameAdmitted.and
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    {trace : AppliedBodyTrace benv txs wds state bout}
+    {trace : AppliedBodyTrace benv txs ommers wds state bout}
     {ca : Adr} {left right : Sevm → Devm → Prop}
     (hleft : trace.FrameAdmitted ca left)
     (hright : trace.FrameAdmitted ca right) :
@@ -213,9 +213,9 @@ theorem AppliedBodyTrace.FrameAdmitted.and
   requests := RequestsTrace.FrameAdmitted.and hleft.requests hright.requests
 
 theorem AppliedBodyTrace.freshFrameAdmitted
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (ca : Adr) :
     trace.FrameAdmitted ca Exec.FreshEntry where
   beacon := trace.beacon.freshFrameAdmitted ca

@@ -140,8 +140,8 @@ theorem RequestsTrace.rawFrames_entered {E : Sevm → Devm → Prop} (hE : Enter
   · exact trace.consolidation.rawFrames_entered hE root member
 
 theorem AppliedBodyTrace.rawFrames_entered {E : Sevm → Devm → Prop} (hE : EnteredCondition E)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal} {state : State}
-    {bout : BlockOutput} (trace : AppliedBodyTrace benv txs wds state bout) :
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State}
+    {bout : BlockOutput} (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     ∀ root ∈ trace.rawFrames, E root.sevm root.devm := by
   intro root member
   simp only [AppliedBodyTrace.rawFrames, List.mem_append] at member

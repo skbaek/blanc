@@ -86,8 +86,14 @@ theorem TransactionTrace.codeAt_keep
   have hndMsg : ¬ isValidDelegation (trace.msg.benv.state.getCode a) := by
     rw [hmsgState]
     exact hnd
+  have inherited : a ∉ trace.msg.inheritedDeletions := by
+    have prepared := trace.prepared
+    unfold prepareMessage at prepared
+    have fields := congrArg Msg.inheritedDeletions (Except.ok.inj prepared)
+    rw [← fields]
+    exact AdrSet.not_mem_empty
   have hnotDel := processMessageCall_accountsToDelete_ne hmsgFork trace.message.result
-    hnodel hndMsg
+    hnodel hndMsg inherited
   rw [hfinal]
   rw [foldl_destroyAccount_getCode_ne _ hnotDel]
   rw [State.addBal_getCode, State.addBal_getCode]

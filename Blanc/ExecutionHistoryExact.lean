@@ -18,22 +18,11 @@ theorem ConfiguredBlockTrace.block_eq_of_transition
     (trace : ConfiguredBlockTrace cfg pre post)
     (h : stateTransitionUsing cfg pre block = .ok post) :
     trace.block = block := by
-  have hId := stateTransitionUsing_success_chainId_eq h
-  have selected := h
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at selected
-  obtain ⟨rules, _, core⟩ := Except.bind_eq_ok selected
-  rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at core
-  obtain ⟨_, _, core⟩ := Except.bind_eq_ok core
-  obtain ⟨_, _, core⟩ := Except.bind_eq_ok core
-  dsimp only at core
-  obtain ⟨⟨bodyState, blockOutput⟩, _, core⟩ := Except.bind_eq_ok core
-  dsimp only at core
-  obtain ⟨_, _, final⟩ := Except.bind_eq_ok core
-  obtain ⟨_, _, final⟩ := Except.bind_eq_ok final
+  obtain ⟨_, -, hs⟩ := stateTransitionUsing_scheduled_ok h
+  obtain ⟨-, hblocks, -⟩ := stateTransitionCoreE_eq_ok (stateTransitionScheduledE_eq_ok_iff.mp hs)
   have executed : post.blocks.getLast? = some block := by
-    have blocks := congrArg (fun chain : BlockChain => chain.blocks.getLast?)
-      (Except.ok.inj final)
-    simpa only [appendBlock_getLast?] using blocks.symm
+    rw [hblocks]
+    exact appendBlock_getLast? _ _
   have retained : post.blocks.getLast? = some trace.block :=
     (congrArg (fun chain : BlockChain => chain.blocks.getLast?) trace.postEq).trans
       (appendBlock_getLast? _ _)

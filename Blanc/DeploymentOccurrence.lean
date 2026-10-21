@@ -155,7 +155,8 @@ private theorem Exec.Deriv.ParentPrefix.advancePushToward_appended
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
           have sourceStep := hstatic.symm.trans hstep
-          rw [Ninst.step_push, ite_eq_right hne] at sourceStep
+          simp only [Ninst.step_push, hne, decide_false, Bool.false_and, Bool.false_eq_true,
+            ↓reduceIte] at sourceStep
           obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
           cases hpc
           exact ⟨_, next, .cont hstep next, rest,
@@ -165,13 +166,17 @@ private theorem Exec.Deriv.ParentPrefix.advancePushToward_appended
               Evm.step ⟨pc, sevm, pre⟩ =
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
+          have spawned := hstatic.symm.trans hstep
+          rw [Ninst.step_push] at spawned
+          split at spawned <;> exact (Step.ofExecution_ne_spawn spawned).elim
       | runOk hstep henter child hresume next =>
           have hstatic :
               Evm.step ⟨pc, sevm, pre⟩ =
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
-          exact (Step.ofExecution_ne_spawn (hstatic.symm.trans hstep)).elim
+          have spawned := hstatic.symm.trans hstep
+          rw [Ninst.step_push] at spawned
+          split at spawned <;> exact (Step.ofExecution_ne_spawn spawned).elim
 
 private theorem Exec.Deriv.ParentPrefix.advanceJumpToward_appended
     {start target : Exec.Deriv} {instruction : Jinst}

@@ -75,24 +75,43 @@ theorem validated_intrinsic_le_gas {rules : ForkRules} {tx : Tx} {sender : Adr}
     cases hcontra
   · exact (Nat.le_max_left _ _).trans (not_lt.mp hc)
 
+/-- Four gas per calldata token is at most the per-byte data cost when a
+nonzero byte costs at least sixteen. -/
+private theorem calldata_tokens_mul4_le_dataCost {n : Nat} (hn : 16 ≤ n) (l : Bytes) :
+    l.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) 0 * 4 ≤
+      l.foldl (fun acc x => acc + (if x = 0 then 4 else n)) 0 := by
+  have aux : ∀ (c d : Nat) (l : Bytes), c * 4 ≤ d →
+      l.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) c * 4 ≤
+        l.foldl (fun acc x => acc + (if x = 0 then 4 else n)) d := by
+    intro c d l
+    induction l generalizing c d with
+    | nil => simp only [List.foldl_nil, imp_self]
+    | cons x xs ih =>
+      intro h
+      simp only [List.foldl_cons]
+      apply ih
+      split <;> omega
+  exact aux 0 0 l (by omega)
+
 /-- The intrinsic cost dominates the calldata part: base, initcode, access-list
 and authorization costs are all nonnegative. -/
 theorem intrinsic_ge_dataCost {rules : ForkRules} {tx : Tx} {sender : Adr}
-    (hsg : rules.stateGas = none) :
+    (hsg : rules.stateGas = none) (hnz : 16 ≤ rules.txr.dataNonZero) :
     (tx.data.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) 0) *
         standardCallDataTokenCost ≤
       (calculateIntrinsicCost rules tx sender).1 := by
+  have hdata := calldata_tokens_mul4_le_dataCost hnz tx.data
   simp only [calculateIntrinsicCost, hsg, standardCallDataTokenCost]
   omega
 
 /-- Validated calldata satisfies `length * 4 ≤ tx.gas`. -/
 theorem tx_data_length_mul4_le_gas {rules : ForkRules} {tx : Tx} {sender : Adr}
-    {p : Nat × Nat} (hsg : rules.stateGas = none)
+    {p : Nat × Nat} (hsg : rules.stateGas = none) (hnz : 16 ≤ rules.txr.dataNonZero)
     (h : validateTransaction rules tx sender = .ok p) :
     tx.data.length * 4 ≤ tx.gas := by
   have hi := validated_intrinsic_le_gas hsg h
   have ht := calldata_tokens_ge_length tx.data
-  have hd := intrinsic_ge_dataCost (rules := rules) (tx := tx) (sender := sender) hsg
+  have hd := intrinsic_ge_dataCost (rules := rules) (tx := tx) (sender := sender) hsg hnz
   simp only [standardCallDataTokenCost] at hd
   omega
 
@@ -118,13 +137,18 @@ runs `calculateBaseFeePerGas`, which runs `checkGasLimit`. -/
 theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
     {pre post : BlockChain} (trace : ConfiguredBlockTrace cfg pre post) :
     trace.block.header.gasLimit < 2 ^ 63 := by
-  have htrans := trace.transition
-  have hId : cfg.chainId = pre.chainId :=
-    stateTransitionUsing_success_chainId_eq htrans
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at htrans
-  obtain ⟨_, -, htrans⟩ := Except.bind_eq_ok htrans
-  obtain ⟨hvh, -, -⟩ := stateTransitionAt_eq_ok htrans
+  have key : ∀ {g p : Nat}, checkGasLimit g p = .ok () → g < 2 ^ 63 := by
+    intro g p h
+    unfold checkGasLimit at h
+    by_cases hlim : g ≥ gasLimitMaximum
+    · simp only [hlim, ↓reduceIte] at h
+      cases h
+    · have hmax : gasLimitMaximum = 2 ^ 63 := rfl
+      omega
+  obtain ⟨_, -, hs⟩ := stateTransitionUsing_scheduled_ok trace.transition
+  have hvh := stateTransitionCoreE_header (stateTransitionScheduledE_eq_ok_iff.mp hs)
   unfold validateHeader at hvh
+  obtain ⟨_, -, hvh⟩ := Except.bind_eq_ok hvh
   obtain ⟨parent, -, hvh⟩ := Except.bind_eq_ok hvh
   dsimp only at hvh
   by_cases hpar : trace.block.header.parentHash ≠
@@ -138,17 +162,35 @@ theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
       obtain ⟨_, hcontra, _⟩ := Except.bind_eq_ok hvh
       cases hcontra
   · simp only [hpar, ↓reduceIte] at hvh
-    obtain ⟨_, hbase, -⟩ := Except.bind_eq_ok hvh
-    rw [Except.mapError_eq_ok_iff] at hbase
-    unfold calculateBaseFeePerGas at hbase
-    dsimp only at hbase
-    obtain ⟨_, hcl, -⟩ := Except.bind_eq_ok hbase
-    unfold checkGasLimit at hcl
-    by_cases hlim : trace.block.header.gasLimit ≥ gasLimitMaximum
-    · simp only [hlim, ↓reduceIte] at hcl
-      cases hcl
-    · have hmax : gasLimitMaximum = 2 ^ 63 := rfl
-      omega
+    obtain ⟨_, hfirst, hvh⟩ := Except.bind_eq_ok hvh
+    obtain ⟨_, hexp, -⟩ := Except.bind_eq_ok hvh
+    rw [Except.mapError_eq_ok_iff] at hfirst hexp
+    unfold checkFirstFeeGasLimit at hfirst
+    unfold expectedBaseFee at hexp
+    cases hb : trace.block.header.baseFeePerGas with
+    | none =>
+      rw [hb] at hexp
+      obtain ⟨_, hcl, -⟩ := Except.bind_eq_ok hexp
+      exact key hcl
+    | some _ =>
+      cases hp : parent.header.baseFeePerGas with
+      | none =>
+        simp only [hb, hp, Option.isSome_some, Option.isNone_none, Bool.and_self,
+          ↓reduceIte] at hfirst
+        exact key hfirst
+      | some pbf =>
+        rw [hb, hp] at hexp
+        dsimp only at hexp
+        cases hcalc : calculateBaseFeePerGas trace.block.header.gasLimit
+            parent.header.gasLimit parent.header.gasUsed pbf with
+        | error e =>
+          rw [hcalc] at hexp
+          cases hexp
+        | ok v =>
+          unfold calculateBaseFeePerGas at hcalc
+          dsimp only at hcalc
+          obtain ⟨_, hcl, -⟩ := Except.bind_eq_ok hcalc
+          exact key hcl
 
 /-! ## Message data is preserved by delegation -/
 
@@ -229,7 +271,7 @@ theorem setDelegation_benvStat {msg : Msg} {p : Msg × B256}
 /-- The call wrapper preserves the delegated message's calldata. -/
 theorem messageCallDelegation_data {msg : Msg} {p : Msg × Nat}
     (h : messageCallDelegation msg = .ok p) : p.1.data = msg.data := by
-  unfold messageCallDelegation at h
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at h
   split at h
   · cases h; rfl
   · obtain ⟨q, hq, h⟩ := Except.bind_eq_ok h
@@ -242,7 +284,7 @@ theorem messageCallDelegation_data {msg : Msg} {p : Msg × Nat}
 /-- The call wrapper preserves the delegated message's environment. -/
 theorem messageCallDelegation_benvStat {msg : Msg} {p : Msg × Nat}
     (h : messageCallDelegation msg = .ok p) : p.1.benv.stat = msg.benv.stat := by
-  unfold messageCallDelegation at h
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at h
   split at h
   · cases h; rfl
   · obtain ⟨q, hq, h⟩ := Except.bind_eq_ok h
@@ -255,13 +297,13 @@ theorem messageCallDelegation_benvStat {msg : Msg} {p : Msg × Nat}
 /-- Resolving the delegation target preserves calldata. -/
 theorem messageCallExecutionMessage_data (msg : Msg) :
     (messageCallExecutionMessage msg).data = msg.data := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- Resolving the delegation target preserves the static environment. -/
 theorem messageCallExecutionMessage_benvStat (msg : Msg) :
     (messageCallExecutionMessage msg).benv.stat = msg.benv.stat := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-! ## Per-transaction and per-system-message bounds -/
@@ -279,7 +321,10 @@ theorem TransactionTrace.data_length_lt {benv : Benv} {bout : BlockOutput}
     tx.data.length < 2 ^ 256 := by
   have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   have hmul4 : tx.data.length * 4 ≤ tx.gas :=
-    tx_data_length_mul4_le_gas hsg trace.validation
+    tx_data_length_mul4_le_gas hsg
+      (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+        (by decide) (by decide) (by decide) (by decide))
+      trace.validation
   have hbig : (2 : Nat) ^ 63 < 2 ^ 256 := by decide
   omega
 
@@ -353,6 +398,10 @@ theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
   | create2 =>
     simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
     rw [hsg] at hx
+    by_cases hc2 : sevm.benvStat.rules.op.create2 = true
+    swap
+    · simp only [hc2, Bool.false_eq_true, ↓reduceIte, XStep.ofExcept, reduceCtorEq] at hx
+    simp only [hc2, ↓reduceIte] at hx
     rcases eq1 : Devm.pop pre with _ | ⟨_, devm1⟩ <;> simp only [eq1] at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     rcases eq2 : Devm.popToNat devm1 with _ | ⟨_, devm2⟩ <;> simp only [eq2] at hx
@@ -389,9 +438,6 @@ theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     rcases eq7 : Devm.popToNat devm6 with _ | ⟨_, devm7⟩ <;> simp only [eq7] at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
-    rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress devm7 callee) callee with ⟨_, _, _, _, _⟩
-    simp only [hp11] at hx
     split at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     · simp only [genericCall.step, Bind.bind, Except.bind,
@@ -421,9 +467,6 @@ theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     rcases eq7 : Devm.popToNat devm6 with _ | ⟨_, devm7⟩ <;> simp only [eq7] at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
-    rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress devm7 codeAddress) codeAddress with ⟨_, _, _, _, _⟩
-    simp only [hp11] at hx
     split at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     · simp only [genericCall.step, Bind.bind, Except.bind,
@@ -451,9 +494,6 @@ theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     rcases eq6 : Devm.popToNat devm5 with _ | ⟨_, devm6⟩ <;> simp only [eq6] at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
-    rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress devm6 codeAddress) codeAddress with ⟨_, _, _, _, _⟩
-    simp only [hp11] at hx
     split at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     · simp only [genericCall.step, Bind.bind, Except.bind,
@@ -481,9 +521,6 @@ theorem Xinst.step_spawn_inner_data_length_lt {sevm : Sevm} {pre : Devm}
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     rcases eq6 : Devm.popToNat devm5 with _ | ⟨_, devm6⟩ <;> simp only [eq6] at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
-    rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress devm6 target) target with ⟨_, _, _, _, _⟩
-    simp only [hp11] at hx
     split at hx
     · simp only [XStep.ofExcept, reduceCtorEq] at hx
     · simp only [genericCall.step, Bind.bind, Except.bind,
@@ -732,9 +769,9 @@ theorem ApplyTransactionsTrace.rawFrames_data_bound
 
 /-- A block body's retained frames all have short calldata. -/
 theorem AppliedBodyTrace.rawFrames_data_bound {benv : Benv}
-    {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork)
     (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by

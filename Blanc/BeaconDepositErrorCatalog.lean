@@ -73,7 +73,8 @@ theorem reachableErrorGuard_exact_runCompiledTo
     (h_blob : (errorData (reasonString error.reason)).length < 2 ^ 256)
     (h_words : 32 *
       (bytesWords (errorData (reasonString error.reason))).length < 2 ^ 256)
-    (h_room : stack.length < 1022) :
+    (h_room : stack.length < 1022)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨w :: stack, base.memory,
         G + errorGuardCost base (reasonString error.reason), base.stateGas⟩)
@@ -86,7 +87,7 @@ theorem reachableErrorGuard_exact_runCompiledTo
   exact Func.runCompiledTo_errorGuard (reachableError_lookup error)
     h_ne rfl hwf hr halign h_blob h_words (by
       simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
-        errorBodyCost, Devm.extCost, Devm.memory_setMach]) (by
+        errorBodyCost, Devm.extCost, Devm.memory_setMach]) h_push0 (by
       simp only [Devm.stack_setMach, List.length_cons]
       omega)
 
