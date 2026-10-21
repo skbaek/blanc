@@ -191,6 +191,7 @@ theorem implGuarded_runCompiledTo_nonzero
 
 theorem implGuarded_runCompiledTo_zero
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_data : Sevm.dataWord sevm 0 = 0) :
     ∃ post,
       Func.RunCompiledTo fs sevm
@@ -206,6 +207,7 @@ theorem implGuarded_runCompiledTo_zero
   refine ⟨post, ?_, ?_, rfl, ?_, ?_, ?_, ?_⟩
   · unfold implGuarded cdl implRevert post
     rw [implGuardedRevertGas_eq]
+    have hpush0 := hfork.rules_push0
     func_run [1]
     all_goals try {simp only [B256.eqCheck, h_data, ↓reduceIte, add_tsub_cancel_right]}
     simp only [Nat.add_sub_cancel]
@@ -239,7 +241,7 @@ private lemma static_sstore_run
       post.logs = d.logs := by
   have h_legacy : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
-  have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
+  have h_gas := BenvStat.gas_eq_prague_of_covered hfork
   rw [show Rinst.run ⟨pc, sevm, d⟩ .sstore =
     (do
       let ⟨key, d⟩ ← d.pop
@@ -264,7 +266,7 @@ private lemma static_sstore_run
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
     simp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, h_legacy, h_bal,
       Devm.balReadStorage_of_bal_none, ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none,
-      Except.bind_ok]]
+      Except.bind_ok, hfork.rules_sstore, hfork.rules_access]]
   have h_pop : (d.setMach ⟨[1], d.memory, d.gasLeft, d.stateGas⟩).pop =
       .ok ⟨1, d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩⟩ := by rfl
   have h_if : (if (0 : B256) = 1 then gasColdSload + gasWarmAccess
@@ -520,11 +522,11 @@ theorem implGuarded_static_halt_exec
       hbranchPush hjumpi (by decide)
       (by change ([0] : List B256).length < 1024; decide) hpop with
     ⟨hBranchPushStep, hJumpiStep⟩
-  rcases rpush0 with ⟨xl0, hfill0, hstep0⟩
+  rcases rpush0 (fun _ => hfork.rules_push0) with ⟨xl0, hfill0, hstep0⟩
   rcases rload with ⟨xl1, hfill1, hstep1⟩
   rcases riszero with ⟨xl2, hfill2, hstep2⟩
-  rcases rpush1 with ⟨xl3, hfill3, hstep3⟩
-  rcases rpushSlot with ⟨xl4, hfill4, hstep4⟩
+  rcases rpush1 (fun _ => hfork.rules_push0) with ⟨xl3, hfill3, hstep3⟩
+  rcases rpushSlot (fun _ => hfork.rules_push0) with ⟨xl4, hfill4, hstep4⟩
   obtain ⟨post, h12, h12exec, hstate, htrans, hlogs⟩ :=
     implGuarded_static_sstore_halt
       12 sevm d12 hsstore hfork h_static

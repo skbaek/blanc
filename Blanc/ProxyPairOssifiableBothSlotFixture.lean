@@ -94,8 +94,7 @@ private theorem getStorVal_sstoreBase_ne
         d.getStorVal owner readKey := by
   unfold Devm.getStorVal Devm.getAcct
   rw [Devm.sstoreBase_state]
-  simp only [State.setStorVal, State.get_set_self]
-  rw [Stor.get_set_ne _ hne]
+  rw [State.setStorVal_get_self, Stor.get_set_ne _ hne]
 
 private theorem setupImplementationCost_zero :
     sstoreValueCost 0 implementation.toB256 postSetupImplementation.toB256 = 100 := by
@@ -310,6 +309,7 @@ theorem message_success :
         ByteArray.toList_eq_toList_data, List.append_nil]
   have settled : processMessage message = .ok post := by
     apply MessageExecution.processMessage_clean_of_exec
+    · rfl
     · rfl
     · rfl
     · exact raw

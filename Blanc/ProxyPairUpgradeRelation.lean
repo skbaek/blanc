@@ -19,16 +19,16 @@ def storageWord (state : State) (owner : Adr) (slot : B256) : B256 :=
 theorem storageWord_setStorVal_self
     (state : State) (owner : Adr) (slot value : B256) :
     storageWord (state.setStorVal owner slot value) owner slot = value := by
-  unfold storageWord State.setStorVal
-  rw [State.get_set_self, Stor.get_set_self]
+  unfold storageWord
+  rw [State.setStorVal_get_self, Stor.get_set_self]
 
 theorem storageWord_setStorVal_ne
     (state : State) (owner : Adr) (written read value : B256)
     (hne : written ≠ read) :
     storageWord (state.setStorVal owner written value) owner read =
       storageWord state owner read := by
-  unfold storageWord State.setStorVal
-  rw [State.get_set_self, Stor.get_set_ne _ hne]
+  unfold storageWord
+  rw [State.setStorVal_get_self, Stor.get_set_ne _ hne]
 
 /-- Eager S1-to-S2 migration followed by the independent marker write. -/
 def migration (proxy : Adr) (state : State) : State :=

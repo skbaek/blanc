@@ -79,7 +79,7 @@ theorem fee_getter_inv {sevm : Sevm} {b post : Devm} {M : Mem} {fee : B256} {G :
 
 /-- Construct the actual return outcome at exactly the getter charge. -/
 theorem fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {fee : B256} {G : Nat}
-    (aligned : M.size % 32 = 0) :
+    (hfork : CoveredFork sevm.benvStat.fork) (aligned : M.size % 32 = 0) :
     SFunc.RunExact prog sevm (St b [fee] M (G + feeGetterGas M)) t_0082_c0
       (.halted (feeGetterPost b M fee G)) := by
   let expansion := calculateMemoryGasCost (memExtSize M.size 0 32) - calculateMemoryGasCost M.size
@@ -89,12 +89,12 @@ theorem fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {fee : B256} {G : Na
     simp only [expansion, ← Nat.add_assoc]
   rw [hgas]
   unfold t_0082_c0
-  refine rx_push0 (by change 1 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by change 1 < 1024; decide) ?_
   refine rx_mstore (c := 3 + expansion) ?_ rfl ?_
   · rw [St.extCost_eq rfl]
     rfl
   · refine rx_push (w := (32 : B256)) rfl (by decide) ?_
-    refine rx_push0 (by change 1 < 1024; decide) ?_
+    refine rx_push0 (h_push0 := hfork.rules_push0) (by change 1 < 1024; decide) ?_
     exact rx_return_any rfl (getter_return_free aligned)
 
 /-- The named return writes the full word and preserves every non-machine base field. -/
@@ -169,7 +169,7 @@ theorem exec_fee_getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations :
     rfl
   have tail := user_fee_prefix_exact hfork active wordRun
     (.inr ⟨hlen, zero, fee_getter_exact (b := afterSload sevm b 0)
-      (fee := finalOutput / (17 : B256)) (G := G) aligned⟩)
+      (fee := finalOutput / (17 : B256)) (G := G) hfork aligned⟩)
   rw [branchGas] at tail
   have hgas : G + userFeeGetterGas sevm b M iterations =
       (G + feeGetterGas M + 75 + feeLoopGas iterations + userSetupGas sevm b) + dispatchGas := by

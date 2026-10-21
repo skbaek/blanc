@@ -292,7 +292,7 @@ private theorem systemBody_word1_exact {sevm : Sevm} {base : Devm}
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_sload_sel fork (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shl (v := systemBodyCaller sevm base head index <<< 96) rfl (by change 6 < 1024; decide)
+  apply rx_shl (h_shifts := CoveredFork.rules_shifts (by assumption)) (v := systemBodyCaller sevm base head index <<< 96) rfl (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_mstore (Devm.extCost_add_of_size rfl charge) rfl
   apply rx_push rfl (by change 6 < 1024; decide)
@@ -362,7 +362,7 @@ theorem systemBody_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
     MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil] at next
   have amount := systemBody_amount_exact
     (base := systemBodyBase sevm base head index) (memory := m3)
-    (packed := systemBodyPacked sevm base head index) next
+    (packed := systemBodyPacked sevm base head index) (fork := fork) next
   have words := systemBody_word3_exact (base := systemBodyBase2 sevm base head index) (memory := m2)
     (c := systemRecordWordCharge index (systemBodyCaller sevm base head index)
       (systemBodyPubkey sevm base head index) (systemBodyPacked sevm base head index) memory 2) fork

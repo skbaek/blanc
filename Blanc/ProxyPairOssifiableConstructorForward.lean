@@ -72,6 +72,7 @@ private def stageMask : Func :=
 private theorem stageReturnEnd_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {runtimeBytes : Bytes} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : memory.size = 2208)
     (houtput : (memory.read 0 2188).1 = runtimeBytes)
     (hgas : 10 ≤ G) :
@@ -81,6 +82,7 @@ private theorem stageReturnEnd_runCompiled
         0 2188).2).withOutput runtimeBytes) := by
   unfold stageReturnEnd
   simp only [ossifiablePushCreationCoordinate_shape]
+  have hpush0 := hfork.rules_push0
   func_run (2)
   apply Func.runCompiled_return_word
     (devm := base.setMach
@@ -106,6 +108,7 @@ private theorem stageReturnEnd_runCompiled
 private theorem stageCopy_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {memory : Mem} {runtimeBytes : Bytes} {G n copyCost : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : memory.size = n)
     (hsmall : n < 2188)
     (hcopyCost :
@@ -144,12 +147,13 @@ private theorem stageCopy_runCompiled
   unfold stageCopy
   simp only [ossifiablePushCreationCoordinate_shape]
   have hreturn := stageReturnEnd_runCompiled
-    (fs := fs) (sevm := sevm) (base := base)
+    (fs := fs) (sevm := sevm) (base := base) (hfork := hfork)
     (memory := copiedMemory) (runtimeBytes := runtimeBytes)
     (G := G - (copyCost + 8)) hsizeCopied houtputCopied (by omega)
   have hgasTail :
       (G - (copyCost + 8)) - 5 = G - (copyCost + 13) := by
     omega
+  have hpush0 := hfork.rules_push0
   func_run (3)
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_codecopy_of
@@ -322,8 +326,14 @@ private theorem stageMask_complete
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     simp only [Devm.getStorVal_setMach, hrawLog]
     unfold stageHighMask
-    func_run (4)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
+    func_run (3)
+    -- SHL by hand: the walker's `rfl` probe of the guarded shift rule runs away here.
+    apply Func.RunCompiled.next (Ninst.runCompiled_binary (G := G - 1446)
+      (v := (fun x y : B256 => y <<< x.toNat) 160 ((fun x : B256 => ~~~x) 0)) (by rintro ⟨⟩)
+      (Rinst.runCore_shl_of_shifts hfork.rules_shifts) rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [List.length_cons, List.length_nil]; omega))
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.stateGas_setMach]
     unfold stageMerge
     func_run (2)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -336,7 +346,7 @@ private theorem stageMask_complete
         ite_eq_left ⟨rfl, fun h => hrequestedNonzero h.symm⟩, ite_eq_left rfl]
       norm_num only [gasStorageSet]
     exact stageCopy_runCompiled
-      (fs := fs) (sevm := sevm) (memory := memory2)
+      (fs := fs) (sevm := sevm) (hfork := hfork) (memory := memory2)
       (runtimeBytes := runtimeBytes) (G := G - 21455)
       (n := 224) (copyCost := 405)
       hsize2 (by omega) (by decide) hcode hruntimeLength
@@ -498,8 +508,14 @@ private theorem stageMask_dirtyCovered_complete
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     simp only [Devm.getStorVal_setMach, hrawLog]
     unfold stageHighMask
-    func_run (4)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
+    func_run (3)
+    -- SHL by hand: the walker's `rfl` probe of the guarded shift rule runs away here.
+    apply Func.RunCompiled.next (Ninst.runCompiled_binary (G := G - 1440)
+      (v := (fun x y : B256 => y <<< x.toNat) 160 ((fun x : B256 => ~~~x) 0)) (by rintro ⟨⟩)
+      (Rinst.runCore_shl_of_shifts hfork.rules_shifts) rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [List.length_cons, List.length_nil]; omega))
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.stateGas_setMach]
     unfold stageMerge
     func_run (2)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -513,7 +529,7 @@ private theorem stageMask_dirtyCovered_complete
         exact hrawNonzero hclean.1.symm)]
       norm_num only [gasWarmAccess]
     exact stageCopy_runCompiled
-      (fs := fs) (sevm := sevm) (memory := memory2)
+      (fs := fs) (sevm := sevm) (hfork := hfork) (memory := memory2)
       (runtimeBytes := runtimeBytes) (G := G - 1549)
       (n := 288) (copyCost := 399)
       hsize2 (by omega) (by decide) hcode hruntimeLength

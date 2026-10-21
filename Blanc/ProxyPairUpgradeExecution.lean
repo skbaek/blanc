@@ -269,8 +269,10 @@ private theorem witness_selected_body_of_program
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
     simp only [Rinst.run, Rinst.runCore] at hr
-    rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
-    exact ⟨x, y, hdiff.stack⟩
+    split at hr
+    · rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
+      exact ⟨x, y, hdiff.stack⟩
+    · cases hr
   have hafterSigStack : afterSig.stack = selected :: [] := by
     have hs := stack_of_diffBurn_two hshrDiff hshiftStack
     rw [← hselector]
@@ -489,8 +491,10 @@ theorem v2_initializer_run_storage_effect
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
     simp only [Rinst.run, Rinst.runCore] at hr
-    rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
-    exact ⟨x, y, hdiff.stack⟩
+    split at hr
+    · rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
+      exact ⟨x, y, hdiff.stack⟩
+    · cases hr
   have hafterSigStack : afterSig.stack = initializeV2Selector :: [] := by
     have hs := stack_of_diffBurn_two hshrDiff hshiftStack
     rw [← hselector]

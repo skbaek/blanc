@@ -191,6 +191,7 @@ private theorem
   unfold initializePackedStore
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 23252)
+    case h_push0 => exact fun _ => hfork.rules_push0
     · decide +kernel
     · simp only [Devm.gasLeft_setMach]
       omega
@@ -203,8 +204,14 @@ private theorem
     Devm.memory_setMach, Devm.stack_setMach]
   rw [himplementationRaw]
   unfold initializeHighMask
-  func_run (4)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  func_run (3)
+  -- SHL by hand: the walker's `rfl` probe of the guarded shift rule runs away here.
+  apply Func.RunCompiled.next (Ninst.runCompiled_binary (G := G + 23252 - 2111)
+    (v := (fun x y : B256 => y <<< x.toNat) 160 ((fun x : B256 => ~~~x) 0)) (by rintro ⟨⟩)
+    (Rinst.runCore_shl_of_shifts hfork.rules_shifts) rfl rfl
+    (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+    (by simp only [List.length_cons, List.length_nil]; omega))
+  simp only [Devm.setMach_setMach, Devm.memory_setMach]
   unfold initializeMerge
   simp only [Devm.stateGas_setMach]
   func_run (2)
@@ -464,6 +471,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     unfold initializePackedStore
     apply Func.RunCompiled.next
     · apply Ninst.runCompiled_pushB256 (c := 3) (G := G - 2630)
+      case h_push0 => exact fun _ => hfork.rules_push0
       · decide +kernel
       · simp only [Devm.gasLeft_setMach]
         omega
@@ -476,8 +484,14 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       Devm.memory_setMach, Devm.stack_setMach]
     rw [himplementationRaw]
     unfold initializeHighMask
-    func_run (4)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
+    func_run (3)
+    -- SHL by hand: the walker's `rfl` probe of the guarded shift rule runs away here.
+    apply Func.RunCompiled.next (Ninst.runCompiled_binary (G := G - 4741)
+      (v := (fun x y : B256 => y <<< x.toNat) 160 ((fun x : B256 => ~~~x) 0)) (by rintro ⟨⟩)
+      (Rinst.runCore_shl_of_shifts hfork.rules_shifts) rfl rfl
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [List.length_cons, List.length_nil]; omega))
+    simp only [Devm.setMach_setMach, Devm.memory_setMach]
     unfold initializeMerge
     simp only [Devm.stateGas_setMach]
     func_run (2)

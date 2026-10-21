@@ -182,9 +182,14 @@ theorem deposit_success_settled_effects
       .inl (initEvm (msg.withBenv benv)) :=
     MessageExecution.executeCode_enter_of_codeAddress_not_precompile
       msg benv codeAddress hcodeAddress hnotPrecompile
+  have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
+    have sweep := hfork.rules_touchedSweep
+    rw [hsevm] at sweep
+    rw [← benvAfterTransfer_stat htransfer]
+    exact sweep
   have hsettled : processMessage msg = .ok post :=
     MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
-      msg benv post htransfer hcodeEntry hexecEntry hpostError
+      msg benv post htransfer hcodeEntry hsweep hexecEntry hpostError
   exact ⟨post, hsettled, hstack, hgas, hlogs, rfl, hcountStor,
     hstorage, hcodes, haddresses, houtput, herror, hcompile⟩
 

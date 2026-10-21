@@ -14,7 +14,7 @@ private theorem messageCallDelegation_code_own
     (address : msg.codeAddress = some msg.currentTarget)
     (code : msg.code = msg.benv.state.getCode msg.currentTarget) :
     delegated.code = delegated.benv.state.getCode delegated.currentTarget := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, _⟩
@@ -38,7 +38,7 @@ private theorem messageCallExecutionMessage_code_empty
     (empty : msg.benv.state.getCode a = ByteArray.empty) :
     (messageCallExecutionMessage msg).currentTarget = a →
       (messageCallExecutionMessage msg).code = ByteArray.empty := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   have none : getDelegatedCodeAddress ByteArray.empty = Option.none := by decide
   split
   · intro target
@@ -46,8 +46,7 @@ private theorem messageCallExecutionMessage_code_empty
   · rename_i address delegated
     intro target
     have code : msg.code = ByteArray.empty := by rw [own, target, empty]
-    rw [code, none] at delegated
-    cases delegated
+    simp only [ForkRules.delegatedCodeAddress, code, none, ite_self, reduceCtorEq] at delegated
 
 private theorem RetainedXlot.caller_excluded_of_runFrame
     {frame : Frame} {slot : Xlot}

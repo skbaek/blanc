@@ -575,7 +575,7 @@ theorem not_oldSettledEffects : ¬ OldSettledEffects := by
       (wMsg wGas) wBenv wOwner (w_codeAddress wGas) w_notPrecompile
   have hprocess : processMessage (wMsg wGas) = .ok post :=
     MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
-      (wMsg wGas) wBenv post (w_transfer wGas) hcodeEntry hexec
+      (wMsg wGas) wBenv post (w_transfer wGas) hcodeEntry rfl hexec
       (by rw [hpostError]; rfl)
   rw [hprocess] at hsettled
   cases hsettled

@@ -519,7 +519,8 @@ private theorem proxy_success_delegatecall :
     have hsg : proxySuccessChild.benv.stat.rules.stateGas = none := rfl
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, hsg, executeCode.handleErrorWith_none, executeCode.handleError,
-      Except.bind_ok, h_ok]
+      Except.bind_ok, h_ok,
+      Devm.recordTouch_of_not_touchedSweep (rules := proxySuccessChild.benv.stat.rules) rfl]
   let post := (((incorporateChildOnSuccess proxySuccessParent childPost
       childPost.output).setMach
         ⟨1 :: proxySuccessParent.stack, proxySuccessParent.memory,
@@ -887,7 +888,8 @@ private theorem proxy_revert_child_run :
       B256.toB256_toBytes]
   obtain ⟨post, hrun, herr, hout, hgas, hstate, htra, hlogs⟩ :=
     implGuarded_runCompiledTo_zero [implGuarded]
-      (initSevm proxyRevertChild) (initDevm proxyRevertChild) 22117 h_data
+      (initSevm proxyRevertChild) (initDevm proxyRevertChild) 22117
+      (by change CoveredFork .prague; exact CoveredFork.prague) h_data
   refine ⟨post, ?_, herr, hout, hgas, ?_, htra, hlogs⟩
   · refine Prog.runCompiledTo_intro (G := 22143)
       (mid := (initDevm proxyRevertChild).setMach

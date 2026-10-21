@@ -156,7 +156,7 @@ private theorem submissionWords_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Na
   apply rx_sstore fork (Nat.lt_of_lt_of_le slack (by simp only [Nat.add_assoc]; exact Nat.le_add_right _ _)) dynamic
   apply rx_push rfl (by change 2 < 1024; decide)
   apply rx_add' (v := 1 + submissionKey sevm b) rfl (by change 1 < 1024; decide)
-  apply rx_push0 (by change 2 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 2 < 1024; decide)
   apply rx_calldataload (by change 2 < 1024; decide)
   apply rx_dup2 (by change 3 < 1024; decide)
   apply rx_sstore fork (Nat.lt_of_lt_of_le slack (by simp only [Nat.add_assoc]; exact Nat.le_add_right _ _)) dynamic
@@ -280,7 +280,7 @@ private theorem submissionLog_exact {sevm : Sevm} {base : Devm} {M : Mem} {G : N
   exact .last rfl
 
 private theorem submissionMemory_exact {sevm : Sevm} {base : Devm} {M : Mem} {G : Nat}
-    {tail : B256} {out : Outcome}
+    {tail : B256} {out : Outcome} (fork : CoveredFork sevm.benvStat.fork)
     (next : SFunc.RunExact prog sevm
       (St base [0, 76, tail] (submissionCopyMemory sevm M) G) submissionLogTree out) :
     SFunc.RunExact prog sevm (St base [tail] M
@@ -296,15 +296,15 @@ private theorem submissionMemory_exact {sevm : Sevm} {base : Devm} {M : Mem} {G 
   rw [gasEq, submissionMemory_split]
   apply rx_caller (by change 1 < 1024; decide)
   apply rx_push rfl (by change 2 < 1024; decide)
-  apply rx_shl (v := sevm.caller.toB256 <<< 96) rfl (by change 1 < 1024; decide)
-  apply rx_push0 (by change 2 < 1024; decide)
+  apply rx_shl (h_shifts := CoveredFork.rules_shifts (by assumption)) (v := sevm.caller.toB256 <<< 96) rfl (by change 1 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 2 < 1024; decide)
   apply rx_mstore (Devm.extCost_add_of_size rfl rfl) rfl
   apply rx_push rfl (by change 1 < 1024; decide)
-  apply rx_push0 (by change 2 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 2 < 1024; decide)
   apply rx_push rfl (by change 3 < 1024; decide)
   apply rx_calldatacopy (Devm.extCost_add_of_size rfl rfl) rfl
   apply rx_push rfl (by change 1 < 1024; decide)
-  apply rx_push0 (by change 2 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 2 < 1024; decide)
   exact next
 
 /-- Successful body execution has the entire sequential raw state and actual STOP outcome. -/
@@ -325,7 +325,7 @@ theorem submissionBody_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (.halted (submissionPost sevm b M G)) := by
   have logged := submissionLog_exact (base := submissionWordsStore sevm b)
     (M := M) (tail := submissionTail sevm b) fork dynamic slack
-  have suffix := submissionMemory_exact logged
+  have suffix := submissionMemory_exact fork logged
   have suffixGasEq : G + submissionSuffixGas sevm b M =
       G + sstoreCost sevm (submissionLogged sevm b M) 3 (1 + submissionTail sevm b)
       + 9 + submissionLogGas sevm M + 23 + submissionMstoreGas M + submissionCopyGas sevm M := by

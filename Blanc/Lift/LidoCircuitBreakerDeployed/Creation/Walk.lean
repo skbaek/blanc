@@ -290,24 +290,24 @@ theorem sloadCost_le (sevm : Sevm) (b : Devm) (k : B256) : sloadCost sevm b k �
 theorem sstoreCost_le' (sevm : Sevm) (b : Devm) (k v : B256) : sstoreCost sevm b k v ≤ 22100 :=
   le_trans (sstoreCost_le sevm b k v) (by decide)
 
-theorem fn1_run {sevm : Sevm} {b : Devm} {G : Nat} :
+theorem fn1_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {G : Nat} :
     SFunc.RunExact prog sevm (St b [0x120, 0x200, 0x2f] mem3 (G + 235)) t_026d_c1
       (.returned (St b [0x1e13380, 0x1baf80, 0x5a39a80, 0x278d00, 0x4f1a00, 0x69780, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c] mem3 G)) := by
   unfold t_026d_c1
   refine rx_dest ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -336,7 +336,7 @@ theorem fn1_run {sevm : Sevm} {b : Devm} {G : Nat} :
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -430,6 +430,7 @@ def fn2Cost (sevm : Sevm) (b : Devm) : Nat := 8 + sstoreCost sevm ((afterSload s
 theorem fn2_run {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {G : Nat} (hG : 2300 < G) (hz0 : b.getStorVal sevm.currentTarget 0x0 = 0) :
     SFunc.RunExact prog sevm (St b [0x1baf80, 0x14b, 0x1e13380, 0x1baf80, 0x5a39a80, 0x278d00, 0x4f1a00, 0x69780, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c] mem12 (G + fn2Cost sevm b)) t_0160_c2
       (.returned (St (afterSstore sevm ((afterSload sevm b 0x0).addLog ⟨sevm.currentTarget, [pw1], logData2⟩) 0x0 0x1baf80) [0x1e13380, 0x1baf80, 0x5a39a80, 0x278d00, 0x4f1a00, 0x69780, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c] mem14 G)) := by
+  have hfork := fr.fork
   rw [show G + fn2Cost sevm b = G + 8 + sstoreCost sevm ((afterSload sevm b 0x0).addLog ⟨sevm.currentTarget, [pw1], logData2⟩) 0x0 0x1baf80 + 1327 + sloadCost sevm b 0x0 + 61 by unfold fn2Cost; omega]
   unfold t_0160_c2
   refine rx_dest ?_
@@ -463,7 +464,7 @@ theorem fn2_run {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {G : Nat} (hG : 2
   refine rx_branch_succ (by decide) ?_
   unfold t_01a6_c2
   refine rx_dest ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_sload_sel fr.fork (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -510,7 +511,7 @@ theorem fn2_run {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {G : Nat} (hG : 2
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_log1 (c := 1262) (data := logData2) fr.static (by rw [St.extCost_eq mem14_size]; decide) rfl (read_covered_len mem14_size (by decide) (by decide)) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_sstore fr.fork (by unfold gCallStipend; omega) fr.static ?_
   exact rx_ret
@@ -633,6 +634,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     {G : Nat} (hG : 2300 < G) :
     SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b))
       (returnPost (St (ctorWorld sevm b) [0x0, 0x11e8] mem29 G) 0x0 0x11e8 []) := by
+  have hfork := fr.fork
   refine ⟨t_0000_c0, rfl, ?_⟩
   rw [show G + ctorCost sevm b = G + 1077 + fn3Cost sevm (afterSstore sevm ((afterSload sevm (b.addLog ⟨sevm.currentTarget, [pw0, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c], logData1⟩) 0x0).addLog ⟨sevm.currentTarget, [pw1], logData2⟩) 0x0 0x1baf80) + 18 + fn2Cost sevm (b.addLog ⟨sevm.currentTarget, [pw0, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c], logData1⟩) + 2888 by unfold ctorCost; omega]
 
@@ -686,7 +688,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_push (w := 0x26d) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
     Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_callRet (j := 1) rfl (fn1_run) ?_
+  refine rx_callRet (j := 1) rfl (fn1_run hfork) ?_
   unfold t_002f_c0
   refine rx_dest ?_
   refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
@@ -695,7 +697,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -710,7 +712,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_dest ?_
   refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_sub' (v := 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffff96880) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -734,7 +736,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_dest ?_
   refine rx_dup (n := 3) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd87300) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -762,7 +764,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -912,10 +914,10 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 0x33e) (by decide) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_codecopy (c := 847) (M' := mem17) (by rw [St.extCost_eq mem16_size]; decide) (by rw [hcode]; rfl) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -931,7 +933,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_add' (v := 0xe07) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem19) (by rw [St.extCost_eq mem18_size]; decide) rfl ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -947,7 +949,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_add' (v := 0xdad) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem21) (by rw [St.extCost_eq mem20_size]; decide) rfl ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -963,7 +965,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_add' (v := 0xefc) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem23) (by rw [St.extCost_eq mem22_size]; decide) rfl ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -979,7 +981,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_add' (v := 0xea2) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem25) (by rw [St.extCost_eq mem24_size]; decide) rfl ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
@@ -1013,7 +1015,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 3) (M' := mem29) (by rw [St.extCost_eq mem28_size]; decide) rfl ?_
   refine rx_push (w := 0x11e8) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
-  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   exact rx_return_any rfl (by rw [St.extCost_eq mem29_size]; decide)
 
 theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 55177 := by

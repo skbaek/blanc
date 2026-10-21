@@ -201,8 +201,8 @@ theorem TransactionTrace.root_frame_of_call_value_with_message
       rw [hmsgEq]
       simp only [callMessage, transactionTenv, Tx.auths, htype, List.isEmpty_nil]
     have hdeleg : messageCallDelegation trace.msg = .ok ⟨trace.msg, 0⟩ := by
-      unfold messageCallDelegation
-      simp only [hauths, ↓reduceIte]
+      unfold messageCallDelegation processMessageCall.legacyAuthorization
+      simp only [hauths, Bool.or_true, ↓reduceIte]
     have hdelegEq := Except.ok.inj (hdeleg.symm.trans h_delegation)
     simp only [Prod.mk.injEq] at hdelegEq
     obtain ⟨rfl, -⟩ := hdelegEq
@@ -215,8 +215,8 @@ theorem TransactionTrace.root_frame_of_call_value_with_message
       exact hnodeleg
     have hexecMsgEq : execMsg = trace.msg := by
       rw [h_execMsg]
-      unfold messageCallExecutionMessage
-      simp only [hcode]
+      unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+      simp only [ForkRules.delegatedCodeAddress, hcode, ite_self]
     subst hexecMsgEq
     have hsettledEq : trace.settledFrames = coreTrace.settledFrames := by
       show trace.message.settledFrames = coreTrace.settledFrames
