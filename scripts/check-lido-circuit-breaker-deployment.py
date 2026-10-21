@@ -89,7 +89,7 @@ PINS = {
     "DeploymentRoot": "44c6dc4d3b9ba323222c1fdccbcc40b1679bde862aa6ed74f5b849e33353b04e",
     "canonicalDeploymentStep_establishes_root": "ca826c1707045cf9399a1975ac9a6feea91de2d44b86847e7d697b9c563d5660",
     "DeploymentRoot.reflReach": "9df07c7df5c23375cee939340a5af51ea9fbb6a619f2ed9f41fd41b0c9af4926",
-    "DeploymentRoot.reachable_registryStable": "77b599141a87f3797980f3648b28fbed30445bc9db224cfd310b125d1e01833a",
+    "DeploymentRoot.reachable_registryStable": "218ea1e950cd17776c128b974915ebd3b9810b6fbcb3556c1c7f046b1ffd0081",
     "DeploymentRoot.reachable_code": "81a6786d083b03c2385428f6ca09a79e935ac1ce73242349fe4ecbf136fabbbd",
     "DeploymentRoot.reachable_installedCode": "d7f912846c7b60d6fce05d7ca07e381b861cb00471c5febe7495fb29964db4b8",
     "DeploymentRoot.reachable_witness": "2c7ac7c5246432ba6a0f1b08270f3937641417d5f6c0ca29c2d72774770f0ac1",

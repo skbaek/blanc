@@ -112,7 +112,8 @@ theorem stubPause_cold_runCompiledTo
     case a =>
       refine Func.RunCompiledTo.next
         (Ninst.runCompiled_sstore_cold (G := G) (c := 22100)
-          hfork.rules_stateGas_none rfl hcold ?_
+          hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore
+          rfl hcold ?_
           hdynamic ?_ rfl ?_)
         (Func.RunCompiledTo.last rfl)
       · simp only [Devm.gasLeft_setMach, gCallStipend]
@@ -239,6 +240,7 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
 
 private theorem protected_zero_tail_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (guardSelector selector : B256) (M : Mem) (G : Nat) (post : Devm)
     (hne : guardSelector ≠ selector)
     (guardNonzero : guardSelector ≠ 0)
@@ -251,6 +253,7 @@ private theorem protected_zero_tail_runCompiledTo
   apply Func.RunCompiledTo.next
   · apply Ninst.runCompiled_pushB256 (c := 3) (G := G + 16)
       (pushCost_of_ne_zero guardNonzero)
+    case h_push0 => exact fun _ => hfork.rules_push0
     · simp only [Devm.gasLeft_setMach]
     · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega
@@ -260,6 +263,7 @@ private theorem protected_zero_tail_runCompiledTo
 
 private theorem fsig_prepend_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (selector : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (hselector : Sevm.selector sevm = selector)
     (body : Func.RunCompiledTo fs sevm
@@ -306,10 +310,10 @@ theorem stubMain_pause_cold_runCompiledTo
     decide +kernel
   have protectedNonzero : stubProtectedSelector ≠ 0 := by
     decide +kernel
-  have tail := protected_zero_tail_runCompiledTo fs sevm base
+  have tail := protected_zero_tail_runCompiledTo fs sevm base hfork
     stubProtectedSelector pauseForSelector Mem.empty (G + 22154) post
     protectedNe protectedNonzero body
-  have head := fsig_prepend_runCompiledTo fs sevm base pauseForSelector
+  have head := fsig_prepend_runCompiledTo fs sevm base hfork pauseForSelector
     Mem.empty (G + 22173) _ post hselector tail
   have hg : G + 22173 + 11 = G + 22184 := by omega
   rw [hg] at head
@@ -378,10 +382,10 @@ theorem stubMain_query_true_warm_runCompiledTo
     decide +kernel
   have protectedNonzero : stubProtectedSelector ≠ 0 := by
     decide +kernel
-  have tail := protected_zero_tail_runCompiledTo fs sevm base
+  have tail := protected_zero_tail_runCompiledTo fs sevm base hfork
     stubProtectedSelector isPausedSelector Mem.empty (G + 141) post
     protectedNe protectedNonzero body
-  have head := fsig_prepend_runCompiledTo fs sevm base isPausedSelector
+  have head := fsig_prepend_runCompiledTo fs sevm base hfork isPausedSelector
     Mem.empty (G + 160) _ post hselector tail
   have hg : G + 160 + 11 = G + 171 := by omega
   rw [hg] at head

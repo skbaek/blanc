@@ -1232,15 +1232,10 @@ writes -/
 theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
     (k v : B256) (a : Adr) :
     (temporalSstorePost sevm base k v).getCode a = base.getCode a := by
-  show (((base.withRefundCounter _).state.setStorVal
-    sevm.currentTarget k v).get a).code = ((base.state.get a)).code
-  unfold State.setStorVal
-  by_cases h : sevm.currentTarget = a
-  · subst h
-    rw [State.get_set_self]
-    rfl
-  · rw [State.get_set_ne _ h]
-    rfl
+  show ((base.withRefundCounter _).setStorVal sevm.currentTarget k v).getCode
+    a = base.getCode a
+  rw [Devm.setStorVal_getCode]
+  rfl
 
 private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
     (key : B256) (a : Adr) :
@@ -1785,8 +1780,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (stubRunAfterSetBase.state.get configWorldOwner).stor := by
     rw [hchain]
-    unfold State.setStorVal
-    exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
+    exact congrArg Acct.stor (State.setStorVal_get_ne _ htargetOwner _ _)
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         stubRunAfterSetBase.getStorVal configWorldOwner key := by
@@ -1991,7 +1985,7 @@ private theorem stubPauseWorld_productionRun :
     exact CoveredFork.prague
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     stubPauseWorld_successSuffix
-  have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
+  have hfin := finishSetPauser_pauseAfterSet_runCompiled (h_push0 := hfork.rules_push0) officialParams
     stubPauseWorldSevm stubRunAfterSetNoLog stubRunMemoryLast stubRunImageLast
     pauseWorldCallee.toB256 pauseWorldPauser 0 [] 67693 _ (by decide)
     (by simpa only [stubRunMemoryLast, stubRunImageLast] using
@@ -2108,7 +2102,7 @@ private theorem stubPauseWorld_productionRun :
   rw [show (93123 + (469 + 2100 + 2100 + 2100) : Nat) = 99892 from by
     norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
+  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) officialParams
     stubPauseWorldSevm stubPauseWorldPre 99892 0 _
     hcalldata.1
     stubPauseWorld_publicPausePremises.valueZero

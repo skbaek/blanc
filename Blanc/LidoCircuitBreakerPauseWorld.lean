@@ -73,7 +73,7 @@ canonical word `1`, world untouched, no error introduced, and every
 child-incorporated meta field — logs, refund counter, accounts to delete, both
 accessed sets — exactly the base's own. -/
 theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
-    (G : Nat) :
+    (G : Nat) (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ post,
       Func.RunCompiledTo fs sevm
         (base.setMach ⟨[], Mem.empty, G + 16, base.stateGas⟩) calleeMain (.ok post) ∧
@@ -96,6 +96,7 @@ theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
     case h_ext =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       exact Devm.extCost_empty_word
+    all_goals try exact fun _ => h_push0
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
         (e := 0) (G := G) (out := (1 : B256).toBytes)
@@ -129,13 +130,13 @@ theorem callee_exec (m : Msg) (G : Nat)
       post.world = (initDevm m).world ∧
       post.logs = [] ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = Std.HashSet.emptyWithCapacity ∧
+      post.accountsToDelete = m.inheritedDeletions ∧
       post.accessedAddresses = m.accessedAddresses ∧
       post.accessedStorageKeys = m.accessedStorageKeys ∧
       post.createdAccounts = (initDevm m).createdAccounts := by
   obtain ⟨post, walk, herr, hout, hgasPost, hworld, hlogs, hrefund, hatd,
     haa, hask, hcreated⟩ :=
-    calleeMain_runCompiledTo [calleeMain] (initSevm m) (initDevm m) G
+    calleeMain_runCompiledTo [calleeMain] (initSevm m) (initDevm m) G hfork.rules_push0
   have hlogs0 : (initDevm m).logs = [] := by
     change (match m.benv.stat.rules.stateGas with
       | none => []
@@ -249,6 +250,8 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -321,10 +324,20 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     exact hd1refund
   · change (p.accountsToDelete.union out.accountsToDelete).isEmpty =
       devm.accountsToDelete.isEmpty
+    have hinh : (msg.withBenv benv').inheritedDeletions = .emptyWithCapacity ∨
+        (msg.withBenv benv').inheritedDeletions = devm.accountsToDelete := by
+      change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then .emptyWithCapacity
+          else p.accountsToDelete) = _ ∨
+        (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then .emptyWithCapacity
+          else p.accountsToDelete) = _
+      split
+      · exact Or.inl rfl
+      · exact Or.inr hd1delete
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
-      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
+    rcases hinh with hinh | hinh <;> rw [hinh] <;>
+      simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+        Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true, Bool.and_self]
   · change out.transientStorage = devm.transientStorage
     rw [show out.transientStorage =
       (initDevm (msg.withBenv benv')).transientStorage from
@@ -417,6 +430,8 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -491,10 +506,20 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     exact hd1refund
   · change (p.accountsToDelete.union out.accountsToDelete).isEmpty =
       devm.accountsToDelete.isEmpty
+    have hinh : (msg.withBenv benv').inheritedDeletions = .emptyWithCapacity ∨
+        (msg.withBenv benv').inheritedDeletions = devm.accountsToDelete := by
+      change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then .emptyWithCapacity
+          else p.accountsToDelete) = _ ∨
+        (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then .emptyWithCapacity
+          else p.accountsToDelete) = _
+      split
+      · exact Or.inl rfl
+      · exact Or.inr hd1delete
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
-      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
+    rcases hinh with hinh | hinh <;> rw [hinh] <;>
+      simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+        Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true, Bool.and_self]
   · change out.transientStorage = devm.transientStorage
     rw [show out.transientStorage =
       (initDevm (msg.withBenv benv')).transientStorage from

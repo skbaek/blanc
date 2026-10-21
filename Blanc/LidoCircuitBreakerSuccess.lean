@@ -523,6 +523,9 @@ private theorem tstore_logs_output
   rcases of_run_reg run with ⟨pc, hr⟩
   simp only [Rinst.run, Rinst.runCore] at hr
   split at hr
+  swap
+  · cases hr
+  split at hr
   · rcases Except.bind_eq_ok hr with ⟨⟨key, s1⟩, h1, hr1⟩
     rcases Except.bind_eq_ok hr1 with ⟨⟨value, s2⟩, h2, hr2⟩
     rcases Except.bind_eq_ok hr2 with ⟨charged, h3, hr3⟩
@@ -1464,57 +1467,6 @@ theorem _root_.Blanc.MemWordAt.acrossPauseStatStagingBoundary
     MemWordAt post offset word :=
   memWordAt_acrossPauseStatStaging hpast window run
 
-/-- Contract-local value-carrying `EXTCODESIZE` inversion used by the
-strengthened code-guard handoff. -/
-private lemma success_of_extcodesize_val
-    {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
-    (hp : x :: xs <<+ s.stack)
-    (run : Ninst.Run e s Ninst.extcodesize r) :
-    ((s.getCode x.toAdr).size.toB256 :: xs <<+ r.stack) ∧
-      s.memory = r.memory := by
-  rcases of_run_reg run with ⟨pc, hrun⟩
-  simp only [Rinst.run, Rinst.runCore] at hrun
-  rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
-  rw [Devm.popToAdr_def] at hpopAdr
-  dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
-  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
-  rcases hpopAdr with ⟨rfl, rfl⟩
-  have hpop' := Devm.pop_of_pop hpop
-  have hx : x = word :=
-    (List.of_cons_pref_of_cons_pref hp (pref_of_split hpop'.stack)).left
-  subst word
-  have htail : xs <<+ d0.stack := of_append_pref hpop'.stack hp
-  split at hrun
-  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
-    have hstate : s.state = d2.state :=
-      hpop'.state.trans (Devm.burn_of_chargeGas hgas).state
-    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
-      unfold Devm.getCode Devm.getAcct
-      rw [hstate]
-    refine ⟨?_, ?_⟩
-    · rw [← hcode]
-      exact append_pref (Devm.push_of_push hpush).stack
-        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
-    · exact hpop'.memory.trans
-        ((Devm.burn_of_chargeGas hgas).memory.trans
-          (Devm.push_of_push hpush).memory)
-  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
-    have hstate : s.state = d2.state :=
-      hpop'.state.trans
-        ((show d0.state = (addAccessedAddress d0 x.toAdr).state from rfl).trans
-          (Devm.burn_of_chargeGas hgas).state)
-    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
-      unfold Devm.getCode Devm.getAcct
-      rw [hstate]
-    refine ⟨?_, ?_⟩
-    · rw [← hcode]
-      exact append_pref (Devm.push_of_push hpush).stack
-        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
-    · exact hpop'.memory.trans
-        ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
-          ((Devm.burn_of_chargeGas hgas).memory.trans
-            (Devm.push_of_push hpush).memory))
-
 /-- The code guard, strengthened only on its live arm with both staged-memory
 windows. -/
 private theorem pauseAfterSet_codeGuard_arms_words
@@ -1551,7 +1503,7 @@ private theorem pauseAfterSet_codeGuard_arms_words
     prefix_of_loadWord_window hTarget nil_pref hload
   have hdupStack : target.toB256 :: [target.toB256] <<+ s2.stack :=
     prefix_of_dup_val hdup (by show_nth) htargetStack
-  obtain ⟨hcodeStack, -⟩ := success_of_extcodesize_val hdupStack hcodesize
+  obtain ⟨hcodeStack, -⟩ := of_extcodesize_val hdupStack hcodesize
   have hcode : s2.getCode = entry.getCode := by
     have hloadCode : Devm.getCode entry = Devm.getCode s1 :=
       Line.of_inv Devm.getCode (by unfold loadWord; line_inv) hload

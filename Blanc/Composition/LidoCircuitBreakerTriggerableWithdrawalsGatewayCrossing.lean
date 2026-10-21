@@ -289,7 +289,9 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have hatdOut : out.accountsToDelete = Std.HashSet.emptyWithCapacity := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp only [pauseSentinelPost_accountsToDelete, pauseFinitePost_accountsToDelete] <;> rfl
+    split <;> simp only [pauseSentinelPost_accountsToDelete, pauseFinitePost_accountsToDelete] <;>
+      exact ite_eq_left (show sevm.benvStat.rules.settle.selfdestructRefund = 0 from
+        hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl)
   have haaOut : out.accessedAddresses = p.accessedAddresses := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
@@ -343,6 +345,8 @@ private lemma runCompiled_call_zero_value_gatewayPause
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep (rules := sevm.benvStat.rules) hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -725,7 +729,8 @@ private lemma runCompiled_statcall_gatewayQuery
       ((initDevm childMsg).withOutput
         (1 : B256).toBytes).accountsToDelete from
       congrArg (fun view => view.accountsToDelete) hmetaOut]
-    rfl
+    exact ite_eq_left (show sevm.benvStat.rules.settle.selfdestructRefund = 0 from
+      hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl)
   have haaOut : out.accessedAddresses = p.accessedAddresses := by
     rw [show out.accessedAddresses =
       ((initDevm childMsg).withOutput
@@ -753,6 +758,8 @@ private lemma runCompiled_statcall_gatewayQuery
       executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr0, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep (rules := sevm.benvStat.rules) hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -1452,8 +1459,8 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled_created
     by_cases h : target.toAdr = sevm.currentTarget
     · rw [← h]
       exact hprotTarget hcodeS
-    · unfold State.Protected State.setStorVal
-      rw [State.get_set_ne _ h]
+    · unfold State.Protected
+      rw [State.setStorVal_get_ne _ h]
       exact hprot
   have hsub1' : base.state.subBal sevm.currentTarget 0 = some base.state :=
     State.subBal_zero_of_protected hprot
@@ -1586,7 +1593,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled_created
             Gb + gatewayPauseChildCost duration + 546, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         installedCallStage post := by
       unfold installedCallStage
-      have h := installedCallArgs_runCompiled fs sevm
+      have h := installedCallArgs_runCompiled (hfork := hfork) fs sevm
         (temporalAccountAccessBase base target.toAdr) target
         ((M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes)
         (Gb + gatewayPauseChildCost duration + 526)

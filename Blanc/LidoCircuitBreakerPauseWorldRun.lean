@@ -1769,14 +1769,8 @@ private theorem lastStor_B6_expiry_other {p : B256}
 /-! ## Account-set and code reads at the `pauseAfterSet` boundary -/
 
 private theorem setStorVal_getCode (devm : Devm) (adr : Adr) (k v : B256)
-    (a : Adr) : (devm.setStorVal adr k v).getCode a = devm.getCode a := by
-  show ((devm.state.setStorVal adr k v).get a).code =
-    ((devm.state.get a)).code
-  unfold State.setStorVal
-  by_cases h : adr = a
-  · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+    (a : Adr) : (devm.setStorVal adr k v).getCode a = devm.getCode a :=
+  Devm.setStorVal_getCode devm adr k v a
 
 private theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
     (k v : B256) (a : Adr) :
@@ -2276,7 +2270,7 @@ private theorem pauseLastWorld_master :
   have hafter := hclose _ hW8
   rw [show (6322 + 427 + 2600 : Nat) = 9349 from by norm_num only] at hafter
   -- through finishSetPauser
-  have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
+  have hfin := finishSetPauser_pauseAfterSet_runCompiled (h_push0 := hfork.rules_push0) officialParams
     pauseLastSevm (indexClearPost pauseLastSevm (entryClearPost pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -2403,7 +2397,7 @@ private theorem pauseLastWorld_master :
     norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   -- through the dispatcher
-  obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo officialParams
+  obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) officialParams
     pauseLastSevm pauseLastPre 41548 0 _
     (pauseWorld_dataLength pauseLastWorldStor pauseLastWorldGas)
     (pauseWorld_value pauseLastWorldStor pauseLastWorldGas)
@@ -4360,7 +4354,7 @@ private theorem pauseRetainedWorld_master :
   have hboundary := Func.RunCompiledTo.of_runCompiled hW8
   have hafter := hclose _ hW8
   rw [show (8451 + 427 + 2600 : Nat) = 11478 from by norm_num only] at hafter
-  have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
+  have hfin := finishSetPauser_pauseAfterSet_runCompiled (h_push0 := hfork.rules_push0) officialParams
     pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
       (addAccessedStorageKey (temporalSstorePost pauseRetainedSevm
       (addAccessedStorageKey (temporalSloadBase pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
@@ -4496,7 +4490,7 @@ private theorem pauseRetainedWorld_master :
   rw [show (46708 + (469 + 2100 + 2100 + 2100) : Nat) = 0 + 53477 from by
     norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo officialParams
+  obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) officialParams
     pauseRetainedSevm pauseRetainedPre 53477 0 _
     (pauseWorld_dataLength pauseRetainedWorldStor pauseRetainedWorldGas) (pauseWorld_value pauseRetainedWorldStor pauseRetainedWorldGas)
     (pauseWorld_selector pauseRetainedWorldStor pauseRetainedWorldGas)

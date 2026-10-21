@@ -1633,8 +1633,7 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (gatewayRunAfterSetBase.state.get configWorldOwner).stor := by
     rw [hmidState]
-    unfold State.setStorVal
-    exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
+    exact congrArg Acct.stor (State.setStorVal_get_ne _ htargetOwner _ _)
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         gatewayRunAfterSetBase.getStorVal configWorldOwner key := by
@@ -1852,7 +1851,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
           ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     sentinelGatewayPauseWorld_successSuffix
-  have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
+  have hfin := finishSetPauser_pauseAfterSet_runCompiled (h_push0 := (show CoveredFork sentinelGatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_push0) officialParams
     sentinelGatewayPauseWorldSevm gatewayRunAfterSetNoLog gatewayRunMemoryLast gatewayRunImageLast
     pauseWorldCallee.toB256 pauseWorldPauser 0 [] 71123 _ (by decide)
     (by simpa only [gatewayRunMemoryLast, gatewayRunImageLast,
@@ -1982,7 +1981,9 @@ private theorem sentinelGatewayPauseWorld_productionRun :
   rw [show (96553 + (469 + 2100 + 2100 + 2100) : Nat) = 103322 from by
     norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
+  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo
+    (h_push0 := (show CoveredFork sentinelGatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_push0)
+    (h_shifts := (show CoveredFork sentinelGatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_shifts) officialParams
     sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre 103322 0 _
     hcalldata.1
     sentinelGatewayPauseWorld_publicPausePremises.valueZero

@@ -1745,7 +1745,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
   constructor
   · func_run (3)
     refine Func.RunCompiled.next
-      (Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none (G := G) (c := 20000) rfl hwarm ?_
+      (Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore (G := G) (c := 20000) rfl hwarm ?_
         hstatic ?_ rfl ?_)
       (Func.RunCompiled.last rfl)
     · simp only [Devm.gasLeft_setMach, gCallStipend]
@@ -1859,7 +1859,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_generic
     constructor
     · func_run (3)
       refine Func.RunCompiled.next
-        (Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none (G := G) (c := 20000) rfl hwarm ?_
+        (Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore (G := G) (c := 20000) rfl hwarm ?_
           hstatic ?_ rfl ?_)
         (Func.RunCompiled.last rfl)
       · simp only [Devm.gasLeft_setMach, gCallStipend]
@@ -1940,13 +1940,14 @@ private theorem heartbeatIntervalEventTopic_prepend_runCompiled
     (htopic : topic ≠ 0)
     (htail : Func.RunCompiled fs sevm
       (base.setMach ⟨[topic], memory, G, base.stateGas⟩)
-      tail post) :
+      tail post)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + 3, base.stateGas⟩)
       (Ninst.pushB256 topic ::: tail)
       post := by
   exact .next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (by simpa only [gVerylow] using pushCost_of_ne_zero htopic)
       rfl
       (by
@@ -2049,7 +2050,7 @@ private theorem setHeartbeatIntervalEventPrefix_runCompiled_then
   have hlog := heartbeatIntervalEventLog_prepend_runCompiled (hfork := hfork)
     hsize hdata hstatic htail
   have hargs := heartbeatIntervalEventLogArgs_prepend_runCompiled (hfork := hfork) hlog
-  have htopic := heartbeatIntervalEventTopic_prepend_runCompiled
+  have htopic := heartbeatIntervalEventTopic_prepend_runCompiled (h_push0 := hfork.rules_push0)
     htopic hargs
   have hgas : ((tailGas + 1262) + 5) + 3 = tailGas + 1270 := by
     omega
@@ -2932,7 +2933,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_not_admin
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try { simp only [B256.eqCheck, Ne.symm hnotAdmin, ↓reduceIte, Nat.reduceSubDiff] }
     case h_body =>
-      apply Func.runCompiledTo_revertSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (h_push0 := hfork.rules_push0) (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
         inf_of_le_left]
       · exact Mem.wf_empty
@@ -2972,7 +2973,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_below_min
     all_goals try { simp only [B256.eqCheck, hadmin, ↓reduceIte, Nat.reduceSubDiff] }
     all_goals try { rw [harg]; simp only [B256.ltCheck, hbelow, ↓reduceIte] }
     case h_body =>
-      apply Func.runCompiledTo_revertSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (h_push0 := hfork.rules_push0) (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
         inf_of_le_left]
       · exact Mem.wf_empty
@@ -3016,7 +3017,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
       simp only [B256.ltCheck, B256.not_lt.mpr hmin, ↓reduceIte] }
     all_goals try { rw [harg]; simp only [B256.gtCheck, gt_iff_lt, habove, ↓reduceIte] }
     case h_body =>
-      apply Func.runCompiledTo_revertSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (h_push0 := hfork.rules_push0) (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
         inf_of_le_left]
       · exact Mem.wf_empty
@@ -3518,14 +3519,15 @@ theorem setHeartbeatInterval_success_settles_cleanly
     (hprocess : ProcessMessage msg
       (.some ⟨⟨loc, initSevm msg, initDevm msg⟩, .ok final⟩)
       (.ok settled))
-    (hclean : final.error.isNone = true) :
+    (hclean : final.error.isNone = true)
+    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false) :
     settled = final := by
   have hsettle := (RunFrame.some_inv hprocess).2
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [ite_eq_right hnotError] at hsettle
+  rw [ite_eq_right hnotError, Devm.recordTouch_of_not_touchedSweep hsweep] at hsettle
   exact Except.ok.inj hsettle
 
 /-- Exact clean direct-message setter effects, derived from generated runtime
@@ -3671,6 +3673,7 @@ theorem setHeartbeatInterval_success_settled_effects
   have hfinalPost : final = post := Except.ok.inj hraw
   have hsettledFinal := setHeartbeatInterval_success_settles_cleanly dp
     htarget howner hcodeAddress hcode hvalue hdata hprocess hclean
+    (by simpa only [initSevm] using hfork.rules_touchedSweep)
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨?_, ?_, ?_, ?_⟩
@@ -3732,7 +3735,7 @@ theorem heartbeat_body_runCompiledTo_error_of_count_zero
       simp only [Devm.getStorVal_setMach, hcount]
       simp only [B256.eqCheck, ↓reduceIte] }
     case h_body =>
-      apply Func.runCompiledTo_revertSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (h_push0 := hfork.rules_push0) (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
         inf_of_le_left]
       · exact Mem.wf_empty
@@ -3788,7 +3791,7 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
       simp only [Devm.getStorVal_setMach, holdExpiry, htime]
       simp only [B256.ltCheck, B256.not_lt.mpr hexpired, ↓reduceIte] }
     case h_body =>
-      apply Func.runCompiledTo_revertSelector (G := G)
+      apply Func.runCompiledTo_revertSelector (h_push0 := hfork.rules_push0) (G := G)
       · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
         inf_of_le_left]
       · exact Mem.wf_empty
@@ -4085,7 +4088,7 @@ theorem heartbeat_body_runCompiledTo_error_of_add_wrap
       rw [htime]
       simp only [B256.ltCheck, hwrap, ↓reduceIte] }
     case h_body =>
-      apply Func.runCompiledTo_revertData (G := G)
+      apply Func.runCompiledTo_revertData (G := G) (h_push0 := hfork.rules_push0)
       · exact Mem.wf_empty
       · exact Mem.reads_empty
       · rfl
@@ -4181,14 +4184,15 @@ theorem heartbeat_success_settles_cleanly
     (hprocess : ProcessMessage msg
       (.some ⟨⟨0, initSevm msg, initDevm msg⟩, .ok final⟩)
       (.ok settled))
-    (hclean : final.error.isNone = true) :
+    (hclean : final.error.isNone = true)
+    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false) :
     settled = final := by
   have hsettle := (RunFrame.some_inv hprocess).2
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [ite_eq_right hnotError] at hsettle
+  rw [ite_eq_right hnotError, Devm.recordTouch_of_not_touchedSweep hsweep] at hsettle
   exact Except.ok.inj hsettle
 
 /-- Exact clean direct-message heartbeat effects, derived from generated
@@ -4294,6 +4298,7 @@ theorem heartbeat_success_settled_effects
   have hfinalPost : final = post := Except.ok.inj hraw
   have hsettledFinal := heartbeat_success_settles_cleanly dp htarget howner
     hcodeAddress hcode hvalue hdata hprocess hclean
+    (by simpa only [initSevm] using hfork.rules_touchedSweep)
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨hgas, ?_, ?_⟩

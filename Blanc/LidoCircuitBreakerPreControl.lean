@@ -435,7 +435,7 @@ theorem removeTarget_pauseAfterSet_runCompiled
     hstatic post ?_
   subst hMLast
   rw [hpauseGas]
-  exact finishSetPauser_pauseAfterSet_runCompiled dp sevm _ _ imgFinish
+  exact finishSetPauser_pauseAfterSet_runCompiled (h_push0 := hfork.rules_push0) dp sevm _ _ imgFinish
     target previousPauser 0 stack pauseGas post hstack hreadsFinish
     htargetFinish hpreviousFinish hnewFinish hcontinuationFinish hsizeFinish
     halignFinish hstatic hpause
@@ -474,7 +474,10 @@ theorem pause_body_runCompiledTo_error_of_locked
     (hdataLength : sevm.data.length = 36)
     (hmask : addressMask &&& target = 0)
     (hdataTarget : Sevm.dataWord sevm 4 = target)
-    (hlocked : base.getTransVal sevm.currentTarget lockKey ≠ 0) :
+    (hlocked : base.getTransVal sevm.currentTarget lockKey ≠ 0)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_transient : sevm.benvStat.rules.op.transient = true) :
     ∃ post,
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach ⟨[], Mem.empty, G + pauseReentrantGas, base.stateGas⟩)
@@ -506,7 +509,7 @@ theorem pause_body_runCompiledTo_error_of_locked
           (base.setMach
             ⟨[base.getTransVal sevm.currentTarget lockKey], Mem.empty,
               total - 157, base.stateGas⟩) := by
-        have h := runCompiled_tload_of (sevm := sevm)
+        have h := runCompiled_tload_of (sevm := sevm) (h_transient := h_transient)
           (pre := base.setMach ⟨[lockKey], Mem.empty, total - 57, base.stateGas⟩)
           (key := lockKey)
           (value := base.getTransVal sevm.currentTarget lockKey)
@@ -519,7 +522,7 @@ theorem pause_body_runCompiledTo_error_of_locked
         simp only [B256.eqCheck, hlocked, ↓reduceIte]
       func_run (3) [0]
       case h_body =>
-        apply Func.runCompiledTo_revertSelector (G := G)
+        apply Func.runCompiledTo_revertSelector (h_push0 := h_push0) (G := G)
         · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
           inf_of_le_left]
         · exact Mem.wf_empty
@@ -556,7 +559,10 @@ theorem pause_runCompiledTo_error_of_locked
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hmask : addressMask &&& target = 0)
     (hdataTarget : Sevm.dataWord sevm 4 = target)
-    (hlocked : base.getTransVal sevm.currentTarget lockKey ≠ 0) :
+    (hlocked : base.getTransVal sevm.currentTarget lockKey ≠ 0)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_transient : sevm.benvStat.rules.op.transient = true) :
     ∃ post,
       Prog.RunCompiledTo sevm
         (base.setMach ⟨[], Mem.empty,
@@ -569,11 +575,11 @@ theorem pause_runCompiledTo_error_of_locked
       (∀ a k, post.getTransVal a k = base.getTransVal a k) := by
   obtain ⟨post, hbody, hout, hlogs, hstor, htrans⟩ :=
     pause_body_runCompiledTo_error_of_locked dp sevm base target G
-      hdataLength hmask hdataTarget hlocked
+      hdataLength hmask hdataTarget hlocked h_push0 h_shifts h_transient
   obtain ⟨hprog, hcompile⟩ :=
     pause_dispatch_runCompiledTo dp sevm base pauseReentrantGas G
       (.error (.revert, post)) hdataLength hvalue hselector hcodeAddress
-      hcode hbody
+      hcode hbody h_push0 h_shifts
   exact ⟨post, hprog, hcompile, hout, hlogs, hstor, htrans⟩
 
 /-! ## P3: nothing moves between the boundary and the CALL

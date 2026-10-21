@@ -165,7 +165,8 @@ private lemma runCompiled_call_zero_value_stubPause
         (initDevm (msg.withBenv benv')) duration).accountsToDelete from
       congrArg (fun view => view.accountsToDelete) hmetaOut]
     rw [stubPausePost_accountsToDelete]
-    rfl
+    exact ite_eq_left (show sevm.benvStat.rules.settle.selfdestructRefund = 0 from
+      hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl)
   have haaOut : out.accessedAddresses = p.accessedAddresses := by
     rw [show out.accessedAddresses =
       (stubPausePost (initSevm (msg.withBenv benv'))
@@ -204,6 +205,8 @@ private lemma runCompiled_call_zero_value_stubPause
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep (rules := sevm.benvStat.rules) hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -563,7 +566,8 @@ private lemma runCompiled_staticcall_stubQuery
       ((initDevm (msg.withBenv benv')).withOutput
         (1 : B256).toBytes).accountsToDelete from
       congrArg (fun view => view.accountsToDelete) hmetaOut]
-    rfl
+    exact ite_eq_left (show sevm.benvStat.rules.settle.selfdestructRefund = 0 from
+      hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl)
   have haaOut : out.accessedAddresses = p.accessedAddresses := by
     rw [show out.accessedAddresses =
       ((initDevm (msg.withBenv benv')).withOutput
@@ -590,6 +594,8 @@ private lemma runCompiled_staticcall_stubQuery
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
     simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
+    exact congrArg Except.ok
+      (Devm.recordTouch_of_not_touchedSweep (rules := sevm.benvStat.rules) hfork.rules_touchedSweep _ _ _)
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -890,6 +896,7 @@ theorem installedQueryWrite_runCompiled
       (by simpa only [gVerylow] using pushCost_of_ne_zero hvalue)
       (by show G + 9 = G + 6 + 3; omega)
       (by show ([] : List B256).length < 1024; decide)
+      (fun h => absurd h (B256.toBytes_sig_ne_nil hvalue))
   refine Func.RunCompiled.next hpush ?_
   func_run (2) [0]
   all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
@@ -902,6 +909,7 @@ theorem installedQueryWrite_runCompiled
 
 theorem installedCallArgs_runCompiled
     (fs : List Func) (sevm : Sevm) (devm : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (target : B256) (M : Mem) (G : Nat) (tail : Func) (post : Devm)
     (halign : M.size % 32 = 0)
     (hcover : (targetWord * 32).toNat + 32 ≤ M.size)
@@ -1429,7 +1437,7 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
             duration.toBytes, Gb + 22683, (temporalAccountAccessBase base target.toAdr).stateGas⟩)
         installedCallStage post := by
       unfold installedCallStage
-      have h := installedCallArgs_runCompiled fs sevm
+      have h := installedCallArgs_runCompiled (hfork := hfork) fs sevm
         (temporalAccountAccessBase base target.toAdr) target
         ((M.write 256 pauseForSelector.toBytes).write 288 duration.toBytes)
         (Gb + 22663) (Ninst.call ::: installedQueryPrelude) post halign2

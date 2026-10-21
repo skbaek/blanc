@@ -342,7 +342,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
     hexpiryOrig
     (by rw [accessedStorageKeys_addLog]; exact hwarmNewExpiry)
     hstoreCost hgasStipend hstatic hsize halign hextension
-  have h := finishSetPauser_registerAfterSet_runCompiled dp sevm base M img
+  have h := finishSetPauser_registerAfterSet_runCompiled (h_push0 := hfork.rules_push0) dp sevm base M img
     target oldPauser newPauser stack (G + 5136 + clearCost + storeCost) _
     hstack hreads htarget hprevious hnew hcontinuation hsize halign hstatic
     hregister
@@ -631,7 +631,7 @@ theorem finishSetPauser_retainedNonzero_runCompiled
     hexpiryOrig
     (by rw [accessedStorageKeys_addLog]; exact hwarmNewExpiry)
     hstoreCost hgasStipend hstatic hsize halign hextension
-  have h := finishSetPauser_registerAfterSet_runCompiled dp sevm base M img
+  have h := finishSetPauser_registerAfterSet_runCompiled (h_push0 := hfork.rules_push0) dp sevm base M img
     target oldPauser newPauser stack (G + 3719 + storeCost) _
     hstack hreads htarget hprevious hnew hcontinuation hsize halign hstatic
     hregister
@@ -859,12 +859,14 @@ private theorem replacementPushNotZero_prepend_runCompiled
     {dp : DeployParams} {sevm : Sevm} {base : Devm}
     {G : Nat} {tail : Func} {post : Devm} {target : B256}
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G, base.stateGas⟩) tail post) :
+      (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G, base.stateGas⟩) tail post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨target :: [], Mem.empty, G + 5, base.stateGas⟩)
       ([pushB256 0, not] +++ tail) post := by
   func_run (2) [~~~(0 : B256)]
   case a => exact htail
+  all_goals exact fun _ => hfork.rules_push0
 
 private theorem replacementShiftAddressMask_prepend_runCompiled
     {dp : DeployParams} {sevm : Sevm} {base : Devm}
@@ -872,7 +874,8 @@ private theorem replacementShiftAddressMask_prepend_runCompiled
     (htail : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach
         ⟨((~~~(0 : B256)) <<< (Nat.toB256 160).toNat) :: target :: [],
-          Mem.empty, G, base.stateGas⟩) tail post) :
+          Mem.empty, G, base.stateGas⟩) tail post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨~~~(0 : B256) :: target :: [], Mem.empty, G + 6, base.stateGas⟩)
       ([pushB256 (Nat.toB256 160), shl] +++ tail) post := by
@@ -900,7 +903,8 @@ private theorem replacementCheckNonAddress_success_runCompiled
     {G : Nat} {body : Func} {post : Devm} {target : B256}
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨target :: [], Mem.empty, G + 27, base.stateGas⟩)
       (checkNonAddress +++ ((.call emptyRevertSlot) <?> body)) post := by
@@ -913,8 +917,8 @@ private theorem replacementCheckNonAddress_success_runCompiled
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> body)) post := by
     rw [← addressMask_eq_shl]
     exact hbranch
-  have hshift := replacementShiftAddressMask_prepend_runCompiled hshiftRaw
-  have hnot := replacementPushNotZero_prepend_runCompiled hshift
+  have hshift := replacementShiftAddressMask_prepend_runCompiled (hfork := hfork) hshiftRaw
+  have hnot := replacementPushNotZero_prepend_runCompiled (hfork := hfork) hshift
   have hg : G + 16 + 6 + 5 = G + 27 := by omega
   have hsplit :
       checkNonAddress +++ ((.call emptyRevertSlot) <?> body) =
@@ -931,11 +935,12 @@ private theorem replacementCanonicalAddressArg0_success_runCompiled
     (harg : Sevm.dataWord sevm (32 * 0 + 4) = target)
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 0 body) post := by
-  have hcheck := replacementCheckNonAddress_success_runCompiled hmask hbody
+  have hcheck := replacementCheckNonAddress_success_runCompiled (hfork := hfork) hmask hbody
   have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 27 + 6, base.stateGas⟩)
       (arg 0 +++ checkNonAddress +++
@@ -958,11 +963,12 @@ private theorem replacementCanonicalAddressArg1_success_runCompiled
     (harg : Sevm.dataWord sevm (32 * 1 + 4) = target)
     (hmask : addressMask &&& target = 0)
     (hbody : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
-      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) body post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 1 body) post := by
-  have hcheck := replacementCheckNonAddress_success_runCompiled hmask hbody
+  have hcheck := replacementCheckNonAddress_success_runCompiled (hfork := hfork) hmask hbody
   have hargRun : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 27 + 6, base.stateGas⟩)
       (arg 1 +++ checkNonAddress +++
@@ -1025,16 +1031,17 @@ private theorem replacementRegisterPauserBody_fromStage_runCompiled
         arg 1 +++ mstoreAt newPauserWord +++
         pushB256 0 ::: mstoreAt previousPauserWord +++
         pushB256 0 ::: mstoreAt continuationWord +++
-        .call setPauserSlot) post) :
+        .call setPauserSlot) post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, bodyGas, base.stateGas⟩)
       (registerPauser dp) post := by
   have hadminRun := replacementOnlyAdmin_success_runCompiled hadmin hstage
   have hnewRun :=
-    replacementCanonicalAddressArg1_success_runCompiled hargNew hnewMask
+    replacementCanonicalAddressArg1_success_runCompiled (hfork := hfork) hargNew hnewMask
       hadminRun
   have htargetRun :=
-    replacementCanonicalAddressArg0_success_runCompiled hargTarget htargetMask
+    replacementCanonicalAddressArg0_success_runCompiled (hfork := hfork) hargTarget htargetMask
       hnewRun
   have hstaticRun :=
     replacementRequireStaticArgs_success_runCompiled hdata htargetRun
@@ -1150,7 +1157,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     hnewCountCost hremaining hremainingCount htime hinterval hintervalCold
     hexpiry hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic
     hextension
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target
+  have hstage := registerPauser_stageArgs_runCompiled (h_push0 := hfork.rules_push0) dp sevm base target
     newPauser
     (G + replacementRetainedSetPauserKernelGas sevm base target newPauser
       oldPauser oldCount assignmentCost countCost newCountCost storeCost)
@@ -1175,7 +1182,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
           0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
-    apply replacementRegisterPauserBody_fromStage_runCompiled dp sevm base _
+    apply replacementRegisterPauserBody_fromStage_runCompiled (hfork := hfork) dp sevm base _
       target newPauser
       (G + replacementRetainedRegisterBodyGas sevm base target newPauser
         oldPauser oldCount assignmentCost countCost newCountCost storeCost)
@@ -1342,7 +1349,7 @@ theorem registerPauser_runCompiledTo_retainedNonzero
       hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic hextension with
     ⟨post, hbody, hgas, hstore, hlogs, hexpiries⟩
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  rcases registerPauser_dispatch_runCompiledTo dp sevm base
+  rcases registerPauser_dispatch_runCompiledTo (hfork := hfork) dp sevm base
       (replacementRetainedRegisterBodyGas sevm base target newPauser oldPauser
         oldCount assignmentCost countCost newCountCost storeCost)
       G (.ok post) hdata hvalue hselector hcodeAddress hcode hbodyTo with
@@ -1532,7 +1539,8 @@ theorem registerPauser_retainedNonzero_success_settled_effects
   have hraw : (.ok final : Execution) = .ok post :=
     Exec.result_unique hfinalExec hpostExec
   have hfinalPost : final = post := Except.ok.inj hraw
-  have hsettledFinal := registerPauser_success_settles_cleanly dp
+  have hsettledFinal := registerPauser_success_settles_cleanly
+    (hsweep := by simpa only [initSevm] using hfork.rules_touchedSweep) dp
     htargetOwner howner hcodeAddress hcode hvalue hdata hprocess hclean
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
@@ -1883,7 +1891,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     holdExpiryOrig hwarmOldExpiry hclearCost htime hinterval hintervalCold
     hexpiry hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic
     hextension
-  have hstage := registerPauser_stageArgs_runCompiled dp sevm base target
+  have hstage := registerPauser_stageArgs_runCompiled (h_push0 := hfork.rules_push0) dp sevm base target
     newPauser
     (G + replacementOldLastSetPauserKernelGas sevm base target newPauser
       oldPauser oldCount assignmentCost countCost newCountCost clearCost
@@ -1914,7 +1922,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
           0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
-    apply replacementRegisterPauserBody_fromStage_runCompiled dp sevm base _
+    apply replacementRegisterPauserBody_fromStage_runCompiled (hfork := hfork) dp sevm base _
       target newPauser
       (G + replacementOldLastRegisterBodyGas sevm base target newPauser
         oldPauser oldCount assignmentCost countCost newCountCost clearCost
@@ -2130,7 +2138,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
       hextension with
     ⟨post, hbody, hgas, hstore, hlogs, holdExpiryPost, hexpiries⟩
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  rcases registerPauser_dispatch_runCompiledTo dp sevm base
+  rcases registerPauser_dispatch_runCompiledTo (hfork := hfork) dp sevm base
       (replacementOldLastRegisterBodyGas sevm base target newPauser oldPauser
         oldCount assignmentCost countCost newCountCost clearCost storeCost)
       G (.ok post) hdata hvalue hselector hcodeAddress hcode hbodyTo with
@@ -2343,7 +2351,8 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
   have hraw : (.ok final : Execution) = .ok post :=
     Exec.result_unique hfinalExec hpostExec
   have hfinalPost : final = post := Except.ok.inj hraw
-  have hsettledFinal := registerPauser_success_settles_cleanly dp
+  have hsettledFinal := registerPauser_success_settles_cleanly
+    (hsweep := by simpa only [initSevm] using hfork.rules_touchedSweep) dp
     htargetOwner howner hcodeAddress hcode hvalue hdata hprocess hclean
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]

@@ -4333,10 +4333,11 @@ example (msg : Msg)
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
     (hstatic : msg.isStatic = false)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post, OfficialCreateMessageResult msg.currentTarget msg post :=
   processCreateMessage_establishes_officialRegistryStable msg hvalue hcodeAddress hcode hgas hmax
-    hpauseCold hpauseOriginal hheartbeatCold hheartbeatOriginal hstatic hfork
+    hpauseCold hpauseOriginal hheartbeatCold hheartbeatOriginal hstatic hfork hinherited
 
 example (ca : Adr) (msg : Msg)
     (htarget : msg.currentTarget = ca)
@@ -4359,11 +4360,12 @@ example (ca : Adr) (msg : Msg)
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
     (hstatic : msg.isStatic = false)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post out, OfficialConstructorMessageResult ca msg post out :=
   processMessageCall_establishes_officialRegistryStable ca msg htarget htargetNone hnoCodeOrNonce
     hnoStorage hvalue hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal hheartbeatCold
-    hheartbeatOriginal hstatic hfork
+    hheartbeatOriginal hstatic hfork hinherited
 
 example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)

@@ -66,6 +66,12 @@ private theorem directExternalStep_codeAddress
       rename_i _ vos hos
       -- The delegation lookup runs on the popped-and-recorded machine, so the
       -- premise's code fact has to travel down the operand pops first.
+      have hgc0 : ∀ a : Adr, vos.2.getCode a = devm.getCode a := by
+        intro a
+        rw [Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.pop_getCode hval,
+          Devm.popToAdr_getCode hcallee, Devm.pop_getCode hgas]
       have hgc : ∀ a : Adr,
           (addAccessedAddress vos.2 vcallee.1).getCode a = devm.getCode a := by
         intro a
@@ -85,9 +91,9 @@ private theorem directExternalStep_codeAddress
           all_goals obtain ⟨rfl, rfl⟩ := spawn
           all_goals
             refine congrArg some ((congrArg (fun t => t.2.1)
-              (Blanc.GasSchedule.accessDelegation_of_not_delegation
-                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
-            rw [hgc]
+              (Blanc.ForkRules.accessDelegation_of_not_delegation
+                (rules := sevm.benvStat.rules) ?_)).trans rfl)
+            first | rw [hgc] | rw [hgc0]
             exact notDelegation
     · -- Amsterdam: delegation priced without warming.
       split at spawn
@@ -130,8 +136,8 @@ private theorem directExternalStep_codeAddress
           all_goals obtain ⟨rfl, rfl⟩ := spawn
           all_goals
             refine congrArg some ((congrArg (fun t => t.2.1)
-              (Blanc.GasSchedule.delegationCost_of_not_delegation
-                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+              (Blanc.ForkRules.delegationCost_of_not_delegation
+                (rules := sevm.benvStat.rules) ?_)).trans rfl)
             rw [hgc]
             exact notDelegation
   · simp only [Jaune.Xinst.step, Bind.bind, Except.bind] at spawn
@@ -155,6 +161,12 @@ private theorem directExternalStep_codeAddress
       split at spawn
       · simp only [Jaune.XStep.ofExcept, reduceCtorEq] at spawn
       rename_i _ vos hos
+      have hgc0 : ∀ a : Adr, vos.2.getCode a = devm.getCode a := by
+        intro a
+        rw [Devm.popToNat_getCode hos,
+          Devm.popToNat_getCode hoi, Devm.popToNat_getCode his,
+          Devm.popToNat_getCode hii, Devm.popToAdr_getCode htgt,
+          Devm.pop_getCode hgas]
       have hgc : ∀ a : Adr,
           (addAccessedAddress vos.2 vtgt.1).getCode a = devm.getCode a := by
         intro a
@@ -174,9 +186,9 @@ private theorem directExternalStep_codeAddress
           all_goals obtain ⟨rfl, rfl⟩ := spawn
           all_goals
             refine congrArg some ((congrArg (fun t => t.2.1)
-              (Blanc.GasSchedule.accessDelegation_of_not_delegation
-                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
-            rw [hgc]
+              (Blanc.ForkRules.accessDelegation_of_not_delegation
+                (rules := sevm.benvStat.rules) ?_)).trans rfl)
+            first | rw [hgc] | rw [hgc0]
             exact notDelegation
     · -- Amsterdam: delegation priced without warming.
       split at spawn
@@ -216,8 +228,8 @@ private theorem directExternalStep_codeAddress
           all_goals obtain ⟨rfl, rfl⟩ := spawn
           all_goals
             refine congrArg some ((congrArg (fun t => t.2.1)
-              (Blanc.GasSchedule.delegationCost_of_not_delegation
-                (gas := sevm.benvStat.rules.gas) ?_)).trans rfl)
+              (Blanc.ForkRules.delegationCost_of_not_delegation
+                (rules := sevm.benvStat.rules) ?_)).trans rfl)
             rw [hgc]
             exact notDelegation
 
@@ -439,8 +451,9 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
       simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep
   | push xs hxs =>
-      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq] at hstep
+      split at hstep <;>
+        simp only [Step.run_ofExecution, reduceCtorEq, false_and] at hstep
   | dupn imm =>
       simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep

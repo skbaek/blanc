@@ -185,7 +185,7 @@ private theorem removeTarget_restoreTail_runCompiled
     have htail := hstoreIndex
     simp only [indexKey] at htail
     have hrun := pushZero_targetIndexKey_prepend_runCompiled htargetValue
-      htargetMemory halign htargetCovered (by omega) htail
+      htargetMemory halign htargetCovered (by omega) htail hfork.rules_push0
     have hg : G + finishGas + 12 + indexClearCost + 14 =
         G + finishGas + 26 + indexClearCost := by clear * -; omega
     rw [hg] at hrun
@@ -679,6 +679,7 @@ private theorem removeTarget_storePrefix_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost arrayKey indexKey
     func_run (2) [3]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach]); omega)
@@ -727,9 +728,8 @@ theorem temporal_sstore_cold_runCompiled
           (addAccessedStorageKey base sevm.currentTarget key) key
           value).setMach
         ⟨stack, M, G, (temporalSstorePost sevm (addAccessedStorageKey base sevm.currentTarget key) key value).stateGas⟩) := by
-  apply Ninst.runCompiled_sstore_cold
-      (c := gasColdSload + cost) (G := G)
-  · exact hfork.rules_stateGas_none
+  apply Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hfork.rules_access
+      hfork.rules_sstore (c := gasColdSload + cost) (G := G)
   · rfl
   · exact hcold
   · simp only [Devm.gasLeft_setMach]
@@ -2271,7 +2271,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
-    clear_value holePost
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex
+      imgLast imgLength imgIndex
     func_run (2) [movedKey]
     case a =>
       have hg : G + finishGas + 64 + lengthRestoreCost + indexClearCost +
@@ -2292,7 +2293,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
-    clear_value holePost
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex
+      imgLast imgLength imgIndex
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
@@ -2318,7 +2320,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
-    clear_value holePost
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex
+      imgLast imgLength imgIndex
     func_run (2) [3]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach]); omega)
@@ -2476,6 +2479,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex
+      imgLast imgLength imgIndex
     func_run (1)
     case a =>
       have hg : G + finishGas + 100 + lastExtCost + gasColdSload +
@@ -2539,7 +2544,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
-    clear_value movedPost
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (2) [tailKey]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2568,6 +2573,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (2) [3]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach]); omega)
@@ -2629,6 +2635,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (1)
     case a =>
       have hg : G + finishGas + 118 + lastExtCost + lengthExtCost +
@@ -2700,6 +2707,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (1)
     case a =>
       have hg : G + finishGas + 121 + lastExtCost + lengthExtCost +
@@ -2761,6 +2769,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (1)
     case a =>
       have hg : G + finishGas + 127 + lastExtCost + indexExtCost +
@@ -2847,6 +2856,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (2) [indexKey]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2880,6 +2890,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost movedPost tailPost base1 base2 base3 MLast MLength MIndex imgLast imgLength imgIndex
     func_run (2) [3]
     all_goals first | (case a => skip) | (case h_cost => skip) |
       try ((try simp only [Devm.stack_setMach]); omega)

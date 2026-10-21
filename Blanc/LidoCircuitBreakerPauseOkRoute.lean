@@ -257,6 +257,9 @@ private theorem of_run_tload_guard {e : Sevm} {s s' : Devm}
       s.stack s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
+  split at run
+  swap
+  · cases run
   rcases Except.bind_eq_ok run with ⟨⟨key, s₁⟩, hpop, hpush⟩
   have pop := Devm.pop_of_pop hpop
   have push := Devm.pushBurn_of_pushItem hpush
@@ -2468,7 +2471,7 @@ instance : Rinst.Hinv Devm.memory Rinst.extcodesize := ⟨by
     rw [← h1.2]
     exact (Devm.pop_of_pop hp).memory
   refine hm1.trans ?_
-  split at run₁ <;>
+  split at run₁ <;> (try split at run₁) <;>
   · rcases Except.bind_eq_ok run₁ with ⟨s₂, h2, run₂⟩
     exact Eq.trans (Devm.burn_of_chargeGas h2).memory
       (Devm.push_of_push run₂).memory⟩

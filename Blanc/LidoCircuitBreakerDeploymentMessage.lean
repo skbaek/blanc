@@ -836,7 +836,8 @@ theorem processCreateMessage_establishes_officialRegistryStable
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
     (hstatic : msg.isStatic = false)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post, OfficialCreateMessageResult msg.currentTarget msg post := by
   have hconstructorGas : officialConstructorRequiredGas ≤ msg.gas := by
     have htotal := hgas
@@ -937,7 +938,7 @@ theorem processCreateMessage_establishes_officialRegistryStable
       raw.accountsToDelete = base.accountsToDelete := by
         rw [hrawEq']
         exact officialConstructorPost_accountsToDelete sevm base G
-      _ = .emptyWithCapacity := by rfl
+      _ = .emptyWithCapacity := hinherited
   have hrawGas :
       raw.gasLeft = msg.gas - officialConstructorRequiredGas := by
     calc
@@ -1096,12 +1097,13 @@ theorem processMessageCall_establishes_officialRegistryStable
       (msg.benv.stat.origState.get msg.currentTarget).stor.get
         heartbeatIntervalSlot = 0)
     (hstatic : msg.isStatic = false)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post out, OfficialConstructorMessageResult ca msg post out := by
   obtain ⟨createPost, hcreate⟩ :=
     processCreateMessage_establishes_officialRegistryStable (hfork := hfork) msg hvalue
       hcodeAddress hcode hgas hmax hpauseCold hpauseOriginal
-      hheartbeatCold hheartbeatOriginal hstatic
+      hheartbeatCold hheartbeatOriginal hstatic hinherited
   have hcreate' : OfficialCreateMessageResult ca msg createPost := by
     simpa only [htarget] using hcreate
   let out := officialMessageOutputOf createPost

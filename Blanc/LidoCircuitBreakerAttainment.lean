@@ -2330,7 +2330,9 @@ theorem setPauseDuration_dispatch_runCompiledTo
     (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
     (hbody : Func.RunCompiledTo (runtimeMain dp :: aux) sevm
       (base.setMach ⟨[], Mem.empty, G + bodyGas, base.stateGas⟩)
-      (setPauseDuration dp) out) :
+      (setPauseDuration dp) out)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty,
         G + setPauseDurationDispatchGas + bodyGas, base.stateGas⟩)
@@ -2358,6 +2360,7 @@ theorem setPauseDuration_dispatch_runCompiledTo
       func_run (31) [0, 0,
         selector "setPauseDuration" [.uint256],
         0, 0, 0, 0, 1]
+      all_goals try exact fun _ => h_push0
       have hboundary : G + 150 + bodyGas - 150 = G + bodyGas := by
         omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -2387,7 +2390,7 @@ theorem configWorld_run :
   obtain ⟨hrun, hcompile⟩ :=
     setPauseDuration_dispatch_runCompiledTo officialParams configWorldSevm
       configWorldPre 21498 0 (.ok post) configWorld_dataLength configWorld_value
-      configWorld_selector configWorld_codeBytes hbody
+      configWorld_selector configWorld_codeBytes hbody hfork.rules_push0 hfork.rules_shifts
   have hentry :
       configWorldPre.setMach ⟨[], Mem.empty,
         0 + setPauseDurationDispatchGas + 21498, configWorldPre.stateGas⟩ = configWorldPre := rfl

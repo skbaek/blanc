@@ -137,7 +137,7 @@ theorem DeploymentRoot.reachable_registryStable
       deployed future) :
     RegistryStable officialParams ca future.state :=
   chainUsing_preserves_registryStable officialParams ca _ deployed future
-    hreach hroot.stable (fun _ _ h => by
+    hreach hroot.stable (fun _ _ _ h => by
       rw [ChainConfig.pragueOnly_forkAt] at h
       cases h
       exact CoveredFork.prague)

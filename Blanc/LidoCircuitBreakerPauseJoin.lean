@@ -80,22 +80,26 @@ out of gas. -/
 private lemma step_push_fail {pc : Nat} {sevm : Sevm} {devm : Devm}
     {xs : Bytes} {le : xs.length ≤ 32}
     (h_at : Ninst.At sevm.code pc (.push xs le))
-    (h_gas : devm.gasLeft < if xs = [] then gBase else gVerylow) :
+    (h_gas : devm.gasLeft < if xs = [] then gBase else gVerylow)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Evm.step ⟨pc, sevm, devm⟩ =
       .halt (.error ⟨.halt (.outOfGas .none), devm⟩) := by
-  rw [Evm.step_next h_at, Ninst.step_push, chargeGas_eq_outOfGas h_gas]
+  rw [Evm.step_next h_at, Ninst.step_push]
+  simp only [h_push0, Bool.not_true, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
+  rw [chargeGas_eq_outOfGas h_gas]
   rfl
 
 /-- A `PUSH0` with the gas for its charge continues with a zero pushed. -/
 private lemma step_push0_cont {pc : Nat} {sevm : Sevm} {devm : Devm}
     {le : ([] : Bytes).length ≤ 32}
     (h_at : Ninst.At sevm.code pc (.push [] le))
-    (h_gas : gBase ≤ devm.gasLeft) (h_room : devm.stack.length < 1024) :
+    (h_gas : gBase ≤ devm.gasLeft) (h_room : devm.stack.length < 1024)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1)
       (devm.setMach ⟨0 :: devm.stack, devm.memory,
         devm.gasLeft - gBase, devm.stateGas⟩) := by
   rw [Evm.step_next h_at, Ninst.step_push]
-  rw [show (if ([] : Bytes) = [] then gBase else gVerylow) = gBase from rfl]
+  simp only [h_push0, Bool.not_true, Bool.and_false, Bool.false_eq_true, ↓reduceIte]
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
@@ -175,7 +179,8 @@ on.  This is the fact that closes the arbitrary-gas leg of the crossing
 inversion: `callee_exec` pins every budget of at least `17`, and this lemma
 refutes a clean settle on every budget below. -/
 private theorem callee_exec_low_gas {m : Msg}
-    (hcode : m.code = calleeCode) (hgas : m.gas < 17) :
+    (hcode : m.code = calleeCode) (hgas : m.gas < 17)
+    (hfork : CoveredFork m.benv.stat.fork) :
     ∃ (e : EvmError) (d : Devm), exec (initEvm m) = .error ⟨e, d⟩ := by
   have hc : (initSevm m).code = calleeCode := hcode
   have hbytes : calleeCode.toList = calleeBytes := by
@@ -211,7 +216,7 @@ private theorem callee_exec_low_gas {m : Msg}
     step_jumpdest_cont (devm := initDevm m) at0 (show (1 : Nat) ≤ m.gas from h1)
   rcases Nat.lt_or_ge m.gas 4 with h2 | h2
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
-      ⟨Exec.cont s0 (Exec.halt (step_push_fail
+      ⟨Exec.cont s0 (Exec.halt (step_push_fail (h_push0 := hfork.rules_push0)
         (devm := (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1, (initDevm m).stateGas⟩) at1 ?_))⟩⟩
     rw [ite_eq_right (by decide)]
     show m.gas - 1 < 3
@@ -224,7 +229,7 @@ private theorem callee_exec_low_gas {m : Msg}
       (show (0 : Nat) < 1024 by decide)
   rcases Nat.lt_or_ge m.gas 6 with h3 | h3
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
-      ⟨Exec.cont s0 (Exec.cont s1 (Exec.halt (step_push_fail
+      ⟨Exec.cont s0 (Exec.cont s1 (Exec.halt (step_push_fail (h_push0 := hfork.rules_push0)
         (devm := (initDevm m).setMach
           ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩) at3 ?_)))⟩⟩
     rw [ite_eq_left rfl]
@@ -234,7 +239,7 @@ private theorem callee_exec_low_gas {m : Msg}
       ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩⟩ = .cont 4
       ((initDevm m).setMach
         ⟨0 :: Bytes.toB256 [1] :: [], Mem.empty, m.gas - 1 - 3 - 2, (initDevm m).stateGas⟩) :=
-    step_push0_cont (le := by decide) at3
+    step_push0_cont (h_push0 := hfork.rules_push0) (le := by decide) at3
       (show (2 : Nat) ≤ m.gas - 1 - 3 by omega)
       (show (1 : Nat) < 1024 by decide)
   rcases Nat.lt_or_ge m.gas 12 with h4 | h4
@@ -255,7 +260,7 @@ private theorem callee_exec_low_gas {m : Msg}
   rcases Nat.lt_or_ge m.gas 15 with h5 | h5
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.cont s1 (Exec.cont s2 (Exec.cont
-        (by exact s3) (Exec.halt (step_push_fail (devm := d4) at5 ?_)))))⟩⟩
+        (by exact s3) (Exec.halt (step_push_fail (h_push0 := hfork.rules_push0) (devm := d4) at5 ?_)))))⟩⟩
     rw [ite_eq_right (by decide), hg4]
     show m.gas - 12 < 3
     omega
@@ -266,7 +271,7 @@ private theorem callee_exec_low_gas {m : Msg}
       (by rw [hstk4]; decide)
   refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
     ⟨Exec.cont s0 (Exec.cont s1 (Exec.cont s2 (Exec.cont (by exact s3)
-      (Exec.cont s4 (Exec.halt (step_push_fail
+      (Exec.cont s4 (Exec.halt (step_push_fail (h_push0 := hfork.rules_push0)
         (devm := d4.setMach ⟨Bytes.toB256 [32] :: d4.stack, d4.memory,
           d4.gasLeft - 3, d4.stateGas⟩) at7 ?_))))))⟩⟩
   rw [ite_eq_left rfl]
@@ -351,7 +356,7 @@ private lemma settle_ok_clean {msg : Msg} {raw : Execution} {child : Devm}
       cases hnone
     · rw [ite_eq_right he] at hsettle'
       cases hsettle'
-      rfl
+      rw [Devm.recordTouch_of_not_touchedSweep hmsgFork.rules_touchedSweep]
 
 /-- A resume against a full parent stack cannot land `.ok`: both flag pushes
 overflow. -/
@@ -488,7 +493,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
       obtain ⟨e', d', herr⟩ := callee_exec_low_gas
         (m := msg.withBenv
           msg.benv)
-        rfl hlow
+        rfl hlow (by change CoveredFork sevm.benvStat.fork; exact hfork)
       rw [herr, hraw] at hexecraw
       cases hexecraw
     · obtain ⟨out, hexec, _herr, _hout, _hgas, hworld, _⟩ :=

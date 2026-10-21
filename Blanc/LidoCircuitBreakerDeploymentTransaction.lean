@@ -81,6 +81,10 @@ theorem canonicalDeploymentTransaction_succeeds
   have hfork : CoveredFork ctx.msg.benv.stat.fork := by
     rw [ctx.msg_benv_eq, ctx.begun_eq, ctx.systemPrefix.environment_eq]
     exact CoveredFork.prague
+  have hinherited : ctx.msg.inheritedDeletions = .emptyWithCapacity := by
+    have prepared := ctx.prepare_eq
+    unfold prepareMessage at prepared
+    exact (congrArg Msg.inheritedDeletions (Except.ok.inj prepared)).symm
   obtain ⟨messagePost, messageOut, hmessage⟩ :=
     processMessageCall_establishes_officialRegistryStable ca ctx.msg
       ctx.target_eq ctx.msg_target_eq ctx.noCodeOrNonce ctx.noStorage
@@ -89,7 +93,7 @@ theorem canonicalDeploymentTransaction_succeeds
       (by simpa only [ctx.target_eq] using ctx.pauseOriginal)
       (by simpa only [ctx.target_eq] using ctx.heartbeatCold)
       (by simpa only [ctx.target_eq] using ctx.heartbeatOriginal)
-      ctx.msg_static_eq hfork
+      ctx.msg_static_eq hfork hinherited
   obtain ⟨createPost, hcreate, hmessagePost, hmessageOut⟩ :=
     hmessage.creation
   let usedGas := deploymentUsedGasFromMessage ctx.txInput tx sender messageOut
@@ -175,6 +179,7 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hintrinsic]
     simp only [allocateEvmGas, hforkStateGas]
     simp only [deploymentEffectiveGasPrice] at hprepare ⊢
+    simp only [show pragueRules.txr.warmCoinbase = true from rfl, ↓reduceIte]
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
@@ -188,7 +193,7 @@ theorem canonicalDeploymentTransaction_succeeds
       simp only [settleTransactionGas, pragueRules_stateGas, deploymentUsedGasFromMessage,
         deploymentCalldataFloorGas, TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      simp only [and_self]
+      exact ⟨rfl, rfl, rfl⟩
     rw [hsettlement]
     have hforkBalNone : pragueRules.bal = none := by
       rfl

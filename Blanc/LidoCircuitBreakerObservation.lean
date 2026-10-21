@@ -822,7 +822,7 @@ value-carrying form is derived here. -/
 /-- `EXTCODESIZE` at a known stack top, **with its value**: the word it pushes
 is the code size of the account its operand names, read in the frame's own
 state, and memory is untouched. -/
-private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
+theorem of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
     (hp : x :: xs <<+ s.stack)
     (run : Ninst.Run e s Ninst.extcodesize r) :
     ((s.getCode x.toAdr).size.toB256 :: xs <<+ r.stack) ∧
@@ -840,6 +840,34 @@ private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
   subst word
   have htail : xs <<+ d0.stack := of_append_pref hpop'.stack hp
   split at hrun
+  · split at hrun
+    · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+      have hst : s.state = d2.state :=
+        hpop'.state.trans (Devm.burn_of_chargeGas hgas).state
+      have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+        unfold Devm.getCode Devm.getAcct; rw [hst]
+      refine ⟨?_, ?_⟩
+      · rw [← hcode]
+        exact append_pref (Devm.push_of_push hpush).stack
+          (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+      · exact hpop'.memory.trans
+          ((Devm.burn_of_chargeGas hgas).memory.trans
+            (Devm.push_of_push hpush).memory)
+    · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
+      have hst : s.state = d2.state :=
+        hpop'.state.trans
+          ((show d0.state = (addAccessedAddress d0 x.toAdr).state from rfl).trans
+            (Devm.burn_of_chargeGas hgas).state)
+      have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
+        unfold Devm.getCode Devm.getAcct; rw [hst]
+      refine ⟨?_, ?_⟩
+      · rw [← hcode]
+        exact append_pref (Devm.push_of_push hpush).stack
+          (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
+      · exact hpop'.memory.trans
+          ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
+            ((Devm.burn_of_chargeGas hgas).memory.trans
+              (Devm.push_of_push hpush).memory))
   · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
     have hst : s.state = d2.state :=
       hpop'.state.trans (Devm.burn_of_chargeGas hgas).state
@@ -852,21 +880,6 @@ private lemma of_extcodesize_val {e : Sevm} {s r : Devm} {x : B256} {xs : Stack}
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
           (Devm.push_of_push hpush).memory)
-  · rcases Except.bind_eq_ok hrun with ⟨d2, hgas, hpush⟩
-    have hst : s.state = d2.state :=
-      hpop'.state.trans
-        ((show d0.state = (addAccessedAddress d0 x.toAdr).state from rfl).trans
-          (Devm.burn_of_chargeGas hgas).state)
-    have hcode : d2.getCode x.toAdr = s.getCode x.toAdr := by
-      unfold Devm.getCode Devm.getAcct; rw [hst]
-    refine ⟨?_, ?_⟩
-    · rw [← hcode]
-      exact append_pref (Devm.push_of_push hpush).stack
-        (by show xs <<+ d2.stack; rw [← (Devm.burn_of_chargeGas hgas).stack]; exact htail)
-    · exact hpop'.memory.trans
-        ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
-          ((Devm.burn_of_chargeGas hgas).memory.trans
-            (Devm.push_of_push hpush).memory))
 
 /-- **Outcome 1: a target with no code is rejected before anything is sent.**
 

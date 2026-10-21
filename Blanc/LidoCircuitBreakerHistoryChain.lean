@@ -158,6 +158,8 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
       rw [← h_if]; exact hc_state)]
     exact h_coh
   · -- the sub-message succeeded
+    rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+      (by rw [hc_stat]; exact hfork.rules_touchedSweep)] at h_if
     have h_if' := h_if.symm
     subst h_if'
     have h_wb_ca : (childMsg.withBenv benv').codeAddress = some cadr := hc_ca
@@ -1290,8 +1292,8 @@ theorem processMessageCall_preserves_registryStable (dp : DeployParams)
     (hfork : CoveredFork msg.benv.stat.fork) :
     RegistryStable dp ca st' :=
   (registryStable_iff_stateInv dp ca st').mpr
-    (ContractSpec.processMessageCall_preserves_inv hfork (registrySpec_preserves dp ca)
-      h_run h_inv).1
+    (ContractSpec.processMessageCall_preserves_stateInv hfork (registrySpec_preserves dp ca)
+      h_run h_inv)
 
 theorem processTransaction_preserves_registryStable (dp : DeployParams)
     (ca : Adr) (benv : Benv) (bout bout' : BlockOutput) (tx : Tx) (i : Nat)
@@ -1337,7 +1339,7 @@ theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_stable : RegistryStable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     RegistryStable dp ca ch'.state :=
   (registryStable_iff_stateInv dp ca ch'.state).mpr
     (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
@@ -1360,7 +1362,7 @@ theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     RegistryStable dp ca future.state :=
   (registryStable_iff_stateInv dp ca future.state).mpr
     (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
@@ -1505,7 +1507,7 @@ theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
     stable hcov).installedCode
@@ -1518,7 +1520,7 @@ theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
@@ -1530,7 +1532,7 @@ theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     {target : B256} (htarget : canonicalAddress target) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
@@ -1553,7 +1555,7 @@ theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
       (∀ pauser, canonicalAddress pauser →
@@ -1801,7 +1803,7 @@ theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (target : B256) (htarget : canonicalAddress target) :
     ∃ entries,
       (entries.map Prod.fst).Nodup ∧

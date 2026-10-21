@@ -1311,8 +1311,7 @@ private theorem gatewayPauseWorld_afterSetGatewaySeam :
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (gatewayRunAfterSetBase.state.get configWorldOwner).stor := by
     rw [hmidState]
-    unfold State.setStorVal
-    exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
+    exact congrArg Acct.stor (State.setStorVal_get_ne _ htargetOwner _ _)
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         gatewayRunAfterSetBase.getStorVal configWorldOwner key := by
@@ -1528,7 +1527,7 @@ private theorem gatewayPauseWorld_productionRun :
           ⟨[], gatewayRunMemoryLast, 71154, gatewayRunAfterSetBase.stateGas⟩) successPre := by
   obtain ⟨successPre, final, hsuccess, hafter, hsuccessTo, hafterTo, hni⟩ :=
     gatewayPauseWorld_successSuffix
-  have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
+  have hfin := finishSetPauser_pauseAfterSet_runCompiled (h_push0 := (show CoveredFork gatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_push0) officialParams
     gatewayPauseWorldSevm gatewayRunAfterSetNoLog gatewayRunMemoryLast gatewayRunImageLast
     pauseWorldCallee.toB256 pauseWorldPauser 0 [] 71154 _ (by decide)
     (by simpa only [gatewayRunMemoryLast, gatewayRunImageLast,
@@ -1653,7 +1652,9 @@ private theorem gatewayPauseWorld_productionRun :
   rw [show (96584 + (469 + 2100 + 2100 + 2100) : Nat) = 103353 from by
     norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
-  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
+  obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo
+    (h_push0 := (show CoveredFork gatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_push0)
+    (h_shifts := (show CoveredFork gatewayPauseWorldSevm.benvStat.fork by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide).rules_shifts) officialParams
     gatewayPauseWorldSevm gatewayPauseWorldPre 103353 0 _
     hcalldata.1
     gatewayPauseWorld_publicPausePremises.valueZero
