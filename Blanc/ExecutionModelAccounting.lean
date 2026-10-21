@@ -217,8 +217,14 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
         change (((prepared.state.setStor newAddress .empty).incrNonce newAddress).get
           newAddress).nonce ≠ 0
         rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-        dsimp only [State.setStor]
-        rw [State.get_set_self]
+        have keep : ((prepared.state.setStor newAddress .empty).get newAddress).nonce =
+            (prepared.state.get newAddress).nonce := by
+          unfold State.setStor
+          dsimp only
+          split
+          · rw [State.get_setPresent_self]
+          · rw [State.get_set_self]
+        rw [keep]
         change ((d.state.incrNonce sevm.currentTarget).get newAddress).nonce + 1 ≠ 0
         rw [preparedZero]
         decide

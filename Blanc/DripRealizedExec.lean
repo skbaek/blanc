@@ -1427,8 +1427,8 @@ theorem Exec.CoreDripAccounting.nextSome
       simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at step
   | push xs length =>
-      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at step
+      rw [Ninst.StepRun, Ninst.step_push] at step
+      split at step <;> cases (Step.run_ofExecution.mp step).1
   | dupn imm =>
       cases (Step.run_ofExecution.mp step).1
   | swapn imm =>

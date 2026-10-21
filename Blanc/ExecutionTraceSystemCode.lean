@@ -82,8 +82,8 @@ theorem SystemMessageTrace.rawFrames_target_of_code
     simp only [systemTransactionMessage, processSystemTransactionMsg, processSystemTransactionTenv,
       Std.TreeMap.empty_eq_emptyc, List.isEmpty_nil]
   have hdelegated : delegated = systemTransactionMessage benv target data := by
-    unfold messageCallDelegation at hdel
-    simp only [hauths, ↓reduceIte] at hdel
+    unfold messageCallDelegation processMessageCall.legacyAuthorization at hdel
+    simp only [hauths, Bool.or_true, ↓reduceIte] at hdel
     exact (Prod.mk.inj (Except.ok.inj hdel)).1.symm
   have hcode : (systemTransactionMessage benv target data).code = benv.state.getCode target := rfl
   have hnone : getDelegatedCodeAddress (systemTransactionMessage benv target data).code = none := by
@@ -91,8 +91,8 @@ theorem SystemMessageTrace.rawFrames_target_of_code
     have h : ¬ isValidDelegation (benv.state.getCode target) := hnd
     simp only [getDelegatedCodeAddress, h, ↓reduceIte]
   subst hdelegated
-  unfold messageCallExecutionMessage
-  rw [hnone]
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+  simp only [ForkRules.delegatedCodeAddress, hnone, ite_self]
   simpa only [hcode] using hreach
 
 /-! ### The canonical code stays installed and its frames stay put -/
@@ -168,9 +168,9 @@ frame of its system messages targets a system address**, when no frame it enters
 system address, no authorization of its transactions recovers to one, and none was created in the
 block. -/
 theorem AppliedBodyTrace.systemFrames_of_installed
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) (installed : SystemCodeInstalled benv.state)
     (notCreated : ∀ p ∈ systemContracts, p.1 ∉ benv.createdAccounts)
     (hauth : ∀ p ∈ systemContracts, ∀ q ∈ trace.decodedTxs.putIndex, ∀ auth ∈ q.2.auths,

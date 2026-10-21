@@ -41,8 +41,8 @@ theorem reach_chi_rho_mono
     (root : DeploymentRoot cfg base deployed ca)
     (r₁ : BlockChain.ReachUsing cfg deployed ch)
     (r₂ : BlockChain.ReachUsing cfg ch ch')
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     chiN (ch.state.getStor ca) ≤ chiN (ch'.state.getStor ca) ∧
       rhoN (ch.state.getStor ca) ≤ rhoN (ch'.state.getStor ca) := by
   have hch := root.reachable_stateInv r₁ hcov
@@ -62,8 +62,8 @@ theorem configuredBlock_mono
     {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post)
     (h_inv : (dripMonoSpec chi0 rho0).StateInv ca pre.state)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     chi0 ≤ chiN (post.state.getStor ca) ∧
       rho0 ≤ rhoN (post.state.getStor ca) := by
   have hpost := ContractSpec.stateTransitionUsing_preserves_inv
@@ -78,8 +78,8 @@ theorem configuredHistory_mono
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (h_inv : (dripMonoSpec chi0 rho0).StateInv ca checkpoint.state)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     chi0 ≤ chiN (future.state.getStor ca) ∧
       rho0 ≤ rhoN (future.state.getStor ca) := by
   have hpost := history.stateInv

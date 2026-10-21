@@ -12,30 +12,20 @@ namespace Prorata
 
 /-- `SHR` is a silent binary operation; the generic log-invariance catalogue
 does not register it. -/
-private theorem shr_logs_hinv : Rinst.Hinv Devm.logs Rinst.shr := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private theorem shr_logs_hinv : Rinst.Hinv Devm.logs Rinst.shr := by show_hinv_logs_binary
 
-private theorem mul_logs_hinv : Rinst.Hinv Devm.logs Rinst.mul := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private theorem mul_logs_hinv : Rinst.Hinv Devm.logs Rinst.mul := by show_hinv_logs_binary
 
-private theorem div_logs_hinv : Rinst.Hinv Devm.logs Rinst.div := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private theorem div_logs_hinv : Rinst.Hinv Devm.logs Rinst.div := by show_hinv_logs_binary
 
 private theorem selfbalance_logs_hinv : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
-  exact (Devm.burn_of_chargeGas hcharge).logs.trans
-    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+    exact (Devm.burn_of_chargeGas hcharge).logs.trans
+      ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)
+  · cases run⟩
 
 private theorem revert_logs_hinv : Linst.Hinv Devm.logs Devm.logs Linst.revert := by
   constructor

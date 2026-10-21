@@ -70,8 +70,8 @@ theorem ProcessCreateMessageTrace.settledFrames_length_gas_le {msg : Msg} {post 
 `messageCallDelegation_gas`); only the execution-message wrapper stays here. -/
 private theorem messageCallExecutionMessage_gas (msg : Msg) :
     (messageCallExecutionMessage msg).gas = msg.gas := by
-  unfold messageCallExecutionMessage
-  cases getDelegatedCodeAddress msg.code <;> rfl
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+  split <;> rfl
 
 private theorem createRun_gasLeft {msg : Msg} {evm : Devm}
     {state : State} {out : MsgCallOutput}
@@ -112,32 +112,18 @@ private theorem callRun_gasLeft {msg delegated execMsg : Msg} {refund : Nat}
   have execCore : processMessage (messageCallExecutionMessage delegated) = .ok evm :=
     (congrArg processMessage execEq).symm.trans core
   unfold messageCallDelegation at delegation
-  by_cases empty : msg.tenv.stat.auths.isEmpty = true
-  all_goals
-    first
-    | rw [ite_eq_left empty] at delegation
-      have same : msg = delegated := (Prod.mk.inj (Except.ok.inj delegation)).1
-      simp only [empty, ite_true, bind, Except.bind] at result
-      rw [same] at result
-    | rw [ite_eq_right empty] at delegation
-      obtain ⟨next, set, rest⟩ := Except.bind_eq_ok delegation
-      have same : next.1 = delegated := (Prod.mk.inj (Except.ok.inj rest)).1
-      simp only [empty, Bool.false_eq_true, ite_false, set, bind, Except.bind] at result
-      rw [same] at result
-    cases code : getDelegatedCodeAddress delegated.code
-    all_goals
-      simp only [messageCallExecutionMessage, code] at execCore
-      simp only [code] at result
-      rw [execCore] at result
-      simp only [Except.bimap, id] at result
-      by_cases good : evm.error.isNone = true
-      · rw [ite_eq_left good] at result
-        obtain ⟨refundProcess, _, output⟩ := Except.bind_eq_ok result
-        exact (congrArg (fun p : State × MsgCallOutput => p.2.gasLeft)
-          (Except.ok.inj output)).symm
-      · rw [ite_eq_right good] at result
-        exact (congrArg (fun p : State × MsgCallOutput => p.2.gasLeft)
-          (Except.ok.inj result)).symm
+  have execCore' : processMessage delegated.resolveCodeDelegation = .ok evm := execCore
+  simp only [delegation, bind, Except.bind] at result
+  rw [execCore'] at result
+  simp only [Except.bimap, id] at result
+  by_cases good : evm.error.isNone = true
+  · rw [ite_eq_left good] at result
+    obtain ⟨refundProcess, _, output⟩ := Except.bind_eq_ok result
+    exact (congrArg (fun p : State × MsgCallOutput => p.2.gasLeft)
+      (Except.ok.inj output)).symm
+  · rw [ite_eq_right good] at result
+    exact (congrArg (fun p : State × MsgCallOutput => p.2.gasLeft)
+      (Except.ok.inj result)).symm
 
 /-- Actual settled message frames and returned execution gas share the message grant,
 with one extra unit for a potentially free root frame. -/

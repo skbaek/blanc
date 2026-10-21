@@ -356,8 +356,8 @@ theorem Exec.CoreDripTranscript.nextSome
       simp only [Ninst.StepRun, Ninst.step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at step
   | push xs length =>
-      simp only [Ninst.StepRun, Ninst.step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at step
+      rw [Ninst.StepRun, Ninst.step_push] at step
+      split at step <;> cases (Step.run_ofExecution.mp step).1
   | dupn imm =>
       cases (Step.run_ofExecution.mp step).1
   | swapn imm =>
@@ -482,8 +482,8 @@ theorem dripTraceRealizes_transcript
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future ∧
       callKinds steps = history.dripCalls coalition ca :=
   (ladderObserved coalition ca).traceRealizes_of_configuredHistoryTrace

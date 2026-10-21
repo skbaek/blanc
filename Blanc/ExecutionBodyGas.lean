@@ -68,9 +68,9 @@ private theorem RequestsTrace.settledFrames_length_le
 /-- All four system-message grants remain in the full-body budget, including
 their descendants even when their code is not canonical. -/
 theorem AppliedBodyTrace.settledFrames_gas_bound
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (fork : CoveredFork benv.stat.fork) :
     4 * trace.settledFrames.length ≤
       5 * benv.stat.blockGasLimit + 16 * (systemTransactionGas + 1) := by

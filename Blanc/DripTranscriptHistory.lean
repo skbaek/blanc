@@ -11,8 +11,8 @@ variable {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
 theorem history_transcript_accounting_exact
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joinResidue +
@@ -54,8 +54,8 @@ exceed its actual principal plus the floor of its actual realized accrual. -/
 theorem history_transcript_entitlement
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     (transcriptTally scale.toNat freshNat scale.toNat 0
         (history.dripCalls coalition ca)).paid ≤
       (transcriptTally scale.toNat freshNat scale.toNat 0
@@ -80,8 +80,8 @@ theorem realized_segment_certified
     (callsL : historyL.dripCalls coalition ca = left.map Kind.drip)
     (callsR : historyR.dripCalls coalition ca = right.map Kind.drip)
     (sameElapsed : left.sum = right.sum)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     natDistance (chiN (futureL.state.getStor ca)) (chiN (futureR.state.getStor ca)) ≤
       max (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat left right)
           (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat right left) := by
@@ -114,8 +114,8 @@ theorem dripCalls_ne_nil_of_totalUnits
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
     (moved : totalN (future.state.getStor ca) ≠ 0)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     history.dripCalls coalition ca ≠ [] := by
   obtain ⟨steps, realizes, faithful⟩ :=
     dripTraceRealizes_transcript root coalition history hcov
@@ -140,7 +140,7 @@ theorem concreteHistory_dripCalls_ne_nil :
     concreteHistoryTrace.dripCalls {concreteCreateSender} concreteCreateTarget ≠ [] := by
   apply dripCalls_ne_nil_of_totalUnits concreteDeploymentRoot
     {concreteCreateSender} concreteHistoryTrace _
-    (fun _ _ hfork => concreteConfig_covered hfork)
+    (fun _ _ _ hfork => concreteConfig_covered hfork)
   unfold totalN
   rw [concreteExited_values.2.2.2]
   decide

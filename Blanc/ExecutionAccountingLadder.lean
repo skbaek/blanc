@@ -285,9 +285,9 @@ open _root_.Blanc.ExecutionTrace in
 
 /-- G9, observed: the segments are observed in `applyBody` order. -/
 theorem body (O : L.Observed)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (inv : S.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
@@ -317,7 +317,7 @@ theorem configuredHistory (O : L.Observed) {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
     (inv : S.StateInv ca checkpoint.state)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
         (L.carrier.ofState future.state) ∧
       O.view.obs steps = history.settledFrames.flatMap O.view.frameObs := by
@@ -476,9 +476,9 @@ theorem directWithdrawal (L : AccountingLadder S ca)
 open _root_.Blanc.ExecutionTrace in
 /-- G9.  A whole successful block body, in `applyBody` order. -/
 theorem body (L : AccountingLadder S ca)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (inv : S.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
@@ -507,7 +507,7 @@ theorem configuredHistory (L : AccountingLadder S ca)
     {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
     (inv : S.StateInv ca checkpoint.state)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState checkpoint.state) steps
       (L.carrier.ofState future.state) := by
   exact ((Observed.trivial L).configuredHistory history inv hcov).imp
@@ -548,7 +548,7 @@ theorem Observed.traceRealizes_of_configuredHistoryTrace
     {cfg : ChainConfig} {root future : BlockChain}
     (inv : S.StateInv ca root.state)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg root future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, L.TraceRealizes cfg root steps future ∧
       O.view.obs steps = history.settledFrames.flatMap O.view.frameObs := by
   induction history with
@@ -602,7 +602,7 @@ theorem of_configuredHistoryTrace (L : AccountingLadder S ca)
     {cfg : ChainConfig} {root future : BlockChain}
     (inv : S.StateInv ca root.state)
     (history : _root_.Blanc.ExecutionTrace.ConfiguredHistoryTrace cfg root future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, L.TraceRealizes cfg root steps future := by
   exact ((Observed.trivial L).traceRealizes_of_configuredHistoryTrace inv
     history hcov).imp fun _ realizes => realizes.1
@@ -613,10 +613,10 @@ theorem exists_of_reachUsing (L : AccountingLadder S ca)
     {cfg : ChainConfig} {root future : BlockChain}
     (inv : S.StateInv ca root.state)
     (reach : BlockChain.ReachUsing cfg root future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, L.TraceRealizes cfg root steps future := by
   rcases _root_.Blanc.ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing
-    reach (by intro _ _ _ _ _ hfork; exact hcov _ _ hfork) with ⟨history⟩
+    reach (by intro _ _ _ _ _ hfork; exact hcov _ _ _ hfork) with ⟨history⟩
   exact of_configuredHistoryTrace L inv history hcov
 -- mirrors ProrataAccountingHistory.lean:167–173.
 

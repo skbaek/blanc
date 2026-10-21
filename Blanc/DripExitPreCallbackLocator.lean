@@ -283,10 +283,13 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
     (left right : Msg)
     (settled : (Frame.ofCall left).settle raw = .ok child)
     (clean : child.error.isSome = false)
-    (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas) :
+    (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas)
+    (sweepLeft : left.benv.stat.rules.settle.touchedSweep = false)
+    (sweepRight : right.benv.stat.rules.settle.touchedSweep = false) :
     (Frame.ofCall right).settle raw = .ok child := by
   simp only [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
-    Bool.false_eq_true, ite_false] at settled ⊢
+    Bool.false_eq_true, ite_false, Devm.recordTouch_of_not_touchedSweep sweepLeft,
+    Devm.recordTouch_of_not_touchedSweep sweepRight] at settled ⊢
   rw [← stateGasEq]
   cases handled : executeCode.handleErrorWith left.benv.stat.rules.stateGas raw with
   | error e =>

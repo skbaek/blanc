@@ -106,7 +106,7 @@ def RequestsTrace.settledRoots
   trace.withdrawal.settledRoots ++ trace.consolidation.settledRoots
 
 def AppliedBodyTrace.settledRoots
-    (trace : AppliedBodyTrace benv txs wds state bout) : List Exec.Frame :=
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : List Exec.Frame :=
   trace.beacon.settledRoots ++ trace.history.settledRoots ++
     trace.transactions.settledRoots ++ trace.requests.settledRoots
 
@@ -187,7 +187,7 @@ theorem RequestsTrace.settledFrames_eq (trace : RequestsTrace benv bout state bo
     List.flatMap_append]
   rw [trace.withdrawal.settledFrames_eq, trace.consolidation.settledFrames_eq]
 
-theorem AppliedBodyTrace.settledFrames_eq (trace : AppliedBodyTrace benv txs wds state bout) :
+theorem AppliedBodyTrace.settledFrames_eq (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     trace.settledFrames = rootFrames trace.settledRoots := by
   simp only [AppliedBodyTrace.settledFrames, AppliedBodyTrace.settledRoots, rootFrames,
     List.flatMap_append]

@@ -182,9 +182,9 @@ theorem TransactionMessageOccurrence.msg_sum_nof
 /-- The actual beacon and history messages cannot increase total balance, so
 the body-entry withdrawal bound funds the selected transaction prefix. -/
 theorem TransactionMessageOccurrence.msg_sum_nof_of_body
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
+    {body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout}
     {msg : Msg} {messageState : State} {out : MsgCallOutput}
     {message : ExecutionTrace.MessageCallTrace msg messageState out}
     (occurrence : TransactionMessageOccurrence body.transactions message)
@@ -716,33 +716,33 @@ trace.  The index keeps the original source category and the full message
 trace, rather than a structural message equality or an unordered membership
 claim. -/
 inductive BodyMessageOccurrence :
-    ∀ {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    ∀ {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
       {state : State} {bout : BlockOutput}
-      (_ : ExecutionTrace.AppliedBodyTrace benv txs wds state bout)
+      (_ : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout)
       {msg : Msg} {messageState : State} {out : MsgCallOutput},
       ExecutionTrace.MessageCallTrace msg messageState out → Type
-  | beacon {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+  | beacon {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
       {state : State} {bout : BlockOutput}
-      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) :
       BodyMessageOccurrence body body.beacon.message
-  | history {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+  | history {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
       {state : State} {bout : BlockOutput}
-      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) :
       BodyMessageOccurrence body body.history.message
-  | transaction {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+  | transaction {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
       {state : State} {bout : BlockOutput}
-      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout)
+      (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout)
       {msg : Msg} {messageState : State} {out : MsgCallOutput}
       {message : ExecutionTrace.MessageCallTrace msg messageState out}
       (occurrence : TransactionMessageOccurrence body.transactions message) :
       BodyMessageOccurrence body message
   | withdrawalRequest {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) :
       BodyMessageOccurrence body body.requests.withdrawal.message
   | consolidationRequest {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-      {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-      (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
+      {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+      (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) :
       BodyMessageOccurrence body body.requests.consolidation.message
 
 /-- A successful raw interpreter execution retained by an actual call-message
@@ -775,9 +775,9 @@ structure MessageCallExecutionOccurrence
 envelope carrier: the source tag, call wrapper, and raw execution remain
 attached before any nested frame is selected. -/
 structure BodyExecutionOccurrence
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) where
+    (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) where
   msg : Msg
   messageState : State
   out : MsgCallOutput
@@ -888,9 +888,9 @@ Both `bodyExecution` and `frameMember` are proof-relevant: a future chronology
 may distinguish equal states reached by different body sources or call-tree
 occurrences. -/
 structure BodyFrameOccurrence
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) where
+    (body : ExecutionTrace.AppliedBodyTrace benv txs ommers wds state bout) where
   bodyExecution : BodyExecutionOccurrence body
   frame : Exec.LocatedFrame
   frameMember : frame ∈ (Blanc.Exec.committedFramePaths bodyExecution.execution.run)

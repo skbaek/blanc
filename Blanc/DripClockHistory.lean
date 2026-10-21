@@ -88,9 +88,9 @@ private theorem requests_clock_admitted
 
 private theorem body_clock_admitted
     {T : Nat} {ca : Adr} {benv : Benv}
-    {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (htime : benv.stat.time.toNat ≤ T) :
     trace.FrameAdmitted ca (ClockEntry T) := by
   have htransactionTime : trace.transactionBenv.stat.time.toNat ≤ T := by
@@ -176,8 +176,8 @@ theorem history_clockInv
     {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∀ t, future.blocks.getLast?.map (·.header.timestamp) = some t →
       ClockInv (chiN (deployed.state.getStor ca)) (rhoN (deployed.state.getStor ca))
         t (future.state.getStor ca) := by

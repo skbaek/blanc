@@ -21,9 +21,9 @@ theorem indexedTransactions_length {α : Type} (xs : List α) : xs.putIndex.leng
 /-- Taking the complete decoded list stops at the transaction boundary,
 before any withdrawal credit or request call. -/
 theorem AppliedBodyTrace.transactionPrefix_full_boundary
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (cut : trace.transactions.PrefixSplit trace.decodedTxs.length) :
     cut.benv = trace.transactionBenv ∧ cut.bout = trace.transactionBout := by
   have after := cut.suffix
@@ -35,17 +35,17 @@ theorem AppliedBodyTrace.transactionPrefix_full_boundary
 /-- Raw entered frames of the actual opening calls and selected transaction
 prefix, including roots whose effects later roll back. -/
 def AppliedBodyTrace.transactionPrefixFrames
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {n : Nat}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) {n : Nat}
     (cut : trace.transactions.PrefixSplit n) : List Exec.Deriv :=
   trace.beacon.rawFrames ++ trace.history.rawFrames ++ cut.before.rawFrames
 
 /-- A transaction cut keeps the body's actual fork. -/
 theorem AppliedBodyTrace.transactionPrefix_covered
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {n : Nat}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) {n : Nat}
     (cut : trace.transactions.PrefixSplit n) (fork : CoveredFork benv.stat.fork) :
     CoveredFork cut.benv.stat.fork := by
   rw [cut.before.stat_eq]
@@ -55,9 +55,9 @@ theorem AppliedBodyTrace.transactionPrefix_covered
 endpoint from body entry, using admission only for the entered prefix roots. -/
 theorem AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem
     {c : ContractSpecSem} {ca : Adr} {entry : Sevm → Devm → Prop}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {n : Nat}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) {n : Nat}
     (cut : trace.transactions.PrefixSplit n)
     (preserves : c.PreservesAdmitted ca entry) (fork : CoveredFork benv.stat.fork)
     (admitted : ∀ root ∈ trace.transactionPrefixFrames cut,

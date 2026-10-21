@@ -436,6 +436,7 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
     have key : ∀ m : Msg, m.benv.stat = sevm.benvStat →
         (Frame.ofCall m).settle raw = .ok child := fun m hm =>
       ofCall_settle_of_clean _ m settled.symm clean (by rw [hm]; rfl)
+        (by exact hfork.rules_touchedSweep) (by rw [hm]; exact hfork.rules_touchedSweep)
     rw [key]
     · cases hError : child.error <;> simp_all only [ne_eq, not_lt, ExceptT.stM_eq, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
     · rfl

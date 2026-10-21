@@ -14,64 +14,36 @@ namespace Prorata
 private instance : Rinst.Hinv Devm.logs Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
-  exact (Devm.burn_of_chargeGas hcharge).logs.trans
-    ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)⟩
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+    exact (Devm.burn_of_chargeGas hcharge).logs.trans
+      ((Devm.balReadAccount_logs _ _ _).symm.trans (Devm.push_of_push hpush).logs)
+  · cases run⟩
 
-private instance : Rinst.Hinv Devm.logs Rinst.sub := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private instance : Rinst.Hinv Devm.logs Rinst.sub := by show_hinv_logs_binary
 
-private instance : Rinst.Hinv Devm.logs Rinst.mul := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private instance : Rinst.Hinv Devm.logs Rinst.mul := by show_hinv_logs_binary
 
-private instance : Rinst.Hinv Devm.logs Rinst.div := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private instance : Rinst.Hinv Devm.logs Rinst.div := by show_hinv_logs_binary
 
-private instance : Rinst.Hinv Devm.logs Rinst.shr := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.logs
+private instance : Rinst.Hinv Devm.logs Rinst.shr := by show_hinv_logs_binary
 
 private instance : Rinst.Hinv Devm.output Rinst.selfbalance := ⟨by
   intro pc sevm pre post run
   simp only [Rinst.run, Rinst.runCore] at run
-  rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
-  exact (Devm.burn_of_chargeGas hcharge).output.trans
-    (Devm.balReadAccount_output.symm.trans (Devm.push_of_push hpush).output)⟩
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨devm, hcharge, hpush⟩
+    exact (Devm.burn_of_chargeGas hcharge).output.trans
+      (Devm.balReadAccount_output.symm.trans (Devm.push_of_push hpush).output)
+  · cases run⟩
 
-private instance : Rinst.Hinv Devm.output Rinst.sub := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
+private instance : Rinst.Hinv Devm.output Rinst.sub := by show_hinv_output_binary
 
-private instance : Rinst.Hinv Devm.output Rinst.mul := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
+private instance : Rinst.Hinv Devm.output Rinst.mul := by show_hinv_output_binary
 
-private instance : Rinst.Hinv Devm.output Rinst.div := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
+private instance : Rinst.Hinv Devm.output Rinst.div := by show_hinv_output_binary
 
-private instance : Rinst.Hinv Devm.output Rinst.shr := by
-  refine ⟨?_⟩
-  intro pc sevm pre post run
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.diffBurn_of_applyBinary run).choose_spec.choose_spec.output
+private instance : Rinst.Hinv Devm.output Rinst.shr := by show_hinv_output_binary
 
 private instance : Rinst.Hinv Devm.memory Rinst.mul := by
   refine ⟨?_⟩

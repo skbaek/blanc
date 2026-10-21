@@ -2,6 +2,7 @@ import Blanc.ExecutionFrames
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionAccountingLadder
+import Blanc.LadderReached
 
 /-!
 # Block-environment inheritance for execution frames
@@ -147,9 +148,9 @@ private theorem ApplyTransactionsTrace.frameAdmitted_time
       exact htime
 
 private theorem AppliedBodyTrace.frameAdmitted_time
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput} {time : B256}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput} {time : B256}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (htime : benv.stat.time = time) (ca : Adr) :
     trace.FrameAdmitted ca (fun sevm _ => sevm.benvStat.time = time) where
   beacon := trace.beacon.frameAdmitted_time htime ca
@@ -182,31 +183,15 @@ theorem ConfiguredBlockTrace.post_blocks_getLast
 /-- Jaune's header validation rejects a block whose timestamp is at or below its
 parent's (`timestampOlderThanParent`), so an accepted header is strictly
 newer than the chain tip. -/
-private theorem validateHeader_parent_timestamp_lt
-    {rules : ForkRules} {chain : BlockChain} {header : Header} {parent : Block}
-    (valid : validateHeader rules chain header = .ok ())
-    (head : chain.blocks.getLast? = some parent) :
-    parent.header.timestamp < header.timestamp := by
-  unfold validateHeader at valid
-  rw [head] at valid
-  by_contra hle
-  have hle' : header.timestamp ≤ parent.header.timestamp := Nat.le_of_not_lt hle
-  simp only [Option.toExcept, bind, Except.bind] at valid
-  repeat' split at valid
-  all_goals cases valid
-
 theorem ConfiguredBlockTrace.parent_timestamp_lt
     {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTrace cfg pre post) {parent : Block}
     (head : pre.blocks.getLast? = some parent) :
     parent.header.timestamp < trace.block.header.timestamp := by
-  have h := trace.transition
-  have hId : cfg.chainId = pre.chainId := stateTransitionUsing_success_chainId_eq h
-  rw [stateTransitionUsing_eq_of_chainId_eq hId] at h
-  obtain ⟨rules, _, hWith⟩ := Except.bind_eq_ok h
-  rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hWith
-  obtain ⟨u, hvalid, _⟩ := Except.bind_eq_ok hWith
-  exact validateHeader_parent_timestamp_lt hvalid head
+  obtain ⟨_, _, _, ⟨tip, hlast, hlt⟩, _⟩ := stateTransitionUsing_reachedStep trace.transition
+  rw [head] at hlast
+  cases hlast
+  exact hlt
 
 end ExecutionTrace
 

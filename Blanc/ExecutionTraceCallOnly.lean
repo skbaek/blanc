@@ -88,8 +88,12 @@ theorem Xinst.step_call_spawn
       ((Devm.pop_getCode h3).trans
       ((Devm.popToAdr_getCode h2).trans
         (Devm.pop_getCode h1))))))
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
   simp only [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, h7,
-    Bind.bind, Except.bind, Except.assert] at spawn
+    Bind.bind, Except.bind, Except.assert, hfork.rules_access,
+    ForkRules.accessDelegation_enabled delegation] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals first
@@ -359,15 +363,15 @@ theorem MessageCallTrace.callOnly {msg : Msg} {state : State} {out : MsgCallOutp
         cases target
     | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
         have hdeleg : messageCallDelegation msg = .ok ⟨msg, 0⟩ := by
-          unfold messageCallDelegation
-          simp only [hauths, ↓reduceIte]
+          unfold messageCallDelegation processMessageCall.legacyAuthorization
+          simp only [hauths, Bool.or_true, ↓reduceIte]
         have hdelegEq := Except.ok.inj (hdeleg.symm.trans delegation)
         simp only [Prod.mk.injEq] at hdelegEq
         obtain ⟨rfl, -⟩ := hdelegEq
         have hexec : execMsg = msg := by
           rw [execMsgEq]
-          unfold messageCallExecutionMessage
-          simp only [hnd]
+          unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+          simp only [ForkRules.delegatedCodeAddress, hnd, ite_self]
         subst hexec
         exact RetainedXlot.callOnly coreTrace.retained coreTrace.run hfork hca hcode hworld
   refine ⟨hroots, ?_⟩
@@ -481,8 +485,8 @@ theorem RequestsTrace.callOnly {benv : Benv} {bout : BlockOutput} {state : State
 /-- **A block body whose transactions are calls without authorizations, in a call-only world,
 enters only frames with a code address and leaves a call-only world.** -/
 theorem AppliedBodyTrace.callOnly {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork)
     (hcalls : ∀ p ∈ trace.decodedTxs.putIndex,
       (∃ t, p.2.type.receiver? = some t) ∧ p.2.auths = [])

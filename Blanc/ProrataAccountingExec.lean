@@ -356,7 +356,8 @@ theorem Exec.CoreProrataAccounting.nextSome
   | reg r =>
       cases (Step.run_ofExecution.mp step).1
   | push xs length =>
-      cases (Step.run_ofExecution.mp step).1
+      rw [Ninst.StepRun, Ninst.step_push] at step
+      split at step <;> cases (Step.run_ofExecution.mp step).1
   | dupn imm =>
       cases (Step.run_ofExecution.mp step).1
   | swapn imm =>

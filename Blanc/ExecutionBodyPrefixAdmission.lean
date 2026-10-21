@@ -9,15 +9,15 @@ namespace Blanc.ExecutionTrace
 open Jaune
 
 def AppliedBodyTrace.requestBenv {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) : Benv :=
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : Benv :=
   trace.transactionBenv.withState
     (processWithdrawalsState trace.transactionBenv.state wds)
 
 /-- The transaction prefix retains the selected fork at the request boundary. -/
 theorem AppliedBodyTrace.requestBenv_covered {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (fork : CoveredFork benv.stat.fork) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) (fork : CoveredFork benv.stat.fork) :
     CoveredFork trace.requestBenv.stat.fork := by
   change CoveredFork trace.transactionBenv.stat.fork
   rw [trace.transactions.stat_eq]
@@ -27,8 +27,8 @@ theorem AppliedBodyTrace.requestBenv_covered {benv : Benv} {txs : List (Bytes �
 APIs; this does not consume either checked request outcome. -/
 theorem AppliedBodyTrace.requestBenvInv_admitted_sem {c : ContractSpecSem}
     {ca : Adr} {entry : Sevm → Devm → Prop}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput} (trace : AppliedBodyTrace benv txs wds state bout)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput} (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (preserves : c.PreservesAdmitted ca entry) (fork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)

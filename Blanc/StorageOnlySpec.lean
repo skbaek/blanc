@@ -295,6 +295,10 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
             ((h_pop5.state).trans ((h_pop6.state).trans h_pop7.state)))))
   clear e1 e2 e3 e4 e5 e6 e7 eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2 h_pop4 h_pop5 h_pop6 h_pop7
   -- delegation resolution
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled delegation] at h_run
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
       (addAccessedAddress devm7 callee) callee with
     ⟨dp, na, code0, dagc, devm9⟩
@@ -446,6 +450,8 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
           rw [h_sf_state, ← h_if]; exact hc_state)]
         exact h_cons
       -- sub-message succeeded
+      rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+        (by rw [hc_stat]; exact hfork.rules_touchedSweep)] at h_if
       have h_if' := h_if.symm
       subst h_if'
       have h_wb_ca : (childMsg.withBenv benv').codeAddress = some na := hc_ca

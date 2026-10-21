@@ -114,8 +114,8 @@ theorem RequestsTrace.rawFrames_codeImage {benv : Benv} {bout : BlockOutput} {st
   · exact trace.consolidation.rawFrames_codeImage withdrawalInv root member
 
 theorem AppliedBodyTrace.rawFrames_codeImage {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (preserves : c.PreservesAdmitted ca entry)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) (preserves : c.PreservesAdmitted ca entry)
     (hfork : CoveredFork benv.stat.fork) (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (inv : c.BenvInv ca benv) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by

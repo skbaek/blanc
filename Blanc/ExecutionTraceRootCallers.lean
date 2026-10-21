@@ -127,9 +127,9 @@ theorem ApplyTransactionsTrace.settledRoots_caller_ne {ca : Adr} {entry : Sevm �
     · exact ih (by simpa only [Benv.withState] using hfork) admitted.2 nextSum headInv R member
 
 theorem AppliedBodyTrace.settledRoots_caller_ne {ca : Adr} {entry : Sevm → Devm → Prop}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (preserves : c.PreservesAdmitted ca entry) (hfork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)

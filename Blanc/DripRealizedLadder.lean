@@ -26,7 +26,7 @@ theorem retainedConfiguredHistoryReplay (coalition : Finset Adr)
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
     (inv : dripSpec.StateInv ca checkpoint.state)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, RealizedChain (snapshot coalition ca checkpoint.state) steps
       (snapshot coalition ca future.state) :=
   (ladder coalition ca).configuredHistory history inv hcov

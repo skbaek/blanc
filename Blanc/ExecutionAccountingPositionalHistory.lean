@@ -152,8 +152,8 @@ theorem processCreateMessage_at (L : PositionalLadder c ca entry)
           (processCreateMessage.msg msg).benv.state.get ca = msg.benv.state.get ca := by
         dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor,
           Benv.incrNonce, addCreatedAccount, Benv.clearStorageWritesIfEmpty]
-        rw [State.incrNonce, State.setAccount_get_ne _ targetNe, State.setStor,
-          State.get_set_ne _ targetNe]
+        rw [State.incrNonce, State.setAccount_get_ne _ targetNe, State.setStor]
+        split <;> simp only [State.get_setPresent_ne _ targetNe, State.get_set_ne _ targetNe]
       have preparedSnapshot :
           L.carrier.ofState (processCreateMessage.msg msg).benv.state =
             L.carrier.ofState msg.benv.state :=
@@ -381,9 +381,9 @@ open _root_.Blanc.ExecutionTrace in
 /-- G9, positional: beacon roots, history storage and the transaction list are full replays
 before later parts; direct withdrawals are a silent replay before the request calls. -/
 theorem body_at (L : PositionalLadder c ca entry)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)

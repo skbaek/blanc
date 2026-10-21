@@ -17,8 +17,8 @@ structure DeploymentRoot
   validContext : deployed.ValidContext
   chainId : cfg.chainId = deployed.chainId
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ∀ {timestamp rules},
-    cfg.rulesAt timestamp = .ok rules → ¬ rules.isPrecomp ca
+  target_not_precompile : ∀ {number timestamp rules},
+    cfg.rulesAt number timestamp = .ok rules → ¬ rules.isPrecomp ca
   installed : some (deployed.state.getCode ca).toList =
     Prog.compile prorata
   emptyStorage : deployed.state.getStor ca = Stor.empty
@@ -44,8 +44,8 @@ theorem DeploymentRoot.reflReach
 theorem DeploymentRoot.reachable_stateInv
     (root : DeploymentRoot cfg deployed ca)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     prorataSpec.StateInv ca future.state :=
   prorataSpec.chainUsing_preserves_inv ca (prorataSpec_preserves ca)
     cfg deployed future reach root.stateInv hcov
@@ -54,8 +54,8 @@ theorem DeploymentRoot.reachable_stateInv
 theorem DeploymentRoot.reachable_accountingInvariant
     (root : DeploymentRoot cfg deployed ca)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     balSum (future.state.getStor ca) =
         supplyN (future.state.getStor ca) ∧
       supplyN (future.state.getStor ca) ≤ maxSupply.toNat ∧

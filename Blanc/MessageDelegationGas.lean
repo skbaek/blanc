@@ -67,13 +67,11 @@ theorem setDelegation_gas {msg : Msg} {p : Msg × B256}
 theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
     (run : ExecutionTrace.messageCallDelegation msg = .ok (delegated, refund)) :
     delegated.gas = msg.gas := by
-  unfold ExecutionTrace.messageCallDelegation at run
-  by_cases empty : msg.tenv.stat.auths.isEmpty = true
-  · rw [ite_eq_left empty] at run
-    cases run
+  unfold ExecutionTrace.messageCallDelegation processMessageCall.legacyAuthorization at run
+  split at run
+  · cases run
     rfl
-  · rw [ite_eq_right empty] at run
-    obtain ⟨next, set, rest⟩ := Except.bind_eq_ok run
+  · obtain ⟨next, set, rest⟩ := Except.bind_eq_ok run
     cases rest
     exact setDelegation_gas set
 

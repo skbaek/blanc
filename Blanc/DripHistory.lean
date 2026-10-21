@@ -23,8 +23,8 @@ global balance-plus-withdrawal no-wrap bound and exact configured transition. -/
 theorem DeploymentRoot.reachable_stateInv
     (root : DeploymentRoot cfg base deployed ca)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     dripSpec.StateInv ca future.state :=
   dripSpec.chainUsing_preserves_inv ca (dripSpec_preserves ca)
     cfg deployed future reach root.stateInv hcov

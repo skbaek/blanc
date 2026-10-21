@@ -203,6 +203,8 @@ private theorem withdraw_post
       rw [← heq]
       exact herr
     simp only [hclean, Bool.false_eq_true] at this
+  rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+    (by exact hfork.rules_touchedSweep)] at hchild
   rw [hchild] at hexec herr
   have hchildPost : prorataSpec.Post ca
       (initSevm (childMsg.withBenv benv)) child := by
