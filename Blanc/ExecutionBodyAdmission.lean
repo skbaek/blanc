@@ -35,9 +35,9 @@ structure RequestsTrace.FrameAdmitted
 
 /-- Admission for every interpreter-bearing component of one applied body. -/
 structure AppliedBodyTrace.FrameAdmitted
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (ca : Adr) (entry : Sevm → Devm → Prop) : Prop where
   beacon : trace.beacon.FrameAdmitted ca entry
   history : trace.history.FrameAdmitted ca entry
@@ -110,7 +110,7 @@ theorem SystemMessageTrace.stateInv_and_sum_le_admitted_sem
     (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
       Benv.beginTransaction] using hfork.rules_stateGas_none)
     trace.message.result
-  refine ⟨stateInv.1, ?_⟩
+  refine ⟨(stateInv AdrSet.not_mem_empty).1, ?_⟩
   simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
     sumLe
 
@@ -153,9 +153,9 @@ theorem RequestsTrace.stateInv_and_sum_le_admitted_sem
 
 theorem AppliedBodyTrace.stateInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (preserves : c.PreservesAdmitted ca entry)
     (hfork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)
@@ -256,9 +256,9 @@ all of its concrete interpreter traces are admitted.  The retained body bound
 continues to discharge every balance-credit side condition. -/
 theorem AppliedBodyTrace.stateInv_admitted
     {ca : Adr} {entry : Sevm → Devm → Prop}
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (preserves : c.PreservesAdmitted ca entry)
     (hfork : CoveredFork benv.stat.fork)
     (admitted : trace.FrameAdmitted ca entry)

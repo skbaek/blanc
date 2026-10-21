@@ -229,14 +229,16 @@ theorem ri_tload {k : B256} {d : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   rw [show (St b (k :: S) M G).pop = .ok (k, St b S M G) from rfl] at run
   simp only [Except.bind_ok] at run
-  have hp := Devm.pushBurn_of_pushItem run
-  have hs : d.stack = b.getTransVal sevm.currentTarget k :: S := by
-    have h2 := hp.stack
-    simp only [Stack.Push, Split, List.cons_append, List.nil_append] at h2
-    exact h2
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, e⟩
+  split at run
+  · have hp := Devm.pushBurn_of_pushItem run
+    have hs : d.stack = b.getTransVal sevm.currentTarget k :: S := by
+      have h2 := hp.stack
+      simp only [Stack.Push, Split, List.cons_append, List.nil_append] at h2
+      exact h2
+    have e := St.of_stackRel hp
+    rw [hs] at e
+    exact ⟨_, e⟩
+  · cases run
 
 /-- `TSTORE`, inverted (no state-gas dimension under a covered fork). -/
 theorem ri_tstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
@@ -248,13 +250,15 @@ theorem ri_tstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.for
   simp only [Except.bind_ok] at run
   rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
   simp only [Except.bind_ok] at run
-  rcases Except.bind_eq_ok run with ⟨s1, h1, run1⟩
-  rcases Except.bind_eq_ok run1 with ⟨_, -, h2⟩
-  cases h2
-  have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨s1.gasLeft, ?_⟩
-  rw [e1]
-  rfl
+  split at run
+  · rcases Except.bind_eq_ok run with ⟨s1, h1, run1⟩
+    rcases Except.bind_eq_ok run1 with ⟨_, -, h2⟩
+    cases h2
+    have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+    refine ⟨s1.gasLeft, ?_⟩
+    rw [e1]
+    rfl
+  · cases run
 
 theorem getStor_setTransVal (d : Devm) (a : Adr) (k v : B256) :
     Devm.getStor (d.setTransVal a k v) = Devm.getStor d := rfl
