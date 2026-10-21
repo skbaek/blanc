@@ -135,6 +135,11 @@ jobs:
           execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
       - name: Build the Jaune fixture runner
         run: lake build jaune/jaune
+      # The write-site checker tops sit outside the Blanc root until L3
+      # consumes them; scripts/AxiomCheck.lean imports them, and the build
+      # certificate covers every Blanc/** module, so build them explicitly too.
+      - name: Build the write-site checker tops
+        run: lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality
       # The proof-recipe authoring leaf (which imports its generated registry)
       # is deliberately unreachable from Blanc.lean, so the default build never
       # produces their oleans, but scripts/check.sh --no-build elaborates
