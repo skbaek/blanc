@@ -253,7 +253,7 @@ injectivity nor raw-slot/storage-root equality.
 #### REG-5 — For a zero target word the compiled program constructs the exact `PausableZero` revert, and no instruction occurrence in that derivation is an `SSTORE`
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite`
-- **Premises:** the complete resource and code domain — owner, code address, exact bytes, table slice, stack, `Mem.Wf`, `Mem.Reads`, the target read, `canonicalAddress target`, `target = 0`, `pre.memory.size % 32 = 0`, an exact gas equation, and `pre.stack.length < 1023`.
+- **Premises:** the complete resource and code domain — owner, code address, exact bytes, table slice, stack, `Mem.Wf`, `Mem.Reads`, the target read, `canonicalAddress target`, `target = 0`, `pre.memory.size % 32 = 0`, an exact gas equation, `pre.stack.length < 1023`, and selected PUSH0 availability (`sevm.benvStat.rules.op.push0 = true`).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-registry.sh`
 - **Differential channel:** `register-zero-target-before-write#1:action`
@@ -440,7 +440,7 @@ register never lets the pillar's name imply otherwise.
 #### MON-4 — A monitor sees neither a rolled-back event nor a rolled-back registry: exact direct messages that settle with an error have empty logs and restore the input witness
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.pauserSet_settled_error_not_observable`, `Blanc.LidoCircuitBreaker.pauserSet_target_zero_no_success`, `Blanc.LidoCircuitBreaker.pauserSet_target_zero_error_logs_unchanged`
-- **Premises:** the exact direct-message shape and an erroring settlement; the two target-zero auxiliaries additionally take the explicit target-zero revert construction.
+- **Premises:** the exact direct-message shape and an erroring settlement; the two target-zero auxiliaries additionally take the explicit target-zero revert construction, and `pauserSet_target_zero_error_logs_unchanged` also takes selected PUSH0 availability (`sevm.benvStat.rules.op.push0 = true`).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-enumeration.sh`
 - **Differential channel:** `register-zero-target-before-write#1:action`, `pause-eoa#2:action`

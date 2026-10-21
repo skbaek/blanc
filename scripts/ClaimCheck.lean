@@ -3082,7 +3082,8 @@ example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
-    (hroom : pre.stack.length < 1023) :
+    (hroom : pre.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
@@ -3097,7 +3098,7 @@ example (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
           occurrence.instruction ≠ .reg .sstore :=
   setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite dp howner
     hcodeAddress hbytes htable hstack hwf hr htargetRead htargetCanonical
-    htargetZero halign hgas hroom
+    htargetZero halign hgas hroom h_push0
 
 example {fs : List Func} {sevm : Sevm} {pre final : Devm}
     {img : Bytes} {entries : List Entry}
@@ -3762,7 +3763,8 @@ example
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
-    (hroom : pre.stack.length < 1023) :
+    (hroom : pre.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
@@ -3776,7 +3778,7 @@ example
               Exec.Deriv),
           occurrence.instruction ≠ .reg .sstore) ∧
       post.logs = pre.logs :=
-  pauserSet_target_zero_error_logs_unchanged dp howner hcodeAddress hbytes htable hstack hwf hr htargetRead htargetCanonical htargetZero halign hgas hroom
+  pauserSet_target_zero_error_logs_unchanged dp howner hcodeAddress hbytes htable hstack hwf hr htargetRead htargetCanonical htargetZero halign hgas hroom h_push0
 
 -- pauserSet_register_success
 example

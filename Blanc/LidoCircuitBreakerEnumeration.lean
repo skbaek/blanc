@@ -589,7 +589,8 @@ theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
 private theorem enumLoop_done_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm) (entries : List Entry) (G : Nat)
     (hw : RegistryWitness
-      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries) :
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[Nat.toB256 entries.length],
         enumPrefixMemory entries entries, G + 49, base.stateGas⟩)
@@ -646,7 +647,7 @@ theorem enumLoop_runCompiled
   | nil =>
       simp only [List.append_nil] at hsplit
       subst entries
-      exact enumLoop_done_runCompiled fs sevm base done G hw
+      exact enumLoop_done_runCompiled (h_push0 := hfork.rules_push0) fs sevm base done G hw
   | cons entry rest ih =>
       unfold enumLoop
       have hdone : done.length < entries.length := by
@@ -812,7 +813,7 @@ theorem getPausables_body_runCompiled
     omega }
   all_goals try { exact Devm.extCost_empty_word }
   refine Func.RunCompiled.next
-    (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none
+    (Ninst.runCompiled_sload_warm hfork.rules_stateGas_none hfork.rules_access
       (v := Nat.toB256 entries.length)
       (G := G + getPausablesGasWarm entries - 114)
       rfl ?_ ?_ ?_ (by simp only [List.length_nil, Nat.ofNat_pos])) ?_
@@ -884,7 +885,7 @@ theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
   intro key hkey
   exact prepareEnumerationStorage_warm sevm base entries hkey
 
-set_option maxRecDepth 675 in
+set_option maxRecDepth 800 in
 /-- A well-formed direct `getPausables()` call through the exact parameterized
 runtime reaches the verified body, returns the complete ordered ABI image, and
 uses the concrete current target as both code and storage owner.  The code
@@ -1050,7 +1051,7 @@ theorem registryScalarReturn_runCompiled
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
 
-set_option maxRecDepth 742 in
+set_option maxRecDepth 800 in
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
@@ -1101,7 +1102,7 @@ theorem getPauser_body_runCompiled
       Devm.getStorVal_setMach, hstorage, hgasFinal]
     exact hreturn }
 
-set_option maxRecDepth 742 in
+set_option maxRecDepth 800 in
 /-- Exact compiled-body result for the per-pauser multiplicity view on a
 canonical ABI address word and the same concrete Registry owner. -/
 theorem getPausableCount_body_runCompiled
@@ -1982,7 +1983,7 @@ theorem pauserSet_register_success_committed
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
   rw [ite_eq_right hnotError] at hsettle
-  have hsettled : settled = final := Except.ok.inj hsettle
+  have hsettled := Except.ok.inj hsettle
   subst settled
   have hinitOwner : (initSevm msg).currentTarget = ca := by
     simpa only [initSevm] using howner
@@ -1991,7 +1992,7 @@ theorem pauserSet_register_success_committed
   have hinitCode : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
     simpa only [initSevm] using hcode
-  exact pauserSet_register_success dp hinitOwner hinitCodeAddress hinitCode
+  exact pauserSet_register_success (final := final) dp hinitOwner hinitCodeAddress hinitCode
     htable hwf hr htargetRead hnewRead hcontinuationRead hcontinuation
     hw htarget hnew hexec
 
@@ -2059,7 +2060,8 @@ theorem pauserSet_target_zero_error_logs_unchanged
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
-    (hroom : pre.stack.length < 1023) :
+    (hroom : pre.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
@@ -2076,7 +2078,7 @@ theorem pauserSet_target_zero_error_logs_unchanged
   dsimp only
   refine ⟨setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite dp
     howner hcodeAddress hbytes htable hstack hwf hr htargetRead
-    htargetCanonical htargetZero halign hgas hroom, rfl⟩
+    htargetCanonical htargetZero halign hgas hroom h_push0, rfl⟩
 
 /-- At the top-level message boundary an exact direct register or pause call
 that settles with an error exposes no logs, so a raw frame-local `PauserSet`

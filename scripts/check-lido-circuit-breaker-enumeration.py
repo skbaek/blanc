@@ -43,7 +43,7 @@ ROLES = {
     "registryViews_coherent": "f512ffe4df0180e3a7a3b81bc4a4bedbad01aa7e650324e8264d9c736603ff4b",
     "pauserSet_local_transition": "ad985d9a98c965466709789366564ed09d3a6444ba2a5810f8756d1020aa9894",
     "pauserSet_target_zero_no_success": "5ddcaaebf789223390d7949699b0816c443500d35b49b67600743ba3831ba12d",
-    "pauserSet_target_zero_error_logs_unchanged": "71697a0b3a1218166dba18d414dd0955f398292c24175584bdce0ef7093ea96e",
+    "pauserSet_target_zero_error_logs_unchanged": "679ec24b3ce18593d3dfa0f016614930309bf457aefcfcd8854add52c4b81d65",
     "pauserSet_register_success": "322d07f5645ed20c12db9421d5dbf18f72e0d9245eca11b199771832bbf5fc34",
     "pauserSet_register_success_committed": "423931268008b2515cb862901f86cae9c17149c842f20a9b1223018207c01ecd",
     "pauserSet_settled_error_not_observable": "fc87de212f62e2e7eed74b6cefe6bd6cbeaa5e5b1f098c997f70b5543a5423b1",

@@ -5291,10 +5291,15 @@ private lemma Ninst.exists_exec_targetZeroRawSstoreFree
         rfl
       exact ⟨.cont step tail, .cont rootFree tailFree⟩
   | push bytes length =>
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
+      rw [Ninst.StepRun, Ninst.step_push] at stepRun
+      split at stepRun
+      · rw [Step.run_ofExecution] at stepRun
+        cases stepRun.2
+      rename_i available
+      rw [Step.run_ofExecution] at stepRun
       have step : Evm.step ⟨pc, sevm, pre⟩ =
           .cont (pc + Ninst.size (.push bytes length)) post := by
-        rw [evmStep, Ninst.step_push, ← stepRun.2]
+        rw [evmStep, Ninst.step_push, if_neg available, ← stepRun.2]
         rfl
       exact ⟨.cont step tail, .cont rootFree tailFree⟩
   | dupn imm =>
@@ -5554,14 +5559,15 @@ private theorem directPausePath_prepend_pushB256
     (tail : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨word :: stack, pre.memory, G, pre.stateGas⟩) body out)
     (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) tail) :
+      (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (Ninst.pushB256 word ::: body) out,
       Func.RunCompiledTo.DirectPausePath ca target (phase := phase) run := by
   subst stack
   apply directPausePath_prepend_childless
     (ca := ca) (target := target)
     (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := pre) (w := word)
-      (c := c) (G := G) hcost hgas hroom) (by
+      (c := c) (G := G) hcost hgas hroom (fun _ => hfork.rules_push0)) (by
         unfold Ninst.pushB256
         simp only [ne_eq, reduceCtorEq, not_false_eq_true, implies_true]) tail tailPath
 
@@ -5576,7 +5582,8 @@ private theorem directPausePath_prepend_tagTop
     (tail : Func.RunCompiledTo fs sevm
       (base.setMach ⟨slot region x :: stack, base.memory, G, base.stateGas⟩) body out)
     (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) tail) :
+      (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm
         (base.setMach ⟨x :: stack, base.memory,
           G + gVerylow + pushGas, base.stateGas⟩)
@@ -5592,7 +5599,7 @@ private theorem directPausePath_prepend_tagTop
       (ca := ca) (target := target) hor (by simp only [ne_eq, reduceCtorEq, not_false_eq_true,
         implies_true]) tail tailPath with
     ⟨orRun, orPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := ca) (target := target) (word := regionWord region)
       (phase := phase) (stack := x :: stack) (c := pushGas)
       (pre := base.setMach ⟨x :: stack, base.memory,
@@ -5829,7 +5836,7 @@ private theorem directPausePath_sstore_warm_revert_step
   have instructionRun : Ninst.RunCompiled sevm devm (.reg .sstore)
       (base.setMach ⟨s, devm.memory, G, base.stateGas⟩) := by
     dsimp only [base, G, c]
-    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm
+    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore hstack hwarm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
       hstatic rfl rfl (by omega)
   let run : Func.RunCompiledTo fs sevm devm
@@ -5934,7 +5941,7 @@ private theorem directPausePath_assignment_zero_warm_revert_step
   have instructionRun : Ninst.RunCompiled sevm devm (.reg .sstore)
       (base.setMach ⟨s, devm.memory, G, base.stateGas⟩) := by
     dsimp only [base, G, c]
-    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm
+    exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hfork.rules_access hfork.rules_sstore hstack hwarm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
       hstatic rfl rfl (by omega)
   have hpopped : Stack.Pop [assignmentSlot target, 0] devm.stack
@@ -6022,10 +6029,15 @@ private lemma Ninst.exists_exec_directPausePath
         rfl
       exact ⟨.cont step tail, .cont rootChildless tailPath⟩
   | push bytes length =>
-      rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at stepRun
+      rw [Ninst.StepRun, Ninst.step_push] at stepRun
+      split at stepRun
+      · rw [Step.run_ofExecution] at stepRun
+        cases stepRun.2
+      rename_i available
+      rw [Step.run_ofExecution] at stepRun
       have step : Evm.step ⟨pc, sevm, pre⟩ =
           .cont (pc + Ninst.size (.push bytes length)) post := by
-        rw [evmStep, Ninst.step_push, ← stepRun.2]
+        rw [evmStep, Ninst.step_push, if_neg available, ← stepRun.2]
         rfl
       exact ⟨.cont step tail, .cont rootChildless tailPath⟩
   | dupn imm =>
@@ -6567,7 +6579,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
       (pushCost_of_ne_zero hoffset) (by
         rw [hgas]
         dsimp only [pauseAfterSetZeroCodeCost, loadCost, offset, suffixCost]
-        omega) (by rw [hstack]; omega)
+        omega) (by rw [hstack]; omega) (fun _ => hfork.rules_push0)
   have hload : Ninst.RunCompiled sevm
       (pre.setMach ⟨offset :: stack, pre.memory,
         G + loadCost + gVerylow + codeCost + suffixCost, pre.stateGas⟩)
@@ -6611,7 +6623,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
             (devm := pre.setMach ⟨target :: target :: stack, M,
               G + gasWarmAccess + suffixCost, pre.stateGas⟩)
             (x := target) (v := 0) (s := target :: stack)
-            (G := G + suffixCost) rfl
+            (G := G + suffixCost) hfork.rules_access hfork.rules_codeReadSurcharge rfl
             (by change target.toAdr ∈ pre.accessedAddresses; exact hwarm)
             (by
               change Nat.toB256 (pre.getCode target.toAdr).size = 0
@@ -6625,7 +6637,8 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
             (devm := pre.setMach ⟨target :: target :: stack, M,
               G + gasColdAccountAccess + suffixCost, pre.stateGas⟩)
             (x := target) (v := 0) (s := target :: stack)
-            (G := G + suffixCost) rfl
+            (G := G + suffixCost) hfork.rules_access hfork.rules_codeReadSurcharge
+            hfork.rules_coldAccountAccess rfl
             (by change target.toAdr ∉ pre.accessedAddresses; exact hcold)
             (by
               change Nat.toB256 (pre.getCode target.toAdr).size = 0
@@ -6657,7 +6670,7 @@ private theorem pauseAfterSet_zeroCode_runCompiledTo
       Func.revert (.error (.revert, raw)) := by
     simpa only [raw, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach] using
-      Func.runCompiledTo_revert_func
+      Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0)
         (fs := fs) (sevm := sevm)
         (devm := codeBase.setMach
           ⟨target :: stack, M, G + (gBase + gBase), codeBase.stateGas⟩)
@@ -6800,7 +6813,8 @@ private theorem loadWord_prepend_directPause
         (pre.memory.read (word * 32).toNat 32).2, G, pre.stateGas⟩) rest out)
     (tailPath : Func.RunCompiledTo.DirectPausePath
       sevm.currentTarget markedTarget
-      (phase := phase) tail) :
+      (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (loadWord word +++ rest) out,
       Func.RunCompiledTo.DirectPausePath sevm.currentTarget markedTarget
         (phase := phase) run := by
@@ -6809,7 +6823,7 @@ private theorem loadWord_prepend_directPause
   let loadCost : Nat := gVerylow + pre.extCost [⟨offset.toNat, 32⟩]
   have hpush : Ninst.RunCompiled sevm pre (Ninst.pushB256 offset)
       (pre.setMach ⟨offset :: stack, pre.memory, G + loadCost, pre.stateGas⟩) := by
-    simpa only [hstack] using Ninst.runCompiled_pushB256
+    simpa only [hstack] using Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (sevm := sevm) (devm := pre) (w := offset)
       (c := pushCost offset.toBytes.sig) (G := G + loadCost) rfl (by
         rw [hgas]
@@ -7103,7 +7117,7 @@ private theorem finishSetPauser_pause_terminal_runCompiledTo
         continuationWord := by
     simp only [Devm.gasLeft_setMach]
     simp only [finishLoadWordCost, Devm.extCost, Devm.memory_setMach]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := base.setMach ⟨stack, base.memory,
         G + branchCost + finishLoadWordCost base continuationWord, base.stateGas⟩)
       (markedTarget := target) (hstack := rfl) hcontinuation hloadGas
@@ -7222,7 +7236,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (base.setMach ⟨zeroWord :: zeroWord :: pauserSetEvent :: target ::
         previousPauser :: newPauser :: stack, base.memory, pushedGas, base.stateGas⟩) := by
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-      Devm.memory_setMach] using Ninst.runCompiled_pushB256
+      Devm.memory_setMach] using Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (sevm := sevm)
       (devm := base.setMach
         ⟨zeroWord :: pauserSetEvent :: target :: previousPauser ::
@@ -7242,7 +7256,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (base.setMach ⟨zeroWord :: pauserSetEvent :: target :: previousPauser ::
         newPauser :: stack, base.memory, pushedGas + zeroCost, base.stateGas⟩) := by
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-      Devm.memory_setMach] using Ninst.runCompiled_pushB256
+      Devm.memory_setMach] using Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (sevm := sevm)
       (devm := base.setMach
         ⟨pauserSetEvent :: target :: previousPauser :: newPauser :: stack,
@@ -7262,7 +7276,7 @@ private theorem finishSetPauser_pause_suffix_runCompiledTo
       (base.setMach ⟨pauserSetEvent :: target :: previousPauser ::
         newPauser :: stack, base.memory, pushedGas + zeroCost + zeroCost, base.stateGas⟩) := by
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-      Devm.memory_setMach] using Ninst.runCompiled_pushB256
+      Devm.memory_setMach] using Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (sevm := sevm)
       (devm := base.setMach
         ⟨target :: previousPauser :: newPauser :: stack, base.memory,
@@ -7406,7 +7420,7 @@ private theorem finishSetPauser_pause_runCompiledTo
     dsimp only [targetCost, afterPrevious]
     simp only [Devm.gasLeft_setMach, finishLoadWordCost, Devm.extCost,
       Devm.memory_setMach]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre.setMach ⟨previousPauser :: newPauser :: stack, M₂,
         G + suffixCost + targetCost, pre.stateGas⟩)
       (word := targetWord) (value := target) (markedTarget := target)
@@ -7424,7 +7438,7 @@ private theorem finishSetPauser_pause_runCompiledTo
     dsimp only [previousCost, afterNew]
     simp only [Devm.gasLeft_setMach, finishLoadWordCost, Devm.extCost,
       Devm.memory_setMach]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre.setMach ⟨newPauser :: stack, M₁,
         G + suffixCost + targetCost + previousCost, pre.stateGas⟩)
       (word := previousPauserWord) (value := previousPauser)
@@ -7440,7 +7454,7 @@ private theorem finishSetPauser_pause_runCompiledTo
       previousCost, newCost, afterTarget, afterPrevious, afterNew,
       M₃, M₂, M₁]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := newPauserWord) (value := newPauser)
       (markedTarget := target) hstack hnewValue hnewGas
       (by omega) hprevious hpreviousPath with
@@ -7647,7 +7661,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
           ⟨raw, tail, rawOutput, tailPath⟩
         exact ⟨raw, tail, rawOutput, tailPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := loaded) (region := indexRegion)
       (x := target) (stack := 0 :: stack) (pushGas := tagPushCost)
@@ -7664,7 +7678,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
           (pre.setMach ⟨0 :: stack, pre.memory, loadGas, pre.stateGas⟩) targetWord := by
     change loadGas = tagGas + finishLoadWordCost pre targetWord
     dsimp only [loadGas]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre.setMach ⟨0 :: stack, pre.memory, loadGas, pre.stateGas⟩)
       (word := targetWord) (value := target) (markedTarget := target)
       (G := tagGas) (hstack := rfl) htargetValue hloadGas
@@ -7681,7 +7695,7 @@ private theorem removeTarget_final_pause_suffix_runCompiledTo
     dsimp only [removeTargetFinalPauseCost, loaded, M, finishCost,
       callCost, zeroPushCost, tagPushCost, storeGas, tagGas, loadGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target) (word := 0)
       (phase := .beforeZeroCode) (pre := pre) (stack := stack)
       (c := zeroPushCost) (G := loadGas) hstack rfl hstartGas
@@ -7848,7 +7862,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
           ⟨raw, tail, rawOutput, tailPath⟩
         exact ⟨raw, tail, rawOutput, tailPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (word := arrayLengthSlot) (phase := .beforeZeroCode)
       (pre := loaded.setMach
@@ -7895,7 +7909,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       (ca := sevm.currentTarget) (target := target) hswap (by simp only [Fin.isValue, ne_eq,
         reduceCtorEq, not_false_eq_true, implies_true])
       subRun subPath with ⟨swapRun, swapPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target) (word := 1)
       (phase := .beforeZeroCode)
       (pre := loaded.setMach
@@ -7915,7 +7929,7 @@ private theorem removeTarget_length_pause_suffix_runCompiledTo
       slotPushCost, onePushCost, storeGas, slotPushGas, subGas,
       swapGas, onePushGas, loadGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := arrayLengthWord) (value := arrayLength)
       (markedTarget := target) (G := onePushGas) hstack hlengthValue
       hloadGas (by omega)
@@ -8092,7 +8106,7 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
           ⟨raw, tail, rawOutput, tailPath⟩
         exact ⟨raw, tail, rawOutput, tailPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := loaded) (region := arrayRegion)
       (x := arrayLength) (stack := 0 :: stack) (pushGas := tagPushCost)
@@ -8112,7 +8126,7 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
           arrayLengthWord := by
     change loadGas = tagGas + finishLoadWordCost pre arrayLengthWord
     dsimp only [loadGas]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre.setMach ⟨0 :: stack, pre.memory, loadGas, pre.stateGas⟩)
       (word := arrayLengthWord) (value := arrayLength)
       (markedTarget := target) (G := tagGas) (hstack := rfl)
@@ -8128,7 +8142,7 @@ private theorem removeTarget_tail_clear_pause_suffix_runCompiledTo
     dsimp only [removeTargetTailClearPauseCost, loaded, M, suffixCost,
       zeroPushCost, tagPushCost, storeGas, tagGas, loadGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target) (word := 0)
       (phase := .beforeZeroCode) (pre := pre) (stack := stack)
       (c := zeroPushCost) (G := loadGas) hstack rfl hstartGas
@@ -8335,7 +8349,7 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
             hsuffixGas with ⟨raw, tail, rawOutput, tailPath⟩
         exact ⟨raw, tail, rawOutput, tailPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := loaded) (region := indexRegion)
       (x := lastTarget) (stack := removedIndex :: stack)
@@ -8358,7 +8372,7 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
     change lastLoadGas =
       tagGas + finishLoadWordCost afterRemoved lastTargetWord
     dsimp only [lastLoadGas]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := afterRemoved.setMach
         ⟨removedIndex :: stack, M₁, lastLoadGas, afterRemoved.stateGas⟩)
       (word := lastTargetWord) (value := lastTarget)
@@ -8377,7 +8391,7 @@ private theorem removeTarget_moved_index_pause_suffix_runCompiledTo
       M₁, M₂, suffixCost, tagPushCost, storeGas, tagGas,
       lastLoadGas, removedLoadGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := removedIndexWord) (value := removedIndex)
       (markedTarget := target) (G := lastLoadGas) hstack hremovedValue
       hremovedLoadGas (by omega)
@@ -8605,7 +8619,7 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
           ⟨raw, tail, rawOutput, tailPath⟩
         exact ⟨raw, tail, rawOutput, tailPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := loaded) (region := arrayRegion)
       (x := removedIndex) (stack := lastTarget :: stack)
@@ -8628,7 +8642,7 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
     change removedLoadGas =
       tagGas + finishLoadWordCost afterLast removedIndexWord
     dsimp only [removedLoadGas]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := afterLast.setMach
         ⟨lastTarget :: stack, M₁, removedLoadGas, afterLast.stateGas⟩)
       (word := removedIndexWord) (value := removedIndex)
@@ -8647,7 +8661,7 @@ private theorem removeTarget_hole_pause_suffix_runCompiledTo
       M₁, M₂, suffixCost, tagPushCost, storeGas, tagGas,
       removedLoadGas, lastLoadGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := lastTargetWord) (value := lastTarget)
       (markedTarget := target) (G := removedLoadGas) hstack hlastValue
       hlastLoadGas (by omega)
@@ -8958,7 +8972,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
           simp only [pushPre, Devm.gasLeft_setMach, htailGas]
           dsimp only [pushGas, mstoreGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeZeroCode) (pre := pushPre)
             (word := lastTargetWord * 32) (stack := lastTarget :: stack)
@@ -8974,7 +8988,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
           rawOutput,
           by simpa only [mstoreAt, prepend, pushPre] using rawPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := afterLength)
       (region := arrayRegion) (x := arrayLength) (stack := stack)
@@ -8994,7 +9008,7 @@ private theorem removeTarget_last_save_pause_suffix_runCompiledTo
       loaded, suffixCost, tagPushCost, offsetPushCost, mstoreCost,
       mstoreGas, pushGas, sloadGas, tagGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := arrayLengthWord) (value := arrayLength)
       (markedTarget := target) (G := tagGas) hstack harrayLengthValue
       hloadGas (by omega)
@@ -9296,7 +9310,7 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
           simp only [offsetPre, Devm.gasLeft_setMach, htailGas]
           dsimp only [offsetGas, mstoreGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeZeroCode) (pre := offsetPre)
             (word := arrayLengthWord * 32) (stack := arrayLength :: stack)
@@ -9319,7 +9333,7 @@ private theorem removeTarget_length_save_pause_suffix_runCompiledTo
       suffixCost, slotPushCost, offsetPushCost, mstoreCost, mstoreGas,
       offsetGas, sloadGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (pre := pre) (word := arrayLengthSlot)
       (stack := stack) (c := slotPushCost) (G := sloadGas)
@@ -9620,7 +9634,7 @@ private theorem removeTarget_pause_runCompiledTo
           simp only [offsetPre, Devm.gasLeft_setMach, htailGas]
           dsimp only [offsetGas, mstoreGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeZeroCode) (pre := offsetPre)
             (word := removedIndexWord * 32) (stack := removedIndex :: stack)
@@ -9637,7 +9651,7 @@ private theorem removeTarget_pause_runCompiledTo
           rawOutput,
           by simpa only [mstoreAt, prepend, offsetPre] using rawPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := afterTarget)
       (region := indexRegion) (x := target) (stack := stack)
@@ -9656,7 +9670,7 @@ private theorem removeTarget_pause_runCompiledTo
       suffixCost, tagPushCost, offsetPushCost, mstoreCost, mstoreGas,
       offsetGas, sloadGas, tagGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := targetWord) (value := target)
       (markedTarget := target) (G := tagGas) hstack htargetValue
       hloadGas (by omega)
@@ -9836,7 +9850,7 @@ private theorem afterOldPauser_pause_runCompiledTo
     dsimp only [afterOldPauserPauseCost, M, loaded, removeCost,
       branchCost, callCost]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := newPauserWord) (value := (0 : B256))
       (markedTarget := target)
       (G := G + removeCost + callCost + branchCost + gVerylow)
@@ -10170,7 +10184,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
                     hstoreTailGas] using callPath⟩) with
           ⟨raw, storeRun, rawOutput, storePath⟩
         let afterSecond := base.setMach ⟨[], M₂, 0, base.stateGas⟩
-        rcases directPausePath_prepend_tagTop
+        rcases directPausePath_prepend_tagTop (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeZeroCode) (base := afterSecond)
             (region := countRegion) (x := previousPauser)
@@ -10195,7 +10209,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           dsimp only [secondLoadGas, afterPrevious, secondTagGas]
           simp only [finishLoadWordCost, Devm.extCost, Devm.memory_setMach]
           omega
-        rcases loadWord_prepend_directPause
+        rcases loadWord_prepend_directPause (hfork := hfork)
             (pre := base.setMach ⟨decrementedCount :: stack, M₁,
               secondLoadGas + sloadSpare, base.stateGas⟩)
             (word := previousPauserWord) (value := previousPauser)
@@ -10253,7 +10267,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           simp only [pushPre, Devm.gasLeft_setMach]
           dsimp only [onePushGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target) (word := 1)
             (phase := .beforeZeroCode) (pre := pushPre)
             (stack := countValue :: stack) (c := onePushCost)
@@ -10271,7 +10285,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
           by simpa only [previousCountKey, prepend_append, pushPre,
               hsloadTailGas] using pushPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeZeroCode) (base := afterPrevious)
       (region := countRegion) (x := previousPauser) (stack := stack)
@@ -10291,7 +10305,7 @@ private theorem previousCount_decrement_pause_suffix_runCompiledTo
       storeGas, secondTagGas, secondLoadGas, subGas, swapGas, onePushGas,
       sloadGas, firstTagGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := previousPauserWord) (value := previousPauser)
       (markedTarget := target) (G := firstTagGas) hstack hpreviousValue
       hloadGas (by omega)
@@ -10712,7 +10726,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
           by simpa only [suffixPre, Devm.setMach_setMach, Devm.stateGas_setMach,
               Devm.stack_setMach, Devm.memory_setMach] using suffixPath⟩) with
     ⟨raw, storeRun, rawOutput, storePath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (base := loaded)
       (region := assignmentRegion) (x := target)
@@ -10734,7 +10748,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
     simp only [Devm.gasLeft_setMach]
     dsimp only [targetLoadGas, afterNew, tagGas]
     simp only [finishLoadWordCost, Devm.extCost, Devm.memory_setMach]
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := afterNew.setMach
         ⟨0 :: previousPauser :: stack, M₁, targetLoadGas, afterNew.stateGas⟩)
       (word := targetWord) (value := target) (markedTarget := target)
@@ -10751,7 +10765,7 @@ private theorem assignment_zero_pause_suffix_runCompiledTo
     dsimp only [assignmentZeroPauseCost, M₁, afterNew, M₂, loaded,
       suffixCost, tagPushCost, storeGas, tagGas, targetLoadGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := newPauserWord) (value := 0)
       (markedTarget := target) (G := targetLoadGas) hstack hnewValue
       hnewLoadGas (by simp only [List.length_cons]; omega)
@@ -11083,7 +11097,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
           simp only [offsetPre, Devm.gasLeft_setMach]
           dsimp only [offsetGas, mstoreGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeWrite) (pre := offsetPre)
             (word := previousPauserWord * 32)
@@ -11123,7 +11137,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
           rawOutput,
           by simpa only [mstoreAt, prepend, htailGas] using dupPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (base := afterTarget)
       (region := assignmentRegion) (x := target) (stack := stack)
@@ -11142,7 +11156,7 @@ private theorem previousAssignment_save_pause_suffix_runCompiledTo
       loaded, suffixCost, tagPushCost, offsetPushCost, mstoreCost,
       mstoreGas, offsetGas, dupGas, sloadGas, tagGas]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := targetWord) (value := target)
       (markedTarget := target) (G := tagGas) hstack htargetValue
       hloadGas (by omega)
@@ -11312,7 +11326,7 @@ private theorem setPauserKernel_singletonRemoval_pause_runCompiledTo
     dsimp only [setPauserKernelSingletonRemovalPauseCost, M, guarded,
       bodyCost, branchCost]
     omega
-  rcases loadWord_prepend_directPause
+  rcases loadWord_prepend_directPause (hfork := hfork)
       (pre := pre) (word := targetWord) (value := target)
       (markedTarget := target)
       (G := G + bodyCost + branchCost + gVerylow)
@@ -11599,7 +11613,7 @@ private theorem continuation_save_setPauserKernel_call_pause_runCompiledTo
   have hoffsetGas : offsetPre.gasLeft =
       (G + kernelCost + callCost + mstoreCost) + offsetPushCost := by
     simp only [offsetPre, Devm.gasLeft_setMach]
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := offsetPre)
       (word := continuationWord * 32) (stack := 1 :: stack)
@@ -11618,7 +11632,7 @@ private theorem continuation_save_setPauserKernel_call_pause_runCompiledTo
       offsetPre]
     simp only [Devm.gasLeft_setMach]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := 1) (stack := stack)
       (c := onePushCost) (G := offsetPre.gasLeft)
@@ -11802,7 +11816,7 @@ private theorem previous_zero_continuation_kernel_call_pause_runCompiledTo
   have hoffsetGas : offsetPre.gasLeft =
       (G + suffixCost + mstoreCost) + offsetPushCost := by
     simp only [offsetPre, Devm.gasLeft_setMach]
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := offsetPre)
       (word := previousPauserWord * 32) (stack := 0 :: stack)
@@ -11819,7 +11833,7 @@ private theorem previous_zero_continuation_kernel_call_pause_runCompiledTo
       suffixCost, mstoreCost, offsetPushCost, zeroPushCost, offsetPre]
     simp only [Devm.gasLeft_setMach]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := 0) (stack := stack)
       (c := zeroPushCost) (G := offsetPre.gasLeft)
@@ -12001,7 +12015,7 @@ private theorem new_zero_previous_continuation_kernel_call_pause_runCompiledTo
   have hoffsetGas : offsetPre.gasLeft =
       (G + suffixCost + mstoreCost) + offsetPushCost := by
     simp only [offsetPre, Devm.gasLeft_setMach]
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := offsetPre)
       (word := newPauserWord * 32) (stack := 0 :: stack)
@@ -12018,7 +12032,7 @@ private theorem new_zero_previous_continuation_kernel_call_pause_runCompiledTo
       suffixCost, mstoreCost, offsetPushCost, zeroPushCost, offsetPre]
     simp only [Devm.gasLeft_setMach]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := 0) (stack := stack)
       (c := zeroPushCost) (G := offsetPre.gasLeft)
@@ -12048,7 +12062,8 @@ private theorem directPausePath_prepend_arg_zero
     (tail : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨value :: stack, pre.memory, G, pre.stateGas⟩) rest out)
     (tailPath : Func.RunCompiledTo.DirectPausePath
-      sevm.currentTarget markedTarget (phase := phase) tail) :
+      sevm.currentTarget markedTarget (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (arg 0 +++ rest) out,
       Func.RunCompiledTo.DirectPausePath sevm.currentTarget markedTarget
         (phase := phase) run := by
@@ -12071,7 +12086,7 @@ private theorem directPausePath_prepend_arg_zero
   have hpushGas : pre.gasLeft =
       (G + gVerylow) + pushCost (4 : B256).toBytes.sig := by
     exact hgas
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := markedTarget)
       (phase := phase) (pre := pre) (word := 4) (stack := stack)
       (c := pushCost (4 : B256).toBytes.sig) (G := G + gVerylow)
@@ -12243,7 +12258,7 @@ private theorem target_arg_save_pause_runCompiledTo
   have hoffsetGas : offsetPre.gasLeft =
       (G + suffixCost + mstoreCost) + offsetPushCost := by
     simp only [offsetPre, Devm.gasLeft_setMach]
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := offsetPre)
       (word := targetWord * 32) (stack := target :: stack)
@@ -12261,7 +12276,7 @@ private theorem target_arg_save_pause_runCompiledTo
       offsetPushCost, argPushCost, offsetPre]
     simp only [Devm.gasLeft_setMach]
     omega
-  rcases directPausePath_prepend_arg_zero
+  rcases directPausePath_prepend_arg_zero (hfork := hfork)
       (pre := pre) (value := target) (markedTarget := target)
       (stack := stack) (G := offsetPre.gasLeft)
       hstack hdataTarget hargGas (by omega)
@@ -12561,7 +12576,7 @@ private theorem pauseDuration_save_pause_runCompiledTo
           simp only [offsetPre, Devm.gasLeft_setMach]
           dsimp only [offsetGas, mstoreGas]
           omega
-        rcases directPausePath_prepend_pushB256
+        rcases directPausePath_prepend_pushB256 (hfork := hfork)
             (ca := sevm.currentTarget) (target := target)
             (phase := .beforeWrite) (pre := offsetPre)
             (word := durationWord * 32) (stack := duration :: stack)
@@ -12586,7 +12601,7 @@ private theorem pauseDuration_save_pause_runCompiledTo
       mstoreCost, offsetPushCost, slotPushCost, mstoreGas, offsetGas,
       sloadGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := pauseDurationSlot)
       (stack := stack) (c := slotPushCost) (G := sloadGas)
@@ -12909,7 +12924,7 @@ private theorem liveExpiry_pause_runCompiledTo
               Devm.stack_setMach,
               Devm.memory_setMach] using timestampPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (base := pre) (region := expiryRegion)
       (x := pauser) (stack := stack) (pushGas := tagPushCost)
@@ -13267,7 +13282,7 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
               Devm.stack_setMach,
               Devm.memory_setMach] using callerPath⟩) with
     ⟨raw, sloadRun, rawOutput, sloadPath⟩
-  rcases directPausePath_prepend_tagTop
+  rcases directPausePath_prepend_tagTop (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (base := pre) (region := assignmentRegion)
       (x := target) (stack := stack) (pushGas := tagPushCost)
@@ -13283,7 +13298,7 @@ private theorem authorized_liveExpiry_pause_runCompiledTo
     dsimp only [authorizedLiveExpiryPauseCost, suffixCost, branchCost,
       tagPushCost, branchGas, eqGas, callerGas, sloadGas, tagGas]
     omega
-  rcases directPausePath_prepend_arg_zero
+  rcases directPausePath_prepend_arg_zero (hfork := hfork)
       (pre := pre) (value := target) (markedTarget := target)
       (stack := stack) (G := tagGas) (phase := .beforeWrite)
       hstack hdataTarget hargGas (by omega)
@@ -13309,12 +13324,14 @@ private theorem directPausePath_prepend_tload
     (tail : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨value :: stack, pre.memory, G, pre.stateGas⟩) body out)
     (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) tail) :
+      (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (tload ::: body) out,
       Func.RunCompiledTo.DirectPausePath ca target
         (phase := phase) run := by
   have hcore : Rinst.runCore 0 pre sevm .tload =
       .ok (pre.setMach ⟨value :: stack, pre.memory, G, pre.stateGas⟩) := by
+    simp only [Rinst.runCore, hfork.rules_transient, ↓reduceIte]
     show (do
       let ⟨k, d⟩ ← pre.pop
       pushItem (d.getTransVal sevm.currentTarget k) gasWarmAccess d) = _
@@ -13359,7 +13376,7 @@ private theorem directPausePath_prepend_tstore
   have hcore : Rinst.runCore 0 pre sevm .tstore =
       .ok ((pre.setMach ⟨stack, pre.memory, G, pre.stateGas⟩).setTransVal
         sevm.currentTarget key value) := by
-    simp only [Rinst.runCore, hfork.rules_stateGas_none]
+    simp only [Rinst.runCore, hfork.rules_transient, hfork.rules_stateGas_none, ↓reduceIte]
     show (do
       let ⟨k, d⟩ ← pre.pop
       let ⟨v, d⟩ ← d.pop
@@ -13610,7 +13627,7 @@ private theorem lock_write_authorized_pause_runCompiledTo
           Devm.stack_setMach, Devm.memory_setMach,
           Devm.gasLeft_setMach] using tailPath) with
     ⟨storeRun, storePath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite)
       (pre := pre.setMach
@@ -13628,7 +13645,7 @@ private theorem lock_write_authorized_pause_runCompiledTo
     dsimp only [lockWriteAuthorizedPauseCost, suffixCost, onePushCost,
       keyPushCost, storeGas, keyPushGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := 1) (stack := stack)
       (c := onePushCost) (G := keyPushGas) hstack rfl honeGas (by omega)
@@ -13815,7 +13832,7 @@ private theorem unlocked_guard_pause_runCompiledTo
   have htloadGas : tloadPre.gasLeft = iszeroGas + gasWarmAccess := by
     simp only [tloadPre, Devm.gasLeft_setMach]
     dsimp only [tloadGas]
-  rcases directPausePath_prepend_tload
+  rcases directPausePath_prepend_tload (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := tloadPre) (key := lockKey)
       (value := 0) (stack := stack) (G := iszeroGas) rfl hlock htloadGas
@@ -13830,7 +13847,7 @@ private theorem unlocked_guard_pause_runCompiledTo
     dsimp only [unlockedGuardPauseCost, suffixCost, branchCost, keyPushCost,
       branchGas, iszeroGas, tloadGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := lockKey)
       (stack := stack) (c := keyPushCost) (G := tloadGas)
@@ -13860,7 +13877,8 @@ private theorem directPausePath_prepend_checkNonAddress_zero
     (tail : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨0 :: stack, pre.memory, G, pre.stateGas⟩) body out)
     (tailPath : Func.RunCompiledTo.DirectPausePath ca markedTarget
-      (phase := phase) tail) :
+      (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (checkNonAddress +++ body) out,
       Func.RunCompiledTo.DirectPausePath ca markedTarget
         (phase := phase) run := by
@@ -13886,7 +13904,7 @@ private theorem directPausePath_prepend_checkNonAddress_zero
         not_false_eq_true, implies_true]) tail tailPath with
     ⟨andRun, andPath⟩
   have hshl : Ninst.RunCompiled sevm shlPre (.reg .shl) andPre := by
-    exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
+    exact Ninst.runCompiled_binary (by rintro ⟨⟩) (Rinst.runCore_shl_of_shifts hfork.rules_shifts) rfl (by
       simpa only using addressMask_eq_shl.symm) (by
       simp only [shlPre, Devm.gasLeft_setMach]) (by
       simp only [List.length_cons]
@@ -13899,7 +13917,7 @@ private theorem directPausePath_prepend_checkNonAddress_zero
       (by simpa only [shlPre, andPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using andPath) with
     ⟨shlRun, shlPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := ca) (target := markedTarget) (phase := phase)
       (pre := push160Pre) (word := Nat.toB256 160)
       (stack := (~~~(0 : B256)) :: target :: stack)
@@ -13928,7 +13946,7 @@ private theorem directPausePath_prepend_checkNonAddress_zero
     rw [hgas]
     dsimp only [checkNonAddressPauseCost, push160Cost, pushZeroCost]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := ca) (target := markedTarget) (phase := phase)
       (pre := pre) (word := 0) (stack := target :: stack)
       (c := pushZeroCost)
@@ -14120,7 +14138,7 @@ private theorem canonical_unlocked_pause_runCompiledTo
       branchGas + checkNonAddressPauseCost := by
     simp only [checkPre, Devm.gasLeft_setMach]
     dsimp only [checkGas]
-  rcases directPausePath_prepend_checkNonAddress_zero
+  rcases directPausePath_prepend_checkNonAddress_zero (hfork := hfork)
       (ca := sevm.currentTarget) (markedTarget := target)
       (phase := .beforeWrite) (pre := checkPre) (target := target)
       (stack := stack) (G := branchGas) rfl hmask hcheckGas (by omega)
@@ -14135,7 +14153,7 @@ private theorem canonical_unlocked_pause_runCompiledTo
     dsimp only [canonicalUnlockedPauseCost, suffixCost, branchCost,
       branchGas, checkGas]
     omega
-  rcases directPausePath_prepend_arg_zero
+  rcases directPausePath_prepend_arg_zero (hfork := hfork)
       (pre := pre) (value := target) (markedTarget := target)
       (stack := stack) (G := checkGas) (phase := .beforeWrite)
       hstack hdataTarget hargGas (by omega)
@@ -14349,7 +14367,7 @@ private theorem exact_pause_runCompiledTo
     dsimp only [exactPauseCost, suffixCost, branchCost, boundPushCost,
       branchGas, ltGas, calldataGas]
     omega
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pre) (word := Nat.toB256 36)
       (stack := stack) (c := boundPushCost) (G := calldataGas)
@@ -14547,7 +14565,7 @@ private theorem third_group_pause_dispatch_runCompiledTo
       (ca := sevm.currentTarget) (target := target) heq (by simp only [ne_eq, reduceCtorEq,
         not_false_eq_true, implies_true])
       branchRun branchPath with ⟨eqRun, eqPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pushPre) (word := pauseSelector)
       (stack := pauseSelector :: pauseSelector :: stack)
@@ -14784,7 +14802,7 @@ private theorem hybrid_pause_dispatch_runCompiledTo
       (ca := sevm.currentTarget) (target := target) hinnerGt (by simp only [ne_eq, reduceCtorEq,
         not_false_eq_true, implies_true])
       innerBranchRun innerBranchPath with ⟨innerGtRun, innerGtPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := innerPushPre) (word := innerPivot)
       (stack := pauseSelector :: pauseSelector :: stack)
@@ -14857,7 +14875,7 @@ private theorem hybrid_pause_dispatch_runCompiledTo
       (ca := sevm.currentTarget) (target := target) houterGt (by simp only [ne_eq, reduceCtorEq,
         not_false_eq_true, implies_true])
       outerBranchRun outerBranchPath with ⟨outerGtRun, outerGtPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := outerPushPre) (word := outerPivot)
       (stack := pauseSelector :: pauseSelector :: stack)
@@ -14921,7 +14939,8 @@ private theorem directPausePath_prepend_fsig
     (tail : Func.RunCompiledTo fs sevm
       (pre.setMach ⟨selectedTarget :: stack, pre.memory, G, pre.stateGas⟩) rest out)
     (tailPath : Func.RunCompiledTo.DirectPausePath sevm.currentTarget
-      markedTarget (phase := phase) tail) :
+      markedTarget (phase := phase) tail)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     ∃ run : Func.RunCompiledTo fs sevm pre (fsig +++ rest) out,
       Func.RunCompiledTo.DirectPausePath sevm.currentTarget markedTarget
         (phase := phase) run := by
@@ -14935,14 +14954,14 @@ private theorem directPausePath_prepend_fsig
       G + gVerylow + pushCost (224 : B256).toBytes.sig + gVerylow, pre.stateGas⟩
   have hshr : Ninst.RunCompiled sevm shrPre shr
       (pre.setMach ⟨selectedTarget :: stack, pre.memory, G, pre.stateGas⟩) := by
-    exact Ninst.runCompiled_binary (by rintro ⟨⟩) rfl rfl (by
+    exact Ninst.runCompiled_binary (by rintro ⟨⟩) (Rinst.runCore_shr_of_shifts hfork.rules_shifts) rfl (by
       exact hshift) (by
       simp only [shrPre, Devm.gasLeft_setMach]) (by omega)
   rcases directPausePath_prepend_childless
       (ca := sevm.currentTarget) (target := markedTarget) hshr (by simp only [ne_eq, reduceCtorEq,
         not_false_eq_true, implies_true])
       tail tailPath with ⟨shrRun, shrPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := markedTarget)
       (phase := phase) (pre := shrPushPre) (word := 224)
       (stack := selectorWord :: stack)
@@ -14970,7 +14989,7 @@ private theorem directPausePath_prepend_fsig
       (by simpa only [shrPushPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using shrPushPath) with
     ⟨loadRun, loadPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := markedTarget)
       (phase := phase) (pre := pre) (word := 0) (stack := stack)
       (c := pushCost (0 : B256).toBytes.sig)
@@ -15121,7 +15140,7 @@ private theorem fsig_hybrid_pause_dispatch_runCompiledTo
     rw [hgas]
     dsimp only [fsigHybridPauseDispatchCost, hybridCost]
     omega
-  rcases directPausePath_prepend_fsig
+  rcases directPausePath_prepend_fsig (hfork := hfork)
       (pre := pre) (selectorWord := selectorWord)
       (selectedTarget := selector "pause" [.address])
       (markedTarget := target) (stack := stack) (G := G + hybridCost)
@@ -15345,7 +15364,7 @@ private theorem runtimeMain_pause_runCompiledTo
       (by simpa only [calldataPre, ltPre, Devm.setMach_setMach, Devm.stateGas_setMach,
           Devm.stack_setMach, Devm.memory_setMach] using ltPath) with
     ⟨calldataRun, calldataPath⟩
-  rcases directPausePath_prepend_pushB256
+  rcases directPausePath_prepend_pushB256 (hfork := hfork)
       (ca := sevm.currentTarget) (target := target)
       (phase := .beforeWrite) (pre := pushPre) (word := 4)
       (stack := (0 : B256) :: stack)
@@ -15871,7 +15890,10 @@ theorem pause_direct_postWrite_revert_settles_and_restores_registry
       (raw := .error (.revert, raw)) hframeEntry
     have hsg : msg.benv.stat.rules.stateGas = none :=
       hmsgFork.rules_stateGas_none
-    simpa only [post, Frame.ofCall, Frame.settle, Frame.settleMsg, hsg, executeCode.handleErrorWith_none, executeCode.handleError, processMessage.settle, Devm.error, Devm.withError, Devm.setMeta, ExceptT.stM_eq, Bool.false_eq_true, ↓reduceIte, Except.bind_ok, Option.isSome_some] using hrun
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false :=
+      hmsgFork.rules_touchedSweep
+    simpa only [post, Frame.ofCall, Frame.settle, Frame.settleMsg, hsg,
+      Devm.recordTouch_of_not_touchedSweep hsweep, executeCode.handleErrorWith_none, executeCode.handleError, processMessage.settle, Devm.error, Devm.withError, Devm.setMeta, ExceptT.stM_eq, Bool.false_eq_true, ↓reduceIte, Except.bind_ok, Option.isSome_some] using hrun
   have herror : post.error.isSome :=
     ProcessMessage.error_isSome_of_raw_revert
       hmsgFork.rules_stateGas_none hprocess
@@ -15970,7 +15992,8 @@ private theorem setPauser_zero_runCompiledTo_source
     (htargetZero : target = 0)
     (halign : pre.memory.size % 32 = 0)
     (hgas : pre.gasLeft = G + setPauserZeroCost pre)
-    (hroom : pre.stack.length < 1023) :
+    (hroom : pre.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
       (setPauserZeroLoadMemory pre).write 0 data.toB256.toBytes,
@@ -16006,7 +16029,7 @@ private theorem setPauser_zero_runCompiledTo_source
   have hpush : Ninst.RunCompiled sevm pre (Ninst.pushB256 offset)
       (pre.setMach ⟨offset :: stack, pre.memory,
         G + loadCost + gVerylow + branchCost + callCost + selectorCost, pre.stateGas⟩) := by
-    simpa only [hstack] using Ninst.runCompiled_pushB256
+    simpa only [hstack] using Ninst.runCompiled_pushB256 (h_push0 := fun h => absurd h (B256.toBytes_sig_ne_nil hoffset))
       (sevm := sevm) (devm := pre) (w := offset) (c := gVerylow)
       (G := G + loadCost + gVerylow + branchCost + callCost + selectorCost)
       (pushCost_of_ne_zero hoffset) hpushGas (by omega)
@@ -16071,7 +16094,7 @@ private theorem setPauser_zero_runCompiledTo_source
       hMalign (by
         simp only [Devm.gasLeft_setMach]
         dsimp only [selectorCost]
-        rfl) (by simpa only [Devm.stack_setMach] using hstackRoom)
+        rfl) h_push0 (by simpa only [Devm.stack_setMach] using hstackRoom)
   have hbodyFree :=
     runCompiledTo_revertSelector_targetZeroPathFree
       (hlen := hdataLength) hbody
@@ -16816,7 +16839,8 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
         (gVerylow + gMid + gJumpdest) +
         revertSelectorCost (pre.setMach ⟨pre.stack,
           (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
-    (hroom : pre.stack.length < 1023) :
+    (hroom : pre.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let fs := (runtime dp).main :: (runtime dp).aux
     let data := customErrorData "PausableZero"
     let post := (pre.setMach ⟨stack,
@@ -16834,7 +16858,7 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
     simpa only [setPauserZeroCost, setPauserZeroLoadMemory] using hgas
   rcases runtime_registry_lookups dp with
     ⟨herror, _happend, _hafter, _hremove, _hfinish⟩
-  rcases setPauser_zero_runCompiledTo_source herror hstack hwf hr
+  rcases setPauser_zero_runCompiledTo_source (h_push0 := h_push0) herror hstack hwf hr
       htargetRead htargetZero halign hgasPrivate hroom with
     ⟨run, runFree⟩
   have hcompiled :
