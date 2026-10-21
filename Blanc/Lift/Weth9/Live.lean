@@ -216,20 +216,22 @@ theorem bal_callee_pre {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {a r : B
 open Blanc.Lift in
 theorem bal_callee_cold {sevm : Sevm} {b : Devm} {g : Nat} {a r : B256} {S : List B256}
     (hroom : S.length < 1000) (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (haccess : sevm.benvStat.rules.access = .eip2929)
     (hcold : (⟨sevm.currentTarget, mapSlot a 3⟩ : Adr × B256) ∉ b.accessedStorageKeys) :
     SFunc.RunExact prog sevm (St b (a :: r :: S) memFp (g + 2191)) t_0b18_c6
       (.returned (St (addAccessedStorageKey b sevm.currentTarget (mapSlot a 3))
         (b.getStorVal sevm.currentTarget (mapSlot a 3) :: r :: S) (memBal a) g)) :=
-  bal_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp only [List.length_cons]; omega)
+  bal_callee_pre hroom (rx_sload_cold hlegacy haccess hcold (by simp only [List.length_cons]; omega)
     (rx_dup2 (by simp only [List.length_cons]; omega) rx_ret))
 
 open Blanc.Lift in
 theorem bal_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {a r : B256} {S : List B256}
     (hroom : S.length < 1000) (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (haccess : sevm.benvStat.rules.access = .eip2929)
     (hwarm : (⟨sevm.currentTarget, mapSlot a 3⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
     SFunc.RunExact prog sevm (St b (a :: r :: S) memFp (g + 191)) t_0b18_c6
       (.returned (St b (b.getStorVal sevm.currentTarget (mapSlot a 3) :: r :: S) (memBal a) g)) :=
-  bal_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp only [List.length_cons]; omega)
+  bal_callee_pre hroom (rx_sload_warm hlegacy haccess hwarm (by simp only [List.length_cons]; omega)
     (rx_dup2 (by simp only [List.length_cons]; omega) rx_ret))
 
 open Blanc.Lift in
@@ -417,20 +419,22 @@ theorem dec_callee_post {sevm : Sevm} {b : Devm} {g : Nat} {r x : B256}
 open Blanc.Lift in
 theorem dec_callee_cold {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List B256} {M : Mem}
     (hroom : S.length < 1000) (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (haccess : sevm.benvStat.rules.access = .eip2929)
     (hcold : (⟨sevm.currentTarget, 2⟩ : Adr × B256) ∉ b.accessedStorageKeys) :
     SFunc.RunExact prog sevm (St b (r :: S) M (g + 2151)) t_0b05_c7
       (.returned (St (addAccessedStorageKey b sevm.currentTarget 2)
         ((Bytes.toB256 [0xff] &&& b.getStorVal sevm.currentTarget 2) :: r :: S) M g)) :=
-  dec_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
+  dec_callee_pre hroom (rx_sload_cold hlegacy haccess hcold (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
 
 open Blanc.Lift in
 theorem dec_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List B256} {M : Mem}
     (hroom : S.length < 1000) (hlegacy : sevm.benvStat.rules.stateGas = none)
+    (haccess : sevm.benvStat.rules.access = .eip2929)
     (hwarm : (⟨sevm.currentTarget, 2⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
     SFunc.RunExact prog sevm (St b (r :: S) M (g + 151)) t_0b05_c7
       (.returned (St b ((Bytes.toB256 [0xff] &&& b.getStorVal sevm.currentTarget 2) :: r :: S)
         M g)) :=
-  dec_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
+  dec_callee_pre hroom (rx_sload_warm hlegacy haccess hwarm (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
 
 open Blanc.Lift in
 /-- The `decimals` ABI tail at 0x279: mask to `uint8` twice, write at the
@@ -722,7 +726,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 534)
       (G := pre.gasLeft - 534 + 53 + 191) h_value
       (bal_callee_warm (b := pre) (g := pre.gasLeft - 534 + 53) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
@@ -732,7 +736,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 2534)
       (G := pre.gasLeft - 2534 + 53 + 2191) h_value
       (bal_callee_cold (b := pre) (g := pre.gasLeft - 2534 + 53) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
@@ -762,7 +766,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 444)
       (G := pre.gasLeft - 444 + 65 + 151) h_value
       (dec_callee_warm (b := pre) (g := pre.gasLeft - 444 + 65) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
     have h0 := dispatch_decimals (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     refine ⟨post, ⟨_, rfl, h0⟩, by omega, ?_⟩
@@ -772,7 +776,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 2444)
       (G := pre.gasLeft - 2444 + 65 + 2151) h_value
       (dec_callee_cold (b := pre) (g := pre.gasLeft - 2444 + 65) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
     have h0 := dispatch_decimals (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     refine ⟨post, ⟨_, rfl, h0⟩, by omega, ?_⟩

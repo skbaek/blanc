@@ -1085,6 +1085,10 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
   clear e1 e2 e3 hs₁ hs₂ hs₃ eq1 eq2 eq3 eq4 eq5 eq6 eq7
   clear h_pop2 h_pop4 h_pop5 h_pop6 h_pop7 h₂
   -- delegation resolution
+  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled delegation] at h_run
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
       (addAccessedAddress devm7 sevm.caller) sevm.caller with
     ⟨dp, na, code0, dagc, devm9⟩
@@ -1214,6 +1218,8 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
         rw [h_sf_state, ← h_if]
         exact hc_state
       -- sub-message succeeded
+      rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+        (by rw [hc_stat]; exact hfork.rules_touchedSweep)] at h_if
       have h_if' := h_if.symm
       subst h_if'
       have h_wb_ca : (childMsg.withBenv benv').codeAddress = some na := hc_ca
@@ -1661,7 +1667,7 @@ theorem stateTransitionUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hfork : ∀ n t f, cfg.forkAt n t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.stateTransitionUsing_preserves_inv wa (wethSpec_preserves wa)
@@ -1681,7 +1687,7 @@ theorem stateTransition_preserves_solvent (wa : Adr)
 -- covered. `BlockChain.ReachUsing` is unchanged and lives in `Blanc/Ladder.lean`.
 theorem chainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
-    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hfork : ∀ n t f, cfg.forkAt n t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.chainUsing_preserves_inv wa (wethSpec_preserves wa)
@@ -1709,7 +1715,7 @@ theorem addBlockToChainUsing_preserves_solvent (wa : Adr) (cfg : ChainConfig)
     (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (hfork : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hfork : ∀ n t f, cfg.forkAt n t = .ok f → CoveredFork f)
     (h_inv : State.Inv wa ch.state) : State.Inv wa ch'.state :=
   wethSpec_stateInv_iff.mp
     (ContractSpec.addBlockToChainUsing_preserves_inv wa (wethSpec_preserves wa)

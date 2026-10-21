@@ -83,7 +83,7 @@ theorem body_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
   refine rx_dest ?_
   refine rx_push (w := solCountSlot) (by decide) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_sload_warm hleg hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
+  refine rx_sload_warm hleg hfork.rules_access hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
@@ -98,7 +98,7 @@ theorem body_countBump {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : B
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_sload_warm hleg hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
+  refine rx_sload_warm hleg hfork.rules_access hwarm (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_

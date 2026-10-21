@@ -157,8 +157,8 @@ theorem MessageCallTrace.rawFrames_gasMeasure_le
       intro root member
       have h := coreTrace.rawFrames_gasMeasure_le root member
       have hexec : (messageCallExecutionMessage delegated).gas = delegated.gas := by
-        unfold messageCallExecutionMessage
-        cases getDelegatedCodeAddress delegated.code <;> rfl
+        unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+        split <;> rfl
       rw [hexec, messageCallDelegation_gas delegation] at h
       exact h
 
@@ -212,9 +212,9 @@ theorem RequestsTrace.rawFrames_gasMeasure_le
 
 /-- Every frame of a body starts below one word of gas once the block gas limit does. -/
 theorem AppliedBodyTrace.rawFrames_gasMeasure_lt
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) (hlimit : benv.stat.blockGasLimit < 2 ^ 256) :
     ∀ root ∈ trace.rawFrames, root.devm.gasMeasure < 2 ^ 256 := by
   intro root member

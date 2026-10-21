@@ -323,14 +323,23 @@ theorem Rinst.balanceCore_noRevert (rules : ForkRules) (world : World)
   · exact h
   generalize (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
     else rules.gas.coldAccountAccess) = cost
-  have h' := Mach.chargeGas_noRevert cost m
-  rcases hc' : Mach.chargeGas cost m with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
-  · exact h'
-  have h'' := Mach.push_noRevert ((world.state.get x.toAdr).bal) m'
-  rcases hc'' : Mach.push ((world.state.get x.toAdr).bal) m' with
-    ⟨e'', m''⟩ | ⟨a'', m''⟩ <;> rw [hc''] at h'' <;> try dsimp only
-  · exact h''
-  · trivial
+  rcases hacc : rules.access with g | _ <;> dsimp only
+  · have h' := Mach.chargeGas_noRevert g.balance m
+    rcases hc' : Mach.chargeGas g.balance m with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+    · exact h'
+    have h'' := Mach.push_noRevert ((world.state.get x.toAdr).bal) m'
+    rcases hc'' : Mach.push ((world.state.get x.toAdr).bal) m' with
+      ⟨e'', m''⟩ | ⟨a'', m''⟩ <;> rw [hc''] at h'' <;> try dsimp only
+    · exact h''
+    · trivial
+  · have h' := Mach.chargeGas_noRevert cost m
+    rcases hc' : Mach.chargeGas cost m with ⟨e', m'⟩ | ⟨a', m'⟩ <;> rw [hc'] at h' <;> try dsimp only
+    · exact h'
+    have h'' := Mach.push_noRevert ((world.state.get x.toAdr).bal) m'
+    rcases hc'' : Mach.push ((world.state.get x.toAdr).bal) m' with
+      ⟨e'', m''⟩ | ⟨a'', m''⟩ <;> rw [hc''] at h'' <;> try dsimp only
+    · exact h''
+    · trivial
 
 theorem balance_noRevert (rules : ForkRules) (devm : Devm) :
     NoRevertOut (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
@@ -429,7 +438,12 @@ theorem processCreateMessage.chargeCodeGas_noRevert (rules : ForkRules)
   dsimp only
   split
   · split
-    · exact noRevertOut_halt _ _
+    · split
+      · exact noRevertOut_halt _ _
+      · refine noRevertOut_bind (chargeGas_noRevert _ _) fun _ => ?_
+        split
+        · exact noRevertOut_halt _ _
+        · trivial
     · refine noRevertOut_bind (chargeGas_noRevert _ _) fun _ => ?_
       split
       · exact noRevertOut_halt _ _
@@ -585,6 +599,11 @@ theorem Ninst.step_halt_noRevert {evm : Evm} {n : Ninst} {ex : Execution}
       rw [hx] at this; exact this
     | spawn f rsm => cases h
   · rw [Ninst.step_push] at h
+    split at h
+    · obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
+      refine ⟨p, rfl, ?_⟩
+      have := noRevertOut_halt (α := Devm) (.invalidOpcode .none) evm.dyna
+      rw [hx] at this; exact this
     obtain ⟨p, hx, rfl⟩ := Step.ofExecution_halt h
     refine ⟨p, rfl, ?_⟩
     have := noRevertOut_bind (chargeGas_noRevert
@@ -703,7 +722,9 @@ theorem pushAt_exact_revertOrOk {pc sevm pre xs exn}
     exact (hro.not_noRevert_error rfl hn).elim
   | cont h exc' =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push, ite_eq_right hne] at hs
+    rw [Ninst.step_push] at hs
+    split at hs
+    · cases Step.ofExecution_cont hs |>.2
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
     cases hpc
     rcases Devm.pushRun_exact hrun with ⟨hroom, hgas⟩
@@ -712,19 +733,19 @@ theorem pushAt_exact_revertOrOk {pc sevm pre xs exn}
   | doneErr h _ _ =>
     have hs := hstep.symm.trans h
     rw [Ninst.step_push] at hs
-    cases Step.ofExecution_ne_spawn hs
+    split at hs <;> cases Step.ofExecution_ne_spawn hs
   | doneOk h _ _ _ =>
     have hs := hstep.symm.trans h
     rw [Ninst.step_push] at hs
-    cases Step.ofExecution_ne_spawn hs
+    split at hs <;> cases Step.ofExecution_ne_spawn hs
   | runErr h _ _ _ =>
     have hs := hstep.symm.trans h
     rw [Ninst.step_push] at hs
-    cases Step.ofExecution_ne_spawn hs
+    split at hs <;> cases Step.ofExecution_ne_spawn hs
   | runOk h _ _ _ _ =>
     have hs := hstep.symm.trans h
     rw [Ninst.step_push] at hs
-    cases Step.ofExecution_ne_spawn hs
+    split at hs <;> cases Step.ofExecution_ne_spawn hs
 
 theorem jumpdest_at_exact_revertOrOk {pc sevm pre exn}
     (exc : Exec pc sevm pre exn) (hro : RevertOrOk exn)
