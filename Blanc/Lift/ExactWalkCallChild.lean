@@ -98,8 +98,13 @@ lemma Ninst.runCompiled_call_nonzero_child {sevm : Sevm} {devm : Devm}
       valueCallSpawnMsg, callMsg] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
+      change sevm.benvStat.rules.settle.touchedSweep = false
+      exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
-      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdi := accessDelegation_inv h_del
   have hpstack : p.stack.length < 1024 := by
     change d1.stack.length < 1024
@@ -204,8 +209,13 @@ lemma Ninst.runCompiled_call_zero_child {sevm : Sevm} {devm : Devm}
       valueCallSpawnMsg, callSpawnMsg, callMsg, Msg.withBenv] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
+      change sevm.benvStat.rules.settle.touchedSweep = false
+      exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
-      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdi := accessDelegation_inv h_del
   have hpstack : p.stack.length < 1024 := by
     change d1.stack.length < 1024
@@ -240,11 +250,12 @@ variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {f : SFunc} {
   {S : List B256} {M : Mem} {G : Nat}
 
 /-- `PUSH0` inside a cut run. -/
-theorem rxc_push0 {le : ([] : Bytes).length ≤ 32} (hroom : S.length < 1024)
+theorem rxc_push0 {le : ([] : Bytes).length ≤ 32}
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C (St b (0 :: S) M G) f r) :
     SFunc.RunExactCut fs sevm C (St b S M (G + 2)) (.next (.push [] le) f) r :=
   .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 2)) (c := gBase) (G := G)
-    rfl rfl hroom) k
+    rfl rfl hroom (fun _ => h_push0)) k
 
 /-- `CALLDATALOAD` inside a cut run. -/
 theorem rxc_calldataload {x : B256} (hroom : S.length < 1024)
