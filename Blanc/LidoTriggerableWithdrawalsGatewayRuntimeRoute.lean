@@ -276,6 +276,9 @@ private theorem runtimePrefix_dispatchFrame
         (Devm.push_of_push qloadPush))
   rcases of_run_reg qshr with ⟨_, qshrCore⟩
   simp only [Rinst.run, Rinst.runCore] at qshrCore
+  split at qshrCore
+  rotate_left
+  · cases qshrCore
   rcases Devm.diffBurn_of_applyBinary qshrCore with ⟨_, _, qshrDiff⟩
   exact (dispatchFrame_of_burnBy hburn).trans
     ((dispatchFrame_of_pushBurn (of_run_pushB256 qpush4)).trans
@@ -416,6 +419,9 @@ theorem dispatcher_body_of_prog_run_empty_frame
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
     simp only [Rinst.run, Rinst.runCore] at hr
+    split at hr
+    rotate_left
+    · cases hr
     rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
     exact ⟨x, y, hdiff.stack⟩
   have hafterSigStack : afterSig.stack = selector :: [] := by
@@ -734,6 +740,9 @@ theorem trigger_body_of_prog_run_empty_frame
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
     simp only [Rinst.run, Rinst.runCore] at hr
+    split at hr
+    rotate_left
+    · cases hr
     rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
     exact ⟨x, y, hdiff.stack⟩
   have hafterSigStack : afterSig.stack = selTriggerFullWithdrawals :: [] := by
@@ -828,6 +837,7 @@ theorem trigger_body_of_prog_run_empty_frame
     · exact hpopBurn.accountReads
     · exact hpopBurn.storageReads
     · exact hpopBurn.storageWrites
+    · exact hpopBurn.touchedAccounts
   have hprefixFrame : Devm.DispatchFramePreserved entry afterSig :=
     runtimePrefix_dispatchFrame hburn hguardRun hguardPop hsigFrame
   have hrouteFrame : Devm.DispatchFramePreserved afterSig bodyPre :=

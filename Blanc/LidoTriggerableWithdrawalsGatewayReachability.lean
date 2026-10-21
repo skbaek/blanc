@@ -651,6 +651,7 @@ theorem pauseOnlyRole_runCompiledTo
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   -- Outer hash walk (5 steps) over the abstract image.
+  have hpush0 : sevm.benvStat.rules.op.push0 = true := hfork.rules_push0
   func_run (5) [0, 42]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
@@ -716,6 +717,7 @@ the child's world and meta projections constructively. -/
 private theorem pauseEvent_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {memory : Mem}
     {duration : B256} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false)
     (hsize : memory.size = 64)
     (hread : (memory.read 0 32).1 = duration.toBytes) :
@@ -734,6 +736,7 @@ private theorem pauseEvent_exact_runCompiledTo
       (pushCost_of_ne_zero (by decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.RunCompiledTo.next
   · exact Ninst.runCompiled_pushB256
@@ -742,6 +745,7 @@ private theorem pauseEvent_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.RunCompiledTo.next
   · exact Ninst.runCompiled_pushB256
@@ -749,6 +753,7 @@ private theorem pauseEvent_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gBase])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.RunCompiledTo.next
@@ -780,6 +785,7 @@ private theorem pauseEvent_exact_runCompiledTo
 private theorem pauseFiniteLogTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {duration : B256} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (harg : Sevm.dataWord sevm 4 = duration)
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiledTo fs sevm
@@ -814,7 +820,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
     have h0 : ((0 : B256) * 32).toNat = 0 := by decide
     rw [Mem.size_write_word_at, hscratch64, h0]
     decide
-  have eventRun := pauseEvent_exact_runCompiledTo
+  have eventRun := pauseEvent_exact_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm) (base := base)
     (memory := (staged2.write
       ((0 : B256) * 32).toNat duration.toBytes))
@@ -822,6 +828,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
     hscratchread
   clear hlen hne hscratchread hscratchsize
   unfold arg cdl
+  have hpush0 : sevm.benvStat.rules.op.push0 = true := hfork.rules_push0
   func_run (2)
   rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
   apply Func.runCompiledTo_mstoreAt
@@ -832,6 +839,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
   · simp only [List.length_nil, Nat.ofNat_pos]
+  · exact fun _ => hfork.rules_push0
   · intro S G'
     have hscratch64 : staged2.size = 64 := by
       rw [← hstaged2]
@@ -901,7 +909,7 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
             ⟨[], (pauseAuthScratch sevm.caller.toB256).write
               ((0 : B256) * 32).toNat duration.toBytes, G, ((afterSstore sevm base resumeSinceSlot value).addLog ⟨sevm.currentTarget, [signatureHash "Paused" [.uint256]], duration.toBytes⟩).stateGas⟩)) := by
   generalize hstaged3 : (pauseAuthScratch sevm.caller.toB256) = staged3
-  have tailRun := pauseFiniteLogTail_exact_runCompiledTo
+  have tailRun := pauseFiniteLogTail_exact_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm)
     (base := afterSstore sevm base resumeSinceSlot value)
     (duration := duration) (G := G) harg hstatic
@@ -912,6 +920,7 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   rw [show G + 21025 = G + 1025 + 20000 from by omega]
   apply Func.RunCompiledTo.next
@@ -1209,6 +1218,7 @@ private theorem pauseForFirstDispatch_runCompiledTo
 private theorem fsig_prepend_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {selector : B256} {post : Devm} {G : Nat} {tail : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hselector : Sevm.selector sevm = selector)
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[selector], Mem.empty, G, base.stateGas⟩) tail (.ok post)) :
@@ -1225,6 +1235,7 @@ shared nonpayable gate (`19`), and the selected first entry (`25`). -/
 private theorem pauseForRuntimeMain_runCompiledTo
     {dp : DeployParams} {fs : List Func} {sevm : Sevm} {base : Devm}
     {post : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hguard : sevm.data.length.toB256 <? (4 : B256) = 0)
     (hselector : Sevm.selector sevm = selPauseFor)
     (hvalue : sevm.value = 0)
@@ -1243,7 +1254,7 @@ private theorem pauseForRuntimeMain_runCompiledTo
     (taken := Ninst.pop ::: triggerFullWithdrawals dp)
     (selector := selPauseFor) (other := selTriggerFullWithdrawals)
     (G := G + 25 + 19) (by decide +kernel) (by decide +kernel) hgate
-  have hsig := fsig_prepend_runCompiledTo
+  have hsig := fsig_prepend_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm) (base := base)
     (selector := selPauseFor) (G := G + 25 + 19 + 22)
     hselector htrigger
@@ -1290,7 +1301,7 @@ theorem pauseForFinite_runtime_runCompiledTo
     harg hresume horiginal hcoldResume hstatic hduration hfinite htime
   have pauseRun := pauseForFiniteBody_runCompiledTo
     (hsize := hsize) (hbody := authorizedRun)
-  have mainRun := pauseForRuntimeMain_runCompiledTo
+  have mainRun := pauseForRuntimeMain_runCompiledTo (hfork := hfork)
     (dp := dp) (fs := fs) (sevm := sevm) (base := base)
     (G := G + 25499) hguard hselector hvalue pauseRun
   refine Prog.runCompiledTo_intro
@@ -1364,6 +1375,7 @@ theorem pauseForFinite_exec
 
 private theorem pauseSentinelEventTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 1022, base.stateGas⟩)
@@ -1396,7 +1408,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
     have h0 : ((0 : B256) * 32).toNat = 0 := by decide
     rw [Mem.size_write_word_at, hscratch64, h0]
     decide
-  have eventRun := pauseEvent_exact_runCompiledTo
+  have eventRun := pauseEvent_exact_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm) (base := base)
     (memory := (staged9.write
       ((0 : B256) * 32).toNat pauseInfinitely.toBytes))
@@ -1409,6 +1421,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
       (pushCost_of_ne_zero (by decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.runCompiledTo_mstoreAt
       (memory := staged9) (stack := []) (value := pauseInfinitely)
@@ -1418,6 +1431,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
   · simp only [List.length_nil, Nat.ofNat_pos]
+  · exact fun _ => hfork.rules_push0
   · intro S G'
     have hscratch64 : staged9.size = 64 := by
       rw [← hstagedS]
@@ -1446,7 +1460,7 @@ private theorem pauseForSentinel_exact_runCompiledTo
         (pauseEvent sevm pauseInfinitely)).setMach
           ⟨[], (pauseAuthScratch sevm.caller.toB256).write
             ((0 : B256) * 32).toNat pauseInfinitely.toBytes, G, ((afterSstore sevm base resumeSinceSlot pauseInfinitely).addLog (pauseEvent sevm pauseInfinitely)).stateGas⟩)) := by
-  have eventRun := pauseSentinelEventTail_exact_runCompiledTo
+  have eventRun := pauseSentinelEventTail_exact_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm)
     (base := afterSstore sevm base resumeSinceSlot pauseInfinitely)
     (G := G) hstatic
@@ -1457,6 +1471,7 @@ private theorem pauseForSentinel_exact_runCompiledTo
       (pushCost_of_ne_zero (by decide +kernel))
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.RunCompiledTo.next
   · exact Ninst.runCompiled_pushB256
@@ -1465,6 +1480,7 @@ private theorem pauseForSentinel_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
+      (fun _ => hfork.rules_push0)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   rw [show G + 21022 = G + 1022 + 20000 from by omega]
   apply Func.RunCompiledTo.next
@@ -1638,7 +1654,7 @@ theorem pauseForSentinel_runtime_exact_runCompiledTo
     horiginal hcoldResume hstatic
   have pauseRun := pauseForFiniteBody_runCompiledTo
     (hsize := hsize) (hbody := authorizedRun)
-  have mainRun := pauseForRuntimeMain_runCompiledTo
+  have mainRun := pauseForRuntimeMain_runCompiledTo (hfork := hfork)
     (dp := dp) (fs := fs) (sevm := sevm) (base := base)
     (G := G + 25468) hguard hselector hvalue pauseRun
   refine Prog.runCompiledTo_intro
@@ -1783,6 +1799,7 @@ shared nonpayable gate (`19`), and the selected second entry (`47`). -/
 private theorem isPausedRuntimeMain_runCompiledTo
     {dp : DeployParams} {fs : List Func} {sevm : Sevm} {base : Devm}
     {post : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hguard : sevm.data.length.toB256 <? (4 : B256) = 0)
     (hselector : Sevm.selector sevm = selIsPaused)
     (hvalue : sevm.value = 0)
@@ -1801,7 +1818,7 @@ private theorem isPausedRuntimeMain_runCompiledTo
     (taken := Ninst.pop ::: triggerFullWithdrawals dp)
     (selector := selIsPaused) (other := selTriggerFullWithdrawals)
     (G := G + 47 + 19) (by decide +kernel) (by decide +kernel) hgate
-  have hsig := fsig_prepend_runCompiledTo
+  have hsig := fsig_prepend_runCompiledTo (hfork := hfork)
     (fs := fs) (sevm := sevm) (base := base)
     (selector := selIsPaused) (G := G + 47 + 19 + 22)
     hselector htrigger
@@ -1839,7 +1856,7 @@ theorem isPaused_true_warm_runtime_runCompiledTo
     isPaused_true_warm_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (storedUntil := storedUntil) (G := G) hstored hwarm hpaused
-  have mainRun := isPausedRuntimeMain_runCompiledTo
+  have mainRun := isPausedRuntimeMain_runCompiledTo (hfork := hfork)
     (dp := dp) (fs := fs) (sevm := sevm) (base := base)
     (G := G + 121) hguard hselector hvalue queryRun
   refine ⟨post, ?_, output, stored, gas, error, hmeta, world⟩
@@ -1973,7 +1990,7 @@ theorem isPaused_true_cold_runtime_runCompiledTo
     isPaused_true_cold_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (storedUntil := storedUntil) (G := G) hstored hcold hpaused
-  have mainRun := isPausedRuntimeMain_runCompiledTo
+  have mainRun := isPausedRuntimeMain_runCompiledTo (hfork := hfork)
     (dp := dp) (fs := fs) (sevm := sevm) (base := base)
     (G := G + 2121) hguard hselector hvalue queryRun
   refine ⟨post, ?_, output, stored, gas⟩
