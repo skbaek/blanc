@@ -1,4 +1,4 @@
-# Blanc: A Minimal EVM Programming Language for Interactive Verification
+# Blanc: EVM bytecode, verified in Lean 4
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
@@ -9,12 +9,21 @@ which premises; the Blanc language and its contracts; and what none of it claims
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.
 
-Blanc is an EVM programming language optimized for formal verification 
-with interactive theorem provers. Blanc's toolchain is implemented in Lean 4.
+Blanc proves theorems in Lean 4 about Ethereum bytecode as it is deployed —
+WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the EIP-7002
+system contract — against Jaune, an executable EVM semantics, with exact gas,
+liveness, and no axioms beyond Lean's three. The bytes are read from mainnet
+without trusting the compilers that produced them; what is claimed about each
+artifact, and where, is mapped in
+[`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
 
-Blanc compiles to deployable EVM bytecode, and several contracts here
-reimplement contracts that exist on mainnet. **A Blanc theorem is a statement
-about Jaune's modeled semantics, not a deployment audit** — see
+Blanc began as a programming language: the EVM's own instructions, arranged by
+four constructors, with a compiler whose correctness is a Lean theorem.
+Contracts written in it, several of them reimplementations of contracts that
+exist on mainnet, are verified over their compiled bytes
+([the language](https://skbaek.github.io/blanc/language.html)).
+**A Blanc theorem is a statement about Jaune's modeled semantics, not a
+deployment audit** — see
 [`SECURITY.md`](SECURITY.md) before treating any result here as a safety claim
 about anything on chain.
 

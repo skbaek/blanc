@@ -1,16 +1,21 @@
 # Security policy
 
-## Read this first: Blanc emits bytecode, and a Blanc proof is not a deployment audit
+## Read this first: a Blanc proof is not a deployment audit
 
-Blanc compiles contracts to EVM runtime bytecode, and several of the contracts
-in this repository are reimplementations of contracts that exist on mainnet.
-Neither fact makes anything here safe to deploy.
+Blanc proves properties of bytecode deployed on mainnet, and it compiles its
+own contracts to EVM runtime bytecode, several of them reimplementations of
+contracts that exist on mainnet. None of this makes anything here, or anything
+on chain, safe to deploy or to use.
 
-A Blanc theorem is a statement about **Jaune's modeled semantics** — that a
-program, compiled by Blanc's verified compiler, has a stated property when
-executed by Jaune's EVM. It is not a statement about the Ethereum network, and
+A Blanc theorem is a statement about **Jaune's modeled semantics** — that
+given bytecode, whether bytes read from mainnet or a Blanc program as Blanc's
+verified compiler emits it, has a stated property when executed by Jaune's EVM. It is not a statement about the Ethereum network, and
 it is not an audit. In particular:
 
+- **Lifted bytes are recorded provenance.** That the bytes a theorem is about
+  are the ones at a mainnet address is checked against separately operated
+  providers, not proved, and the theorem holds only under its stated
+  hypotheses.
 - **A port is not the original.** Where a Blanc contract reimplements a
   deployed one, it observably diverges from it. What a port does and does not
   claim is governed by [`PORTING.md`](PORTING.md), and every known divergence
