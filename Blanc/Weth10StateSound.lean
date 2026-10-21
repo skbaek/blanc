@@ -1456,6 +1456,8 @@ theorem backedPost_of_value_call
         rw [← h_eq]
         exact h_err2
       simp only [h_child_clean, Bool.false_eq_true] at this
+    rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+      hfork.rules_touchedSweep] at h_eq_child
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -4453,6 +4455,24 @@ theorem of_extcodesize_frame
   have htail : xs <<+ d0.stack :=
     of_append_pref hpop'.stack hp
   split at hrun
+  · split at hrun
+    · rcases Except.bind_eq_ok hrun with
+        ⟨d2, hgas, hpush⟩
+      refine ⟨_, append_pref (Devm.push_of_push hpush).stack ?_, ?_⟩
+      · rw [Devm.balReadAccount_stack, ← (Devm.burn_of_chargeGas hgas).stack]
+        exact htail
+      · exact hpop'.memory.trans
+          ((Devm.burn_of_chargeGas hgas).memory.trans
+            (Devm.push_of_push hpush).memory)
+    · rcases Except.bind_eq_ok hrun with
+        ⟨d2, hgas, hpush⟩
+      refine ⟨_, append_pref (Devm.push_of_push hpush).stack ?_, ?_⟩
+      · rw [Devm.balReadAccount_stack, ← (Devm.burn_of_chargeGas hgas).stack]
+        exact htail
+      · exact hpop'.memory.trans
+          ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
+            ((Devm.burn_of_chargeGas hgas).memory.trans
+              (Devm.push_of_push hpush).memory))
   · rcases Except.bind_eq_ok hrun with
       ⟨d2, hgas, hpush⟩
     refine ⟨_, append_pref (Devm.push_of_push hpush).stack ?_, ?_⟩
@@ -4461,15 +4481,6 @@ theorem of_extcodesize_frame
     · exact hpop'.memory.trans
         ((Devm.burn_of_chargeGas hgas).memory.trans
           (Devm.push_of_push hpush).memory)
-  · rcases Except.bind_eq_ok hrun with
-      ⟨d2, hgas, hpush⟩
-    refine ⟨_, append_pref (Devm.push_of_push hpush).stack ?_, ?_⟩
-    · rw [Devm.balReadAccount_stack, ← (Devm.burn_of_chargeGas hgas).stack]
-      exact htail
-    · exact hpop'.memory.trans
-        ((show d0.memory = (addAccessedAddress d0 x.toAdr).memory from rfl).trans
-          ((Devm.burn_of_chargeGas hgas).memory.trans
-            (Devm.push_of_push hpush).memory))
 
 /-- Stack-only projection of `of_extcodesize_frame`. -/
 theorem prefix_of_extcodesize
@@ -5796,11 +5807,9 @@ theorem flashExactSpecs_lift
     apply h_rel hfork flash
     cases n with
     | push xs le =>
-      rcases Except.bind_eq_ok (Step.run_ofExecution.mp h_run).2.symm with
-        ⟨devm1, h_charge, h_push⟩
-      exact h_pre.state_eq
-        (((Devm.burn_of_chargeGas h_charge).state).trans
-          ((Devm.push_of_push h_push).state)).symm
+      have frame := Ninst.push_instructionFrame_effectRec
+        (xl := .none) trivial h_run
+      exact h_pre.state_eq frame.state.symm
     | dupn imm =>
       have frame := Ninst.dupn_instructionFrame_effectRec
         (xl := .none) trivial h_run
@@ -5837,7 +5846,8 @@ theorem flashExactSpecs_lift
       h_ne h_child h_rel hfork flash h_pre
     cases n with
     | push xs le =>
-      cases (Step.run_ofExecution.mp h_run).1
+      simp only [Ninst.StepRun, Ninst.step_push] at h_run
+      split at h_run <;> cases (Step.run_ofExecution.mp h_run).1
     | dupn imm =>
       cases (Step.run_ofExecution.mp h_run).1
     | swapn imm =>
@@ -5939,6 +5949,8 @@ theorem flashExactRel_of_value_call
         rw [← h_eq]
         exact h_err2
       simp only [h_child_clean, Bool.false_eq_true] at this
+    rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+      hfork.rules_touchedSweep] at h_eq_child
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
@@ -6090,6 +6102,8 @@ theorem backedPost_of_static_call
         rw [← h_eq]
         exact h_err2
       simp only [h_child_clean, Bool.false_eq_true] at this
+    rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+      hfork.rules_touchedSweep] at h_eq_child
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -6222,6 +6236,8 @@ theorem flashExactRel_of_static_call
         rw [← h_eq]
         exact h_err2
       simp only [h_child_clean, Bool.false_eq_true] at this
+    rw [Devm.recordTouch_of_not_touchedSweep (rules := childMsg.benv.stat.rules)
+      hfork.rules_touchedSweep] at h_eq_child
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
@@ -6341,7 +6357,9 @@ private lemma permit_prefix_of_chainid
     e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
   rcases of_run_reg run with ⟨pc, hrun⟩
   simp only [Rinst.run, Rinst.runCore] at hrun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem hrun) hp
+  split at hrun
+  · exact prefix_of_push (Devm.pushBurn_of_pushItem hrun) hp
+  · cases hrun
 
 /-- The nonce prefix isolated from `permit`.  Keeping this local to the state
 proof avoids making the authentication-oriented permit module an upstream

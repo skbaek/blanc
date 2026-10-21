@@ -103,7 +103,7 @@ theorem stateTransitionUsing_preserves_stable
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : Stable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     Stable dp ca ch'.state :=
   Stable.ofStateInvs
     (ContractSpec.stateTransitionUsing_preserves_inv ca
@@ -119,7 +119,7 @@ theorem chainUsing_preserves_stable
     (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : Stable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     Stable dp ca ch'.state :=
   Stable.ofStateInvs
     (ContractSpec.chainUsing_preserves_inv ca
@@ -137,7 +137,7 @@ theorem addBlockToChainUsing_preserves_stable
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_inv : Stable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     Stable dp ca ch'.state :=
   Stable.ofStateInvs
     (ContractSpec.addBlockToChainUsing_preserves_inv ca
@@ -163,7 +163,7 @@ theorem chain_reachable_backed_and_flash_zero
     (ch ch' : BlockChain)
     (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : Stable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat := by
   have h := chainUsing_preserves_stable dp ca cfg ch ch' h_reach h_inv hcov

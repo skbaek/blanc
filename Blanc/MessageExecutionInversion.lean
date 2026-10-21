@@ -42,7 +42,7 @@ theorem processMessage_clean_rawPost
             simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
               processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, errorEq,
               Option.isSome_none, Except.ok.injEq] at settleEq
-            exact congrArg Devm.output settleEq
+            rw [settleEq, Devm.recordTouch_output]
 
 /-- Entry facts of a retained code frame that do not depend on the entry
 transfer preserving any storage: frame-entry program counter, code, addresses,

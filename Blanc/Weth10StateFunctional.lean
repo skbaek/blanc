@@ -535,9 +535,11 @@ private lemma sload_logs {e : Sevm} {s s' : Devm}
           .ok s' →
       s1.logs = s'.logs by
     split at run1
-    · exact H s1 gasWarmAccess rfl run1
-    · exact H (addAccessedStorageKey s1 e.currentTarget key)
-        gasColdSload rfl run1
+    · split at run1
+      · exact H s1 gasWarmAccess rfl run1
+      · exact H (addAccessedStorageKey s1 e.currentTarget key)
+          gasColdSload rfl run1
+    · exact H s1 _ rfl run1
   intro d c hlogs run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
   exact ((hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
@@ -560,9 +562,11 @@ private lemma sload_output {e : Sevm} {s s' : Devm}
           .ok s' →
       s1.output = s'.output by
     split at run1
-    · exact H s1 gasWarmAccess rfl run1
-    · exact H (addAccessedStorageKey s1 e.currentTarget key)
-        gasColdSload rfl run1
+    · split at run1
+      · exact H s1 gasWarmAccess rfl run1
+      · exact H (addAccessedStorageKey s1 e.currentTarget key)
+          gasColdSload rfl run1
+    · exact H s1 _ rfl run1
   intro d c houtput run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
   exact ((houtput.trans (Devm.burn_of_chargeGas h2).output).trans

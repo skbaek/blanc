@@ -349,10 +349,11 @@ private theorem initEvm_exec_weth10_zero
     {msg : Msg}
     (h_value : msg.value = 0)
     (h_gas : 1471 ≤ msg.gas)
-    (h_code : msg.code.toList = weth10InitCode) :
+    (h_code : msg.code.toList = weth10InitCode)
+    (hfork : CoveredFork msg.benv.stat.fork) :
     exec (initEvm msg) =
       .ok (weth10InitPost (initSevm msg) (initDevm msg) msg.gas) :=
-  weth10Init_exec_zero (sevm := initSevm msg) (base := initDevm msg)
+  weth10Init_exec_zero (hfork := hfork) (sevm := initSevm msg) (base := initDevm msg)
     (g := msg.gas) h_value h_gas h_code
 
 private theorem chargeCodeGas_weth10_output
@@ -429,7 +430,7 @@ private structure Weth10InitCheckpoint
   logs : initPost.logs = []
   error : initPost.error = .none
   refundCounter : initPost.refundCounter = 0
-  accountsToDelete : initPost.accountsToDelete = .emptyWithCapacity
+  accountsToDelete : initPost.accountsToDelete = msg.inheritedDeletions
   gas : initPost.gasLeft = msg.gas - 1471
 
 private theorem processMessage_weth10_checkpoint
@@ -451,12 +452,15 @@ private theorem processMessage_weth10_checkpoint
       benv.stat = prepared.benv.stat :=
         benvAfterTransfer_stat h_transfer
       _ = msg.benv.stat := by rfl
+  have hseedFork : CoveredFork benv.stat.fork := by
+    rw [h_stat]
+    exact hfork
   have h_seed_value : seeded.value = 0 := h_value
   have h_seed_code : seeded.code.toList = weth10InitCode := h_code
   have h_seed_ca : seeded.codeAddress = .none := h_codeAddress
   have h_seed_gas : seeded.gas = msg.gas := rfl
   have h_exec : exec (initEvm seeded) = .ok initPost := by
-    apply initEvm_exec_weth10_zero h_seed_value
+    apply initEvm_exec_weth10_zero (hfork := hseedFork) h_seed_value
     · rw [h_seed_gas]
       exact h_gas
     · exact h_seed_code
@@ -470,6 +474,7 @@ private theorem processMessage_weth10_checkpoint
   have h_pm : processMessage prepared = .ok initPost := by
     apply processMessage_ok_of_exec h_transfer h_seed_ca h_exec
       h_init_error
+      (hfork.cases (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl)
   have h_output :
       initPost.output =
         weth10Code (freshDeployParams
@@ -506,7 +511,7 @@ private theorem processMessage_weth10_checkpoint
       | none => []
       | some _ => _) = []
     rw [h_seed_rules]
-  · exact (weth10InitFunc_runCompiled_zero
+  · exact (weth10InitFunc_runCompiled_zero (hfork := hseedFork)
       (sevm := initSevm seeded) (base := initDevm seeded) (g := msg.gas)
       h_seed_value h_gas).2
 
@@ -520,7 +525,7 @@ private structure Weth10ChargeCheckpoint
   logs : charged.logs = []
   error : charged.error = .none
   refundCounter : charged.refundCounter = 0
-  accountsToDelete : charged.accountsToDelete = .emptyWithCapacity
+  accountsToDelete : charged.accountsToDelete = msg.inheritedDeletions
   gas : charged.gasLeft = msg.gas - 1264071
 
 private theorem processCreateMessage_weth10_charge_checkpoint
@@ -575,7 +580,7 @@ private theorem weth10InstalledPost_certificate
     (h_logs : charged.logs = [])
     (h_error : charged.error = .none)
     (h_refund : charged.refundCounter = 0)
-    (h_delete : charged.accountsToDelete = .emptyWithCapacity)
+    (h_delete : charged.accountsToDelete = msg.inheritedDeletions)
     (h_gas : charged.gasLeft = msg.gas - 1264071) :
     ∃ post,
       processCreateMessage msg = .ok post ∧
@@ -587,7 +592,7 @@ private theorem weth10InstalledPost_certificate
       post.gasLeft = msg.gas - 1264071 ∧
       post.error = .none ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = .emptyWithCapacity := by
+      post.accountsToDelete = msg.inheritedDeletions := by
   have h_code_nonempty : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
     change charged.output.length ≠ 0
     rw [h_output, weth10Code_length]
@@ -643,7 +648,7 @@ private theorem processCreateMessage_weth10_success_raw
       post.gasLeft = msg.gas - 1264071 ∧
       post.error = .none ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = .emptyWithCapacity := by
+      post.accountsToDelete = msg.inheritedDeletions := by
   let dp :=
     freshDeployParams msg.benv.stat.chainId.toB256 msg.currentTarget
   obtain ⟨initPost, init⟩ :=
@@ -716,7 +721,7 @@ theorem processCreateMessage_weth10_success_full
       post.gasLeft = msg.gas - weth10CreateMessageGasAccounting ∧
       post.error = .none ∧
       post.refundCounter = 0 ∧
-      post.accountsToDelete = .emptyWithCapacity := by
+      post.accountsToDelete = msg.inheritedDeletions := by
   have h_gas' : 1264071 ≤ msg.gas := by
     rw [← weth10CreateMessageGasAccounting_eq]
     exact h_gas
