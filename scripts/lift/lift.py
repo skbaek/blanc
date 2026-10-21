@@ -385,6 +385,8 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-parts", str(check["parts"])]
                 if check.get("literal_tries") is True:
                     argv.append("--check-literal-tries")
+                if "rest_parts" in check:
+                    argv += ["--check-rest-parts", str(check["rest_parts"])]
                 if check.get("assembly") in ("seven", "two", "chain"):
                     argv += ["--check-assembly", check["assembly"]]
             jumps = row.get("jumps")
@@ -411,11 +413,13 @@ def run_registry(args: argparse.Namespace) -> int:
                 if "parts" in check:
                     # split memory-mode Check: CheckTries and CheckPart<i> beside Check.lean
                     check_dir = (root / check["path"]).parent
+                    # (and, with check.rest_parts, the chain-tail modules CheckRest<j>)
                     produced_parts = sorted(out.glob("CheckTries.lean")) + sorted(
-                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):]))
+                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):])) + sorted(
+                        out.glob("CheckRest*.lean"), key=lambda q: int(q.stem[len("CheckRest"):]))
                     pairs += [(q, check_dir / q.name) for q in produced_parts]
                     names = {q.name for q in produced_parts}
-                    for extra in sorted(check_dir.glob("CheckPart*.lean")):
+                    for extra in sorted(check_dir.glob("CheckPart*.lean")) + sorted(check_dir.glob("CheckRest*.lean")):
                         if extra.name not in names:
                             print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
                             failures += 1
@@ -520,6 +524,8 @@ parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
 parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
+parser.add_argument("--check-rest-parts", type=int, default=0,
+                    help="memory-mode split Check: move the tail of the rest_/jrest_ assembly chain into CheckRest1..CheckRest{K-1}, cut at CheckPart boundaries, so Check keeps only the head of the chain and cert_checkM/cert_jumpsOkM (K >= 2; registry check.rest_parts); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
 parser.add_argument("--check-assembly", choices=("seven", "two", "chain"), default=None,
@@ -597,6 +603,10 @@ if args.hex is None or args.sha256 is None or args.namespace is None or args.cer
 
 if args.jumps_out is not None and (args.check_out is None or MEMRET):
     parser.error("regular jumps mode needs --check-out and --memret off")
+
+if args.check_rest_parts != 0 and (args.check_rest_parts < 2 or args.check_parts < args.check_rest_parts
+                                   or not MEMRET or args.check_out is None):
+    parser.error("--check-rest-parts K needs K >= 2, --check-out, --memret and --check-parts N >= K")
 
 # 1. Load bytecode
 code_hex = args.hex.read_text().strip()
@@ -2721,11 +2731,15 @@ def check_source() -> Any:
     return files if args.check_parts >= 2 else files["Check"]
 
 
-def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -> Dict[str, str]:
+def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
+                rest: Optional[List[Tuple[int, int, List[str]]]] = None) -> Dict[str, str]:
     """The generated Check as files by name.  With `--check-parts N >= 2` (registry
     `check.parts`): `CheckTries` (the code tries), `CheckPart0`..`CheckPart{N-1}` (contiguous
     ranges of the per-entry decisions, which build in parallel) and `Check` (imports the parts
-    and holds the assembly); otherwise one `Check`."""
+    and holds the assembly); otherwise one `Check`.  With `rest` (`--check-rest-parts`, memory
+    mode only), each `(lo, hi, lines)` becomes `CheckRest<j>`: the chain-tail theorems over
+    entries lo..hi-1, importing the parts of that range and the next `CheckRest`; `Check`
+    then imports only the parts below the first cut and `CheckRest1`."""
     ns = args.namespace
     lines = list(head)
     files: Dict[str, str] = {}
@@ -2751,10 +2765,28 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -
                 body += blocks[i]
             body += [f"end {ns}", ""]
             files[f"CheckPart{p}"] = "\n".join(body)
-        lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
-                 [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
-                            "Assembles the per-entry decisions of the CheckPart modules.")
-                  for l in preamble])
+        if rest:
+            for j, (lo, hi, rest_lines) in enumerate(rest, start=1):
+                body = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)
+                         if lo <= bounds[p] < hi] +
+                        ([f"import {ns}.CheckRest{j + 1}"] if j < len(rest) else []) +
+                        [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                                   f"Entries {lo}..{hi - 1}: the tail of the assembly chain over the CheckPart decisions.")
+                         for l in preamble])
+                body += rest_lines
+                body.extend(["", f"end {ns}", ""])
+                files[f"CheckRest{j}"] = "\n".join(body)
+            first = rest[0][0]
+            lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1) if bounds[p] < first] +
+                     [f"import {ns}.CheckRest1"] +
+                     [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                                "Assembles the per-entry decisions of the CheckPart modules.")
+                      for l in preamble])
+        else:
+            lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
+                     [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                                "Assembles the per-entry decisions of the CheckPart modules.")
+                      for l in preamble])
     else:
         for b in blocks:
             lines += b
@@ -2859,7 +2891,7 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
                 projection = ".2" * pos + (".1" if pos + 1 < len(indices) else "")
                 blocks[i] += entry_decisions_mem(i, f"jumps_batch_{start}{projection}")
     # Chain over the certificate's tails: each step is syntactic in its premises.
-    assembly = [
+    chain_end = [
         f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
         "  decide +kernel",
         "",
@@ -2867,8 +2899,9 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
         "  decide +kernel",
         "",
     ]
+    steps: Dict[int, List[str]] = {}
     for i in reversed(range(n)):
-        assembly.extend([
+        steps[i] = ([
             f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
             f"  Cert.checkEntriesM_drop cert {i} (by decide +kernel) entry_{i} rest_{i + 1}",
             "",
@@ -2876,7 +2909,7 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
             f"  Cert.jumpsEntriesM_drop cert {i} (by decide +kernel) jumps_{i} jrest_{i + 1}",
             "",
         ])
-    assembly.extend([
+    final = ([
         "theorem cert_checkM : Cert.checkM code cert mems true = true := by",
         "  unfold Cert.checkM",
         "  rw [Bool.and_eq_true, Bool.and_eq_true]",
@@ -2884,7 +2917,27 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
         "",
         "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
     ])
-    files = split_check(lines, blocks, assembly)
+    rest: Optional[List[Tuple[int, int, List[str]]]] = None
+    if args.check_rest_parts >= 2:
+        # Cut the chain at CheckPart boundaries nearest equal entry counts (the chain's
+        # text is linear in the entries); Check keeps the head [0, cuts[1]).
+        cuts = [0]
+        for j in range(1, args.check_rest_parts):
+            target = n * j / args.check_rest_parts
+            cut = min((b for b in bounds[1:-1] if b > cuts[-1]), key=lambda b: abs(b - target))
+            cuts.append(cut)
+        cuts.append(n)
+        rest = []
+        for j in range(1, len(cuts) - 1):
+            lo, hi = cuts[j], cuts[j + 1]
+            seg = list(chain_end) if hi == n else []
+            for i in reversed(range(lo, hi)):
+                seg += steps[i]
+            rest.append((lo, hi, seg))
+        assembly = [l for i in reversed(range(cuts[1])) for l in steps[i]] + final
+    else:
+        assembly = chain_end + [l for i in reversed(range(n)) for l in steps[i]] + final
+    files = split_check(lines, blocks, assembly, rest)
     for name in files:
         if "  kernel_rfl_and" in files[name]:
             files[name] = "import Blanc.Lift.KernelBatch\n" + files[name]
