@@ -173,7 +173,7 @@ theorem body_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
           ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
           (Sevm.dataWord sevm 0)) + 2 by omega]
-  refine rx_push0 (fs := fs) (sevm := sevm)
+  refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (fs := fs) (sevm := sevm)
     (b := afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
     (M := M)
     (G := G + 13 + sstoreCost sevm

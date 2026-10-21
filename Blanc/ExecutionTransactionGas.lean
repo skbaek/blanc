@@ -103,7 +103,8 @@ theorem TransactionTrace.exists_gasSettlement
     exact trace.validation
   obtain ⟨refund, refundEq, _⟩ := trace.exists_finalStateForm fork
   obtain ⟨settled, result, cumulative, block⟩ :=
-    processTransaction_of_stages_gasUsed stateGas fork.rules_bal_none validation trace.checked
+    processTransaction_of_stages_gasUsed stateGas fork.rules_bal_none
+      fork.rules_touchedSweep fork.rules_refundQuotient validation trace.checked
       trace.debit trace.prepared trace.message.result refundEq
   have output := (Prod.mk.inj (Except.ok.inj (trace.result.symm.trans result))).2
   subst settled

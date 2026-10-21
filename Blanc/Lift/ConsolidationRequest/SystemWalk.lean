@@ -177,14 +177,14 @@ theorem tail_run {sevm : Sevm} {b : Devm} {G : Nat}
   rw [gasEq]
   unfold t_018e_c4
   apply rx_dest
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_sstore hfork (by omega) hstatic
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := (1 : B256)) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_sstore hfork (by omega) hstatic
   apply rx_push (w := (0x74 : B256)) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_mul hmul (by simp only [List.length_nil]; decide)
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   exact terminal
 
 /-- The no-excess branch: read slot 1, find nothing pending, jump to the tail. -/
@@ -229,7 +229,7 @@ theorem noexcess_run {sevm : Sevm} {b : Devm} {G : Nat} {s0 : B256}
   unfold t_0181_c3
   apply rx_pop
   apply rx_pop
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := (0x18e : B256)) (by decide)
     (by simp only [List.length_cons, List.length_nil]; decide)
   refine rx_jump prog_4 ?_
@@ -268,7 +268,7 @@ theorem excessread_run {sevm : Sevm} {b : Devm} {G : Nat}
   rw [gasEq]
   unfold t_0146_c2
   apply rx_dest
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_sload_sel hfork
     (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
@@ -344,11 +344,11 @@ theorem ptr_run {sevm : Sevm} {b : Devm} {G : Nat} {q s2 s3 : B256}
   apply rx_dest
   apply rx_swap1
   apply rx_pop
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := (2 : B256)) (by decide)
     (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_sstore hfork (by omega) hstatic
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := (3 : B256)) (by decide)
     (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_sstore hfork (by omega) hstatic
@@ -397,7 +397,7 @@ theorem exit_run {sevm : Sevm} {b : Devm} {G : Nat} {d s2 s3 : B256}
   rw [gasEq]
   unfold t_00e7_c1
   apply rx_dest
-  apply rx_push0 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; decide)
   unfold t_00e9_c1
   apply rx_dest
   apply rx_dup2 (by simp only [List.length_cons, List.length_nil]; decide)

@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.SystemSetup
 import Blanc.Lift.WithdrawalRequest.SystemMemory
 import Blanc.Lift.ExactWalkOps
+import Blanc.Lift.ExactMustRun
 
 /-! # The certified queue body's decreasing-offset amount stores -/
 
@@ -445,6 +446,7 @@ def systemBodyAmountGas (index packed : B256) (memory : Mem) : Nat :=
 
 private theorem systemBody_amount_prep_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (next : SFunc.RunExact prog sevm
       (St base [systemRecordAmountOffset index, packed >>> 64, index, count, head, tail] memory gas)
       systemBodyByte7Tree out) :
@@ -458,11 +460,12 @@ private theorem systemBody_amount_prep_exact {sevm : Sevm} {base : Devm}
   apply rx_add' (v := systemRecordAmountOffset index) rfl (by change 5 < 1024; decide)
   apply rx_swap1
   apply rx_push rfl (by change 6 < 1024; decide)
-  apply rx_shr (v := packed >>> 64) rfl (by change 5 < 1024; decide)
+  apply rx_shr (v := packed >>> 64) rfl h_shifts (by change 5 < 1024; decide)
   exact rx_swap1 next
 
 private theorem systemBody_byte7_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (7 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -477,7 +480,7 @@ private theorem systemBody_byte7_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte6Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 56) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 56) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 7 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -485,6 +488,7 @@ private theorem systemBody_byte7_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte6_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (6 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -499,7 +503,7 @@ private theorem systemBody_byte6_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte5Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 48) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 48) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 6 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -507,6 +511,7 @@ private theorem systemBody_byte6_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte5_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (5 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -521,7 +526,7 @@ private theorem systemBody_byte5_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte4Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 40) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 40) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 5 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -529,6 +534,7 @@ private theorem systemBody_byte5_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte4_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (4 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -543,7 +549,7 @@ private theorem systemBody_byte4_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte3Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 32) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 32) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 4 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -551,6 +557,7 @@ private theorem systemBody_byte4_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte3_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (3 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -565,7 +572,7 @@ private theorem systemBody_byte3_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte2Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 24) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 24) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 3 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -573,6 +580,7 @@ private theorem systemBody_byte3_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte2_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (2 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -587,7 +595,7 @@ private theorem systemBody_byte2_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte1Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 16) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 16) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 2 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -595,6 +603,7 @@ private theorem systemBody_byte2_exact {sevm : Sevm} {base : Devm}
 
 private theorem systemBody_byte1_exact {sevm : Sevm} {base : Devm}
     {memory : Mem} {gas c : Nat} {index count head tail packed : B256} {out : Outcome}
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (charge : gVerylow +
       (calculateMemoryGasCost (memExtSize memory.size (1 + systemRecordAmountOffset index).toNat 1)
         - calculateMemoryGasCost memory.size) = c)
@@ -609,7 +618,7 @@ private theorem systemBody_byte1_exact {sevm : Sevm} {base : Devm}
   rw [gasEq, systemBodyByte0Tree_split]
   apply rx_dup2 (by change 6 < 1024; decide)
   apply rx_push rfl (by change 7 < 1024; decide)
-  apply rx_shr (v := (packed >>> 64) >>> 8) rfl (by change 6 < 1024; decide)
+  apply rx_shr (v := (packed >>> 64) >>> 8) rfl h_shifts (by change 6 < 1024; decide)
   apply rx_dup2 (by change 7 < 1024; decide)
   apply rx_push rfl (by change 8 < 1024; decide)
   apply rx_add' (v := 1 + systemRecordAmountOffset index) rfl (by change 7 < 1024; decide)
@@ -639,6 +648,7 @@ private theorem systemBody_byte0_exact {sevm : Sevm} {base : Devm}
 /-- A next-header continuation constructs the actual amount suffix with exact gas. -/
 theorem systemBody_amount_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
     {index count head tail packed : B256} {out : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
     (next : SFunc.RunExact prog sevm
       (St base [1 + index, count, head, tail]
         ((systemRecordAmountStage index packed).applyMemory memory) gas) t_00e1_c6 out) :
@@ -664,36 +674,36 @@ theorem systemBody_amount_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas 
     (memory := m7)
     (c := systemRecordAmountCharge index packed memory 7)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) next
-  have tail := systemBody_byte1_exact (packed := packed)
+  have tail := systemBody_byte1_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m6)
     (c := systemRecordAmountCharge index packed memory 6)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte2_exact (packed := packed)
+  have tail := systemBody_byte2_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m5)
     (c := systemRecordAmountCharge index packed memory 5)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte3_exact (packed := packed)
+  have tail := systemBody_byte3_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m4)
     (c := systemRecordAmountCharge index packed memory 4)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte4_exact (packed := packed)
+  have tail := systemBody_byte4_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m3)
     (c := systemRecordAmountCharge index packed memory 3)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte5_exact (packed := packed)
+  have tail := systemBody_byte5_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m2)
     (c := systemRecordAmountCharge index packed memory 2)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte6_exact (packed := packed)
+  have tail := systemBody_byte6_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := m1)
     (c := systemRecordAmountCharge index packed memory 1)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_succ, List.getElem?_cons_zero, List.length_cons, List.length_nil, List.take_succ_cons, List.take_zero, MemoryStage.applyMemory_cons, MemoryStage.applyMemory_nil]; rfl) tail
-  have tail := systemBody_byte7_exact (packed := packed)
+  have tail := systemBody_byte7_exact (packed := packed) (h_shifts := fork.rules_shifts)
     (memory := memory)
     (c := systemRecordAmountCharge index packed memory 0)
     (by simp only [systemRecordAmountCharge, systemRecordAmountStage, List.getElem?_cons_zero,
       List.length_cons, List.length_nil, List.take_zero, MemoryStage.applyMemory_nil]) tail
-  have ready := systemBody_amount_prep_exact (packed := packed) tail
+  have ready := systemBody_amount_prep_exact (packed := packed) (h_shifts := fork.rules_shifts) tail
   have gasEq : gas + systemBodyAmountGas index packed memory =
       gas + 17 + systemRecordAmountCharge index packed memory 7
       + systemRecordAmountCharge index packed memory 6 + 18

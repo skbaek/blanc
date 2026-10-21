@@ -54,6 +54,33 @@ lemma BenvStat.gas_eq_prague_of_covered {s : BenvStat}
   exact h.cases (motive := fun f => (Fork.ruleSet f).gas = pragueRules.gas)
     rfl rfl rfl rfl
 
+/-- Covered forks add no code-read surcharge to `EXTCODESIZE`/`EXTCODECOPY`. -/
+lemma CoveredFork.rules_codeReadSurcharge {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.gas.codeReadSurcharge = 0 :=
+  (congrArg GasSchedule.codeReadSurcharge (BenvStat.gas_eq_prague_of_covered h)).trans
+    pragueRules_gas_codeReadSurcharge
+
+/-- Every covered fork selects the EIP-1153 transient-storage opcodes. -/
+lemma CoveredFork.rules_transient {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.op.transient = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).op.transient = true) rfl rfl rfl rfl
+
+/-- Every covered fork selects EIP-1344 `CHAINID`. -/
+lemma CoveredFork.rules_chainId {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.op.chainId = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).op.chainId = true) rfl rfl rfl rfl
+
+/-- Every covered fork selects EIP-3198 `BASEFEE`. -/
+lemma CoveredFork.rules_baseFee {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.op.baseFee = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).op.baseFee = true) rfl rfl rfl rfl
+
+/-- Covered forks price a cold account access at `gasColdAccountAccess`. -/
+lemma CoveredFork.rules_coldAccountAccess {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.gas.coldAccountAccess = gasColdAccountAccess :=
+  (congrArg GasSchedule.coldAccountAccess (BenvStat.gas_eq_prague_of_covered h)).trans
+    pragueRules_gas_coldAccountAccess
+
 /-- `Devm.popToNat`, evaluated forward: `Devm.pop` with the popped word read
 as a `Nat`. -/
 lemma Devm.popToNat_eq_ok {x : B256} {s : List B256} {devm : Devm}
@@ -126,6 +153,16 @@ lemma pushCost_zero : pushCost ((0 : B256).toBytes.sig) = gBase := rfl
 lemma B256.toBytes_sig_ne_nil {w : B256} (h : w ≠ 0) : w.toBytes.sig ≠ [] := by
   intro h_nil
   exact h (by rw [← B256.toB256_toBytes w, ← Bytes.toB256_sig, h_nil]; rfl)
+
+/-- A `PUSH` priced at `gVerylow` carries an immediate, so its `PUSH0`
+availability guard is vacuous: the guard's premise `xs = []` would price it at
+`gBase`. -/
+lemma push0_guard_of_pushCost_verylow {xs : Bytes} {P : Prop}
+    (h : pushCost xs = gVerylow) : xs = [] → P := by
+  intro h_nil
+  subst h_nil
+  simp only [pushCost, ↓reduceIte, gBase, gVerylow] at h
+  omega
 
 /-- Every other `Ninst.pushB256` carries an immediate and costs `gVerylow`.
 Proved from `Bytes.toB256_sig`, so it needs no computation on `w` — an
@@ -1191,6 +1228,20 @@ lemma Rinst.runCore_sar_of_shifts {devm : Devm} {sevm : Sevm}
     (h : sevm.benvStat.rules.op.shifts = true) :
     Rinst.runCore 0 devm sevm .sar =
       applyBinary (fun x y => B256.arithShiftRight y x.toNat) gVerylow devm := by
+  simp only [Rinst.runCore, h, ↓reduceIte]
+
+/-- `CHAINID` pushes the chain id under rules that select EIP-1344. -/
+lemma Rinst.runCore_chainid_of_chainId {devm : Devm} {sevm : Sevm}
+    (h : sevm.benvStat.rules.op.chainId = true) :
+    Rinst.runCore 0 devm sevm .chainid =
+      pushItem sevm.benvStat.chainId.toB256 gBase devm := by
+  simp only [Rinst.runCore, h, ↓reduceIte]
+
+/-- `BASEFEE` pushes the base fee under rules that select EIP-3198. -/
+lemma Rinst.runCore_basefee_of_baseFee {devm : Devm} {sevm : Sevm}
+    (h : sevm.benvStat.rules.op.baseFee = true) :
+    Rinst.runCore 0 devm sevm .basefee =
+      pushItem sevm.benvStat.baseFeePerGas.toB256 gBase devm := by
   simp only [Rinst.runCore, h, ↓reduceIte]
 
 /-- A unary register opcode: `NOT`, `ISZERO`, … -/
@@ -2760,6 +2811,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
   let push0 ← `(tactic|
     first
     | assumption
+    | intro _; assumption
     | intro empty; exact CoveredFork.rules_push0 (by assumption)
     | intro empty; rfl
     | intro empty; exact absurd empty (List.cons_ne_nil _ _)
@@ -3401,14 +3453,25 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       -- EIP-145 shifts are guarded by the selected rules; their binary
       -- evaluation is a rule premised on that selection, discharged from a
       -- local fact or from fork coverage, never evaluated through the guard.
-      let shift? : Option Name := match r'.getAppFnArgs with
-        | (``Jaune.Rinst.shl, #[]) => some ``Blanc.Rinst.runCore_shl_of_shifts
-        | (``Jaune.Rinst.shr, #[]) => some ``Blanc.Rinst.runCore_shr_of_shifts
-        | (``Jaune.Rinst.sar, #[]) => some ``Blanc.Rinst.runCore_sar_of_shifts
+      -- `CHAINID` and `BASEFEE` are guarded the same way, by their own flags.
+      let shift? : Option (Name × Name) := match r'.getAppFnArgs with
+        | (``Jaune.Rinst.shl, #[]) =>
+          some (``Blanc.Rinst.runCore_shl_of_shifts, ``Blanc.CoveredFork.rules_shifts)
+        | (``Jaune.Rinst.shr, #[]) =>
+          some (``Blanc.Rinst.runCore_shr_of_shifts, ``Blanc.CoveredFork.rules_shifts)
+        | (``Jaune.Rinst.sar, #[]) =>
+          some (``Blanc.Rinst.runCore_sar_of_shifts, ``Blanc.CoveredFork.rules_shifts)
+        | (``Jaune.Rinst.chainid, #[]) =>
+          some (``Blanc.Rinst.runCore_chainid_of_chainId, ``Blanc.CoveredFork.rules_chainId)
+        | (``Jaune.Rinst.basefee, #[]) =>
+          some (``Blanc.Rinst.runCore_basefee_of_baseFee, ``Blanc.CoveredFork.rules_baseFee)
         | _ => none
       let core ← match shift? with
-        | some lem => do
-          let e ← mkAppOptM lem #[some d, some sevm, none]
+        | some (lem, _) => do
+          -- The selected-shift premise is left as a hole: only the
+          -- rule's right-hand side is read here.
+          let h ← mkFreshExprMVar none
+          let e := mkAppN (mkConst lem) #[d, sevm, h]
           let some (_, _, rhs) := (← instantiateMVars (← inferType e)).eq?
             | throwError "func_run: shift rule shape"
           pure rhs
@@ -3419,11 +3482,12 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
       let ne' ← `(tactic| exact nofun)
       let rfl' ← `(tactic| rfl)
       let shiftDef ← match shift? with
-        | some lem => do
+        | some (lem, fact) => do
           let lemId := mkIdent lem
+          let factId := mkIdent fact
           `(tactic| first
               | exact $lemId (by assumption)
-              | exact $lemId (CoveredFork.rules_shifts (by assumption)))
+              | exact $lemId ($factId (by assumption)))
         | none => `(tactic| rfl)
       match core.getAppFnArgs with
       | (``Jaune.applyBinary, #[f, costE, _]) => do
@@ -3493,7 +3557,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hne, hdef, hg, hr] =>
           discharge hne [ne, ne']
-          discharge hdef [rfl']
+          discharge hdef [rfl', shiftDef]
           dischargeProfiled .gas hg (← gasTacs)
           dischargeProfiled .room hr (← roomTacs)
         | _ => throwError "func_run: pushItem opcode left {gs.length} obligations"

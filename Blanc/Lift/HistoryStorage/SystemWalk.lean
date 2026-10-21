@@ -42,7 +42,7 @@ theorem body_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
         (Sevm.dataWord sevm 0) =
       (G + 19 + sstoreCost sevm b ((sevm.benvStat.number.toB256 - 1) % (0x1fff : B256))
         (Sevm.dataWord sevm 0)) + 2 by omega]
-  refine rx_push0 (S := []) (by decide) ?_
+  refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (S := []) (by decide) ?_
   rw [show G + 19 +
       sstoreCost sevm b ((sevm.benvStat.number.toB256 - 1) % (0x1fff : B256))
         (Sevm.dataWord sevm 0) =

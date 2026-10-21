@@ -58,7 +58,8 @@ theorem temporal_extcodesize_runCompiled
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
       Ninst.runCompiled_extcodesize_warm
         (devm := base.setMach ⟨x :: stack, M, G + gasWarmAccess, base.stateGas⟩)
-        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
+        hfork.rules_stateGas_none (hfork.rules_access)
+        hfork.rules_codeReadSurcharge rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
   · simp only [temporalAccountAccessBase, temporalAccountAccessCost,
       ite_eq_right hwarm]
     have hsg : (addAccessedAddress base x.toAdr).stateGas = base.stateGas := rfl
@@ -66,7 +67,8 @@ theorem temporal_extcodesize_runCompiled
       Devm.stateGas_setMach, hsg] using
       Ninst.runCompiled_extcodesize_cold
         (devm := base.setMach ⟨x :: stack, M, G + gasColdAccountAccess, base.stateGas⟩)
-        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
+        hfork.rules_stateGas_none (hfork.rules_access)
+        hfork.rules_codeReadSurcharge hfork.rules_coldAccountAccess rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
 
 /-- `EXTCODESIZE`, inverted with its actual account-warming image. -/
 theorem ri_extcodesize {sevm : Sevm} {b d : Devm} {S : List B256}
@@ -78,7 +80,8 @@ theorem ri_extcodesize {sevm : Sevm} {b d : Devm} {S : List B256}
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore,
     Devm.balReadAccount_of_bal_none hfork.rules_bal_none] at run
-  rw [BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none] at run
+  rw [BenvStat.gas_eq_prague_of_covered hfork] at run
+  simp only [hfork.rules_access, pragueRules_gas_codeReadSurcharge, Nat.add_zero] at run
   rw [show (St b (x :: S) M G).popToAdr = .ok (x.toAdr, St b S M G) from rfl] at run
   simp only [Except.bind_ok] at run
   rw [show (St b S M G).accessedAddresses = b.accessedAddresses from rfl] at run

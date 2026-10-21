@@ -173,13 +173,13 @@ theorem systemSetup_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
       simp only [ite_eq_left h]
       refine rx_branchTo_succ (by decide) prog_setup_join ?_
       unfold t_00df_c1
-      exact rx_dest (rx_push0 (by change 3 < 1024; decide) loop)
+      exact rx_dest (rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 3 < 1024; decide) loop)
     · simp only [systemCount, ite_eq_right h] at loop
       simp only [ite_eq_right h]
       refine rx_branchTo_zero ?_
       unfold t_00dc_c0 t_00df_c1
       exact rx_pop (rx_push rfl (by change 2 < 1024; decide)
-        (rx_dest (rx_push0 (by change 3 < 1024; decide) loop)))
+        (rx_dest (rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 3 < 1024; decide) loop)))
   have gasEq : gas + systemSetupGas sevm base =
       gas + (if (systemDifference sevm base).toNat < 16 then 3 else 8) +
         10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 +

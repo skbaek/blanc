@@ -272,6 +272,8 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     apply processMessage_ok_of_exec htransfer hpreparedCodeAddress
     · simpa only [seeded] using hexec
     · exact hrawErrorNone
+    · exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
   have hrawStorage' : raw.state.getStor msg.currentTarget =
       ((Stor.empty.set implementationSlotLit implementation.toB256).set
         adminSlotLit requestedAdmin.toB256) := by

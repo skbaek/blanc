@@ -298,11 +298,11 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
       (St (initDevm msg) [] Mem.empty (G0 + 15)) Blanc.Lift.SystemDrainer.t_0000_c0
       (.halted (St post [1] Mem.empty G')) := by
     unfold Blanc.Lift.SystemDrainer.t_0000_c0
-    refine rx_push0 (by decide) ?_
-    refine rx_push0 (by decide) ?_
-    refine rx_push0 (by decide) ?_
-    refine rx_push0 (by decide) ?_
-    refine rx_push0 (by decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by decide) ?_
     refine rx_push rfl (by decide) ?_
     refine rx_gas (by decide) ?_
     exact .next run (.last rfl)

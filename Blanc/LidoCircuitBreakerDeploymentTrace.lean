@@ -478,7 +478,8 @@ theorem constructorPatchPair_runCompiled
     (hargumentMemory : (M.read (32 * i.val) 32).2 = M)
     (hwrite : M.write offset value.toBytes = M')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], M', G, base.stateGas⟩) rest post) :
+      (base.setMach ⟨[], M', G, base.stateGas⟩) rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], M, G + (pushGas + 9), base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
@@ -497,7 +498,7 @@ theorem constructorPatchPair_runCompiled
   simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
     pushCompactNatForProof_eq, pushFixedNatForProof_eq, ite_eq_left hoffset]
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 9) hpush
+  · apply Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0) (c := pushGas) (G := G + 9) hpush
     · simp only [Devm.gasLeft_setMach]
       omega
     · simp only [Devm.stack_setMach, List.length_nil]
@@ -536,11 +537,12 @@ theorem ConstructorPatchInvariant.runCompiled_write
     (hfit : offset + 32 ≤ 4512)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory.write offset value.toBytes, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + (pushGas + 9), base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++ storeByteOffsetForProof offset +++ rest) post := by
-  apply constructorPatchPair_runCompiled hoffset hpush h.memory_size hfit
+  apply constructorPatchPair_runCompiled (hfork := hfork) hoffset hpush h.memory_size hfit
   · rw [h.read_argument i, hvalue]
   · exact h.read_memory i
   · rfl
@@ -584,29 +586,30 @@ theorem officialConstructorPatchLine1_4_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory4, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorCopiedMemory, G + 44, base.stateGas⟩)
       (loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 398 +++
         loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 1318 +++
         loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 2057 +++
         loadArgumentIndexForProof 0 +++ storeByteOffsetForProof 2144 +++ rest) post := by
-  have h4 := officialConstructorPatchInvariant3.runCompiled_write
+  have h4 := officialConstructorPatchInvariant3.runCompiled_write (hfork := hfork)
     (i := ⟨0, by decide⟩) (offset := 2144) (pushGas := 2)
     (G := G) (value := officialParams.admin)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory4] using hrest)
-  have h3 := officialConstructorPatchInvariant2.runCompiled_write
+  have h3 := officialConstructorPatchInvariant2.runCompiled_write (hfork := hfork)
     (i := ⟨0, by decide⟩) (offset := 2057) (pushGas := 2)
     (G := G + 11) (value := officialParams.admin)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory3] using h4)
-  have h2 := officialConstructorPatchInvariant1.runCompiled_write
+  have h2 := officialConstructorPatchInvariant1.runCompiled_write (hfork := hfork)
     (i := ⟨0, by decide⟩) (offset := 1318) (pushGas := 2)
     (G := G + 22) (value := officialParams.admin)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory2] using h3)
-  have h1 := officialConstructorCopiedMemory_invariant.runCompiled_write
+  have h1 := officialConstructorCopiedMemory_invariant.runCompiled_write (hfork := hfork)
     (i := ⟨0, by decide⟩) (offset := 398) (pushGas := 2)
     (G := G + 33) (value := officialParams.admin)
     (by decide) (by decide +kernel) rfl (by decide) (by
@@ -655,29 +658,30 @@ theorem officialConstructorPatchLine5_8_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory8, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory4, G + 48, base.stateGas⟩)
       (loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 441 +++
         loadArgumentIndexForProof 1 +++ storeByteOffsetForProof 937 +++
         loadArgumentIndexForProof 2 +++ storeByteOffsetForProof 482 +++
         loadArgumentIndexForProof 2 +++ storeByteOffsetForProof 2185 +++ rest) post := by
-  have h8 := officialConstructorPatchInvariant7.runCompiled_write
+  have h8 := officialConstructorPatchInvariant7.runCompiled_write (hfork := hfork)
     (i := ⟨2, by decide⟩) (offset := 2185) (pushGas := 3)
     (G := G) (value := officialParams.maxPauseDuration)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory8] using hrest)
-  have h7 := officialConstructorPatchInvariant6.runCompiled_write
+  have h7 := officialConstructorPatchInvariant6.runCompiled_write (hfork := hfork)
     (i := ⟨2, by decide⟩) (offset := 482) (pushGas := 3)
     (G := G + 12) (value := officialParams.maxPauseDuration)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory7] using h8)
-  have h6 := officialConstructorPatchInvariant5.runCompiled_write
+  have h6 := officialConstructorPatchInvariant5.runCompiled_write (hfork := hfork)
     (i := ⟨1, by decide⟩) (offset := 937) (pushGas := 3)
     (G := G + 24) (value := officialParams.minPauseDuration)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory6] using h7)
-  have h5 := officialConstructorPatchInvariant4.runCompiled_write
+  have h5 := officialConstructorPatchInvariant4.runCompiled_write (hfork := hfork)
     (i := ⟨1, by decide⟩) (offset := 441) (pushGas := 3)
     (G := G + 36) (value := officialParams.minPauseDuration)
     (by decide) (by decide +kernel) rfl (by decide) (by
@@ -733,29 +737,30 @@ theorem officialConstructorPatchLine9_12_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory12, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchMemory8, G + 48, base.stateGas⟩)
       (loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 732 +++
         loadArgumentIndexForProof 3 +++ storeByteOffsetForProof 1361 +++
         loadArgumentIndexForProof 4 +++ storeByteOffsetForProof 896 +++
         loadArgumentIndexForProof 4 +++ storeByteOffsetForProof 1402 +++ rest) post := by
-  have h12 := officialConstructorPatchInvariant11.runCompiled_write
+  have h12 := officialConstructorPatchInvariant11.runCompiled_write (hfork := hfork)
     (i := ⟨4, by decide⟩) (offset := 1402) (pushGas := 3)
     (G := G) (value := officialParams.maxHeartbeatInterval)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory12] using hrest)
-  have h11 := officialConstructorPatchInvariant10.runCompiled_write
+  have h11 := officialConstructorPatchInvariant10.runCompiled_write (hfork := hfork)
     (i := ⟨4, by decide⟩) (offset := 896) (pushGas := 3)
     (G := G + 12) (value := officialParams.maxHeartbeatInterval)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory11] using h12)
-  have h10 := officialConstructorPatchInvariant9.runCompiled_write
+  have h10 := officialConstructorPatchInvariant9.runCompiled_write (hfork := hfork)
     (i := ⟨3, by decide⟩) (offset := 1361) (pushGas := 3)
     (G := G + 24) (value := officialParams.minHeartbeatInterval)
     (by decide) (by decide +kernel) rfl (by decide) (by
       simpa only [officialConstructorPatchMemory10] using h11)
-  have h9 := officialConstructorPatchInvariant8.runCompiled_write
+  have h9 := officialConstructorPatchInvariant8.runCompiled_write (hfork := hfork)
     (i := ⟨3, by decide⟩) (offset := 732) (pushGas := 3)
     (G := G + 36) (value := officialParams.minHeartbeatInterval)
     (by decide) (by decide +kernel) rfl (by decide) (by
@@ -1230,6 +1235,7 @@ theorem officialConstructorColdStore_runCompiled
     simp only [horiginal, ite_self]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none
+        hfork.rules_access hfork.rules_sstore
         (c := 22100) (G := G) (rc := base.refundCounter)
     · rfl
     · simpa only [Devm.setMach, Devm.accessedStorageKeys] using hcold
@@ -1454,7 +1460,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
     B256.toNat_toB256_of_lt hindexBound
   rw [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter + 6)
+  · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow hloadPush) (c := 3) (G := Gafter + 6)
       hloadPush
     · simp only [Devm.gasLeft_setMach]
     · simp only [Devm.stack_setMach, List.length_nil]
@@ -1474,7 +1480,7 @@ theorem constructorArgumentSstorePrefix_runCompiled
       · simp only [List.length_nil]
         omega
     · apply Func.RunCompiled.next
-      · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter)
+      · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow hkeyPush) (c := 3) (G := Gafter)
           hkeyPush
         · simp only [Devm.gasLeft_setMach]
         · simp only [Devm.stack_setMach, List.length_cons,
@@ -1556,20 +1562,20 @@ theorem constructorEventLog1Prefix_runCompiled
   rw [hgas]
   unfold logWith
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter + 6)
+  · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow htopicPush) (c := 3) (G := Gafter + 6)
       htopicPush
     · simp only [Devm.gasLeft_setMach]
     · simp only [Devm.stack_setMach, List.length_nil]
       omega
   · apply Func.RunCompiled.next
-    · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter + 3)
+    · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow (by decide)) (c := 3) (G := Gafter + 3)
       · decide
       · simp only [Devm.gasLeft_setMach]
       · simp only [Devm.stack_setMach, List.length_cons,
           List.length_nil]
         omega
     · apply Func.RunCompiled.next
-      · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter)
+      · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow (by decide)) (c := 3) (G := Gafter)
         · rw [officialConstructorEventScratch_eq]
           decide
         · simp only [Devm.gasLeft_setMach]
@@ -1604,7 +1610,8 @@ theorem constructorArgumentMstorePrefix_runCompiled
       (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost [⟨offset, 32⟩] = storeExt)
     (hwrite : memory.write offset value.toBytes = memory')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post) :
+      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++
@@ -1627,7 +1634,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
   simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
     pushCompactNatForProof_eq, pushFixedNatForProof_eq, ite_eq_left hoffsetLt]
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256
+  · apply Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
         (c := indexPushCost)
         (G := Gafter + (loadCost + 6 + storeExt))
         hindexPush
@@ -1652,7 +1659,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
       · simp only [List.length_nil]
         omega
     · apply Func.RunCompiled.next
-      · apply Ninst.runCompiled_pushBytes
+      · apply Ninst.runCompiled_pushBytes (h_push0 := fun h => absurd h (List.cons_ne_nil _ _))
             (c := 3) (G := Gafter + (3 + storeExt))
         · rfl
         · simp only [Devm.gasLeft_setMach]
@@ -1691,7 +1698,8 @@ theorem constructorZeroMstorePrefix_runCompiled
       (base.setMach ⟨S, memory, G, base.stateGas⟩).extCost [⟨offset, 32⟩] = storeExt)
     (hwrite : memory.write offset (0 : B256).toBytes = memory')
     (hrest : Func.RunCompiled fs sevm
-      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post) :
+      (base.setMach ⟨[], memory', Gafter, base.stateGas⟩) rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (pushB256 0 ::: storeByteOffsetForProof offset +++ rest) post := by
@@ -1706,7 +1714,7 @@ theorem constructorZeroMstorePrefix_runCompiled
   simp only [storeByteOffsetForProof_eq, pushFixedNatForProof_eq,
     ite_eq_left hoffsetLt]
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256 (c := 2)
+  · apply Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0) (c := 2)
         (G := Gafter + (6 + storeExt))
     · simpa only [gBase] using pushCost_zero
     · simp only [Devm.gasLeft_setMach]
@@ -1714,7 +1722,7 @@ theorem constructorZeroMstorePrefix_runCompiled
     · simp only [Devm.stack_setMach, List.length_nil]
       omega
   · apply Func.RunCompiled.next
-    · apply Ninst.runCompiled_pushBytes
+    · apply Ninst.runCompiled_pushBytes (h_push0 := fun h => absurd h (List.cons_ne_nil _ _))
           (c := 3) (G := Gafter + (3 + storeExt))
       · rfl
       · simp only [Devm.gasLeft_setMach]
@@ -1813,7 +1821,8 @@ theorem constructorArgumentLog2Prefix_runCompiled
       (base.setMach
         ⟨[(1 : B256) * 32, (4 : B256) * 32,
             eventTopic, indexedTopic], memory, Gafter, base.stateGas⟩)
-      (Ninst.log (Fin.succ 1) ::: rest) post) :
+      (Ninst.log (Fin.succ 1) ::: rest) post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, Gbefore, base.stateGas⟩)
       (loadArgumentIndexForProof i.val +++
@@ -1829,7 +1838,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
   unfold logWith
   rw [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
   apply Func.RunCompiled.next
-  · apply Ninst.runCompiled_pushB256
+  · apply Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
         (c := indexPushCost)
         (G := Gafter + (loadCost + eventPushCost + 6))
         hindexPush
@@ -1854,7 +1863,7 @@ theorem constructorArgumentLog2Prefix_runCompiled
       · simp only [List.length_nil]
         omega
     · apply Func.RunCompiled.next
-      · apply Ninst.runCompiled_pushB256
+      · apply Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
             (c := eventPushCost) (G := Gafter + 6) heventPush
         · simp only [Devm.gasLeft_setMach]
           omega
@@ -1862,14 +1871,14 @@ theorem constructorArgumentLog2Prefix_runCompiled
             List.length_nil]
           omega
       · apply Func.RunCompiled.next
-        · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter + 3)
+        · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow (by decide)) (c := 3) (G := Gafter + 3)
           · decide
           · simp only [Devm.gasLeft_setMach]
           · simp only [Devm.stack_setMach, List.length_cons,
               List.length_nil]
             omega
         · apply Func.RunCompiled.next
-          · apply Ninst.runCompiled_pushB256 (c := 3) (G := Gafter)
+          · apply Ninst.runCompiled_pushB256 (h_push0 := push0_guard_of_pushCost_verylow (by decide)) (c := 3) (G := Gafter)
             · decide
             · simp only [Devm.gasLeft_setMach]
             · simp only [Devm.stack_setMach, List.length_cons,
@@ -2326,14 +2335,15 @@ theorem officialConstructorHeartbeatScratchValue_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatZeroMemory, G + 12, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 6 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
-  apply constructorArgumentMstorePrefix_runCompiled
+  apply constructorArgumentMstorePrefix_runCompiled (hfork := hfork)
     (i := ⟨6, by decide⟩)
     (offset := officialConstructorEventScratch + 32)
     (indexPushCost := 3) (loadCost := 3) (storeExt := 0)
@@ -2391,13 +2401,14 @@ theorem officialConstructorHeartbeatScratchZero_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatZeroMemory, G + 12, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G + 20, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
-  apply constructorZeroMstorePrefix_runCompiled
+  apply constructorZeroMstorePrefix_runCompiled (hfork := hfork)
     (offset := officialConstructorEventScratch) (storeExt := 0)
     (memory' := officialConstructorHeartbeatZeroMemory)
     (Gafter := G + 12)
@@ -2421,7 +2432,8 @@ theorem officialConstructorHeartbeatScratchLine_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorHeartbeatMemory, G, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorPauseStoredBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G + 20, (officialConstructorPauseStoredBase sevm base).stateGas⟩)
@@ -2430,8 +2442,8 @@ theorem officialConstructorHeartbeatScratchLine_runCompiled
         loadArgumentIndexForProof 6 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
-  have hvalue := officialConstructorHeartbeatScratchValue_runCompiled hrest
-  exact officialConstructorHeartbeatScratchZero_runCompiled hvalue
+  have hvalue := officialConstructorHeartbeatScratchValue_runCompiled (hfork := hfork) hrest
+  exact officialConstructorHeartbeatScratchZero_runCompiled (hfork := hfork) hvalue
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsHeartbeatSuffix.lean`. -/
 
@@ -2461,7 +2473,7 @@ theorem officialConstructorHeartbeatSuffix_runCompiled
     hcold horiginal hcurrent hstatic hreturn
   have hlog := officialConstructorHeartbeatLogLine_runCompiled hstatic hstore
   have hscratch :=
-    officialConstructorHeartbeatScratchLine_runCompiled hlog
+    officialConstructorHeartbeatScratchLine_runCompiled (hfork := hfork) hlog
   unfold officialConstructorHeartbeatSuffix
   convert hscratch using 1
 
@@ -2687,14 +2699,15 @@ theorem officialConstructorPauseScratchValue_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPauseZeroMemory, G + 15, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (loadArgumentIndexForProof 5 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
-  apply constructorArgumentMstorePrefix_runCompiled
+  apply constructorArgumentMstorePrefix_runCompiled (hfork := hfork)
       (i := ⟨5, by decide⟩)
       (offset := officialConstructorEventScratch + 32)
       (indexPushCost := 3) (loadCost := 3) (storeExt := 3)
@@ -2739,13 +2752,14 @@ theorem officialConstructorPauseScratchZero_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPauseZeroMemory, G + 15, (officialConstructorInitializedBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPatchedMemory, G + 27, (officialConstructorInitializedBase sevm base).stateGas⟩)
       (pushB256 0 :::
         storeByteOffsetForProof officialConstructorEventScratch +++ rest) post := by
-  apply constructorZeroMstorePrefix_runCompiled
+  apply constructorZeroMstorePrefix_runCompiled (hfork := hfork)
       (offset := officialConstructorEventScratch) (storeExt := 4)
       (memory' := officialConstructorPauseZeroMemory)
       (Gafter := G + 15)
@@ -2767,7 +2781,8 @@ theorem officialConstructorPauseScratchLine_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPauseMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPatchedMemory, G + 27, (officialConstructorInitializedBase sevm base).stateGas⟩)
@@ -2776,8 +2791,8 @@ theorem officialConstructorPauseScratchLine_runCompiled
         loadArgumentIndexForProof 5 +++
         storeByteOffsetForProof (officialConstructorEventScratch + 32) +++
         rest) post := by
-  have hvalue := officialConstructorPauseScratchValue_runCompiled hrest
-  exact officialConstructorPauseScratchZero_runCompiled hvalue
+  have hvalue := officialConstructorPauseScratchValue_runCompiled (hfork := hfork) hrest
+  exact officialConstructorPauseScratchZero_runCompiled (hfork := hfork) hvalue
 
 /-! Consolidated from `LidoCircuitBreakerDeploymentTraceEffectsConfigurationSuffix.lean`. -/
 
@@ -2819,7 +2834,7 @@ theorem officialConstructorConfigurationSuffix_runCompiled
   have hpauseLog := officialConstructorPauseLogLine_runCompiled
     hstatic hpauseStore
   have hpauseScratch :=
-    officialConstructorPauseScratchLine_runCompiled hpauseLog
+    officialConstructorPauseScratchLine_runCompiled (hfork := hfork) hpauseLog
   unfold officialConstructorConfigurationSuffix
     officialConstructorConfigurationPrefix
   convert hpauseScratch using 1
@@ -2880,7 +2895,8 @@ theorem officialConstructorInitializedLogLine_runCompiled
     (hrest : Func.RunCompiled fs sevm
       ((officialConstructorInitializedBase sevm base).setMach
         ⟨[], officialConstructorPatchedMemory, G, (officialConstructorInitializedBase sevm base).stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchedMemory, G + 2163, base.stateGas⟩)
       (officialConstructorInitializedPrefix +++ rest) post := by
@@ -2899,7 +2915,7 @@ theorem officialConstructorInitializedLogLine_runCompiled
   have hlog := officialConstructorInitializedLogOpcode_runCompiled
     hstatic hrest
   unfold officialConstructorInitializedPrefix
-  apply constructorArgumentLog2Prefix_runCompiled
+  apply constructorArgumentLog2Prefix_runCompiled (hfork := hfork)
       (i := ⟨0, by decide⟩)
       (eventTopic := circuitBreakerInitializedEvent)
       (indexedTopic := officialParams.admin)
@@ -2953,7 +2969,8 @@ private theorem officialConstructorPatchLine_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchedMemory, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorCopiedMemory, G + 140, base.stateGas⟩)
       (officialConstructorPatchLine +++ rest) post := by
@@ -2962,9 +2979,9 @@ private theorem officialConstructorPatchLine_runCompiled
       rest post := by
     rw [officialConstructorPatchMemory12_eq_patched]
     exact hrest
-  have h9 := officialConstructorPatchLine9_12_runCompiled hrest12
-  have h5 := officialConstructorPatchLine5_8_runCompiled (G := G + 48) h9
-  have h1 := officialConstructorPatchLine1_4_runCompiled (G := G + 96) h5
+  have h9 := officialConstructorPatchLine9_12_runCompiled (hfork := hfork) hrest12
+  have h5 := officialConstructorPatchLine5_8_runCompiled (hfork := hfork) (G := G + 48) h9
+  have h1 := officialConstructorPatchLine1_4_runCompiled (hfork := hfork) (G := G + 96) h5
   simpa only [officialConstructorPatchLine, prepend_append] using h1
 
 theorem officialConstructorCopyPatch_runCompiled
@@ -2973,13 +2990,14 @@ theorem officialConstructorCopyPatch_runCompiled
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorPatchedMemory, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
           officialConstructorDecodedMemory, G + 985, base.stateGas⟩)
       (codecopy ::: patchRuntimeLineForProof constructorRuntimeBaseForProof +++ rest) post := by
-  have hpatch := officialConstructorPatchLine_runCompiled hrest
+  have hpatch := officialConstructorPatchLine_runCompiled (hfork := hfork) hrest
   refine Func.RunCompiled.next
     (devm' := base.setMach
       ⟨[], officialConstructorCopiedMemory, G + 140, base.stateGas⟩) ?_ ?_
@@ -3039,9 +3057,9 @@ theorem officialConstructorEffectBody_runCompiled
   have hconfiguration := officialConstructorConfigurationSuffix_runCompiled (hfork := hfork)
     (fs := fs) (G := G) hpauseCold hpauseOriginal hpauseCurrent
     hheartbeatCold hheartbeatOriginal hheartbeatCurrent hstatic
-  have hinitialized := officialConstructorInitializedLogLine_runCompiled
+  have hinitialized := officialConstructorInitializedLogLine_runCompiled (hfork := hfork)
     hstatic hconfiguration
-  have hcopy := officialConstructorCopyPatch_runCompiled hcode hinitialized
+  have hcopy := officialConstructorCopyPatch_runCompiled (hfork := hfork) hcode hinitialized
   unfold officialConstructorEffectBody
   have hstart :
       base.setMach
@@ -3508,7 +3526,8 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
-      officialConstructorMinPauseNonzeroStage post) :
+      officialConstructorMinPauseNonzeroStage post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 21, base.stateGas⟩)
       officialConstructorAdminNonzeroStage post := by
@@ -3539,7 +3558,8 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
-      officialConstructorAdminNonzeroStage post) :
+      officialConstructorAdminNonzeroStage post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 32, base.stateGas⟩)
       officialConstructorCanonicalAdminStage post := by
@@ -3571,7 +3591,8 @@ private theorem officialConstructorValidationDecode_runCompiled
     (hcode : sevm.code.toList = officialFullCreateInput)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G, base.stateGas⟩)
-      officialConstructorCanonicalAdminStage post) :
+      officialConstructorCanonicalAdminStage post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty, G + 93, base.stateGas⟩)
       lidoCircuitBreakerConstructorProgram.main post := by
@@ -3618,7 +3639,8 @@ theorem officialConstructorValidationPrefix_runCompiled
       (base.setMach
         ⟨[(224 : B256), (616 : B256), (4282 : B256)],
           officialConstructorDecodedMemory, g - 367, base.stateGas⟩)
-      officialConstructorEffectBody post) :
+      officialConstructorEffectBody post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled
       (lidoCircuitBreakerConstructorProgram.main ::
         lidoCircuitBreakerConstructorProgram.aux)
@@ -3643,11 +3665,11 @@ theorem officialConstructorValidationPrefix_runCompiled
   have hpauseNonzero :=
     officialConstructorMinPauseNonzeroStage_runCompiled hpauseBounds
   have hadmin :=
-    officialConstructorAdminNonzeroStage_runCompiled hpauseNonzero
+    officialConstructorAdminNonzeroStage_runCompiled (hfork := hfork) hpauseNonzero
   have hcanonical :=
-    officialConstructorCanonicalAdminStage_runCompiled hadmin
+    officialConstructorCanonicalAdminStage_runCompiled (hfork := hfork) hadmin
   have hdecode :=
-    officialConstructorValidationDecode_runCompiled hvalue hcode hcanonical
+    officialConstructorValidationDecode_runCompiled (hfork := hfork) hvalue hcode hcanonical
   have hgasExact :
       g - 367 + 9 + 28 + 28 + 28 + 28 + 28 + 22 + 28 + 22 + 21 + 32 +
         93 = g := by
@@ -3698,7 +3720,7 @@ private theorem officialConstructorProgram_runCompiled
     have hgas : (G + 50328) - 367 = G + 49961 := by omega
     rw [hgas]
     exact heffect
-  have hmain := officialConstructorValidationPrefix_runCompiled
+  have hmain := officialConstructorValidationPrefix_runCompiled (hfork := hfork)
     (base := base) (g := G + 50328) hvalue hcode (by omega) heffect'
   apply Prog.runCompiled_intro
     (G := G + 50328)

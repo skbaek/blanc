@@ -61,6 +61,8 @@ private theorem fsig_dispatchFrame
         (Devm.push_of_push qloadPush))
   rcases of_run_reg qshr with ⟨_, qshrCore⟩
   simp only [Rinst.run, Rinst.runCore] at qshrCore
+  split at qshrCore
+  case isFalse => cases qshrCore
   rcases Devm.diffBurn_of_applyBinary qshrCore with ⟨_, _, qshrDiff⟩
   exact (dispatchFrame_of_burnBy hburn).trans
     ((dispatchFrame_of_pushBurn (of_run_pushB256 qpush0)).trans
@@ -114,6 +116,8 @@ theorem runtime_selected_body_of_prog_run_empty_frame
       [y >>> x.toNat] sigShift.stack afterSig.stack := by
     rcases of_run_reg qshr with ⟨_, hr⟩
     simp only [Rinst.run, Rinst.runCore] at hr
+    split at hr
+    case isFalse => cases hr
     rcases Devm.diffBurn_of_applyBinary hr with ⟨x, y, hdiff⟩
     exact ⟨x, y, hdiff.stack⟩
   have hafterSigStack : afterSig.stack = selector :: [] := by

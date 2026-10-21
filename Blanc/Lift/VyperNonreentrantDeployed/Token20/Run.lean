@@ -81,7 +81,7 @@ section Dispatch
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- `CALLDATALOAD(0) >> 224`: the selector word on the stack.  12 gas. -/
-theorem head {g : SFunc}
+theorem head {g : SFunc} (h_shifts : sevm.benvStat.rules.op.shifts = true)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] M G) g o) :
     SFunc.RunExact prog sevm (St b [] M (G + 12))
       (.next (.push [0x00] (by decide)) (.next (.reg .calldataload)
@@ -89,13 +89,14 @@ theorem head {g : SFunc}
   refine rx_push (w := 0) (by decide) (by simp only [List.length_nil]; omega) ?_
   refine rx_calldataload (by simp only [List.length_nil]; omega) ?_
   refine rx_push (w := 224) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  exact rx_shr rfl (by simp only [List.length_nil]; omega) k
+  exact rx_shr rfl h_shifts (by simp only [List.length_nil]; omega) k
 
 /-- `approve`: the fourth comparison matches, jumping to entry 6.  100 gas. -/
-theorem dispatch_approve (hsel : Sevm.selector sevm = 0x095ea7b3)
+theorem dispatch_approve (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (hsel : Sevm.selector sevm = 0x095ea7b3)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] M G) t_00d4_c6 o) :
     SFunc.RunExact prog sevm (St b [] M (G + 100)) t_0000_c0 o :=
-  head (cmp_miss (by rw [hsel]; decide) (cmp_miss (by rw [hsel]; decide)
+  head h_shifts (cmp_miss (by rw [hsel]; decide) (cmp_miss (by rw [hsel]; decide)
     (cmp_miss (by rw [hsel]; decide) (cmp_hit (j := 6) (by rw [hsel]; decide) rfl k))))
 
 end Dispatch
@@ -193,7 +194,7 @@ theorem approve_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
   have hrun : SFunc.RunExact prog sevm (St pre [] Mem.empty (G + 16 + sstoreCost sevm pre (allowSlot sevm.caller (apSpender sevm)) (apVal sevm) + 87 +
       100)) t_0000_c0
       (.halted (approvePost sevm pre G)) := by
-    refine dispatch_approve hsel ?_
+    refine dispatch_approve hfork.rules_shifts hsel ?_
     refine rx_dest ?_
     refine rx_caller (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rx_push (w := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_

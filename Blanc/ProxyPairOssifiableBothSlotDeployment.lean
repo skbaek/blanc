@@ -251,6 +251,9 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     apply processMessage_ok_of_exec htransfer hpreparedCodeAddress
     · simpa only [seeded] using hexec
     · exact hrawErrorNone
+    · exact (show CoveredFork creationMessage.benv.stat.fork by
+          change CoveredFork .prague; exact CoveredFork.prague).cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
   have hrawLogs' : raw.logs =
       [rawUpgradedLog target implementation.toB256] ++
         [ossifiableConstructorAdminChangedLog target

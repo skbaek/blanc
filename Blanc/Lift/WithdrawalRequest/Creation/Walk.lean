@@ -28,7 +28,7 @@ theorem constructor_run (sevm : Sevm) (b : Devm) (G : Nat)
   rw [hgas]
   unfold t_0000_c0
   refine rx_push (w := B256.max) rfl (by decide) ?_
-  refine rx_push0 (by change 1 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide) ?_
   refine rx_sstore hfork ?_ hstatic ?_
   · apply Nat.lt_of_lt_of_le hsentry
     simp only [Nat.add_assoc]
@@ -36,14 +36,14 @@ theorem constructor_run (sevm : Sevm) (b : Devm) (G : Nat)
   · refine rx_push (w := (504 : B256)) rfl (by decide) ?_
     refine rx_dup1 (by change 1 < 1024; decide) ?_
     refine rx_push (w := (45 : B256)) rfl (by decide) ?_
-    refine rx_push0 (by change 3 < 1024; decide) ?_
+    refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 3 < 1024; decide) ?_
     refine rx_codecopy (c := 99) (M' := constructorMemory) ?_ ?_ ?_
     · exact constructor_codecopy_charge _ _
     · rw [hcode]
       change Mem.empty.write 0 (creationCode.sliceD 45 504 0) = constructorMemory
       rw [runtime_window]
       rfl
-    · refine rx_push0 (by change 1 < 1024; decide) ?_
+    · refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide) ?_
       exact rx_return_any rfl (constructor_return_charge _ _)
 
 end Blanc.Lift.WithdrawalRequest.Creation

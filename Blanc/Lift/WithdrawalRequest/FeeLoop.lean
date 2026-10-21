@@ -72,6 +72,7 @@ private theorem header_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
 private theorem header_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {output accumulator counter numerator denominator : B256} {o : Outcome}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (tail : SFunc.RunExact prog sevm
       (St b [output, accumulator, counter, numerator, denominator] M G)
       (if accumulator = 0 then t_0068_c0 else t_0055_c0) o) :
@@ -82,7 +83,7 @@ private theorem header_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   rw [hgas]
   unfold t_004d_c0
   refine rx_dest ?_
-  refine rx_push0 (by change 5 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := hfork.rules_push0) (by change 5 < 1024; decide) ?_
   refine rx_dup3 (by change 6 < 1024; decide) ?_
   refine rx_gt rfl (by change 5 < 1024; decide) ?_
   refine rx_iszero rfl (by change 5 < 1024; decide) ?_
@@ -214,6 +215,7 @@ theorem fee_loop_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 theorem fee_loop_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {output accumulator counter numerator denominator finalOutput : B256}
     {iterations : Nat} {o : Outcome}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (wordRun : WordFakeExponential.Run numerator denominator counter accumulator output iterations finalOutput)
     (tail : ∀ finalCounter, SFunc.RunExact prog sevm
       (St b [finalOutput, 0, finalCounter, numerator, denominator] M G) t_0068_c0 o) :
@@ -222,10 +224,10 @@ theorem fee_loop_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       t_004d_c0 o := by
   induction wordRun generalizing G with
   | stop counter output =>
-    exact header_exact (tail counter)
+    exact header_exact hfork (tail counter)
   | @step counter accumulator output iterations finalOutput active next ih =>
     rw [feeLoopGas_succ, ← Nat.add_assoc, ← Nat.add_assoc]
-    apply header_exact
+    apply header_exact hfork
     simp only [ite_eq_right active]
     exact body_exact (ih tail)
 
@@ -255,6 +257,6 @@ theorem user_fee_loop_exact {sevm : Sevm} {b : Devm} {M : Mem} {G iterations : N
       t_0068_c0 o) :
     SFunc.RunExact prog sevm
       (St b [] M (G + feeLoopGas iterations + userSetupGas sevm b)) t_001a_c0 o := by
-  exact user_setup_exact hfork active (fee_loop_exact wordRun tail)
+  exact user_setup_exact hfork active (fee_loop_exact hfork wordRun tail)
 
 end Blanc.Lift.WithdrawalRequest

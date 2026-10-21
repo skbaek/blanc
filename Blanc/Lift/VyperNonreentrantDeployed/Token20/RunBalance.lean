@@ -18,10 +18,11 @@ section BalanceDispatch
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- `balanceOf`: the third comparison matches, jumping to entry 5.  78 gas. -/
-theorem dispatch_balanceOf (hsel : Sevm.selector sevm = 0x70a08231)
+theorem dispatch_balanceOf (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (hsel : Sevm.selector sevm = 0x70a08231)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] M G) t_0037_c5 o) :
     SFunc.RunExact prog sevm (St b [] M (G + 78)) t_0000_c0 o :=
-  head (cmp_miss (by rw [hsel]; decide) (cmp_miss (by rw [hsel]; decide)
+  head h_shifts (cmp_miss (by rw [hsel]; decide) (cmp_miss (by rw [hsel]; decide)
     (cmp_hit (j := 5) (by rw [hsel]; decide) rfl k)))
 
 end BalanceDispatch
@@ -50,7 +51,7 @@ theorem balanceOf_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [hgas]; unfold balanceOfGas; omega
   have hrun : SFunc.RunExact prog sevm (St pre [] Mem.empty (G + 15 + sloadCost sevm pre (balSlot (boHolder sevm)) + 13 + 78)) t_0000_c0
       (.halted (balanceOfPost sevm pre G)) := by
-    refine dispatch_balanceOf hsel ?_
+    refine dispatch_balanceOf hfork.rules_shifts hsel ?_
     refine rx_dest ?_
     refine rx_push (w := 4) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rx_calldataload (by simp only [List.length_cons, List.length_nil]; omega) ?_

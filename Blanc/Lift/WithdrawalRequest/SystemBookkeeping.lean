@@ -98,10 +98,10 @@ private theorem pointer_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : 
       apply rx_dest
       apply rx_swap1
       apply rx_pop
-      apply rx_push0 (by change 1 < 1024; decide)
+      apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
       apply rx_push rfl (by change 2 < 1024; decide)
       apply rx_sstore fork (by omega) dynamic
-      apply rx_push0 (by change 1 < 1024; decide)
+      apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
       apply rx_push rfl (by change 2 < 1024; decide)
       exact rx_sstore fork (by omega) dynamic next
     · have different : tail ≠ systemAdvancedHead head count := Ne.symm drained
@@ -208,7 +208,7 @@ private theorem excess_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : N
       rw [gasEq]
       apply rx_branchTo_zero
       unfold t_01cb_c2
-      exact rx_pop (rx_push0 (by change 1 < 1024; decide) next)
+      exact rx_pop (rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide) next)
     · simp only [systemEffectiveExcess, ite_eq_right inhibited] at next
       simp only [ite_eq_right inhibited, Nat.add_zero]
       exact rx_branchTo_succ (by decide : (1 : B256) ≠ 0) excess_join next
@@ -220,7 +220,7 @@ private theorem excess_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : N
   rw [gasEq]
   unfold t_01a0_c2
   apply rx_dest
-  apply rx_push0 (by change 1 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
   apply rx_sload_sel fork (by change 1 < 1024; decide)
   apply rx_dup1 (by change 2 < 1024; decide)
   apply rx_push (w := B256.max)
@@ -325,7 +325,7 @@ private theorem count_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Na
       unfold t_01db_c3
       apply rx_pop
       apply rx_pop
-      apply rx_push0 (by change 1 < 1024; decide)
+      apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
       apply rx_push rfl (by change 2 < 1024; decide)
       exact rx_jump stores_join next
   have gasEq : gas + systemCountReadGas sevm base =
@@ -428,14 +428,14 @@ private theorem final_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Na
   rw [gasEq]
   unfold t_01e8_c4
   apply rx_dest
-  apply rx_push0 (by change 2 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 2 < 1024; decide)
   apply rx_sstore fork (by omega) dynamic
-  apply rx_push0 (by change 1 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
   apply rx_push rfl (by change 2 < 1024; decide)
   apply rx_sstore fork (by omega) dynamic
   apply rx_push rfl (by change 1 < 1024; decide)
   apply rx_mul rfl (by decide)
-  apply rx_push0 (by change 1 < 1024; decide)
+  apply rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide)
   exact terminal
 
 /-- Successful bookkeeping has exactly the sequential stores and actual RETURN

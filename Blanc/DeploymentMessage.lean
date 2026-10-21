@@ -101,7 +101,8 @@ def directCreateMessageOutputOf (post : Devm) : MsgCallOutput :=
     logs := post.logs
     accountsToDelete := post.accountsToDelete
     error := post.error
-    returnData := post.output }
+    returnData := post.output
+    touchedAccounts := post.meta.touchedAccounts }
 
 /-! ## Contract-neutral protocol-deployment plumbing -/
 

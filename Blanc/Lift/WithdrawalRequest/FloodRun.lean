@@ -214,7 +214,7 @@ theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
   · unfold Blanc.Lift.FloodLooper.t_0007_c1
     refine rxc_dest ?_
     refine rxc_dup (n := 0) (w := Nat.toB256 i) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-    refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+    refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_calldataload (by simp only [List.length_cons, List.length_nil]; omega) ?_
     rw [looper_count env]
     refine rxc_eq (v := 0) ?_ (by simp only [List.length_cons, List.length_nil]; omega) ?_
@@ -224,10 +224,10 @@ theorem flood_iter {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
     refine rxc_push rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_branch_zero ?_
     unfold Blanc.Lift.FloodLooper.t_000f_c1
-    refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
-    refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+    refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
+    refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_push (w := 56) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_
-    refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+    refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_push (w := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_push rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
     refine rxc_gas (by simp only [List.length_cons, List.length_nil]; omega) ?_
@@ -283,7 +283,7 @@ theorem flood_exit {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Entr
   refine rxc_dest ?_
   refine rxc_dup (n := 0) (w := Nat.toB256 k) rfl
     (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+  refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rxc_calldataload (by simp only [List.length_cons, List.length_nil]; omega) ?_
   rw [looper_count env]
   refine rxc_eq (v := 1) ?_ (by simp only [List.length_cons, List.length_nil]; omega) ?_
@@ -360,7 +360,7 @@ theorem flood_frame {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Ent
   refine rxc_push (w := 56) (by decide) (by simp only [List.length_nil]; omega) ?_
   refine rxc_push (w := 32) (by decide)
     (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rxc_push0 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+  refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rxc_calldatacopy (c := 15) (M' := payloadMem (Blanc.WithdrawalRequest.submissionPayload
     entry)) ?_ ?_ ?_
   · have h0 : (0 : B256).toNat = 0 := rfl
@@ -373,7 +373,7 @@ theorem flood_frame {sevm : Sevm} {k : Nat} {entry : Blanc.WithdrawalRequest.Ent
     rw [h0, h32, h56, env.data,
       calldata_payload (Blanc.WithdrawalRequest.submissionPayload_length entry)]
     rfl
-  refine rxc_push0 (by simp only [List.length_nil]; omega) ?_
+  refine rxc_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by simp only [List.length_nil]; omega) ?_
   rw [t_0007_eq]
   exact loop
 

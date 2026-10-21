@@ -122,7 +122,11 @@ registry has identified the likely vocabulary.
   For existing covered consumers, use `CoveredFork.rules_access`,
   `rules_push0`, `rules_sstore` and
   `BenvStat.gas_eq_prague_of_covered`; the latter replaces the invalid inference
-  from state-gas absence to Prague gas prices.
+  from state-gas absence to Prague gas prices. Its EXTCODESIZE projections are
+  `CoveredFork.rules_codeReadSurcharge` and `CoveredFork.rules_coldAccountAccess`,
+  and the selected transient-storage, `CHAINID` and `BASEFEE` flags are
+  `CoveredFork.rules_transient`, `rules_chainId` and `rules_baseFee` (all in
+  [`Blanc/Forward.lean`](../Blanc/Forward.lean)).
 - For the loose gas-free walk prefix reaching an intermediate cut of a
   successful source run, with source-path accumulation, use
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
@@ -209,7 +213,10 @@ registry has identified the likely vocabulary.
   `SHL`/`SHR`/`SAR` step through `Rinst.runCore_{shl,shr,sar}_of_shifts`, whose
   selected-shift premise comes from a local hypothesis or from
   `CoveredFork.rules_shifts` (in [`Blanc/Semantics.lean`](../Blanc/Semantics.lean));
-  a nonempty `PUSH` closes its PUSH0 guard by `B256.toBytes_sig_ne_nil`.
+  a nonempty `PUSH` closes its PUSH0 guard by `B256.toBytes_sig_ne_nil`, or by
+  `push0_guard_of_pushCost_verylow` from a `pushCost … = gVerylow` premise.
+  `CHAINID` and `BASEFEE` step the same way through
+  `Rinst.runCore_{chainid_of_chainId,basefee_of_baseFee}`.
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
 - A selected `LOG` step that exposes unchanged storage, balances, code,

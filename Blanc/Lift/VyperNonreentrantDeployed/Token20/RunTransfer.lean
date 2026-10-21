@@ -44,10 +44,11 @@ section TransferDispatch
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- `transfer`: the first comparison matches, jumping to entry 3.  34 gas. -/
-theorem dispatch_transfer (hsel : Sevm.selector sevm = 0xa9059cbb)
+theorem dispatch_transfer (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (hsel : Sevm.selector sevm = 0xa9059cbb)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] M G) t_005a_c3 o) :
     SFunc.RunExact prog sevm (St b [] M (G + 34)) t_0000_c0 o :=
-  head (cmp_hit (j := 3) (by rw [hsel]; decide) rfl k)
+  head h_shifts (cmp_hit (j := 3) (by rw [hsel]; decide) rfl k)
 
 end TransferDispatch
 
@@ -194,7 +195,7 @@ theorem transfer_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
         (mvFrom sevm pre sevm.caller - trVal sevm) + 39 +
       sloadCost sevm pre (balSlot sevm.caller) + 4 + 32 + 34)) t_0000_c0
       (.halted (transferPost sevm pre G)) := by
-    refine dispatch_transfer hsel (transfer_entry ?_)
+    refine dispatch_transfer hfork.rules_shifts hsel (transfer_entry ?_)
     refine move hfork hstatic (by simp only [List.length_cons, List.length_nil]; omega)
       (Nat.lt_add_right _ hsent) hle hnof ?_
     exact ok_empty (by simp only [List.length_cons, List.length_nil]; omega)

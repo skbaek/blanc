@@ -107,7 +107,8 @@ theorem processCreateMessage_establishes_artifact
     (hstatic : msg.isStatic = false)
     (hdepth : msg.depth ≠ 0)
     (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post, DirectCreateMessageResult msg.currentTarget msg post := by
   let prepared := processCreateMessage.msg msg
   obtain ⟨benv, htransfer⟩ :=
@@ -215,7 +216,10 @@ theorem processCreateMessage_establishes_artifact
     calc
       raw.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty :=
         hrawDeleteBase
-      _ = true := by rfl
+      _ = true := by
+        change msg.inheritedDeletions.isEmpty = true
+        rw [hinherited]
+        exact Std.HashSet.isEmpty_emptyWithCapacity
   have hstart : initEvm seeded =
       ⟨0, sevm,
         base.setMach
@@ -236,6 +240,8 @@ theorem processCreateMessage_establishes_artifact
     apply processMessage_ok_of_exec htransfer hpreparedCodeAddress
     · simpa only [seeded] using hexec
     · exact hrawError
+    · exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
   let chargedMach : Mach :=
     ⟨raw.stack, raw.memory,
       raw.gasLeft - constructorCodeDepositGas, raw.stateGas⟩
@@ -385,11 +391,12 @@ theorem processMessageCall_establishes_artifact
     (hstatic : msg.isStatic = false)
     (hdepth : msg.depth ≠ 0)
     (hpre : decide (msg.benv.stat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (hinherited : msg.inheritedDeletions = .emptyWithCapacity) :
     ∃ post out, DirectConstructorMessageResult ca msg post out := by
   obtain ⟨createPost, hcreate⟩ :=
     processCreateMessage_establishes_artifact msg hvalue hcodeAddress hcode
-      hgas hmax hshaCode hshaWarm horiginal hstatic hdepth hpre hfork
+      hgas hmax hshaCode hshaWarm horiginal hstatic hdepth hpre hfork hinherited
   have hcreate' : DirectCreateMessageResult ca msg createPost := by
     simpa only [htarget] using hcreate
   let out := messageOutputOf createPost

@@ -411,7 +411,8 @@ private theorem return96_runCompiled
     (hreads : Mem.Reads memory image)
     (hsize : memory.size = 96)
     (hmod : memory.size % 32 = 0)
-    (hlen : image.length = 96) :
+    (hlen : image.length = 96)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], memory, G + 5, base.stateGas⟩)
       (returnMemoryRange 0 96)
@@ -458,7 +459,8 @@ private theorem storeByteShiftStack_runCompiled
       (base.setMach
         ⟨(word >>> 8) :: stack,
           memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
       (dup 0 ::: pushB256 i ::: mstore8 :::
@@ -523,7 +525,8 @@ theorem storeLe64At_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)
       (storeLe64At address +++ rest) post := by
@@ -593,49 +596,49 @@ theorem storeLe64At_runCompiled
     rw [hM8]
     exact hrest
   unfold storeLe64At
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M0) (word := word) (i := address) (G := G + 96)
       (stack := stack)
   · simpa only [M0] using hsize32
   · rw [hnat0]; dsimp only [M0]; omega
   · exact hpush0
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M1) (word := word >>> 8) (i := address + 1)
       (G := G + 81) (stack := stack)
   · rw [hsize1]; exact hsize32
   · rw [hnat1, hsize1]; omega
   · exact hpush1
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M2) (word := word >>> 8 >>> 8) (i := address + 2)
       (G := G + 66) (stack := stack)
   · rw [hsize2]; exact hsize32
   · rw [hnat2, hsize2]; omega
   · exact hpush2
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M3) (word := word >>> 8 >>> 8 >>> 8) (i := address + 3)
       (G := G + 51) (stack := stack)
   · rw [hsize3]; exact hsize32
   · rw [hnat3, hsize3]; omega
   · exact hpush3
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M4) (word := word >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 4) (G := G + 36) (stack := stack)
   · rw [hsize4]; exact hsize32
   · rw [hnat4, hsize4]; omega
   · exact hpush4
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M5) (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 5) (G := G + 21) (stack := stack)
   · rw [hsize5]; exact hsize32
   · rw [hnat5, hsize5]; omega
   · exact hpush5
   · exact hroom
-  apply storeByteShiftStack_runCompiled
+  apply storeByteShiftStack_runCompiled (hfork := hfork)
       (memory := M6)
       (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 6) (G := G + 6) (stack := stack)
@@ -661,12 +664,13 @@ theorem storeLe64At64_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[word], getDepositCountHeaderMemory, G + 111, base.stateGas⟩)
       (storeLe64At 64 +++ rest) post := by
-  exact storeLe64At_runCompiled
+  exact storeLe64At_runCompiled (hfork := hfork)
     (memory := getDepositCountHeaderMemory)
     (address := 64) (offset := 64) (stack := [])
     getDepositCountHeaderMemory_spec.2.2.2
@@ -691,11 +695,12 @@ theorem storeLe64At32_runCompiled
     (hrest : Func.RunCompiled fs sevm
       (base.setMach
         ⟨[], storeLe64Memory memory 32 word, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[word], memory, G + 111, base.stateGas⟩)
       (storeLe64At 32 +++ rest) post := by
-  exact storeLe64At_runCompiled
+  exact storeLe64At_runCompiled (hfork := hfork)
     (memory := memory) (address := 32) (offset := 32) (stack := [])
     hsize32 hfit
     (by decide +kernel)
@@ -715,14 +720,15 @@ theorem getDepositCountHeader_runCompiled
     {G : Nat} {rest : Func}
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], getDepositCountHeaderMemory, G, base.stateGas⟩)
-      rest post) :
+      rest post)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty, G + 34, base.stateGas⟩)
       (pushB256 32 ::: mstoreAt 0 +++
        pushB256 8 ::: mstoreAt 1 +++
        pushB256 0 ::: mstoreAt 2 +++ rest) post := by
   apply Func.RunCompiled.next
-  · exact Ninst.runCompiled_pushB256 (w := 32) (c := gVerylow)
+  · exact Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0) (w := 32) (c := gVerylow)
       (G := G + 31) (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)
@@ -731,7 +737,7 @@ theorem getDepositCountHeader_runCompiled
     func_run (2) [3]
     · exact Devm.extCost_empty_word
     · apply Func.RunCompiled.next
-      · exact Ninst.runCompiled_pushB256 (w := 8) (c := gVerylow)
+      · exact Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0) (w := 8) (c := gVerylow)
           (G := G + 20) (by decide +kernel)
           (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
           (by simp only [Devm.stack_setMach, List.length_nil]; omega)
@@ -741,7 +747,7 @@ theorem getDepositCountHeader_runCompiled
         · exact Devm.extCost_of_size (n := 32) rfl
             (by decide +kernel)
         · apply Func.RunCompiled.next
-          · exact Ninst.runCompiled_pushB256 (w := 0) (c := gBase)
+          · exact Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0) (w := 0) (c := gBase)
               (G := G + 9) pushCost_zero
               (by simp only [Devm.gasLeft_setMach, gBase]; omega)
               (by simp only [Devm.stack_setMach, List.length_nil]; omega)
@@ -765,7 +771,8 @@ theorem getDepositCountHeader_runCompiled
 /-- Return the canonical count image without memory expansion, in five gas. -/
 theorem getDepositCountReturn_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm}
-    (word : B256) (G : Nat) :
+    (word : B256) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiled fs sevm
       (base.setMach
         ⟨[], getDepositCountResultMemory word, G + 5, base.stateGas⟩)
@@ -774,7 +781,7 @@ theorem getDepositCountReturn_runCompiled
         ⟨[], getDepositCountResultMemory word, G, base.stateGas⟩).withOutput
           (abiDynamicBytesReturn (le64 word.toNat))) := by
   have carrier := getDepositCountResultMemory_spec word
-  exact return96_runCompiled G
+  exact return96_runCompiled (hfork := hfork) G
     carrier.reads carrier.size_eq carrier.size_mod
     (abiDynamicBytesReturn_le64_length word.toNat)
 
@@ -792,7 +799,8 @@ private theorem storeByteShiftStack_runCompiledTo
       (base.setMach
         ⟨(word >>> 8) :: stack,
           memory.write i.toNat [word.2.2.toUInt8], G, base.stateGas⟩)
-      rest ex) :
+      rest ex)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨word :: stack, memory, G + 15, base.stateGas⟩)
       (dup 0 ::: pushB256 i ::: mstore8 :::
@@ -857,7 +865,8 @@ theorem storeLe64At_runCompiledTo
     (hrest : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, storeLe64Memory memory offset word, G, base.stateGas⟩)
-      rest ex) :
+      rest ex)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨word :: stack, memory, G + 111, base.stateGas⟩)
       (storeLe64At address +++ rest) ex := by
@@ -927,49 +936,49 @@ theorem storeLe64At_runCompiledTo
     rw [hM8]
     exact hrest
   unfold storeLe64At
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M0) (word := word) (i := address) (G := G + 96)
       (stack := stack)
   · simpa only [M0] using hsize32
   · rw [hnat0]; dsimp only [M0]; omega
   · exact hpush0
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M1) (word := word >>> 8) (i := address + 1)
       (G := G + 81) (stack := stack)
   · rw [hsize1]; exact hsize32
   · rw [hnat1, hsize1]; omega
   · exact hpush1
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M2) (word := word >>> 8 >>> 8) (i := address + 2)
       (G := G + 66) (stack := stack)
   · rw [hsize2]; exact hsize32
   · rw [hnat2, hsize2]; omega
   · exact hpush2
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M3) (word := word >>> 8 >>> 8 >>> 8) (i := address + 3)
       (G := G + 51) (stack := stack)
   · rw [hsize3]; exact hsize32
   · rw [hnat3, hsize3]; omega
   · exact hpush3
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M4) (word := word >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 4) (G := G + 36) (stack := stack)
   · rw [hsize4]; exact hsize32
   · rw [hnat4, hsize4]; omega
   · exact hpush4
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M5) (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 5) (G := G + 21) (stack := stack)
   · rw [hsize5]; exact hsize32
   · rw [hnat5, hsize5]; omega
   · exact hpush5
   · exact hroom
-  apply storeByteShiftStack_runCompiledTo
+  apply storeByteShiftStack_runCompiledTo (hfork := hfork)
       (memory := M6)
       (word := word >>> 8 >>> 8 >>> 8 >>> 8 >>> 8 >>> 8)
       (i := address + 6) (G := G + 6) (stack := stack)

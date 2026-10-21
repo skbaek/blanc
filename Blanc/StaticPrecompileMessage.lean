@@ -58,11 +58,11 @@ theorem stor_of_processMessage_staticPrecomp
           rw [Except.ok.inj hset]
           rfl
         · rw [ite_eq_right herr] at hset
-          have heq : child = evm' := Except.ok.inj hset
+          have heq := Except.ok.inj hset
           subst heq
           have hstate := state_of_executePrecomp_ok hpc.2.2 herr
           intro a
-          change (child.state.get a).stor = (parent.state.get a).stor
+          change (evm'.state.get a).stor = (parent.state.get a).stor
           rw [hstate]
           rfl
     · exact False.elim (hinterp.1 (by exact hpre))
@@ -111,11 +111,11 @@ theorem code_of_processMessage_staticPrecomp
           rw [Except.ok.inj hset]
           rfl
         · rw [ite_eq_right herr] at hset
-          have heq : child = evm' := Except.ok.inj hset
+          have heq := Except.ok.inj hset
           subst heq
           have hstate := state_of_executePrecomp_ok hpc.2.2 herr
           intro a
-          change (child.state.get a).code = (parent.state.get a).code
+          change (evm'.state.get a).code = (parent.state.get a).code
           rw [hstate]
           rfl
     · exact False.elim (hinterp.1 (by exact hpre))

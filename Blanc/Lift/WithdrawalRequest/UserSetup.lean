@@ -69,6 +69,7 @@ private theorem init_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
 private theorem init_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {excess : B256} {o : Outcome}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (tail : SFunc.RunExact prog sevm (St b [0, 17, 1, excess, 17] M G) t_004d_c0 o) :
     SFunc.RunExact prog sevm (St b [excess, 17] M (G + 19)) t_0045_c0 o := by
   have hgas : G + 19 = G + 2 + 3 + 3 + 5 + 3 + 3 := by
@@ -80,7 +81,7 @@ private theorem init_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   refine rx_mul (v := 17) rfl (by change 2 < 1024; decide) ?_
   refine rx_push one_push (by change 3 < 1024; decide) ?_
   refine rx_swap1 ?_
-  exact rx_push0 (by change 4 < 1024; decide) tail
+  exact rx_push0 (h_push0 := CoveredFork.rules_push0 hfork) (by change 4 < 1024; decide) tail
 
 /-- Success excludes the inhibitor and reaches the initialized loop with slot zero warmed. -/
 theorem user_setup_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
@@ -140,14 +141,14 @@ theorem user_setup_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outco
   rw [hgas]
   unfold t_001a_c0
   refine rx_push denominator_push (by decide) ?_
-  refine rx_push0 (by change 1 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := CoveredFork.rules_push0 (by assumption)) (by change 1 < 1024; decide) ?_
   refine rx_sload_sel hfork (by change 1 < 1024; decide) ?_
   refine rx_dup1 (by change 2 < 1024; decide) ?_
   refine rx_push inhibitor_push (by change 3 < 1024; decide) ?_
   refine rx_eq (v := 0) ?_ (by change 2 < 1024; decide) ?_
   · simp only [B256.eqCheck, ite_eq_right (Ne.symm active)]
   · refine rx_push rfl (by change 3 < 1024; decide) ?_
-    exact rx_branch_zero (init_exact tail)
+    exact rx_branch_zero (init_exact hfork tail)
 
 /-- A successful canonical user execution reaches the non-inhibited initialized fee loop. -/
 theorem exec_user_setup {sevm : Sevm} {pre post : Devm}

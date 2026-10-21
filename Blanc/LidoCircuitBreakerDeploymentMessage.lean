@@ -595,6 +595,8 @@ private theorem processMessage_official_constructor_checkpoint
     apply processMessage_ok_of_exec htransfer hpreparedCodeAddress
     · simpa only [seeded] using hexec
     · exact hrawError
+    · exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
   refine ⟨⟨raw, {
     benv := benv
     residualGas := G
