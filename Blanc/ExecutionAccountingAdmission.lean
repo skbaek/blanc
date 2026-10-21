@@ -90,9 +90,9 @@ theorem processWithdrawalsState_getStor_eq (ca : Adr) (state : State)
 
 /-- G+4.  The block's withdrawal bound survives the body prefix. -/
 theorem AppliedBodyTrace.transactionBound
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (hfork : CoveredFork benv.stat.fork) :
     sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
@@ -518,7 +518,7 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
   have messageInv := trace.message.stateInv_admitted_sem L.preserves (by
     rw [prepareMessage_benv trace.prepared]
     simpa only [Benv.beginTransaction] using hfork) admitted
-      (trace.msgInv_sem inv notCreated)
+      (trace.msgInv_sem inv notCreated) (trace.not_mem_msg_inheritedDeletions ca)
   have messageProtected := State.Protected.of_image messageInv.1.code
   obtain ⟨refundSteps, refundReplay, refundObserved⟩ :=
     L.carrier.ofAddBal_observed L.view (L.tag blockIndex transactionIndex)
@@ -694,9 +694,9 @@ theorem directWithdrawal (L : AccountingLadderAdmitted c ca entry)
 open _root_.Blanc.ExecutionTrace in
 /-- G9, observed: the segments are observed in `applyBody` order. -/
 theorem body (L : AccountingLadderAdmitted c ca entry)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca benv.state)
     (notCreated : ca ∉ benv.createdAccounts)

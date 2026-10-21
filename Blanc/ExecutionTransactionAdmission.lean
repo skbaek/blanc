@@ -88,12 +88,8 @@ theorem TransactionTrace.benvInv_admitted_sem
   have msgFork : CoveredFork trace.msg.benv.stat.fork := by
     rw [prepareMessage_benv trace.prepared]
     simpa only [Benv.beginTransaction] using hfork
-  have inherited : ca ∉ trace.msg.inheritedDeletions := by
-    have prepared := trace.prepared
-    unfold prepareMessage at prepared
-    have fields := congrArg Msg.inheritedDeletions (Except.ok.inj prepared)
-    rw [← fields]
-    exact AdrSet.not_mem_empty
+  have inherited : ca ∉ trace.msg.inheritedDeletions :=
+    trace.not_mem_msg_inheritedDeletions ca
   have messageInv :=
     trace.message.stateInv_admitted_sem preserves msgFork admitted msgInv inherited
   rcases trace.exists_stateChronology hfork with ⟨chronology⟩

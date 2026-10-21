@@ -54,7 +54,7 @@ def RequestsTrace.settledFrames
   trace.withdrawal.settledFrames ++ trace.consolidation.settledFrames
 
 def AppliedBodyTrace.settledFrames
-    (trace : AppliedBodyTrace benv txs wds state bout) : List Exec.Frame :=
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : List Exec.Frame :=
   trace.beacon.settledFrames ++ trace.history.settledFrames ++
     trace.transactions.settledFrames ++ trace.requests.settledFrames
 

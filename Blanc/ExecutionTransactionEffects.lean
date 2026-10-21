@@ -191,6 +191,19 @@ theorem TransactionTrace.benvInv
 
 /-! ## Final settlement -/
 
+/-- A transaction's prepared message inherits no pending deletions: no account
+is in its `inheritedDeletions`. -/
+theorem TransactionTrace.not_mem_msg_inheritedDeletions
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') (a : Adr) :
+    a ∉ trace.msg.inheritedDeletions := by
+  have prepared := trace.prepared
+  unfold prepareMessage at prepared
+  have fields := congrArg Msg.inheritedDeletions (Except.ok.inj prepared)
+  rw [← fields]
+  exact AdrSet.not_mem_empty
+
 /-- A transaction never destroys an installed contract account. -/
 theorem TransactionTrace.accountsToDelete_ne
     {ca : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -201,12 +214,8 @@ theorem TransactionTrace.accountsToDelete_ne
     (notCreated : ca ∉ benv.createdAccounts)
     (hfork : CoveredFork benv.stat.fork) :
     ∀ address ∈ trace.messageOut.accountsToDelete.toList, address ≠ ca := by
-  have inherited : ca ∉ trace.msg.inheritedDeletions := by
-    have prepared := trace.prepared
-    unfold prepareMessage at prepared
-    have fields := congrArg Msg.inheritedDeletions (Except.ok.inj prepared)
-    rw [← fields]
-    exact AdrSet.not_mem_empty
+  have inherited : ca ∉ trace.msg.inheritedDeletions :=
+    trace.not_mem_msg_inheritedDeletions ca
   exact (ContractSpec.processMessageCall_preserves_inv (by
     rw [prepareMessage_benv trace.prepared]
     simpa only [Benv.beginTransaction] using hfork) preserves
