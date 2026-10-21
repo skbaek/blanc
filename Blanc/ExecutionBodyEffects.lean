@@ -221,9 +221,9 @@ theorem RequestsTrace.stateInv_and_sum_le
 world's total balance. Both system prefixes, every transaction, and both
 request-system calls are included; no contract invariant is required. -/
 theorem AppliedBodyTrace.sum_le_of_empty_withdrawals
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs [] state bout)
+    (trace : AppliedBodyTrace benv txs ommers [] state bout)
     (hfork : CoveredFork benv.stat.fork) :
     sum state.bal ≤ sum benv.state.bal := by
   have hforkHistory : CoveredFork (benv.withState trace.beaconState).stat.fork := by

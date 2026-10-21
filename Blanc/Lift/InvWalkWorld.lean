@@ -239,7 +239,8 @@ theorem ri_sload {k : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
     ∃ G', d = St (afterSload sevm b k) (b.getStorVal sevm.currentTarget k :: S) M G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore,
-    Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
+    Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
+    CoveredFork.rules_access hfork] at run
   rw [show (St b (k :: S) M G).pop = .ok (k, St b S M G) from rfl] at run
   simp only [Except.bind_ok] at run
   by_cases hw : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys

@@ -277,7 +277,9 @@ theorem run_shr_top (run : Ninst.Run sevm d (.reg .shr) d') (hs : d.stack = x ::
     d'.stack = (y >>> x.toNat) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
+  split at run
+  · exact binary_top run hs
+  · cases run
 
 theorem run_lt_top (run : Ninst.Run sevm d (.reg .lt) d') (hs : d.stack = x :: y :: rest) :
     d'.stack = B256.ltCheck x y :: rest := by
