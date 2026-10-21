@@ -3517,6 +3517,7 @@
      "Blanc/Lift/UniswapV2Pair/Creation/Check.lean",
      "Blanc/Lift/UniswapV2Pair/Creation/Jumps.lean",
      "Blanc/Lift/PairCode.lean",
+     "Blanc/Lift/Curve3Pool/Code.lean",
      "Blanc/Lift/Usdc/ImplFp/Ann.lean",
      "Blanc/Lift/Usdc/ImplWs/Ann.lean"
     ],

@@ -828,6 +828,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.Donate",
                     "Lift.Curve3Pool.Walk.Getters",
                     "Lift.Curve3Pool.Cert",
+                    "Lift.Curve3Pool.Code",
                     "Lift.Curve3Pool.KitCheck",
                     "Lift.Curve3Pool.Callee.A",
                     "Lift.Curve3Pool.Callee.ABase",
