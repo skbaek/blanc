@@ -5,6 +5,7 @@ import Blanc.Weth10HolderFlowAlgebra
 import Blanc.Weth10Redeemable
 import Blanc.Weth10Erc677Functional
 import Blanc.Weth10FlashFunctional
+import Blanc.LadderReached
 
 /-!
 Committed per-holder flow accounting for the exact Blanc WETH10 runtime.
@@ -905,6 +906,23 @@ theorem exists_accountedHistory_of_reachUsing
     Nonempty (AccountedHistory cfg dp ca checkpoint future) := by
   rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing h hcovered with
     ⟨history⟩
+  exact exists_accountedHistory_of_configuredHistoryTrace
+    (dp := dp) (ca := ca) history
+
+/-- Reached-segment form of `exists_accountedHistory_of_reachUsing`: coverage
+is asked only at or after the timestamp floor `T`, from a checkpoint whose tip
+is at or past it. -/
+theorem exists_accountedHistory_of_reachUsing_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (h : BlockChain.ReachUsing cfg checkpoint future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, checkpoint.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    Nonempty (AccountedHistory cfg dp ca checkpoint future) := by
+  rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing_of_reached
+      h T hcov hstart with ⟨history⟩
   exact exists_accountedHistory_of_configuredHistoryTrace
     (dp := dp) (ca := ca) history
 

@@ -1,4 +1,5 @@
 import Blanc.Weth10AnyOrder
+import Blanc.LadderReached
 
 /-!
 Ethereum-mainnet specializations of the schedule-parametric WETH10 results.
@@ -16,57 +17,32 @@ namespace Weth10
 
 /-! ## Mainnet rule selection -/
 
-/-- The modeled mainnet schedule never selects Amsterdam.  Stated by direct
-case analysis on the four activations rather than through
-`mainnetChainConfig_covered`, so the named-rules lemma below keeps the
-dependency footprint `scripts/check.sh` pins for it. -/
-private theorem mainnet_forkAt?_ne_amsterdam (t : Nat) :
-    mainnetChainConfig.forkAt? t ≠ some .amsterdam := by
-  simp only [ChainConfig.forkAt?, mainnetChainConfig, List.filter]
-  by_cases h1 : mainnetPragueTimestamp ≤ t <;>
-    by_cases h2 : mainnetOsakaTimestamp ≤ t <;>
-    by_cases h3 : mainnetBpo1Timestamp ≤ t <;>
-    by_cases h4 : mainnetBpo2Timestamp ≤ t <;>
-    simp only [h1, decide_true, h2, h3, h4, List.getLast?_cons_cons, List.getLast?_singleton, Option.map_some, ne_eq, Option.some.injEq, reduceCtorEq, not_false_eq_true, decide_false, List.getLast?_nil, Option.map_none]
-
-/-- Every successful lookup in the currently modeled mainnet schedule selects
-one of the four rule records named by that schedule. -/
+/-- Every successful lookup in the currently modeled mainnet schedule at or
+after Prague selects one of the four rule records named by that schedule. -/
 theorem mainnet_rulesAt_eq_named
-    {timestamp : Nat} {rules : ForkRules}
-    (h : mainnetChainConfig.rulesAt timestamp = .ok rules) :
+    {number timestamp : Nat} {rules : ForkRules}
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (h : mainnetChainConfig.rulesAt number timestamp = .ok rules) :
     rules = pragueRules ∨ rules = osakaRules ∨
       rules = bpo1Rules ∨ rules = bpo2Rules := by
   rw [ChainConfig.rulesAt] at h
-  cases hf : mainnetChainConfig.forkAt timestamp with
+  cases hf : mainnetChainConfig.forkAt number timestamp with
   | error e => simp only [hf, Except.bind_error, reduceCtorEq] at h
   | ok f =>
     rw [hf] at h
-    simp only [Fork.rules, bind, Except.bind, Except.mapError,
-      Except.ok.injEq] at h
-    subst h
-    cases f
-    all_goals first
-      | exact Or.inl rfl
-      | exact Or.inr (Or.inl rfl)
-      | exact Or.inr (Or.inr (Or.inl rfl))
-      | exact Or.inr (Or.inr (Or.inr rfl))
-      | skip
-    exfalso
-    apply mainnet_forkAt?_ne_amsterdam timestamp
-    have hv : mainnetChainConfig.validate = .ok () := by decide
-    unfold ChainConfig.forkAt at hf
-    rw [hv] at hf
-    cases hq : mainnetChainConfig.forkAt? timestamp with
-    | none => simp only [bind, Except.bind, Except.mapError, hq, reduceCtorEq] at hf
-    | some g =>
-      simp only [hq, Except.mapError, bind, Except.bind, Except.ok.injEq] at hf
-      rw [hf]
+    have hcov := mainnetChainConfig_covered number timestamp f hmodern hf
+    unfold CoveredFork coveredForks at hcov
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcov
+    simp only [bind, Except.bind, Fork.rules, Except.mapError] at h
+    rcases hcov with rfl | rfl | rfl | rfl <;>
+      simp only [Fork.rules?, Except.ok.injEq] at h <;> subst h <;>
+      simp only [true_or, or_true]
 
 /-- At and after the final modeled mainnet activation, configured lookup
 selects BPO2. -/
 theorem mainnet_rulesAt_eq_bpo2_of_ge
-    {timestamp : Nat} (h : mainnetBpo2Timestamp ≤ timestamp) :
-    mainnetChainConfig.rulesAt timestamp = .ok bpo2Rules := by
+    {number timestamp : Nat} (h : mainnetBpo2Timestamp ≤ timestamp) :
+    mainnetChainConfig.rulesAt number timestamp = .ok bpo2Rules := by
   change 1_767_747_671 ≤ timestamp at h
   have hvalid : mainnetChainConfig.validate = .ok () := by decide
   rw [ChainConfig.rulesAt, ChainConfig.forkAt, hvalid]
@@ -74,6 +50,8 @@ theorem mainnet_rulesAt_eq_bpo2_of_ge
     mainnetBpo1Timestamp, mainnetBpo2Timestamp, List.getLast?_filter, List.reverse_cons,
     List.reverse_nil, List.nil_append, List.cons_append, h, decide_true, List.find?_cons_of_pos,
     Option.map_some, Fork.rules, bind_assoc, Except.bind_ok]
+  simp only [ForkActivation.atTime, ForkCriterion.reached, h, decide_true,
+    List.find?_cons_of_pos, Option.map_some]
   rfl
 
 /-! ## Closed redemption ceiling under every mainnet rule set -/
@@ -112,15 +90,22 @@ mainnet schedule can select admits any transaction gas limit up to EIP-7825's
 `2 ^ 24`, so a caller holding `tx.gas ≤ 2 ^ 24` closes that obligation without
 knowing which rules the block selects. -/
 theorem mainnet_checkTransactionGasCap_of_le
-    {timestamp gas : Nat} {rules : ForkRules}
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    {number timestamp gas : Nat} {rules : ForkRules}
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hgas : gas ≤ 2 ^ 24) :
     checkTransactionGasCap rules.tx gas = .ok () := by
-  rcases mainnet_rulesAt_eq_named hrules with h | h | h | h <;> subst h
-  · rfl
-  all_goals
-    change (if gas > 16777216 then _ else .ok () : Except TxValidationError Unit) = .ok ()
-    exact ite_eq_right (Nat.not_lt.mpr hgas)
+  rw [ChainConfig.rulesAt] at hrules
+  cases hf : mainnetChainConfig.forkAt number timestamp with
+  | error e => simp only [hf, Except.bind_error, reduceCtorEq] at hrules
+  | ok f =>
+    rw [hf] at hrules
+    simp only [bind, Except.bind, Fork.rules, Except.mapError] at hrules
+    cases f <;> simp only [Fork.rules?, Except.ok.injEq, reduceCtorEq] at hrules <;>
+      subst hrules <;>
+      first
+        | rfl
+        | (change (if gas > 16777216 then _ else .ok () : Except TxValidationError Unit) = .ok ()
+           exact ite_eq_right (Nat.not_lt.mpr hgas))
 
 /-! ## BPO2 deployment root -/
 
@@ -130,9 +115,9 @@ def weth10CurrentMainnetCreationTimestamp : Nat := 1_767_747_683
 
 /-- Kernel-decided synchronization pin between the Lean specialization and the
 committed current-mainnet creation fixture. -/
-theorem weth10CurrentMainnetCreation_rulesAt :
-    mainnetChainConfig.rulesAt 1_767_747_683 = .ok bpo2Rules := by
-  decide
+theorem weth10CurrentMainnetCreation_rulesAt (number : Nat) :
+    mainnetChainConfig.rulesAt number 1_767_747_683 = .ok bpo2Rules :=
+  mainnet_rulesAt_eq_bpo2_of_ge (by decide)
 
 /-- Current-mainnet specialization of the schedule-parametric deployment
 root. -/
@@ -173,19 +158,33 @@ four named records. -/
 theorem chainUsing_preserves_stable_mainnet
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
     (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
-    (hstable : Stable dp ca ch.state) :
+    (hstable : Stable dp ca ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      mainnetPragueTimestamp ≤ parent.header.timestamp) :
     Stable dp ca ch'.state :=
-  chainUsing_preserves_stable dp ca mainnetChainConfig ch ch' hreach hstable
-    mainnetChainConfig_covered
+  chainUsing_preserves_stable_of_reached dp ca mainnetChainConfig mainnetPragueTimestamp
+    mainnetChainConfig_covered ch ch' hreach hstable hstart
 
 theorem chain_reachable_backed_and_flash_zero_mainnet
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
     (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
-    (hstable : Stable dp ca ch.state) :
+    (hstable : Stable dp ca ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      mainnetPragueTimestamp ≤ parent.header.timestamp) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
-  chain_reachable_backed_and_flash_zero
-    dp ca mainnetChainConfig ch ch' hreach hstable mainnetChainConfig_covered
+  have h := chainUsing_preserves_stable_mainnet dp ca ch ch' hreach hstable hstart
+  ⟨h.flashZero, h.solvent⟩
+
+/-- A current-mainnet deployment root's tip is at or past Prague's timestamp:
+the deployment block ran a covered fork, and mainnet selects covered forks only
+from Prague on. -/
+theorem mainnetDeploymentRoot_pragueFloor
+    {base deployed : BlockChain} {dp : DeployParams} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed dp ca) :
+    ∃ tip, deployed.blocks.getLast? = some tip ∧
+      mainnetPragueTimestamp ≤ tip.header.timestamp :=
+  DeploymentRoot.tip_floor hroot mainnetChainConfig_pragueTimestamp_le_of_covered
 
 theorem deployment_reachable_residual_messageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -200,8 +199,9 @@ theorem deployment_reachable_residual_messageRedemption_enabled_mainnet
     (henv : AdmissibleRedemptionMessage
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
-  deployment_reachable_residual_messageRedemption_enabled
-    hroot mainnetChainConfig_covered hcheckpoint hq henv
+  deployment_reachable_residual_messageRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hq henv
 
 theorem deployment_reachable_residual_transactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -217,8 +217,9 @@ theorem deployment_reachable_residual_transactionRedemption_enabled_mainnet
     (henv : AdmissibleRedemptionTx
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_residual_transactionRedemption_enabled
-    hroot mainnetChainConfig_covered hcheckpoint hq hentry henv
+  deployment_reachable_residual_transactionRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hq hentry henv
 
 theorem deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -232,8 +233,9 @@ theorem deployment_reachable_residual_selfMessageRedemption_enabled_mainnet
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
     MessageRedemptionEnabled dp ca u u q future.state msg :=
-  deployment_reachable_residual_selfMessageRedemption_enabled
-    hroot mainnetChainConfig_covered hcheckpoint hq henv
+  deployment_reachable_residual_selfMessageRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hq henv
 
 theorem
     deployment_reachable_residual_selfTransactionRedemption_enabled_mainnet
@@ -249,8 +251,9 @@ theorem
     (hentry : benv.state = future.state)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
-  deployment_reachable_residual_selfTransactionRedemption_enabled
-    hroot mainnetChainConfig_covered hcheckpoint hq hentry henv
+  deployment_reachable_residual_selfTransactionRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hq hentry henv
 
 theorem deployment_reachable_booked_messageRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -261,8 +264,9 @@ theorem deployment_reachable_booked_messageRedemption_enabled_mainnet
     (henv : AdmissibleRedemptionMessage
       rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
-  deployment_reachable_booked_messageRedemption_enabled
-    hroot mainnetChainConfig_covered hfuture hq henv
+  deployment_reachable_booked_messageRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hfuture hq henv
 
 theorem deployment_reachable_booked_transactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -275,8 +279,9 @@ theorem deployment_reachable_booked_transactionRedemption_enabled_mainnet
     (henv : AdmissibleRedemptionTx
       rules dp ca u recipient q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_booked_transactionRedemption_enabled
-    hroot mainnetChainConfig_covered hfuture hentry hq henv
+  deployment_reachable_booked_transactionRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hfuture hentry hq henv
 
 theorem deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
     {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
@@ -288,8 +293,9 @@ theorem deployment_reachable_booked_selfTransactionRedemption_enabled_mainnet
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
     TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
-  deployment_reachable_booked_selfTransactionRedemption_enabled
-    hroot mainnetChainConfig_covered hfuture hentry hq henv
+  deployment_reachable_booked_selfTransactionRedemption_enabled_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hfuture hentry hq henv
 
 theorem
     deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_mainnet
@@ -305,8 +311,9 @@ theorem
       rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender
-    hroot mainnetChainConfig_covered hfuture hentry hq henv hrecovered
+  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hfuture hentry hq henv hrecovered
 
 theorem deployment_reachable_future_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
@@ -316,7 +323,8 @@ theorem deployment_reachable_future_redeemable_mainnet
     (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable hroot mainnetChainConfig_covered hcheckpoint hfuture
+  deployment_reachable_future_redeemable_of_reached hroot mainnetPragueTimestamp
+    mainnetChainConfig_covered (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hfuture
 
 theorem deployment_reachable_future_dualSelector_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
@@ -326,8 +334,9 @@ theorem deployment_reachable_future_dualSelector_redeemable_mainnet
     (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
-  deployment_reachable_future_dualSelector_redeemable
-    hroot mainnetChainConfig_covered hcheckpoint hfuture
+  deployment_reachable_future_dualSelector_redeemable_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hfuture
 
 theorem deployment_reachable_future_redeemable_allHolders_mainnet
     {dp : DeployParams} {ca : Adr}
@@ -337,8 +346,9 @@ theorem deployment_reachable_future_redeemable_allHolders_mainnet
     (hfuture : BlockChain.ReachUsing mainnetChainConfig checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
       mainnetChainConfig dp ca u checkpoint future history :=
-  deployment_reachable_future_redeemable_allHolders
-    hroot mainnetChainConfig_covered hcheckpoint hfuture
+  deployment_reachable_future_redeemable_allHolders_of_reached
+    hroot mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hcheckpoint hfuture
 
 theorem deployment_fullWindow_future_redeemable_mainnet
     {dp : DeployParams} {ca u : Adr}
@@ -348,7 +358,8 @@ theorem deployment_fullWindow_future_redeemable_mainnet
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
         mainnetChainConfig dp ca u deployed future history :=
-  deployment_fullWindow_future_redeemable hroot mainnetChainConfig_covered hfuture
+  deployment_fullWindow_future_redeemable_of_reached hroot mainnetPragueTimestamp
+    mainnetChainConfig_covered (mainnetDeploymentRoot_pragueFloor hroot) hfuture
 
 theorem deployment_reachable_dormant_holder_balance_monotone_mainnet
     {dp : DeployParams} {ca u : Adr} {base deployed future : BlockChain}
@@ -359,27 +370,31 @@ theorem deployment_reachable_dormant_holder_balance_monotone_mainnet
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
         bookedBalanceNat future.state ca u :=
-  deployment_reachable_dormant_holder_balance_monotone hroot mainnetChainConfig_covered hfuture
+  deployment_reachable_dormant_holder_balance_monotone_of_reached hroot mainnetPragueTimestamp
+    mainnetChainConfig_covered (mainnetDeploymentRoot_pragueFloor hroot) hfuture
 
 theorem deployment_reachable_redeemClaims_anyOrder_mainnet
-    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {rules : ForkRules} {number timestamp : Nat} {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : MainnetDeploymentRoot base deployed dp ca)
     (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
-  deployment_reachable_redeemClaims_anyOrder
-    hroot hfuture mainnetChainConfig_covered hrules hadm hperm
+  deployment_reachable_redeemClaims_anyOrder_of_reached
+    hroot hfuture mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hmodern hrules hadm hperm
 
 theorem deployment_reachable_redeemEveryoneList_anyOrder_mainnet
-    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {rules : ForkRules} {number timestamp : Nat} {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : MainnetDeploymentRoot base deployed dp ca)
     (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
       ClaimAdmissible rules ca future.state
@@ -387,8 +402,9 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder_mainnet
     (hperm :
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
-  deployment_reachable_redeemEveryoneList_anyOrder
-    hroot hfuture mainnetChainConfig_covered hrules hnodup hrecipients hperm
+  deployment_reachable_redeemEveryoneList_anyOrder_of_reached
+    hroot hfuture mainnetPragueTimestamp mainnetChainConfig_covered
+    (mainnetDeploymentRoot_pragueFloor hroot) hmodern hrules hnodup hrecipients hperm
 
 /-! The schedule-indexed conservation, no-wrap, and determinism pins. -/
 

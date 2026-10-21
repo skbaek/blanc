@@ -1,5 +1,6 @@
 import Blanc.Weth10StateSound
 import Blanc.Weth10DeployProof
+import Blanc.LadderReached
 
 /-!
 Public packaging of WETH10's existing backing and exact-counter results.
@@ -128,6 +129,26 @@ theorem chainUsing_preserves_stable
     (ContractSpec.chainUsing_preserves_inv ca
       (flashExactSpec_preserves dp ca 0) cfg ch ch' h_reach
       h_inv.flashStateInv hcov)
+
+/-- Reached-segment form of `chainUsing_preserves_stable`: fork coverage is
+asked only at or after the timestamp floor `T`, from a starting tip at or past
+it (`ContractSpec.chainUsing_preserves_inv_of_reached`). -/
+theorem chainUsing_preserves_stable_of_reached
+    (dp : DeployParams) (ca : Adr) (cfg : ChainConfig) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
+    (h_inv : Stable dp ca ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      T ≤ parent.header.timestamp) :
+    Stable dp ca ch'.state :=
+  Stable.ofStateInvs
+    (ContractSpec.chainUsing_preserves_inv_of_reached ca
+      (backedSpec_preserves dp ca) cfg T hcov h_reach
+      h_inv.backedStateInv hstart).1
+    (ContractSpec.chainUsing_preserves_inv_of_reached ca
+      (flashExactSpec_preserves dp ca 0) cfg T hcov h_reach
+      h_inv.flashStateInv hstart).1
 
 /-- Configured-chain block import preserves WETH10 stability. -/
 theorem addBlockToChainUsing_preserves_stable

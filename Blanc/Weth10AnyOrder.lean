@@ -600,7 +600,7 @@ theorem redeemEveryoneList_anyOrder
 rule set. -/
 private theorem rulesSelected_of_rulesAt {cfg : ChainConfig} {number timestamp : Nat}
     {rules : ForkRules}
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hcov : ∀ f, cfg.forkAt number timestamp = .ok f → CoveredFork f)
     (hrules : cfg.rulesAt number timestamp = .ok rules) :
     ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules := by
   unfold ChainConfig.rulesAt at hrules
@@ -609,12 +609,35 @@ private theorem rulesSelected_of_rulesAt {cfg : ChainConfig} {number timestamp :
       simp only [bind, Except.bind, hf, reduceCtorEq] at hrules
   | ok f =>
       simp only [bind, Except.bind, hf, Except.mapError, Fork.rules, Except.ok.injEq] at hrules
-      have hcf := hcov number timestamp f hf
+      have hcf := hcov f hf
       refine ⟨f, hcf, ?_⟩
       unfold CoveredFork coveredForks at hcf
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hcf
       rcases hcf with rfl | rfl | rfl | rfl <;>
         simpa only [Fork.rules?, Fork.ruleSet, Except.ok.injEq] using hrules
+
+/-- Reached-segment form of `deployment_reachable_redeemClaims_anyOrder`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip and the selected rules have both reached. -/
+theorem deployment_reachable_redeemClaims_anyOrder_of_reached
+    {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfloor : T ≤ timestamp)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
+    (hadm : ClaimsAdmissible rules ca future.state cs)
+    (hperm : cs.Perm ds) :
+    ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
+  redeemClaims_anyOrder (hroot.target_not_precompile hrules)
+    (rulesSelected_of_rulesAt (fun f hf => hcov _ _ f hfloor hf) hrules)
+    (hroot.reachable_stable_of_reached hfuture T hcov hstart) hadm hperm
 
 /-- **The flagship instance.** At any configured future of a verified
 WETH10 deployment, every permutation of an admissible finite claim list has a
@@ -635,9 +658,37 @@ theorem deployment_reachable_redeemClaims_anyOrder
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
-  redeemClaims_anyOrder (hroot.target_not_precompile hrules)
-    (rulesSelected_of_rulesAt hcov hrules)
-    (hroot.reachable_stable hfuture hcov) hadm hperm
+  deployment_reachable_redeemClaims_anyOrder_of_reached hroot hfuture 0
+    (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) (Nat.zero_le _) hrules hadm hperm
+
+/-- Reached-segment form of `deployment_reachable_redeemEveryoneList_anyOrder`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip and the selected rules have both reached. -/
+theorem deployment_reachable_redeemEveryoneList_anyOrder_of_reached
+    {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
+    {dp : DeployParams} {ca : Adr}
+    {base deployed future : BlockChain} {holders : List Adr}
+    {recipient : Adr → Adr} {claims : List RedemptionClaim}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfloor : T ≤ timestamp)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
+    (hnodup : holders.Nodup)
+    (hrecipients : ∀ u ∈ holders,
+      ClaimAdmissible rules ca future.state
+        ⟨u, bookedBalanceNat future.state ca u, recipient u⟩)
+    (hperm :
+      (fullBalanceClaims ca future.state holders recipient).Perm claims) :
+    ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
+  redeemEveryoneList_anyOrder (hroot.target_not_precompile hrules)
+    (rulesSelected_of_rulesAt (fun f hf => hcov _ _ f hfloor hf) hrules)
+    (hroot.reachable_stable_of_reached hfuture T hcov hstart) hnodup hrecipients hperm
 
 /-- The deployment-rooted full-balance instance for any supplied
 duplicate-free holder list and admissible recipient map. -/
@@ -657,9 +708,9 @@ theorem deployment_reachable_redeemEveryoneList_anyOrder
     (hperm :
       (fullBalanceClaims ca future.state holders recipient).Perm claims) :
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
-  redeemEveryoneList_anyOrder (hroot.target_not_precompile hrules)
-    (rulesSelected_of_rulesAt hcov hrules)
-    (hroot.reachable_stable hfuture hcov) hnodup hrecipients hperm
+  deployment_reachable_redeemEveryoneList_anyOrder_of_reached hroot hfuture 0
+    (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) (Nat.zero_le _) hrules hnodup hrecipients hperm
 
 end Weth10
 

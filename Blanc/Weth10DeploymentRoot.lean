@@ -1220,6 +1220,44 @@ theorem DeploymentRoot.reachable_stable
     Stable dp ca future.state :=
   chainUsing_preserves_stable dp ca _ deployed future hreach hroot.stable hcov
 
+/-- The deployed chain's tip is the deployment block, which the schedule
+selected under a covered fork. -/
+theorem DeploymentRoot.tip_covered
+    (hroot : DeploymentRoot cfg base deployed dp ca) :
+    ∃ tip fork, deployed.blocks.getLast? = some tip ∧
+      cfg.forkAt tip.header.number tip.header.timestamp = .ok fork ∧
+      CoveredFork fork := by
+  obtain ⟨fork, cb, _, _, _, _, _, _, _, henv, hfork, _, _, hwith, _⟩ :=
+    hroot.execution
+  obtain ⟨_, hblocks, _⟩ :=
+    stateTransitionCoreE_eq_ok (stateTransitionAt_eq_ok_iff.mp hwith)
+  refine ⟨cb.block, fork, ?_, henv.forkAt, hfork⟩
+  rw [hblocks]
+  exact appendBlock_getLast? _ _
+
+/-- A timestamp floor that every covered selection of the schedule respects
+holds at the deployed tip. -/
+theorem DeploymentRoot.tip_floor
+    (hroot : DeploymentRoot cfg base deployed dp ca) {T : Nat}
+    (hT : ∀ {number timestamp f}, cfg.forkAt number timestamp = .ok f →
+      CoveredFork f → T ≤ timestamp) :
+    ∃ tip, deployed.blocks.getLast? = some tip ∧ T ≤ tip.header.timestamp := by
+  obtain ⟨tip, _, htip, hf, hcov⟩ := hroot.tip_covered
+  exact ⟨tip, htip, hT hf hcov⟩
+
+/-- Reached-segment form of `DeploymentRoot.reachable_stable`: coverage is
+asked only at or after a timestamp floor the deployed tip has reached. -/
+theorem DeploymentRoot.reachable_stable_of_reached
+    (hroot : DeploymentRoot cfg base deployed dp ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    Stable dp ca future.state :=
+  chainUsing_preserves_stable_of_reached dp ca _ T hcov deployed future hreach
+    hroot.stable hstart
+
 end Weth10
 
 end Blanc

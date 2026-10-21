@@ -80,7 +80,13 @@ registry has identified the likely vocabulary.
   `ContractSpec.chainUsing_preserves_inv_of_reached` asks coverage only at or
   after a timestamp floor and a starting tip at or past it, and
   `stateTransitionUsing_reachedStep` gives the strictly-later block and new tip
-  of one accepted step.
+  of one accepted step. `BlockChain.ReachUsing.tip_floor` carries the tip's
+  floor along a reach, `stateTransitionUsing_covered_of_reached` covers one
+  floored step, `ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing_of_reached`
+  builds a configured history over a floored segment, and
+  `mainnetChainConfig_pragueTimestamp_le_of_covered` is the converse of
+  `mainnetChainConfig_covered` (a covered mainnet selection is at or after
+  Prague), which turns a covered deployment block into the floor's start.
   To move an execution *between* covered forks, use
   [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean): `withFork` replaces the fork on
   `Sevm`/`Evm`/`Msg`/`Frame`; `evm_step_withFork` (one step commutes at an

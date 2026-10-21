@@ -1,4 +1,5 @@
 import Blanc.Ladder
+import Blanc.ExecutionHistory
 
 /-!
 Reached-segment fork coverage for configured chains.
@@ -45,6 +46,95 @@ theorem stateTransitionUsing_reachedStep {cfg : ChainConfig} {pre post : BlockCh
     refine ⟨f, Except.mapError_eq_ok_iff.mp hf, hs, ⟨parent, hlast, hlt⟩, ?_⟩
     rw [hblocks]
     exact appendBlock_getLast? _ _
+
+/-- The tip's timestamp floor is carried along any configured reach: every
+accepted block is strictly later than the tip it extends. -/
+theorem BlockChain.ReachUsing.tip_floor {cfg : ChainConfig} {ch ch' : BlockChain}
+    (h_reach : BlockChain.ReachUsing cfg ch ch') {T : Nat}
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      T ≤ parent.header.timestamp) :
+    ∃ parent, ch'.blocks.getLast? = some parent ∧ T ≤ parent.header.timestamp := by
+  induction h_reach with
+  | refl => exact hstart
+  | step _ _ h_st ih =>
+    obtain ⟨tip, htip, hfloor⟩ := ih
+    obtain ⟨_, _, _, ⟨parent, hlast, hlt⟩, hnew⟩ := stateTransitionUsing_reachedStep h_st
+    rw [htip] at hlast
+    cases hlast
+    exact ⟨_, hnew, Nat.le_of_lt (Nat.lt_of_le_of_lt hfloor hlt)⟩
+
+/-- A step accepted from a tip at or past the timestamp floor selects a fork
+that floor coverage covers. -/
+theorem stateTransitionUsing_covered_of_reached {cfg : ChainConfig}
+    {pre post : BlockChain} {block : Block} (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ parent, pre.blocks.getLast? = some parent ∧
+      T ≤ parent.header.timestamp)
+    (h : stateTransitionUsing cfg pre block = .ok post) {fork : Fork}
+    (hf : cfg.forkAt block.header.number block.header.timestamp = .ok fork) :
+    CoveredFork fork := by
+  obtain ⟨_, _, _, ⟨parent, hlast, hlt⟩, _⟩ := stateTransitionUsing_reachedStep h
+  obtain ⟨tip, htip, hfloor⟩ := hstart
+  rw [htip] at hlast
+  cases hlast
+  exact hcov _ _ fork (Nat.le_of_lt (Nat.lt_of_le_of_lt hfloor hlt)) hf
+
+/-- A successful mainnet selection of a covered fork happens at or after
+Prague's timestamp: every covered fork mainnet schedules is activated by a
+timestamp no earlier than Prague's.  This is the converse direction of
+`mainnetChainConfig_covered`. -/
+theorem mainnetChainConfig_pragueTimestamp_le_of_covered
+    {number timestamp : Nat} {f : Fork}
+    (h : mainnetChainConfig.forkAt number timestamp = .ok f) (hf : CoveredFork f) :
+    mainnetPragueTimestamp ≤ timestamp := by
+  have hvalid : mainnetChainConfig.validate = .ok () := by decide
+  have hsome : mainnetChainConfig.forkAt? number timestamp = some f := by
+    rw [ChainConfig.forkAt, hvalid] at h
+    cases hq : mainnetChainConfig.forkAt? number timestamp with
+    | none => simp only [hq, Except.mapError, bind, Except.bind] at h; cases h
+    | some g =>
+      simp only [hq, Except.mapError, bind, Except.bind, Except.ok.injEq] at h
+      rw [h]
+  obtain ⟨a, ha, rfl⟩ := Option.map_eq_some_iff.mp hsome
+  obtain ⟨hmem, hreached⟩ := List.mem_filter.mp (List.mem_of_getLast? ha)
+  unfold CoveredFork coveredForks at hf
+  simp only [mainnetChainConfig, List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
+      rfl | rfl | rfl | rfl
+  all_goals
+    clear h ha hsome hvalid
+    first
+      | exact absurd hf (by decide)
+      | (simp only [ForkCriterion.reached, decide_eq_true_eq] at hreached
+         simp only [mainnetPragueTimestamp, mainnetOsakaTimestamp, mainnetBpo1Timestamp,
+           mainnetBpo2Timestamp] at hreached ⊢
+         omega)
+
+namespace ExecutionTrace
+
+/-- **Configured histories on a reached segment.**  The floor variant of
+`exists_configuredHistoryTrace_of_reachUsing`: coverage is asked only at or
+after the timestamp floor, from a checkpoint whose tip is at or past it. -/
+theorem exists_configuredHistoryTrace_of_reachUsing_of_reached
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (h : BlockChain.ReachUsing cfg checkpoint future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ parent, checkpoint.blocks.getLast? = some parent ∧
+      T ≤ parent.header.timestamp) :
+    Nonempty (ConfiguredHistoryTrace cfg checkpoint future) := by
+  induction h with
+  | refl hcfg hctx hid =>
+      exact ⟨.refl hcfg hctx hid⟩
+  | step prior bound transition ih =>
+      rcases ih with ⟨history⟩
+      rcases exists_configuredBlockTrace_of_transition bound transition
+        (stateTransitionUsing_covered_of_reached T hcov (prior.tip_floor hstart)
+          transition) with ⟨block⟩
+      exact ⟨.step history block⟩
+
+end ExecutionTrace
 
 namespace ContractSpec
 

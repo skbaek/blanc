@@ -57,6 +57,37 @@ the *future* snapshot.  The bridge is the truncated floor: whatever the window
 did, the checkpoint balance minus the window's permanent outflow is still
 present at the end. -/
 
+/-- Reached-segment form of `deployment_reachable_residual_messageRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_residual_messageRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hq : q <= bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleRedemptionMessage
+      rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg := by
+  have hcheckpointStable : Stable dp ca checkpoint.state :=
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hfutureStable : Stable dp ca future.state :=
+    hroot.reachable_stable_of_reached (reachUsing_trans hcheckpoint history.toReachUsing)
+      T hcov hstart
+  have hfloor := holderFlow_truncated_floor hcheckpointStable history (u := u)
+  exact hfutureStable.messageRedemption_enabled_of_le
+    (Nat.le_trans hq hfloor) henv
+
 /-- A deployment-rooted holder can spend its checkpoint residual through a
 fresh admissible redemption message at any later snapshot the accounted
 history reaches.  The residual bound is stated at the checkpoint; the
@@ -74,14 +105,46 @@ theorem deployment_reachable_residual_messageRedemption_enabled
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleRedemptionMessage
       rules dp ca u recipient q future.state msg) :
-    MessageRedemptionEnabled dp ca u recipient q future.state msg := by
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  deployment_reachable_residual_messageRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hq henv
+
+/-- Reached-segment form of `deployment_reachable_residual_transactionRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_residual_transactionRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory cfg dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hq : q <= bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleRedemptionTx
+      rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hfutureStable : Stable dp ca future.state :=
-    hroot.reachable_stable (hcov := hcov) (reachUsing_trans hcheckpoint history.toReachUsing)
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hentryStable : Stable dp ca benv.state := by
+    rw [hentry]
+    exact hroot.reachable_stable_of_reached (T := T) (hcov := hcov) (hstart := hstart)
+      (reachUsing_trans hcheckpoint history.toReachUsing)
   have hfloor := holderFlow_truncated_floor hcheckpointStable history (u := u)
-  exact hfutureStable.messageRedemption_enabled_of_le
-    (Nat.le_trans hq hfloor) henv
+  refine hentryStable.transactionRedemption_enabled_of_le ?_ henv
+  rw [hentry]
+  exact Nat.le_trans hq hfloor
 
 /-- The transaction-level counterpart: the same checkpoint residual bound
 enables a whole admissible redemption transaction whose entry state is the
@@ -102,17 +165,39 @@ theorem deployment_reachable_residual_transactionRedemption_enabled
     (hentry : benv.state = future.state)
     (henv : AdmissibleRedemptionTx
       rules dp ca u recipient q benv bout tx index) :
-    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_residual_transactionRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hq hentry henv
+
+/-- Reached-segment form of `deployment_reachable_residual_selfMessageRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_residual_selfMessageRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hq : q <= bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
+    MessageRedemptionEnabled dp ca u u q future.state msg := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hentryStable : Stable dp ca benv.state := by
-    rw [hentry]
-    exact hroot.reachable_stable (hcov := hcov)
-      (reachUsing_trans hcheckpoint history.toReachUsing)
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hfutureStable : Stable dp ca future.state :=
+    hroot.reachable_stable_of_reached (reachUsing_trans hcheckpoint history.toReachUsing)
+      T hcov hstart
   have hfloor := holderFlow_truncated_floor hcheckpointStable history (u := u)
-  refine hentryStable.transactionRedemption_enabled_of_le ?_ henv
-  rw [hentry]
-  exact Nat.le_trans hq hfloor
+  exact hfutureStable.selfRedemption_enabled_of_le
+    (Nat.le_trans hq hfloor) henv
 
 /-- The checkpoint residual is also enabled through the direct-holder
 `withdraw(q)` message selector. -/
@@ -127,14 +212,43 @@ theorem deployment_reachable_residual_selfMessageRedemption_enabled
       ((history.weth10Flow u).redeemed +
         (history.weth10Flow u).externalTransferredOut))
     (henv : AdmissibleSelfRedemptionMessage rules dp ca u q future.state msg) :
-    MessageRedemptionEnabled dp ca u u q future.state msg := by
+    MessageRedemptionEnabled dp ca u u q future.state msg :=
+  deployment_reachable_residual_selfMessageRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hq henv
+
+/-- Reached-segment form of `deployment_reachable_residual_selfTransactionRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_residual_selfTransactionRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed checkpoint future : BlockChain}
+    {history : AccountedHistory cfg dp ca checkpoint future}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hq : q <= bookedBalanceNat checkpoint.state ca u -
+      ((history.weth10Flow u).redeemed +
+        (history.weth10Flow u).externalTransferredOut))
+    (hentry : benv.state = future.state)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
   have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hfutureStable : Stable dp ca future.state :=
-    hroot.reachable_stable (hcov := hcov) (reachUsing_trans hcheckpoint history.toReachUsing)
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hentryStable : Stable dp ca benv.state := by
+    rw [hentry]
+    exact hroot.reachable_stable_of_reached (T := T) (hcov := hcov) (hstart := hstart)
+      (reachUsing_trans hcheckpoint history.toReachUsing)
   have hfloor := holderFlow_truncated_floor hcheckpointStable history (u := u)
-  exact hfutureStable.selfRedemption_enabled_of_le
-    (Nat.le_trans hq hfloor) henv
+  refine hentryStable.selfTransactionRedemption_enabled_of_le ?_ henv
+  rw [hentry]
+  exact Nat.le_trans hq hfloor
 
 /-- The transaction-altitude counterpart for the direct-holder
 `withdraw(q)` selector. -/
@@ -151,17 +265,30 @@ theorem deployment_reachable_residual_selfTransactionRedemption_enabled
         (history.weth10Flow u).externalTransferredOut))
     (hentry : benv.state = future.state)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
-    TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
-  have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hentryStable : Stable dp ca benv.state := by
-    rw [hentry]
-    exact hroot.reachable_stable (hcov := hcov)
-      (reachUsing_trans hcheckpoint history.toReachUsing)
-  have hfloor := holderFlow_truncated_floor hcheckpointStable history (u := u)
-  refine hentryStable.selfTransactionRedemption_enabled_of_le ?_ henv
-  rw [hentry]
-  exact Nat.le_trans hq hfloor
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  deployment_reachable_residual_selfTransactionRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hq hentry henv
+
+/-- Reached-segment form of `deployment_reachable_booked_messageRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_booked_messageRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain} {msg : Msg}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
+    MessageRedemptionEnabled dp ca u recipient q future.state msg :=
+  (hroot.reachable_stable_of_reached hfuture
+      T hcov hstart).messageRedemption_enabled_of_le hq henv
 
 /-- Rebasing the window at the future itself collapses the outflow terms, so
 the *entire booked balance* at any reachable snapshot — not merely a
@@ -176,7 +303,36 @@ theorem deployment_reachable_booked_messageRedemption_enabled
     (hq : q <= bookedBalanceNat future.state ca u)
     (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
     MessageRedemptionEnabled dp ca u recipient q future.state msg :=
-  (hroot.reachable_stable (hcov := hcov) hfuture).messageRedemption_enabled_of_le hq henv
+  deployment_reachable_booked_messageRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture hq henv
+
+/-- Reached-segment form of `deployment_reachable_booked_transactionRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_booked_transactionRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
+  have hstable : Stable dp ca benv.state := by
+    rw [hentry]
+    exact hroot.reachable_stable_of_reached hfuture
+      T hcov hstart
+  refine hstable.transactionRedemption_enabled_of_le ?_ henv
+  rw [hentry]
+  exact hq
 
 /-- The transaction-level counterpart of the rebased bound: the full booked
 balance at any reachable snapshot is transaction-redemption enabled from that
@@ -192,11 +348,34 @@ theorem deployment_reachable_booked_transactionRedemption_enabled
     (hentry : benv.state = future.state)
     (hq : q <= bookedBalanceNat future.state ca u)
     (henv : AdmissibleRedemptionTx rules dp ca u recipient q benv bout tx index) :
-    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index := by
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_booked_transactionRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture hentry hq henv
+
+/-- Reached-segment form of `deployment_reachable_booked_selfTransactionRedemption_enabled`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_booked_selfTransactionRedemption_enabled_of_reached
+    {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
   have hstable : Stable dp ca benv.state := by
     rw [hentry]
-    exact hroot.reachable_stable (hcov := hcov) hfuture
-  refine hstable.transactionRedemption_enabled_of_le ?_ henv
+    exact hroot.reachable_stable_of_reached hfuture
+      T hcov hstart
+  refine hstable.selfTransactionRedemption_enabled_of_le ?_ henv
   rw [hentry]
   exact hq
 
@@ -212,13 +391,36 @@ theorem deployment_reachable_booked_selfTransactionRedemption_enabled
     (hentry : benv.state = future.state)
     (hq : q <= bookedBalanceNat future.state ca u)
     (henv : AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index) :
-    TransactionRedemptionEnabled dp ca u u q benv bout tx index := by
-  have hstable : Stable dp ca benv.state := by
-    rw [hentry]
-    exact hroot.reachable_stable (hcov := hcov) hfuture
-  refine hstable.selfTransactionRedemption_enabled_of_le ?_ henv
-  rw [hentry]
-  exact hq
+    TransactionRedemptionEnabled dp ca u u q benv bout tx index :=
+  deployment_reachable_booked_selfTransactionRedemption_enabled_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture hentry hq henv
+
+/-- Reached-segment form of
+`deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_of_reached
+    {cfg : ChainConfig} {rules : ForkRules}
+    {dp : DeployParams} {ca u recipient : Adr}
+    {q : Nat} {base deployed future : BlockChain}
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {maxPriorityFee maxFee : Nat}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future)
+    (hentry : benv.state = future.state)
+    (hq : q <= bookedBalanceNat future.state ca u)
+    (henv : NonSignatureRedemptionTxEnvelope
+      rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
+    (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
+    TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
+  deployment_reachable_booked_transactionRedemption_enabled_of_reached
+    hroot T hcov hstart hfuture hentry hq (henv.admissible_of_recoveredSender hrecovered)
 
 /-- For a funded holder admitted by Jaune's exact sender boundary, with the
 canonical payload, nonce, fees and gas envelope, sender recovery is the only
@@ -238,8 +440,9 @@ theorem deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSe
       rules dp ca u recipient q benv bout tx index maxPriorityFee maxFee)
     (hrecovered : recoverSender benv.stat.chainId tx = .ok u) :
     TransactionRedemptionEnabled dp ca u recipient q benv bout tx index :=
-  deployment_reachable_booked_transactionRedemption_enabled
-    hroot hcov hfuture hentry hq (henv.admissible_of_recoveredSender hrecovered)
+  deployment_reachable_booked_transactionRedemption_enabled_of_recoveredSender_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture hentry hq henv hrecovered
 
 /-! ## The flagship guarantee -/
 
@@ -313,6 +516,45 @@ structure FutureDualSelectorRedemptionGuarantee
     AdmissibleSelfRedemptionTx rules dp ca u q benv bout tx index ->
     TransactionRedemptionEnabled dp ca u u q benv bout tx index
 
+/-- Reached-segment form of `deployment_reachable_future_redeemable`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_future_redeemable_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
+    ∃ history, FutureRedemptionGuarantee
+      cfg dp ca u checkpoint future history := by
+  have hcheckpointStable : Stable dp ca checkpoint.state :=
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hfutureStable : Stable dp ca future.state :=
+    hroot.reachable_stable_of_reached (reachUsing_trans hcheckpoint hfuture)
+      T hcov hstart
+  obtain ⟨history⟩ :=
+    exists_accountedHistory_of_reachUsing_of_reached (dp := dp) (ca := ca)
+      hfuture T hcov (hcheckpoint.tip_floor hstart)
+  refine ⟨history, hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
+  · exact (holderFlow_flash_cancelled hcheckpointStable history).2
+  · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
+    omega
+  · exact fun hnc =>
+      permanentOutflow_eq_hardenedOutflow_of_noCollision
+        hcheckpointStable history hnc
+  · exact fun _ _ _ _ hq henv =>
+      deployment_reachable_residual_messageRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq henv
+  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
+      deployment_reachable_residual_transactionRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq hentry henv
+
 /-- The flagship: a deployment root, a leg to a checkpoint and a further leg
 to an arbitrary future snapshot yield an accounted history of the second leg
 carrying the whole guarantee.
@@ -328,27 +570,36 @@ theorem deployment_reachable_future_redeemable
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
+      cfg dp ca u checkpoint future history :=
+  deployment_reachable_future_redeemable_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hfuture
+
+/-- Reached-segment form of `deployment_reachable_future_dualSelector_redeemable`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_future_dualSelector_redeemable_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
+    ∃ history, FutureDualSelectorRedemptionGuarantee
       cfg dp ca u checkpoint future history := by
-  have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hfutureStable : Stable dp ca future.state :=
-    hroot.reachable_stable (hcov := hcov) (reachUsing_trans hcheckpoint hfuture)
-  obtain ⟨history⟩ :=
-    exists_accountedHistory_of_reachUsing (dp := dp) (ca := ca)
-      hcheckpointStable hfuture (fun _ _ hf => hcov _ _ _ hf)
-  refine ⟨history, hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
-  · exact (holderFlow_flash_cancelled hcheckpointStable history).2
-  · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
-    omega
-  · exact fun hnc =>
-      permanentOutflow_eq_hardenedOutflow_of_noCollision
-        hcheckpointStable history hnc
-  · exact fun _ _ _ _ hq henv =>
-      deployment_reachable_residual_messageRedemption_enabled
-        hroot hcov hcheckpoint hq henv
-  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
-      deployment_reachable_residual_transactionRedemption_enabled
-        hroot hcov hcheckpoint hq hentry henv
+  rcases deployment_reachable_future_redeemable_of_reached
+      hroot T hcov hstart hcheckpoint hfuture with ⟨history, hguarantee⟩
+  refine ⟨history, hguarantee, ?_, ?_⟩
+  · exact fun _ _ _ hq henv =>
+      deployment_reachable_residual_selfMessageRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq henv
+  · exact fun _ _ _ _ _ _ hentry hq henv =>
+      deployment_reachable_residual_selfTransactionRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq hentry henv
 
 /-- The dual-selector flagship: the same accounted history packages
 `withdrawTo` and direct-holder `withdraw` at both altitudes. -/
@@ -360,16 +611,51 @@ theorem deployment_reachable_future_dualSelector_redeemable
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
+      cfg dp ca u checkpoint future history :=
+  deployment_reachable_future_dualSelector_redeemable_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hfuture
+
+/-- Reached-segment form of `deployment_reachable_future_redeemable_allHolders`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_future_redeemable_allHolders_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {base deployed checkpoint future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
+    (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
+    ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
       cfg dp ca u checkpoint future history := by
-  rcases deployment_reachable_future_redeemable
-      hroot hcov hcheckpoint hfuture with ⟨history, hguarantee⟩
-  refine ⟨history, hguarantee, ?_, ?_⟩
-  · exact fun _ _ _ hq henv =>
-      deployment_reachable_residual_selfMessageRedemption_enabled
-        hroot hcov hcheckpoint hq henv
-  · exact fun _ _ _ _ _ _ hentry hq henv =>
-      deployment_reachable_residual_selfTransactionRedemption_enabled
-        hroot hcov hcheckpoint hq hentry henv
+  have hcheckpointStable : Stable dp ca checkpoint.state :=
+    hroot.reachable_stable_of_reached hcheckpoint
+      T hcov hstart
+  have hfutureStable : Stable dp ca future.state :=
+    hroot.reachable_stable_of_reached (reachUsing_trans hcheckpoint hfuture)
+      T hcov hstart
+  obtain ⟨history⟩ :=
+    exists_accountedHistory_of_reachUsing_of_reached (dp := dp) (ca := ca)
+      hfuture T hcov (hcheckpoint.tip_floor hstart)
+  refine ⟨history, ?_⟩
+  intro u
+  refine ⟨hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
+  · exact (holderFlow_flash_cancelled hcheckpointStable history).2
+  · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
+    omega
+  · exact fun hnc =>
+      permanentOutflow_eq_hardenedOutflow_of_noCollision
+        hcheckpointStable history hnc
+  · exact fun _ _ _ _ hq henv =>
+      deployment_reachable_residual_messageRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq henv
+  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
+      deployment_reachable_residual_transactionRedemption_enabled_of_reached
+        hroot T hcov hstart hcheckpoint hq hentry henv
 
 /-- The simultaneous form of the flagship: because the accounted history is
 recovered from the reachability derivation alone, one history carries the
@@ -383,29 +669,10 @@ theorem deployment_reachable_future_redeemable_allHolders
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
-      cfg dp ca u checkpoint future history := by
-  have hcheckpointStable : Stable dp ca checkpoint.state :=
-    hroot.reachable_stable (hcov := hcov) hcheckpoint
-  have hfutureStable : Stable dp ca future.state :=
-    hroot.reachable_stable (hcov := hcov) (reachUsing_trans hcheckpoint hfuture)
-  obtain ⟨history⟩ :=
-    exists_accountedHistory_of_reachUsing (dp := dp) (ca := ca)
-      hcheckpointStable hfuture (fun _ _ hf => hcov _ _ _ hf)
-  refine ⟨history, ?_⟩
-  intro u
-  refine ⟨hfutureStable, hfuture, ?_, ?_, ?_, ?_, ?_⟩
-  · exact (holderFlow_flash_cancelled hcheckpointStable history).2
-  · have hfloor := holderFlow_residual_floor hcheckpointStable history (u := u)
-    omega
-  · exact fun hnc =>
-      permanentOutflow_eq_hardenedOutflow_of_noCollision
-        hcheckpointStable history hnc
-  · exact fun _ _ _ _ hq henv =>
-      deployment_reachable_residual_messageRedemption_enabled
-        hroot hcov hcheckpoint hq henv
-  · exact fun _ _ _ _ _ _ _ hentry hq henv =>
-      deployment_reachable_residual_transactionRedemption_enabled
-        hroot hcov hcheckpoint hq hentry henv
+      cfg dp ca u checkpoint future history :=
+  deployment_reachable_future_redeemable_allHolders_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hcheckpoint hfuture
 
 /-! ## The deployment-rooted full window
 
@@ -427,6 +694,25 @@ theorem deploymentRoot_allowanceQuiescent
   rw [hroot.emptyStorage]
   rfl
 
+/-- Reached-segment form of `deployment_fullWindow_future_redeemable`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_fullWindow_future_redeemable_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
+    AllowanceQuiescent ca u deployed.state ∧
+      ∃ history, FutureRedemptionGuarantee
+        cfg dp ca u deployed future history :=
+  ⟨deploymentRoot_allowanceQuiescent hroot,
+    deployment_reachable_future_redeemable_of_reached hroot T hcov hstart hroot.reflReach hfuture⟩
+
 /-- The full-window corollary: with the deployment itself as the checkpoint,
 the guarantee holds over the contract's whole life and its window starts
 allowance-quiescent. -/
@@ -439,8 +725,9 @@ theorem deployment_fullWindow_future_redeemable
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
         cfg dp ca u deployed future history :=
-  ⟨deploymentRoot_allowanceQuiescent hroot,
-    deployment_reachable_future_redeemable hroot hcov hroot.reflReach hfuture⟩
+  deployment_fullWindow_future_redeemable_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture
 
 /-- In a deployment-rooted history, no nonzero delegated permanent outflow
 can retain the empty deployment checkpoint as its governing allowance root. -/
@@ -516,6 +803,31 @@ theorem deployment_fullWindow_dormant_holder_balance_monotone
   dormant_holder_balance_monotone hroot.stable history hnc
     (deploymentRoot_allowanceQuiescent hroot) hdormant
 
+/-- Reached-segment form of `deployment_reachable_dormant_holder_balance_monotone`:
+fork coverage is asked only at or after the timestamp floor `T`, which the
+deployed tip has reached. -/
+theorem deployment_reachable_dormant_holder_balance_monotone_of_reached
+    {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
+    {base deployed future : BlockChain}
+    (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
+    (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    (hfuture : BlockChain.ReachUsing cfg deployed future) :
+    ∃ history : AccountedHistory cfg dp ca deployed future,
+      NoAllowanceKeyCollision history →
+      NoAuthorizingActBy u history →
+      bookedBalanceNat deployed.state ca u ≤
+        bookedBalanceNat future.state ca u := by
+  obtain ⟨history⟩ :=
+    exists_accountedHistory_of_reachUsing_of_reached (dp := dp) (ca := ca)
+      hfuture T hcov hstart
+  exact ⟨history, fun hnc hdormant =>
+    deployment_fullWindow_dormant_holder_balance_monotone
+      hroot history hnc hdormant⟩
+
 /-- Reachability constructs the authentic full-window history; only its
 trace-local collision property and the holder's effective dormancy remain as
 conditional premises. -/
@@ -529,13 +841,10 @@ theorem deployment_reachable_dormant_holder_balance_monotone
       NoAllowanceKeyCollision history →
       NoAuthorizingActBy u history →
       bookedBalanceNat deployed.state ca u ≤
-        bookedBalanceNat future.state ca u := by
-  obtain ⟨history⟩ :=
-    exists_accountedHistory_of_reachUsing (dp := dp) (ca := ca)
-      hroot.stable hfuture (fun _ _ hf => hcov _ _ _ hf)
-  exact ⟨history, fun hnc hdormant =>
-    deployment_fullWindow_dormant_holder_balance_monotone
-      hroot history hnc hdormant⟩
+        bookedBalanceNat future.state ca u :=
+  deployment_reachable_dormant_holder_balance_monotone_of_reached
+    hroot 0 (fun number t f _ h => hcov number t f h)
+    (hroot.tip_floor fun _ _ => Nat.zero_le _) hfuture
 
 end Weth10
 
