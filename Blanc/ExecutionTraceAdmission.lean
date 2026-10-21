@@ -105,9 +105,9 @@ theorem RequestsTrace.frameAdmitted_iff_rawFrames
     List.mem_append, or_imp, forall_and]
 
 theorem AppliedBodyTrace.frameAdmitted_iff_rawFrames
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (ca : Adr) (entry : Sevm → Devm → Prop) :
     trace.FrameAdmitted ca entry ↔
       ∀ root ∈ trace.rawFrames,
