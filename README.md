@@ -1,4 +1,4 @@
-# Blanc: A Minimal EVM Programming Language for Interactive Verification
+# Blanc: A Verification Stack for EVM Bytecode in Lean 4
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
@@ -9,12 +9,24 @@ which premises; the Blanc language and its contracts; and what none of it claims
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.
 
-Blanc is an EVM programming language optimized for formal verification 
-with interactive theorem provers. Blanc's toolchain is implemented in Lean 4.
+Blanc is a verification stack for EVM bytecode, built in Lean 4 on Jaune's
+executable EVM semantics. It proves theorems about Ethereum bytecode as it is
+deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the
+EIP-7002 system contract — with exact gas, liveness, and no axioms beyond
+Lean's three. The bytes are read from mainnet without trusting the compilers
+that produced them; what is claimed about each artifact, and where, is mapped
+in [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
 
-Blanc compiles to deployable EVM bytecode, and several contracts here
-reimplement contracts that exist on mainnet. **A Blanc theorem is a statement
-about Jaune's modeled semantics, not a deployment audit** — see
+The stack also offers the option of programming in Blanc's native language:
+the EVM's own instructions, arranged by four constructors, with a compiler
+whose correctness is a Lean theorem. Because every implementation choice stays
+open, down to the instruction, it lets developers push performance
+optimization, proof simplicity and customization as far as they choose.
+Contracts written in it, several of them reimplementations of contracts that
+exist on mainnet, are verified over their compiled bytes
+([the language](https://skbaek.github.io/blanc/language.html)).
+**A Blanc theorem is a statement about Jaune's modeled semantics, not a
+deployment audit** — see
 [`SECURITY.md`](SECURITY.md) before treating any result here as a safety claim
 about anything on chain.
 
