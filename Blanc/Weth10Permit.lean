@@ -1696,25 +1696,33 @@ lemma prefix_of_chainid {e : Sevm} {s s' : Devm} {xs : Stack}
     e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
+  split at run
+  · exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
+  · cases run
 
 lemma memory_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.memory = s'.memory := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).memory
+  split at run
+  · exact (Devm.pushBurn_of_pushItem run).memory
+  · cases run
 
 private lemma logs_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.logs = s'.logs := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).logs
+  split at run
+  · exact (Devm.pushBurn_of_pushItem run).logs
+  · cases run
 
 private lemma output_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.output = s'.output := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact (Devm.pushBurn_of_pushItem run).output
+  split at run
+  · exact (Devm.pushBurn_of_pushItem run).output
+  · cases run
 
 private lemma permit_sload_logs {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s sload s') : s.logs = s'.logs := by
@@ -1731,9 +1739,11 @@ private lemma permit_sload_logs {e : Sevm} {s s' : Devm}
             (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' → s1.logs = s'.logs by
     split at run1
-    · exact H s1 gasWarmAccess rfl run1
-    · exact H (addAccessedStorageKey s1 e.currentTarget key)
-        gasColdSload rfl run1
+    · split at run1
+      · exact H s1 gasWarmAccess rfl run1
+      · exact H (addAccessedStorageKey s1 e.currentTarget key)
+          gasColdSload rfl run1
+    · exact H s1 _ rfl run1
   intro d c hlogs run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
   exact ((hlogs.trans (Devm.burn_of_chargeGas h2).logs).trans
@@ -1755,9 +1765,11 @@ private lemma permit_sload_output {e : Sevm} {s s' : Devm}
             (Devm.balReadStorage e.benvStat.rules e.currentTarget key y)) =
           .ok s' → s1.output = s'.output by
     split at run1
-    · exact H s1 gasWarmAccess rfl run1
-    · exact H (addAccessedStorageKey s1 e.currentTarget key)
-        gasColdSload rfl run1
+    · split at run1
+      · exact H s1 gasWarmAccess rfl run1
+      · exact H (addAccessedStorageKey s1 e.currentTarget key)
+          gasColdSload rfl run1
+    · exact H s1 _ rfl run1
   intro d c houtput run'
   rcases Except.bind_eq_ok run' with ⟨s2, h2, run2⟩
   exact ((houtput.trans (Devm.burn_of_chargeGas h2).output).trans

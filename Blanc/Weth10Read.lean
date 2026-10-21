@@ -278,10 +278,8 @@ theorem deploymentChainId_output
 private lemma read_prefix_of_chainid {e : Sevm} {s s' : Devm}
     {xs : Stack}
     (hp : xs <<+ s.stack) (h : Ninst.Run e s chainid s') :
-    e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  exact prefix_of_push (Devm.pushBurn_of_pushItem run) hp
+    e.benvStat.chainId.toB256 :: xs <<+ s'.stack :=
+  prefix_of_chainid hp h
 
 private lemma read_memory_eq_of_chainid {e : Sevm} {s s' : Devm}
     (h : Ninst.Run e s chainid s') : s.memory = s'.memory :=
@@ -292,7 +290,9 @@ private lemma read_code_eq_of_chainid {e : Sevm} {s s' : Devm}
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   funext a
-  exact getCode_eq_of_state_eq (Devm.pushBurn_of_pushItem run).state a
+  split at run
+  · exact getCode_eq_of_state_eq (Devm.pushBurn_of_pushItem run).state a
+  · cases run
 
 private lemma read_prefix_of_pushDeployWord {e : Sevm} {s s' : Devm}
     {w : B256} {xs : Stack} (hp : xs <<+ s.stack)

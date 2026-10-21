@@ -121,6 +121,7 @@ genres can share this walk without a large all-at-once elaboration. -/
 theorem callbackFullWordPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {fullWord : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨stack, base.memory, G, base.stateGas⟩) fullWord ex)
@@ -143,6 +144,7 @@ the first 13-gas half of `checkReturnDataHead`. -/
 theorem callbackHeadCopyPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {tail : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_len : B256.toNat 0 + B256.toNat 32 ≤ base.returnData.length)
     (h32 : base.memory.size % 32 = 0)
     (h_msz : 64 ≤ base.memory.size)
@@ -168,6 +170,7 @@ theorem callbackHeadCopyPrefix_runCompiledTo {dp : DeployParams}
 theorem callbackHeadReadPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {tail : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_copySize : (flashCallbackCopiedMemory base).size = base.memory.size)
     (h32 : base.memory.size % 32 = 0)
     (h_msz : 64 ≤ base.memory.size)
@@ -197,6 +200,7 @@ forcing kernel reduction of its bytes. -/
 theorem callbackHeadMismatchFlagPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {expected head : B256} {memory : Mem} {tail : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_neq : (expected =? head) = 0)
     (h_tail : Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
       (base.setMach ⟨1 :: stack, memory, G, base.stateGas⟩) tail ex)
@@ -211,7 +215,7 @@ theorem callbackHeadMismatchFlagPrefix_runCompiledTo {dp : DeployParams}
         simp only [Devm.gasLeft_setMach]
         omega) (by
         simp only [Devm.stack_setMach, List.length_cons]
-        omega)) ?_
+        omega) (fun _ => hfork.rules_push0)) ?_
   simp only [Devm.setMach_setMach]
   func_run (2) [0, 1]
   all_goals try omega
@@ -223,6 +227,7 @@ guard flag after an exact symbolic push-width charge plus eleven gas. -/
 theorem callbackHeadMismatchReadPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {expected : B256} {tail : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_neq : (expected =? flashCallbackReturnDataHead base) = 0)
     (h_copySize : (flashCallbackCopiedMemory base).size = base.memory.size)
     (h32 : base.memory.size % 32 = 0)
@@ -238,8 +243,8 @@ theorem callbackHeadMismatchReadPrefix_runCompiledTo {dp : DeployParams}
         eq ::: iszero ::: tail) ex := by
   rw [show G + (pushCost expected.toBytes.sig + 11) =
       (G + (pushCost expected.toBytes.sig + 6)) + 5 by omega]
-  exact callbackHeadReadPrefix_runCompiledTo h_copySize h32 h_msz
-    (callbackHeadMismatchFlagPrefix_runCompiledTo h_neq h_tail (by omega))
+  exact callbackHeadReadPrefix_runCompiledTo (hfork := hfork) h_copySize h32 h_msz
+    (callbackHeadMismatchFlagPrefix_runCompiledTo (hfork := hfork) h_neq h_tail (by omega))
     (by omega)
 
 /-- A full-word magic mismatch charges the callback-success word's exact push
@@ -248,6 +253,7 @@ width plus 24 gas to copy/read/compare and leave a nonzero flag.  Keeping
 theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256}
     {tail : Func} {ex : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_neq : (CALLBACK_SUCCESS =? flashCallbackReturnDataHead base) = 0)
     (h32 : base.memory.size % 32 = 0)
@@ -284,8 +290,8 @@ theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
       (G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 11)) + 13 by omega]
   simpa only [checkReturnDataHead, pushList, show (0 * 32 : B256) = 0 from by decide, List.map_cons,
     List.map_nil, List.cons_append, List.nil_append, prepend] using
-    callbackHeadCopyPrefix_runCompiledTo h_len h32 h_msz
-      (callbackHeadMismatchReadPrefix_runCompiledTo h_neq hs1 h32 h_msz h_tail (by omega))
+    callbackHeadCopyPrefix_runCompiledTo (hfork := hfork) h_len h32 h_msz
+      (callbackHeadMismatchReadPrefix_runCompiledTo (hfork := hfork) h_neq hs1 h32 h_msz h_tail (by omega))
       (by omega)
 
 /-- From the full-word decoder, a magic mismatch reaches the exact locked
@@ -293,6 +299,7 @@ flash-failure payload.  The symbolic-width decoder and error guard are
 composed without an all-at-once tactic walk. -/
 theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_neq : (CALLBACK_SUCCESS =? flashCallbackReturnDataHead base) = 0)
     (h32 : base.memory.size % 32 = 0)
@@ -318,8 +325,8 @@ theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
             (bytesWords (errorData "WETH: flash loan failed")).zipIdx,
           G, (flashCallbackHeadBase base stack).stateGas⟩).withOutput
             (errorData "WETH: flash loan failed"))) := by
-  apply callbackMagicMismatchPrefix_runCompiledTo h_ge h_neq h32 h_msz
-  · exact Func.runCompiledTo_errorGuard (flashFailedError_lookup dp)
+  apply callbackMagicMismatchPrefix_runCompiledTo (hfork := hfork) h_ge h_neq h32 h_msz
+  · exact Func.runCompiledTo_errorGuard (h_push0 := hfork.rules_push0) (flashFailedError_lookup dp)
       (by decide) rfl
       (by simpa only [flashCallbackHeadBase, Devm.memory_setMach] using hwf)
       (by simpa only [flashCallbackHeadBase, Devm.memory_setMach] using hr)
@@ -336,6 +343,7 @@ theorem flashCallback_wrongMagicTail_runCompiledTo {dp : DeployParams}
 locked flash-failure payload on a full-word magic mismatch. -/
 theorem flashCallback_wrongMagic_runCompiledTo {dp : DeployParams}
     {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 base.returnData.length <? (32 : B256)) = 0)
     (h_neq : (CALLBACK_SUCCESS =? flashCallbackReturnDataHead base) = 0)
     (h32 : base.memory.size % 32 = 0)
@@ -360,8 +368,8 @@ theorem flashCallback_wrongMagic_runCompiledTo {dp : DeployParams}
           G, (flashCallbackHeadBase base stack).stateGas⟩).withOutput
             (errorData "WETH: flash loan failed"))) := by
   simpa only [flashCallbackReturn] using
-    callbackFullWordPrefix_runCompiledTo h_ge
-      (flashCallback_wrongMagicTail_runCompiledTo h_ge h_neq h32 h_msz
+    callbackFullWordPrefix_runCompiledTo (hfork := hfork) h_ge
+      (flashCallback_wrongMagicTail_runCompiledTo (hfork := hfork) h_ge h_neq h32 h_msz
         hwf hr halign h_blob h_words h_room) (by omega)
 
 /-! ## Nonpayability -/
@@ -375,6 +383,7 @@ theorem nonpayableRevertCost_eq : nonpayableRevertCost = 22 := by decide
 value, before its body can inspect calldata or storage. -/
 theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     {base : Devm} {G : Nat} {body : Func}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value ≠ 0)
     (h_room : base.stack.length < 1022) :
     Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
@@ -394,7 +403,7 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
       (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
       simp only [Devm.gasLeft_setMach, gBase]) (by
         simp only [Devm.stack_setMach]
-        omega)
+        omega) hfork.rules_push0
 
 /-! ## Guard precedence at selected-body altitude -/
 
@@ -403,6 +412,7 @@ token therefore reaches the locked flash-token reason without any amount,
 storage or callback premise. -/
 theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     {base : Devm} {G : Nat} {stack : List B256} {img : Bytes} {token : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_arg : Sevm.argWord sevm 0 = token)
     (h_ne : token ≠ sevm.currentTarget.toB256)
     (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
@@ -431,7 +441,7 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   · change sevm.currentTarget.toB256 =? Sevm.argWord sevm 0 = 0
     rw [h_arg]
     simp only [B256.eqCheck, Ne.symm h_ne, ↓reduceIte]
-  · exact Func.runCompiledTo_errorGuard (flashTokenError_lookup dp)
+  · exact Func.runCompiledTo_errorGuard (h_push0 := hfork.rules_push0) (flashTokenError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
           errorBodyCost, Devm.extCost, Devm.memory_setMach]
