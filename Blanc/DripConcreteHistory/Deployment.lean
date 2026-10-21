@@ -152,7 +152,7 @@ theorem concreteCreateEnvelopeParse :
   rw [hparse]
 
 theorem concreteCreateDecode :
-    decodeTx (.inl concreteCreateTxRlp) = .ok concreteCreateTx := by
+    decodeTx pragueRules (.inl concreteCreateTxRlp) = .ok concreteCreateTx := by
   simp only [decodeTx, concreteCreateEncoded, List.cons_append, List.nil_append,
     Bytes.toExTx, concreteCreateEnvelopeParse, concreteCreateFields]
   rfl
@@ -214,9 +214,9 @@ def concreteGenesisHeader : Header := {
   stateRoot := concreteGenesisState.root, txsRoot := 0, receiptRoot := 0,
   bloom := List.replicate 256 0, difficulty := 0, number := 0,
   gasLimit := 10000000, gasUsed := 5000000, timestamp := 0,
-  extraData := [], prevRandao := 0, nonce := 0, baseFeePerGas := 1,
-  withdrawalsRoot := 0, blobGasUsed := 0, excessBlobGas := 0,
-  parentBeaconBlockRoot := 0, requestsHash := some 0,
+  extraData := [], prevRandao := 0, nonce := 0, baseFeePerGas := some 1,
+  withdrawalsRoot := some 0, blobGasUsed := some 0, excessBlobGas := some 0,
+  parentBeaconBlockRoot := some 0, requestsHash := some 0,
   blockAccessListHash := none, slotNumber := none }
 
 def concreteGenesisBlock : Block :=
@@ -300,7 +300,7 @@ theorem concreteDeploymentBase :
       rw [concreteGenesisSender]; rfl
     rw [hn]
     exact concreteCreateAddress.symm
-  · intro timestamp selected hrules
+  · intro number timestamp selected hrules
     have hr : selected = pragueRules := by
       exact (Except.ok.inj hrules).symm
     subst selected
@@ -345,8 +345,8 @@ theorem concreteCreateChecked :
       concreteCreateTx 4000000 = .ok (4000000, []) := by rfl
   have hreceiver : checkTransactionReceiver concreteCreateTx = .ok () := by rfl
   have hauth : checkTransactionAuthorizationList concreteCreateTx = .ok () := by rfl
-  have hsender : checkTransactionSenderAccount (concreteGenesisState.get concreteCreateSender)
-      concreteCreateTx 4000000 = .ok () := by
+  have hsender : checkTransactionSenderAccountFor pragueRules
+      (concreteGenesisState.get concreteCreateSender) concreteCreateTx 4000000 = .ok () := by
     rw [concreteGenesisSender]
     decide +kernel
   exact checkTransaction_ok_of_parts hgas hchain concreteCreateRecoveredSender hfee
@@ -365,7 +365,7 @@ def concreteDeploymentHeader (stateRoot txsRoot receiptRoot withdrawalsRoot requ
     stateRoot := stateRoot
     txsRoot := txsRoot
     receiptRoot := receiptRoot
-    withdrawalsRoot := withdrawalsRoot
+    withdrawalsRoot := some withdrawalsRoot
     requestsHash := some requestsHash }
 
 theorem concreteDeploymentHeader_benv (sr tr rr wr rh : B256) :
@@ -396,25 +396,8 @@ theorem concreteDeploymentHeader_decode (sr tr rr wr rh : B256) :
   have h64 (name : String) : (0 : Nat).toBytes.toRlpB64 name = .ok 0 := by
     rw [h0b]
     rfl
-  refine RlpConcrete.header21_roundtrip
-    (header := concreteDeploymentHeader sr tr rr wr rh) (requestsHash := rh)
-    (blobGasUsed := 0) (excessBlobGas := 0) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · rfl
-  · rfl
-  · rfl
-  · exact hc _
-  · exact hb
-  · exact h0 _
-  · exact h1 _
-  · exact hl
-  · exact hg
-  · exact h1 _
-  · exact hn
-  · exact h1 _
-  · exact h64 _
-  · rfl
-  · exact h64 _
-  · rfl
+  exact RlpConcrete.header21_roundtrip (concreteDeploymentHeader sr tr rr wr rh) rh rfl rfl rfl
+    1 wr 0 rfl rfl rfl (hc _) hb (h0 _) (h1 _) hl hg (h1 _) hn (h1 _) 0 0 (h64 _) rfl (h64 _) rfl
 
 theorem concreteDeploymentHeader_valid (sr tr rr wr rh : B256) :
     validateHeader pragueRules concreteBase (concreteDeploymentHeader sr tr rr wr rh) =
@@ -423,7 +406,23 @@ theorem concreteDeploymentHeader_valid (sr tr rr wr rh : B256) :
     List.getLast?_singleton, Option.toExcept, bind, Except.bind,
     concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader,
     Header.hash, pragueRules_header, ne_eq, not_true_eq_false, ite_false]
-  with_unfolding_all rfl
+  have hbase : calculateBaseFeePerGas 10000000 10000000 5000000 1 = .ok 1 := by decide +kernel
+  have hexcess : calculateExcessBlobGas pragueRules.blob concreteGenesisHeader = 0 := by
+    decide +kernel
+  have hconsensus : ∀ h : Header, h.difficulty = 0 → h.nonce = 0 →
+      h.ommersHash = emptyOmmerHash → checkConsensusFields pragueRules h concreteGenesisHeader = .ok () := by
+    intro h hd hn ho
+    have hpow : pragueRules.pow = none := rfl
+    simp only [checkConsensusFields, hpow, hd, hn, ho, ne_eq, not_true_eq_false,
+      ite_false]
+    rfl
+  simp only [concreteGenesisHeader] at hexcess hconsensus
+  simp only [checkHeaderShape, checkHeaderFieldPresence, Option.isSome_some, Option.isSome_none,
+    bind, Except.bind, checkFirstFeeGasLimit, Option.isNone_some, Bool.and_false,
+    Bool.false_eq_true, ite_false, Except.mapError, expectedBaseFee, hbase, hexcess,
+    ne_eq, not_true_eq_false, Functor.map, Except.map, pragueRules_header]
+  rw [hconsensus _ (by rfl) (by rfl) (by rfl)]
+  rfl
 
 def concreteHeaderFields (sr tr rr wr rh : B256) : List BLT :=
   [.bytes concreteGenesisHeader.hash.toBytes, .bytes emptyOmmerHash.toBytes,
@@ -684,7 +683,7 @@ theorem concreteCanonicalEnvelope (sr tr rr wr rh : B256) :
     decode_eq := concreteCreateDecode
     ommers_eq := rfl
     withdrawals_eq := rfl
-    forkAt := ChainConfig.pragueOnly_forkAt 1 _
+    forkAt := ChainConfig.pragueOnly_forkAt 1 _ _
     type_eq := ⟨1, 8, rfl⟩
     value_eq := rfl
     data_eq := rfl
@@ -717,7 +716,7 @@ theorem concreteCanonicalEnvelope (sr tr rr wr rh : B256) :
 
 private theorem concreteDeploymentBody_exists : ∃ output : State × BlockOutput,
     applyBody (initBenv .prague concreteBase concreteExecutionHeader)
-      [.inl concreteCreateTxRlp] [] = .ok output ∧
+      [.inl concreteCreateTxRlp] [] [] = .ok output ∧
     output.2.blockGasUsed = 479909 ∧ output.2.blockLogs = [] ∧ output.2.blobGasUsed = 0 := by
   let preview := concreteCanonicalBlock 0 0 0 0 0
   have henv := concreteCanonicalEnvelope 0 0 0 0 0
@@ -734,7 +733,7 @@ private theorem concreteDeploymentBody_exists : ∃ output : State × BlockOutpu
     preview concreteCreateTxRlp concreteCreateTx concreteCreateSender concreteCreateTarget
     henv CoveredFork.prague ctx post bout htx suffix
   change applyBody (initBenv .prague concreteBase (concreteDeploymentHeader 0 0 0 0 0))
-    [.inl concreteCreateTxRlp] [] = .ok (post, bout) at hrun
+    [.inl concreteCreateTxRlp] [] [] = .ok (post, bout) at hrun
   rw [concreteDeploymentHeader_benv] at hrun
   have hgas : bout.blockGasUsed = 479909 := by
     rw [htx.blockGasUsed, ctx.systemPrefix.environment_eq]
@@ -748,7 +747,7 @@ noncomputable def concreteDeploymentBody : State × BlockOutput :=
 
 theorem concreteDeploymentBody_run :
     applyBody (initBenv .prague concreteBase concreteExecutionHeader)
-      [.inl concreteCreateTxRlp] [] = .ok concreteDeploymentBody :=
+      [.inl concreteCreateTxRlp] [] [] = .ok concreteDeploymentBody :=
   (Classical.choose_spec concreteDeploymentBody_exists).1
 
 theorem concreteDeploymentBody_gas : concreteDeploymentBody.2.blockGasUsed = 479909 :=
@@ -771,10 +770,10 @@ noncomputable def concreteDeployed : BlockChain :=
 
 theorem concreteDeploymentBody_finalHeader :
     applyBody (initBenv .prague concreteBase concreteDeploymentEnvelope.block.header)
-      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.wds =
+      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.ommers concreteDeploymentEnvelope.block.wds =
       .ok concreteDeploymentBody := by
   change applyBody (initBenv .prague concreteBase (concreteDeploymentHeader _ _ _ _ _))
-    [.inl concreteCreateTxRlp] [] = .ok concreteDeploymentBody
+    [.inl concreteCreateTxRlp] [] [] = .ok concreteDeploymentBody
   rw [concreteDeploymentHeader_benv]
   exact concreteDeploymentBody_run
 
@@ -793,14 +792,19 @@ theorem concreteDeploymentChecks :
     CanonicalBlock.ofDecode, concreteDeploymentBlock, concreteDeploymentHeader,
     concreteExecutionHeader, concreteGenesisHeader, logsBloom, List.foldl_nil,
     ne_eq, not_true_eq_false, ite_false, pure, Bind.bind, Except.bind]
+  simp only [Nat.max_zero, not_true_eq_false, ite_false, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true]
   rfl
 
 theorem concreteDeploymentStep :
     stateTransitionUsing concreteConfig concreteBase concreteDeploymentEnvelope.block =
       .ok concreteDeployed := by
   rw [stateTransitionUsing_eq_of_chainId_eq concreteDeploymentBase.chainId_eq]
-  rw [show concreteConfig.forkAt concreteDeploymentEnvelope.block.header.timestamp =
-    .ok .prague from ChainConfig.pragueOnly_forkAt 1 _]
+  rw [show concreteConfig.forkAt concreteDeploymentEnvelope.block.header.number
+      concreteDeploymentEnvelope.block.header.timestamp =
+    .ok .prague from ChainConfig.pragueOnly_forkAt 1 _ _]
+  simp only [Except.mapError, Except.bind]
+  rw [stateTransitionScheduledE_of_pow_none _ _ _ _ rfl]
   change stateTransitionAt .prague concreteBase concreteDeploymentEnvelope.block = _
   rw [stateTransitionAt_eq_ok_iff, stateTransitionE]
   have henvelope : concreteDeploymentEnvelope.block =
@@ -820,46 +824,18 @@ theorem concreteDeploymentStep :
         (getWithdrawalsRoot concreteDeploymentBody.2)
         (computeRequestsHash concreteDeploymentBody.2.requests)) = .ok ()
     exact concreteDeploymentHeader_valid _ _ _ _ _
-  rw [hheader]
-  change (do
-    Except.mapError TransitionError.block
-      (stateTransitionOmmersCheck concreteDeploymentEnvelope.block.ommers)
-    let output ← applyBody (initBenv .prague concreteBase concreteDeploymentEnvelope.block.header)
-      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.wds
-    Except.mapError TransitionError.block (stateTransitionChecks output.2
-      concreteDeploymentEnvelope.block.header (getTransactionsRoot output.2) output.1.root
-      (getReceiptRoot output.2) (logsBloom output.2.blockLogs) (getWithdrawalsRoot output.2)
-      (computeRequestsHash output.2.requests))
-    Except.mapError TransitionError.block
-      (blockAccessListCheck (Fork.ruleSet .prague) output.2
-        concreteDeploymentEnvelope.block.header)
-    .ok (⟨appendBlock concreteBase.blocks concreteDeploymentEnvelope.block,
-      output.1, concreteBase.chainId⟩ : BlockChain)) = .ok concreteDeployed
-  rw [concreteDeploymentBody_finalHeader]
-  rw [henvelope]
-  have hommers : stateTransitionOmmersCheck
-      (concreteDeploymentBlock concreteDeploymentBody.1.root
-        (getTransactionsRoot concreteDeploymentBody.2) (getReceiptRoot concreteDeploymentBody.2)
-        (getWithdrawalsRoot concreteDeploymentBody.2)
-        (computeRequestsHash concreteDeploymentBody.2.requests)).ommers = .ok () := by
+  have hommers : checkBlockOmmers (Fork.ruleSet .prague) concreteBase
+      concreteDeploymentEnvelope.block.header concreteDeploymentEnvelope.block.ommers = .ok () := by
     rfl
-  have hchecks : stateTransitionChecks concreteDeploymentBody.2
-      (concreteDeploymentBlock concreteDeploymentBody.1.root
-        (getTransactionsRoot concreteDeploymentBody.2) (getReceiptRoot concreteDeploymentBody.2)
-        (getWithdrawalsRoot concreteDeploymentBody.2)
-        (computeRequestsHash concreteDeploymentBody.2.requests)).header
-      (getTransactionsRoot concreteDeploymentBody.2) concreteDeploymentBody.1.root
-      (getReceiptRoot concreteDeploymentBody.2) (logsBloom concreteDeploymentBody.2.blockLogs)
-      (getWithdrawalsRoot concreteDeploymentBody.2)
-      (computeRequestsHash concreteDeploymentBody.2.requests) = .ok () := by
-    exact concreteDeploymentChecks
+  have hchecks := concreteDeploymentChecks
   have hbal : blockAccessListCheck (Fork.ruleSet .prague) concreteDeploymentBody.2
-      (concreteDeploymentBlock concreteDeploymentBody.1.root
-        (getTransactionsRoot concreteDeploymentBody.2) (getReceiptRoot concreteDeploymentBody.2)
-        (getWithdrawalsRoot concreteDeploymentBody.2)
-        (computeRequestsHash concreteDeploymentBody.2.requests)).header = .ok () := by
+      concreteDeploymentEnvelope.block.header = .ok () := by
     rfl
-  simp only [hommers, Except.mapError, bind, Except.bind, hchecks, hbal]
+  unfold stateTransitionCoreE
+  simp only [hheader, hommers, Except.mapError, bind, Except.bind,
+    concreteDeploymentBody_finalHeader]
+  have hreq : (Fork.ruleSet .prague).header.requestsHash = true := rfl
+  simp only [hreq, ite_true, hchecks, hbal]
   rfl
 
 /-- The configured private genesis actually deploys the strict signed envelope. -/
@@ -874,7 +850,7 @@ theorem concreteDeploymentRoot :
 noncomputable def concreteDeploymentTrace :
     ExecutionTrace.AppliedBodyTrace
       (initBenv .prague concreteBase concreteDeploymentEnvelope.block.header)
-      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.wds
+      concreteDeploymentEnvelope.block.txs concreteDeploymentEnvelope.block.ommers concreteDeploymentEnvelope.block.wds
       concreteDeploymentBody.1 concreteDeploymentBody.2 :=
   Classical.choice (ExecutionTrace.exists_appliedBodyTrace concreteDeploymentBody_finalHeader
     (by simpa only [initBenv, initBenvStat] using CoveredFork.prague))
@@ -908,7 +884,7 @@ theorem concreteDeploymentStateForm :
     preview concreteCreateTxRlp concreteCreateTx concreteCreateSender concreteCreateTarget
     henv CoveredFork.prague ctx post bout htx suffix
   change applyBody (initBenv .prague concreteBase (concreteDeploymentHeader 0 0 0 0 0))
-    [.inl concreteCreateTxRlp] [] = .ok (post, bout) at hrun
+    [.inl concreteCreateTxRlp] [] [] = .ok (post, bout) at hrun
   rw [concreteDeploymentHeader_benv] at hrun
   have hpost : post = concreteDeployed.state :=
     congrArg Prod.fst (Except.ok.inj (hrun.symm.trans concreteDeploymentBody_run))
@@ -926,13 +902,21 @@ def concreteConstructorEntry : State :=
   (concreteConstructorPrepared.setBal concreteCreateSender
     (concreteConstructorPrepared.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0
 
+private theorem setStor_get_nonce (st : State) (adr a : Adr) (s : Stor) :
+    ((st.setStor adr s).get a).nonce = (st.get a).nonce := by
+  unfold State.setStor
+  dsimp only
+  split <;> by_cases h : adr = a
+  · subst a; rw [State.get_setPresent_self]
+  · rw [State.get_setPresent_ne _ h]
+  · subst a; rw [State.get_set_self]
+  · rw [State.get_set_ne _ h]
+
 private theorem concreteConstructorPrepared_sender_nonce :
     (concreteConstructorPrepared.get concreteCreateSender).nonce = 1 := by
   have different : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
   unfold concreteConstructorPrepared
-  rw [State.incrNonce, State.setAccount_get_ne _ different]
-  unfold State.setStor
-  rw [State.get_set_ne _ different]
+  rw [State.incrNonce, State.setAccount_get_ne _ different, setStor_get_nonce]
   unfold concreteDeploymentDebit
   rw [State.setBal_get_nonce]
   unfold State.incrNonce
@@ -943,10 +927,7 @@ private theorem concreteConstructorPrepared_target_nonce :
     (concreteConstructorPrepared.get concreteCreateTarget).nonce = 1 := by
   have different : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
   unfold concreteConstructorPrepared
-  rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-  unfold State.setStor
-  rw [State.get_set_self]
-  change (concreteDeploymentDebit.get concreteCreateTarget).nonce + 1 = 1
+  rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, setStor_get_nonce]
   unfold concreteDeploymentDebit
   rw [State.setBal_get_ne different]
   unfold State.incrNonce
@@ -1041,7 +1022,9 @@ theorem concreteDeployedCode (address : Adr) (hne : concreteCreateTarget ≠ add
     concreteConstructorPrepared, concreteDeploymentDebit, State.getCode,
     State.addBal, State.setBal_get_code, State.incrNonce_get_code,
     State.setStor_get_code, State.setCode_get_code_ne hne,
-    State.setStorVal, State.get_set_ne _ hne]
+    State.setStorVal]
+  split_ifs <;> simp only [State.get_setPresent_ne _ hne, State.get_set_ne _ hne,
+    State.setBal_get_code, State.incrNonce_get_code, State.setStor_get_code]
 
 theorem concreteDeployedSystemCode (address : Adr)
     (ha : address ∈ [beaconRootsAddress, historyStorageAddress,
@@ -1173,7 +1156,7 @@ theorem concreteJoinEnvelopeParse :
   simp only [List.length_cons, concreteJoinPayload_length]
   rw [hp]
 
-theorem concreteJoinDecode : decodeTx (.inl concreteJoinTxRlp) = .ok concreteJoinTx := by
+theorem concreteJoinDecode : decodeTx pragueRules (.inl concreteJoinTxRlp) = .ok concreteJoinTx := by
   simp only [decodeTx, concreteJoinTxRlp, List.cons_append, List.nil_append,
     Bytes.toExTx, concreteJoinEnvelopeParse, concreteJoinFields]
   rfl
@@ -1193,14 +1176,16 @@ theorem concreteDeployedSenderCode :
   rfl
 
 theorem concreteJoinSenderChecked :
-    checkTransactionSenderAccount (concreteDeployed.state.get concreteCreateSender)
+    checkTransactionSenderAccountFor pragueRules (concreteDeployed.state.get concreteCreateSender)
       concreteJoinTx 4000000 = .ok () := by
   have hn : (concreteDeployed.state.get concreteCreateSender).nonce = 1 := concreteDeployedSenderNonce
   have hb : (concreteDeployed.state.get concreteCreateSender).bal = 999999999999040182 :=
     concreteDeployedSenderBalance
   have hc : (concreteDeployed.state.get concreteCreateSender).code = ByteArray.empty :=
     concreteDeployedSenderCode
-  simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
+  simp only [checkTransactionSenderAccountFor,
+    checkTransactionSenderCodeFor_enabled (rules := pragueRules) rfl,
+    checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
   decide +kernel
 
 
