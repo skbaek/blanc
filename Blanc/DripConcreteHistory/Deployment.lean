@@ -693,7 +693,6 @@ theorem concreteCanonicalEnvelope (sr tr rr wr rh : B256) :
     recoveredSender := concreteCreateRecoveredSender
     validated := concreteCreateValidated
     checked := ?_
-    base_fee_le_effective := ?_
     upfront_funded := ?_
     gas_bound := concreteCreateGasBound
     runtime_code_fits := by decide +kernel
@@ -712,8 +711,6 @@ theorem concreteCanonicalEnvelope (sr tr rr wr rh : B256) :
           (concreteDeploymentHeader sr tr rr wr rh)) concreteCreateTx, [], 0)
     rw [concreteDeploymentHeader_benv]
     exact concreteCreateChecked
-  · change 1 ≤ 2
-    decide
   · change 500000 * 2 ≤ (concreteGenesisState.get concreteCreateSender).bal.toNat
     rw [concreteGenesisSender]
     decide +kernel

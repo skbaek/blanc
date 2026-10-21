@@ -73,8 +73,8 @@ structure CanonicalDeploymentBase
   sumNof : SumNof base.state.bal
   target_eq : ca = computeContractAddress sender (base.state.getNonce sender)
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ∀ {timestamp selected},
-    cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca
+  target_not_precompile : ∀ {number timestamp selected},
+    cfg.rulesAt number timestamp = .ok selected → ¬ selected.isPrecomp ca
   beacon_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress
   history_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress
   withdrawalRequest_not_precompile :
@@ -111,10 +111,10 @@ structure CanonicalWeth10DeploymentBlock
     (deploymentTxBytes : Bytes) (deploymentTx : Tx)
     (sender ca : Adr) : Prop where
   txs_eq : cb.block.txs = [.inl deploymentTxBytes]
-  decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx
+  decode_eq : decodeTx (Fork.ruleSet fork) (.inl deploymentTxBytes) = .ok deploymentTx
   ommers_eq : cb.block.ommers = []
   withdrawals_eq : cb.block.wds = []
-  forkAt : cfg.forkAt cb.block.header.timestamp = .ok fork
+  forkAt : cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork
   type_eq : ∃ maxPriorityFee maxFee,
     deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none []
   value_eq : deploymentTx.value = 0
@@ -129,10 +129,6 @@ structure CanonicalWeth10DeploymentBlock
     checkTransaction benv.beginTransaction
       (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
       .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0)
-  base_fee_le_effective :
-    cb.block.header.baseFeePerGas ≤
-      deploymentEffectiveGasPrice
-        (initBenv fork base cb.block.header) deploymentTx
   upfront_funded :
     deploymentTx.gas *
         deploymentEffectiveGasPrice
@@ -160,7 +156,7 @@ structure DeploymentSystemPrefix
   beaconRun :
     processUncheckedSystemTransaction
       (initBenv fork base block.header)
-      beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
+      beaconRootsAddress (block.header.parentBeaconBlockRoot.getD 0).toBytes =
       .ok (stBeacon, outBeacon)
   lastHashEq :
     List.getLast?
@@ -271,7 +267,7 @@ theorem canonicalDeploymentSystemPrefix
   let initial := initBenv fork base cb.block.header
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
-      initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
+      initial beaconRootsAddress (cb.block.header.parentBeaconBlockRoot.getD 0).toBytes
       (by simpa only [initBenv, initial] using hbase.beaconCode)
       hbase.beacon_not_precompile
       (by simpa only [initBenv, initBenvStat, initial] using hfork)
@@ -370,11 +366,11 @@ theorem prepareCanonicalDeploymentContext
   have hreceiver : deploymentTx.type.receiver? = none := by
     rw [htype]
     rfl
+  have htenvStateGas : tenv.stat.stateGasReservoir = 0 := by rfl
   have hprepare : prepareMessage msgBenv tenv deploymentTx = .ok msg := by
     unfold prepareMessage
     rw [hreceiver]
-    simp only [msg, msgBenv, currentTarget, hreceiver, Except.ok.injEq, Msg.mk.injEq, true_and]
-    rfl
+    simp only [msg, msgBenv, currentTarget, hreceiver, htenvStateGas]
   have hdebit_nonce :
       debit.getNonce sender = base.state.getNonce sender + 1 := by
     dsimp only [debit]
@@ -594,7 +590,8 @@ theorem canonicalDeploymentMessage_succeeds
       logs := post.logs
       accountsToDelete := post.accountsToDelete
       error := post.error
-      returnData := post.output }
+      returnData := post.output
+      touchedAccounts := post.meta.touchedAccounts }
   have hrun : processMessageCall ctx.msg = .ok (post.state, out) := by
     have htoNat : Int.toNat? post.refundCounter = some 0 := by
       rw [hrefund]
@@ -621,7 +618,11 @@ theorem canonicalDeploymentMessage_succeeds
   · simpa only using hleft
   · simpa only using herr
   · rfl
-  · simpa only using hdelete
+  · change post.accountsToDelete = _
+    rw [hdelete]
+    have prepared := ctx.prepare_eq
+    unfold prepareMessage at prepared
+    exact (congrArg Msg.inheritedDeletions (Except.ok.inj prepared)).symm
 
 structure CanonicalDeploymentTransactionResult
     (cfg : ChainConfig) (fork : Fork) (ca : Adr)
@@ -744,6 +745,9 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hintrinsic]
     simp only [allocateEvmGas, hforkStateGas]
     simp only [deploymentEffectiveGasPrice] at hprepare ⊢
+    simp only [show (Fork.ruleSet fork).txr.warmCoinbase = true from
+      hfork.cases (motive := fun f => (Fork.ruleSet f).txr.warmCoinbase = true)
+        rfl rfl rfl rfl, ↓reduceIte]
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
@@ -764,7 +768,10 @@ theorem canonicalDeploymentTransaction_succeeds
         Blanc.deploymentUsedGasFromMessage, Blanc.deploymentCalldataFloorGas,
         TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      simp only [and_self]
+      have hquotient : (Fork.ruleSet fork).settle.refundQuotient = 5 :=
+        hfork.cases (motive := fun f => (Fork.ruleSet f).settle.refundQuotient = 5)
+          rfl rfl rfl rfl
+      simp only [hquotient, and_self]
     rw [hsettlement]
     simp only [BlockOutput.withGasSettlement, hforkBalNone, List.foldl_nil,
       Nat.add_zero]
@@ -774,6 +781,10 @@ theorem canonicalDeploymentTransaction_succeeds
       Blanc.deploymentTxPreludeBout,
       ExecutionTrace.transactionPreludeBout, BlockOutput.init,
       Blanc.deploymentReceiptKey]
+    have hsweep : (Fork.ruleSet fork).settle.touchedSweep = false :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.touchedSweep = false)
+        rfl rfl rfl rfl
+    simp only [sweepTouchedAccounts_of_not_touchedSweep hsweep]
   have hsum : SumNof post.bal := by
     have hle := processTransaction_sum_le hrun (by
       rw [htxRules]
@@ -1000,7 +1011,7 @@ theorem canonicalDeploymentApplyBody_succeeds
     (htx : CanonicalDeploymentTransactionResult cfg fork ca ctx post bout)
     (hsuffix : CanonicalDeploymentSuffixResult cfg fork ca ctx post bout) :
     applyBody (initBenv fork base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) := by
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) := by
   have hputIndex : List.putIndex [deploymentTx] = [(0, deploymentTx)] := rfl
   have hbalNone : (initBenv fork base cb.block.header).stat.rules.bal = none := by
     apply BenvStat.bal_none_of_stateGas_none
@@ -1022,7 +1033,24 @@ theorem canonicalDeploymentApplyBody_succeeds
     simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
+  have hbeaconRules :
+      (initBenv fork base cb.block.header).stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistoryRules :
+      (initBenv fork base cb.block.header).stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => f.ruleSet.sys.historyStorage = true) rfl rfl rfl rfl
+  have hwithdrawalsRules :
+      (initBenv fork base cb.block.header).stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.withdrawalsRoot = true) rfl rfl rfl rfl
+  have hrequestsRules :
+      (initBenv fork base cb.block.header).stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hpow :
+      (initBenv fork base cb.block.header).stat.rules.pow = none :=
+    hfork.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
   unfold applyBody
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte]
   have hbeacon := ctx.systemPrefix.beaconRun
   change processUncheckedSystemTransaction
     (initBenv fork base cb.block.header)
@@ -1035,7 +1063,10 @@ theorem canonicalDeploymentApplyBody_succeeds
   simp only [Option.toExcept]
   rw [ctx.systemPrefix.historyRun]
   rw [henv.txs_eq]
-  simp only [List.mapM_cons, List.mapM_nil, henv.decode_eq, bind,
+  have hdecodeRules :
+      (((initBenv fork base cb.block.header).withState ctx.systemPrefix.stBeacon).withState
+        ctx.systemPrefix.stHistory).stat.rules = Fork.ruleSet fork := rfl
+  simp only [List.mapM_cons, List.mapM_nil, hdecodeRules, henv.decode_eq, bind,
     Except.bind]
   simp only [Except.pure, pure]
   rw [hputIndex]
@@ -1085,15 +1116,15 @@ structure DeploymentRoot
     stateTransitionAt fork
         base cb.block = .ok deployed ∧
     applyBody (initBenv fork base cb.block.header)
-        cb.block.txs cb.block.wds = .ok (post, bout) ∧
+        cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
     post = deployed.state ∧
     (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true
   params_eq : dp = freshDeployParams cfg.chainId.toB256 ca
   configValid : cfg.Valid
   target_ne_zero : ca ≠ 0
-  target_not_precompile : ∀ {timestamp rules},
-    cfg.rulesAt timestamp = .ok rules → ¬ rules.isPrecomp ca
+  target_not_precompile : ∀ {number timestamp rules},
+    cfg.rulesAt number timestamp = .ok rules → ¬ rules.isPrecomp ca
   emptyStorage : deployed.state.getStor ca = Stor.empty
   stable : Stable dp ca deployed.state
   deployed_validContext : deployed.ValidContext
@@ -1124,7 +1155,7 @@ theorem canonicalDeploymentStep_establishes_root
     canonicalDeploymentSuffix_succeeds cfg fork base cb deploymentTx sender ca
       hbase ctx post bout htx hfork
   have happly : applyBody (initBenv fork base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) :=
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
     canonicalDeploymentApplyBody_succeeds cfg fork base cb deploymentTxBytes
       deploymentTx sender ca henv hfork ctx post bout htx suffix
   have hwith : stateTransitionAt fork base cb.block = .ok deployed := by
@@ -1132,7 +1163,11 @@ theorem canonicalDeploymentStep_establishes_root
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := cfg) (ch := base) hbase.chainId_eq] at h
     rw [henv.forkAt] at h
-    simpa only [Except.bind, Except.mapError] using h
+    have hpowNone : (Fork.ruleSet fork).pow = none :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).pow = none) rfl rfl rfl rfl
+    simp only [Except.bind, Except.mapError] at h
+    rw [stateTransitionScheduledE_of_pow_none cfg fork base cb.block hpowNone] at h
+    exact h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
@@ -1181,7 +1216,7 @@ theorem DeploymentRoot.reflReach
 theorem DeploymentRoot.reachable_stable
     (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     Stable dp ca future.state :=
   chainUsing_preserves_stable dp ca _ deployed future hreach hroot.stable hcov
 

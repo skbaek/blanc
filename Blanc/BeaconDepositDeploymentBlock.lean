@@ -119,7 +119,7 @@ theorem canonicalDeploymentApplyBody_succeeds
     (htx : DeploymentTransactionResult chainId ca ctx post bout)
     (hsuffix : DeploymentSuffixResult chainId ca ctx post bout) :
     applyBody (initBenv .prague base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) := by
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) := by
   have hputIndex : List.putIndex [tx] = [(0, tx)] := rfl
   have hbalNone : (initBenv .prague base cb.block.header).stat.rules.bal = none := by
     rfl
@@ -140,7 +140,18 @@ theorem canonicalDeploymentApplyBody_succeeds
     simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
+  have hbeaconRules :
+      (initBenv .prague base cb.block.header).stat.rules.sys.beaconRoots = true := rfl
+  have hhistoryRules :
+      (initBenv .prague base cb.block.header).stat.rules.sys.historyStorage = true := rfl
+  have hwithdrawalsRules :
+      (initBenv .prague base cb.block.header).stat.rules.header.withdrawalsRoot = true := rfl
+  have hrequestsRules :
+      (initBenv .prague base cb.block.header).stat.rules.header.requestsHash = true := rfl
+  have hpow : (initBenv .prague base cb.block.header).stat.rules.pow = none := rfl
   unfold applyBody
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte]
   have hbeacon := ctx.systemPrefix.beaconRun
   change processUncheckedSystemTransaction
     (initBenv .prague base cb.block.header)
@@ -153,7 +164,10 @@ theorem canonicalDeploymentApplyBody_succeeds
   simp only [Option.toExcept]
   rw [ctx.systemPrefix.historyRun]
   rw [henv.txs_eq]
-  simp only [List.mapM_cons, List.mapM_nil, henv.decode_eq, bind,
+  have hdecodeRules :
+      (((initBenv .prague base cb.block.header).withState ctx.systemPrefix.stBeacon).withState
+        ctx.systemPrefix.stHistory).stat.rules = pragueRules := rfl
+  simp only [List.mapM_cons, List.mapM_nil, hdecodeRules, henv.decode_eq, bind,
     Except.bind]
   simp only [Except.pure, pure]
   rw [hputIndex]

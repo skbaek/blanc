@@ -911,9 +911,6 @@ example {cfg : ChainConfig} {fork : Fork}
       checkTransaction benv.beginTransaction
         (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice benv deploymentTx, [], 0))
-    (base_fee_le_effective : cb.block.header.baseFeePerGas ≤
-      deploymentEffectiveGasPrice
-        (initBenv fork base cb.block.header) deploymentTx)
     (upfront_funded :
       deploymentTx.gas * deploymentEffectiveGasPrice
         (initBenv fork base cb.block.header) deploymentTx ≤
@@ -938,7 +935,6 @@ example {cfg : ChainConfig} {fork : Fork}
     recoveredSender := recoveredSender
     validated := validated
     checked := checked
-    base_fee_le_effective := base_fee_le_effective
     upfront_funded := upfront_funded
     gas_bound := gas_bound
     runtime_code_fits := runtime_code_fits
@@ -1127,7 +1123,7 @@ example {cfg : ChainConfig} {base deployed : BlockChain}
       stateTransitionAt fork
           base cb.block = .ok deployed ∧
       applyBody (initBenv fork base cb.block.header)
-          cb.block.txs cb.block.wds = .ok (post, bout) ∧
+          cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
       post = deployed.state ∧
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
           (fun entry => entry.2.succeeded) = some true)
@@ -4147,9 +4143,6 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
        checkTransaction benv.beginTransaction
           (deploymentTxPreludeBout .init tx 0) tx =
         .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)) ∧
-      cb.block.header.baseFeePerGas ≤
-        deploymentEffectiveGasPrice
-          (initBenv .prague base cb.block.header) tx ∧
       tx.gas * deploymentEffectiveGasPrice
           (initBenv .prague base cb.block.header) tx ≤
         (base.state.bal sender).toNat ∧
@@ -4159,7 +4152,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
       ca = computeContractAddress sender tx.nonce :=
   ⟨h.txs_eq, h.decode_eq, h.ommers_eq, h.withdrawals_eq, h.type_eq,
     h.value_eq, h.data_eq, h.nonce_eq, h.nonce_not_max,
-    h.recoveredSender, h.validated, h.checked, h.base_fee_le_effective,
+    h.recoveredSender, h.validated, h.checked,
     h.upfront_funded, h.gas_bound, h.block_gas_room, h.target_eq⟩
 
 example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
@@ -4401,7 +4394,7 @@ example (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (htx : OfficialDeploymentTransactionResult chainId ca ctx post bout)
     (hsuffix : OfficialDeploymentSuffixResult chainId ca ctx post bout) :
     applyBody (initBenv .prague base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) :=
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
   canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
     henv ctx post bout htx hsuffix
 
@@ -4422,7 +4415,7 @@ example {chainId : UInt64} {base deployed : BlockChain} {ca : Adr}
       stateTransitionUsing (ChainConfig.pragueOnly chainId)
         base cb.block = .ok deployed ∧
       applyBody (initBenv .prague base cb.block.header)
-        cb.block.txs cb.block.wds = .ok (post, bout) ∧
+        cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
       post = deployed.state)
     (target_ne_zero : ca ≠ 0)
     (target_not_precompile : ¬ pragueRules.isPrecomp ca)

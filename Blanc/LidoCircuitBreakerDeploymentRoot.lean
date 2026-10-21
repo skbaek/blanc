@@ -28,7 +28,7 @@ structure DeploymentRoot
     stateTransitionUsing (ChainConfig.pragueOnly chainId)
       base cb.block = .ok deployed ∧
     applyBody (initBenv .prague base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) ∧
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
     post = deployed.state
   target_ne_zero : ca ≠ 0
   target_not_precompile : ¬ pragueRules.isPrecomp ca
@@ -65,7 +65,7 @@ theorem canonicalDeploymentStep_establishes_root
     canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
       ctx post bout htx
   have happly : applyBody (initBenv .prague base cb.block.header)
-      cb.block.txs cb.block.wds = .ok (post, bout) :=
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
     canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
       henv ctx post bout htx suffix
   have hwith : stateTransitionAt .prague base cb.block = .ok deployed := by
@@ -73,7 +73,9 @@ theorem canonicalDeploymentStep_establishes_root
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := ChainConfig.pragueOnly chainId) (ch := base)
       (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simpa only [Except.bind, Except.mapError, ChainConfig.pragueOnly_forkAt] using h
+    simp only [Except.bind, Except.mapError, ChainConfig.pragueOnly_forkAt] at h
+    rw [stateTransitionScheduledE_of_pow_none _ .prague base cb.block rfl] at h
+    exact h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert

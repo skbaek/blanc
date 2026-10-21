@@ -67,10 +67,6 @@ structure CanonicalOfficialDeploymentBlock
     checkTransaction benv.beginTransaction
       (deploymentTxPreludeBout .init tx 0) tx =
       .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)
-  base_fee_le_effective :
-    cb.block.header.baseFeePerGas ≤
-      deploymentEffectiveGasPrice
-        (initBenv .prague base cb.block.header) tx
   upfront_funded :
     tx.gas * deploymentEffectiveGasPrice
         (initBenv .prague base cb.block.header) tx ≤
