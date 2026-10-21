@@ -131,7 +131,7 @@ theorem messageCallDelegation_getCode
       authority ≠ a)
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
     delegated.benv.state.getCode a = msg.benv.state.getCode a := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -144,7 +144,7 @@ theorem messageCallDelegation_getCode
 
 theorem messageCallExecutionMessage_getCode (msg : Msg) (a : Adr) :
     (messageCallExecutionMessage msg).benv.state.getCode a = msg.benv.state.getCode a := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-! ### The message wrappers -/
@@ -383,9 +383,9 @@ theorem RequestsTrace.codeAt
 transaction frame it enters**, when no frame it enters targets `a` and no authorization of its
 transactions recovers to `a`. -/
 theorem AppliedBodyTrace.codeAt_empty
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
     (hauth : ∀ p ∈ trace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a)
