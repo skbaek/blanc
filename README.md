@@ -1,4 +1,4 @@
-# Blanc: EVM bytecode, verified in Lean 4
+# Blanc: A Verification Stack for EVM Bytecode in Lean 4
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
@@ -9,16 +9,19 @@ which premises; the Blanc language and its contracts; and what none of it claims
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.
 
-Blanc proves theorems in Lean 4 about Ethereum bytecode as it is deployed —
-WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the EIP-7002
-system contract — against Jaune, an executable EVM semantics, with exact gas,
-liveness, and no axioms beyond Lean's three. The bytes are read from mainnet
-without trusting the compilers that produced them; what is claimed about each
-artifact, and where, is mapped in
-[`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
+Blanc is a verification stack for EVM bytecode, built in Lean 4 on Jaune's
+executable EVM semantics. It proves theorems about Ethereum bytecode as it is
+deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the
+EIP-7002 system contract — with exact gas, liveness, and no axioms beyond
+Lean's three. The bytes are read from mainnet without trusting the compilers
+that produced them; what is claimed about each artifact, and where, is mapped
+in [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
 
-Blanc began as a programming language: the EVM's own instructions, arranged by
-four constructors, with a compiler whose correctness is a Lean theorem.
+The stack also offers the option of programming in Blanc's native language:
+the EVM's own instructions, arranged by four constructors, with a compiler
+whose correctness is a Lean theorem. Because every implementation choice stays
+open, down to the instruction, it lets developers push performance
+optimization, proof simplicity and customization as far as they choose.
 Contracts written in it, several of them reimplementations of contracts that
 exist on mainnet, are verified over their compiled bytes
 ([the language](https://skbaek.github.io/blanc/language.html)).

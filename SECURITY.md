@@ -2,10 +2,10 @@
 
 ## Read this first: a Blanc proof is not a deployment audit
 
-Blanc proves properties of bytecode deployed on mainnet, and it compiles its
-own contracts to EVM runtime bytecode, several of them reimplementations of
-contracts that exist on mainnet. None of this makes anything here, or anything
-on chain, safe to deploy or to use.
+Blanc is a verification stack: it proves properties of bytecode deployed on
+mainnet, and its native language compiles contracts to EVM runtime bytecode,
+several of them reimplementations of contracts that exist on mainnet. None of
+this makes anything here, or anything on chain, safe to deploy or to use.
 
 A Blanc theorem is a statement about **Jaune's modeled semantics** — that
 given bytecode, whether bytes read from mainnet or a Blanc program as Blanc's
