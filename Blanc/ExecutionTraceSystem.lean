@@ -76,7 +76,7 @@ theorem RetainedXlot.rawFrames_sevm_of_spawnFree {slot : Xlot} (retained : Retai
 
 theorem messageCallExecutionMessage_currentTarget (msg : Msg) :
     (messageCallExecutionMessage msg).currentTarget = msg.currentTarget := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl
 
 /-- A settled call whose entered frames run spawn-free code enters only frames at the message's
@@ -111,9 +111,9 @@ def systemTargets : List Adr :=
     consolidationRequestPredeployAddress]
 
 theorem AppliedBodyTrace.systemRawFrames_target_of_spawnFree
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (h : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code) :
     ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ∈ systemTargets := by
   intro root member
