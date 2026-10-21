@@ -20,9 +20,13 @@ theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
   change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
     msg.currentTarget).get msg.currentTarget).stor = .empty
   rw [State.incrNonce_get_stor]
-  unfold State.setStor
-  rw [State.get_set_self]
-  split <;> rfl
+  split
+  · rfl
+  · unfold State.setStor
+    dsimp only
+    split
+    · rw [State.get_setPresent_self]
+    · rw [State.get_set_self]
 
 /-- A zero-value message can always cross its optional entry transfer. -/
 theorem benvAfterTransfer_exists_zero
@@ -37,7 +41,8 @@ theorem processMessage_ok_of_exec
     (htransfer : msg.benvAfterTransfer = .ok benv)
     (hcodeAddress : msg.codeAddress = .none)
     (hexec : exec (initEvm (msg.withBenv benv)) = .ok post)
-    (herror : post.error = .none) :
+    (herror : post.error = .none)
+    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false) :
     processMessage msg = .ok post := by
   unfold processMessage runFrame Frame.enter Frame.ofCall
   rw [htransfer]
@@ -47,7 +52,7 @@ theorem processMessage_ok_of_exec
   simp only [Msg.withBenv, hcodeAddress] at hexec
   rw [hexec]
   simp only [Bool.false_eq_true, ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok,
-    Except.bind_ok, herror, Option.isSome_none]
+    Except.bind_ok, herror, Option.isSome_none, Devm.recordTouch_of_not_touchedSweep hsweep]
 
 /-- Successful inner-message execution followed by successful code charging is
 the successful CREATE settlement, with the charged output installed at the
@@ -215,7 +220,7 @@ structure DeploymentSystemPrefix
   beaconRun :
     processUncheckedSystemTransaction
       (initBenv fork base block.header)
-      beaconRootsAddress block.header.parentBeaconBlockRoot.toBytes =
+      beaconRootsAddress (block.header.parentBeaconBlockRoot.getD 0).toBytes =
       .ok (stBeacon, outBeacon)
   lastHashEq :
     List.getLast?
@@ -242,6 +247,7 @@ private theorem processMessageCall_ok_of_compiled_exec
     (hexec : exec child = .ok post)
     (herror : post.error = none)
     (hstateGas : msg.benv.stat.rules.stateGas = none)
+    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false)
     (hrefund : 0 ≤ post.refundCounter) :
     processMessageCall msg = .ok
       (post.state,
@@ -250,25 +256,36 @@ private theorem processMessageCall_ok_of_compiled_exec
           logs := post.logs
           accountsToDelete := post.accountsToDelete
           error := post.error
-          returnData := post.output }) := by
+          returnData := post.output
+          touchedAccounts := post.meta.touchedAccounts }) := by
   have hprocess : processMessage msg = .ok post := by
     unfold processMessage runFrame
     rw [henter]
     unfold Frame.settle Frame.settleMsg processMessage.settle
     simp only [hexec, executeCode.handleErrorWith_ok, herror, Frame.ofCall, Option.isSome,
-      Bool.false_eq_true, ite_false, bind, Except.bind]
+      Bool.false_eq_true, ite_false, bind, Except.bind, Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
     unfold getDelegatedCodeAddress
     rw [ite_eq_right (not_delegation_of_compile hcompile)]
   have htoNat : Int.toNat? post.refundCounter =
       some post.refundCounter.toNat :=
     Int.mem_toNat?.mpr (Int.toNat_of_nonneg hrefund).symm
+  have hlegacy : processMessageCall.legacyAuthorization msg = .ok ⟨msg, 0⟩ := by
+    simp only [processMessageCall.legacyAuthorization, hauths, List.isEmpty, Bool.or_true,
+      ↓reduceIte]
+  have hresolve : msg.resolveCodeDelegation = msg := by
+    have hnone : msg.benv.stat.rules.delegatedCodeAddress msg.code = none := by
+      unfold ForkRules.delegatedCodeAddress
+      split
+      · exact hdelegation
+      · rfl
+    unfold Msg.resolveCodeDelegation
+    rw [hnone]
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind,
-    hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
-    htoNat, Option.toExcept, Nat.cast_zero, zero_add, hstateGas]
+  simp only [hstateGas, hlegacy, hresolve, hprocess, bind, Except.bind, Except.bimap, id_eq,
+    herror, Option.isNone, ↓reduceIte, htoNat, Option.toExcept, Nat.cast_zero, zero_add]
   rfl
 
 /-- The neutral two-instruction system program executes exactly and leaves the
@@ -319,14 +336,20 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
     (p := deploymentSystemProgram) (msg := msg)
     (child := initEvm msg) (post := post)
     (by rfl) (by rfl) hcompile henter hexec
-    (by rfl) hmsgStateGas (by simp only [hrefund, Std.le_refl])
+    (by rfl) hmsgStateGas
+    (by
+      change benv.stat.rules.settle.touchedSweep = false
+      exact hfork.cases
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl)
+    (by simp only [hrefund, Std.le_refl])
   let out : MsgCallOutput :=
     { gasLeft := post.gasLeft
       refundCounter := post.refundCounter.toNat
       logs := post.logs
       accountsToDelete := post.accountsToDelete
       error := post.error
-      returnData := post.output }
+      returnData := post.output
+      touchedAccounts := post.meta.touchedAccounts }
   have hcallOut : processMessageCall msg = .ok (post.state, out) := by
     exact hcall
   have hpostState : post.state = benv.state := rfl
@@ -388,7 +411,7 @@ theorem canonicalDeploymentSystemPrefix
   let initial := initBenv fork base cb.block.header
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
-      initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
+      initial beaconRootsAddress (cb.block.header.parentBeaconBlockRoot.getD 0).toBytes
       (by simpa only [initBenv, initial] using hbase.beaconCode)
       (by change ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress
           exact hfork.beaconRoots_not_precompile)
