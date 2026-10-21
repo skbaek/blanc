@@ -142,7 +142,7 @@ theorem frame3_child : ChildOk e2.sta aCall post3 ∧ ChildAgree post3 keys3 adr
     hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr⟩
   · rw [cp3_eq] at hp; cases hp
     rw [e3_eq] at he'; cases he'
-    exact ⟨.ok post3, hx3, frame_settle_ok hcr3 hsg3 herr⟩
+    exact ⟨.ok post3, hx3, frame_settle_ok hcr3 hsg3 (by kernel_rfl) herr⟩
   · show a ∈ post3.accessedAddresses ↔ _
     rw [show post3 = post3F post4 from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
     simp only [true_and, adrs3', List.mem_append]

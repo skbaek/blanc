@@ -153,7 +153,7 @@ theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧
     (adrs := cp4.adrs) (stor := aCall.stor) (n := 4505) e4_eq
     (fun x => by rw [hik, hpk, e31_keys]; exact e3_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
-    (by rw [hst, e31_state]; exact e3_world.2) hcr hsg
+    (by rw [hst, e31_state]; exact e3_world.2) hcr hsg (by kernel_rfl)
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code e4_fork hr) fs1_zero
     (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps4]; exact ⟨id, fun _ _ r => r⟩) hrun herr
   rw [hk, ha, hs, hc] at h
