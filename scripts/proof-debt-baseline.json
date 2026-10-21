@@ -593,7 +593,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 742,
+      "value": 761,
       "ceiling": 742
     },
     {
@@ -604,7 +604,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 675,
+      "value": 697,
       "ceiling": 675
     },
     {
@@ -615,7 +615,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 742,
+      "value": 761,
       "ceiling": 742
     },
     {
@@ -648,7 +648,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 680,
+      "value": 706,
       "ceiling": 680
     },
     {
@@ -703,7 +703,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 1150,
+      "value": 1177,
       "ceiling": 1150
     },
     {
@@ -714,7 +714,7 @@
       "scope_kind": "command_scoped",
       "scope_ordinal": 1,
       "option": "maxRecDepth",
-      "value": 670,
+      "value": 692,
       "ceiling": 670
     },
     {
@@ -738,17 +738,6 @@
       "option": "maxHeartbeats",
       "value": 1600000,
       "ceiling": 1600000
-    },
-    {
-      "id": "Blanc/LidoCircuitBreakerPreControl.lean::Blanc.LidoCircuitBreaker.pause_body_runCompiledTo_error_of_locked#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerPreControl.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.pause_body_runCompiledTo_error_of_locked",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 556,
-      "ceiling": 556
     },
     {
       "id": "Blanc/LidoCircuitBreakerRegistry.lean::Blanc.LidoCircuitBreaker.directPauseControl_dataFacts#1::command_scoped::-::maxRecDepth#1",

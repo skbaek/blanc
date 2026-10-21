@@ -986,7 +986,7 @@ zero. -/
 def pauseDecodedMemory (M : Mem) (duration : B256) : Mem :=
   (pauseStagedMemory M duration).write 0 (1 : B256).toBytes
 
-set_option maxRecDepth 680 in
+set_option maxRecDepth 706 in
 /-- `pauseAfterSet` from its entry to the `pauseSuccess` boundary, `.ok`
 flavour: through the target-code guard (charge hypothesis-supplied, warmth
 being a frame fact), the `pauseFor(uint256)` `CALL` and the `isPaused()`

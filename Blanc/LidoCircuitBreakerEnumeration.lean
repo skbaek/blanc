@@ -885,7 +885,7 @@ theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
   intro key hkey
   exact prepareEnumerationStorage_warm sevm base entries hkey
 
-set_option maxRecDepth 800 in
+set_option maxRecDepth 697 in
 /-- A well-formed direct `getPausables()` call through the exact parameterized
 runtime reaches the verified body, returns the complete ordered ABI image, and
 uses the concrete current target as both code and storage owner.  The code
@@ -1051,7 +1051,7 @@ theorem registryScalarReturn_runCompiled
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
 
-set_option maxRecDepth 800 in
+set_option maxRecDepth 761 in
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
@@ -1102,7 +1102,7 @@ theorem getPauser_body_runCompiled
       Devm.getStorVal_setMach, hstorage, hgasFinal]
     exact hreturn }
 
-set_option maxRecDepth 800 in
+set_option maxRecDepth 761 in
 /-- Exact compiled-body result for the per-pauser multiplicity view on a
 canonical ABI address word and the same concrete Registry owner. -/
 theorem getPausableCount_body_runCompiled
