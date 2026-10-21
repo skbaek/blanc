@@ -1339,7 +1339,7 @@ theorem stateTransitionUsing_preserves_registryStable (dp : DeployParams)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
     (h_stable : RegistryStable dp ca ch.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f) :
     RegistryStable dp ca ch'.state :=
   (registryStable_iff_stateInv dp ca ch'.state).mpr
     (ContractSpec.stateTransitionUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg ch
@@ -1362,7 +1362,7 @@ theorem chainUsing_preserves_registryStable (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f) :
     RegistryStable dp ca future.state :=
   (registryStable_iff_stateInv dp ca future.state).mpr
     (ContractSpec.chainUsing_preserves_inv ca (registrySpec_preserves dp ca) cfg checkpoint
@@ -1507,7 +1507,7 @@ theorem chainUsing_future_installedCode (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f) :
     (future.state.getCode ca).toList = lidoCircuitBreakerCode dp :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
     stable hcov).installedCode
@@ -1520,7 +1520,7 @@ theorem chainUsing_future_witness (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries :=
   (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
@@ -1532,7 +1532,7 @@ theorem chainUsing_future_membership (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f)
     {target : B256} (htarget : canonicalAddress target) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
@@ -1555,7 +1555,7 @@ theorem chainUsing_future_countConservation (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f) :
     ∃ entries,
       RegistryWitness (logicalStorageOfStor (future.state.getStor ca)) entries ∧
       (∀ pauser, canonicalAddress pauser →
@@ -1803,7 +1803,7 @@ theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
     (cfg : ChainConfig) (checkpoint future : BlockChain)
     (reach : BlockChain.ReachUsing cfg checkpoint future)
     (stable : RegistryStable dp ca checkpoint.state)
-    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hcov : ∀ number timestamp f, cfg.forkAt number timestamp = .ok f → CoveredFork f)
     (target : B256) (htarget : canonicalAddress target) :
     ∃ entries,
       (entries.map Prod.fst).Nodup ∧
