@@ -943,6 +943,7 @@ import Blanc.Lift.CursorQuietReturn
 import Blanc.Lift.CursorJump
 import Blanc.Lift.CursorOccurrenceRoots
 import Blanc.Lift.InvWalkGas
+import Blanc.Lift.ExactMustRun
 import Blanc.Lift.AccountAccessState
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.PairNoCallEntries

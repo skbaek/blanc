@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
 import Jaune.MulDiv
 import Blanc.Lift.ExactWalkCutOps
+import Blanc.Lift.ExactMustRun
 
 /-!
 # Body segment 1: the six guards and the two `to_little_endian_64` calls
@@ -67,10 +68,11 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   set cnt := b.getStorVal sevm.currentTarget solCountSlot with hcntdef
   set b'' := afterSload sevm b solCountSlot with hb''def
   -- the first `to_little_endian_64` call, over `mem0`, encoding the gwei amount
+  have hshifts : sevm.benvStat.rules.op.shifts = true := CoveredFork.rules_shifts hfork
   obtain ⟨M1, hwf1, hr1, hs1, hcall1⟩ := to_little_endian_64_run (sevm := sevm) (b := b)
       (G := G + (874 + sloadCost sevm b solCountSlot)) (v := gweiAmount sevm)
       (ret := (1344 : B256))
-      (rest := [96, gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
+      (rest := [96, gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel]) hshifts
       (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) wf_mem0 reads_mem0 (by rw [mem0_size]) (by rw [mem0_size])
       img0_fp (by rw [p80]) (by rw [p80]; omega) (by rw [p80]; decide) hcd
   have himg1 : Mem.Reads M1 (img1 (gweiAmount sevm)) := hr1
@@ -81,7 +83,7 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   obtain ⟨M', hwf', hr', hs', hcall2⟩ := to_little_endian_64_run (sevm := sevm) (b := b'')
       (G := G) (v := cnt) (ret := (1397 : B256))
       (rest := [96, sP, (128 : B256), 32, wP, 48, pP, BeaconDeposit.depositEventTopic,
-        (128 : B256), gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel])
+        (128 : B256), gweiAmount sevm, rt, 96, sP, 32, wP, 48, pP, 440, sel]) hshifts
       (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) hwf1 himg1 (by rw [hs1']) (by rw [hs1']; decide) hfp2
       (by decide) (by decide) (by decide) hcd
   set img2 := leImg (img1 (gweiAmount sevm)) (192 : B256) cnt with himg2def

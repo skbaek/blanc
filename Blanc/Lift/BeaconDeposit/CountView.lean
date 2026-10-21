@@ -1,6 +1,6 @@
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.BeaconDepositEncoding
-import Blanc.CompiledWalkInversion
+import Blanc.Lift.ExactMustRun
 
 /-!
 # `get_deposit_count()` on the deployed beacon deposit contract: liveness with exact gas
@@ -117,79 +117,15 @@ theorem maskTop8_and (W : B256) :
 
 /-! ## Selected shifts from the wrapper's fixed witness
 
-A run of the wrapper (entry 33) can only pass the `nonpayable` guard and call the getter
-(entry 8), which calls `to_little_endian_64` (entry 25), whose straight prefix executes `SHL`
-before any branch or terminal; a successful `SHL` step requires the selected shift rules. -/
+Every successful run of the wrapper (entry 33) passes a shift: the `nonpayable` revert arm has
+no successful run, and the other arm calls the getter (entry 8), which calls
+`to_little_endian_64` (entry 25), whose straight prefix executes `SHL`. -/
 
-private theorem rx_inv_dest {fs : List SFunc} {sevm : Sevm} {d : Devm} {f : SFunc} {o : Outcome}
-    (h : SFunc.RunExact fs sevm d (.dest f) o) : ∃ d', SFunc.RunExact fs sevm d' f o := by
-  cases h with
-  | dest _ h => exact ⟨_, h⟩
+theorem count_mustShift_entries : SFunc.mustRunEntries Ninst.isShift prog [8, 25] = true := by
+  decide +kernel
 
-private theorem rx_inv_next {fs : List SFunc} {sevm : Sevm} {d : Devm} {n : Ninst} {f : SFunc}
-    {o : Outcome} (h : SFunc.RunExact fs sevm d (.next n f) o) :
-    ∃ d', SFunc.RunExact fs sevm d' f o := by
-  cases h with
-  | next _ h => exact ⟨_, h⟩
-
-private theorem rx_inv_shl {fs : List SFunc} {sevm : Sevm} {d : Devm} {f : SFunc} {o : Outcome}
-    (h : SFunc.RunExact fs sevm d (.next (.reg .shl) f) o) :
-    sevm.benvStat.rules.op.shifts = true := by
-  cases h with
-  | next hn _ =>
-    rcases of_run_reg (Ninst.Run.of_runCompiled hn) with ⟨_, run⟩
-    simp only [Rinst.run, Rinst.runCore] at run
-    split at run
-    · assumption
-    · cases run
-
-private theorem rx_inv_callNext {fs : List SFunc} {sevm : Sevm} {d : Devm} {j : Nat}
-    {f g : SFunc} {o : Outcome} {P : Prop} (hj : fs[j]? = some g)
-    (h : SFunc.RunExact fs sevm d (.callNext j f) o)
-    (hg : ∀ {d' : Devm} {o' : Outcome}, SFunc.RunExact fs sevm d' g o' → P) : P := by
-  cases h with
-  | callHalt _ hk _ hc =>
-    rw [hj] at hk
-    cases hk
-    exact hg hc
-  | callRet _ hk _ hc _ =>
-    rw [hj] at hk
-    cases hk
-    exact hg hc
-
-/-- `to_little_endian_64` (entry 25) executes `SHL` after 32 straight nodes. -/
-private theorem t14ba_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
-    (h : SFunc.RunExact prog sevm d t_14ba_c25 o) : sevm.benvStat.rules.op.shifts = true := by
-  unfold t_14ba_c25 at h
-  obtain ⟨_, h⟩ := rx_inv_dest h
-  iterate 32 obtain ⟨_, h⟩ := rx_inv_next h
-  exact rx_inv_shl h
-
-/-- The getter (entry 8) calls entry 25 after five straight nodes. -/
-private theorem t10b5_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
-    (h : SFunc.RunExact prog sevm d t_10b5_c8 o) : sevm.benvStat.rules.op.shifts = true := by
-  unfold t_10b5_c8 at h
-  obtain ⟨_, h⟩ := rx_inv_dest h
-  iterate 5 obtain ⟨_, h⟩ := rx_inv_next h
-  exact rx_inv_callNext (j := 25) rfl h t14ba_shifts
-
-/-- The wrapper (entry 33): the `nonpayable` revert arm has no run; the other arm calls entry 8. -/
-private theorem t01ba_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
-    (h : SFunc.RunExact prog sevm d t_01ba_c33 o) : sevm.benvStat.rules.op.shifts = true := by
-  unfold t_01ba_c33 at h
-  obtain ⟨_, h⟩ := rx_inv_dest h
-  iterate 4 obtain ⟨_, h⟩ := rx_inv_next h
-  cases h with
-  | zero _ _ h =>
-    unfold t_01c2_c33 at h
-    iterate 2 obtain ⟨_, h⟩ := rx_inv_next h
-    cases h with
-    | last hr => exact (Linst.not_run_revert_ok hr).elim
-  | succ _ _ _ _ h =>
-    unfold t_01c6_c33 at h
-    obtain ⟨_, h⟩ := rx_inv_dest h
-    iterate 3 obtain ⟨_, h⟩ := rx_inv_next h
-    exact rx_inv_callNext (j := 8) rfl h t10b5_shifts
+theorem count_mustShift : SFunc.mustRun Ninst.isShift [8, 25] t_01ba_c33 = true := by
+  decide +kernel
 
 /-! ## The dispatcher -/
 
@@ -220,7 +156,8 @@ theorem dispatch_count {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_shr (v := Sevm.selector sevm) ?_ (t01ba_shifts k)
+  refine rx_shr (v := Sevm.selector sevm) ?_
+    (k.shifts_of_mustRun count_mustShift_entries count_mustShift)
     (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
       show Bytes.toB256 [0x00] = 0 by decide]
@@ -642,8 +579,7 @@ theorem get_deposit_count_warm_runExact (sevm : Sevm) (base : Devm) (word : B256
         ((base.setMach ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))) := by
   have hleg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hshifts : sevm.benvStat.rules.op.shifts = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
+  have hshifts : sevm.benvStat.rules.op.shifts = true := CoveredFork.rules_shifts hfork
   have hsel : Sevm.selector sevm = 0x621fd130 :=
     hselector.trans Blanc.BeaconDeposit.getDepositCountSelector_eq
   obtain ⟨Mf, hwff, hrf, hsf, hrun⟩ := count_wrapper (sevm := sevm) (b := base) (b' := base)
@@ -670,8 +606,7 @@ theorem get_deposit_count_cold_runExact (sevm : Sevm) (base : Devm) (word : B256
           ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))) := by
   have hleg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hshifts : sevm.benvStat.rules.op.shifts = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
+  have hshifts : sevm.benvStat.rules.op.shifts = true := CoveredFork.rules_shifts hfork
   have hsel : Sevm.selector sevm = 0x621fd130 :=
     hselector.trans Blanc.BeaconDeposit.getDepositCountSelector_eq
   obtain ⟨Mf, hwff, hrf, hsf, hrun⟩ := count_wrapper (sevm := sevm) (b := base)

@@ -292,11 +292,12 @@ theorem rxc_mload_ext {i v : B256} {c : Nat} {M' : Mem}
   .next (Ninst.runCompiled_mload_of (devm := St b (i :: S) M (G + c)) (G := G) rfl hc hv hM
     rfl hroom) k
 
-theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v) (hroom : S.length < 1024)
+theorem rxc_shl {x y v : B256} (hv : y <<< x.toNat = v)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C (St b (v :: S) M G) f r) :
     SFunc.RunExactCut fs sevm C (St b (x :: y :: S) M (G + 3)) (.next (.reg .shl) f) r :=
-  rxc_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩) (fun _ => rfl) hv
-    hroom k
+  rxc_binary (fn := fun x y => y <<< x.toNat) (c := gVerylow) (by rintro ⟨⟩)
+    (fun _ => by simp only [Rinst.runCore, h_shifts, ↓reduceIte]) hv hroom k
 
 /-- `CALLDATACOPY` inside a cut run. -/
 theorem rxc_calldatacopy {di si sz : B256} {c : Nat} {M' : Mem}

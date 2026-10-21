@@ -94,10 +94,11 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
     unfold afterSload; exact ite_eq_left_iff.mpr (fun h => absurd hwarm h)
   have hcnt : b.getStorVal sevm.currentTarget (Bytes.toB256 [0x20]) = Nat.toB256 count := by
     rw [show Bytes.toB256 [0x20] = solCountSlot by decide, hcount]
+  have hshifts : sevm.benvStat.rules.op.shifts = true := CoveredFork.rules_shifts hok.fork
   -- `to_little_endian_64`
   obtain ⟨M1, hwf1, hr1, hs1, hle⟩ := to_little_endian_64_run (sevm := sevm) (b := b)
     (G := G + 986) (v := Nat.toB256 count) (ret := Bytes.toB256 [0x12, 0xff])
-    (rest := node :: Bytes.toB256 [0x02] :: Nat.toB256 0 :: node :: R) (by simp only [List.length_cons]; omega) hwf hr (by simp only [hs, Nat.reduceMod])
+    (rest := node :: Bytes.toB256 [0x02] :: Nat.toB256 0 :: node :: R) hshifts (by simp only [List.length_cons]; omega) hwf hr (by simp only [hs, Nat.reduceMod])
     (by simp only [hs, Nat.reduceLeDiff]) (by rw [hfp, B256.toB256_toBytes]) (by simp only [hpB, Nat.reduceMod]) (by simp only [hpB, Nat.reduceLeDiff]) (by simp only [hpB, Nat.reduceAdd, Nat.reducePow, Nat.reduceLT])
     hcd
   rw [hs, hpB, show leGas 3296 3200 = 821 by decide] at hle
@@ -225,7 +226,7 @@ theorem root_exit {b : Devm} {M : Mem} {img : Bytes} {node rv ret : B256} {count
   refine rxc_dest ?_
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
-  refine rxc_shl (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_shl (v := 0) (by decide) hshifts (by simp only [List.length_cons]; omega) ?_
   refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 3264) ?_ (by rw [h40]; exact read_word hr1 64 h1_64)
     ?_ (by simp only [List.length_cons]; omega) ?_
@@ -554,6 +555,17 @@ theorem root_wrapper {sevm : Sevm} {base : Devm} {stor : Stor} {count : Nat} {se
   · rw [St.extCost_eq hsF', h3360, show (32 : B256).toNat = 32 by decide]; decide
   · rw [h3360, show (32 : B256).toNat = 32 by decide, hr'.read, sliceD_word_self]
 
+/-- Every successful run of the `get_deposit_root` wrapper (entry 34) passes a shift: the
+`nonpayable` revert arm has no successful run; the other arm calls entry 10, whose loops through
+entries 5, 24, 27 and 28 leave only through the call of `to_little_endian_64` (entry 25). -/
+theorem root_mustShift_entries :
+    SFunc.mustRunEntries Ninst.isShift prog [10, 27, 5, 28, 24, 25] = true := by
+  decide +kernel
+
+theorem root_mustShift :
+    SFunc.mustRun Ninst.isShift [10, 27, 5, 28, 24, 25] t_0244_c34 = true := by
+  decide +kernel
+
 /-- The dispatcher path to `get_deposit_root()` (entry 34): `mstore(0x40, 0x80)`, the
 `CALLDATASIZE < 4` test, the selector, three misses and the hit.  139 gas. -/
 theorem dispatch_root {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
@@ -579,7 +591,9 @@ theorem dispatch_root {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_shr (v := Sevm.selector sevm) ?_
+    (k.shifts_of_mustRun root_mustShift_entries root_mustShift)
+    (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
       show Bytes.toB256 [0x00] = 0 by decide]
     rfl

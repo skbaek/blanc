@@ -5141,6 +5141,17 @@ contract-neutral.
   [`LittleEndian.lean`](../Blanc/Lift/BeaconDeposit/LittleEndian.lean) carry that
   condition through their forward walks; arbitrary continuation evidence does
   not supply it. The generic success-inversion statements remain unchanged.
+  The cut-run `rxc_shl` requires the same capability. To obtain it from a fixed
+  run witness rather than a premise, use
+  [`Blanc/Lift/ExactMustRun.lean`](../Blanc/Lift/ExactMustRun.lean):
+  `SFunc.mustRun p K f` (a Boolean walk: every successful `SFunc.RunExact` from
+  `f` executes an instruction selected by `p`, with jump/call targets in the
+  entries `K`, checked by `SFunc.mustRunEntries p fs K`; `REVERT` leaves have no
+  successful run; loops are covered), `SFunc.RunExact.of_mustRun` for any fact a
+  selected step implies, and its shift instance `SFunc.RunExact.shifts_of_mustRun`
+  (`Ninst.isShift`, `Ninst.RunCompiled.shifts_of_isShift`); discharge both checks
+  with `decide +kernel` on the concrete tree. `CoveredFork.rules_shifts` supplies
+  the capability from fork coverage.
   The cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
