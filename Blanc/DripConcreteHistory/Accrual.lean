@@ -191,6 +191,7 @@ def concreteDripStagingMemory : Mem := Mem.empty.write 32 (4 : B256).toBytes
 
 private theorem concreteDrip_readChi (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat) (next : Func)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hchi : base.getStorVal sevm.currentTarget chiSlot = rate)
     (hcold : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
     (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
@@ -247,6 +248,7 @@ private theorem concreteDrip_stageClock (sevm : Sevm) (base post : Devm) (M C : 
 private theorem concreteDrip_stageElapsed (sevm : Sevm) (base post : Devm) (M E : Mem)
     (G : Nat) (next : Func)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hrho : base.getStorVal sevm.currentTarget rhoSlot = 2)
     (hcold : (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys)
     (hsize : M.size = 224)
@@ -293,6 +295,7 @@ private theorem concreteDrip_stageElapsed (sevm : Sevm) (base post : Devm) (M E 
 
 private theorem concreteDrip_initializeRpow (sevm : Sevm) (base post : Devm) (M B A Z : Mem)
     (G : Nat) (zeroBase zeroExponent evenExponent : Func)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 224)
     (hbase : M.write (baseWord * 32).toNat rate.toBytes = B)
     (hbsize : B.size = 256)
@@ -313,6 +316,7 @@ private theorem concreteDrip_initializeRpow (sevm : Sevm) (base post : Devm) (M 
             ((Ninst.pushB256 rate ::: mstoreAt accumulatorWord +++ loadWord exponentWord +++
               Ninst.pushB256 2 ::: Ninst.swap 0 ::: Ninst.div ::: mstoreAt exponentWord +++
               .call rpowLoopSlot) <?> evenExponent)))))) post := by
+  have hpush0 := hfork.rules_push0
   func_run (4) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -459,6 +463,7 @@ private theorem concreteDrip_accumulatorMemoryFacts : concreteDripAccumulatorMem
 theorem concreteDrip_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     (htime : sevm.benvStat.time = 5)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hchi : base.getStorVal sevm.currentTarget chiSlot = rate)
     (hrho : base.getStorVal sevm.currentTarget rhoSlot = 2)
     (hcoldChi : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
@@ -469,7 +474,7 @@ theorem concreteDrip_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], concreteDripStagingMemory, G + 122 + 2166 + 79 + 2103, base.stateGas⟩)
       freshStart post := by
-  apply concreteDrip_readChi sevm _ _ _ _ _ hsg hchi hcoldChi
+  apply concreteDrip_readChi sevm _ _ _ _ _ hsg hfork hchi hcoldChi
   apply concreteDrip_stageClock (sevm := sevm) (C := concreteDripStagingMemory.write 160 rate.toBytes)
   · exact htime
   · exact concreteDrip_stagingSize
@@ -477,7 +482,7 @@ theorem concreteDrip_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
   · exact concreteDrip_chiMemoryFacts.1
   · exact concreteDrip_chiMemoryFacts.2.1
   · exact concreteDrip_chiMemoryFacts.2.2
-  apply concreteDrip_stageElapsed (E := concreteDripExponentMemory) (hsg := hsg)
+  apply concreteDrip_stageElapsed (E := concreteDripExponentMemory) (hsg := hsg) (hfork := hfork)
   · exact hrho
   · change (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys.insert
       (sevm.currentTarget, chiSlot)
@@ -490,7 +495,7 @@ theorem concreteDrip_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
   · exact concreteDrip_exponentMemoryFacts.1
   · exact concreteDrip_exponentMemoryFacts.2.1
   · exact concreteDrip_exponentMemoryFacts.2.2
-  apply concreteDrip_initializeRpow (B := concreteDripBaseMemory)
+  apply concreteDrip_initializeRpow (hfork := hfork) (B := concreteDripBaseMemory)
     (A := concreteDripAccumulatorMemory) (Z := concreteDripLoopMemory)
   · exact concreteDrip_exponentMemoryFacts.1
   · rfl

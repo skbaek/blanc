@@ -204,6 +204,7 @@ theorem concreteJoinEntry_storage (address : Adr) :
     · exact code empty.1
 
 private theorem concreteJoin_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdata : sevm.data = concreteJoinTx.data)
     (hjoin : Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) join post) :
@@ -214,6 +215,8 @@ private theorem concreteJoin_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
   have hshift : Sevm.dataWord sevm 0 >>> B256.toNat 224 = joinSelector := by
     simp only [Sevm.dataWord, hdata, concreteJoinTx]
     decide +kernel
+  have hshifts := hfork.rules_shifts
+  have hpush0 := hfork.rules_push0
   func_run (1)
   simp only [hdata, concreteJoinTx]
   func_run (5) [joinSelector]
@@ -327,7 +330,7 @@ theorem concreteDeployedRho : (concreteDeployed.state.getStor concreteCreateTarg
     have hlen : code.length = 1762 := codeSize_exact
     exact Nat.ne_of_gt (by omega : code.length > 0)
   rw [State.setCode_get_stor nonempty]
-  simp only [constructorStoredState, State.setStorVal, State.get_set_self]
+  simp only [constructorStoredState, State.setStorVal_get_self]
   exact Stor.get_set_self _ _ _
 
 noncomputable def concreteJoinDevm : Devm :=
@@ -1250,7 +1253,7 @@ theorem concreteJoin_runtime (G : Nat) :
       (concreteJoinDevm.setMach ⟨[], Mem.empty, G + 55079, concreteJoinDevm.stateGas⟩)
       main (concreteJoinRuntimePost G) := by
   rw [show G + 55079 = G + 45830 + 96 + 114 + 104 + 34 + 122 + 2166 + 70 + 2103 + 4327 + 113 by omega]
-  apply concreteJoin_dispatch
+  apply concreteJoin_dispatch (hfork := CoveredFork.prague)
     (G := G + 45830 + 96 + 114 + 104 + 34 + 122 + 2166 + 70 + 2103 + 4327)
   · rfl
   apply concreteJoin_stage
@@ -1301,7 +1304,7 @@ theorem concreteJoin_frameEntry :
     (Frame.ofCall concreteJoinMessage).enter =
       .run (initEvm (concreteJoinMessage.withBenv concreteJoinEntry)) := by
   have hnp : ¬ pragueRules.isPrecomp concreteCreateTarget :=
-    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 2)
+    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 0 0)
   have he : executeCode.enter (concreteJoinMessage.withBenv concreteJoinEntry) =
       .inl (initEvm (concreteJoinMessage.withBenv concreteJoinEntry)) := by
     unfold executeCode.enter
@@ -1321,7 +1324,8 @@ theorem concreteJoin_processMessage :
   rw [concreteJoin_frameEntry]
   simp only [Frame.ofCall, concreteJoin_exec, Frame.settle_eq_settleMsg_handleErrorWith,
     Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
-    executeCode.handleErrorWith_ok, Except.bind_ok, concreteJoin_postError, Option.isSome_none]
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteJoin_postError, Option.isSome_none,
+    Devm.recordTouch_of_not_touchedSweep (rules := concreteJoinMessage.benv.stat.rules) rfl]
 
 noncomputable def concreteJoinMessageState : State := (concreteJoinRuntimePost 423856).state
 
@@ -1335,19 +1339,12 @@ def concreteJoinMessageOutput : MsgCallOutput := {
 
 theorem concreteJoin_messageCall :
     processMessageCall concreteJoinMessage = .ok (concreteJoinMessageState, concreteJoinMessageOutput) := by
-  have htarget : concreteJoinMessage.target.isNone = false := rfl
-  have hauths : concreteJoinMessage.tenv.stat.auths = [] := rfl
   have hcode : some concreteJoinMessage.code.toList = Prog.compile runtime := concreteJoin_compiled
   have hdelegation : getDelegatedCodeAddress concreteJoinMessage.code = none := by
     unfold getDelegatedCodeAddress
     rw [ite_eq_right (not_delegation_of_compile hcode)]
-  have hrefund : (concreteJoinRuntimePost 423856).refundCounter = 0 := rfl
-  unfold processMessageCall
-  rw [htarget]
-  unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
-    concreteJoin_processMessage, Except.bimap, id_eq, concreteJoin_postError,
-    Option.isNone, hrefund]
+  rw [processMessageCall_call_of_message (refund := 0) rfl rfl rfl hdelegation
+    concreteJoin_processMessage concreteJoin_postError rfl]
   rfl
 
 noncomputable def concreteJoinTransactionState : State :=
@@ -1507,7 +1504,7 @@ theorem concreteJoin_requestSuffix :
   rfl
 
 theorem concreteJoin_body :
-    applyBody concreteJoinTxInput [.inl concreteJoinTxRlp] [] =
+    applyBody concreteJoinTxInput [.inl concreteJoinTxRlp] [] [] =
       .ok (concreteJoinTransactionState, concreteJoinTransactionBout) := by
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteJoinTxInput beaconRootsAddress concreteJoinTxInput.stat.parentBeaconBlockRoot.toBytes
@@ -1539,6 +1536,13 @@ theorem concreteJoin_body :
     change pragueRules.bal = none
     rfl
   unfold applyBody
+  have hbeaconRules : concreteJoinTxInput.stat.rules.sys.beaconRoots = true := rfl
+  have hhistoryRules : concreteJoinTxInput.stat.rules.sys.historyStorage = true := rfl
+  have hwithdrawalsRules : concreteJoinTxInput.stat.rules.header.withdrawalsRoot = true := rfl
+  have hrequestsRules : concreteJoinTxInput.stat.rules.header.requestsHash = true := rfl
+  have hpow : concreteJoinTxInput.stat.rules.pow = none := rfl
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte]
   simp only [BalBuilder.incorporateSystem, hbalNone, checkBlockAccessListGasLimit]
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
@@ -1548,7 +1552,8 @@ theorem concreteJoin_body :
     concreteJoinTxInput.state from rfl, hi']
   have htransaction := concreteJoin_transaction
   unfold BlockOutput.init at htransaction
-  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, concreteJoinDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
+  have hrulesP : concreteJoinTxInput.stat.rules = pragueRules := rfl
+  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, hrulesP, concreteJoinDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
     applyTransactions, htransaction]
   have hwithdrawals : processWithdrawals
       (concreteJoinTxInput.withState concreteJoinTransactionState)
@@ -1570,7 +1575,7 @@ noncomputable def concreteJoinHeader (sr tr rr wr rh : B256) : Header :=
     stateRoot := sr
     txsRoot := tr
     receiptRoot := rr
-    withdrawalsRoot := wr
+    withdrawalsRoot := some wr
     requestsHash := some rh }
 
 theorem concreteJoinHeader_benv (sr tr rr wr rh : B256) :
@@ -1591,7 +1596,7 @@ theorem concreteJoinHeader_valid (sr tr rr wr rh : B256) :
   have hparentGasUsed : concreteDeploymentEnvelope.block.header.gasUsed = 479909 := by
     rw [hparent]
     rfl
-  have hparentBaseFee : concreteDeploymentEnvelope.block.header.baseFeePerGas = 1 := by
+  have hparentBaseFee : concreteDeploymentEnvelope.block.header.baseFeePerGas = some 1 := by
     rw [hparent]
     rfl
   have hparentTimestamp : concreteDeploymentEnvelope.block.header.timestamp = 1 := by
@@ -1600,10 +1605,10 @@ theorem concreteJoinHeader_valid (sr tr rr wr rh : B256) :
   have hparentNumber : concreteDeploymentEnvelope.block.header.number = 1 := by
     rw [hparent]
     rfl
-  have hparentBlobGas : concreteDeploymentEnvelope.block.header.blobGasUsed = 0 := by
+  have hparentBlobGas : concreteDeploymentEnvelope.block.header.blobGasUsed = some 0 := by
     rw [hparent]
     rfl
-  have hparentExcessBlobGas : concreteDeploymentEnvelope.block.header.excessBlobGas = 0 := by
+  have hparentExcessBlobGas : concreteDeploymentEnvelope.block.header.excessBlobGas = some 0 := by
     rw [hparent]
     rfl
   have hparentExtraData : concreteDeploymentEnvelope.block.header.extraData = [] := by
@@ -1624,6 +1629,9 @@ theorem concreteJoinHeader_valid (sr tr rr wr rh : B256) :
   have hparentSlot : concreteDeploymentEnvelope.block.header.slotNumber = none := by
     rw [hparent]
     rfl
+  have hparentBeacon : concreteDeploymentEnvelope.block.header.parentBeaconBlockRoot = some 0 := by
+    rw [hparent]
+    rfl
   have hbase : calculateBaseFeePerGas 10000000 10000000 479909 1 = .ok 1 := by
     decide +kernel
   have hexcess : calculateExcessBlobGas pragueRules.blob concreteDeploymentEnvelope.block.header = 0 := by
@@ -1634,8 +1642,18 @@ theorem concreteJoinHeader_valid (sr tr rr wr rh : B256) :
     concreteJoinHeader, concreteJoinExecutionHeader, Header.hash, hparentGasLimit,
     hparentGasUsed, hparentBaseFee, hparentTimestamp, hparentNumber, hparentBlobGas,
     hparentExcessBlobGas, hparentExtraData, hparentDifficulty, hparentNonce, hparentOmmers,
-    hparentBal, hparentSlot, hbase, hexcess, ne_eq, not_true_eq_false, ite_false]
-  simp only [Except.mapError]
+    hparentBal, hparentSlot, hparentBeacon, hbase, hexcess, ne_eq, not_true_eq_false, ite_false,
+    checkHeaderShape, checkHeaderFieldPresence, Option.isSome_some, Option.isSome_none,
+    pragueRules_header, checkFirstFeeGasLimit, Option.isNone_some, Bool.and_false,
+    Bool.false_eq_true, expectedBaseFee, Functor.map, Except.map, Option.any_some]
+  have hconsensus : ∀ h p : Header, h.difficulty = 0 → h.nonce = 0 →
+      h.ommersHash = emptyOmmerHash → checkConsensusFields pragueRules h p = .ok () := by
+    intro h p hd hn ho
+    have hpow : pragueRules.pow = none := rfl
+    simp only [checkConsensusFields, hpow, hd, hn, ho, ne_eq, not_true_eq_false, ite_false]
+    rfl
+  rw [hconsensus _ _ (by rfl) (by rfl) (by rfl)]
+  simp only [Except.mapError, bne_self_eq_false, Bool.false_eq_true, ite_false]
   rfl
 
 noncomputable def concreteJoinBlock : Block := {
@@ -1663,37 +1681,41 @@ theorem concreteJoin_checks :
     CanonicalBlock.ofDecode, concreteDeploymentBlock, concreteDeploymentHeader,
     concreteExecutionHeader, concreteGenesisHeader, logsBloom, List.foldl_nil,
     ne_eq, not_true_eq_false, ite_false, pure, Bind.bind, Except.bind]
+  have hs : concreteJoinTransactionBout.blockStateGasUsed = 0 := rfl
+  simp only [hs, Nat.max_zero, not_true_eq_false, ite_false, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true]
   rfl
 
 theorem concreteJoin_step :
     stateTransitionUsing concreteConfig concreteDeployed concreteJoinBlock = .ok concreteJoined := by
   rw [stateTransitionUsing_eq_of_chainId_eq concreteDeploymentRoot.deployed_chainId]
-  rw [show concreteConfig.forkAt concreteJoinBlock.header.timestamp = .ok .prague from
-    ChainConfig.pragueOnly_forkAt 1 _]
+  rw [show concreteConfig.forkAt concreteJoinBlock.header.number
+      concreteJoinBlock.header.timestamp = .ok .prague from
+    ChainConfig.pragueOnly_forkAt 1 _ _]
+  simp only [Except.mapError, Except.bind]
+  rw [stateTransitionScheduledE_of_pow_none _ _ _ _ rfl]
   change stateTransitionAt .prague concreteDeployed concreteJoinBlock = _
   rw [stateTransitionAt_eq_ok_iff, stateTransitionE]
   have hh : validateHeader Fork.prague.ruleSet concreteDeployed concreteJoinBlock.header = .ok () := by
     change validateHeader pragueRules concreteDeployed concreteJoinBlock.header = .ok ()
     exact concreteJoinHeader_valid _ _ _ _ _
-  rw [hh]
-  change (do
-    let output ← applyBody (initBenv .prague concreteDeployed concreteJoinBlock.header)
-      concreteJoinBlock.txs concreteJoinBlock.wds
-    Except.mapError TransitionError.block (stateTransitionChecks output.2
-      concreteJoinBlock.header (getTransactionsRoot output.2) output.1.root
-      (getReceiptRoot output.2) (logsBloom output.2.blockLogs)
-      (getWithdrawalsRoot output.2) (computeRequestsHash output.2.requests))
-    .ok (⟨appendBlock concreteDeployed.blocks concreteJoinBlock, output.1,
-      concreteDeployed.chainId⟩ : BlockChain)) = .ok concreteJoined
+  have hommers : checkBlockOmmers (Fork.ruleSet .prague) concreteDeployed
+      concreteJoinBlock.header concreteJoinBlock.ommers = .ok () := by
+    rfl
   have hbody : applyBody (initBenv .prague concreteDeployed concreteJoinBlock.header)
-      concreteJoinBlock.txs concreteJoinBlock.wds =
+      concreteJoinBlock.txs concreteJoinBlock.ommers concreteJoinBlock.wds =
       .ok (concreteJoinTransactionState, concreteJoinTransactionBout) := by
     change applyBody (initBenv .prague concreteDeployed (concreteJoinHeader _ _ _ _ _))
-      [.inl concreteJoinTxRlp] [] = _
+      [.inl concreteJoinTxRlp] [] [] = _
     rw [concreteJoinHeader_benv]
     exact concreteJoin_body
-  rw [hbody]
-  simp only [Bind.bind, Except.bind, concreteJoin_checks, Except.mapError]
+  have hbal : blockAccessListCheck (Fork.ruleSet .prague) concreteJoinTransactionBout
+      concreteJoinBlock.header = .ok () := by
+    rfl
+  have hreq : (Fork.ruleSet .prague).header.requestsHash = true := rfl
+  unfold stateTransitionCoreE
+  simp only [hh, hommers, Except.mapError, bind, Except.bind, hbody, hreq, ite_true,
+    concreteJoin_checks, hbal]
   rfl
 
 theorem concreteJoined_storage : concreteJoined.state.getStor concreteCreateTarget =
@@ -1742,7 +1764,7 @@ private theorem concreteJoinMessageState_sender :
   change (((((concreteJoinEntry.state.setStorVal concreteCreateTarget chiSlot rate).setStorVal
     concreteCreateTarget rhoSlot 2).setStorVal concreteCreateTarget concreteCreateSender.toB256 99).setStorVal
     concreteCreateTarget totalUnitsSlot 99).get concreteCreateSender) = _
-  simp only [State.setStorVal, State.get_set_ne _ ht]
+  simp only [State.setStorVal_get_ne _ ht]
 
 theorem concreteJoinedSenderNonce : concreteJoined.state.getNonce concreteCreateSender = 2 := by
   change (concreteJoinTransactionState.get concreteCreateSender).nonce = _
@@ -1904,7 +1926,7 @@ theorem concreteDripEnvelopeParse :
   simp only [List.length_cons, concreteDripPayload_length]
   rw [hp]
 
-theorem concreteDripDecode : decodeTx (.inl concreteDripTxRlp) = .ok concreteDripTx := by
+theorem concreteDripDecode : decodeTx pragueRules (.inl concreteDripTxRlp) = .ok concreteDripTx := by
   simp only [decodeTx, concreteDripTxRlp, List.cons_append, List.nil_append,
     Bytes.toExTx, concreteDripEnvelopeParse, concreteDripFields]
   rfl
@@ -1922,14 +1944,16 @@ theorem concreteJoinedSenderCode : concreteJoined.state.getCode concreteCreateSe
   exact concreteDeployedSenderCode
 
 theorem concreteDripSenderChecked :
-    checkTransactionSenderAccount (concreteJoined.state.get concreteCreateSender)
+    checkTransactionSenderAccountFor pragueRules (concreteJoined.state.get concreteCreateSender)
       concreteDripTx 4000000 = .ok () := by
   have hn : (concreteJoined.state.get concreteCreateSender).nonce = 2 := concreteJoinedSenderNonce
   have hb : (concreteJoined.state.get concreteCreateSender).bal = 999999999998887794 :=
     concreteJoinedSenderBalance
   have hc : (concreteJoined.state.get concreteCreateSender).code = ByteArray.empty :=
     concreteJoinedSenderCode
-  simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
+  simp only [checkTransactionSenderAccountFor,
+    checkTransactionSenderCodeFor_enabled (rules := pragueRules) rfl,
+    checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
   decide +kernel
 
 

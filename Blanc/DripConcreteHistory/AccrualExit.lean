@@ -5,10 +5,12 @@ open Jaune
 namespace Drip
 
 private theorem concreteDrip_stage (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hfresh : Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], concreteDripStagingMemory, G, base.stateGas⟩) freshStart post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 27, base.stateGas⟩) drip post := by
+  have hpush0 := hfork.rules_push0
   func_run (3) [6]
   · simp only [Devm.extCost, Devm.memory_setMach]
     decide +kernel
@@ -22,6 +24,7 @@ private theorem concreteDrip_stage (sevm : Sevm) (base post : Devm) (G : Nat)
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using hfresh
 
 private theorem concreteDrip_square (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (next : Func) (hsize : M.size = 288)
     (hread : Bytes.toB256 (M.read (baseWord * 32).toNat 32).1 = rate)
     (hmem : (M.read (baseWord * 32).toNat 32).2 = M)
@@ -32,6 +35,7 @@ private theorem concreteDrip_square (sevm : Sevm) (base post : Devm) (M : Mem) (
       (guardedRoundedMul baseWord baseWord baseWord next) post := by
   unfold guardedRoundedMul roundedMulRecovery
   rw [ite_eq_left rfl]
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -53,6 +57,7 @@ private theorem concreteDrip_square (sevm : Sevm) (base post : Devm) (M : Mem) (
   simpa only [Nat.add_sub_cancel] using htail
 
 private theorem concreteDrip_accumulate (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (next : Func) (hsize : M.size = 288)
     (hacc : Bytes.toB256 (M.read (accumulatorWord * 32).toNat 32).1 = rate)
     (haccMem : (M.read (accumulatorWord * 32).toNat 32).2 = M)
@@ -65,6 +70,7 @@ private theorem concreteDrip_accumulate (sevm : Sevm) (base post : Devm) (M : Me
       (guardedRoundedMul accumulatorWord baseWord accumulatorWord next) post := by
   unfold guardedRoundedMul roundedMulRecovery
   rw [ite_eq_right (by decide +kernel)]
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -98,6 +104,7 @@ private theorem concreteDrip_accumulate (sevm : Sevm) (base post : Devm) (M : Me
   simpa only [Nat.add_sub_cancel] using htail
 
 private theorem concreteDrip_loopOne (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hexp : Bytes.toB256 (M.read 0 32).1 = 1) (hexpMem : (M.read 0 32).2 = M)
     (hbase : Bytes.toB256 (M.read 224 32).1 = rate) (hbaseMem : (M.read 224 32).2 = M)
@@ -105,6 +112,7 @@ private theorem concreteDrip_loopOne (sevm : Sevm) (base post : Devm) (M : Mem) 
       (base.setMach ⟨[], M.write 224 concreteDripSquare.toBytes, G, base.stateGas⟩) rpowAfterSquare post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 140, base.stateGas⟩) rpowLoop post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -113,7 +121,7 @@ private theorem concreteDrip_loopOne (sevm : Sevm) (base post : Devm) (M : Mem) 
   rw [hexp, hexpMem]
   func_run (2) [0]
   rw [show G + 140 - 21 = (G + 12) + 107 by omega]
-  apply concreteDrip_square _ _ _ _ _ _ hsize hbase hbaseMem
+  apply concreteDrip_square (hfork := hfork) _ _ _ _ _ _ hsize hbase hbaseMem
   change Func.RunCompiled _ sevm
     (base.setMach ⟨[], M.write 224 concreteDripSquare.toBytes, G + 12, base.stateGas⟩) (.call rpowAfterSquareSlot) post
   apply Func.runCompiled_call' (f := rpowAfterSquare) (G := G) rfl
@@ -123,6 +131,7 @@ private theorem concreteDrip_loopOne (sevm : Sevm) (base post : Devm) (M : Mem) 
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using htail
 
 private theorem concreteDrip_afterSquare (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hexp : Bytes.toB256 (M.read 0 32).1 = 1) (hexpMem : (M.read 0 32).2 = M)
     (hacc : Bytes.toB256 (M.read 256 32).1 = rate) (haccMem : (M.read 256 32).2 = M)
@@ -132,6 +141,7 @@ private theorem concreteDrip_afterSquare (sevm : Sevm) (base post : Devm) (M : M
       (base.setMach ⟨[], M.write 256 concreteDripFactor.toBytes, G, base.stateGas⟩) rpowAdvance post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 147, base.stateGas⟩) rpowAfterSquare post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -140,7 +150,7 @@ private theorem concreteDrip_afterSquare (sevm : Sevm) (base post : Devm) (M : M
   rw [hexp, hexpMem]
   func_run (3) [1]
   rw [show G + 147 - 25 = (G + 12) + 110 by omega]
-  apply concreteDrip_accumulate _ _ _ _ _ _ hsize hacc haccMem hbase hbaseMem
+  apply concreteDrip_accumulate (hfork := hfork) _ _ _ _ _ _ hsize hacc haccMem hbase hbaseMem
   change Func.RunCompiled _ sevm
     (base.setMach ⟨[], M.write 256 concreteDripFactor.toBytes, G + 12, base.stateGas⟩) (.call rpowAdvanceSlot) post
   apply Func.runCompiled_call' (f := rpowAdvance) (G := G) rfl
@@ -150,12 +160,14 @@ private theorem concreteDrip_afterSquare (sevm : Sevm) (base post : Devm) (M : M
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using htail
 
 private theorem concreteDrip_advance (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hexp : Bytes.toB256 (M.read 0 32).1 = 1) (hexpMem : (M.read 0 32).2 = M)
     (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M.write 0 (0 : B256).toBytes, G, base.stateGas⟩) rpowLoop post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 33, base.stateGas⟩) rpowAdvance post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -177,6 +189,7 @@ private theorem concreteDrip_advance (sevm : Sevm) (base post : Devm) (M : Mem) 
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using htail
 
 private theorem concreteDrip_rpowZero (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hread : Bytes.toB256 (M.read 0 32).1 = 0)
     (hmem : (M.read 0 32).2 = M)
@@ -184,6 +197,7 @@ private theorem concreteDrip_rpowZero (sevm : Sevm) (base post : Devm) (M : Mem)
       (base.setMach ⟨[], M, G, base.stateGas⟩) composeFresh post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 34, base.stateGas⟩) rpowLoop post := by
+  have hpush0 := hfork.rules_push0
   func_run (1)
   refine Func.RunCompiled.next
     (Ninst.runCompiled_mload_of (v := 0) (M := M) (c := 3) (G := G + 29)
@@ -379,12 +393,13 @@ private theorem concreteDrip_rpowRead256 :
 
 
 theorem concreteDrip_rpow (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcompose : Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], concreteDripRpowMemory, G, base.stateGas⟩) composeFresh post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], concreteDripLoopMemory, G + 354, base.stateGas⟩) rpowLoop post := by
   rw [show G + 354 = (G + 214) + 140 by omega]
-  apply concreteDrip_loopOne
+  apply concreteDrip_loopOne (hfork := hfork)
   · exact concreteDrip_loopSize
   · exact concreteDrip_loopRead0
   · exact concreteDrip_loopUnchanged _ (by decide)
@@ -392,7 +407,7 @@ theorem concreteDrip_rpow (sevm : Sevm) (base post : Devm) (G : Nat)
   · exact concreteDrip_loopUnchanged _ (by decide)
   change Func.RunCompiled _ sevm (base.setMach ⟨[], concreteDripSquareMemory, G + 214, base.stateGas⟩) rpowAfterSquare post
   rw [show G + 214 = (G + 67) + 147 by omega]
-  apply concreteDrip_afterSquare
+  apply concreteDrip_afterSquare (hfork := hfork)
   · exact concreteDrip_squareSize
   · exact concreteDrip_squareRead0
   · exact concreteDrip_squareUnchanged _ (by decide)
@@ -402,14 +417,15 @@ theorem concreteDrip_rpow (sevm : Sevm) (base post : Devm) (G : Nat)
   · exact concreteDrip_squareUnchanged _ (by decide)
   change Func.RunCompiled _ sevm (base.setMach ⟨[], concreteDripFactorMemory, G + 67, base.stateGas⟩) rpowAdvance post
   rw [show G + 67 = (G + 34) + 33 by omega]
-  apply concreteDrip_advance
+  apply concreteDrip_advance (hfork := hfork)
   · exact concreteDrip_factorSize
   · exact concreteDrip_factorRead0
   · exact concreteDrip_factorUnchanged _ (by decide)
-  exact concreteDrip_rpowZero _ _ _ _ _ concreteDrip_rpowSize concreteDrip_rpowRead0
+  exact concreteDrip_rpowZero (hfork := hfork) _ _ _ _ _ concreteDrip_rpowSize concreteDrip_rpowRead0
     (concreteDrip_rpowUnchanged _ (by decide)) hcompose
 
 private theorem concreteDrip_composeFresh (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hchi : Bytes.toB256 (M.read (storedChiWord * 32).toNat 32).1 = rate)
     (hchiMem : (M.read (storedChiWord * 32).toNat 32).2 = M)
@@ -419,6 +435,7 @@ private theorem concreteDrip_composeFresh (sevm : Sevm) (base post : Devm) (M : 
       (base.setMach ⟨[concreteDripChi], M, G, base.stateGas⟩) freshRoute post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 104, base.stateGas⟩) composeFresh post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -451,6 +468,7 @@ private theorem concreteDrip_composeFresh (sevm : Sevm) (base post : Devm) (M : 
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using hroute
 
 private theorem concreteDrip_freshRoute (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hroute : Bytes.toB256 (M.read (routeWord * 32).toNat 32).1 = routeDrip)
     (hmem : (M.read (routeWord * 32).toNat 32).2 = M)
@@ -458,6 +476,7 @@ private theorem concreteDrip_freshRoute (sevm : Sevm) (base post : Devm) (M : Me
       (base.setMach ⟨[concreteDripChi], M, G, base.stateGas⟩) afterDrip post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[concreteDripChi], M, G + 97, base.stateGas⟩) freshRoute post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -615,22 +634,22 @@ theorem concreteDrip_endpoint (G : Nat) :
     Func.RunCompiled (runtime.main :: runtime.aux) concreteDripSevm
       (concreteDripDevm.setMach ⟨[], Mem.empty, G + 10877, concreteDripDevm.stateGas⟩) drip (concreteDripRuntimePost G) := by
   rw [show G + 10877 = G + 5825 + 97 + 104 + 354 + 122 + 2166 + 79 + 2103 + 27 by omega]
-  apply concreteDrip_stage
-  apply concreteDrip_freshStart
+  apply concreteDrip_stage (hfork := CoveredFork.prague)
+  apply concreteDrip_freshStart (hfork := CoveredFork.prague)
   · rfl
   · exact CoveredFork.prague.rules_stateGas_none
   · exact concreteDripDevm_chi
   · exact concreteDripDevm_rho
   · exact concreteDripDevm_cold _
   · exact concreteDripDevm_cold _
-  apply concreteDrip_rpow
-  apply concreteDrip_composeFresh
+  apply concreteDrip_rpow (hfork := CoveredFork.prague)
+  apply concreteDrip_composeFresh (hfork := CoveredFork.prague)
   · exact concreteDrip_rpowSize
   · exact concreteDrip_rpowRead160
   · exact concreteDrip_rpowUnchanged _ (by decide)
   · exact concreteDrip_rpowRead256
   · exact concreteDrip_rpowUnchanged _ (by decide)
-  apply concreteDrip_freshRoute
+  apply concreteDrip_freshRoute (hfork := CoveredFork.prague)
   · exact concreteDrip_rpowSize
   · exact concreteDrip_rpowRead32
   · exact concreteDrip_rpowUnchanged _ (by decide)
@@ -639,6 +658,7 @@ theorem concreteDrip_endpoint (G : Nat) :
     concreteDrip_chiStore.1 concreteDrip_chiStore.2 concreteDrip_rhoStore.1 concreteDrip_rhoStore.2
 
 private theorem concreteDrip_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdata : sevm.data = concreteDripTx.data)
     (hvalue : sevm.value = 0)
     (hdrip : Func.RunCompiled (runtime.main :: runtime.aux) sevm
@@ -650,6 +670,7 @@ private theorem concreteDrip_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
   have hshift : Sevm.dataWord sevm 0 >>> B256.toNat 224 = dripSelector := by
     simp only [Sevm.dataWord, hdata, concreteDripTx]
     decide +kernel
+  have hpush0 := hfork.rules_push0
   func_run (1)
   simp only [hdata, concreteDripTx]
   func_run (5) [dripSelector]
@@ -679,7 +700,7 @@ theorem concreteDrip_runtime (G : Nat) :
     Func.RunCompiled (runtime.main :: runtime.aux) concreteDripSevm
       (concreteDripDevm.setMach ⟨[], Mem.empty, G + 11010, concreteDripDevm.stateGas⟩) main (concreteDripRuntimePost G) := by
   rw [show G + 11010 = (G + 10877) + 133 by omega]
-  exact concreteDrip_dispatch _ _ _ _ rfl rfl (concreteDrip_endpoint G)
+  exact concreteDrip_dispatch (hfork := CoveredFork.prague) _ _ _ _ rfl rfl (concreteDrip_endpoint G)
 
 theorem concreteDripDevm_gas : concreteDripDevm.gasLeft = 478936 := by
   change 500000 - deploymentIntrinsicGas concreteDripTxInput concreteDripTx concreteCreateSender = 478936
@@ -707,7 +728,7 @@ theorem concreteDrip_frameEntry :
     (Frame.ofCall concreteDripMessage).enter =
       .run (initEvm (concreteDripMessage.withBenv concreteDripEntry)) := by
   have hnp : ¬ pragueRules.isPrecomp concreteCreateTarget :=
-    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 5)
+    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 0 0)
   have he : executeCode.enter (concreteDripMessage.withBenv concreteDripEntry) =
       .inl (initEvm (concreteDripMessage.withBenv concreteDripEntry)) := by
     unfold executeCode.enter
@@ -727,7 +748,8 @@ theorem concreteDrip_processMessage :
   rw [concreteDrip_frameEntry]
   simp only [Frame.ofCall, concreteDrip_exec, Frame.settle_eq_settleMsg_handleErrorWith,
     Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
-    executeCode.handleErrorWith_ok, Except.bind_ok, concreteDrip_postError, Option.isSome_none]
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteDrip_postError, Option.isSome_none,
+    Devm.recordTouch_of_not_touchedSweep (rules := concreteDripMessage.benv.stat.rules) rfl]
 
 noncomputable def concreteDripMessageState : State := (concreteDripRuntimePost 467925).state
 
@@ -741,19 +763,12 @@ def concreteDripMessageOutput : MsgCallOutput := {
 
 theorem concreteDrip_messageCall :
     processMessageCall concreteDripMessage = .ok (concreteDripMessageState, concreteDripMessageOutput) := by
-  have htarget : concreteDripMessage.target.isNone = false := rfl
-  have hauths : concreteDripMessage.tenv.stat.auths = [] := rfl
   have hcode : some concreteDripMessage.code.toList = Prog.compile runtime := concreteDrip_compiled
   have hdelegation : getDelegatedCodeAddress concreteDripMessage.code = none := by
     unfold getDelegatedCodeAddress
     rw [ite_eq_right (not_delegation_of_compile hcode)]
-  have hrefund : (concreteDripRuntimePost 467925).refundCounter = 0 := rfl
-  unfold processMessageCall
-  rw [htarget]
-  unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
-    concreteDrip_processMessage, Except.bimap, id_eq, concreteDrip_postError,
-    Option.isNone, hrefund]
+  rw [processMessageCall_call_of_message (refund := 0) rfl rfl rfl hdelegation
+    concreteDrip_processMessage concreteDrip_postError rfl]
   rfl
 
 noncomputable def concreteDripTransactionState : State :=
@@ -912,7 +927,7 @@ theorem concreteDrip_requestSuffix :
   rfl
 
 theorem concreteDrip_body :
-    applyBody concreteDripTxInput [.inl concreteDripTxRlp] [] =
+    applyBody concreteDripTxInput [.inl concreteDripTxRlp] [] [] =
       .ok (concreteDripTransactionState, concreteDripTransactionBout) := by
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteDripTxInput beaconRootsAddress concreteDripTxInput.stat.parentBeaconBlockRoot.toBytes
@@ -947,6 +962,13 @@ theorem concreteDrip_body :
     change pragueRules.bal = none
     rfl
   unfold applyBody
+  have hbeaconRules : concreteDripTxInput.stat.rules.sys.beaconRoots = true := rfl
+  have hhistoryRules : concreteDripTxInput.stat.rules.sys.historyStorage = true := rfl
+  have hwithdrawalsRules : concreteDripTxInput.stat.rules.header.withdrawalsRoot = true := rfl
+  have hrequestsRules : concreteDripTxInput.stat.rules.header.requestsHash = true := rfl
+  have hpow : concreteDripTxInput.stat.rules.pow = none := rfl
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte]
   simp only [BalBuilder.incorporateSystem, hbalNone, checkBlockAccessListGasLimit]
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
@@ -956,7 +978,8 @@ theorem concreteDrip_body :
     concreteDripTxInput.state from rfl, hi']
   have htransaction := concreteDrip_transaction
   unfold BlockOutput.init at htransaction
-  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, concreteDripDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
+  have hrulesP : concreteDripTxInput.stat.rules = pragueRules := rfl
+  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, hrulesP, concreteDripDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
     applyTransactions, htransaction]
   have hwithdrawals : processWithdrawals
       (concreteDripTxInput.withState concreteDripTransactionState)
@@ -978,7 +1001,7 @@ noncomputable def concreteDripHeader (sr tr rr wr rh : B256) : Header :=
     stateRoot := sr
     txsRoot := tr
     receiptRoot := rr
-    withdrawalsRoot := wr
+    withdrawalsRoot := some wr
     requestsHash := some rh }
 
 theorem concreteDripHeader_benv (sr tr rr wr rh : B256) :
@@ -1002,15 +1025,15 @@ theorem concreteDripHeader_valid (sr tr rr wr rh : B256) :
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentGasUsed : concreteJoinBlock.header.gasUsed = 76144 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentBaseFee : concreteJoinBlock.header.baseFeePerGas = 1 := by
+  have hparentBaseFee : concreteJoinBlock.header.baseFeePerGas = some 1 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentTimestamp : concreteJoinBlock.header.timestamp = 2 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentNumber : concreteJoinBlock.header.number = 2 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentBlobGas : concreteJoinBlock.header.blobGasUsed = 0 := by
+  have hparentBlobGas : concreteJoinBlock.header.blobGasUsed = some 0 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentExcessBlobGas : concreteJoinBlock.header.excessBlobGas = 0 := by
+  have hparentExcessBlobGas : concreteJoinBlock.header.excessBlobGas = some 0 := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentExtraData : concreteJoinBlock.header.extraData = [] := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
@@ -1024,6 +1047,8 @@ theorem concreteDripHeader_valid (sr tr rr wr rh : B256) :
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentSlot : concreteJoinBlock.header.slotNumber = none := by
     simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
+  have hparentBeacon : concreteJoinBlock.header.parentBeaconBlockRoot = some 0 := by
+    simp only [hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hbase : calculateBaseFeePerGas 10000000 10000000 76144 1 = .ok 1 := by
     decide +kernel
   have hexcess : calculateExcessBlobGas pragueRules.blob concreteJoinBlock.header = 0 := by
@@ -1031,9 +1056,19 @@ theorem concreteDripHeader_valid (sr tr rr wr rh : B256) :
     rw [hparentExcessBlobGas, hparentBlobGas]
     decide +kernel
   simp only [validateHeader, hlast, Option.toExcept, bind, Except.bind,
-    concreteDripHeader, concreteDripExecutionHeader, Header.hash, hparentGasLimit, hparentGasUsed, hparentBaseFee, hparentTimestamp, hparentNumber, hparentBlobGas, hparentExcessBlobGas, hparentExtraData, hparentDifficulty, hparentNonce, hparentOmmers, hparentBal, hparentSlot,
-    hbase, hexcess, ne_eq, not_true_eq_false, ite_false]
-  simp only [Except.mapError]
+    concreteDripHeader, concreteDripExecutionHeader, Header.hash, hparentGasLimit, hparentGasUsed, hparentBaseFee, hparentTimestamp, hparentNumber, hparentBlobGas, hparentExcessBlobGas, hparentExtraData, hparentDifficulty, hparentNonce, hparentOmmers, hparentBal, hparentSlot, hparentBeacon,
+    hbase, hexcess, ne_eq, not_true_eq_false, ite_false,
+    checkHeaderShape, checkHeaderFieldPresence, Option.isSome_some, Option.isSome_none,
+    pragueRules_header, checkFirstFeeGasLimit, Option.isNone_some, Bool.and_false,
+    Bool.false_eq_true, expectedBaseFee, Functor.map, Except.map, Option.any_some]
+  have hconsensus : ∀ h p : Header, h.difficulty = 0 → h.nonce = 0 →
+      h.ommersHash = emptyOmmerHash → checkConsensusFields pragueRules h p = .ok () := by
+    intro h p hd hn ho
+    have hpow : pragueRules.pow = none := rfl
+    simp only [checkConsensusFields, hpow, hd, hn, ho, ne_eq, not_true_eq_false, ite_false]
+    rfl
+  rw [hconsensus _ _ (by rfl) (by rfl) (by rfl)]
+  simp only [Except.mapError, bne_self_eq_false, Bool.false_eq_true, ite_false]
   rfl
 
 noncomputable def concreteDripBlock : Block := {
@@ -1061,38 +1096,42 @@ theorem concreteDrip_checks :
     CanonicalBlock.ofDecode, concreteDeploymentBlock, concreteDeploymentHeader,
     concreteExecutionHeader, concreteGenesisHeader, logsBloom, List.foldl_nil,
     ne_eq, not_true_eq_false, ite_false, pure, Bind.bind, Except.bind]
+  have hs : concreteDripTransactionBout.blockStateGasUsed = 0 := rfl
+  simp only [hs, Nat.max_zero, not_true_eq_false, ite_false, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true]
   rfl
 
 theorem concreteDrip_step :
     stateTransitionUsing concreteConfig concreteJoined concreteDripBlock = .ok concreteDripped := by
   have hchain : concreteConfig.chainId = concreteJoined.chainId := concreteDeploymentRoot.deployed_chainId
   rw [stateTransitionUsing_eq_of_chainId_eq hchain]
-  rw [show concreteConfig.forkAt concreteDripBlock.header.timestamp = .ok .prague from
-    ChainConfig.pragueOnly_forkAt 1 _]
+  rw [show concreteConfig.forkAt concreteDripBlock.header.number
+      concreteDripBlock.header.timestamp = .ok .prague from
+    ChainConfig.pragueOnly_forkAt 1 _ _]
+  simp only [Except.mapError, Except.bind]
+  rw [stateTransitionScheduledE_of_pow_none _ _ _ _ rfl]
   change stateTransitionAt .prague concreteJoined concreteDripBlock = _
   rw [stateTransitionAt_eq_ok_iff, stateTransitionE]
   have hh : validateHeader Fork.prague.ruleSet concreteJoined concreteDripBlock.header = .ok () := by
     change validateHeader pragueRules concreteJoined concreteDripBlock.header = .ok ()
     exact concreteDripHeader_valid _ _ _ _ _
-  rw [hh]
-  change (do
-    let output ← applyBody (initBenv .prague concreteJoined concreteDripBlock.header)
-      concreteDripBlock.txs concreteDripBlock.wds
-    Except.mapError TransitionError.block (stateTransitionChecks output.2
-      concreteDripBlock.header (getTransactionsRoot output.2) output.1.root
-      (getReceiptRoot output.2) (logsBloom output.2.blockLogs)
-      (getWithdrawalsRoot output.2) (computeRequestsHash output.2.requests))
-    .ok (⟨appendBlock concreteJoined.blocks concreteDripBlock, output.1,
-      concreteJoined.chainId⟩ : BlockChain)) = .ok concreteDripped
+  have hommers : checkBlockOmmers (Fork.ruleSet .prague) concreteJoined
+      concreteDripBlock.header concreteDripBlock.ommers = .ok () := by
+    rfl
   have hbody : applyBody (initBenv .prague concreteJoined concreteDripBlock.header)
-      concreteDripBlock.txs concreteDripBlock.wds =
+      concreteDripBlock.txs concreteDripBlock.ommers concreteDripBlock.wds =
       .ok (concreteDripTransactionState, concreteDripTransactionBout) := by
     change applyBody (initBenv .prague concreteJoined (concreteDripHeader _ _ _ _ _))
-      [.inl concreteDripTxRlp] [] = _
+      [.inl concreteDripTxRlp] [] [] = _
     rw [concreteDripHeader_benv]
     exact concreteDrip_body
-  rw [hbody]
-  simp only [Bind.bind, Except.bind, concreteDrip_checks, Except.mapError]
+  have hbal : blockAccessListCheck (Fork.ruleSet .prague) concreteDripTransactionBout
+      concreteDripBlock.header = .ok () := by
+    rfl
+  have hreq : (Fork.ruleSet .prague).header.requestsHash = true := rfl
+  unfold stateTransitionCoreE
+  simp only [hh, hommers, Except.mapError, bind, Except.bind, hbody, hreq, ite_true,
+    concreteDrip_checks, hbal]
   rfl
 
 theorem concreteDripped_storage : concreteDripped.state.getStor concreteCreateTarget =
@@ -1136,7 +1175,7 @@ private theorem concreteDripMessageState_sender :
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
   change (((concreteDripEntry.state.setStorVal concreteCreateTarget chiSlot concreteDripChi).setStorVal
     concreteCreateTarget rhoSlot 5).get concreteCreateSender) = _
-  simp only [State.setStorVal, State.get_set_ne _ ht]
+  simp only [State.setStorVal_get_ne _ ht]
 
 theorem concreteDrippedSenderNonce : concreteDripped.state.getNonce concreteCreateSender = 3 := by
   change (concreteDripTransactionState.get concreteCreateSender).nonce = _
@@ -1301,7 +1340,7 @@ theorem concreteExitEnvelopeParse :
   simp only [List.length_cons, concreteExitPayload_length]
   rw [hp]
 
-theorem concreteExitDecode : decodeTx (.inl concreteExitTxRlp) = .ok concreteExitTx := by
+theorem concreteExitDecode : decodeTx pragueRules (.inl concreteExitTxRlp) = .ok concreteExitTx := by
   simp only [decodeTx, concreteExitTxRlp, List.cons_append, List.nil_append,
     Bytes.toExTx, concreteExitEnvelopeParse, concreteExitFields]
   rfl
@@ -1319,14 +1358,16 @@ theorem concreteDrippedSenderCode : concreteDripped.state.getCode concreteCreate
   exact concreteJoinedSenderCode
 
 theorem concreteExitSenderChecked :
-    checkTransactionSenderAccount (concreteDripped.state.get concreteCreateSender)
+    checkTransactionSenderAccountFor pragueRules (concreteDripped.state.get concreteCreateSender)
       concreteExitTx 4000000 = .ok () := by
   have hn : (concreteDripped.state.get concreteCreateSender).nonce = 3 := concreteDrippedSenderNonce
   have hb : (concreteDripped.state.get concreteCreateSender).bal = 999999999998823644 :=
     concreteDrippedSenderBalance
   have hc : (concreteDripped.state.get concreteCreateSender).code = ByteArray.empty :=
     concreteDrippedSenderCode
-  simp only [checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
+  simp only [checkTransactionSenderAccountFor,
+    checkTransactionSenderCodeFor_enabled (rules := pragueRules) rfl,
+    checkTransactionSenderAccount, hn, hb, checkTransactionSenderCode, hc]
   decide +kernel
 
 theorem concreteExitChecked :
@@ -1692,6 +1733,7 @@ private theorem concreteExit_stage (base post : Devm) (G : Nat)
 
 private theorem concreteExit_readChi (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat) (next : Func)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hchi : base.getStorVal sevm.currentTarget chiSlot = concreteDripChi)
     (hcold : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
     (htail : Func.RunCompiled (runtime.main :: runtime.aux) sevm
@@ -1708,6 +1750,7 @@ private theorem concreteExit_readChi (sevm : Sevm) (base post : Devm) (M : Mem) 
 
 
 private theorem concreteExit_stageClock (sevm : Sevm) (base post : Devm) (M C : Mem)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (G : Nat) (next : Func) (htime : sevm.benvStat.time = 6)
     (hsize : M.size = 160)
     (hstore : M.write (storedChiWord * 32).toNat concreteDripChi.toBytes = C)
@@ -1723,6 +1766,7 @@ private theorem concreteExit_stageClock (sevm : Sevm) (base post : Devm) (M C : 
           (.revert <?>
             (loadWord storedChiWord +++ Ninst.pushB256 maxChi ::: Ninst.lt :::
               (.revert <?> (Ninst.timestamp ::: mstoreAt nowWord +++ next)))))) post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -1748,6 +1792,7 @@ private theorem concreteExit_stageClock (sevm : Sevm) (base post : Devm) (M C : 
 private theorem concreteExit_stageElapsed (sevm : Sevm) (base post : Devm) (M E : Mem)
     (G : Nat) (next : Func)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hrho : base.getStorVal sevm.currentTarget rhoSlot = 5)
     (hcold : (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys)
     (hsize : M.size = 224)
@@ -1794,6 +1839,7 @@ private theorem concreteExit_stageElapsed (sevm : Sevm) (base post : Devm) (M E 
 
 private theorem concreteExit_initializeRpow (sevm : Sevm) (base post : Devm) (M B A Z : Mem)
     (G : Nat) (zeroBase zeroExponent evenExponent : Func)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 224)
     (hbase : M.write (baseWord * 32).toNat rate.toBytes = B)
     (hbsize : B.size = 256)
@@ -1814,6 +1860,7 @@ private theorem concreteExit_initializeRpow (sevm : Sevm) (base post : Devm) (M 
             ((Ninst.pushB256 rate ::: mstoreAt accumulatorWord +++ loadWord exponentWord +++
               Ninst.pushB256 2 ::: Ninst.swap 0 ::: Ninst.div ::: mstoreAt exponentWord +++
               .call rpowLoopSlot) <?> evenExponent)))))) post := by
+  have hpush0 := hfork.rules_push0
   func_run (4) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -1963,6 +2010,7 @@ private theorem concreteExit_accumulatorMemoryFacts : concreteExitAccumulatorMem
 theorem concreteExit_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     (htime : sevm.benvStat.time = 6)
     (hsg : sevm.benvStat.rules.stateGas = none)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hchi : base.getStorVal sevm.currentTarget chiSlot = concreteDripChi)
     (hrho : base.getStorVal sevm.currentTarget rhoSlot = 5)
     (hcoldChi : (sevm.currentTarget, chiSlot) ∉ base.accessedStorageKeys)
@@ -1973,15 +2021,15 @@ theorem concreteExit_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], concreteExitStagingMemory, G + 122 + 2166 + 70 + 2103, base.stateGas⟩)
       freshStart post := by
-  apply concreteExit_readChi sevm _ _ _ _ _ hsg hchi hcoldChi
-  apply concreteExit_stageClock (sevm := sevm) (C := concreteExitStagingMemory.write 160 concreteDripChi.toBytes)
+  apply concreteExit_readChi sevm _ _ _ _ _ hsg hfork hchi hcoldChi
+  apply concreteExit_stageClock (hfork := hfork) (sevm := sevm) (C := concreteExitStagingMemory.write 160 concreteDripChi.toBytes)
   · exact htime
   · exact concreteExit_stagingSize
   · rfl
   · exact concreteExit_chiMemoryFacts.1
   · exact concreteExit_chiMemoryFacts.2.1
   · exact concreteExit_chiMemoryFacts.2.2
-  apply concreteExit_stageElapsed (E := concreteExitExponentMemory) (hsg := hsg)
+  apply concreteExit_stageElapsed (E := concreteExitExponentMemory) (hsg := hsg) (hfork := hfork)
   · exact hrho
   · change (sevm.currentTarget, rhoSlot) ∉ base.accessedStorageKeys.insert
       (sevm.currentTarget, chiSlot)
@@ -1994,7 +2042,7 @@ theorem concreteExit_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
   · exact concreteExit_exponentMemoryFacts.1
   · exact concreteExit_exponentMemoryFacts.2.1
   · exact concreteExit_exponentMemoryFacts.2.2
-  apply concreteExit_initializeRpow (B := concreteExitBaseMemory)
+  apply concreteExit_initializeRpow (hfork := hfork) (B := concreteExitBaseMemory)
     (A := concreteExitAccumulatorMemory) (Z := concreteExitLoopMemory)
   · exact concreteExit_exponentMemoryFacts.1
   · rfl
@@ -2118,6 +2166,7 @@ private theorem concreteExit_loopRead256 :
   exact Bytes.readWord_writeAt_self _ _ _
 
 private theorem concreteExit_composeFresh (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hchi : Bytes.toB256 (M.read (storedChiWord * 32).toNat 32).1 = concreteDripChi)
     (hchiMem : (M.read (storedChiWord * 32).toNat 32).2 = M)
@@ -2127,6 +2176,7 @@ private theorem concreteExit_composeFresh (sevm : Sevm) (base post : Devm) (M : 
       (base.setMach ⟨[concreteExitChi], M, G, base.stateGas⟩) freshRoute post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], M, G + 104, base.stateGas⟩) composeFresh post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -2159,6 +2209,7 @@ private theorem concreteExit_composeFresh (sevm : Sevm) (base post : Devm) (M : 
   · simpa only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using hroute
 
 private theorem concreteExit_freshRoute (sevm : Sevm) (base post : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288)
     (hroute : Bytes.toB256 (M.read (routeWord * 32).toNat 32).1 = routeExit)
     (hmem : (M.read (routeWord * 32).toNat 32).2 = M)
@@ -2166,6 +2217,7 @@ private theorem concreteExit_freshRoute (sevm : Sevm) (base post : Devm) (M : Me
       (base.setMach ⟨[concreteExitChi], M, G, base.stateGas⟩) afterExit post) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[concreteExitChi], M, G + 53, base.stateGas⟩) freshRoute post := by
+  have hpush0 := hfork.rules_push0
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -2440,7 +2492,7 @@ private theorem concreteExit_prefix (G : Nat) (post : Devm)
   · exact concreteExitDevm_units.2
   · exact concreteExitDevm_cold _
   · exact concreteExitDevm_cold _
-  apply concreteExit_freshStart
+  apply concreteExit_freshStart (hfork := CoveredFork.prague)
   · rfl
   · exact concreteExit_stateGas_none
   · exact concreteExitDevm_chi
@@ -2455,17 +2507,17 @@ private theorem concreteExit_prefix (G : Nat) (post : Devm)
         (concreteCreateTarget, concreteCreateSender.toB256)).insert (concreteCreateTarget, totalUnitsSlot)
     simp only [Std.HashSet.mem_insert, concreteExitDevm_cold, or_false, not_or]
     exact ⟨by decide +kernel, by decide +kernel⟩
-  apply concreteDrip_rpowZero
+  apply concreteDrip_rpowZero (hfork := CoveredFork.prague)
   · exact concreteExit_loopSize
   · exact concreteExit_loopRead0
   · exact concreteExit_loopUnchanged 0 (by decide)
-  apply concreteExit_composeFresh
+  apply concreteExit_composeFresh (hfork := CoveredFork.prague)
   · exact concreteExit_loopSize
   · exact concreteExit_loopRead160
   · exact concreteExit_loopUnchanged 160 (by decide)
   · exact concreteExit_loopRead256
   · exact concreteExit_loopUnchanged 256 (by decide)
-  apply concreteExit_freshRoute
+  apply concreteExit_freshRoute (hfork := CoveredFork.prague)
   · exact concreteExit_loopSize
   · exact concreteExit_loopRead32
   · exact concreteExit_loopUnchanged 32 (by decide)
@@ -2541,6 +2593,7 @@ theorem concreteExitTotalBase_code (a : Adr) :
   rfl
 
 private theorem concreteExit_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hdata : sevm.data = concreteExitTx.data)
     (hvalue : sevm.value = 0)
     (hexit : Func.RunCompiled (runtime.main :: runtime.aux) sevm
@@ -2554,6 +2607,7 @@ private theorem concreteExit_dispatch (sevm : Sevm) (base post : Devm) (G : Nat)
   have hshift : Sevm.dataWord sevm 0 >>> B256.toNat 224 = exitSelector := by
     simp only [Sevm.dataWord, hdata, concreteExitTx]
     decide +kernel
+  have hpush0 := hfork.rules_push0
   func_run (1)
   simp only [hdata, concreteExitTx]
   func_run (5) [exitSelector]
@@ -2720,11 +2774,13 @@ noncomputable def concreteExitRuntimePost : Devm :=
     ⟨[], concreteExitLoopMemory.write 0 (40 : B256).toBytes, 451083, concreteExitCallPost.stateGas⟩).withOutput (40 : B256).toBytes
 
 private theorem concreteExit_afterCall (sevm : Sevm) (base : Devm) (M : Mem) (G : Nat)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hsize : M.size = 288) :
     Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[1, 40], M, G + 24, base.stateGas⟩)
       ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)
       ((base.setMach ⟨[], M.write 0 (40 : B256).toBytes, G, base.stateGas⟩).withOutput (40 : B256).toBytes) := by
+  have hpush0 := hfork.rules_push0
   func_run (5) [0]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -2756,17 +2812,19 @@ private theorem concreteExit_callTail :
       (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert))
       concreteExitRuntimePost := by
   have hprefix (sevm : Sevm) (base post : Devm) (M : Mem)
+      (hfork : CoveredFork sevm.benvStat.fork)
       (h : Func.RunCompiled (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[457907, sevm.caller.toB256, 40, 0, 0, 0, 0, 40], M, 457907, base.stateGas⟩)
         (Ninst.call ::: ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post) :
       Func.RunCompiled (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[40], M, 457925, base.stateGas⟩)
         (Ninst.dup 0 ::: sendToCaller +++ ((mstoreAt 0 +++ returnMemoryRange 0 32) <?> .revert)) post := by
+    have hpush0 := hfork.rules_push0
     func_run (8)
     all_goals first
       | exact h
       | simp only [Devm.gasLeft_setMach, gVerylow, gBase]
-  apply hprefix
+  apply hprefix (hfork := CoveredFork.prague)
   refine Func.RunCompiled.next (devm' := concreteExitCallPost) concreteExitCallPost_run ?_
   have heta (d : Devm) : d.setMach ⟨d.stack, d.memory, d.gasLeft, d.stateGas⟩ = d := by cases d; rfl
   have hm : concreteExitCallPost.setMach ⟨[1, 40], concreteExitLoopMemory, 451083 + 24, concreteExitCallPost.stateGas⟩ =
@@ -2776,7 +2834,7 @@ private theorem concreteExit_callTail :
       ⟨concreteExitCallPost.stack, concreteExitCallPost.memory, 451107, concreteExitCallPost.stateGas⟩ = concreteExitCallPost
     rw [← concreteExitCallPost_machine.2.2]
     exact heta _
-  have h := concreteExit_afterCall concreteExitSevm concreteExitCallPost concreteExitLoopMemory
+  have h := concreteExit_afterCall (hfork := CoveredFork.prague) concreteExitSevm concreteExitCallPost concreteExitLoopMemory
     451083 concreteExit_loopSize
   rw [hm] at h
   exact h
@@ -2784,7 +2842,7 @@ private theorem concreteExit_callTail :
 theorem concreteExit_runtime :
     Func.RunCompiled (runtime.main :: runtime.aux) concreteExitSevm
       (concreteExitDevm.setMach ⟨[], Mem.empty, 478795, concreteExitDevm.stateGas⟩) main concreteExitRuntimePost := by
-  exact concreteExit_dispatch _ _ _ 478639 rfl rfl
+  exact concreteExit_dispatch (hfork := CoveredFork.prague) _ _ _ 478639 rfl rfl
     (concreteExit_prefix 457925 concreteExitRuntimePost concreteExit_callTail)
 
 theorem concreteExitDevm_gas : concreteExitDevm.gasLeft = 478796 := by
@@ -2813,7 +2871,7 @@ theorem concreteExit_frameEntry :
     (Frame.ofCall concreteExitMessage).enter =
       .run (initEvm (concreteExitMessage.withBenv concreteExitEntry)) := by
   have hnp : ¬ pragueRules.isPrecomp concreteCreateTarget :=
-    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 6)
+    concreteDeploymentBase.target_not_precompile (ChainConfig.pragueOnly_rulesAt 1 0 0)
   have he : executeCode.enter (concreteExitMessage.withBenv concreteExitEntry) =
       .inl (initEvm (concreteExitMessage.withBenv concreteExitEntry)) := by
     unfold executeCode.enter
@@ -2834,7 +2892,8 @@ theorem concreteExit_processMessage :
   rw [concreteExit_frameEntry]
   simp only [Frame.ofCall, concreteExit_exec, Frame.settle_eq_settleMsg_handleErrorWith,
     Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
-    executeCode.handleErrorWith_ok, Except.bind_ok, concreteExit_postError, Option.isSome_none]
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteExit_postError, Option.isSome_none,
+    Devm.recordTouch_of_not_touchedSweep (rules := concreteExitMessage.benv.stat.rules) rfl]
 
 noncomputable def concreteExitMessageState : State := concreteExitRuntimePost.state
 
@@ -2844,27 +2903,22 @@ noncomputable def concreteExitMessageOutput : MsgCallOutput := {
   logs := []
   accountsToDelete := concreteExitCallPost.accountsToDelete
   error := none
-  returnData := (40 : B256).toBytes }
+  returnData := (40 : B256).toBytes
+  touchedAccounts := concreteExitRuntimePost.meta.touchedAccounts }
 
 theorem concreteExit_messageCall :
     processMessageCall concreteExitMessage = .ok (concreteExitMessageState, concreteExitMessageOutput) := by
-  have htarget : concreteExitMessage.target.isNone = false := rfl
-  have hauths : concreteExitMessage.tenv.stat.auths = [] := rfl
   have hcode : some concreteExitMessage.code.toList = Prog.compile runtime := concreteExit_compiled
   have hdelegation : getDelegatedCodeAddress concreteExitMessage.code = none := by
     unfold getDelegatedCodeAddress
     rw [ite_eq_right (not_delegation_of_compile hcode)]
   have hrefund : concreteExitRuntimePost.refundCounter = 0 := concreteExitCallPost_meta.2.2.1
+  rw [processMessageCall_call_of_message (refund := 0) rfl rfl rfl hdelegation
+    concreteExit_processMessage concreteExit_postError (by rw [hrefund]; rfl)]
   have hlogs : concreteExitRuntimePost.logs = [] := concreteExitCallPost_meta.2.1
-  unfold processMessageCall
-  rw [htarget]
-  unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
-    concreteExit_processMessage, Except.bimap, id_eq, concreteExit_postError,
-    Option.isNone, hrefund]
-  simp only [concreteExitRuntimePost, Devm.withOutput_logs, Devm.setMach_logs,
-    concreteExitCallPost_meta.2.1]
-  rfl
+  congr 2
+  unfold concreteExitMessageOutput
+  congr 1
 
 noncomputable def concreteExitTransactionState : State :=
   deploymentFinalState concreteExitTxInput concreteExitTx concreteCreateSender
@@ -3018,7 +3072,7 @@ theorem concreteExit_requestSuffix :
   rfl
 
 theorem concreteExit_body :
-    applyBody concreteExitTxInput [.inl concreteExitTxRlp] [] =
+    applyBody concreteExitTxInput [.inl concreteExitTxRlp] [] [] =
       .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteExitTxInput beaconRootsAddress concreteExitTxInput.stat.parentBeaconBlockRoot.toBytes
@@ -3053,6 +3107,13 @@ theorem concreteExit_body :
     change pragueRules.bal = none
     rfl
   unfold applyBody
+  have hbeaconRules : concreteExitTxInput.stat.rules.sys.beaconRoots = true := rfl
+  have hhistoryRules : concreteExitTxInput.stat.rules.sys.historyStorage = true := rfl
+  have hwithdrawalsRules : concreteExitTxInput.stat.rules.header.withdrawalsRoot = true := rfl
+  have hrequestsRules : concreteExitTxInput.stat.rules.header.requestsHash = true := rfl
+  have hpow : concreteExitTxInput.stat.rules.pow = none := rfl
+  simp only [beaconRootsCall, historyStorageCall, withdrawalsPass, requestsPass,
+    hbeaconRules, hhistoryRules, hwithdrawalsRules, hrequestsRules, hpow, ↓reduceIte]
   simp only [BalBuilder.incorporateSystem, hbalNone, checkBlockAccessListGasLimit]
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
@@ -3062,7 +3123,8 @@ theorem concreteExit_body :
     concreteExitTxInput.state from rfl, hi']
   have htransaction := concreteExit_transaction
   unfold BlockOutput.init at htransaction
-  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, concreteExitDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
+  have hrulesP : concreteExitTxInput.stat.rules = pragueRules := rfl
+  simp only [BlockOutput.init, List.mapM_cons, List.mapM_nil, hrulesP, concreteExitDecode, pure, Except.pure, bind, Except.bind, List.putIndex, List.putIndex.aux,
     applyTransactions, htransaction]
   have hwithdrawals : processWithdrawals
       (concreteExitTxInput.withState concreteExitTransactionState)
@@ -3084,7 +3146,7 @@ noncomputable def concreteExitHeader (sr tr rr wr rh : B256) : Header :=
     stateRoot := sr
     txsRoot := tr
     receiptRoot := rr
-    withdrawalsRoot := wr
+    withdrawalsRoot := some wr
     requestsHash := some rh }
 
 theorem concreteExitHeader_benv (sr tr rr wr rh : B256) :
@@ -3113,15 +3175,15 @@ theorem concreteExitHeader_valid (sr tr rr wr rh : B256) :
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentGasUsed : concreteDripBlock.header.gasUsed = 32075 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentBaseFee : concreteDripBlock.header.baseFeePerGas = 1 := by
+  have hparentBaseFee : concreteDripBlock.header.baseFeePerGas = some 1 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentTimestamp : concreteDripBlock.header.timestamp = 5 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentNumber : concreteDripBlock.header.number = 3 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentBlobGas : concreteDripBlock.header.blobGasUsed = 0 := by
+  have hparentBlobGas : concreteDripBlock.header.blobGasUsed = some 0 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
-  have hparentExcessBlobGas : concreteDripBlock.header.excessBlobGas = 0 := by
+  have hparentExcessBlobGas : concreteDripBlock.header.excessBlobGas = some 0 := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentExtraData : concreteDripBlock.header.extraData = [] := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
@@ -3135,6 +3197,8 @@ theorem concreteExitHeader_valid (sr tr rr wr rh : B256) :
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hparentSlot : concreteDripBlock.header.slotNumber = none := by
     simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
+  have hparentBeacon : concreteDripBlock.header.parentBeaconBlockRoot = some 0 := by
+    simp only [hDrip, concreteDripHeader, concreteDripExecutionHeader, hJoin, concreteJoinHeader, concreteJoinExecutionHeader, hDeploy, concreteDeploymentHeader, concreteExecutionHeader, concreteGenesisHeader] <;> rfl
   have hbase : calculateBaseFeePerGas 10000000 10000000 32075 1 = .ok 1 := by
     decide +kernel
   have hexcess : calculateExcessBlobGas pragueRules.blob concreteDripBlock.header = 0 := by
@@ -3142,9 +3206,19 @@ theorem concreteExitHeader_valid (sr tr rr wr rh : B256) :
     rw [hparentExcessBlobGas, hparentBlobGas]
     decide +kernel
   simp only [validateHeader, hlast, Option.toExcept, bind, Except.bind,
-    concreteExitHeader, concreteExitExecutionHeader, Header.hash, hparentGasLimit, hparentGasUsed, hparentBaseFee, hparentTimestamp, hparentNumber, hparentBlobGas, hparentExcessBlobGas, hparentExtraData, hparentDifficulty, hparentNonce, hparentOmmers, hparentBal, hparentSlot,
-    hbase, hexcess, ne_eq, not_true_eq_false, ite_false]
-  simp only [Except.mapError]
+    concreteExitHeader, concreteExitExecutionHeader, Header.hash, hparentGasLimit, hparentGasUsed, hparentBaseFee, hparentTimestamp, hparentNumber, hparentBlobGas, hparentExcessBlobGas, hparentExtraData, hparentDifficulty, hparentNonce, hparentOmmers, hparentBal, hparentSlot, hparentBeacon,
+    hbase, hexcess, ne_eq, not_true_eq_false, ite_false,
+    checkHeaderShape, checkHeaderFieldPresence, Option.isSome_some, Option.isSome_none,
+    pragueRules_header, checkFirstFeeGasLimit, Option.isNone_some, Bool.and_false,
+    Bool.false_eq_true, expectedBaseFee, Functor.map, Except.map, Option.any_some]
+  have hconsensus : ∀ h p : Header, h.difficulty = 0 → h.nonce = 0 →
+      h.ommersHash = emptyOmmerHash → checkConsensusFields pragueRules h p = .ok () := by
+    intro h p hd hn ho
+    have hpow : pragueRules.pow = none := rfl
+    simp only [checkConsensusFields, hpow, hd, hn, ho, ne_eq, not_true_eq_false, ite_false]
+    rfl
+  rw [hconsensus _ _ (by rfl) (by rfl) (by rfl)]
+  simp only [Except.mapError, bne_self_eq_false, Bool.false_eq_true, ite_false]
   rfl
 
 noncomputable def concreteExitBlock : Block := {
@@ -3172,40 +3246,43 @@ theorem concreteExit_checks :
     CanonicalBlock.ofDecode, concreteDeploymentBlock, concreteDeploymentHeader,
     concreteExecutionHeader, concreteGenesisHeader, logsBloom, List.foldl_nil,
     ne_eq, not_true_eq_false, ite_false, pure, Bind.bind, Except.bind]
+  have hs : concreteExitTransactionBout.blockStateGasUsed = 0 := rfl
+  simp only [hs, Nat.max_zero, not_true_eq_false, ite_false, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true]
   rfl
 
 theorem concreteExit_step :
     stateTransitionUsing concreteConfig concreteDripped concreteExitBlock = .ok concreteExited := by
   have hchain : concreteConfig.chainId = concreteDripped.chainId := concreteDeploymentRoot.deployed_chainId
   rw [stateTransitionUsing_eq_of_chainId_eq hchain]
-  rw [show concreteConfig.forkAt concreteExitBlock.header.timestamp = .ok .prague from
-    ChainConfig.pragueOnly_forkAt 1 _]
+  rw [show concreteConfig.forkAt concreteExitBlock.header.number
+      concreteExitBlock.header.timestamp = .ok .prague from
+    ChainConfig.pragueOnly_forkAt 1 _ _]
+  simp only [Except.mapError, Except.bind]
+  rw [stateTransitionScheduledE_of_pow_none _ _ _ _ rfl]
   change stateTransitionAt .prague concreteDripped concreteExitBlock = _
   rw [stateTransitionAt_eq_ok_iff, stateTransitionE]
   have hh : validateHeader Fork.prague.ruleSet concreteDripped concreteExitBlock.header = .ok () := by
     change validateHeader pragueRules concreteDripped concreteExitBlock.header = .ok ()
     exact concreteExitHeader_valid _ _ _ _ _
-  rw [hh]
-  change (do
-    let output ← applyBody (initBenv .prague concreteDripped concreteExitBlock.header)
-      concreteExitBlock.txs concreteExitBlock.wds
-    Except.mapError TransitionError.block (stateTransitionChecks output.2
-      concreteExitBlock.header (getTransactionsRoot output.2) output.1.root
-      (getReceiptRoot output.2) (logsBloom output.2.blockLogs)
-      (getWithdrawalsRoot output.2) (computeRequestsHash output.2.requests))
-    .ok (⟨appendBlock concreteDripped.blocks concreteExitBlock, output.1,
-      concreteDripped.chainId⟩ : BlockChain)) = .ok concreteExited
+  have hommers : checkBlockOmmers (Fork.ruleSet .prague) concreteDripped
+      concreteExitBlock.header concreteExitBlock.ommers = .ok () := by
+    rfl
   have hbody : applyBody (initBenv .prague concreteDripped concreteExitBlock.header)
-      concreteExitBlock.txs concreteExitBlock.wds =
+      concreteExitBlock.txs concreteExitBlock.ommers concreteExitBlock.wds =
       .ok (concreteExitTransactionState, concreteExitTransactionBout) := by
     change applyBody (initBenv .prague concreteDripped (concreteExitHeader _ _ _ _ _))
-      [.inl concreteExitTxRlp] [] = _
+      [.inl concreteExitTxRlp] [] [] = _
     rw [concreteExitHeader_benv]
     exact concreteExit_body
-  rw [hbody]
-  simp only [Bind.bind, Except.bind, concreteExit_checks, Except.mapError]
+  have hbal : blockAccessListCheck (Fork.ruleSet .prague) concreteExitTransactionBout
+      concreteExitBlock.header = .ok () := by
+    rfl
+  have hreq : (Fork.ruleSet .prague).header.requestsHash = true := rfl
+  unfold stateTransitionCoreE
+  simp only [hh, hommers, Except.mapError, bind, Except.bind, hbody, hreq, ite_true,
+    concreteExit_checks, hbal]
   rfl
-
 
 theorem concreteExited_storage : concreteExited.state.getStor concreteCreateTarget =
     ((((concreteDripped.state.getStor concreteCreateTarget).set chiSlot concreteExitChi).set rhoSlot 6).set
@@ -3279,7 +3356,7 @@ private theorem concreteExitTotalBase_sender :
   change (((((concreteExitEntry.state.setStorVal concreteCreateTarget chiSlot concreteExitChi).setStorVal
     concreteCreateTarget rhoSlot 6).setStorVal concreteCreateTarget concreteCreateSender.toB256 59).setStorVal
     concreteCreateTarget totalUnitsSlot 59).get concreteCreateSender) = _
-  simp only [State.setStorVal, State.get_set_ne _ ht]
+  simp only [State.setStorVal_get_ne _ ht]
 
 theorem concreteExitedSenderNonce : concreteExited.state.getNonce concreteCreateSender = 4 := by
   change (concreteExitTransactionState.get concreteCreateSender).nonce = _
