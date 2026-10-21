@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.LittleEndian
 import Blanc.BeaconDepositEncoding
+import Blanc.CompiledWalkInversion
 
 /-!
 # `get_deposit_count()` on the deployed beacon deposit contract: liveness with exact gas
@@ -114,6 +115,82 @@ theorem maskTop8_and (W : B256) :
   rw [List.take_left' (UInt64.length_toBytes a)]
   rfl
 
+/-! ## Selected shifts from the wrapper's fixed witness
+
+A run of the wrapper (entry 33) can only pass the `nonpayable` guard and call the getter
+(entry 8), which calls `to_little_endian_64` (entry 25), whose straight prefix executes `SHL`
+before any branch or terminal; a successful `SHL` step requires the selected shift rules. -/
+
+private theorem rx_inv_dest {fs : List SFunc} {sevm : Sevm} {d : Devm} {f : SFunc} {o : Outcome}
+    (h : SFunc.RunExact fs sevm d (.dest f) o) : ∃ d', SFunc.RunExact fs sevm d' f o := by
+  cases h with
+  | dest _ h => exact ⟨_, h⟩
+
+private theorem rx_inv_next {fs : List SFunc} {sevm : Sevm} {d : Devm} {n : Ninst} {f : SFunc}
+    {o : Outcome} (h : SFunc.RunExact fs sevm d (.next n f) o) :
+    ∃ d', SFunc.RunExact fs sevm d' f o := by
+  cases h with
+  | next _ h => exact ⟨_, h⟩
+
+private theorem rx_inv_shl {fs : List SFunc} {sevm : Sevm} {d : Devm} {f : SFunc} {o : Outcome}
+    (h : SFunc.RunExact fs sevm d (.next (.reg .shl) f) o) :
+    sevm.benvStat.rules.op.shifts = true := by
+  cases h with
+  | next hn _ =>
+    rcases of_run_reg (Ninst.Run.of_runCompiled hn) with ⟨_, run⟩
+    simp only [Rinst.run, Rinst.runCore] at run
+    split at run
+    · assumption
+    · cases run
+
+private theorem rx_inv_callNext {fs : List SFunc} {sevm : Sevm} {d : Devm} {j : Nat}
+    {f g : SFunc} {o : Outcome} {P : Prop} (hj : fs[j]? = some g)
+    (h : SFunc.RunExact fs sevm d (.callNext j f) o)
+    (hg : ∀ {d' : Devm} {o' : Outcome}, SFunc.RunExact fs sevm d' g o' → P) : P := by
+  cases h with
+  | callHalt _ hk _ hc =>
+    rw [hj] at hk
+    cases hk
+    exact hg hc
+  | callRet _ hk _ hc _ =>
+    rw [hj] at hk
+    cases hk
+    exact hg hc
+
+/-- `to_little_endian_64` (entry 25) executes `SHL` after 32 straight nodes. -/
+private theorem t14ba_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
+    (h : SFunc.RunExact prog sevm d t_14ba_c25 o) : sevm.benvStat.rules.op.shifts = true := by
+  unfold t_14ba_c25 at h
+  obtain ⟨_, h⟩ := rx_inv_dest h
+  iterate 32 obtain ⟨_, h⟩ := rx_inv_next h
+  exact rx_inv_shl h
+
+/-- The getter (entry 8) calls entry 25 after five straight nodes. -/
+private theorem t10b5_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
+    (h : SFunc.RunExact prog sevm d t_10b5_c8 o) : sevm.benvStat.rules.op.shifts = true := by
+  unfold t_10b5_c8 at h
+  obtain ⟨_, h⟩ := rx_inv_dest h
+  iterate 5 obtain ⟨_, h⟩ := rx_inv_next h
+  exact rx_inv_callNext (j := 25) rfl h t14ba_shifts
+
+/-- The wrapper (entry 33): the `nonpayable` revert arm has no run; the other arm calls entry 8. -/
+private theorem t01ba_shifts {sevm : Sevm} {d : Devm} {o : Outcome}
+    (h : SFunc.RunExact prog sevm d t_01ba_c33 o) : sevm.benvStat.rules.op.shifts = true := by
+  unfold t_01ba_c33 at h
+  obtain ⟨_, h⟩ := rx_inv_dest h
+  iterate 4 obtain ⟨_, h⟩ := rx_inv_next h
+  cases h with
+  | zero _ _ h =>
+    unfold t_01c2_c33 at h
+    iterate 2 obtain ⟨_, h⟩ := rx_inv_next h
+    cases h with
+    | last hr => exact (Linst.not_run_revert_ok hr).elim
+  | succ _ _ _ _ h =>
+    unfold t_01c6_c33 at h
+    obtain ⟨_, h⟩ := rx_inv_dest h
+    iterate 3 obtain ⟨_, h⟩ := rx_inv_next h
+    exact rx_inv_callNext (j := 8) rfl h t10b5_shifts
+
 /-! ## The dispatcher -/
 
 /-- The dispatcher path to `get_deposit_count()` (entry 33): `mstore(0x40, 0x80)`, the
@@ -143,7 +220,8 @@ theorem dispatch_count {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_shr (v := Sevm.selector sevm) ?_ (t01ba_shifts k)
+    (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
       show Bytes.toB256 [0x00] = 0 by decide]
     rfl
@@ -162,7 +240,7 @@ theorem slot20 : Bytes.toB256 [0x20] = countSlot := by decide
 `to_little_endian_64`'s 830 (868 and the read), over `mem0`; it returns the payload pointer `0x80` over a memory
 of six words reading as `img1 w`. -/
 theorem count_getter {sevm : Sevm} {b b' : Devm} {g : Nat} {sel : B256} {sl : Nat} {w : B256}
-    (hcd : sevm.data.length < 2 ^ 256)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) (hcd : sevm.data.length < 2 ^ 256)
     (hsload : ∀ S : List B256, ∀ M : Mem, ∀ G : Nat, ∀ f : SFunc, ∀ o : Outcome,
       S.length < 1000 →
       SFunc.RunExact prog sevm (St b' (w :: S) M G) f o →
@@ -172,7 +250,7 @@ theorem count_getter {sevm : Sevm} {b b' : Devm} {g : Nat} {sel : B256} {sl : Na
         t_10b5_c8 (.returned (St b' [Bytes.toB256 [0x80], sel] M' g)) := by
   obtain ⟨M', hwf', hr', hs', hrun⟩ := to_little_endian_64_run (sevm := sevm) (b := b')
     (G := g + 17) (v := w) (ret := Bytes.toB256 [0x10, 0xc2])
-    (rest := [Bytes.toB256 [0x60], Bytes.toB256 [0x01, 0xcf], sel]) (by simp only [List.length_cons,
+    (rest := [Bytes.toB256 [0x60], Bytes.toB256 [0x01, 0xcf], sel]) h_shifts (by simp only [List.length_cons,
       List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) wf_mem0 reads_mem0
     (by rw [mem0_size]) (by rw [mem0_size]) img0_fp (by rw [p80]) (by rw [p80]; omega)
     (by rw [p80]; decide) hcd
@@ -501,7 +579,7 @@ theorem count_tail {sevm : Sevm} {b : Devm} {g : Nat} {sel w : B256} {M : Mem}
 /-- The `get_deposit_count` wrapper: the `nonpayable` guard, the call into the getter, and the
 encoding.  39 gas of its own, the getter's `868 + sl`, and the encoding's 390. -/
 theorem count_wrapper {sevm : Sevm} {b b' : Devm} {g : Nat} {sel : B256} {sl : Nat} {w : B256}
-    (hval : sevm.value = 0) (hcd : sevm.data.length < 2 ^ 256)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) (hval : sevm.value = 0) (hcd : sevm.data.length < 2 ^ 256)
     (hsload : ∀ S : List B256, ∀ M : Mem, ∀ G : Nat, ∀ f : SFunc, ∀ o : Outcome,
       S.length < 1000 →
       SFunc.RunExact prog sevm (St b' (w :: S) M G) f o →
@@ -510,7 +588,7 @@ theorem count_wrapper {sevm : Sevm} {b b' : Devm} {g : Nat} {sel : B256} {sl : N
       SFunc.RunExact prog sevm (St b [sel] mem0 (g + (1297 + sl))) t_01ba_c33
         (.halted ((St b' [sel] Mf g).withOutput
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 w.toNat)))) := by
-  obtain ⟨M', hwf', hr', hs', hcall⟩ := count_getter (g := g + 390) (sel := sel) hcd hsload
+  obtain ⟨M', hwf', hr', hs', hcall⟩ := count_getter (g := g + 390) (sel := sel) h_shifts hcd hsload
   obtain ⟨Mf, hwff, hrf, hsf, htail⟩ := count_tail (sevm := sevm) (b := b') (g := g) (sel := sel)
     hwf' hr' hs'
   refine ⟨Mf, hwff, hrf, hsf, ?_⟩
@@ -564,13 +642,15 @@ theorem get_deposit_count_warm_runExact (sevm : Sevm) (base : Devm) (word : B256
         ((base.setMach ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))) := by
   have hleg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  have hshifts : sevm.benvStat.rules.op.shifts = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
   have hsel : Sevm.selector sevm = 0x621fd130 :=
     hselector.trans Blanc.BeaconDeposit.getDepositCountSelector_eq
   obtain ⟨Mf, hwff, hrf, hsf, hrun⟩ := count_wrapper (sevm := sevm) (b := base) (b' := base)
-    (g := G) (sel := Sevm.selector sevm) (sl := 100) (w := word) hvalue hdataBound
+    (g := G) (sel := Sevm.selector sevm) (sl := 100) (w := word) hshifts hvalue hdataBound
     (fun S M G' f o hS k => by
       rw [← hstorage] at k
-      exact rx_sload_warm hleg hwarm (by omega) k)
+      exact rx_sload_warm hleg hfork.rules_access hwarm (by omega) k)
   refine ⟨Mf, hwff, hrf, hsf, _, rfl, ?_⟩
   exact dispatch_count (b := base) hdataLength hdataBound hsel hrun
 
@@ -590,14 +670,16 @@ theorem get_deposit_count_cold_runExact (sevm : Sevm) (base : Devm) (word : B256
           ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))) := by
   have hleg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  have hshifts : sevm.benvStat.rules.op.shifts = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
   have hsel : Sevm.selector sevm = 0x621fd130 :=
     hselector.trans Blanc.BeaconDeposit.getDepositCountSelector_eq
   obtain ⟨Mf, hwff, hrf, hsf, hrun⟩ := count_wrapper (sevm := sevm) (b := base)
     (b' := addAccessedStorageKey base sevm.currentTarget countSlot)
-    (g := G) (sel := Sevm.selector sevm) (sl := 2100) (w := word) hvalue hdataBound
+    (g := G) (sel := Sevm.selector sevm) (sl := 2100) (w := word) hshifts hvalue hdataBound
     (fun S M G' f o hS k => by
       rw [← hstorage] at k
-      exact rx_sload_cold hleg hcold (by omega) k)
+      exact rx_sload_cold hleg hfork.rules_access hcold (by omega) k)
   refine ⟨Mf, hwff, hrf, hsf, _, rfl, ?_⟩
   exact dispatch_count (b := base) hdataLength hdataBound hsel hrun
 
