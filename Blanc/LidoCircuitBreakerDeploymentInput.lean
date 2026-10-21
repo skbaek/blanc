@@ -50,7 +50,7 @@ structure CanonicalOfficialDeploymentBlock
     (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (txBytes : Bytes) (tx : Tx) (sender ca : Adr) : Prop where
   txs_eq : cb.block.txs = [.inl txBytes]
-  decode_eq : decodeTx (.inl txBytes) = .ok tx
+  decode_eq : decodeTx pragueRules (.inl txBytes) = .ok tx
   ommers_eq : cb.block.ommers = []
   withdrawals_eq : cb.block.wds = []
   type_eq : ∃ maxPriorityFee maxFee,

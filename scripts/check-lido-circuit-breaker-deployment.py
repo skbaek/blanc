@@ -82,7 +82,7 @@ PINS = {
     "OfficialCreateMessageResult": "846e6ca7c073eb4575bf827e1e68c4d671a3e35e13624b81c0766376f3263612",
     "OfficialConstructorMessageResult": "ac72fa7080ad768826622ca3a4d17f6a859c7be69d8b52426fffd0304087b5ab",
     "CanonicalDeploymentBase": "baed7dd75d0138d5aa6b8c16e2a0daeebc54b3b76a8edc7d1bef83d730bd8755",
-    "CanonicalOfficialDeploymentBlock": "fd738feeee042b993d2029e2520d36066f4dc40a93db81196537b20832a27f28",
+    "CanonicalOfficialDeploymentBlock": "b2f6ffd58b4804d4fa8a69f70c24d60344310f41a69407a7511fec0fcbefff54",
     "PreparedDeploymentContext": "d8e8dc1bd01e4202ba7670315f3a3a464b6e31574ac5b81afe2fe387415ca31f",
     "OfficialDeploymentTransactionResult": "4123d37aa90ea893ad37cbcf73184a94b0dcb2146b7c021a086487935364c62f",
     "OfficialDeploymentSuffixResult": "3c359fd060bd6c981d177062d40bc52e4e7ce5d9d69220e31966b5a02e0f4977",
