@@ -66,7 +66,8 @@ registry has identified the likely vocabulary.
 - Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
   Consume it only through `CoveredFork.stateGas_none`, `bal_none`,
   `rules_stateGas_none`, `rules_bal_none`, `rules_access`, `rules_push0`,
-  `rules_sstore`, `requests_eq`,
+  `rules_shifts`, `rules_touchedSweep`, `rules_refundQuotient`, `rules_dataNonZero`,
+  `rules_calldataFloor`, `rules_sstore`, `requests_eq`,
   `beaconRoots_not_precompile`, `historyStorage_not_precompile`, `of_eq` and,
   where a per-fork case split is unavoidable, `CoveredFork.cases`. Discharge a
   schedule premise with a concrete config lemma such as
@@ -3923,10 +3924,14 @@ For the converse (a transaction *succeeds*, and I have its stages) use
 [`Blanc/TransactionForward.lean`](../Blanc/TransactionForward.lean):
 `checkTransactionGasLimits_ok_of_room` and `checkTransaction_ok_of_parts` assemble the
 admission check from its parts, `processMessageCall_call_of_message` settles a call message
-(no authorizations, no delegation) over a successful `processMessage`, and
-`processTransaction_of_stages` is `processTransaction` from the validation, admission, debit,
-prepared message and message-call outcome, with the exact settled state (gas refund and coinbase
-fee credited, accounts deleted).  Worked use:
+(no authorizations, no delegation) over a successful `processMessage`, including the
+touched-account output field, and `processTransaction_of_stages` is `processTransaction` from
+the validation, admission, debit, prepared message and message-call outcome, with the exact
+settled state (gas refund and coinbase fee credited, accounts deleted) under the selected
+settlement facts (`CoveredFork.rules_touchedSweep`, `CoveredFork.rules_refundQuotient`). The
+sender-account part is the rule-selected `checkTransactionSenderAccountFor`, and
+`calculateIntrinsicCost_two_call` takes the nonzero-byte price and calldata floor
+(`CoveredFork.rules_dataNonZero`, `CoveredFork.rules_calldataFloor`).  Worked use:
 `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
 For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
 the whole envelope from field-level facts: `processTransaction_call_value_of_exec` takes the fee, nonce, funds,
@@ -4121,8 +4126,8 @@ systemCallOutput post)` for any member of `systemContracts` on a covered fork, f
 non-negative refund counter (and, for the block-level forms, the canonical code installed).
 `systemContracts_not_precompile`, `systemContracts_nondelegated` and
 `systemContracts_nonempty` are the envelope facts; `afterSstore_state`,
-`afterSstore_getAcct_ne`, `State.get_setStorVal_ne` and `State.getStor_setStorVal_self`
-read a store's world-state effect and account/storage preservation. Worked uses: the EIP-4788 and
+`afterSstore_getAcct_ne`, `State.get_setStorVal_ne`, `State.get_setStorVal_self` and
+`State.getStor_setStorVal_self` (both `setPresent` and `set` arms) read a store's world-state effect and account/storage preservation. Worked uses: the EIP-4788 and
 EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
 `Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
 `processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
