@@ -124,7 +124,7 @@ theorem reAdd_frame : ReAddFrame := by
   rw [hk, ha, hs, hc] at hca
   have hagB := (wrun_cont hBat).1 hag
   refine ⟨d, hx, hgas, hout, herr, hcr, hca, ⟨_, hBat, hagB, rfl, ?_, ?_⟩,
-    fun f h1 h2 => frame_settle_ok h1 h2 herr⟩
+    fun f h1 h2 h3 => frame_settle_ok h1 h2 h3 herr⟩
   · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).1
   · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).2
 

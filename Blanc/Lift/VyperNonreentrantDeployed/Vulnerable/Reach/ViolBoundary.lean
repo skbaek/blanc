@@ -322,8 +322,8 @@ the frame is an `Exec` of the implementation's bytes from that machine (static m
 with the original state and the fork changed) halting without error with `gasRe` gas left and
 return data `outRe`; its settled machine is described by the halt's literal prefixes followed
 by the same tails (`ChildAgree`); at step 2625 it is at `add_liquidity`'s body with lock slot 0
-taken while lock slot 2 is held; and a non-create frame without state gas (the forwarder's
-`DELEGATECALL` frame) settles to that machine. -/
+taken while lock slot 2 is held; and a non-create frame without state gas and without the
+touched-account sweep (the forwarder's `DELEGATECALL` frame) settles to that machine. -/
 def ReAddFrame : Prop :=
   ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     CoveredFork g → (∀ e ∈ readStor, storOf O e.1.1 e.1.2 = e.2) →
@@ -339,7 +339,7 @@ def ReAddFrame : Prop :=
         Agree cB ∧ cB.f = Vulnerable.t_0370_c63 ∧
         storOf cB.devm.state proxyAddr 0 = 1 ∧ storOf cB.devm.state proxyAddr 2 = 1) ∧
       ∀ f : Frame, f.isCreate = false → f.inner.benv.stat.rules.stateGas = none →
-        f.settle (.ok post) = .ok post
+        f.inner.benv.stat.rules.settle.touchedSweep = false → f.settle (.ok post) = .ok post
 
 /-- **The violation, observed on one settled execution** of `violMsg g W`: the message
 succeeds with `gasV` gas left and breaks the LP ledger (`totalSupply = 1800 < 1906 =

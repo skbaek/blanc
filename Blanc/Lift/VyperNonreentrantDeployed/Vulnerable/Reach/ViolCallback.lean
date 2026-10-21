@@ -795,7 +795,7 @@ theorem exec4_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (hgasRe : post.gasLeft = gasRe) (houtRe : post.output = outRe)
     (herrRe : post.error = none)
     (hsettleRe : ∀ f : Frame, f.isCreate = false →
-      f.inner.benv.stat.rules.stateGas = none → f.settle (.ok post) = .ok post)
+      f.inner.benv.stat.rules.stateGas = none → f.inner.benv.stat.rules.settle.touchedSweep = false → f.settle (.ok post) = .ok post)
     (hC4' : AcctAgree (e4Cb31 O tS tA m w).dyna.state (acs4Cb O tS tA m w))
     (dcr : ((((cpCb5 O tS tA m w).withFork g).f).isCreate = false))
     (dsg : (((((cpCb5 O tS tA m w).withFork g).f).inner.benv.stat.rules.stateGas =
@@ -813,7 +813,7 @@ theorem exec4_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
       ((((e4Cb O tS tA m w).withFork g).dyna))
       (.ok (post4Cb O tS tA m w post))) := by
   have hstep4 := step4_of g O tS tA m w dstep
-  have hsettle4pre := hsettleRe _ dcr dsg
+  have hsettle4pre := hsettleRe _ dcr dsg (by change (Fork.ruleSet g).settle.touchedSweep = false; exact hg.cases (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl)
   obtain ⟨hAgreeEnter5, e5enter, hsettle4⟩ :=
     mid4_of g O tS tA m w hg post hgasRe houtRe herrRe hC4' dst8 hsettle4pre
   have hrest4 := rest4_of g O tS tA m w hg post
