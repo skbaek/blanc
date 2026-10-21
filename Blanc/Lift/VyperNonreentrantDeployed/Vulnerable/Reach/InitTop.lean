@@ -191,7 +191,9 @@ theorem init_message_at (hg : CoveredFork g) :
   obtain ⟨-, -, -, hcr, -, -, hsg, -, -⟩ := cpI_spec_at hg
   have hsettle : Resume.run (.call cpI.p cpI.oi cpI.os) ((cpI.withFork g).f.settle (.ok dI)) =
       .ok (dP2 dI) := by
-    rw [frame_settle_ok hcr hsg he1]; exact resumeCallB_sound hr
+    rw [frame_settle_ok hcr hsg
+      (CoveredFork.rules_touchedSweep (s := (cpI.withFork g).f.inner.benv.stat) hg) he1]
+    exact resumeCallB_sound hr
   have hsta : (e3_44 dI).sta = e3.sta := stepN_sta (evm := ⟨32, e3.sta, dP2 dI⟩) ht
   have hstep_halt : Evm.step ((e3_44 dI).withFork g) = .halt (.ok (post3F dI)) := by
     have hp : (e3_44 dI).sta.benvStat.fork = .prague := by rw [hsta]; exact e3_block.1
@@ -218,6 +220,7 @@ theorem init_message_at (hg : CoveredFork g) :
   show (frame3.withFork g).settle (exec ⟨(e3.withFork g).pc, (e3.withFork g).sta,
     (e3.withFork g).dyna⟩) = _
   rw [hex]
-  exact frame_settle_ok rfl hsg0 he0'
+  exact frame_settle_ok rfl hsg0
+    (CoveredFork.rules_touchedSweep (s := (frame3.withFork g).inner.benv.stat) hg) he0'
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

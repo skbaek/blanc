@@ -146,6 +146,7 @@ theorem liftCreate_post {code : ByteArray} {c : Cert}
     (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
   have hprocess : processMessage (processCreateMessage.msg msg) = .ok raw :=
     processMessage_ok_of_exec htransfer hcodeAddress hexec herror
+      (hfork.cases (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl)
   have hcharge := processCreateMessage.chargeCodeGas_legacy_eq_ok
     (rules := msg.benv.stat.rules) (d := raw) hfork.rules_stateGas_none hprefix hgas hmax
   exact processCreateMessage_ok_of_processMessage_and_charge msg hprocess herror hcharge

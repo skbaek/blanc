@@ -142,7 +142,7 @@ theorem approve_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor5) :
       rw [h0]; exact hex
     rw [hexec]
     exact frame_settle_ok rfl (CoveredFork.rules_stateGas_none (s := (rootBenv g W).stat) hg)
-      hpost_err
+      (CoveredFork.rules_touchedSweep (s := (rootBenv g W).stat) hg) hpost_err
   · rw [hca.2.2.2 a]
     exact acsP_lookup a
   · rw [hca.2.2.1 a k, stor6_eq]

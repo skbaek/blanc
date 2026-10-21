@@ -868,7 +868,9 @@ theorem child4_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
   have hsetF3 : ((((cpCb O tS tA m w).withFork g).f)).settle
       (.ok (post4Cb O tS tA m w post)) =
       .ok (obsChild4Cb (post4Cb O tS tA m w post)) := by
-    rw [frame_settle_ok hcrF3 hsgF3 herr4, hobs4]
+    rw [frame_settle_ok hcrF3 hsgF3
+      (CoveredFork.rules_touchedSweep
+        (s := ((((cpCb O tS tA m w).withFork g).f).inner.benv.stat)) hg) herr4, hobs4]
   have hk : ChildOk (((sCb.withOrig O).withFork g)) (cACb O tS tA m w)
       (obsChild4Cb (post4Cb O tS tA m w post)) := by
     intro cp cevm hp he

@@ -33,7 +33,8 @@ def systemCallOutput (post : Devm) : MsgCallOutput :=
     logs := post.logs
     accountsToDelete := post.accountsToDelete
     error := none
-    returnData := post.output }
+    returnData := post.output
+    touchedAccounts := post.meta.touchedAccounts }
 
 /-- No canonical system contract sits at a precompile address on a covered fork. -/
 theorem systemContracts_not_precompile {p : Adr × ByteArray} (member : p ∈ systemContracts)
@@ -82,7 +83,7 @@ theorem processSystemTransaction_of_exec {benv : Benv} {p : Adr × ByteArray}
       systemCallMsg benv p.1 p.2 data := rfl
   have message : processMessage (systemCallMsg benv p.1 p.2 data) = .ok post :=
     MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
-      _ _ _ entry codeEntry (by rw [self]; exact run) clean
+      _ _ _ entry codeEntry fork.rules_touchedSweep (by rw [self]; exact run) clean
   have call := processMessageCall_call_of_message
     (msg := systemCallMsg benv p.1 p.2 data) (post := post)
     (fork.rules_stateGas_none (s := benv.beginTransaction.stat)) rfl rfl
@@ -128,7 +129,10 @@ theorem afterSstore_state (sevm : Sevm) (base : Devm) (key value : B256) :
 theorem State.get_setStorVal_ne (w : State) {owner a : Adr} (key value : B256)
     (different : owner ≠ a) : (w.setStorVal owner key value).get a = w.get a := by
   unfold State.setStorVal
-  exact State.get_set_ne w different _
+  dsimp only
+  split
+  · exact State.get_setPresent_ne w different _
+  · exact State.get_set_ne w different _
 
 theorem afterSstore_getAcct_ne (sevm : Sevm) (base : Devm) (key value : B256) {a : Adr}
     (hne : sevm.currentTarget ≠ a) :
@@ -136,9 +140,22 @@ theorem afterSstore_getAcct_ne (sevm : Sevm) (base : Devm) (key value : B256) {a
   unfold Devm.getAcct
   rw [afterSstore_state, State.get_setStorVal_ne _ _ _ hne]
 
+/-- A storage write at an account replaces exactly that account's storage, whether
+the account existed (`setPresent`) or not (`set`). -/
+theorem State.get_setStorVal_self (w : State) (t : Adr) (k v : B256) :
+    (w.setStorVal t k v).get t = { w.get t with stor := (w.get t).stor.set k v } := by
+  unfold State.setStorVal
+  dsimp only
+  split
+  · rw [State.get_setPresent_self]
+  · rw [State.get_set_self]
+
 theorem State.getStor_setStorVal_self (w : State) (t : Adr) (k v : B256) :
     (w.setStorVal t k v).getStor t = (w.getStor t).set k v := by
   unfold State.setStorVal State.getStor
-  rw [State.get_set_self]
+  dsimp only
+  split
+  · rw [State.get_setPresent_self]
+  · rw [State.get_set_self]
 
 end Blanc

@@ -258,8 +258,7 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     show msg.gas - ctorGas sevm b - 59800 = _
     rw [hcg]
   · rw [pf.2.2.1, hraw, facts.1]
-    unfold State.setStorVal
-    rw [State.get_set_self, processCreateMessage_msg_afterTransfer_get hvalue htransfer,
+    rw [State.get_setStorVal_self, processCreateMessage_msg_afterTransfer_get hvalue htransfer,
       ite_eq_left rfl, runtime_code]
     unfold tokenAcct
     apply Acct.ext

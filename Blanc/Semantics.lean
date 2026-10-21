@@ -216,6 +216,26 @@ theorem CoveredFork.rules_shifts {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.op.shifts = true :=
   h.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
 
+/-- No covered fork sweeps touched empty accounts at settlement. -/
+theorem CoveredFork.rules_touchedSweep {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.settle.touchedSweep = false :=
+  h.cases (motive := fun f => (Fork.ruleSet f).settle.touchedSweep = false) rfl rfl rfl rfl
+
+/-- Every covered fork caps the gas refund at a fifth of the gas used (EIP-3529). -/
+theorem CoveredFork.rules_refundQuotient {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.settle.refundQuotient = 5 :=
+  h.cases (motive := fun f => (Fork.ruleSet f).settle.refundQuotient = 5) rfl rfl rfl rfl
+
+/-- Every covered fork prices a nonzero calldata byte at sixteen gas (EIP-2028). -/
+theorem CoveredFork.rules_dataNonZero {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.txr.dataNonZero = 16 :=
+  h.cases (motive := fun f => (Fork.ruleSet f).txr.dataNonZero = 16) rfl rfl rfl rfl
+
+/-- Every covered fork applies the calldata floor (EIP-7623). -/
+theorem CoveredFork.rules_calldataFloor {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.txr.calldataFloor = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).txr.calldataFloor = true) rfl rfl rfl rfl
+
 theorem CoveredFork.rules_sstore {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.sstore = ⟨true, true⟩ :=
   h.cases (motive := fun f => (Fork.ruleSet f).sstore = ⟨true, true⟩)

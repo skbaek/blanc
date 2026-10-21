@@ -299,7 +299,9 @@ theorem add_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor6) :
   obtain ⟨-, -, -, hcr, -, -, hsg, -, -⟩ := cpA_spec_at hg hW
   have hsettle : Resume.run (.call (cpA W).p (cpA W).oi (cpA W).os)
       (((cpA W).withFork g).f.settle (.ok dI)) = .ok (dA2 W dI) := by
-    rw [frame_settle_ok hcr hsg he1]; exact resumeCallB_sound hr
+    rw [frame_settle_ok hcr hsg
+      (CoveredFork.rules_touchedSweep (s := ((cpA W).withFork g).f.inner.benv.stat) hg) he1]
+    exact resumeCallB_sound hr
   have hsta : (eA44 W dI).sta = (eA W).sta := stepN_sta (evm := ⟨32, (eA W).sta, dA2 W dI⟩) ht
   have hstep_halt : Evm.step ((eA44 W dI).withFork g) = .halt (.ok (postA W dI)) := by
     have hp : (eA44 W dI).sta.benvStat.fork = .prague := by rw [hsta]; exact (eA_fork W).1
@@ -325,6 +327,7 @@ theorem add_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor6) :
   show ((frameA W).withFork g).settle (exec ⟨((eA W).withFork g).pc, ((eA W).withFork g).sta,
     ((eA W).withFork g).dyna⟩) = _
   rw [hex]
-  exact frame_settle_ok rfl hsg0 he0'
+  exact frame_settle_ok rfl hsg0
+    (CoveredFork.rules_touchedSweep (s := ((frameA W).withFork g).inner.benv.stat) hg) he0'
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

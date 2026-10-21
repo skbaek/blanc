@@ -237,7 +237,14 @@ theorem root_f1_settle_raw (g : Fork) (W : State) (m : Meta) (w : World)
       (by rw [stepN_sta (e1'11_eq W (storTailOf W) (acctTailOf W) m w),
         (e1_fork W (storTailOf W) (acctTailOf W) m w).1]; exact CoveredFork.prague)
       hg (dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrF2 hsgF2 herrRm
+    have hsweepF2 : (cpF2 W (storTailOf W) (acctTailOf W) m w).f.inner.benv.stat.rules.settle.touchedSweep
+        = false := by
+      rw [(dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m w)).2]
+      apply CoveredFork.rules_touchedSweep
+      rw [stepN_sta (e1'11_eq W (storTailOf W) (acctTailOf W) m w),
+        (e1_fork W (storTailOf W) (acctTailOf W) m w).1]
+      exact CoveredFork.prague
+    exact frame_settle_ok hcrF2 hsgF2 hsweepF2 herrRm
   have hobRaw : obsChildF1raw post2 = post2 :=
     childObs_eq hgasRm houtRm herrRm
   have hresumeRaw : resumeCallB
@@ -323,7 +330,9 @@ theorem root_f1_exec (g : Fork) (W : State) (m : Meta) (w : World)
       (.ok (postF1raw W (storTailOf W) (acctTailOf W) m w post2)) = _
     rw [settle_withFork_of_stat hFroot hg
       (callPrep_stat (cpR_eq W (storTailOf W) (acctTailOf W) m w))]
-    rw [frame_settle_ok hcrR hsgR herrF1raw, hobsF1]
+    rw [frame_settle_ok hcrR hsgR (by
+      rw [(callPrep_stat (cpR_eq W (storTailOf W) (acctTailOf W) m w)).2]
+      exact CoveredFork.rules_touchedSweep hFroot) herrF1raw, hobsF1]
   intro cp cevm hp he
   rw [cpR_at g W (storTailOf W) (acctTailOf W) m w hg] at hp
   obtain rfl := Option.some_inj.mp hp
@@ -347,7 +356,7 @@ theorem root_f1_exec (g : Fork) (W : State) (m : Meta) (w : World)
       (.ok (obsChildF1 post2)) = _
     rw [settle_withFork_of_stat hfstat hg
       (dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrF2 hsgF2 (show (obsChildF1 post2).error = none from rfl)
+    exact frame_settle_ok hcrF2 hsgF2 (CoveredFork.rules_touchedSweep hg) (show (obsChildF1 post2).error = none from rfl)
   have htailF1Fork : stepN 10
       ((⟨32, (e1 W (storTailOf W) (acctTailOf W) m w).sta,
         d1R W (storTailOf W) (acctTailOf W) m w post2⟩ : Evm).withFork g) =
@@ -385,7 +394,7 @@ theorem root_f1_exec (g : Fork) (W : State) (m : Meta) (w : World)
       (.ok (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m w post2))) = _
     rw [settle_withFork_of_stat hFroot hg
       (callPrep_stat (cpR_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrR hsgR
+    exact frame_settle_ok hcrR hsgR (CoveredFork.rules_touchedSweep hg)
       (show (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m w post2)).error = none from rfl)
   intro cp cevm hp he
   rw [cpR_at g W (storTailOf W) (acctTailOf W) m w hg] at hp
@@ -485,7 +494,7 @@ theorem root_f1_facts (hRm : RemoveFrame) (g : Fork) (W : State) (m : Meta) (w :
       (.ok (obsChildF1 post2)) = _
     rw [settle_withFork_of_stat hfstat hg
       (dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrF2 hsgF2 (show (obsChildF1 post2).error = none from rfl)
+    exact frame_settle_ok hcrF2 hsgF2 (CoveredFork.rules_touchedSweep hg) (show (obsChildF1 post2).error = none from rfl)
   have htailF1Fork : stepN 10
       ((⟨32, (e1 W (storTailOf W) (acctTailOf W) m w).sta,
         d1R W (storTailOf W) (acctTailOf W) m w post2⟩ : Evm).withFork g) =
@@ -528,7 +537,7 @@ theorem root_f1_facts (hRm : RemoveFrame) (g : Fork) (W : State) (m : Meta) (w :
       (.ok (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m w post2))) = _
     rw [settle_withFork_of_stat hFroot hg
       (callPrep_stat (cpR_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrR hsgR
+    exact frame_settle_ok hcrR hsgR (CoveredFork.rules_touchedSweep hg)
       (show (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m w post2)).error = none from rfl)
   have hchildOkR : ChildOk ((sR.withOrig W).withFork g)
       (cR W (storTailOf W) (acctTailOf W) m w)
@@ -664,7 +673,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
       (.ok (obsChildF1 post2)) = .ok (obsChildF1 post2)
     rw [settle_withFork_of_stat hfstat hg
       (dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m0 w0))]
-    exact frame_settle_ok hcrF2 hsgF2 (show (obsChildF1 post2).error = none from rfl)
+    exact frame_settle_ok hcrF2 hsgF2 (CoveredFork.rules_touchedSweep hg) (show (obsChildF1 post2).error = none from rfl)
   have hresF1Fork : resumeCallB (((cpF2 W (storTailOf W) (acctTailOf W) m0 w0).withFork g).p)
       (((cpF2 W (storTailOf W) (acctTailOf W) m0 w0).withFork g).oi)
       (((cpF2 W (storTailOf W) (acctTailOf W) m0 w0).withFork g).os)
@@ -717,7 +726,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
       (.ok (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m0 w0 post2))) = _
     rw [settle_withFork_of_stat hFroot hg
       (callPrep_stat (cpR_eq W (storTailOf W) (acctTailOf W) m0 w0))]
-    exact frame_settle_ok hcrR hsgR (show (obsChildF1
+    exact frame_settle_ok hcrR hsgR (CoveredFork.rules_touchedSweep hg) (show (obsChildF1
       (postF1 W (storTailOf W) (acctTailOf W) m0 w0 post2)).error = none from rfl)
   have hchildOkR : ChildOk ((sR.withOrig W).withFork g)
       (cR W (storTailOf W) (acctTailOf W) m0 w0)
@@ -879,6 +888,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
     rw [hexec]
     exact frame_settle_ok rfl
       (CoveredFork.rules_stateGas_none (s := (Frame.ofCall (violMsg g W)).inner.benv.stat) hg)
+      (CoveredFork.rules_touchedSweep (s := (Frame.ofCall (violMsg g W)).inner.benv.stat) hg)
       herrV
   have hstorV : cl.stor = storV ++ storTailOf W := by
     rw [← List.take_append_drop storV.length cl.stor, htakeV, hdropV]
