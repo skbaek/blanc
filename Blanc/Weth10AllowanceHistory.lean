@@ -261,13 +261,12 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
     (hsound : CommittedExecAllowanceSound dp ca) :
     MessageAllowanceSound dp ca := by
   intro msg state out trace ready hfork
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.AllowanceAccounted
       change AllowanceTransported ca msg.benv.state state []
-      have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createCollision_state_eq
+        htarget hcollision hresult hfork
       subst state
       exact AllowanceTransported.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -277,8 +276,8 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
       have htransport :=
         ProcessCreateMessageTrace.allowanceTransported_of_committedExecSound trace
           hsound ready htarget htargetNe hfork
-      have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createRun_state_eq
+        htarget hcollision hcore hresult hfork
       change AllowanceTransported ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.attributionStream dp ca)
@@ -292,8 +291,8 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
       have readyExecMsg : MessageReady dp ca execMsg := by
         simpa only [hexecMsg] using readyExec
       have htargetExec : execMsg.target.isNone = false := by
-        rw [hexecMsg, messageCallExecutionMessage_target_eq,
-          messageCallDelegation_target_eq hdelegation]
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_target_eq,
+          ExecutionTrace.messageCallDelegation_target_eq hdelegation]
         exact htarget
       have runReadyExec := readyExecMsg.runReady_of_call htargetExec
       have htransport :
@@ -304,8 +303,8 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
           (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
                 ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
               exact hfork)
-      have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_callRun_state_eq
+        htarget hdelegation hexecMsg hcore hresult hfork
       have hpre :
           execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
@@ -416,8 +415,8 @@ theorem RequestsTrace.allowanceTransported
 theorem AppliedBodyTrace.allowanceTransported
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hmessage : MessageAllowanceSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)
@@ -786,13 +785,12 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
     (hsound : CommittedExecAllowanceReadSound dp ca) :
     MessageAllowanceReadSound dp ca := by
   intro msg state out trace ready hfork
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.AllowanceAccountedSound
       change AllowanceTransportedSound ca msg.benv.state state []
-      have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createCollision_state_eq
+        htarget hcollision hresult hfork
       subst state
       exact AllowanceTransportedSound.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -803,8 +801,8 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
         ProcessCreateMessageTrace.allowanceTransportedSound_of_committedExecSound
           trace
           hsound ready htarget htargetNe hfork
-      have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createRun_state_eq
+        htarget hcollision hcore hresult hfork
       change AllowanceTransportedSound ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.attributionStream dp ca)
@@ -818,8 +816,8 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
       have readyExecMsg : MessageReady dp ca execMsg := by
         simpa only [hexecMsg] using readyExec
       have htargetExec : execMsg.target.isNone = false := by
-        rw [hexecMsg, messageCallExecutionMessage_target_eq,
-          messageCallDelegation_target_eq hdelegation]
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_target_eq,
+          ExecutionTrace.messageCallDelegation_target_eq hdelegation]
         exact htarget
       have runReadyExec := readyExecMsg.runReady_of_call htargetExec
       have htransport :
@@ -830,8 +828,8 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
           (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
                 ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
               exact hfork)
-      have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_callRun_state_eq
+        htarget hdelegation hexecMsg hcore hresult hfork
       have hpre :
           execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
@@ -948,8 +946,8 @@ theorem RequestsTrace.allowanceTransportedSound
 theorem AppliedBodyTrace.allowanceTransportedSound
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hmessage : MessageAllowanceReadSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)

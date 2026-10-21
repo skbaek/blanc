@@ -696,9 +696,9 @@ def RequestsTrace.flowObservations (dp : DeployParams) (ca : Adr)
 
 
 def AppliedBodyTrace.flowActions (dp : DeployParams) (ca : Adr)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     List FlowAction :=
   Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.beacon ++
     Blanc.Weth10.SystemMessageTrace.flowActions dp ca trace.history ++
@@ -707,9 +707,9 @@ def AppliedBodyTrace.flowActions (dp : DeployParams) (ca : Adr)
     Blanc.Weth10.RequestsTrace.flowActions dp ca trace.requests
 
 def AppliedBodyTrace.flowObservations (dp : DeployParams) (ca : Adr)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     List FlowObservation :=
   (Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace).map
     FlowAction.observation
@@ -724,19 +724,19 @@ structure AccountedBlock
   block : Block
   bound : sum pre.state.bal + wdsum block.wds < 2 ^ 256
   fork : Fork
-  forkAt : cfg.forkAt block.header.timestamp = .ok fork
+  forkAt : cfg.forkAt block.header.number block.header.timestamp = .ok fork
   rules : ForkRules
   rulesEq : fork.ruleSet = rules
-  rulesAt : cfg.rulesAt block.header.timestamp = .ok rules
+  rulesAt : cfg.rulesAt block.header.number block.header.timestamp = .ok rules
   covered : CoveredFork fork
   transition : stateTransitionUsing cfg pre block = .ok post
   bodyState : State
   blockOutput : BlockOutput
   bodyRun : applyBody (initBenv fork pre block.header)
-    block.txs block.wds = .ok (bodyState, blockOutput)
+    block.txs block.ommers block.wds = .ok (bodyState, blockOutput)
   bodyTrace : AppliedBodyTrace
     (initBenv fork pre block.header)
-    block.txs block.wds bodyState blockOutput
+    block.txs block.ommers block.wds bodyState blockOutput
   actions : List FlowAction
   actions_eq : actions =
     Blanc.Weth10.AppliedBodyTrace.flowActions dp ca bodyTrace
@@ -900,7 +900,8 @@ theorem exists_accountedHistory_of_reachUsing
     (h : BlockChain.ReachUsing cfg checkpoint future)
     (hcovered : ∀ {pre post block},
       stateTransitionUsing cfg pre block = .ok post →
-      ∀ {fork}, cfg.forkAt block.header.timestamp = .ok fork → CoveredFork fork) :
+      ∀ {fork}, cfg.forkAt block.header.number block.header.timestamp = .ok fork →
+        CoveredFork fork) :
     Nonempty (AccountedHistory cfg dp ca checkpoint future) := by
   rcases ExecutionTrace.exists_configuredHistoryTrace_of_reachUsing h hcovered with
     ⟨history⟩

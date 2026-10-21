@@ -3499,8 +3499,9 @@ theorem Exec.CoreEthSound.nextSome
       simp only [Ninst.StepRun, Ninst.step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep
   | push xs hxs =>
-      simp only [Ninst.StepRun, Ninst.step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at hstep
+      simp only [Ninst.StepRun, Ninst.step_push, ExceptT.stM_eq] at hstep
+      split at hstep <;>
+        simp only [Step.run_ofExecution, reduceCtorEq, false_and] at hstep
   | dupn imm =>
       simp only [Ninst.StepRun, Ninst.step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep

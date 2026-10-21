@@ -704,8 +704,12 @@ theorem Devm.DispatchSilent.of_fsig
   cases hnil
   rcases of_run_reg q₄ with ⟨pc, hshrCore⟩
   simp only [Rinst.run, Rinst.runCore] at hshrCore
+  have hshrApply : applyBinary (fun x y => y >>> x.toNat) gVerylow s₃ = .ok post := by
+    split at hshrCore
+    · exact hshrCore
+    · cases hshrCore
   obtain ⟨left, right, hshrBurn⟩ :=
-    Devm.diffBurn_of_applyBinary hshrCore
+    Devm.diffBurn_of_applyBinary hshrApply
   have hloadState : s₁.state = s₂.state := by
     rcases of_run_reg q₂ with ⟨loadPc, hloadCore⟩
     simp only [Rinst.run, Rinst.runCore] at hloadCore
@@ -1430,6 +1434,7 @@ theorem Devm.eq_of_burnBy
   · exact hleft.accountReads.symm.trans hright.accountReads
   · exact hleft.storageReads.symm.trans hright.storageReads
   · exact hleft.storageWrites.symm.trans hright.storageWrites
+  · exact hleft.touchedAccounts.symm.trans hright.touchedAccounts
 
 /-- The actual retained root execution, advanced past the runtime's entry
 `JUMPDEST`, is a compiled cursor at `weth10Main`. -/

@@ -358,11 +358,16 @@ private theorem AccountedBlock.stable
   rw [stateTransitionUsing] at hrun
   obtain ⟨_, _, hrun⟩ := Except.bind_eq_ok hrun
   obtain ⟨f, hf, hrun⟩ := Except.bind_eq_ok hrun
-  have hfork : cfg.forkAt accounted.block.header.timestamp = .ok f :=
+  have hfork : cfg.forkAt accounted.block.header.number
+      accounted.block.header.timestamp = .ok f :=
     Except.mapError_eq_ok_iff.mp hf
   rw [accounted.forkAt] at hfork
   cases hfork
-  exact stateTransitionAt_preserves_stable dp ca accounted.fork _ _ _ hrun
+  have hpow : accounted.fork.ruleSet.pow = none :=
+    accounted.covered.cases (motive := fun f => f.ruleSet.pow = none) rfl rfl rfl rfl
+  rw [stateTransitionScheduledE_of_pow_none cfg _ _ _ hpow] at hrun
+  exact stateTransitionAt_preserves_stable dp ca accounted.fork _ _ _
+    (stateTransitionAt_eq_ok_iff.mpr (Except.mapError_eq_ok_iff.mp hrun))
     (by simpa only [Nat.reducePow] using accounted.bound) hstable accounted.covered
 
 /-- Accounted replay transports the checkpoint invariant to the endpoint; each

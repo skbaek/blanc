@@ -598,18 +598,23 @@ theorem redeemEveryoneList_anyOrder
 
 /-- A configured rule lookup on a covered schedule selects a covered fork's own
 rule set. -/
-private theorem rulesSelected_of_rulesAt {cfg : ChainConfig} {timestamp : Nat}
+private theorem rulesSelected_of_rulesAt {cfg : ChainConfig} {number timestamp : Nat}
     {rules : ForkRules}
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
-    (hrules : cfg.rulesAt timestamp = .ok rules) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hrules : cfg.rulesAt number timestamp = .ok rules) :
     ∃ f, CoveredFork f ∧ Fork.ruleSet f = rules := by
   unfold ChainConfig.rulesAt at hrules
-  cases hf : cfg.forkAt timestamp with
+  cases hf : cfg.forkAt number timestamp with
   | error e =>
       simp only [bind, Except.bind, hf, reduceCtorEq] at hrules
   | ok f =>
       simp only [bind, Except.bind, hf, Except.mapError, Fork.rules, Except.ok.injEq] at hrules
-      exact ⟨f, hcov timestamp f hf, hrules⟩
+      have hcf := hcov number timestamp f hf
+      refine ⟨f, hcf, ?_⟩
+      unfold CoveredFork coveredForks at hcf
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hcf
+      rcases hcf with rfl | rfl | rfl | rfl <;>
+        simpa only [Fork.rules?, Fork.ruleSet, Except.ok.injEq] using hrules
 
 /-- **The flagship instance.** At any configured future of a verified
 WETH10 deployment, every permutation of an admissible finite claim list has a
@@ -620,13 +625,13 @@ here, and the boundary's stability comes from the stability development.  This
 remains a message/state-level statement: it does not claim a block step,
 transaction inclusion, or that any of these messages was mined. -/
 theorem deployment_reachable_redeemClaims_anyOrder
-    {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
-    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
@@ -637,14 +642,14 @@ theorem deployment_reachable_redeemClaims_anyOrder
 /-- The deployment-rooted full-balance instance for any supplied
 duplicate-free holder list and admissible recipient map. -/
 theorem deployment_reachable_redeemEveryoneList_anyOrder
-    {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+    {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
-    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
       ClaimAdmissible rules ca future.state

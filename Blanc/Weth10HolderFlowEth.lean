@@ -1189,179 +1189,16 @@ theorem MessageReady.of_messageCallDelegation
     {dp : DeployParams} {ca : Adr} {msg delegated : Msg} {refund : Nat}
     (ready : MessageReady dp ca msg)
     (hrun : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
-    MessageReady dp ca delegated := by
-  unfold messageCallDelegation at hrun
-  split at hrun
-  · simp only [Except.ok.injEq, Prod.mk.injEq] at hrun
-    rcases hrun with ⟨rfl, rfl⟩
-    exact ready
-  · rcases Except.bind_eq_ok hrun with
-      ⟨⟨delegated', refundWord⟩, hset, hrest⟩
-    simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
-    rcases hrest with ⟨rfl, rfl⟩
-    exact ⟨ContractSpec.setDelegation_preserves_msgInv hset ready.backed,
-      ContractSpec.setDelegation_preserves_msgInv hset ready.flash⟩
+    MessageReady dp ca delegated :=
+  ⟨ContractSpec.MsgInv.of_messageCallDelegation ready.backed hrun,
+    ContractSpec.MsgInv.of_messageCallDelegation ready.flash hrun⟩
 
 theorem MessageReady.messageCallExecutionMessage
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     (ready : MessageReady dp ca msg) :
-    MessageReady dp ca (messageCallExecutionMessage msg) := by
-  exact ⟨ContractSpec.MsgInv.pc
-      (codeSrc := fun dca => msg.benv.state.getCode dca) ready.backed,
-    ContractSpec.MsgInv.pc
-      (codeSrc := fun dca => msg.benv.state.getCode dca) ready.flash⟩
-
-theorem setDelegation_bal_eq
-    {msg delegated : Msg} {refund : B256}
-    (hrun : setDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.bal = msg.benv.state.bal := by
-  unfold setDelegation at hrun
-  rcases Except.bind_eq_ok hrun with
-    ⟨⟨loopMsg, loopRefund⟩, hloop, hrest⟩
-  have hbal := setDelegationLoop_bal_eq hloop
-  cases hcode : loopMsg.codeAddress with
-  | none => simp only [hcode, Except.bind_error, reduceCtorEq] at hrest
-  | some address =>
-    simp only [hcode, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at hrest
-    rcases hrest with ⟨rfl, rfl⟩
-    exact hbal
-
-theorem messageCallDelegation_bal_eq
-    {msg delegated : Msg} {refund : Nat}
-    (hrun : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.bal = msg.benv.state.bal := by
-  unfold messageCallDelegation at hrun
-  split at hrun
-  · simp only [Except.ok.injEq, Prod.mk.injEq] at hrun
-    rcases hrun with ⟨rfl, rfl⟩
-    rfl
-  · rcases Except.bind_eq_ok hrun with
-      ⟨⟨delegated', refundWord⟩, hset, hrest⟩
-    simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
-    rcases hrest with ⟨rfl, rfl⟩
-    exact setDelegation_bal_eq hset
-
-theorem messageCallDelegation_target_eq
-    {msg delegated : Msg} {refund : Nat}
-    (hrun : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.target = msg.target := by
-  unfold messageCallDelegation at hrun
-  split at hrun
-  · simp only [Except.ok.injEq, Prod.mk.injEq] at hrun
-    rcases hrun with ⟨rfl, rfl⟩
-    rfl
-  · rcases Except.bind_eq_ok hrun with
-      ⟨⟨delegated', refundWord⟩, hset, hrest⟩
-    simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
-    rcases hrest with ⟨rfl, rfl⟩
-    exact (setDelegation_fields hset).2.1
-
-theorem messageCallExecutionMessage_target_eq (msg : Msg) :
-    (messageCallExecutionMessage msg).target = msg.target := by
-  unfold messageCallExecutionMessage
-  split <;> rfl
-
-theorem processMessageCall_createCollision_state_eq
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    (htarget : msg.target.isNone = true)
-    (hcollision : messageCreateCollision msg = true)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
-    (hsg : msg.benv.stat.rules.stateGas = none) :
-    state = msg.benv.state := by
-  unfold processMessageCall at hresult
-  simp only [htarget, ↓reduceIte] at hresult
-  unfold processMessageCall.create at hresult
-  unfold messageCreateCollision at hcollision
-  simp only [hcollision, ↓reduceIte, pure, hsg] at hresult
-  exact (Prod.mk.inj (Except.ok.inj hresult)).1.symm
-
-theorem processMessageCall_createRun_state_eq
-    {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
-    (htarget : msg.target.isNone = true)
-    (hcollision : messageCreateCollision msg = false)
-    (hcore : processCreateMessage msg = .ok evm)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
-    (hsg : msg.benv.stat.rules.stateGas = none) :
-    state = evm.state := by
-  unfold processMessageCall at hresult
-  simp only [htarget, ↓reduceIte] at hresult
-  unfold processMessageCall.create at hresult
-  unfold messageCreateCollision at hcollision
-  simp only [hcollision, Bool.false_eq_true, ↓reduceIte,
-    bind, Except.bind, hsg] at hresult
-  rcases Except.bind_eq_ok hresult with
-    ⟨actual, hactualMap, htail⟩
-  have hactualCore := Except.bimap_id_eq_ok hactualMap
-  have hactualEq : actual = evm := Except.ok.inj
-    (hactualCore.symm.trans hcore)
-  subst actual
-  split at htail
-  · rcases Except.bind_eq_ok htail with
-      ⟨refundActual, _hrefund, hout⟩
-    exact (Prod.mk.inj (Except.ok.inj hout)).1.symm
-  · exact (Prod.mk.inj (Except.ok.inj htail)).1.symm
-
-theorem processMessageCall_callRun_state_eq
-    {msg delegated execMsg : Msg} {refund : Nat}
-    {evm : Devm} {state : State} {out : MsgCallOutput}
-    (htarget : msg.target.isNone = false)
-    (hdelegation :
-      messageCallDelegation msg = .ok ⟨delegated, refund⟩)
-    (hexecMsg : execMsg = messageCallExecutionMessage delegated)
-    (hcore : processMessage execMsg = .ok evm)
-    (hresult : processMessageCall msg = .ok ⟨state, out⟩)
-    (hsg : msg.benv.stat.rules.stateGas = none) :
-    state = evm.state := by
-  unfold processMessageCall at hresult
-  simp only [htarget, Bool.false_eq_true, ↓reduceIte] at hresult
-  cases hauth : msg.tenv.stat.auths.isEmpty with
-  | false =>
-      unfold messageCallDelegation at hdelegation
-      simp only [hauth, Bool.false_eq_true, ↓reduceIte] at hdelegation
-      rcases Except.bind_eq_ok hdelegation with
-        ⟨⟨delegated', refundWord⟩, hset, hrest⟩
-      simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
-      rcases hrest with ⟨rfl, rfl⟩
-      unfold processMessageCall.call at hresult
-      simp only [hauth, Bool.false_eq_true, ↓reduceIte,
-        hset, bind, Except.bind, hsg] at hresult
-      have hcoreExec :
-          processMessage (messageCallExecutionMessage delegated') =
-            .ok evm :=
-        (congrArg processMessage hexecMsg).symm.trans hcore
-      rcases Except.bind_eq_ok hresult with
-        ⟨actual, hactualMap, htail⟩
-      have hactualCore := Except.bimap_id_eq_ok hactualMap
-      have hactualEq : actual = evm := Except.ok.inj
-        (hactualCore.symm.trans hcoreExec)
-      subst actual
-      split at htail
-      · rcases Except.bind_eq_ok htail with
-          ⟨refundActual, _hrefund, hout⟩
-        exact (Prod.mk.inj (Except.ok.inj hout)).1.symm
-      · exact (Prod.mk.inj (Except.ok.inj htail)).1.symm
-  | true =>
-      unfold messageCallDelegation at hdelegation
-      simp only [hauth, ↓reduceIte,
-        Except.ok.injEq, Prod.mk.injEq] at hdelegation
-      rcases hdelegation with ⟨rfl, rfl⟩
-      unfold processMessageCall.call at hresult
-      simp only [hauth, ↓reduceIte,
-        bind, Except.bind, hsg] at hresult
-      have hcoreExec :
-          processMessage (messageCallExecutionMessage msg) = .ok evm :=
-        (congrArg processMessage hexecMsg).symm.trans hcore
-      rcases Except.bind_eq_ok hresult with
-        ⟨actual, hactualMap, htail⟩
-      have hactualCore := Except.bimap_id_eq_ok hactualMap
-      have hactualEq : actual = evm := Except.ok.inj
-        (hactualCore.symm.trans hcoreExec)
-      subst actual
-      split at htail
-      · rcases Except.bind_eq_ok htail with
-          ⟨refundActual, _hrefund, hout⟩
-        exact (Prod.mk.inj (Except.ok.inj hout)).1.symm
-      · exact (Prod.mk.inj (Except.ok.inj htail)).1.symm
+    MessageReady dp ca (messageCallExecutionMessage msg) :=
+  ⟨ContractSpec.MsgInv.messageCallExecutionMessage ready.backed,
+    ContractSpec.MsgInv.messageCallExecutionMessage ready.flash⟩
 
 /-- ETH accounting for one exact settled message trace.  Proving this
 predicate from the retained recursive execution is the sole semantic seam
@@ -1389,13 +1226,12 @@ theorem CommittedExecEthSound.messageEthSound
     (hsound : CommittedExecEthSound dp ca) :
     MessageEthSound dp ca := by
   intro msg state out trace ready hfork
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.EthAccounted
       change EthBound ca msg.benv.state state []
-      have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createCollision_state_eq
+        htarget hcollision hresult hfork
       simpa only [hstate] using EthBound.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
       unfold MessageCallTrace.EthAccounted
@@ -1404,8 +1240,8 @@ theorem CommittedExecEthSound.messageEthSound
       have hbound :=
         ProcessCreateMessageTrace.ethBound_of_committedExecSound trace
           hsound ready htarget htargetNe hfork
-      have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createRun_state_eq
+        htarget hcollision hcore hresult hfork
       change EthBound ca msg.benv.state state
         (if evm.error.isSome then []
          else Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
@@ -1420,8 +1256,8 @@ theorem CommittedExecEthSound.messageEthSound
       have readyExecMsg : MessageReady dp ca execMsg := by
         simpa only [hexecMsg] using readyExec
       have htargetExec : execMsg.target.isNone = false := by
-        rw [hexecMsg, messageCallExecutionMessage_target_eq,
-          messageCallDelegation_target_eq hdelegation]
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_target_eq,
+          ExecutionTrace.messageCallDelegation_target_eq hdelegation]
         exact htarget
       have runReadyExec := readyExecMsg.runReady_of_call htargetExec
       have hbound : EthBound ca execMsg.benv.state evm.state
@@ -1431,11 +1267,11 @@ theorem CommittedExecEthSound.messageEthSound
           (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
                 ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
               exact hfork)
-      have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_callRun_state_eq
+        htarget hdelegation hexecMsg hcore hresult hfork
       have hpre : execMsg.benv.state.bal = msg.benv.state.bal := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_bal_eq,
-          messageCallDelegation_bal_eq hdelegation]
+          ExecutionTrace.messageCallDelegation_bal_eq hdelegation]
       change EthBound ca msg.benv.state state
         (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)
       unfold EthBound at hbound ⊢
@@ -1634,8 +1470,8 @@ prefix before the exact withdrawal credits are added. -/
 theorem AppliedBodyTrace.ethBound
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hmessage : MessageEthSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)

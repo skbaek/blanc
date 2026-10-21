@@ -175,9 +175,12 @@ private theorem Xinst.step_staticcall_spawn_data
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         devm.stack)
     (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hdeleg : sevm.benvStat.rules.delegationEnabled = true)
+    (haccess : sevm.benvStat.rules.access = .eip2929) :
     StaticcallSpawnData sevm devm frame resume := by
-  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hspawn
+  simp only [Xinst.step, hsg, haccess, Bind.bind, Except.bind,
+    ForkRules.accessDelegation_enabled hdeleg] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨actualGasWord, d1⟩ <;>
     simp only [eq1] at hspawn
   · cases hspawn
@@ -302,19 +305,22 @@ private theorem Ninst.step_staticcall_spawn_data
         pre.stack)
     (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc')
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hdeleg : sevm.benvStat.rules.delegationEnabled = true)
+    (haccess : sevm.benvStat.rules.access = .eip2929) :
     StaticcallSpawnData sevm pre frame resume := by
   have hx : Xinst.step sevm pre .staticcall = .spawn frame resume := by
     exact XStep.toStep_spawn (by
       simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_staticcall_spawn_data gasWord tail operands hx hsg
+  exact Xinst.step_staticcall_spawn_data gasWord tail operands hx hsg hdeleg haccess
 
 private theorem Xinst.step_staticcall_done_state
     {sevm : Sevm} {pre post : Devm}
     (hdone : Xinst.step sevm pre .staticcall = .done (.ok post))
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (haccess : sevm.benvStat.rules.access = .eip2929) :
     pre.state = post.state := by
-  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hdone
+  simp only [Xinst.step, hsg, haccess, Bind.bind, Except.bind] at hdone
   rcases eq1 : Devm.pop pre with err | ⟨gasWord, d1⟩ <;>
     simp only [eq1] at hdone
   · cases hdone
@@ -340,14 +346,14 @@ private theorem Xinst.step_staticcall_done_state
   · cases hdone
   have f6 := Devm.popToNat_worldEq_of_ok eq6
   rcases hdelegation :
-      sevm.benvStat.rules.gas.accessDelegation
+      sevm.benvStat.rules.accessDelegation
         (addAccessedAddress d6 target) target with
     ⟨delegated, delegatedAddress, code, delegationGas, d8⟩
   simp only [hdelegation] at hdone
   have f8 : Devm.WorldEq d6 d8 := by
     have haccess := addAccessedAddress_worldEq d6 target
-    have hdelegationFrame := GasSchedule.accessDelegation_instructionFrame
-      sevm.benvStat.rules.gas (addAccessedAddress d6 target) target
+    have hdelegationFrame := ForkRules.accessDelegation_instructionFrame
+      sevm.benvStat.rules (addAccessedAddress d6 target) target
     rw [hdelegation] at hdelegationFrame
     exact ⟨haccess.1.trans hdelegationFrame.state,
       haccess.2.trans hdelegationFrame.transientStorage⟩
@@ -522,7 +528,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           have hout : ex = .ok post := (Step.ofExecution_cont hcont).2
           subst ex
           exact .none (PermitOwnObservations.of_state_eq
-            (Xinst.step_staticcall_done_state hxs hfork.rules_stateGas_none))
+            (Xinst.step_staticcall_done_state hxs hfork.rules_stateGas_none
+              hfork.rules_access))
       | spawn frame resume =>
           rw [Ninst.step_exec, hxs] at hs
           cases hs
@@ -537,7 +544,9 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
         filled (show Xlot.Filled .none from trivial) step actual).1
       subst slot
       rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs
-          hfork.rules_stateGas_none with
+          hfork.rules_stateGas_none
+          (hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true)
+            rfl rfl rfl rfl) hfork.rules_access with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, _hdepth, _htarget, _hcodeAddress,
           _hresolution, hvalue, _htransfer, _hstatic⟩
@@ -569,7 +578,9 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
         filled actualFilled step actual).1
       subst slot
       rcases Ninst.step_staticcall_spawn_data gasWord tail operands hs
-          hfork.rules_stateGas_none with
+          hfork.rules_stateGas_none
+          (hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true)
+            rfl rfl rfl rfl) hfork.rules_access with
         ⟨msg, parent, outputIndex, outputSize, hframe, hresumeShape,
           hparentState, hbenvState, hdepth, htarget, hcodeAddress,
           hresolution, hvalue, htransfer, hstatic⟩
@@ -704,10 +715,8 @@ private theorem permit_prefix_of_chainid
     {e : Sevm} {pre post : Devm} {tail : Stack}
     (hp : tail <<+ pre.stack)
     (run : Ninst.Run e pre Ninst.chainid post) :
-    e.benvStat.chainId.toB256 :: tail <<+ post.stack := by
-  rcases of_run_reg run with ⟨pc, core⟩
-  simp only [Rinst.run, Rinst.runCore] at core
-  exact prefix_of_push (Devm.pushBurn_of_pushItem core) hp
+    e.benvStat.chainId.toB256 :: tail <<+ post.stack :=
+  prefix_of_chainid hp run
 
 /-- The tentative normalized nonce increment is outside both WETH booked
 balances and the flash slot, and cannot change ETH balances or code. -/

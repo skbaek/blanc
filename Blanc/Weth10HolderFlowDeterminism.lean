@@ -296,9 +296,9 @@ theorem RequestsTrace.index_eq_and_heq_of_same_input
   exact ⟨rfl, rfl, heq_of_eq (RequestsTrace.eq_of_same left right)⟩
 
 theorem AppliedBodyTrace.eq_of_same
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (left right : AppliedBodyTrace benv txs wds state bout) :
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (left right : AppliedBodyTrace benv txs ommers wds state bout) :
     left = right := by
   rcases left with ⟨leftRun, leftBeaconState, leftBeaconOut, leftBeacon,
     leftLastHash, leftLastHashRun, leftHistoryState, leftHistoryOut,

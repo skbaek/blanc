@@ -330,9 +330,9 @@ theorem RequestsTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
     (SystemMessageTrace.ledgerMirrors dp ca trace.consolidation)
 
 theorem AppliedBodyTrace.ledgerMirrors (dp : DeployParams) (ca : Adr)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     LedgerMirrors dp ca (trace.attributionStream dp ca)
       (trace.flowActions dp ca) :=
   (((SystemMessageTrace.ledgerMirrors dp ca trace.beacon).append
@@ -622,9 +622,9 @@ theorem RequestsTrace.rootedLedger (dp : DeployParams) (ca : Adr)
       (by simpa only [Benv.withState] using hfork))
 
 theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) :
     RootedLedger dp ca (trace.attributionStream dp ca) :=
   (((SystemMessageTrace.rootedLedger dp ca trace.beacon hfork).append

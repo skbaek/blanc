@@ -288,13 +288,12 @@ theorem CommittedExecStorageSound.messageStorageSound
     (hsound : CommittedExecStorageSound dp ca) :
     MessageStorageSound dp ca := by
   intro msg state out trace ready hfork
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   cases trace with
   | createCollision htarget hcollision hresult =>
       unfold MessageCallTrace.StorageAccounted
       change StateStorageFlowAccounting ca msg.benv.state state []
-      have hstate := processMessageCall_createCollision_state_eq
-        htarget hcollision hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createCollision_state_eq
+        htarget hcollision hresult hfork
       subst state
       exact StateStorageFlowAccounting.refl ca msg.benv.state
   | createRun htarget hcollision evm hcore trace hresult =>
@@ -304,8 +303,8 @@ theorem CommittedExecStorageSound.messageStorageSound
       have haccounting :=
         ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
           trace hsound ready htarget htargetNe hfork
-      have hstate := processMessageCall_createRun_state_eq
-        htarget hcollision hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_createRun_state_eq
+        htarget hcollision hcore hresult hfork
       change StateStorageFlowAccounting ca msg.benv.state state
         (if evm.error.isSome then []
          else trace.retained.flowActions dp ca)
@@ -319,8 +318,8 @@ theorem CommittedExecStorageSound.messageStorageSound
       have readyExecMsg : MessageReady dp ca execMsg := by
         simpa only [hexecMsg] using readyExec
       have htargetExec : execMsg.target.isNone = false := by
-        rw [hexecMsg, messageCallExecutionMessage_target_eq,
-          messageCallDelegation_target_eq hdelegation]
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_target_eq,
+          ExecutionTrace.messageCallDelegation_target_eq hdelegation]
         exact htarget
       have runReadyExec := readyExecMsg.runReady_of_call htargetExec
       have haccounting :
@@ -331,8 +330,8 @@ theorem CommittedExecStorageSound.messageStorageSound
           (by rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_benv_stat,
                 ExecutionTrace.messageCallDelegation_benv_stat hdelegation]
               exact hfork)
-      have hstate := processMessageCall_callRun_state_eq
-        htarget hdelegation hexecMsg hcore hresult hsg
+      have hstate := ExecutionTrace.processMessageCall_callRun_state_eq
+        htarget hdelegation hexecMsg hcore hresult hfork
       have hpre :
           execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
         rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
@@ -442,6 +441,7 @@ theorem TransactionTrace.postMessage_getStor_eq
   have hmessageInv := ContractSpec.processMessageCall_preserves_inv hmsgFork
     (backedSpec_preserves dp ca) trace.message.result
     (trace.message_ready hstable hnotCreated).backed
+    (trace.not_mem_msg_inheritedDeletions ca)
   have hp : State.Protected trace.messageState ca :=
     State.Protected.of_image (sem := (weth10 dp).codeSem) hmessageInv.1.code
   apply hstateStor.trans
@@ -544,8 +544,8 @@ theorem RequestsTrace.storageAccounting
 theorem AppliedBodyTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
     {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hmessage : MessageStorageSound dp ca)
     (hstable : Stable dp ca benv.state)
     (hnotCreated : ca ∉ benv.createdAccounts)

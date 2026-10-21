@@ -345,9 +345,9 @@ def RequestsTrace.attributionStream (dp : DeployParams) (ca : Adr)
       trace.consolidation
 
 def AppliedBodyTrace.attributionStream (dp : DeployParams) (ca : Adr)
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     List CountedFrame :=
   Blanc.Weth10.SystemMessageTrace.attributionStream dp ca trace.beacon ++
     Blanc.Weth10.SystemMessageTrace.attributionStream dp ca trace.history ++

@@ -532,9 +532,9 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     rw [ite_eq_right (by omega)]
     cases hmax : rules.tx.maxGas with
     | none =>
-        simp only [checkInitcodeSize, TxType.receiver?, henv.type_eq, henv.nonce_not_max, ↓reduceIte, Option.isNone_some, gt_iff_lt, Bool.false_and, Bool.false_eq_true, Except.bind_ok]
+        simp only [checkInitcodeLimit, checkInitcodeSize, ite_self, TxType.receiver?, henv.type_eq, henv.nonce_not_max, ↓reduceIte, Option.isNone_some, gt_iff_lt, Bool.false_and, Bool.false_eq_true, Except.bind_ok]
     | some maxGas =>
-        simp only [checkInitcodeSize, TxType.receiver?, henv.type_eq, henv.gas_cap, henv.nonce_not_max, Option.isNone_some, gt_iff_lt, Bool.false_and, Bool.false_eq_true, ↓reduceIte, Except.bind_ok]
+        simp only [checkInitcodeLimit, checkInitcodeSize, ite_self, TxType.receiver?, henv.type_eq, henv.gas_cap, henv.nonce_not_max, Option.isNone_some, gt_iff_lt, Bool.false_and, Bool.false_eq_true, ↓reduceIte, Except.bind_ok]
   have hchecked :
       checkTransaction benv.beginTransaction
           (redemptionTxPreludeBout bout tx index) tx =
@@ -598,7 +598,9 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     simp only
     rw [hreceiver, hauth]
     simp only
-    rw [hsender]
+    rw [checkTransactionSenderAccountFor_enabled (by
+      exact henv.fork_covered.cases
+        (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl), hsender]
   have heffective_le_max :
       redemptionEffectiveGasPrice benv tx ≤ maxFee := by
     have hbase := henv.base_fee_le_max
@@ -2079,7 +2081,8 @@ theorem processMessageCall_eq_of_exec
     (hexec : exec child = .ok post)
     (herror : post.error = none)
     (hrefund : 0 ≤ post.refundCounter)
-    (hsg : msg.benv.stat.rules.stateGas = none) :
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hsweep : msg.benv.stat.rules.settle.touchedSweep = false) :
     processMessageCall msg = .ok
       (post.state,
         { gasLeft := post.gasLeft
@@ -2087,7 +2090,8 @@ theorem processMessageCall_eq_of_exec
           logs := post.logs
           accountsToDelete := post.accountsToDelete
           error := post.error
-          returnData := post.output }) := by
+          returnData := post.output
+          touchedAccounts := post.meta.touchedAccounts }) := by
   have hprocess : processMessage msg = .ok post := by
     unfold processMessage runFrame
     rw [henter]
@@ -2097,19 +2101,16 @@ theorem processMessageCall_eq_of_exec
     unfold executeCode.handleError
     simp only [hexec, herror, Frame.ofCall, Option.isSome,
       Bool.false_eq_true, ite_false, bind, Except.bind]
+    rw [Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
     unfold getDelegatedCodeAddress
     rw [ite_eq_right (not_delegation_of_compile hcompile)]
   have htoNat : Int.toNat? post.refundCounter =
       some post.refundCounter.toNat :=
     Int.mem_toNat?.mpr (Int.toNat_of_nonneg hrefund).symm
-  unfold processMessageCall
-  rw [htarget]
-  unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind,
-    hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
-    htoNat, Option.toExcept, Nat.cast_zero, zero_add, hsg]
-  rfl
+  rw [herror]
+  simpa only [Nat.zero_add] using processMessageCall_call_of_message hsg htarget
+    (by simp only [hauths, List.isEmpty]) hdelegation hprocess herror htoNat
 
 lemma zero_transfer_bal {st mid : State} {caller target : Adr}
     (hsub : st.subBal caller 0 = some mid) :
@@ -2153,7 +2154,11 @@ structure MessageFrameRedemptionOutcome
   outRefundCounter : out.refundCounter = post.refundCounter.toNat
   outLogs : out.logs = post.logs
   outReturnData : out.returnData = post.output
-  outAccountsToDeleteEmpty : out.accountsToDelete.isEmpty = true
+  /-- The frame adds no pending deletion of its own: its deletion set is empty
+  exactly when the message's inherited set is (a transaction's prepared
+  message inherits none). -/
+  outAccountsToDeleteEmpty :
+    out.accountsToDelete.isEmpty = msg.inheritedDeletions.isEmpty
 
 theorem Stable.withdrawTo_messageFrame_of_le
     {rules : ForkRules} {dp : DeployParams} {ca owner recipient : Adr} {q : Nat}
@@ -2268,7 +2273,8 @@ theorem Stable.withdrawTo_messageFrame_of_le
       logs := post.logs
       accountsToDelete := post.accountsToDelete
       error := post.error
-      returnData := post.output }
+      returnData := post.output
+      touchedAccounts := post.meta.touchedAccounts }
   have hprocess : processMessageCall msg = .ok (post.state, out) := by
     apply processMessageCall_eq_of_exec
       (p := weth10 dp) (benv := benv') (child := child)
@@ -2283,6 +2289,7 @@ theorem Stable.withdrawTo_messageFrame_of_le
         rw [hchildEq]
         exact hexec)
       hpostError houtcome.refundNonnegative henv.fork_covered.rules_stateGas_none
+      henv.fork_covered.rules_touchedSweep
   have hchildLogs : child.dyna.logs = [] := by
     have hstat : (msg.withBenv benv').benv.stat.rules.stateGas = none := by
       change benv'.stat.rules.stateGas = none
@@ -2299,7 +2306,7 @@ theorem Stable.withdrawTo_messageFrame_of_le
       hargs.2] at houtcome
     exact houtcome
   · exact hpostError
-  · change post.accountsToDelete.isEmpty = true
+  · change post.accountsToDelete.isEmpty = msg.inheritedDeletions.isEmpty
     rw [houtcome.accountsToDeleteEmpty]
     rfl
 
@@ -2414,7 +2421,8 @@ theorem Stable.withdraw_messageFrame_of_le
       logs := post.logs
       accountsToDelete := post.accountsToDelete
       error := post.error
-      returnData := post.output }
+      returnData := post.output
+      touchedAccounts := post.meta.touchedAccounts }
   have hprocess : processMessageCall msg = .ok (post.state, out) := by
     apply processMessageCall_eq_of_exec
       (p := weth10 dp) (benv := benv') (child := child)
@@ -2429,6 +2437,7 @@ theorem Stable.withdraw_messageFrame_of_le
         rw [hchildEq]
         exact hexec)
       hpostError houtcome.refundNonnegative henv.fork_covered.rules_stateGas_none
+      henv.fork_covered.rules_touchedSweep
   have hchildLogs : child.dyna.logs = [] := by
     have hstat : (msg.withBenv benv').benv.stat.rules.stateGas = none := by
       change benv'.stat.rules.stateGas = none
@@ -2445,7 +2454,7 @@ theorem Stable.withdraw_messageFrame_of_le
       harg] at houtcome
     exact houtcome
   · exact hpostError
-  · change post.accountsToDelete.isEmpty = true
+  · change post.accountsToDelete.isEmpty = msg.inheritedDeletions.isEmpty
     rw [houtcome.accountsToDeleteEmpty]
     rfl
 
@@ -2963,8 +2972,11 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
     exact Int.mem_toNat?.mpr rfl
   have hdelete : messageOut.accountsToDelete.toList = [] := by
     apply List.isEmpty_iff.mp
-    rw [Std.HashSet.isEmpty_toList]
-    exact hframe.outAccountsToDeleteEmpty
+    rw [Std.HashSet.isEmpty_toList, hframe.outAccountsToDeleteEmpty]
+    have prepared := hprepare
+    unfold prepareMessage at prepared
+    rw [← congrArg Msg.inheritedDeletions (Except.ok.inj prepared)]
+    rfl
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
@@ -3014,6 +3026,11 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   simp only [List.map_nil, List.flatten_nil]
   rw [hintrinsic]
   simp only [allocateEvmGas, hsg]
+  have hwarm : rules.txr.warmCoinbase = true := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.cases
+      (motive := fun f => f.ruleSet.txr.warmCoinbase = true) rfl rfl rfl rfl
+  simp only [hwarm, ite_true]
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
@@ -3021,6 +3038,12 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rw [hrefund]
   simp only [hdelete, List.foldl_nil]
   simp only [settleSelfdestructs, hsg]
+  have hquot : rules.settle.refundQuotient = 5 := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_refundQuotient
+  have hsweepRules : rules.settle.touchedSweep = false := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_touchedSweep
   have hsettlement :
       settleTransactionGas rules tx.gas
         (calculateIntrinsicCost rules tx owner).2
@@ -3033,10 +3056,10 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
           redemptionUsedGasFromMessage benv tx owner messageOut
             messagePost.refundCounter.toNat, 0⟩ := by
     simp only [settleTransactionGas, hsg, redemptionUsedGasFromMessage, redemptionCalldataFloorGas,
-      deploymentCalldataFloorGas, henv.rules_eq]
+      deploymentCalldataFloorGas, henv.rules_eq, hquot]
   rw [hsettlement]
   simp only [BlockOutput.withGasSettlement, hbalNone, List.foldl_nil,
-    Nat.add_zero]
+    Nat.add_zero, sweepTouchedAccounts_of_not_touchedSweep hsweepRules]
   simp only [redemptionFinalState, redemptionFinalBout,
     redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
     redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,
@@ -3069,8 +3092,11 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
     exact Int.mem_toNat?.mpr rfl
   have hdelete : messageOut.accountsToDelete.toList = [] := by
     apply List.isEmpty_iff.mp
-    rw [Std.HashSet.isEmpty_toList]
-    exact hframe.outAccountsToDeleteEmpty
+    rw [Std.HashSet.isEmpty_toList, hframe.outAccountsToDeleteEmpty]
+    have prepared := hprepare
+    unfold prepareMessage at prepared
+    rw [← congrArg Msg.inheritedDeletions (Except.ok.inj prepared)]
+    rfl
   rcases henv.type_eq with ⟨maxPriorityFee, maxFee, htype⟩
   unfold processTransaction
   simp only [bind, Except.bind]
@@ -3120,6 +3146,11 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   simp only [List.map_nil, List.flatten_nil]
   rw [hintrinsic]
   simp only [allocateEvmGas, hsg]
+  have hwarm : rules.txr.warmCoinbase = true := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.cases
+      (motive := fun f => f.ruleSet.txr.warmCoinbase = true) rfl rfl rfl rfl
+  simp only [hwarm, ite_true]
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
@@ -3127,6 +3158,12 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   rw [hrefund]
   simp only [hdelete, List.foldl_nil]
   simp only [settleSelfdestructs, hsg]
+  have hquot : rules.settle.refundQuotient = 5 := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_refundQuotient
+  have hsweepRules : rules.settle.touchedSweep = false := by
+    rw [← henv.rules_eq]
+    exact henv.fork_covered.rules_touchedSweep
   have hsettlement :
       settleTransactionGas rules tx.gas
         (calculateIntrinsicCost rules tx owner).2
@@ -3139,10 +3176,10 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
           redemptionUsedGasFromMessage benv tx owner messageOut
             messagePost.refundCounter.toNat, 0⟩ := by
     simp only [settleTransactionGas, hsg, redemptionUsedGasFromMessage, redemptionCalldataFloorGas,
-      deploymentCalldataFloorGas, henv.rules_eq]
+      deploymentCalldataFloorGas, henv.rules_eq, hquot]
   rw [hsettlement]
   simp only [BlockOutput.withGasSettlement, hbalNone, List.foldl_nil,
-    Nat.add_zero]
+    Nat.add_zero, sweepTouchedAccounts_of_not_touchedSweep hsweepRules]
   simp only [redemptionFinalState, redemptionFinalBout,
     redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice,
     redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout,

@@ -4618,10 +4618,8 @@ private lemma permitPrefix_of_chainid_writeCompleteness
     {e : Sevm} {s s' : Devm} {xs : Stack}
     (stackPrefix : xs <<+ s.stack)
     (run : Ninst.Run e s Ninst.chainid s') :
-    e.benvStat.chainId.toB256 :: xs <<+ s'.stack := by
-  rcases of_run_reg run with ⟨_pc, coreRun⟩
-  simp only [Rinst.run, Rinst.runCore] at coreRun
-  exact prefix_of_push (Devm.pushBurn_of_pushItem coreRun) stackPrefix
+    e.benvStat.chainId.toB256 :: xs <<+ s'.stack :=
+  prefix_of_chainid stackPrefix run
 
 private def permitDeadlineGuardLine : Line :=
   arg 3 ++ [Ninst.timestamp, Ninst.gt]

@@ -216,7 +216,8 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
           msg.currentTarget).get ca) = msg.benv.state.get ca
         simp only [State.incrNonce, State.setStor]
-        rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
+        rw [State.setAccount_get_ne _ htargetNe]
+        split <;> simp only [State.get_setPresent_ne _ htargetNe, State.get_set_ne _ htargetNe]
       unfold State.Protected
       rw [hget, ← hparent]
       exact hp
@@ -878,8 +879,9 @@ theorem Exec.CoreAllowanceSound.nextSome
       simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep
   | push xs hxs =>
-      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq] at hstep
+      split at hstep <;>
+        simp only [Step.run_ofExecution, reduceCtorEq, false_and] at hstep
   | dupn imm =>
       simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep
@@ -1272,7 +1274,8 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
         change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
           msg.currentTarget).get ca) = msg.benv.state.get ca
         simp only [State.incrNonce, State.setStor]
-        rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
+        rw [State.setAccount_get_ne _ htargetNe]
+        split <;> simp only [State.get_setPresent_ne _ htargetNe, State.get_set_ne _ htargetNe]
       unfold State.Protected
       rw [hget, ← hparent]
       exact hp
@@ -1709,8 +1712,9 @@ theorem Exec.CoreAllowanceReadSound.nextSome
       simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep
   | push xs hxs =>
-      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
-        false_and] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq] at hstep
+      split at hstep <;>
+        simp only [Step.run_ofExecution, reduceCtorEq, false_and] at hstep
   | dupn imm =>
       simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
         false_and] at hstep

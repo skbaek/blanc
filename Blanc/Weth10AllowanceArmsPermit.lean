@@ -171,9 +171,10 @@ private theorem Xinst.step_staticcall_spawn_facts
       (128 : B256) :: (128 : B256) :: (32 : B256) :: tail <<+
         devm.stack)
     (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hfork : CoveredFork sevm.benvStat.fork) :
     StatcallSpawnFacts sevm devm frame := by
-  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hspawn
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access, Bind.bind,
+    Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨actualGasWord, d1⟩ <;>
     simp only [eq1] at hspawn
   · cases hspawn
@@ -217,6 +218,8 @@ private theorem Xinst.step_staticcall_spawn_facts
   have hpre6 : devm.state = d6.state :=
     f1.state.trans (f2.state.trans (f3.1.trans
       (f4.1.trans (f5.1.trans f6.1))))
+  rw [ForkRules.accessDelegation_enabled (show sevm.benvStat.rules.delegationEnabled = true from
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl)] at hspawn
   rcases hdelegation :
       sevm.benvStat.rules.gas.accessDelegation
         (addAccessedAddress d6 (1 : B256).toAdr) (1 : B256).toAdr with
@@ -280,12 +283,12 @@ private theorem Ninst.step_staticcall_spawn_facts
         pre.stack)
     (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc')
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hfork : CoveredFork sevm.benvStat.fork) :
     StatcallSpawnFacts sevm pre frame := by
   have hx : Xinst.step sevm pre .staticcall = .spawn frame resume := by
     exact XStep.toStep_spawn (by
       simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_staticcall_spawn_facts gasWord tail operands hx hsg
+  exact Xinst.step_staticcall_spawn_facts gasWord tail operands hx hfork
 
 /-- No interpreted child can be spawned at the permit call boundary when
 the precompile is enabled and undelegated: frame entry would resolve the
@@ -356,7 +359,7 @@ private theorem Exec.Deriv.ParentStepActions.counted_of_permitStatcall
       have hspawn := (Evm.step_next hat).symm.trans hstep
       have hfacts :=
         Ninst.step_staticcall_spawn_facts gasWord stack operands hspawn
-          hfork.rules_stateGas_none
+          hfork
       exact not_run_of_staticcallSpawnFacts hprecomp hnodeleg hfacts henter
 
 /-- Cross the permit `STATICCALL` while preserving the empty counted
@@ -595,9 +598,10 @@ private theorem genericCall.step_spawn_depth_pos
 private theorem Xinst.step_staticcall_spawn_message
     {sevm : Sevm} {devm : Devm} {frame : Frame} {resume : Resume}
     (hspawn : Xinst.step sevm devm .staticcall = .spawn frame resume)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hfork : CoveredFork sevm.benvStat.fork) :
     StatcallSpawnMessage sevm devm frame := by
-  simp only [Xinst.step, hsg, Bind.bind, Except.bind] at hspawn
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access, Bind.bind,
+    Except.bind] at hspawn
   rcases eq1 : Devm.pop devm with err | ⟨gasWord, d1⟩ <;>
     simp only [eq1] at hspawn
   · cases hspawn
@@ -626,6 +630,8 @@ private theorem Xinst.step_staticcall_spawn_message
   have hpre6 : devm.state = d6.state :=
     f1.state.trans (f2.state.trans (f3.1.trans
       (f4.1.trans (f5.1.trans f6.1))))
+  rw [ForkRules.accessDelegation_enabled (show sevm.benvStat.rules.delegationEnabled = true from
+    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl)] at hspawn
   rcases hdelegation :
       sevm.benvStat.rules.gas.accessDelegation
         (addAccessedAddress d6 target) target with
@@ -696,12 +702,12 @@ private theorem Ninst.step_staticcall_spawn_message
     {frame : Frame} {resume : Resume}
     (hspawn : Ninst.step ⟨pc, sevm, pre⟩ Ninst.staticcall =
       .spawn frame resume pc')
-    (hsg : sevm.benvStat.rules.stateGas = none) :
+    (hfork : CoveredFork sevm.benvStat.fork) :
     StatcallSpawnMessage sevm pre frame := by
   have hx : Xinst.step sevm pre .staticcall = .spawn frame resume :=
     XStep.toStep_spawn (by
       simpa only [Ninst.staticcall, Ninst.step_exec] using hspawn)
-  exact Xinst.step_staticcall_spawn_message hx hsg
+  exact Xinst.step_staticcall_spawn_message hx hfork
 
 /-- Whatever the permit `STATICCALL` edge turns out to be, every record its
 counted label retains read the word the parent's storage held at the call
@@ -743,7 +749,7 @@ private theorem entryReadSound_staticcallCrossing
       exact Xinst.step_spawn_benvStat hx
     obtain ⟨msg, target, delegated, hframe, hcurrent, hcodeAddress, hstate,
       hdepth, hres⟩ :=
-      Ninst.step_staticcall_spawn_message hspawn hfork.rules_stateGas_none
+      Ninst.step_staticcall_spawn_message hspawn hfork
     have hrun : RunFrame f (some (cevm, raw)) (f.settle raw) :=
       RunFrame.of_run henter
     rcases hsettle : Jaune.Frame.settle f raw with err | settled
