@@ -731,14 +731,31 @@ not change observed reads.
 The shell adapter `scripts/read-audit/launch.sh` is an ordinary input of each
 wrapper that sources it. The audit separately binds its measurement script
 and the exact observer closure (`launch.sh`, `launcher.py`, `bootstrap.py`,
-and `sitecustomize.py`) by content before and after execution. An arbitrary
-neighbouring file does not become observation machinery by location. Ordinary
+`sitecustomize.py`, and `native_process.py`) by content before and after
+execution. An arbitrary neighbouring file does not become observation machinery by location. Ordinary
 invocations retain their original commands and environment; explicit audit
 launches use a bootstrap and controller. The bootstrap preserves target
 arguments, Python flags, environment and import search paths, but initializes
 observer modules before the target and changes the OS launch path. Synthetic
 parity controls cover the supported launches; this observation does not
 replace ordinary gate or runtime-identity validation.
+
+An optional native-process capability can observe the exact DRIP routing-test
+shell fixtures. Supply both `--native-process-capability` and its independently
+approved `--native-process-capability-sha256`; there is no default capability.
+The capability binds the collector and loader, exact executable identities and
+roles, observer sources, fixture producer, and copied wrapper/helper sources.
+The collector starts its own child and records process creation, execution,
+directory changes and termination. Captures must connect the observed Python
+parent, actual subprocess launch, owned collector lifetime, native root lifetime
+and every Python descendant's startup and completion. Unknown executables,
+missing receipts, unsupported traces, unavailable collection and identity drift
+refuse coverage. No generic unsupported-handoff receipt is waived.
+
+This optional observation covers process handoffs, not native file reads or
+Python embedded in native runtimes. Tracing changes process parentage and
+scheduling. Before/after identity checks do not prove atomic source immutability.
+Ordinary gate verdicts and supported-launch parity remain separate evidence.
 
 The observer records Python audit events after installation. It cannot see
 interpreter startup, its own pre-install imports, native or C-extension reads

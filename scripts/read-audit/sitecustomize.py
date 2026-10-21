@@ -39,6 +39,13 @@ import sys
 import threading
 
 
+def _self_start():
+    if not sys.platform.startswith("linux"):
+        return None
+    with open("/proc/self/stat") as stream:
+        return int(stream.read().rsplit(")", 1)[1].split()[19])
+
+
 def install(target: str):
     """Install from explicit configuration; log failures must remain failures."""
     installed = getattr(sys, "_blanc_gate_read_observer", None)
@@ -47,6 +54,8 @@ def install(target: str):
             raise RuntimeError("read observer log changed inside one interpreter")
         return installed[1]
     global _FD, _LOCAL, _OS_OPEN, _OPENED
+    native_transport = threading.local()
+    sys._blanc_gate_native_transport = native_transport
     _FD = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
     _LOCAL = threading.local()
     log_state = {"failed": False}
@@ -237,6 +246,19 @@ def install(target: str):
                 # coalesced: neither has this active constructor/frame receipt.
                 _LOCAL.popen_event = None
                 return
+        pending = getattr(native_transport, "pending", None)
+        if (event == "subprocess.Popen" and pending is not None
+                and tuple(command) == pending["command"] and not pending["used"]
+                and _popen_execute_frame() is not None):
+            import hashlib
+            environment = args[3] if args[3] is not None else os.environ
+            digest = hashlib.sha256(json.dumps(dict(environment), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            pending["used"] = True
+            _emit("J", json.dumps({"schema": "native-shell-v1", "nonce": pending["nonce"],
+                                   "parent_pid": os.getpid(), "command": command,
+                                   "cwd": os.path.realpath(args[2] or os.getcwd()),
+                                   "environment_sha256": digest}, sort_keys=True))
+            return
         if "--read-audit" in command:
             marker = command.index("--read-audit")
             bootstrap = os.path.join(os.path.dirname(__file__), "bootstrap.py")
@@ -294,7 +316,7 @@ def install(target: str):
         # shutil checks this set before using its symlink-safe fd walk.
         os.supports_dir_fd.add(_observed_open)
     sys._blanc_gate_read_observer = (target, _emit)
-    _emit("S", json.dumps({"pid": os.getpid(), "ppid": os.getppid(), "mode": "sitecustomize", "executable": sys.executable, "argv": sys.argv, "orig_argv": sys.orig_argv}, sort_keys=True))
+    _emit("S", json.dumps({"pid": os.getpid(), "ppid": os.getppid(), "mode": "sitecustomize", "executable": sys.executable, "argv": sys.argv, "orig_argv": sys.orig_argv, "process_start": _self_start()}, sort_keys=True))
     def complete():
         # A target may catch a transient write exception. Later successful
         # records cannot restore the events that were lost in this process.
@@ -303,6 +325,14 @@ def install(target: str):
             return  # withhold E even if writing the refusal now succeeds
         _emit("E", str(os.getpid()))
     atexit.register(complete)
+    # Only the optional private callback is installed; no native capability
+    # or identity is granted by importing the observer.
+    import importlib.util
+    launcher = os.path.join(os.path.dirname(__file__), "launcher.py")
+    spec = importlib.util.spec_from_file_location("_blanc_native_adapter_launcher", launcher)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.install_shell_adapter(target, _emit)
     return _emit
 
 if os.environ.get("GATE_READ_AUDIT"):

@@ -26,6 +26,7 @@ def main():
     hook = launcher.load_hook()
     emit = hook.install(config["log"])
     sys._blanc_gate_read_audit_run = launcher.Adapter(config["log"], emit)
+    launcher.install_shell_adapter(config["log"], emit)
     sys.dont_write_bytecode = True
     mode, target, arguments = config["mode"], config["target"], config["arguments"]
     sys.orig_argv = config["original"]

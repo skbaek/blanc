@@ -83,6 +83,11 @@ _SPEC.loader.exec_module(gc)
 ROOT = gc.ROOT
 HOOK_DIR = ROOT / "scripts/read-audit"
 OUT_DIR = ROOT / ".lake/read-audit"
+NATIVE_CAPABILITY = None  # Explicit caller-pinned measurement authority only.
+_NATIVE_SPEC = importlib.util.spec_from_file_location("_blanc_native_auditor", HOOK_DIR / "native_process.py")
+native_process = importlib.util.module_from_spec(_NATIVE_SPEC)
+_NATIVE_SPEC.loader.exec_module(native_process)
+
 
 # Roots whose contents could plausibly change a verdict.  Anything outside them
 # -- the Python installation, temporary directories -- is machinery, not input.
@@ -316,7 +321,7 @@ LOST_HOOK_ROWS = frozenset(['lido-deployment', 'weth10-differential', 'lido-disp
 LAKE_SUBTREES = (".lake/build", ".lake/packages")
 
 
-OBSERVER_FILES = ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py")
+OBSERVER_FILES = ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py", "native_process.py")
 
 
 def observer_identity() -> dict[str, str]:
@@ -380,6 +385,15 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
 
     observation_sources = observer_identity()
+    native_descriptor = Path(str(log) + ".native-capability.json")
+    native_descriptor.unlink(missing_ok=True)
+    if NATIVE_CAPABILITY is not None:
+        # The sidecar is transport data. The auditor retains its independent
+        # command-line origin+digest binding and never adopts child-provided pins.
+        if hashlib.sha256(Path(NATIVE_CAPABILITY["origin"]).read_bytes()).hexdigest() != NATIVE_CAPABILITY["sha256"]:
+            raise ValueError("native capability origin changed before audit")
+        native_descriptor.write_text(json.dumps(NATIVE_CAPABILITY, sort_keys=True) + "\n")
+        observation_sources[str(Path(NATIVE_CAPABILITY["origin"]).resolve())] = NATIVE_CAPABILITY["sha256"]
     started = time.monotonic()
     result = subprocess.run(
         gate["command"], cwd=ROOT, env=environment,
@@ -410,8 +424,9 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     listings: set[str] = set()
     unverified: set[str] = set(required_root_errors)
     starts, ends = {}, set()
+    native_records = []
     launches, bootstraps, completions, handoffs, delegated, transports = {}, {}, {}, [], [], []
-    if observer_identity() != observation_sources:
+    if any(observation_sources.get(name) != sha for name, sha in observer_identity().items()):
         unverified.add("observer source changed during measured execution")
     if log.is_file():
         log_text = log.read_text(encoding="utf-8", errors="replace")
@@ -446,11 +461,17 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
             elif kind == "E":
                 try:
                     pid = int(raw)
-                    if pid <= 0 or pid in ends:
-                        raise ValueError("duplicate completion pid")
+                    if pid <= 0 or pid in ends or pid not in starts:
+                        raise ValueError("duplicate/orphan completion pid")
                     ends.add(pid)
                 except ValueError as error:
                     unverified.add(f"invalid completion receipt: {error}")
+            elif kind in ("H", "I", "J", "K"):
+                try:
+                    item = json.loads(raw)
+                    native_records.append((kind, item))
+                except (ValueError, TypeError) as error:
+                    unverified.add(f"invalid native record: {error}")
             elif kind in ("N", "B", "C", "P", "D", "T"):
                 try:
                     item = json.loads(raw)
@@ -495,6 +516,8 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
             unverified.add("Python descendant has no matching observer receipt: " + repr(handoff.get("original")))
         else:
             available.remove(match)
+    native_errors, native_captures = native_process.validate_records(native_records, NATIVE_CAPABILITY, starts, ends, log)
+    unverified.update(native_errors)
     if identifier in LOST_HOOK_ROWS:
         if not bootstraps:
             unverified.add("known sanitized/PYTHONPATH-replaced Python launch has no verified explicit adapter")
@@ -586,6 +609,9 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
         "non_python_delegations": delegated,
         "observer_source_sha256": observation_sources,
         "transport_receipts": transports,
+        "native_process_captures": native_captures,
+        "native_capability": NATIVE_CAPABILITY,
+
         "command": " ".join(gate["command"]),
         "exit": result.returncode,
         "elapsed_s": round(elapsed, 1),
@@ -618,7 +644,20 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--only", nargs="+", help="audit just these gate ids"
     )
+    parser.add_argument("--native-process-capability", help="explicit optional native measurement contract")
+    parser.add_argument("--native-process-capability-sha256", help="independently approved exact capability digest")
     arguments = parser.parse_args(argv)
+    global NATIVE_CAPABILITY
+    if bool(arguments.native_process_capability) != bool(arguments.native_process_capability_sha256):
+        parser.error("native capability path and approved digest must be supplied together")
+    NATIVE_CAPABILITY = None
+    if arguments.native_process_capability:
+        try:
+            origin = str(Path(arguments.native_process_capability).resolve(strict=True))
+            data = native_process.load_capability(origin, arguments.native_process_capability_sha256)
+            NATIVE_CAPABILITY = {"origin": origin, "sha256": arguments.native_process_capability_sha256, "data": data}
+        except (OSError, ValueError, TypeError, native_process.Unknown) as error:
+            parser.error("native capability unavailable: " + str(error))
 
     registry = gc.load_registry(gc.registry_path(ROOT))
     gates = [g for g in registry["gates"] if g["kind"] == "cacheable"]

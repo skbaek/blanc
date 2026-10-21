@@ -600,7 +600,13 @@ def legacy_descendant_controls() -> None:
                         if n == 't8n':
 
                             def norm(v):
-                                return [x if not x.startswith('/tmp/tmp') else '<actual-temporary-path>/' + Path(x).name if x.endswith('.json') else '<actual-temporary-path>' for x in v]
+                                index = v.index('--output.basedir')
+                                base = Path(v[index + 1])
+                                assert base.parent.resolve() == Path(tempfile.gettempdir()).resolve() and base.name.startswith('tmp'), base
+                                exact = {str(base / name): '<actual-temporary-path>/' + name
+                                         for name in ('env.json', 'alloc.json', 'txs.json')}
+                                exact[str(base)] = '<actual-temporary-path>'
+                                return [exact.get(x, x) for x in v]
                             expected[k] = norm(expected[k])
                             got[k] = norm(got[k])
                     assert got == expected, (n, {k: (expected[k], got[k]) for k in got if got[k] != expected[k]})
@@ -954,7 +960,269 @@ def current_wrapper_source_controls() -> None:
     print("CONTROL current wrappers bash syntax, static-only return/status, and ordinary adapter exact argv/env/output/status")
 
 
+def native_shell_controls(seed=None, artifact_root=None, expect_backend_denial=False) -> None:
+    """Real optional native protocol; no implicit native role/capability policy.
+
+    An explicit seed is only supplied by reviewed host controls. The ordinary
+    suite checks backend absence; it never discovers or approves native roles.
+    """
+    import ast
+    import hashlib
+    import json
+    import shutil
+    import unittest
+
+    module = load_audit()
+    with tempfile.TemporaryDirectory(prefix="native-shell-integrated-") as directory:
+        root = Path(directory).resolve()
+        module.ROOT, module.gc.ROOT = root, root
+        module.OUT_DIR = root / ".lake/read-audit"
+        hidden = root / "hidden.txt"
+        hidden.write_text("hidden real Python input\n")
+        child = root / "child.py"
+        child.write_text("import os,sys\nopen('hidden.txt').read()\nprint('real-child-output')\n"
+                         "if sys.argv[-1]=='missing-completion': os._exit(0)\n")
+        wrapper = root / "wrapper.sh"
+        wrapper.write_text("#!/bin/bash\ncase \"$1\" in missing-start|cap-self-authorize) flags=-I;; *) flags=-B;; esac\n"
+                           + sys.executable + " $flags " + str(child) + " \"$1\"\n")
+        parent = root / "parent.py"
+        parent.write_text('''import hashlib,json,os,subprocess,sys
+from pathlib import Path
+mode=sys.argv[1]
+run=getattr(sys,"_blanc_gate_read_audit_shell_run",None)
+log=Path(os.environ['GATE_READ_AUDIT'])
+sidecar=Path(str(log)+'.native-capability.json')
+restore=None
+if mode=='backend-drift':
+ carried=json.loads(sidecar.read_text()); name=carried['data']['drift_control']; Path(name).write_text('changed backend identity')
+if mode=='source-drift': Path('wrapper.sh').write_text(Path('wrapper.sh').read_text()+'# actual source drift\\n')
+if mode=='cap-self-authorize':
+ carried=json.loads(sidecar.read_text()); origin=Path(carried['origin']); restore=(origin,origin.read_bytes(),sidecar.read_bytes())
+ carried['data']['roles'][sys.executable]['kind']='native'
+ raw=(json.dumps(carried['data'],sort_keys=True,separators=(',',':'))+'\\n').encode()
+ origin.write_bytes(raw);carried['sha256']=hashlib.sha256(raw).hexdigest();sidecar.write_text(json.dumps(carried))
+if mode=='absent-sidecar': sidecar.unlink()
+command=['/bin/bash',str(Path('wrapper.sh').resolve()),mode]
+try:
+ if run is None: result=subprocess.run(command,capture_output=True,text=True)
+ else: result=run(command,capture_output=True,text=True,_read_audit_boundary={'id':'synthetic','root':str(Path.cwd())})
+finally:
+ if restore:
+  origin,raw,transport=restore;origin.write_bytes(raw);sidecar.write_bytes(transport)
+if mode in ('duplicate-K','orphan-K','unrelated-U'):
+ emit=sys._blanc_gate_read_observer[1]
+ if mode=='unrelated-U': emit('U','unrelated opaque process obligation')
+ else:
+  item=json.loads(next(x.split('\\t',1)[1] for x in log.read_text().splitlines() if x.startswith('K\\t')))
+  if mode=='orphan-K':item['nonce']='0'*32
+  emit('K',json.dumps(item))
+print(result.stdout,end='');print(result.stderr,end='',file=sys.stderr)
+raise SystemExit(result.returncode)
+''')
+        facts = []
+        authority = root.parent / (root.name+'-backend-identity-control.json')
+        authority.write_text('unchanged backend identity\n')
+        capfile = root / 'explicit-capability.json'
+
+        def configure(*, missing=False):
+            if seed is None:
+                module.NATIVE_CAPABILITY = None
+                return
+            cap = json.loads(json.dumps(seed))
+            cap['observer_sources'] = {name: hashlib.sha256((HOOK / name).read_bytes()).hexdigest()
+                                       for name in module.native_process.SOURCE_FILES}
+            cap['boundaries'] = {'synthetic': {'kind': 'static-synthetic-v1', 'root': str(root),
+                'files': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in (wrapper, child)}}}
+            cap['tools'][str(authority)] = hashlib.sha256(authority.read_bytes()).hexdigest()
+            cap['drift_control'] = str(authority)
+            if missing:
+                absent = str(root / 'absent-collector')
+                cap['invocation'][-1] = absent
+                cap['tools'][absent] = '0'*64
+            raw = (json.dumps(cap, sort_keys=True, separators=(',', ':'))+'\n').encode()
+            capfile.write_bytes(raw)
+            module.NATIVE_CAPABILITY = {'origin': str(capfile), 'sha256': hashlib.sha256(raw).hexdigest(), 'data': cap}
+
+        def observed(name, mode='good'):
+            gate = {'id': name, 'command': [sys.executable, '-B', str(parent), mode],
+                    'inputs': {'files': [parent.name, wrapper.name, child.name]}}
+            result = module.audit_gate(gate, [root], set())
+            facts.append({'name': name, 'result': result})
+            if artifact_root is not None:
+                target=Path(artifact_root);target.mkdir(parents=True,exist_ok=True)
+                (target/'results.json').write_text(json.dumps(facts,indent=2)+'\n')
+                shutil.copytree(module.OUT_DIR,target/'audit',dirs_exist_ok=True)
+            return result
+
+        def unknown(result, phrase):
+            assert result['unverified'] and any(phrase in message for message in result['unverified']), result
+
+        if seed is None:
+            configure()
+            result = observed('no-optional-native-capability')
+            unknown(result, 'native')
+            assert result['exit'] == 0 and result['reads_observed'] > 0, result
+            print('CONTROL absent optional native capability refuses; ordinary target still runs')
+            return
+
+        configure()
+        if expect_backend_denial:
+            denied = observed('real-denied-backend')
+            unknown(denied, 'collector')
+            assert not denied['native_process_captures'], denied
+            diagnostic=(module.OUT_DIR/'real-denied-backend.stderr.log').read_text()
+            assert 'Operation not permitted' in diagnostic and 'PTRACE' in diagnostic, diagnostic
+            print('CONTROL actual sandbox ptrace denial is UNKNOWN; no target verdict or coverage inferred')
+            return
+        good = observed('native-hidden-read')
+        assert good['exit'] == 0 and not good['unverified'] and good['undeclared'] == ['hidden.txt'], good
+        assert len(good['native_process_captures']) == 1
+        assert len(good['native_process_captures'][0]['python_generations']) == 1
+        unknown(observed('missing-child-start', 'missing-start'), 'native Python exec')
+        unknown(observed('missing-child-completion', 'missing-completion'), 'startup/completion')
+        for mode, phrase in [('duplicate-K','duplicate'),('orphan-K','nonces'),('unrelated-U','unrelated opaque')]:
+            unknown(observed(mode,mode),phrase)
+        # Change only callback selection after a green baseline. Restore exact
+        # source, without an identical restored-positive rerun.
+        green = parent.read_bytes()
+        needle = b'run=getattr(sys,"_blanc_gate_read_audit_shell_run",None)'
+        assert green.count(needle) == 1
+        try:
+            parent.write_bytes(green.replace(needle, b'run=None'))
+            unknown(observed('sole-shell-callback-removal'), 'opaque shell')
+        finally:
+            parent.write_bytes(green)
+        assert parent.read_bytes() == green
+        facts.append({'name':'sole-callback-restoration','sha256':hashlib.sha256(green).hexdigest(),'rerun':False})
+        # Sidecar data AND its digest cannot confer authority: keep the auditor's
+        # independently pinned original contract, then restore exact origin.
+        cap_green = capfile.read_bytes()
+        unknown(observed('sidecar-self-authority-rejected','cap-self-authorize'), 'auditor-authorized')
+        assert capfile.read_bytes() == cap_green
+        unknown(observed('real-absent-sidecar','absent-sidecar'), 'native')
+        original = wrapper.read_bytes()
+        unknown(observed('dynamic-source-drift','source-drift'), 'source drift')
+        wrapper.write_bytes(original); assert wrapper.read_bytes() == original
+        original = authority.read_bytes()
+        unknown(observed('backend-component-drift','backend-drift'), 'identity drift')
+        authority.write_bytes(original); assert authority.read_bytes() == original
+        configure(missing=True)
+        unknown(observed('real-absent-backend'), 'native')
+
+        # Actual source-owned dynamic DRIP producer and copied real mock routing.
+        producer = Path(__file__).with_name('test-drip-gate-coordination.py')
+        harness = root / 'routing.py'
+        harness.write_text('''import hashlib,importlib.util,json,os,sys,unittest,tempfile
+from pathlib import Path
+tempfile.tempdir=str(Path(__file__).resolve().parent)
+spec=importlib.util.spec_from_file_location('actual_drip',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+records=[];original=m.DripGateCoordination.run_gate
+if sys.argv[2]=='ordinary': sys.__dict__.pop('_blanc_gate_read_audit_shell_run',None)
+def recording(self,*args):
+ env={k:v.replace(str(self.root),'$FIXTURE') for k,v in self.env.items() if k!='GATE_READ_AUDIT'}
+ result,rows=original(self,*args)
+ records.append({'args':list(args),'environment_sha256':hashlib.sha256(json.dumps(env,sort_keys=True).encode()).hexdigest(),'status':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'calls':rows})
+ return result,rows
+m.DripGateCoordination.run_gate=recording
+result=unittest.TestResult();unittest.defaultTestLoader.loadTestsFromTestCase(m.DripGateCoordination).run(result)
+assert result.testsRun==7 and not result.failures and not result.errors,(result.failures,result.errors)
+print(json.dumps(records,sort_keys=True))
+''')
+        cap = json.loads(json.dumps(seed))
+        cap['observer_sources'] = {name: hashlib.sha256((HOOK/name).read_bytes()).hexdigest()
+                                   for name in module.native_process.SOURCE_FILES}
+        cap['boundaries'] = {'drip-routing': {'kind':'drip-routing-v1', 'producer':str(producer),
+            'producer_sha256':hashlib.sha256(producer.read_bytes()).hexdigest(),
+            'copied':{name:{'source':str(producer.parent/name),'sha256':hashlib.sha256((producer.parent/name).read_bytes()).hexdigest()}
+                      for name in ('check-drip.sh','gate-semaphore.sh')}}}
+        raw = (json.dumps(cap,sort_keys=True,separators=(',',':'))+'\n').encode();capfile.write_bytes(raw)
+        module.NATIVE_CAPABILITY = {'origin':str(capfile),'sha256':hashlib.sha256(raw).hexdigest(),'data':cap}
+        def routing(name,mode):
+            gate={'id':name,'command':[sys.executable,'-B',str(harness),str(producer),mode],
+                  'inputs':{'files':[str(harness),str(producer),str(producer.parent/'check-drip.sh'),str(producer.parent/'gate-semaphore.sh')]}}
+            outcome=module.audit_gate(gate,[root],set());facts.append({'name':name,'result':outcome})
+            return outcome,json.loads((module.OUT_DIR/(name+'.stdout.log')).read_text())
+        positive, traced = routing('actual-integrated-drip','observed')
+        assert positive['exit']==0 and not positive['unverified'] and not positive['undeclared'],positive
+        assert len(positive['native_process_captures'])==9 and len(traced)==9
+        baseline, ordinary = routing('actual-drip-ordinary','ordinary')
+        assert baseline['exit']==0 and len(ordinary)==9 and baseline['unverified'],baseline
+        assert traced==ordinary,(traced,ordinary)
+        if artifact_root is not None:
+            target=Path(artifact_root);target.mkdir(parents=True,exist_ok=True)
+            (target/'results.json').write_text(json.dumps(facts,indent=2)+'\n')
+            shutil.copytree(module.OUT_DIR,target/'audit',dirs_exist_ok=True)
+            (target/'capability.json').write_bytes(capfile.read_bytes())
+        print('CONTROL integrated native protocol: real hidden Python HOLE, missing receipts/callback, nonce/orphan/U, source/backend/capability refusals, exact restoration; actual seven DRIP methods/nine launches parity')
+
+
+def native_cancellation_control(seed, artifact_root) -> None:
+    """Kill only the owned collector pidfd; EXITKILL must close its own tree."""
+    import hashlib
+    import json
+    import shutil
+    module=load_audit()
+    with tempfile.TemporaryDirectory(prefix='native-shell-cancellation-') as directory:
+        root=Path(directory).resolve();module.ROOT=module.gc.ROOT=root;module.OUT_DIR=root/'.lake/read-audit'
+        wrapper=root/'wrapper.sh'
+        wrapper.write_text('#!/bin/bash\nprintf "%s\\n" "$$" > owned-root.pid\n/bin/sleep 30 &\nprintf "%s\\n" "$!" > owned-child.pid\nwait\n')
+        parent=root/'parent.py'
+        parent.write_text('''import json,os,signal,subprocess,sys,time
+from pathlib import Path
+owned=[]
+def stat(pid):
+ raw=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(')',1)[1].split()
+ return int(raw[19]),raw[0]
+def interrupted(self,*args,**kwargs):
+ deadline=time.monotonic()+3
+ while not (Path('owned-root.pid').exists() and Path('owned-child.pid').exists()):
+  if self.poll() is not None: raise AssertionError('collector failed before cancellation')
+  if time.monotonic()>deadline:raise AssertionError('owned child readiness timeout')
+  time.sleep(.01)
+ for path in ('owned-root.pid','owned-child.pid'):
+  pid=int(Path(path).read_text());start,state=stat(pid);owned.append({'pid':pid,'start':start,'pidfd':os.pidfd_open(pid)})
+ raise KeyboardInterrupt('own collector cancellation control')
+original=subprocess.Popen.communicate;subprocess.Popen.communicate=interrupted
+try:
+ try:sys._blanc_gate_read_audit_shell_run(['/bin/bash',str(Path('wrapper.sh').resolve())],capture_output=True,text=True,_read_audit_boundary={'id':'cancel','root':str(Path.cwd())})
+ except KeyboardInterrupt:pass
+ else:raise AssertionError('cancellation not propagated')
+finally:subprocess.Popen.communicate=original
+try:
+ deadline=time.monotonic()+2
+ while True:
+  live=[]
+  for item in owned:
+   try:start,state=stat(item['pid'])
+   except FileNotFoundError:state='gone';start=item['start']
+   item['final_state']=state
+   if start==item['start'] and state!='Z' and state!='gone':live.append(item)
+  if not live:break
+  if time.monotonic()>deadline:raise AssertionError('EXITKILL left owned descendants running')
+  time.sleep(.01)
+ print(json.dumps([{k:v for k,v in item.items() if k!='pidfd'} for item in owned]))
+finally:
+ for item in owned:
+  try:
+   start,state=stat(item['pid'])
+   if start==item['start'] and state!='Z':signal.pidfd_send_signal(item['pidfd'],signal.SIGKILL)
+  except FileNotFoundError:pass
+  os.close(item['pidfd'])
+''')
+        cap=json.loads(json.dumps(seed));cap['observer_sources']={name:hashlib.sha256((HOOK/name).read_bytes()).hexdigest() for name in module.native_process.SOURCE_FILES}
+        cap['boundaries']={'cancel':{'kind':'static-synthetic-v1','root':str(root),'files':{str(wrapper):hashlib.sha256(wrapper.read_bytes()).hexdigest()}}}
+        raw=(json.dumps(cap,sort_keys=True,separators=(',',':'))+'\n').encode();origin=root/'capability.json';origin.write_bytes(raw)
+        module.NATIVE_CAPABILITY={'origin':str(origin),'sha256':hashlib.sha256(raw).hexdigest(),'data':cap}
+        result=module.audit_gate({'id':'owned-cancellation','command':[sys.executable,'-B',str(parent)],'inputs':{'files':[parent.name,wrapper.name]}},[root],set())
+        assert result['exit']==0 and result['unverified'] and not result['native_process_captures'],result
+        states=json.loads((module.OUT_DIR/'owned-cancellation.stdout.log').read_text());assert len(states)==2 and all(item['final_state'] in ('gone','Z') for item in states),states
+        target=Path(artifact_root);target.mkdir(parents=True,exist_ok=True)
+        (target/'results.json').write_text(json.dumps({'result':result,'owned_descendants':states},indent=2)+'\n');shutil.copytree(module.OUT_DIR,target/'audit')
+        print('CONTROL cancellation propagates, retains UNKNOWN, kills only owned collector pidfd; EXITKILL descendants gone/zombie with exact start identities')
+
+
 def main() -> int:
+    native_shell_controls()
     current_wrapper_source_controls()
     observer_removal_control()
     descendant_observation_controls()

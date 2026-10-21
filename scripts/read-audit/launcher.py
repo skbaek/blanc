@@ -111,6 +111,17 @@ class Adapter:
         return result
 
 
+
+def install_shell_adapter(log, emit):
+    transport = getattr(sys, "_blanc_gate_native_transport", None)
+    if transport is None:
+        return  # Missing observer remains refused by existing startup checks.
+    spec = importlib.util.spec_from_file_location("_blanc_native_process", HERE / "native_process.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys._blanc_gate_read_audit_shell_run = module.ShellAdapter(log, emit, transport)
+
+
 def main():
     if len(sys.argv) < 3:
         raise SystemExit("usage: launcher.py LOG ORIGINAL_COMMAND...")
