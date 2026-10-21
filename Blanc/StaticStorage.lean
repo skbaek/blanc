@@ -211,8 +211,10 @@ private theorem Xinst.step_staticcall_spawn_ready {sevm : Sevm} {pre : Devm}
     (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
     (fork : CoveredFork sevm.benvStat.fork) :
     State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0 := by
-  simp only [Xinst.step, fork.rules_stateGas_none, Bind.bind, Except.bind,
-    Pure.pure, Except.pure] at spawn
+  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
+    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+  simp only [Xinst.step, fork.rules_stateGas_none, fork.rules_access, ForkRules.accessDelegation,
+    hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
 
@@ -267,7 +269,7 @@ private theorem GenericCall.none_state_transfer {sevm : Sevm} {devm inter : Devm
         ⟨_, _, handled⟩ | ⟨_, _, impossible, _⟩
       · refine ⟨Frame.ofCall (callMsg sevm (devm.withReturnData []) gas value caller target codeAddress stv isStatic ((devm.withReturnData []).memory.data.sliceD ii is 0) code dp), .call (devm.withReturnData []) oi os, entry, ?_, transfer, ?_⟩
         · simp only [ite_eq_right (show ¬ sevm.depth = 0 from by assumption)]
-        · rw [state, state_of_executePrecomp_ok handled clean]
+        · rw [state, Devm.recordTouch_state, state_of_executePrecomp_ok handled clean]
           rfl
       · cases impossible
 private theorem Xinst.none_state_transfer_static {sevm : Sevm} {pre post : Devm} {x : Xinst}
@@ -541,8 +543,10 @@ private theorem Xinst.step_staticcall_spawn_value_zero {sevm : Sevm} {pre : Devm
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
     (fork : CoveredFork sevm.benvStat.fork) : f.inner.value = 0 := by
-  simp only [Xinst.step, fork.rules_stateGas_none, Bind.bind, Except.bind,
-    Pure.pure, Except.pure] at spawn
+  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
+    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+  simp only [Xinst.step, fork.rules_stateGas_none, fork.rules_access, ForkRules.accessDelegation,
+    hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals
@@ -828,8 +832,11 @@ private theorem Xinst.staticcall_none_getStor_eq {sevm : Sevm} {pre post : Devm}
     (run : Xinst.Run sevm pre .staticcall .none (.ok post))
     (fork : CoveredFork sevm.benvStat.fork) :
     Devm.getStor post = Devm.getStor pre := by
-  simp only [Xinst.Run, Xinst.step, fork.rules_stateGas_none, Bind.bind, Except.bind,
-    Pure.pure, Except.pure] at run
+  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
+    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+  simp only [Xinst.Run, Xinst.step, fork.rules_stateGas_none, fork.rules_access,
+    ForkRules.accessDelegation, hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   all_goals first
