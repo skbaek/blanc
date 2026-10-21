@@ -57,11 +57,11 @@ theorem concreteDeployed_sum_le :
 /-- The literal schedule selects Prague at every timestamp.  Keep this
 certificate separate from the concrete transition proofs so the configured
 trace constructors retain the actual fork selected by their headers. -/
-theorem concreteConfig_covered {timestamp : Nat} {fork : Fork}
-    (hfork : concreteConfig.forkAt timestamp = .ok fork) :
+theorem concreteConfig_covered {number timestamp : Nat} {fork : Fork}
+    (hfork : concreteConfig.forkAt number timestamp = .ok fork) :
     CoveredFork fork := by
-  have hprague : concreteConfig.forkAt timestamp = .ok .prague := by
-    simpa only [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
+  have hprague : concreteConfig.forkAt number timestamp = .ok .prague := by
+    simpa only [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 number timestamp
   rw [hprague] at hfork
   cases hfork
   exact CoveredFork.prague
