@@ -213,10 +213,11 @@ private theorem depositEndpointErrorWitness_of_safeBody
       (validateDepositAbi safeBody) reachableErrorSlots = true)
     (hexec : runtime.reachableExecFree
       (validateDepositAbi safeBody) reachableErrorSlots = true)
-    (houtput : post.output = errorData (reasonString reason)) :
+    (houtput : post.output = errorData (reasonString reason))
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G reason := by
   unfold DepositEndpointErrorWitness
-  have habi := validateDepositAbi_success_runCompiledTo
+  have habi := validateDepositAbi_success_runCompiledTo (h_push0 := h_push0)
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
     (G := G + bodyCost) (body := safeBody)
     hdataBound hdec hbody
@@ -339,7 +340,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
       reconstructDepositDataNode depositSuccessGuards by rfl]
     simpa only [stagedBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach] using
       hreconstructRun
-  have hguards := depositGuards_storageEffectRun
+  have hguards := depositGuards_storageEffectRun (h_push0 := hfork.rules_push0)
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
     (amount := amount)
     (G := (K + 1779) + 5799 + sloadCost sevm base depositCountSlot)
@@ -357,7 +358,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
         ⟨[], depositDecodedMemory sevm.data, G + bodyCost, base.stateGas⟩)
       depositBody (.error (.revert, post)) [] := by
     simpa only [hgas] using hguards
-  have hendpoint := validateDepositAbi_success_storageEffectRun
+  have hendpoint := validateDepositAbi_success_storageEffectRun (h_push0 := hfork.rules_push0)
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
     (G := G + bodyCost) hdataBound hdec hbody
   have htotal : (G + bodyCost) + 521 = G + (bodyCost + 521) := by
@@ -379,7 +380,8 @@ private theorem depositLengthGuard_failure_runCompiledTo
     (hread : Bytes.toB256 (memory.read index 32).1 = actual)
     (hne : actual ≠ expected)
     (hwordPush : pushCost (word * 32).toBytes.sig = gVerylow)
-    (hexpectedPush : pushCost expected.toBytes.sig = gVerylow) :
+    (hexpectedPush : pushCost expected.toBytes.sig = gVerylow)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
@@ -400,7 +402,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
     Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)
   unfold loadWord
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (c := gVerylow) (G := (G + errorCost) + 12) hwordPush
       (by
         simp only [Devm.gasLeft_setMach, errorCost, guardBase,
@@ -421,7 +423,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
       (by simp only [List.length_nil]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (c := gVerylow) (G := (G + errorCost) + 6) hexpectedPush
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
@@ -433,7 +435,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
   case h_val => simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, Nat.add_sub_cancel] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hmem.image) (otherwise := otherwise)
       error (by decide) hmem.wf hmem.reads hmod
@@ -446,7 +448,8 @@ private theorem depositValueLowerGuard_failure_runCompiledTo
     {sevm : Sevm} {base : Devm} {memory : Mem} {data : Bytes}
     {G : Nat} {otherwise : Func}
     (hmem : DepositDecodedMemoryCarrier memory data)
-    (hlower : sevm.value < Nat.toB256 oneEther) :
+    (hlower : sevm.value < Nat.toB256 oneEther)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
@@ -472,7 +475,7 @@ private theorem depositValueLowerGuard_failure_runCompiledTo
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, ReachableReason.slot,
       Nat.add_sub_cancel] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hmem.image) (otherwise := otherwise)
       .valueTooLow (by decide) hmem.wf hmem.reads hmod
@@ -483,7 +486,8 @@ private theorem depositGweiMultipleGuard_failure_runCompiledTo
     {sevm : Sevm} {base : Devm} {memory : Mem} {data : Bytes}
     {G : Nat} {otherwise : Func}
     (hmem : DepositDecodedMemoryCarrier memory data)
-    (hremainder : sevm.value % Nat.toB256 oneGwei ≠ 0) :
+    (hremainder : sevm.value % Nat.toB256 oneGwei ≠ 0)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
@@ -509,7 +513,7 @@ private theorem depositGweiMultipleGuard_failure_runCompiledTo
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, ReachableReason.slot,
       Nat.add_sub_cancel] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G)
       (w := sevm.value % Nat.toB256 oneGwei)
       (stack := []) (img := hmem.image) (otherwise := otherwise)
@@ -523,7 +527,8 @@ private theorem depositAmountUpperGuard_failure_runCompiledTo
     {amount : B256} {G : Nat} {otherwise : Func}
     (hmem : DepositDecodedMemoryCarrier memory data)
     (hamount : sevm.value / Nat.toB256 oneGwei = amount)
-    (hupper : Nat.toB256 (2 ^ 64 - 1) < amount) :
+    (hupper : Nat.toB256 (2 ^ 64 - 1) < amount)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let writtenMemory := memory.write 672 amount.toBytes
     let guardBase := base.setMach ⟨[], writtenMemory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
@@ -561,7 +566,7 @@ private theorem depositAmountUpperGuard_failure_runCompiledTo
   simpa only [writtenMemory, guardBase, errorCost,
       Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach,
       ReachableReason.slot, Nat.add_sub_cancel, hamountWord] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hwritten.image)
       (otherwise := otherwise)
@@ -574,7 +579,8 @@ private theorem depositRootGuard_failure_runCompiledTo
     {sevm : Sevm} {base : Devm} {memory : Mem}
     {oldCount node : B256} {G : Nat} {otherwise : Func}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
-    (hroot : Sevm.argWord sevm 3 ≠ node) :
+    (hroot : Sevm.argWord sevm 3 ≠ node)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
@@ -615,7 +621,7 @@ private theorem depositRootGuard_failure_runCompiledTo
       show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
       hmemory, ReachableReason.slot,
       Nat.add_sub_cancel] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hmem.image)
       (otherwise := otherwise)
@@ -628,7 +634,8 @@ private theorem depositCapGuard_failure_runCompiledTo
     {sevm : Sevm} {base : Devm} {memory : Mem}
     {oldCount node : B256} {G : Nat} {otherwise : Func}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
-    (hcap : ¬ oldCount < Nat.toB256 (2 ^ 32 - 1)) :
+    (hcap : ¬ oldCount < Nat.toB256 (2 ^ 32 - 1))
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
     Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory,
@@ -671,7 +678,7 @@ private theorem depositCapGuard_failure_runCompiledTo
       show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hmemory, ReachableReason.slot,
       Nat.add_sub_cancel] using
-    (reachableErrorGuard_exact_runCompiledTo
+    (reachableErrorGuard_exact_runCompiledTo (h_push0 := h_push0)
       (base := guardBase) (G := G) (w := (1 : B256))
       (stack := []) (img := hmem.image) (otherwise := otherwise)
       .merkleTreeFull (by decide) hmem.wf hmem.reads hmod
@@ -688,7 +695,8 @@ theorem deposit_pubkeyLength_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .pubkey_length) :
+        .error .pubkey_length)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G .pubkey_length := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
     withdrawalCredentials signature depositDataRoot sevm.value.toNat
@@ -724,7 +732,7 @@ theorem deposit_pubkeyLength_error_endpoint_runCompiledTo
     unfold pubkeyLengthSafeBody
     simpa only [memory, guardBase, guardCost, post,
         ReachableReason.slot] using
-      (depositLengthGuard_failure_runCompiledTo
+      (depositLengthGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (actual := Nat.toB256 pubkey.length)
         (expected := (48 : B256)) (word := 3) (index := 96)
@@ -732,7 +740,7 @@ theorem deposit_pubkeyLength_error_endpoint_runCompiledTo
         .pubkeyLength hcarrier (by decide +kernel)
         (by rw [hcarrier.size_eq]; omega) hread hne
         (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 15) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterPubkeyLength) (by rfl)
@@ -749,7 +757,8 @@ theorem deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .withdrawal_credentials_length) :
+        .error .withdrawal_credentials_length)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G
       .withdrawal_credentials_length := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
@@ -789,14 +798,14 @@ theorem deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
       (base.setMach ⟨[], memory, ((G + guardCost) + 15) + 28, base.stateGas⟩)
       withdrawalLengthSafeBody (.error (.revert, post)) := by
     unfold withdrawalLengthSafeBody
-    refine depositLengthGuard_runCompiledTo
+    refine depositLengthGuard_runCompiledTo (h_push0 := h_push0)
       (word := 3) (expected := 48) (index := 96)
       (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
       (by rw [hcarrier.size_eq]; omega) hread0
       (by decide +kernel) (by decide +kernel) ?_
     simpa only [memory, guardBase, guardCost, post,
         ReachableReason.slot] using
-      (depositLengthGuard_failure_runCompiledTo
+      (depositLengthGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data)
         (actual := Nat.toB256 withdrawalCredentials.length)
@@ -804,7 +813,7 @@ theorem deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
         (G := G) .withdrawalCredentialsLength hcarrier
         (by decide +kernel) (by rw [hcarrier.size_eq]; omega)
         hread1 hne (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 43) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterWithdrawalLength) (by rfl)
@@ -821,7 +830,8 @@ theorem deposit_signatureLength_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .signature_length) :
+        .error .signature_length)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G .signature_length := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
     withdrawalCredentials signature depositDataRoot sevm.value.toNat
@@ -865,26 +875,26 @@ theorem deposit_signatureLength_error_endpoint_runCompiledTo
         ⟨[], memory, (((G + guardCost) + 15) + 28) + 28, base.stateGas⟩)
       signatureLengthSafeBody (.error (.revert, post)) := by
     unfold signatureLengthSafeBody
-    refine depositLengthGuard_runCompiledTo
+    refine depositLengthGuard_runCompiledTo (h_push0 := h_push0)
       (word := 3) (expected := 48) (index := 96)
       (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
       (by rw [hcarrier.size_eq]; omega) hread0
       (by decide +kernel) (by decide +kernel) ?_
-    refine depositLengthGuard_runCompiledTo
+    refine depositLengthGuard_runCompiledTo (h_push0 := h_push0)
       (word := 4) (expected := 32) (index := 128)
       (slot := withdrawalLengthErrorSlot) hcarrier (by decide +kernel)
       (by rw [hcarrier.size_eq]; omega) hread1
       (by decide +kernel) (by decide +kernel) ?_
     simpa only [memory, guardBase, guardCost, post,
         ReachableReason.slot] using
-      (depositLengthGuard_failure_runCompiledTo
+      (depositLengthGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (actual := Nat.toB256 signature.length)
         (expected := (96 : B256)) (word := 5) (index := 160)
         (G := G) .signatureLength hcarrier (by decide +kernel)
         (by rw [hcarrier.size_eq]) hread2 hne
         (by decide +kernel) (by decide +kernel))
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 71) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterSignatureLength) (by rfl)
@@ -901,7 +911,8 @@ theorem deposit_valueTooLow_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .value_too_low) :
+        .error .value_too_low)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G .value_too_low := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
     withdrawalCredentials signature depositDataRoot sevm.value.toNat
@@ -927,13 +938,13 @@ theorem deposit_valueTooLow_error_endpoint_runCompiledTo
       (base.setMach ⟨[], memory, ((G + guardCost) + 8) + 84, base.stateGas⟩)
       valueTooLowSafeBody (.error (.revert, post)) := by
     unfold valueTooLowSafeBody
-    refine depositLengthGuards_runCompiledTo hcarrier hdec
+    refine depositLengthGuards_runCompiledTo (h_push0 := h_push0) hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     simpa only [memory, guardBase, guardCost, post] using
-      (depositValueLowerGuard_failure_runCompiledTo
+      (depositValueLowerGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (G := G) hcarrier hlowerWord)
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 92) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterValueTooLow) (by rfl)
@@ -950,7 +961,8 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .value_not_gwei_multiple) :
+        .error .value_not_gwei_multiple)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G .value_not_gwei_multiple := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
     withdrawalCredentials signature depositDataRoot sevm.value.toNat
@@ -991,15 +1003,15 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
         ⟨[], memory, (((G + guardCost) + 10) + 21) + 84, base.stateGas⟩)
       valueNotGweiSafeBody (.error (.revert, post)) := by
     unfold valueNotGweiSafeBody
-    refine depositLengthGuards_runCompiledTo hcarrier hdec
+    refine depositLengthGuards_runCompiledTo (h_push0 := h_push0) hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     refine depositValueLowerGuard_runCompiledTo
       (slot := valueTooLowErrorSlot) hlowerWord ?_
     simpa only [memory, guardBase, guardCost, post] using
-      (depositGweiMultipleGuard_failure_runCompiledTo
+      (depositGweiMultipleGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (G := G) hcarrier hremainderWord)
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 115) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterValueNotGwei) (by rfl)
@@ -1016,7 +1028,8 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
       signature depositDataRoot)
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
-        .error .value_too_high) :
+        .error .value_too_high)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositEndpointErrorWitness sevm base G .value_too_high := by
   have hspec := deposit_error_spec Bytes.sha256 state pubkey
     withdrawalCredentials signature depositDataRoot sevm.value.toNat
@@ -1065,7 +1078,7 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
         ((((G + guardCost) + 73) + 23) + 21) + 84, base.stateGas⟩)
       valueTooHighSafeBody (.error (.revert, post)) := by
     unfold valueTooHighSafeBody
-    refine depositLengthGuards_runCompiledTo hcarrier hdec
+    refine depositLengthGuards_runCompiledTo (h_push0 := h_push0) hcarrier hdec
       hpubkey hwithdrawal hsignature ?_
     refine depositValueLowerGuard_runCompiledTo
       (slot := valueTooLowErrorSlot) hlowerWord ?_
@@ -1073,11 +1086,11 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
       (slot := valueNotGweiErrorSlot) hgweiWord ?_
     simpa only [memory, amount, writtenMemory, guardBase, guardCost,
         post] using
-      (depositAmountUpperGuard_failure_runCompiledTo
+      (depositAmountUpperGuard_failure_runCompiledTo (h_push0 := h_push0)
         (sevm := sevm) (base := base) (memory := memory)
         (data := sevm.data) (amount := amount) (G := G)
         hcarrier rfl hupperWord)
-  exact depositEndpointErrorWitness_of_safeBody hdataBound hdec
+  exact depositEndpointErrorWitness_of_safeBody (h_push0 := h_push0) hdataBound hdec
     (bodyCost := guardCost + 201) (by
       simpa only [Nat.add_assoc] using hguard)
     (replacement := afterValueTooHigh) (by
@@ -1186,7 +1199,7 @@ theorem deposit_depositDataRootMismatch_error_endpoint_runCompiledTo
       depositSuccessGuardsSafe (.error (.revert, post)) := by
     simpa only [depositSuccessGuardsSafe, guardBase, post, hcost,
         Nat.add_assoc] using
-      (depositRootGuard_failure_runCompiledTo
+      (depositRootGuard_failure_runCompiledTo (h_push0 := hfork.rules_push0)
         (sevm := sevm) (base := finalPost) (G := G)
         (otherwise :=
           pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
@@ -1287,7 +1300,7 @@ theorem deposit_merkleTreeFull_error_endpoint_runCompiledTo
       ReachableReason.merkleTreeFull.reason))
   have hcost := depositPostHashErrorGuardCost_eq
     (base := finalPost) .merkleTreeFull hstart
-  have hcapRun := depositCapGuard_failure_runCompiledTo
+  have hcapRun := depositCapGuard_failure_runCompiledTo (h_push0 := hfork.rules_push0)
     (sevm := sevm) (base := finalPost) (G := G)
     (otherwise := Func.stop) hstart hcapWord
   have hrootRun := depositRootGuard_runCompiledTo

@@ -21,7 +21,8 @@ theorem depositLengthGuard_storageEffectRun
     (hwordPush : pushCost (word * 32).toBytes.sig = 3)
     (hexpectedPush : pushCost expected.toBytes.sig = 3)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (loadWord word +++ pushB256 expected ::: eq ::: iszero :::
@@ -32,7 +33,7 @@ theorem depositLengthGuard_storageEffectRun
     Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)
   unfold loadWord
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 25) hwordPush
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 25) hwordPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
@@ -52,7 +53,7 @@ theorem depositLengthGuard_storageEffectRun
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 19) hexpectedPush
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 19) hexpectedPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
@@ -101,7 +102,8 @@ theorem depositLengthGuards_storageEffectRun
     (hwithdrawal : withdrawalCredentials.length = 32)
     (hsignature : signature.length = 96)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 84, base.stateGas⟩)
       (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
@@ -122,17 +124,17 @@ theorem depositLengthGuards_storageEffectRun
     rw [hcarrier.read_length1, B256.toB256_toBytes, hlen1]
   have hread2 : Bytes.toB256 (memory.read 160 32).1 = 96 := by
     rw [hcarrier.read_length2, B256.toB256_toBytes, hlen2]
-  have hsignatureRun := depositLengthGuard_storageEffectRun
+  have hsignatureRun := depositLengthGuard_storageEffectRun (h_push0 := h_push0)
     (word := 5) (expected := 96) (index := 160)
     (slot := signatureLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]) hread2
     (by decide +kernel) (by decide +kernel) htail
-  have hwithdrawalRun := depositLengthGuard_storageEffectRun
+  have hwithdrawalRun := depositLengthGuard_storageEffectRun (h_push0 := h_push0)
     (word := 4) (expected := 32) (index := 128)
     (slot := withdrawalLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]; omega) hread1
     (by decide +kernel) (by decide +kernel) hsignatureRun
-  have hpubkeyRun := depositLengthGuard_storageEffectRun
+  have hpubkeyRun := depositLengthGuard_storageEffectRun (h_push0 := h_push0)
     (word := 3) (expected := 48) (index := 96)
     (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]; omega) hread0
@@ -147,13 +149,14 @@ theorem depositValueLowerGuard_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hlower : Nat.toB256 oneEther ≤ sevm.value)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 21, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneEther) ::: callvalue ::: lt :::
         ((.call slot) <?> rest)) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := Nat.toB256 oneEther)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := Nat.toB256 oneEther)
       (c := gVerylow) (G := G + 18)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -197,13 +200,14 @@ theorem depositGweiMultipleGuard_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hgwei : sevm.value % Nat.toB256 oneGwei = 0)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 23, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: mod :::
         ((.call slot) <?> rest)) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := Nat.toB256 oneGwei)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := Nat.toB256 oneGwei)
       (c := gVerylow) (G := G + 20)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -252,7 +256,8 @@ theorem depositAmountUpperGuard_storageEffectRun
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (htail : Func.StorageEffectRun fs sevm
       (base.setMach
-        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex effects) :
+        ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 86, base.stateGas⟩)
       (pushB256 (Nat.toB256 oneGwei) ::: callvalue ::: div ::: dup 0 :::
@@ -260,7 +265,7 @@ theorem depositAmountUpperGuard_storageEffectRun
         pushB256 (Nat.toB256 (2 ^ 64 - 1)) ::: lt :::
         ((.call slot) <?> rest)) ex effects := by
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := Nat.toB256 oneGwei)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := Nat.toB256 oneGwei)
       (c := gVerylow) (G := G + 83)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -296,7 +301,7 @@ theorem depositAmountUpperGuard_storageEffectRun
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach, mstoreAt, prepend]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := amountWord * 32)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := amountWord * 32)
       (c := gVerylow) (G := G + 70)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -319,7 +324,7 @@ theorem depositAmountUpperGuard_storageEffectRun
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := Nat.toB256 (2 ^ 64 - 1)) (c := gVerylow) (G := G + 16)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -366,7 +371,8 @@ theorem depositGuards_storageEffectRun
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G, base.stateGas⟩)
-      (stageDepositEvent +++ depositAfterEvent) ex effects) :
+      (stageDepositEvent +++ depositAfterEvent) ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
@@ -378,13 +384,13 @@ theorem depositGuards_storageEffectRun
       (base.setMach ⟨[], memory.write 672 amount.toBytes, G, base.stateGas⟩)
       (stageDepositEvent +++ depositAfterEvent) ex effects := by
     simpa only [memory, depositEventInputMemory] using hbody
-  have hupperRun := depositAmountUpperGuard_storageEffectRun
+  have hupperRun := depositAmountUpperGuard_storageEffectRun (h_push0 := h_push0)
     (slot := valueTooHighErrorSlot) hcarrier hamount hupper hbody'
-  have hgweiRun := depositGweiMultipleGuard_storageEffectRun
+  have hgweiRun := depositGweiMultipleGuard_storageEffectRun (h_push0 := h_push0)
     (slot := valueNotGweiErrorSlot) hgwei hupperRun
-  have hlowerRun := depositValueLowerGuard_storageEffectRun
+  have hlowerRun := depositValueLowerGuard_storageEffectRun (h_push0 := h_push0)
     (slot := valueTooLowErrorSlot) hlower hgweiRun
-  have hlengthRun := depositLengthGuards_storageEffectRun
+  have hlengthRun := depositLengthGuards_storageEffectRun (h_push0 := h_push0)
     (base := base) (memory := memory) hcarrier hdec hpubkey hwithdrawal
     hsignature hlowerRun
   simpa only [memory, depositGuardsGas, depositBody] using hlengthRun

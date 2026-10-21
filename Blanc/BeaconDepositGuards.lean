@@ -35,7 +35,8 @@ theorem depositLengthGuard_runCompiledTo
     (hwordPush : pushCost (word * 32).toBytes.sig = 3)
     (hexpectedPush : pushCost expected.toBytes.sig = 3)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (loadWord word +++ pushB256 expected ::: eq ::: iszero :::
@@ -46,7 +47,7 @@ theorem depositLengthGuard_runCompiledTo
     Mem.read_snd_eq_self (memExtSize_of_le hmod hcovered)
   unfold loadWord
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 25) hwordPush
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 25) hwordPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
@@ -64,7 +65,7 @@ theorem depositLengthGuard_runCompiledTo
       (by simp only [List.length_nil]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 19) hexpectedPush
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 19) hexpectedPush
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)) ?_
@@ -89,7 +90,8 @@ theorem depositLengthGuards_runCompiledTo
     (hwithdrawal : withdrawalCredentials.length = 32)
     (hsignature : signature.length = 96)
     (htail : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], memory, G + 84, base.stateGas⟩)
       (loadWord 3 +++ pushB256 48 ::: eq ::: iszero :::
@@ -110,17 +112,17 @@ theorem depositLengthGuards_runCompiledTo
     rw [hcarrier.read_length1, B256.toB256_toBytes, hlen1]
   have hread2 : Bytes.toB256 (memory.read 160 32).1 = 96 := by
     rw [hcarrier.read_length2, B256.toB256_toBytes, hlen2]
-  have hsignatureRun := depositLengthGuard_runCompiledTo
+  have hsignatureRun := depositLengthGuard_runCompiledTo (h_push0 := h_push0)
     (word := 5) (expected := 96) (index := 160)
     (slot := signatureLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]) hread2
     (by decide +kernel) (by decide +kernel) htail
-  have hwithdrawalRun := depositLengthGuard_runCompiledTo
+  have hwithdrawalRun := depositLengthGuard_runCompiledTo (h_push0 := h_push0)
     (word := 4) (expected := 32) (index := 128)
     (slot := withdrawalLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]; omega) hread1
     (by decide +kernel) (by decide +kernel) hsignatureRun
-  have hpubkeyRun := depositLengthGuard_runCompiledTo
+  have hpubkeyRun := depositLengthGuard_runCompiledTo (h_push0 := h_push0)
     (word := 3) (expected := 48) (index := 96)
     (slot := pubkeyLengthErrorSlot) hcarrier (by decide +kernel)
     (by rw [hcarrier.size_eq]; omega) hread0
@@ -205,7 +207,8 @@ theorem depositGuards_runCompiledTo
     (hupper : amount ≤ Nat.toB256 (2 ^ 64 - 1))
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], depositEventInputMemory sevm.data amount, G, base.stateGas⟩)
-      (stageDepositEvent +++ depositAfterEvent) ex) :
+      (stageDepositEvent +++ depositAfterEvent) ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], depositDecodedMemory sevm.data, G + depositGuardsGas, base.stateGas⟩)
@@ -223,7 +226,7 @@ theorem depositGuards_runCompiledTo
     (slot := valueNotGweiErrorSlot) hgwei hupperRun
   have hlowerRun := depositValueLowerGuard_runCompiledTo
     (slot := valueTooLowErrorSlot) hlower hgweiRun
-  have hlengthRun := depositLengthGuards_runCompiledTo
+  have hlengthRun := depositLengthGuards_runCompiledTo (h_push0 := h_push0)
     (base := base) (memory := memory) hcarrier hdec hpubkey hwithdrawal
     hsignature hlowerRun
   simpa only [memory, depositGuardsGas, depositBody] using hlengthRun

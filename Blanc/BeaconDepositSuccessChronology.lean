@@ -191,7 +191,7 @@ theorem deposit_success_retainedStorageEffectTriples
     change _logged.error = none
     rw [_herror, Blanc.afterSload_error, hbaseError]
   obtain ⟨execution, hrun, heffects, hcompiled⟩ :=
-    deposit_route_retainedStorageEffectTriples
+    deposit_route_retainedStorageEffectTriples (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts)
       hlengthWordNe hselector hendpoint'
         (by simpa only [Execution.commits, Option.isNone_iff_eq_none] using hpostError) hcode
   refine ⟨post, execution, ?_, ?_, hcompiled⟩

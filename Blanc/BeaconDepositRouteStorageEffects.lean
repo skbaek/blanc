@@ -12,7 +12,8 @@ private theorem exactDepositLeafRoute_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hbody : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) depositEndpoint out effects) :
+      (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩) depositEndpoint out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
       depositLeafRoute out effects := by
@@ -21,7 +22,7 @@ private theorem exactDepositLeafRoute_storageEffectRun
     rw [depositSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 17) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 17) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -59,7 +60,8 @@ private theorem exactDepositMiddleDispatch_storageEffectRun
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hleaf : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 20, base.stateGas⟩)
-      depositLeafRoute out effects) :
+      depositLeafRoute out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
       depositMiddleDispatch out effects := by
@@ -80,7 +82,7 @@ private theorem exactDepositMiddleDispatch_storageEffectRun
     rw [getDepositCountSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 37) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 37) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -122,7 +124,8 @@ private theorem exactDepositRootDispatch_storageEffectRun
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hmiddle : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 43, base.stateGas⟩)
-      depositMiddleDispatch out effects) :
+      depositMiddleDispatch out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
       depositRootDispatch out effects := by
@@ -142,7 +145,7 @@ private theorem exactDepositRootDispatch_storageEffectRun
     rw [depositSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 59) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 59) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -180,7 +183,9 @@ private theorem exactDepositMainRoute_storageEffectRun
     (hselector : Sevm.selector sevm = depositSelector)
     (hroot : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[depositSelector], Mem.empty, G + 65, base.stateGas⟩)
-      depositRootDispatch out effects) :
+      depositRootDispatch out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], Mem.empty, G + 76, base.stateGas⟩)
       (Func.main tree) out effects := by
@@ -207,20 +212,22 @@ theorem deposit_route_storageEffectRun
     (hselector : Sevm.selector sevm = depositSelector)
     (hbody : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out effects) :
+      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ mid : Devm,
       Devm.BurnBy gJumpdest
         (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) mid ∧
       Func.StorageEffectRun (runtime.main :: runtime.aux)
         sevm mid runtime.main out effects := by
   have hleaf :=
-    exactDepositLeafRoute_storageEffectRun (G := K) hbody
+    exactDepositLeafRoute_storageEffectRun (h_push0 := h_push0) (G := K) hbody
   have hmiddle :=
-    exactDepositMiddleDispatch_storageEffectRun (G := K) hleaf
+    exactDepositMiddleDispatch_storageEffectRun (h_push0 := h_push0) (G := K) hleaf
   have hroot :=
-    exactDepositRootDispatch_storageEffectRun (G := K) hmiddle
+    exactDepositRootDispatch_storageEffectRun (h_push0 := h_push0) (G := K) hmiddle
   have hmain :=
-    exactDepositMainRoute_storageEffectRun (G := K) hselector hroot
+    exactDepositMainRoute_storageEffectRun (h_shifts := h_shifts) (h_push0 := h_push0) (G := K) hselector hroot
   let pre := base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, K + 92, base.stateGas⟩
   let afterSize := base.setMach
@@ -277,7 +284,9 @@ theorem deposit_route_retainedStorageEffectTriples
       (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩) depositEndpoint out effects)
     (hcommits : Execution.commits out = true)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) out,
       Prog.RunCompiledTo sevm
@@ -285,7 +294,7 @@ theorem deposit_route_retainedStorageEffectTriples
       Exec.retainedStorageEffectTriples execution = effects ∧
       some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨mid, hentry, hmain⟩ :=
-    deposit_route_storageEffectRun hnonempty hselector hbody
+    deposit_route_storageEffectRun (h_shifts := h_shifts) (h_push0 := h_push0) hnonempty hselector hbody
   have hprogram : Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty, K + depositRouteGas, base.stateGas⟩) runtime out :=
     ⟨mid, hentry, hmain.run⟩

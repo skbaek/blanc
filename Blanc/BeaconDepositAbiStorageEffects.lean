@@ -180,7 +180,8 @@ private theorem depositTail0Stores_success_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedTail0Memory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[depositLengthWord sevm.data 0,
@@ -261,7 +262,8 @@ private theorem depositTail2OffsetStore_success_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[depositOffsetWord sevm.data 2],
@@ -269,7 +271,7 @@ private theorem depositTail2OffsetStore_success_storageEffectRun
       (mstoreAt 2 +++ body) ex effects := by
   simp only [mstoreAt, prepend]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := 64) (c := gVerylow) (G := G + 3)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := 64) (c := gVerylow) (G := G + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
@@ -303,7 +305,8 @@ private theorem depositTail2Stores_success_storageEffectRun
     {effects : List (Adr × B256 × B256)}
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[depositLengthWord sevm.data 2,
@@ -320,7 +323,7 @@ private theorem depositTail2Stores_success_storageEffectRun
         ⟨[depositOffsetWord sevm.data 2],
           depositDecodedTail2LengthMemoryEffects sevm.data, G + 6, base.stateGas⟩)
       (mstoreAt 2 +++ body) ex effects
-    exact depositTail2OffsetStore_success_storageEffectRun hbody
+    exact depositTail2OffsetStore_success_storageEffectRun (h_push0 := h_push0) hbody
 
 private theorem validateDynamicTail_success_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -341,7 +344,8 @@ private theorem validateDynamicTail_success_storageEffectRun
         ⟨depositLengthWord sevm.data headNat ::
           depositOffsetWord sevm.data headNat :: stack, memory, G, base.stateGas⟩)
       (mstoreAt (Nat.toB256 lengthWord) +++
-        mstoreAt (Nat.toB256 offsetWord) +++ body) ex effects) :
+        mstoreAt (Nat.toB256 offsetWord) +++ body) ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨stack, memory, G + 149, base.stateGas⟩)
       (validateDynamicTail (Nat.toB256 head)
@@ -358,7 +362,7 @@ private theorem validateDynamicTail_success_storageEffectRun
   rw [validateDynamicTail_eq]
   unfold arg cdl
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 146) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 146) hpushCost
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
@@ -381,14 +385,15 @@ private theorem depositTail2_success_storageEffectRun
     (hdec : DynamicTailDecodable sevm.data 2)
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositDecodedTail1Memory sevm.data, G + 164, base.stateGas⟩)
       (validateDynamicTail 2 2 5 body) ex effects := by
-  have hstores := depositTail2Stores_success_storageEffectRun
+  have hstores := depositTail2Stores_success_storageEffectRun (h_push0 := h_push0)
     (base := base) hbody
-  have hrun := validateDynamicTail_success_storageEffectRun
+  have hrun := validateDynamicTail_success_storageEffectRun (h_push0 := h_push0)
     (base := base) (memory := depositDecodedTail1Memory sevm.data)
     (stack := []) (G := G + 15)
     (head := 2) (headNat := 2) (offsetWord := 2) (lengthWord := 5)
@@ -409,17 +414,18 @@ private theorem depositTail1_success_storageEffectRun
     (hdec2 : DynamicTailDecodable sevm.data 2)
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[], depositDecodedTail0Memory sevm.data, G + 328, base.stateGas⟩)
       (validateDynamicTail 1 1 4
         (validateDynamicTail 2 2 5 body)) ex effects := by
-  have htail2 := depositTail2_success_storageEffectRun
+  have htail2 := depositTail2_success_storageEffectRun (h_push0 := h_push0)
     (base := base) hdataBound hdec2 hbody
   have hstores := depositTail1Stores_success_storageEffectRun
     (base := base) htail2
-  have hrun := validateDynamicTail_success_storageEffectRun
+  have hrun := validateDynamicTail_success_storageEffectRun (h_push0 := h_push0)
     (base := base) (memory := depositDecodedTail0Memory sevm.data)
     (stack := []) (G := G + 164 + 15)
     (head := 1) (headNat := 1) (offsetWord := 1) (lengthWord := 4)
@@ -441,17 +447,18 @@ private theorem depositDynamicTails_success_storageEffectRun
     (hdec2 : DynamicTailDecodable sevm.data 2)
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], Mem.empty, G + 500, base.stateGas⟩)
       (validateDynamicTail 0 0 3
         (validateDynamicTail 1 1 4
           (validateDynamicTail 2 2 5 body))) ex effects := by
-  have htail1 := depositTail1_success_storageEffectRun
+  have htail1 := depositTail1_success_storageEffectRun (h_push0 := h_push0)
     (base := base) hdataBound hdec1 hdec2 hbody
-  have hstores := depositTail0Stores_success_storageEffectRun
+  have hstores := depositTail0Stores_success_storageEffectRun (h_push0 := h_push0)
     (base := base) htail1
-  have hrun := validateDynamicTail_success_storageEffectRun
+  have hrun := validateDynamicTail_success_storageEffectRun (h_push0 := h_push0)
     (base := base) (memory := Mem.empty) (stack := [])
     (G := G + 328 + 23)
     (head := 0) (headNat := 0) (offsetWord := 0) (lengthWord := 3)
@@ -476,7 +483,8 @@ theorem validateDepositAbi_success_storageEffectRun
       withdrawalCredentials signature depositDataRoot)
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], depositDecodedMemory sevm.data, G, base.stateGas⟩)
-      body ex effects) :
+      body ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], Mem.empty, G + 521, base.stateGas⟩)
       (validateDepositAbi body) ex effects := by
@@ -490,7 +498,7 @@ theorem validateDepositAbi_success_storageEffectRun
     rw [B256.lt_iff_toNat_lt_toNat, hlengthNat,
       show (132 : B256).toNat = 132 by decide +kernel]
     exact not_lt_of_ge hdec.head
-  have hdecoded := depositDynamicTails_success_storageEffectRun
+  have hdecoded := depositDynamicTails_success_storageEffectRun (h_push0 := h_push0)
     (base := base) hdataBound hdec.pubkeyTail
       hdec.withdrawalCredentialsTail hdec.signatureTail hbody
   unfold validateDepositAbi

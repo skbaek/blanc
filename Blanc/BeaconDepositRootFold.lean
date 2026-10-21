@@ -797,7 +797,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
     decide +kernel
   simp only [getDepositRootEndpoint]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := depositCountSlot) (c := gVerylow)
       (G := K + 100 + sloadCost sevm base depositCountSlot)
       (by
@@ -828,7 +828,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := oldCountWord * 32) (c := gVerylow)
       (G := K + 94)
       (by
@@ -856,7 +856,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
         rfl)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := shiftedSizeWord * 32) (c := gVerylow)
       (G := K + 31)
       (by
@@ -884,7 +884,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
         rfl)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := 0) (c := gBase) (G := K + 23)
       pushCost_zero
       (by simp only [Devm.gasLeft_setMach, gBase])
@@ -892,7 +892,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := nodeWord * 32) (c := gVerylow)
       (G := K + 20)
       (by
@@ -920,7 +920,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
         rfl)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := 0) (c := gBase) (G := K + 12)
       pushCost_zero
       (by simp only [Devm.gasLeft_setMach, gBase])

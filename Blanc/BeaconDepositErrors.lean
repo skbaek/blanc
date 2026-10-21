@@ -31,7 +31,8 @@ also has no retained storage writes. -/
 theorem empty_calldata_runCompiledTo
     (sevm : Sevm) (base : Devm) (G : Nat)
     (hdata : sevm.data = [])
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach ⟨[], Mem.empty, G + emptyCalldataRuntimeGas, base.stateGas⟩)
         (.error (.revert,
@@ -57,7 +58,7 @@ theorem empty_calldata_runCompiledTo
       afterBranch Func.revert out := by
     simpa only [afterBranch, out, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Func.runCompiledTo_revert_func
+      (Func.runCompiledTo_revert_func (h_push0 := h_push0)
         (fs := runtime.main :: runtime.aux) (sevm := sevm)
         (devm := afterBranch) (G := G)
         (by simp only [afterBranch, Devm.gasLeft_setMach, gBase])
@@ -148,7 +149,8 @@ def noMatchSelectorRuntimeGas : Nat := 117
 /-- The rightmost leaf rejects `noMatchSelector` and enters its inline empty
 revert.  The paired certificate is indexed by the identical compiled walk. -/
 private theorem noMatchLeaf_runCompiledTo_with_path
-    {sevm : Sevm} {base : Devm} {G : Nat} :
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[noMatchSelector], Mem.empty, G + 23, base.stateGas⟩)
         (dispatch (.leaf getDepositRootSelector
@@ -164,7 +166,7 @@ private theorem noMatchLeaf_runCompiledTo_with_path
       revertPre Func.revert out := by
     simpa only [revertPre, out, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
-      (Func.runCompiledTo_revert_func
+      (Func.runCompiledTo_revert_func (h_push0 := h_push0)
         (fs := runtime.main :: runtime.aux) (sevm := sevm)
         (devm := revertPre) (G := G)
         (by simp only [revertPre, Devm.gasLeft_setMach, gBase])
@@ -207,7 +209,7 @@ private theorem noMatchLeaf_runCompiledTo_with_path
       (pushB256 getDepositRootSelector) afterPush := by
     simpa only [afterPush, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
         (devm := base.setMach
           ⟨[noMatchSelector], Mem.empty, G + 23, base.stateGas⟩)
         (w := getDepositRootSelector) (G := G + 20) hpushCost
@@ -242,7 +244,8 @@ private theorem noMatchLeaf_runCompiledTo_with_path
 /-- The maximum selector falls through the count/root fork to the rightmost
 leaf, preserving the leaf's raw-SSTORE certificate. -/
 private theorem noMatchInnerDispatch_runCompiledTo_with_path
-    {sevm : Sevm} {base : Devm} {G : Nat} :
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[noMatchSelector], Mem.empty, G + 45, base.stateGas⟩)
         (dispatch
@@ -255,7 +258,7 @@ private theorem noMatchInnerDispatch_runCompiledTo_with_path
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   obtain ⟨hleaf, hleafSafe⟩ :=
-    noMatchLeaf_runCompiledTo_with_path (sevm := sevm)
+    noMatchLeaf_runCompiledTo_with_path (h_push0 := h_push0) (sevm := sevm)
       (base := base) (G := G)
   let branchPre :=
     base.setMach ⟨[(0 : B256), noMatchSelector], Mem.empty, G + 36, base.stateGas⟩
@@ -314,7 +317,7 @@ private theorem noMatchInnerDispatch_runCompiledTo_with_path
       (pushB256 getDepositRootSelector) afterPush := by
     simpa only [afterDup, afterPush, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (devm := afterDup)
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (devm := afterDup)
         (w := getDepositRootSelector) (G := G + 39) hpushCost
         (by simp only [afterDup, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterDup, Devm.stack_setMach, List.length_cons,
@@ -357,7 +360,8 @@ private theorem noMatchInnerDispatch_runCompiledTo_with_path
 /-- The maximum selector also falls through the deposit/count pivot into the
 right-hand count/root dispatcher. -/
 private theorem noMatchMiddleDispatch_runCompiledTo_with_path
-    {sevm : Sevm} {base : Devm} {G : Nat} :
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[noMatchSelector], Mem.empty, G + 67, base.stateGas⟩)
         (dispatch
@@ -372,7 +376,7 @@ private theorem noMatchMiddleDispatch_runCompiledTo_with_path
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   obtain ⟨hinner, hinnerSafe⟩ :=
-    noMatchInnerDispatch_runCompiledTo_with_path (sevm := sevm)
+    noMatchInnerDispatch_runCompiledTo_with_path (h_push0 := h_push0) (sevm := sevm)
       (base := base) (G := G)
   let branchPre :=
     base.setMach ⟨[(0 : B256), noMatchSelector], Mem.empty, G + 58, base.stateGas⟩
@@ -432,7 +436,7 @@ private theorem noMatchMiddleDispatch_runCompiledTo_with_path
       (pushB256 getDepositCountSelector) afterPush := by
     simpa only [afterDup, afterPush, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (devm := afterDup)
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (devm := afterDup)
         (w := getDepositCountSelector) (G := G + 61) hpushCost
         (by simp only [afterDup, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterDup, Devm.stack_setMach, List.length_cons,
@@ -477,7 +481,8 @@ private theorem noMatchMiddleDispatch_runCompiledTo_with_path
 /-- The root selector fork also falls right, reaching the already-certified
 middle dispatcher. -/
 private theorem noMatchRootDispatch_runCompiledTo_with_path
-    {sevm : Sevm} {base : Devm} {G : Nat} :
+    {sevm : Sevm} {base : Devm} {G : Nat}
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[noMatchSelector], Mem.empty, G + 89, base.stateGas⟩)
         (dispatch tree)
@@ -485,7 +490,7 @@ private theorem noMatchRootDispatch_runCompiledTo_with_path
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   obtain ⟨hmiddle, hmiddleSafe⟩ :=
-    noMatchMiddleDispatch_runCompiledTo_with_path (sevm := sevm)
+    noMatchMiddleDispatch_runCompiledTo_with_path (h_push0 := h_push0) (sevm := sevm)
       (base := base) (G := G)
   let branchPre :=
     base.setMach ⟨[(0 : B256), noMatchSelector], Mem.empty, G + 80, base.stateGas⟩
@@ -549,7 +554,7 @@ private theorem noMatchRootDispatch_runCompiledTo_with_path
       (pushB256 depositSelector) afterPush := by
     simpa only [afterDup, afterPush, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (devm := afterDup)
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (devm := afterDup)
         (w := depositSelector) (G := G + 83) hpushCost
         (by simp only [afterDup, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterDup, Devm.stack_setMach, List.length_cons,
@@ -588,7 +593,9 @@ private theorem noMatchRootDispatch_runCompiledTo_with_path
 extends to the exact `Func.main tree` walk. -/
 private theorem noMatchMain_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {G : Nat}
-    (hselector : Sevm.selector sevm = noMatchSelector) :
+    (hselector : Sevm.selector sevm = noMatchSelector)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[], Mem.empty, G + 100, base.stateGas⟩)
         (Func.main tree)
@@ -596,7 +603,7 @@ private theorem noMatchMain_runCompiledTo_with_path
           (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])),
       Func.RunCompiledTo.NoRawSstorePath run := by
   obtain ⟨hroot, hrootSafe⟩ :=
-    noMatchRootDispatch_runCompiledTo_with_path (sevm := sevm)
+    noMatchRootDispatch_runCompiledTo_with_path (h_push0 := h_push0) (sevm := sevm)
       (base := base) (G := G)
   let afterPushZero :=
     base.setMach ⟨[(0 : B256)], Mem.empty, G + 98, base.stateGas⟩
@@ -605,7 +612,7 @@ private theorem noMatchMain_runCompiledTo_with_path
       (pushB256 0) afterPushZero := by
     simpa only [afterPushZero, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (sevm := sevm)
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (sevm := sevm)
         (devm := base.setMach ⟨[], Mem.empty, G + 100, base.stateGas⟩)
         (w := (0 : B256)) (c := gBase) (G := G + 98) pushCost_zero
         (by simp only [Devm.gasLeft_setMach, gBase])
@@ -629,7 +636,7 @@ private theorem noMatchMain_runCompiledTo_with_path
       (pushB256 224) afterPush224 := by
     simpa only [afterLoad, afterPush224, Devm.setMach_setMach, Devm.stateGas_setMach,
         Devm.stack_setMach, Devm.memory_setMach] using
-      (Ninst.runCompiled_pushB256 (sevm := sevm) (devm := afterLoad)
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (sevm := sevm) (devm := afterLoad)
         (w := (224 : B256)) (G := G + 92) hpush224Cost
         (by simp only [afterLoad, Devm.gasLeft_setMach, gVerylow])
         (by simp only [afterLoad, Devm.stack_setMach, List.length_cons,
@@ -645,7 +652,7 @@ private theorem noMatchMain_runCompiledTo_with_path
     exact Ninst.runCompiled_binary
       (r := .shr) (f := fun x y => y >>> x.toNat)
       (cost := gVerylow) (G := G + 89) (v := noMatchSelector)
-      (by rintro ⟨⟩) rfl rfl hselector'
+      (by rintro ⟨⟩) (Rinst.runCore_shr_of_shifts h_shifts) rfl hselector'
       (by simp only [afterPush224, Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)
   let run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
@@ -684,7 +691,9 @@ theorem noMatchSelector_runCompiledTo
     (sevm : Sevm) (base : Devm) (G : Nat)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = noMatchSelector)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach ⟨[], Mem.empty, G + noMatchSelectorRuntimeGas, base.stateGas⟩)
         (.error (.revert,
@@ -708,7 +717,7 @@ theorem noMatchSelector_runCompiledTo
     .error (.revert,
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
-    noMatchMain_runCompiledTo_with_path (sevm := sevm)
+    noMatchMain_runCompiledTo_with_path (h_push0 := h_push0) (h_shifts := h_shifts) (sevm := sevm)
       (base := base) (G := G) hselector
   have hbranchRoom : afterSize.stack.length < 1024 := by
     simp only [afterSize, Devm.stack_setMach, List.length_cons,
@@ -777,7 +786,8 @@ private theorem depositMalformedEndpoint_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {G : Nat}
     (failure : DepositAbiFailure)
     (hdataBound : sevm.data.length < 2 ^ 256)
-    (hfailure : failure.Holds sevm.data) :
+    (hfailure : failure.Holds sevm.data)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach ⟨[], Mem.empty, G + failure.endpointGas, base.stateGas⟩)
         depositEndpoint
@@ -794,7 +804,7 @@ private theorem depositMalformedEndpoint_runCompiledTo_with_path
         (base.setMach
           ⟨failure.finalStack sevm.data,
             failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) :=
-    validateDepositAbi_failure_runCompiledTo failure (by rfl)
+    validateDepositAbi_failure_runCompiledTo (h_push0 := h_push0) failure (by rfl)
       hdataBound hfailure
   have safePath : Func.RunCompiledTo.NoRawSstorePath safeRun := by
     apply Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree
@@ -818,7 +828,9 @@ theorem deposit_malformed_row_runCompiledTo
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hselector : Sevm.selector sevm = depositSelector)
     (hfailure : DepositAbiFailure.Holds sevm.data failure)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Prog.RunCompiledTo sevm
       (base.setMach
         ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
@@ -828,10 +840,10 @@ theorem deposit_malformed_row_runCompiledTo
           ⟨failure.finalStack sevm.data,
             failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
     some sevm.code.toList = Prog.compile runtime := by
-  have hendpoint := validateDepositAbi_failure_runCompiledTo
+  have hendpoint := validateDepositAbi_failure_runCompiledTo (h_push0 := h_push0)
     (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base)
     (G := G) (body := depositBody) failure (by rfl) hdataBound hfailure
-  have hroute := deposit_route_runCompiledTo
+  have hroute := deposit_route_runCompiledTo (h_push0 := h_push0) (h_shifts := h_shifts)
     (K := G + failure.endpointGas) hnonempty hselector hendpoint
   constructor
   · have hgas :
@@ -851,7 +863,9 @@ theorem deposit_malformed_row_noRawSstore
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hselector : Sevm.selector sevm = depositSelector)
     (hfailure : DepositAbiFailure.Holds sevm.data failure)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + depositMalformedRuntimeGas failure, base.stateGas⟩)
@@ -876,10 +890,10 @@ theorem deposit_malformed_row_noRawSstore
       ⟨failure.finalStack sevm.data,
         failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])
   obtain ⟨hbody, hbodySafe⟩ :=
-    depositMalformedEndpoint_runCompiledTo_with_path
+    depositMalformedEndpoint_runCompiledTo_with_path (h_push0 := h_push0)
       failure hdataBound hfailure
   obtain ⟨mid, hentry, hmain, hmainSafe⟩ :=
-    deposit_route_runCompiledTo_with_path
+    deposit_route_runCompiledTo_with_path (h_push0 := h_push0) (h_shifts := h_shifts)
       (K := G + failure.endpointGas) hnonempty hselector hbodySafe
   have hcompiled : some sevm.code.toList = Prog.compile runtime := by
     rw [hcode, code_compile]
@@ -906,7 +920,9 @@ theorem deposit_malformed_runCompiledTo
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hselector : Sevm.selector sevm = depositSelector)
     (hbad : ¬ DepositAbiStructureDecodable sevm.data)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ failure : DepositAbiFailure,
       DepositAbiFailure.Holds sevm.data failure ∧
       Prog.RunCompiledTo sevm
@@ -919,7 +935,7 @@ theorem deposit_malformed_runCompiledTo
               failure.finalMemory sevm.data, G, base.stateGas⟩).withOutput [])) ∧
       some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨failure, hfailure⟩ := exists_depositAbiFailure hbad
-  obtain ⟨hrun, hcompiled⟩ := deposit_malformed_row_runCompiledTo
+  obtain ⟨hrun, hcompiled⟩ := deposit_malformed_row_runCompiledTo (h_push0 := h_push0) (h_shifts := h_shifts)
     sevm base G failure hnonempty hdataBound hselector hfailure hcode
   exact ⟨failure, hfailure, hrun, hcompiled⟩
 
@@ -931,7 +947,9 @@ theorem deposit_malformed_noRawSstore
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hselector : Sevm.selector sevm = depositSelector)
     (hbad : ¬ DepositAbiStructureDecodable sevm.data)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ failure : DepositAbiFailure,
       DepositAbiFailure.Holds sevm.data failure ∧
       ∃ execution : Exec 0 sevm
@@ -955,7 +973,7 @@ theorem deposit_malformed_noRawSstore
         some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨failure, hfailure⟩ := exists_depositAbiFailure hbad
   obtain ⟨execution, hrun, hsafe, hwrites, htriples, hcompiled⟩ :=
-    deposit_malformed_row_noRawSstore
+    deposit_malformed_row_noRawSstore (h_push0 := h_push0) (h_shifts := h_shifts)
       sevm base G failure hnonempty hdataBound hselector hfailure hcode
   exact ⟨failure, hfailure, execution, hrun, hsafe, hwrites, htriples,
     hcompiled⟩
@@ -987,13 +1005,15 @@ theorem deposit_error_public_of_endpoint
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = depositSelector)
     (hcode : sevm.code.toList = code)
-    (endpoint : DepositEndpointErrorWitness sevm base G reason) :
+    (endpoint : DepositEndpointErrorWitness sevm base G reason)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G reason := by
   unfold DepositEndpointErrorWitness at endpoint
   unfold DepositPublicErrorWitness
   obtain ⟨endpointCost, post, hendpoint, hendpointSafe, houtput⟩ := endpoint
   obtain ⟨mid, hentry, hmain, hmainSafe⟩ :=
-    deposit_route_runCompiledTo_with_path
+    deposit_route_runCompiledTo_with_path (h_push0 := h_push0) (h_shifts := h_shifts)
       (K := G + endpointCost) hnonempty hselector hendpointSafe
   let runtimeCost := endpointCost + depositRouteGas
   have hgas : (G + endpointCost) + depositRouteGas =
@@ -1030,10 +1050,12 @@ theorem deposit_pubkeyLength_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .pubkey_length)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G .pubkey_length := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_pubkeyLength_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_pubkeyLength_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose pure model fails the withdrawal-credentials-length
@@ -1050,11 +1072,13 @@ theorem deposit_withdrawalCredentialsLength_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .withdrawal_credentials_length)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G
       .withdrawal_credentials_length := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_withdrawalCredentialsLength_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose pure model fails the signature-length guard reaches
@@ -1071,10 +1095,12 @@ theorem deposit_signatureLength_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .signature_length)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G .signature_length := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_signatureLength_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_signatureLength_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose pure model fails the lower-value guard reaches that
@@ -1091,10 +1117,12 @@ theorem deposit_valueTooLow_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .value_too_low)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G .value_too_low := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_valueTooLow_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_valueTooLow_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose pure model fails the gwei-multiple guard reaches
@@ -1111,10 +1139,12 @@ theorem deposit_valueNotGweiMultiple_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .value_not_gwei_multiple)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G .value_not_gwei_multiple := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose pure model exceeds the uint64 amount bound reaches
@@ -1131,10 +1161,12 @@ theorem deposit_valueTooHigh_error_runCompiledTo
     (herror : deposit Bytes.sha256 state pubkey withdrawalCredentials
       signature depositDataRoot sevm.value.toNat =
         .error .value_too_high)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     DepositPublicErrorWitness sevm base G .value_too_high := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
-  exact deposit_valueTooHigh_error_endpoint_runCompiledTo
+  apply deposit_error_public_of_endpoint (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector hcode
+  exact deposit_valueTooHigh_error_endpoint_runCompiledTo (h_push0 := h_push0)
     hdataBound hdec herror
 
 /-- Decoded calldata whose reconstructed data root differs from the supplied
@@ -1166,7 +1198,7 @@ theorem deposit_depositDataRootMismatch_error_runCompiledTo
     (hcode : sevm.code.toList = code) :
     DepositPublicErrorWitness sevm base G
       .deposit_data_root_mismatch := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  apply deposit_error_public_of_endpoint (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hselector hcode
   exact deposit_depositDataRootMismatch_error_endpoint_runCompiledTo (hfork := hfork)
     hdataBound hdec hcountValue hnodeleg hwarm hpre hdepth hstatic hbound
     herror
@@ -1200,7 +1232,7 @@ theorem deposit_merkleTreeFull_error_runCompiledTo
         .error .merkle_tree_full)
     (hcode : sevm.code.toList = code) :
     DepositPublicErrorWitness sevm base G .merkle_tree_full := by
-  apply deposit_error_public_of_endpoint hnonempty hselector hcode
+  apply deposit_error_public_of_endpoint (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hselector hcode
   exact deposit_merkleTreeFull_error_endpoint_runCompiledTo (hfork := hfork)
     hdataBound hcountBound hdec hcountValue hnodeleg hwarm hpre hdepth
     hstatic hbound herror
@@ -1242,22 +1274,22 @@ theorem deposit_error_runCompiledTo
     herror
   cases error with
   | pubkeyLength =>
-      exact deposit_pubkeyLength_error_runCompiledTo hnonempty hdataBound
+      exact deposit_pubkeyLength_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hdataBound
         hselector hdec herror hcode
   | withdrawalCredentialsLength =>
-      exact deposit_withdrawalCredentialsLength_error_runCompiledTo
+      exact deposit_withdrawalCredentialsLength_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts)
         hnonempty hdataBound hselector hdec herror hcode
   | signatureLength =>
-      exact deposit_signatureLength_error_runCompiledTo hnonempty hdataBound
+      exact deposit_signatureLength_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hdataBound
         hselector hdec herror hcode
   | valueTooLow =>
-      exact deposit_valueTooLow_error_runCompiledTo hnonempty hdataBound
+      exact deposit_valueTooLow_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hdataBound
         hselector hdec herror hcode
   | valueNotGweiMultiple =>
-      exact deposit_valueNotGweiMultiple_error_runCompiledTo hnonempty
+      exact deposit_valueNotGweiMultiple_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty
         hdataBound hselector hdec herror hcode
   | valueTooHigh =>
-      exact deposit_valueTooHigh_error_runCompiledTo hnonempty hdataBound
+      exact deposit_valueTooHigh_error_runCompiledTo (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hnonempty hdataBound
         hselector hdec herror hcode
   | depositDataRootMismatch =>
       exact deposit_depositDataRootMismatch_error_runCompiledTo (hfork := hfork)

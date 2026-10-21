@@ -122,7 +122,7 @@ theorem getDepositRoot_zero_runCompiled
     simp only [B256.toNat_zero] at hnat
     omega
   have hroute0 :=
-    getDepositRoot_route_runCompiled
+    getDepositRoot_route_runCompiled (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts)
       (base := base)
       (K := G + endpointGas + nonpayableEndpointZeroGas)
       hlengthWordNe hselector
@@ -280,7 +280,7 @@ theorem getDepositRoot_zero_runCompiled_noRawSstore
     omega
   obtain ⟨execution, hroute, executionSafe, hwrites, htriples,
       hcompiled⟩ :=
-    getDepositRoot_route_noRawSstore
+    getDepositRoot_route_noRawSstore (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts)
       (base := base)
       (K := G + endpointGas + nonpayableEndpointZeroGas)
       hlengthWordNe hselector hcode (by

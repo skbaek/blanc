@@ -245,19 +245,20 @@ private theorem pushMstoreAt_runCompiledTo
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory.write offset value.toBytes, G, base.stateGas⟩)
-      body ex) :
+      body ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory, G + valueGas + wordGas + gVerylow, base.stateGas⟩)
       (([pushB256 value] ++ mstoreAt word) +++ body) ex := by
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (G := G + wordGas + gVerylow) hvalueCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
-  apply Func.runCompiledTo_mstoreAt
+  apply Func.runCompiledTo_mstoreAt (h_push0 := fun _ => h_push0)
       (pushGas := wordGas) (extGas := 0) hwordCost hroom
   · intro S G'
     apply Devm.extCost_zero_of_le hsize32
@@ -276,7 +277,9 @@ private theorem loadAmountStoreLe64_runCompiledTo
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, storeLe64Memory memory 352 amount, G, base.stateGas⟩)
-      body ex) :
+      body ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨stack, memory, G + 117, base.stateGas⟩)
       (loadWord amountWord +++ storeLe64At 352 +++ body) ex := by
@@ -284,7 +287,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
     decide +kernel
   unfold loadWord
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := amountWord * 32) (c := 3) (G := G + 114)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
@@ -309,7 +312,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
     rw [hext]
     decide
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply storeLe64At_runCompiledTo
+  apply storeLe64At_runCompiledTo (hfork := hfork)
       (memory := memory) (word := amount) (address := 352)
       (offset := 352) (G := G) (stack := stack)
   · exact hsize32
@@ -356,7 +359,8 @@ private theorem copyDynamicPayload_runCompiledTo
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory.write destination.toNat payload, G, base.stateGas⟩)
-      body ex) :
+      body ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory,
@@ -365,7 +369,7 @@ private theorem copyDynamicPayload_runCompiledTo
       (copyDynamicPayload offsetWord delta destination size +++ body) ex := by
   unfold copyDynamicPayload loadWord
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (G := G + offsetGas + gVerylow + deltaGas + gVerylow +
         destinationGas + copyGas)
       hsizeCost
@@ -374,7 +378,7 @@ private theorem copyDynamicPayload_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (G := G + gVerylow + deltaGas + gVerylow + destinationGas + copyGas)
       hoffsetCost
       (by simp only [Devm.gasLeft_setMach]; omega)
@@ -400,7 +404,7 @@ private theorem copyDynamicPayload_runCompiledTo
     decide
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (G := G + gVerylow + destinationGas + copyGas)
       hdeltaCost
       (by simp only [Devm.gasLeft_setMach]; omega)
@@ -418,7 +422,7 @@ private theorem copyDynamicPayload_runCompiledTo
       (by simp only [List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (G := G + copyGas) hdestinationCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
@@ -452,7 +456,8 @@ private theorem stageEventPayloads_runCompiledTo
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], eventPayloadMemory sevm.data amount, G, base.stateGas⟩)
-      body ex) :
+      body ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], depositEventInputMemory sevm.data amount, G + 88, base.stateGas⟩)
@@ -561,7 +566,7 @@ private theorem stageEventPayloads_runCompiledTo
   have htail : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], M4, G, base.stateGas⟩) body ex := by
     simpa only [eventPayloadMemory, M4, M3, M2, M1, M0] using hbody
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (valueGas := 2) (wordGas := 3)
       (memory := M0) (value := 0) (word := 7) (offset := 224)
       (G := G + 80)
@@ -572,7 +577,7 @@ private theorem stageEventPayloads_runCompiledTo
   · rw [c0.size_eq]
     decide +kernel
   · decide
-  apply copyDynamicPayload_runCompiledTo
+  apply copyDynamicPayload_runCompiledTo (h_push0 := h_push0)
       (memory := M1) (offset := depositOffsetWord sevm.data 0)
       (offsetWord := 0) (delta := 0) (destination := 192) (size := 48)
       (payload := depositEventPubkeySlice sevm.data)
@@ -596,7 +601,7 @@ private theorem stageEventPayloads_runCompiledTo
       hsource0, show (48 : B256).toNat = 48 by decide +kernel]
     rfl
   · decide
-  apply copyDynamicPayload_runCompiledTo
+  apply copyDynamicPayload_runCompiledTo (h_push0 := h_push0)
       (memory := M2) (offset := depositOffsetWord sevm.data 1)
       (offsetWord := 1) (delta := 0) (destination := 288) (size := 32)
       (payload := depositEventWithdrawalSlice sevm.data)
@@ -620,7 +625,7 @@ private theorem stageEventPayloads_runCompiledTo
       hsource1, show (32 : B256).toNat = 32 by decide +kernel]
     rfl
   · decide
-  apply copyDynamicPayload_runCompiledTo
+  apply copyDynamicPayload_runCompiledTo (h_push0 := h_push0)
       (memory := M3) (offset := depositOffsetWord sevm.data 2)
       (offsetWord := 2) (delta := 0) (destination := 416) (size := 96)
       (payload := depositEventSignatureSlice sevm.data)
@@ -653,7 +658,9 @@ private theorem stageEventHeaders_runCompiledTo
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], eventBeforeCountMemory sevm.data amount, G, base.stateGas⟩)
-      body ex) :
+      body ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[], eventPayloadMemory sevm.data amount, G + 222, base.stateGas⟩)
@@ -784,7 +791,7 @@ private theorem stageEventHeaders_runCompiledTo
       (base.setMach ⟨[], M17, G, base.stateGas⟩) body ex := by
     simpa only [eventBeforeCountMemory, M17, M16, M15, M14, M13, M12,
       M11, M10, M9, M8, M7, M6, M5, M4] using hbody
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M4) (value := 160) (word := 0) (offset := 0)
       (valueGas := 3) (wordGas := 2) (G := G + 214)
   · decide +kernel
@@ -794,7 +801,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c4.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M5) (value := 256) (word := 1) (offset := 32)
       (valueGas := 3) (wordGas := 3) (G := G + 205)
   · decide +kernel
@@ -804,7 +811,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c5.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M6) (value := 320) (word := 2) (offset := 64)
       (valueGas := 3) (wordGas := 3) (G := G + 196)
   · decide +kernel
@@ -814,7 +821,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c6.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M7) (value := 384) (word := 3) (offset := 96)
       (valueGas := 3) (wordGas := 3) (G := G + 187)
   · decide +kernel
@@ -824,7 +831,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c7.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M8) (value := 512) (word := 4) (offset := 128)
       (valueGas := 3) (wordGas := 3) (G := G + 178)
   · decide +kernel
@@ -834,7 +841,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c8.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M9) (value := 48) (word := 5) (offset := 160)
       (valueGas := 3) (wordGas := 3) (G := G + 169)
   · decide +kernel
@@ -844,7 +851,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c9.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M10) (value := 32) (word := 8) (offset := 256)
       (valueGas := 3) (wordGas := 3) (G := G + 160)
   · decide +kernel
@@ -854,7 +861,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c10.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M11) (value := 8) (word := 10) (offset := 320)
       (valueGas := 3) (wordGas := 3) (G := G + 151)
   · decide +kernel
@@ -864,7 +871,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c11.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M12) (value := 0) (word := 11) (offset := 352)
       (valueGas := 2) (wordGas := 3) (G := G + 143)
   · decide +kernel
@@ -874,14 +881,14 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c12.size_eq]
     omega
   · decide
-  apply loadAmountStoreLe64_runCompiledTo
+  apply loadAmountStoreLe64_runCompiledTo (h_push0 := h_push0) (hfork := hfork)
       (memory := M13) (amount := amount) (G := G + 26)
   · rw [c13.size_eq]
   · rw [c13.size_eq]
   · exact hamount
   · exact hamountMemory
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M14) (value := 96) (word := 12) (offset := 384)
       (valueGas := 3) (wordGas := 3) (G := G + 17)
   · decide +kernel
@@ -891,7 +898,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c14.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M15) (value := 8) (word := 16) (offset := 512)
       (valueGas := 3) (wordGas := 3) (G := G + 8)
   · decide +kernel
@@ -901,7 +908,7 @@ private theorem stageEventHeaders_runCompiledTo
   · rw [c15.size_eq]
     omega
   · decide
-  apply pushMstoreAt_runCompiledTo
+  apply pushMstoreAt_runCompiledTo (h_push0 := h_push0)
       (memory := M16) (value := 0) (word := 17) (offset := 544)
       (valueGas := 2) (wordGas := 3) (G := G)
   · decide +kernel
@@ -918,7 +925,8 @@ private theorem emitDepositEvent_runCompiledTo
     {memory : Mem} {event : DepositEvent} {amount oldCount : B256}
     {G : Nat} {body : Func}
     (hstatic : sevm.isStatic = false)
-    (hmem : DepositEventMemoryCarrier memory event amount oldCount) :
+    (hmem : DepositEventMemoryCarrier memory event amount oldCount)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ logged : Devm,
       logged.logs = base.logs ++ [depositEventLog sevm.currentTarget event] ∧
       (∀ (a : Adr) (k : B256),
@@ -988,7 +996,7 @@ private theorem emitDepositEvent_runCompiledTo
   intro ex htail
   unfold logWith
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := depositEventTopic) (c := 3) (G := G + 5363)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
@@ -996,7 +1004,7 @@ private theorem emitDepositEvent_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := 18 * 32) (c := 3) (G := G + 5360)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
@@ -1004,7 +1012,7 @@ private theorem emitDepositEvent_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := 0 * 32) (c := 2) (G := G + 5358)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
@@ -1018,7 +1026,8 @@ private theorem stageEventCountLog_runCompiledTo
     {amount oldCount : B256} {G : Nat} {body : Func}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hvalue : base.getStorVal sevm.currentTarget depositCountSlot = oldCount)
-    (hstatic : sevm.isStatic = false) :
+    (hstatic : sevm.isStatic = false)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ logged : Devm,
       logged.logs =
         (afterSload sevm base depositCountSlot).logs ++
@@ -1070,7 +1079,7 @@ private theorem stageEventCountLog_runCompiledTo
       depositEventMemory_carrier sevm.data amount oldCount
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hcreated, hlift⟩ :=
-    emitDepositEvent_runCompiledTo
+    emitDepositEvent_runCompiledTo (h_push0 := h_push0)
       (base := afterSload sevm base depositCountSlot) (G := G) hstatic hfinal
   refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
     houtput, herror, hcreated, ?_⟩
@@ -1078,7 +1087,7 @@ private theorem stageEventCountLog_runCompiledTo
   have hlog := hlift (by
     simpa only [M19, M18, M17, ← eventMemory_eq] using htail)
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := depositCountSlot) (c := 3)
       (G := G + 5486 + sloadCost sevm base depositCountSlot)
       (by decide +kernel)
@@ -1100,7 +1109,7 @@ private theorem stageEventCountLog_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   rw [← afterSload_stateGas (sevm := sevm) (base := base) (key := depositCountSlot)]
-  apply Func.runCompiledTo_mstoreAt
+  apply Func.runCompiledTo_mstoreAt (h_push0 := fun _ => h_push0)
       (base := afterSload sevm base depositCountSlot)
       (memory := M17) (stack := [oldCount])
       (value := oldCount) (word := oldCountWord)
@@ -1113,7 +1122,7 @@ private theorem stageEventCountLog_runCompiledTo
     · rw [c17.size_eq]
     · rw [c17.size_eq]
       decide +kernel
-  apply storeLe64At_runCompiledTo
+  apply storeLe64At_runCompiledTo (hfork := hfork)
       (base := afterSload sevm base depositCountSlot)
       (memory := M18) (word := oldCount) (address := 544)
       (offset := 544) (G := G + 5366) (stack := [])
@@ -1191,15 +1200,15 @@ theorem stageDepositEvent_runCompiledTo
           (stageDepositEvent +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hcreated, hlift⟩ :=
-    stageEventCountLog_runCompiledTo (hfork := hfork)
+    stageEventCountLog_runCompiledTo (h_push0 := hfork.rules_push0) (hfork := hfork)
       (fs := fs) (amount := amount) (body := body) (G := G) hvalue hstatic
   refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
     houtput, herror, hcreated, ?_⟩
   intro ex htail
   have hsuffix := hlift htail
-  have hheaders := stageEventHeaders_runCompiledTo
+  have hheaders := stageEventHeaders_runCompiledTo (h_push0 := hfork.rules_push0) (hfork := hfork)
     (G := G + 5489 + sloadCost sevm base depositCountSlot) hsuffix
-  have hpayloads := stageEventPayloads_runCompiledTo
+  have hpayloads := stageEventPayloads_runCompiledTo (h_push0 := hfork.rules_push0)
     (G := G + 5489 + sloadCost sevm base depositCountSlot + 222)
     hdec0 hdec1 hdec2 hheaders
   simpa only [stageDepositEvent, prepend_append, List.append_assoc,

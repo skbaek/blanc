@@ -71,7 +71,8 @@ theorem sha64_success_prefix_runCompiledTo_ext
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
     (hdepth : sevm.depth ≠ 0)
     (hbound : K + 221 + ext < 2 ^ 256)
-    (hroom : stack.length < 1019) :
+    (hroom : stack.length < 1019)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ callPost,
       callPost.stack = 1 :: stack ∧
       callPost.memory = (base.memory.extends
@@ -196,7 +197,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
   let c2 := pushCost ((2 : B256).toBytes.sig)
   simp only [sha64, pushList, List.map, prepend]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (sevm := sevm)
       (devm := base.setMach
         ⟨stack, base.memory,
@@ -211,7 +212,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
       (by simp only [Devm.stack_setMach]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := outputWord * 32) (c := cout)
       (G := K + (c64 + cin + c2 + 223) + ext)
       (by rfl)
@@ -221,7 +222,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
         omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := (64 : B256)) (c := c64)
       (G := K + (cin + c2 + 223) + ext)
       (by rfl)
@@ -231,7 +232,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
         omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := inputWord * 32) (c := cin)
       (G := K + (c2 + 223) + ext)
       (by rfl)
@@ -241,7 +242,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
         omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := (2 : B256)) (c := c2)
       (G := K + 223 + ext)
       (by rfl)
@@ -322,7 +323,7 @@ theorem sha64_success_prefix_runCompiledTo
     simp only [Devm.extCost, hcovered]
     omega
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
-    (sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
+    (sha64_success_prefix_runCompiledTo_ext (h_push0 := hfork.rules_push0) (hfork := hfork)
       (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa only [add_zero, Nat.reducePow] using hbound) hroom)
 
 /-! ## Source-level successful-run inversion -/

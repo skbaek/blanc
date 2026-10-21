@@ -66,7 +66,8 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {G : Nat} {selector : B256}
     (hselector : Sevm.selector sevm = selector)
     (hmiss : selector ∉ beaconSelectors)
-    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ run : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
         (base.setMach
           ⟨[], Mem.empty, G + tree.dispatchMissGas selector + 11, base.stateGas⟩)
@@ -131,7 +132,7 @@ private theorem unmatchedSelectorMain_runCompiledTo_with_path
     exact Ninst.runCompiled_binary
       (r := .shr) (f := fun x y => y >>> x.toNat)
       (cost := gVerylow) (G := G + D) (v := selector)
-      (by rintro ⟨⟩) rfl rfl hselector'
+      (by rintro ⟨⟩) (Rinst.runCore_shr_of_shifts h_shifts) rfl hselector'
       (by simp only [afterPush224, Devm.gasLeft_setMach,
         gVerylow])
       (by simp only [List.length_nil]; omega)
@@ -176,7 +177,8 @@ theorem unmatched_selector_noRawSstore
     (hselector : Sevm.selector sevm = selector)
     (hmiss : selector ∉ beaconSelectors)
     (hcode : sevm.code.toList = code)
-    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
@@ -202,7 +204,7 @@ theorem unmatched_selector_noRawSstore
     .error (.revert,
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])
   obtain ⟨hmain, hmainSafe⟩ :=
-    unmatchedSelectorMain_runCompiledTo_with_path
+    unmatchedSelectorMain_runCompiledTo_with_path (h_shifts := h_shifts)
       (sevm := sevm) (base := base) (G := G) hselector hmiss h_push0
   have hroom : afterSize.stack.length < 1024 := by
     simp only [afterSize, Devm.stack_setMach, List.length_cons,

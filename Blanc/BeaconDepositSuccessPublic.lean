@@ -200,7 +200,7 @@ theorem deposit_success_runCompiled
     simp only [B256.toNat_zero] at hnat
     have hhead := hdec.head
     omega
-  have hroute := deposit_route_runCompiled hlengthWordNe hselector hendpoint
+  have hroute := deposit_route_runCompiled (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hlengthWordNe hselector hendpoint
   have hrun : Prog.RunCompiled sevm
       (base.setMach
         ⟨[], Mem.empty,

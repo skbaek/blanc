@@ -277,13 +277,13 @@ theorem depositEndpoint_success_storageEffectRun
       reconstructDepositDataNode depositSuccessGuards by rfl]
     simpa only [stagedBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach,
       suffixGas] using hsuffix
-  have hguards := depositGuards_storageEffectRun
+  have hguards := depositGuards_storageEffectRun (h_push0 := hfork.rules_push0)
     (fs := fs) (sevm := sevm) (base := base)
     (amount := amount)
     (G := suffixGas + 5799 + sloadCost sevm base depositCountSlot)
     hdec hpubkey hwithdrawal hsignature rfl hlowerWord hgweiWord hupperWord
     heventRun
-  have habi := validateDepositAbi_success_storageEffectRun
+  have habi := validateDepositAbi_success_storageEffectRun (h_push0 := hfork.rules_push0)
     (fs := fs) (sevm := sevm) (base := base)
     (G := suffixGas + 5799 + sloadCost sevm base depositCountSlot +
       depositGuardsGas)

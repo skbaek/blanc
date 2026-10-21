@@ -30,7 +30,8 @@ theorem reconstructLoadStore_storageEffectRun
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
-      rest ex effects) :
+      rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, memory,
@@ -44,7 +45,7 @@ theorem reconstructLoadStore_storageEffectRun
     exact memExtSize_of_le hmod hsourceFit
   simp only [loadWord, mstoreAt, prepend]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := sourceWord * 32) (c := csource)
       (G := K + 3 + ctarget + 3)
       rfl
@@ -82,7 +83,7 @@ theorem reconstructLoadStore_storageEffectRun
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
@@ -121,7 +122,8 @@ theorem reconstructPushStore_storageEffectRun
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
-      rest ex effects) :
+      rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨stack, memory, K + reconstructPushStoreCost value targetWord, base.stateGas⟩)
@@ -130,7 +132,7 @@ theorem reconstructPushStore_storageEffectRun
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
   simp only [mstoreAt, prepend]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := value) (c := cvalue) (G := K + ctarget + 3)
       rfl
       (by
@@ -143,7 +145,7 @@ theorem reconstructPushStore_storageEffectRun
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
@@ -477,7 +479,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
       (base.setMach ⟨stack, firstMemory, K + 248, base.stateGas⟩)
       (Ninst.pushB256 0 ::: mstoreAt 1 +++
         sha64 0 secondIntermediateWord success) ex effects := by
-    have h := reconstructPushStore_storageEffectRun
+    have h := reconstructPushStore_storageEffectRun (h_push0 := hfork.rules_push0)
       (base := base) (memory := firstMemory)
       (value := 0) (targetWord := 1) (stack := stack)
       (K := K + 240) (rest := sha64 0 secondIntermediateWord success)
@@ -489,7 +491,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
           reconstructSignatureSecondStagedMemory,
           show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha)
     simpa only [reconstructPushStoreCost_zero_one] using h
-  have hwhole := reconstructLoadStore_storageEffectRun
+  have hwhole := reconstructLoadStore_storageEffectRun (h_push0 := hfork.rules_push0)
     (base := base) (memory := base.memory)
     (sourceWord := 15) (targetWord := 0)
     (value := Bytes.toB256 signatureTail) (stack := stack)
@@ -625,7 +627,7 @@ theorem reconstructPairSha_storageEffectRun
             reconstructLoadStoreCost rightWord 1, base.stateGas⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
         sha64 0 outputWord success) ex effects := by
-    apply reconstructLoadStore_storageEffectRun
+    apply reconstructLoadStore_storageEffectRun (h_push0 := hfork.rules_push0)
       (base := base) (memory := firstMemory)
       (sourceWord := rightWord) (targetWord := 1)
       (value := right) (stack := stack)
@@ -640,7 +642,7 @@ theorem reconstructPairSha_storageEffectRun
     · omega
     · simpa only [firstMemory, stagedMemory, reconstructPairStagedMemory,
         show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha
-  exact reconstructLoadStore_storageEffectRun
+  exact reconstructLoadStore_storageEffectRun (h_push0 := hfork.rules_push0)
     (base := base) (memory := base.memory)
     (sourceWord := leftWord) (targetWord := 0)
     (value := left) (stack := stack)

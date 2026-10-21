@@ -6153,7 +6153,9 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hselector : Sevm.selector sevm = depositSelector)
     (hbad : ¬ DepositAbiStructureDecodable sevm.data)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ failure : DepositAbiFailure,
       DepositAbiFailure.Holds sevm.data failure ∧
       ∃ execution : Exec 0 sevm
@@ -6176,13 +6178,14 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
           Exec.retainedStorageEffectTriples execution = [] ∧
           some sevm.code.toList = Prog.compile runtime :=
   deposit_malformed_noRawSstore sevm base G hnonempty hdataBound hselector
-    hbad hcode
+    hbad hcode h_push0 h_shifts
 example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hselector : Sevm.selector sevm = selector)
     (hmiss : selector ∉ beaconSelectors)
     (hcode : sevm.code.toList = code)
-    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + unmatchedSelectorRuntimeGas selector, base.stateGas⟩)
@@ -6199,14 +6202,16 @@ example (sevm : Sevm) (base : Devm) (G : Nat) (selector : B256)
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime :=
   unmatched_selector_noRawSstore sevm base G selector hnonempty hselector
-    hmiss hcode h_push0
+    hmiss hcode h_push0 h_shifts
 
 example (sevm : Sevm) (base : Devm) (G : Nat)
     (hdataLength : 36 ≤ sevm.data.length)
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hvalue : sevm.value = 0)
     (hselector : Sevm.selector sevm = supportsInterfaceSelector)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ post,
       ∃ execution : Exec 0 sevm
           (base.setMach
@@ -6225,7 +6230,7 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
         Exec.retainedStorageEffectTriples execution = [] ∧
         some sevm.code.toList = Prog.compile runtime :=
   supportsInterface_runCompiled_noRawSstore sevm base G hdataLength
-    hdataBound hvalue hselector hcode
+    hdataBound hvalue hselector hcode h_push0 h_shifts
 example (sevm : Sevm) (base : Devm) (stor : Stor) (count G : Nat)
     (hfork : CoveredFork sevm.benvStat.fork)
     (hdataLength : 4 ≤ sevm.data.length)
@@ -6290,7 +6295,9 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hvalue : sevm.value ≠ 0)
     (hselector : Sevm.selector sevm = getDepositRootSelector)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas, base.stateGas⟩)
@@ -6307,7 +6314,7 @@ example (sevm : Sevm) (base : Devm) (G : Nat)
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime :=
   getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
-    sevm base G hnonempty hvalue hselector hcode
+    sevm base G hnonempty hvalue hselector hcode h_push0 h_shifts
 example (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
     (hdataLength : 4 ≤ sevm.data.length)
     (hdataBound : sevm.data.length < 2 ^ 256)

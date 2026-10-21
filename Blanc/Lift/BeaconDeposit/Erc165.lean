@@ -529,7 +529,8 @@ theorem dispatch_supports {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
     (h_len : 36 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = 0x01ffc9a7)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] memFp g)
-      t_0044_c31 o) :
+      t_0044_c31 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (g + 73)) t_0000_c0 o := by
   refine rx_push (w := 0x80) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
@@ -555,7 +556,7 @@ theorem dispatch_supports {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
   refine rx_binary (fn := fun x y => y >>> x.toNat) (c := gVerylow)
-    (by rintro ⟨⟩) (fun _ => rfl) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+    (by rintro ⟨⟩) (fun _ => Rinst.runCore_shr_of_shifts h_shifts) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_push (w := 0x01ffc9a7) (by decide) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -605,7 +606,7 @@ theorem supportsInterface_runExact {sevm : Sevm} {pre : Devm}
     have hwrap := wrapper_true (sevm := sevm) (b := pre) (b' := pre) (g := g)
       h_value h_len h_len' (by simpa only [arg] using hcall)
     obtain ⟨post, hrun, hg, ho, hs, hl⟩ := hwrap
-    have hdispatch := dispatch_supports (sevm := sevm) (b := pre) (g := g + 196)
+    have hdispatch := dispatch_supports (h_shifts := hfork.rules_shifts) (sevm := sevm) (b := pre) (g := g + 196)
       h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at hdispatch
     refine ⟨post, ⟨_, rfl, hdispatch⟩, ?_, ?_, hs, hl⟩
@@ -625,7 +626,7 @@ theorem supportsInterface_runExact {sevm : Sevm} {pre : Devm}
       have hwrap := wrapper_false (sevm := sevm) (b := pre) (b' := pre) (g := g)
         h_value h_len h_len' (by simpa only [arg] using hcall)
       obtain ⟨post, hrun, hg, ho, hs, hl⟩ := hwrap
-      have hdispatch := dispatch_supports (sevm := sevm) (b := pre) (g := g + 213)
+      have hdispatch := dispatch_supports (h_shifts := hfork.rules_shifts) (sevm := sevm) (b := pre) (g := g + 213)
         h_len h_len' hsel hrun
       rw [pre_eq_St h_stack h_mem (by omega)] at hdispatch
       refine ⟨post, ⟨_, rfl, hdispatch⟩, ?_, ?_, hs, hl⟩
@@ -643,7 +644,7 @@ theorem supportsInterface_runExact {sevm : Sevm} {pre : Devm}
       have hwrap := wrapper_false (sevm := sevm) (b := pre) (b' := pre) (g := g)
         h_value h_len h_len' (by simpa only [arg] using hcall)
       obtain ⟨post, hrun, hg, ho, hs, hl⟩ := hwrap
-      have hdispatch := dispatch_supports (sevm := sevm) (b := pre) (g := g + 213)
+      have hdispatch := dispatch_supports (h_shifts := hfork.rules_shifts) (sevm := sevm) (b := pre) (g := g + 213)
         h_len h_len' hsel hrun
       rw [pre_eq_St h_stack h_mem (by omega)] at hdispatch
       refine ⟨post, ⟨_, rfl, hdispatch⟩, ?_, ?_, hs, hl⟩

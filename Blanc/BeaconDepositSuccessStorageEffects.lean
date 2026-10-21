@@ -24,7 +24,8 @@ theorem depositRootGuard_storageEffectRun
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hroot : Sevm.argWord sevm 3 = node)
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 31, base.stateGas⟩)
       (loadWord nodeWord +++ arg 3 +++ eq ::: iszero :::
@@ -41,7 +42,7 @@ theorem depositRootGuard_storageEffectRun
     show (nodeWord * 32 : B256) = 640 by decide +kernel,
     show 32 * (3 : B256) + 4 = 100 by decide +kernel]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := 640) (c := gVerylow) (G := G + 28)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := 640) (c := gVerylow) (G := G + 28)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
@@ -64,7 +65,7 @@ theorem depositRootGuard_storageEffectRun
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := 100) (c := gVerylow) (G := G + 22)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := 100) (c := gVerylow) (G := G + 22)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
@@ -126,7 +127,8 @@ theorem depositCapGuard_storageEffectRun
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) rest ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 28, base.stateGas⟩)
       (Ninst.pushB256 (Nat.toB256 (2 ^ 32 - 1)) :::
@@ -144,7 +146,7 @@ theorem depositCapGuard_storageEffectRun
   simp only [loadWord, prepend,
     show (oldCountWord * 32 : B256) = 576 by decide +kernel]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := Nat.toB256 (2 ^ 32 - 1)) (c := gVerylow) (G := G + 25)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -153,7 +155,7 @@ theorem depositCapGuard_storageEffectRun
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (w := 576) (c := gVerylow) (G := G + 22)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (w := 576) (c := gVerylow) (G := G + 22)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
@@ -223,12 +225,13 @@ theorem depositSuccessGuards_storageEffectRun
     (hroot : Sevm.argWord sevm 3 = node)
     (hcap : oldCount < Nat.toB256 (2 ^ 32 - 1))
     (htail : Func.StorageEffectRun fs sevm
-      (base.setMach ⟨[], memory, G, base.stateGas⟩) commitDeposit ex effects) :
+      (base.setMach ⟨[], memory, G, base.stateGas⟩) commitDeposit ex effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], memory, G + 59, base.stateGas⟩)
       depositSuccessGuards ex effects := by
-  have hcapRun := depositCapGuard_storageEffectRun hmem hcap htail
-  have hrootRun := depositRootGuard_storageEffectRun hmem hroot hcapRun
+  have hcapRun := depositCapGuard_storageEffectRun (h_push0 := h_push0) hmem hcap htail
+  have hrootRun := depositRootGuard_storageEffectRun (h_push0 := h_push0) hmem hroot hcapRun
   simpa only [depositSuccessGuards, Nat.add_assoc] using hrootRun
 
 /-- Exact-effect reconstruction followed by both successful post-hash guards. -/
@@ -289,7 +292,7 @@ theorem reconstructDepositDataNode_successGuards_storageEffectRun
   · rw [← hnodeEq]
     exact hreturn
   · intro ex htail
-    have hguards := depositSuccessGuards_storageEffectRun
+    have hguards := depositSuccessGuards_storageEffectRun (h_push0 := hfork.rules_push0)
       (fs := fs) (sevm := sevm) (base := finalPost)
       (memory := finalPost.memory) (G := G)
       hcarrier.toInsertionStart (hroot.trans hnodeEq.symm) hcap htail

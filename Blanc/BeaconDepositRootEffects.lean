@@ -24,7 +24,9 @@ private theorem rootContinuation_storageEffectRun
     (tail : Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[height + 1], memory.write 608 (size >>> 1).toBytes, K, base.stateGas⟩)
-      rootLoop ex []) :
+      rootLoop ex [])
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[height], memory, K + 36, base.stateGas⟩)
       rootContinuation ex [] := by
@@ -42,7 +44,7 @@ private theorem rootContinuation_storageEffectRun
     rw [hmem.read_shiftedSize, B256.toB256_toBytes]
   unfold rootContinuation loadWord mstoreAt
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := shiftedSizeWord * 32) (c := gVerylow) (G := K + 33)
       hpushOff
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -75,7 +77,7 @@ private theorem rootContinuation_storageEffectRun
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := (1 : B256)) (c := gVerylow) (G := K + 27)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -91,7 +93,7 @@ private theorem rootContinuation_storageEffectRun
       (cost := gVerylow) (G := K + 24)
       (x := (1 : B256)) (y := size) (v := size >>> 1)
       (s := [height])
-      (by rintro ⟨⟩) rfl rfl
+      (by rintro ⟨⟩) (Rinst.runCore_shr_of_shifts h_shifts) rfl
       (by simp only [show (1 : B256).toNat = 1 by decide +kernel])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons, List.length_nil]; omega))
@@ -99,7 +101,7 @@ private theorem rootContinuation_storageEffectRun
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := shiftedSizeWord * 32) (c := gVerylow) (G := K + 21)
       hpushOff
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -119,7 +121,7 @@ private theorem rootContinuation_storageEffectRun
     (by rintro operation ⟨⟩)
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, hoff]
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := (1 : B256)) (c := gVerylow) (G := K + 15)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -226,7 +228,7 @@ private theorem rootShaTail_storageEffectRun
         (runtime.main :: runtime.aux) sevm
         (callPost.setMach ⟨[height], callPost.memory, K + 36, callPost.stateGas⟩)
         rootContinuation ex [] :=
-      rootContinuation_storageEffectRun hcarrier htail
+      rootContinuation_storageEffectRun (h_push0 := hfork.rules_push0) (h_shifts := hfork.rules_shifts) hcarrier htail
     apply Func.StorageEffectRun.call (by rfl)
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega)
@@ -332,7 +334,7 @@ private theorem rootLoopLive_storageEffectRun
         simpa only [hz, hn] using hreadMem
       unfold loadWord mstoreAt
       apply Func.StorageEffectRun.next_effectNeutral
-        (Ninst.runCompiled_pushB256
+        (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
           (w := (0 : B256)) (c := gBase) (G := K + 15)
           pushCost_zero
           (by simp only [Devm.gasLeft_setMach, gBase])
@@ -355,7 +357,7 @@ private theorem rootLoopLive_storageEffectRun
         (by rintro operation ⟨⟩)
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       apply Func.StorageEffectRun.next_effectNeutral
-        (Ninst.runCompiled_pushB256
+        (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
           (w := nodeWord * 32) (c := gVerylow) (G := K + 9)
           (by decide +kernel)
           (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -382,7 +384,7 @@ private theorem rootLoopLive_storageEffectRun
         (by rintro operation ⟨⟩)
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       apply Func.StorageEffectRun.next_effectNeutral
-        (Ninst.runCompiled_pushB256
+        (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
           (w := (1 : B256) * 32) (c := gVerylow) (G := K + 3)
           (by decide +kernel)
           (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -418,7 +420,7 @@ private theorem rootLoopLive_storageEffectRun
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
       Devm.memory_setMach]
     apply Func.StorageEffectRun.next_effectNeutral
-      (Ninst.runCompiled_pushB256
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
         (w := branchBase) (c := gVerylow)
         (G := K + 20 + sloadCost sevm base (branchBase + height))
         (by decide +kernel)
@@ -534,7 +536,7 @@ private theorem rootLoopDead_storageEffectRun
           (by simpa only [h1] using hcovered32)
       unfold mstoreAt
       apply Func.StorageEffectRun.next_effectNeutral
-        (Ninst.runCompiled_pushB256
+        (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
           (w := (1 : B256) * 32) (c := gVerylow) (G := K + 3)
           (by decide +kernel)
           (by simp only [Devm.gasLeft_setMach, gVerylow])
@@ -591,7 +593,7 @@ private theorem rootLoopDead_storageEffectRun
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
         Devm.memory_setMach]
       apply Func.StorageEffectRun.next_effectNeutral
-        (Ninst.runCompiled_pushB256
+        (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
           (w := zeroHashBase) (c := gVerylow)
           (G := K + 9 + sloadCost sevm base (zeroHashBase + height))
           (by decide +kernel)
@@ -649,7 +651,7 @@ private theorem rootLoopDead_storageEffectRun
         (by simpa only [hz] using hcovered0)
     unfold rootDeadStep loadWord mstoreAt
     apply Func.StorageEffectRun.next_effectNeutral
-      (Ninst.runCompiled_pushB256
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
         (w := nodeWord * 32) (c := gVerylow)
         (G := K + 23 + sloadCost sevm base (zeroHashBase + height))
         (by decide +kernel)
@@ -675,7 +677,7 @@ private theorem rootLoopDead_storageEffectRun
       (by rintro operation ⟨⟩)
     simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
     apply Func.StorageEffectRun.next_effectNeutral
-      (Ninst.runCompiled_pushB256
+      (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
         (w := (0 : B256)) (c := gBase)
         (G := K + 18 + sloadCost sevm base (zeroHashBase + height))
         pushCost_zero
@@ -1052,12 +1054,13 @@ private theorem rootFinishReturn_storageEffectRun
     {sevm : Sevm} {base : Devm}
     {memory : Mem} {digest : B256} {G : Nat}
     (hsize : memory.size = 672)
-    (hread : Bytes.toB256 (memory.read 640 32).1 = digest) :
+    (hread : Bytes.toB256 (memory.read 640 32).1 = digest)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory, G + 16, base.stateGas⟩)
       (loadWord nodeWord +++ mstoreAt 0 +++ returnMemoryRange 0 32)
       (.ok (rootFinishPost base memory digest G)) [] := by
-  have hrun := rootFinishReturn_runCompiled
+  have hrun := rootFinishReturn_runCompiled (h_push0 := h_push0)
     (fs := runtime.main :: runtime.aux) (sevm := sevm)
     (base := base) (memory := memory) (digest := digest) (G := G)
     hsize hread
@@ -1152,7 +1155,7 @@ private theorem rootFinishShaReturn_storageEffectRun
       (callPost.setMach ⟨[], callPost.memory, G + 16, callPost.stateGas⟩)
       (loadWord nodeWord +++ mstoreAt 0 +++
         returnMemoryRange 0 32) (.ok post) [] :=
-    rootFinishReturn_storageEffectRun hsizeCall hreadCall
+    rootFinishReturn_storageEffectRun (h_push0 := hfork.rules_push0) hsizeCall hreadCall
   have hwhole : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], memory, G + 253, base.stateGas⟩)
@@ -1257,7 +1260,7 @@ private theorem rootFinish_storageEffectRun
         (.ok stopPost) := by
       apply Func.RunCompiledTo.of_runCompiled
       simpa only [show G + 253 + 138 = G + 391 by omega] using
-        (rootFinishPrefix_runCompiled
+        (rootFinishPrefix_runCompiled (h_push0 := hfork.rules_push0) (hfork := hfork)
           (fs := runtime.main :: runtime.aux) (sevm := sevm)
           (base := base) (height := height) (G := G + 253)
           hmem hstop)
@@ -1329,7 +1332,7 @@ private theorem getDepositRootEndpoint_prefix_storageEffectRun
     decide +kernel
   unfold getDepositRootEndpoint
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => hfork.rules_push0)
       (w := depositCountSlot) (c := gVerylow)
       (G := K + 100 + sloadCost sevm base depositCountSlot)
       (by unfold depositCountSlot; decide +kernel)
@@ -1519,7 +1522,7 @@ theorem getDepositRootEndpoint_runCompiled
               (base'.setMach
                 ⟨[(32 : B256)], memory', G + 416, base'.stateGas⟩)
               rootLoop (.ok post) := by
-          apply rootLoopFinish32_dispatch_runCompiledTo
+          apply rootLoopFinish32_dispatch_runCompiledTo (h_push0 := hfork.rules_push0)
             (stack := []) (K := G + 391) hmem
             (by simp only [List.length_nil]; omega)
           simpa only [show G + 391 + 25 = G + 416 by omega] using
@@ -1795,7 +1798,8 @@ private theorem getDepositRootLeafRoute_runCompiledTo
     {out : Execution} {G : Nat}
     (hbody : Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) out) :
+      (nonpayableEndpoint getDepositRootEndpoint) out)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 20, base.stateGas⟩)
@@ -1817,7 +1821,7 @@ private theorem getDepositRootLeafRoute_runCompiledTo
     simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
     omega
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 hpushCost hpushGas hpushRoom) ?_
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) hpushCost hpushGas hpushRoom) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
@@ -1843,7 +1847,8 @@ private theorem getDepositRootInnerRoute_runCompiledTo
     (hleaf : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 20, base.stateGas⟩)
-      getDepositRootLeafRoute out) :
+      getDepositRootLeafRoute out)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 42, base.stateGas⟩)
@@ -1863,7 +1868,7 @@ private theorem getDepositRootInnerRoute_runCompiledTo
     rw [getDepositRootSelector_eq]
     decide +kernel
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 36) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 36) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -1896,7 +1901,8 @@ private theorem getDepositRootMiddleRoute_runCompiledTo
     (hinner : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 42, base.stateGas⟩)
-      getDepositRootInnerRoute out) :
+      getDepositRootInnerRoute out)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 64, base.stateGas⟩)
@@ -1916,7 +1922,7 @@ private theorem getDepositRootMiddleRoute_runCompiledTo
     rw [getDepositCountSelector_eq]
     decide +kernel
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 58) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 58) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -1951,7 +1957,8 @@ private theorem getDepositRootRootRoute_runCompiledTo
     (hmiddle : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 64, base.stateGas⟩)
-      getDepositRootMiddleRoute out) :
+      getDepositRootMiddleRoute out)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 86, base.stateGas⟩)
@@ -1970,7 +1977,7 @@ private theorem getDepositRootRootRoute_runCompiledTo
     rw [depositSelector_eq]
     decide +kernel
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 80) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 80) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2006,14 +2013,16 @@ private theorem getDepositRootMainRoute_runCompiledTo
     (hroot : Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 86, base.stateGas⟩)
-      getDepositRootRootRoute out) :
+      getDepositRootRootRoute out)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach ⟨[], Mem.empty, G + 97, base.stateGas⟩)
       (Func.main tree) out := by
   rw [getDepositRootMainRoute_eq]
   unfold getDepositRootMainRoute fsig shiftRight cdl
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (c := gBase) (G := G + 95)
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (c := gBase) (G := G + 95)
       pushCost_zero
       (by simp only [Devm.gasLeft_setMach, gBase])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
@@ -2028,7 +2037,7 @@ private theorem getDepositRootMainRoute_runCompiledTo
   have hpush224 : pushCost (224 : B256).toBytes.sig = gVerylow := by
     decide +kernel
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256 (G := G + 89) hpush224
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 89) hpush224
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2047,7 +2056,7 @@ private theorem getDepositRootMainRoute_runCompiledTo
       (f := fun x y => y >>> x.toNat)
       (cost := gVerylow) (G := G + 86)
       (v := getDepositRootSelector)
-      (by rintro ⟨⟩) rfl rfl hselector'
+      (by rintro ⟨⟩) (Rinst.runCore_shr_of_shifts h_shifts) rfl hselector'
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by decide)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
@@ -2058,7 +2067,8 @@ private theorem getDepositRootLeafRoute_storageEffectRun
     {out : Execution} {effects : List (Adr × B256 × B256)} {G : Nat}
     (hbody : Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) out effects) :
+      (nonpayableEndpoint getDepositRootEndpoint) out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 20, base.stateGas⟩)
@@ -2069,7 +2079,7 @@ private theorem getDepositRootLeafRoute_storageEffectRun
     rw [getDepositRootSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 17) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 17) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2108,7 +2118,8 @@ private theorem getDepositRootInnerRoute_storageEffectRun
     (hleaf : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 20, base.stateGas⟩)
-      getDepositRootLeafRoute out effects) :
+      getDepositRootLeafRoute out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 42, base.stateGas⟩)
@@ -2130,7 +2141,7 @@ private theorem getDepositRootInnerRoute_storageEffectRun
     rw [getDepositRootSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 36) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 36) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2168,7 +2179,8 @@ private theorem getDepositRootMiddleRoute_storageEffectRun
     (hinner : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 42, base.stateGas⟩)
-      getDepositRootInnerRoute out effects) :
+      getDepositRootInnerRoute out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 64, base.stateGas⟩)
@@ -2190,7 +2202,7 @@ private theorem getDepositRootMiddleRoute_storageEffectRun
     rw [getDepositCountSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 58) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 58) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2231,7 +2243,8 @@ private theorem getDepositRootRootRoute_storageEffectRun
     (hmiddle : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 64, base.stateGas⟩)
-      getDepositRootMiddleRoute out effects) :
+      getDepositRootMiddleRoute out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 86, base.stateGas⟩)
@@ -2252,7 +2265,7 @@ private theorem getDepositRootRootRoute_storageEffectRun
     rw [depositSelector_eq]
     decide +kernel
   apply Func.StorageEffectRun.next_effectNeutral
-    (Ninst.runCompiled_pushB256 (G := G + 80) hpushCost
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0) (G := G + 80) hpushCost
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
@@ -2294,7 +2307,9 @@ private theorem getDepositRootMainRoute_storageEffectRun
     (hroot : Func.StorageEffectRun fs sevm
       (base.setMach
         ⟨[getDepositRootSelector], Mem.empty, G + 86, base.stateGas⟩)
-      getDepositRootRootRoute out effects) :
+      getDepositRootRootRoute out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     Func.StorageEffectRun fs sevm
       (base.setMach ⟨[], Mem.empty, G + 97, base.stateGas⟩)
       (Func.main tree) out effects := by
@@ -2325,7 +2340,9 @@ theorem getDepositRoot_route_storageEffectRun
     (hbody : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) out effects) :
+      (nonpayableEndpoint getDepositRootEndpoint) out effects)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ mid : Devm,
       Devm.BurnBy gJumpdest
         (base.setMach
@@ -2333,15 +2350,15 @@ theorem getDepositRoot_route_storageEffectRun
       Func.StorageEffectRun (runtime.main :: runtime.aux)
         sevm mid runtime.main out effects := by
   have hleaf :=
-    getDepositRootLeafRoute_storageEffectRun (G := K) hbody
+    getDepositRootLeafRoute_storageEffectRun (h_push0 := h_push0) (G := K) hbody
   have hinner :=
-    getDepositRootInnerRoute_storageEffectRun (G := K) hleaf
+    getDepositRootInnerRoute_storageEffectRun (h_push0 := h_push0) (G := K) hleaf
   have hmiddle :=
-    getDepositRootMiddleRoute_storageEffectRun (G := K) hinner
+    getDepositRootMiddleRoute_storageEffectRun (h_push0 := h_push0) (G := K) hinner
   have hroot :=
-    getDepositRootRootRoute_storageEffectRun (G := K) hmiddle
+    getDepositRootRootRoute_storageEffectRun (h_push0 := h_push0) (G := K) hmiddle
   have hmain :=
-    getDepositRootMainRoute_storageEffectRun (G := K) hselector hroot
+    getDepositRootMainRoute_storageEffectRun (h_shifts := h_shifts) (h_push0 := h_push0) (G := K) hselector hroot
   let pre := base.setMach
     ⟨[], Mem.empty, K + getDepositRootRouteGas, base.stateGas⟩
   let mid := base.setMach ⟨[], Mem.empty, K + 113, base.stateGas⟩
@@ -2399,7 +2416,9 @@ theorem getDepositRoot_route_noRawSstore
     (hbody : Func.StorageEffectRun
       (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) out []) :
+      (nonpayableEndpoint getDepositRootEndpoint) out [])
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, K + getDepositRootRouteGas, base.stateGas⟩) out,
@@ -2412,7 +2431,7 @@ theorem getDepositRoot_route_noRawSstore
       Exec.retainedStorageEffectTriples execution = [] ∧
       some sevm.code.toList = Prog.compile runtime := by
   obtain ⟨mid, hentry, hmain⟩ :=
-    getDepositRoot_route_storageEffectRun
+    getDepositRoot_route_storageEffectRun (h_shifts := h_shifts) (h_push0 := h_push0)
       hnonempty hselector hbody
   have hprogram : Prog.RunCompiledTo sevm
       (base.setMach
@@ -2454,7 +2473,8 @@ the endpoint, and that selected arm has an empty exact effect list. -/
 theorem getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
     {sevm : Sevm} {base : Devm} {G : Nat}
     (hvalue : sevm.value ≠ 0)
-    (hroom : base.stack.length < 1023) :
+    (hroom : base.stack.length < 1023)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨base.stack, base.memory, G + nonpayableEndpointRevertGas, base.stateGas⟩)
@@ -2482,7 +2502,7 @@ theorem getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
           (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
           Devm.memory_setMach] using
-        (Func.runCompiledTo_revert_func
+        (Func.runCompiledTo_revert_func (h_push0 := h_push0)
           (fs := runtime.main :: runtime.aux) (sevm := sevm)
           (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩)
           (G := G) (by simp only [Devm.gasLeft_setMach, gBase])
@@ -2498,20 +2518,22 @@ theorem getDepositRoot_route_runCompiledTo
     (hselector : Sevm.selector sevm = getDepositRootSelector)
     (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) out) :
+      (nonpayableEndpoint getDepositRootEndpoint) out)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Prog.RunCompiledTo sevm
       (base.setMach ⟨[], Mem.empty, K + getDepositRootRouteGas, base.stateGas⟩)
       runtime out := by
   have hleaf :=
-    getDepositRootLeafRoute_runCompiledTo (G := K) hbody
+    getDepositRootLeafRoute_runCompiledTo (h_push0 := h_push0) (G := K) hbody
   have hinner :=
-    getDepositRootInnerRoute_runCompiledTo (G := K) hleaf
+    getDepositRootInnerRoute_runCompiledTo (h_push0 := h_push0) (G := K) hleaf
   have hmiddle :=
-    getDepositRootMiddleRoute_runCompiledTo (G := K) hinner
+    getDepositRootMiddleRoute_runCompiledTo (h_push0 := h_push0) (G := K) hinner
   have hroot :=
-    getDepositRootRootRoute_runCompiledTo (G := K) hmiddle
+    getDepositRootRootRoute_runCompiledTo (h_push0 := h_push0) (G := K) hmiddle
   have hmain :=
-    getDepositRootMainRoute_runCompiledTo (G := K) hselector hroot
+    getDepositRootMainRoute_runCompiledTo (h_push0 := h_push0) (h_shifts := h_shifts) (G := K) hselector hroot
   refine Prog.runCompiledTo_intro
     (mid := base.setMach ⟨[], Mem.empty, K + 113, base.stateGas⟩)
     (G := K + 113) ?_ rfl ?_
@@ -2539,11 +2561,13 @@ theorem getDepositRoot_route_runCompiled
     (hselector : Sevm.selector sevm = getDepositRootSelector)
     (hbody : Func.RunCompiled (runtime.main :: runtime.aux) sevm
       (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
-      (nonpayableEndpoint getDepositRootEndpoint) post) :
+      (nonpayableEndpoint getDepositRootEndpoint) post)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Prog.RunCompiled sevm
       (base.setMach ⟨[], Mem.empty, K + getDepositRootRouteGas, base.stateGas⟩)
       runtime post := by
-  rcases getDepositRoot_route_runCompiledTo hnonempty hselector
+  rcases getDepositRoot_route_runCompiledTo (h_push0 := h_push0) (h_shifts := h_shifts) hnonempty hselector
       (Func.RunCompiledTo.of_runCompiled hbody) with
     ⟨mid, hburn, hmain⟩
   exact ⟨mid, hburn, Func.RunCompiled.of_runCompiledTo_ok hmain⟩
@@ -2568,7 +2592,9 @@ theorem getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
     (hnonempty : sevm.data.length.toB256 ≠ 0)
     (hvalue : sevm.value ≠ 0)
     (hselector : Sevm.selector sevm = getDepositRootSelector)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ execution : Exec 0 sevm
         (base.setMach
           ⟨[], Mem.empty, G + getDepositRootNonzeroValueRuntimeGas, base.stateGas⟩)
@@ -2594,14 +2620,14 @@ theorem getDepositRoot_nonzero_value_runCompiledTo_noRawSstore
         (base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) [] := by
     simpa only [routeBase, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
         Devm.memory_setMach] using
-      (getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
+      (getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun (h_push0 := h_push0)
         (sevm := sevm) (base := routeBase) (G := G) hvalue
         (by
           simp only [routeBase, Devm.stack_setMach, List.length_nil]
           omega))
   obtain ⟨execution, hrun, executionSafe, hwrites, htriples,
       hcompiled⟩ :=
-    getDepositRoot_route_noRawSstore
+    getDepositRoot_route_noRawSstore (h_shifts := h_shifts) (h_push0 := h_push0)
       (base := base) (K := G + nonpayableEndpointRevertGas)
       hnonempty hselector hcode
       hbodyEffects

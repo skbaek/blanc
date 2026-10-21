@@ -100,7 +100,8 @@ theorem reconstructLoadStore_runCompiledTo
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
-      rest ex) :
+      rest ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory,
@@ -114,7 +115,7 @@ theorem reconstructLoadStore_runCompiledTo
     exact memExtSize_of_le hmod hsourceFit
   simp only [loadWord, mstoreAt, prepend]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := sourceWord * 32) (c := csource)
       (G := K + 3 + ctarget + 3)
       rfl
@@ -146,7 +147,7 @@ theorem reconstructLoadStore_runCompiledTo
       (by omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
       (by
@@ -184,7 +185,8 @@ theorem reconstructPushStore_runCompiledTo
       (base.setMach
         ⟨stack,
           memory.write (targetWord * 32).toNat value.toBytes, K, base.stateGas⟩)
-      rest ex) :
+      rest ex)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
     Func.RunCompiledTo fs sevm
       (base.setMach
         ⟨stack, memory, K + reconstructPushStoreCost value targetWord, base.stateGas⟩)
@@ -193,7 +195,7 @@ theorem reconstructPushStore_runCompiledTo
   let ctarget := pushCost ((targetWord * 32).toBytes.sig)
   simp only [mstoreAt, prepend]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := value) (c := cvalue) (G := K + ctarget + 3)
       rfl
       (by
@@ -204,7 +206,7 @@ theorem reconstructPushStore_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
-    (Ninst.runCompiled_pushB256
+    (Ninst.runCompiled_pushB256 (h_push0 := fun _ => h_push0)
       (w := targetWord * 32) (c := ctarget) (G := K + 3)
       rfl
       (by
@@ -388,7 +390,7 @@ theorem reconstructSignatureFirstSha_runCompiledTo
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
+    sha64_success_prefix_runCompiledTo_ext (h_push0 := hfork.rules_push0) (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 13) (outputWord := intermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 4)
@@ -544,7 +546,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
-    sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
+    sha64_success_prefix_runCompiledTo_ext (h_push0 := hfork.rules_push0) (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := secondIntermediateWord)
       (stack := stack) (success := success) (K := K) (ext := 3)
@@ -606,7 +608,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
       (base.setMach ⟨stack, firstMemory, K + 248, base.stateGas⟩)
       (pushB256 0 ::: mstoreAt 1 +++
         sha64 0 secondIntermediateWord success) ex := by
-    have h := reconstructPushStore_runCompiledTo
+    have h := reconstructPushStore_runCompiledTo (h_push0 := hfork.rules_push0)
       (base := base) (memory := firstMemory)
       (value := 0) (targetWord := 1) (stack := stack)
       (K := K + 240) (rest := sha64 0 secondIntermediateWord success)
@@ -618,7 +620,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
           reconstructSignatureSecondStagedMemory,
           show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha)
     simpa only [reconstructPushStoreCost_zero_one] using h
-  have hwhole := reconstructLoadStore_runCompiledTo
+  have hwhole := reconstructLoadStore_runCompiledTo (h_push0 := hfork.rules_push0)
     (base := base) (memory := base.memory)
     (sourceWord := 15) (targetWord := 0)
     (value := Bytes.toB256 signatureTail) (stack := stack)
@@ -756,7 +758,7 @@ theorem reconstructPairSha_runCompiledTo
             reconstructLoadStoreCost rightWord 1, base.stateGas⟩)
       (loadWord rightWord +++ mstoreAt 1 +++
         sha64 0 outputWord success) ex := by
-    apply reconstructLoadStore_runCompiledTo
+    apply reconstructLoadStore_runCompiledTo (h_push0 := hfork.rules_push0)
       (base := base) (memory := firstMemory)
       (sourceWord := rightWord) (targetWord := 1)
       (value := right) (stack := stack)
@@ -771,7 +773,7 @@ theorem reconstructPairSha_runCompiledTo
     · omega
     · simpa only [firstMemory, stagedMemory, reconstructPairStagedMemory,
         show ((1 : B256) * 32).toNat = 32 by decide +kernel] using hsha
-  exact reconstructLoadStore_runCompiledTo
+  exact reconstructLoadStore_runCompiledTo (h_push0 := hfork.rules_push0)
     (base := base) (memory := base.memory)
     (sourceWord := leftWord) (targetWord := 0)
     (value := left) (stack := stack)
