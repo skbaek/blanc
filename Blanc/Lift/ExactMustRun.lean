@@ -116,9 +116,4 @@ theorem SFunc.RunExact.shifts_of_mustRun {fs : List SFunc} {sevm : Sevm} {K : Li
     sevm.benvStat.rules.op.shifts = true :=
   SFunc.RunExact.of_mustRun Ninst.RunCompiled.shifts_of_isShift hK h hf
 
-/-- Every covered fork selects the shift instructions. -/
-theorem _root_.Blanc.CoveredFork.rules_shifts {s : BenvStat} (h : CoveredFork s.fork) :
-    s.rules.op.shifts = true :=
-  h.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
-
 end Blanc.Lift

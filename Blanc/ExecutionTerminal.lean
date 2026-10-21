@@ -67,8 +67,6 @@ theorem Func.runCompiledTo_push1Zero_return_empty
       (Ninst.push [0] (by decide) ::: Ninst.push [0] (by decide) ::: Func.last .return_)
       (.ok ((base.setMach ⟨[], Mem.empty, G, base.stateGas⟩).withOutput [])) := by
   func_run
-  · exact fun h => nomatch h
-  · exact fun h => nomatch h
   apply Func.runCompiledTo_return_word (i := 0) (sz := 0) (s := [])
     (e := 0) (G := G) (out := [])
   · rfl

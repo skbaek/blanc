@@ -211,6 +211,11 @@ theorem CoveredFork.rules_push0 {s : BenvStat} (h : CoveredFork s.fork) :
   h.cases (motive := fun f => (Fork.ruleSet f).op.push0 = true)
     rfl rfl rfl rfl
 
+/-- Every covered fork selects the shift instructions. -/
+theorem CoveredFork.rules_shifts {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.op.shifts = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).op.shifts = true) rfl rfl rfl rfl
+
 theorem CoveredFork.rules_sstore {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.sstore = ⟨true, true⟩ :=
   h.cases (motive := fun f => (Fork.ruleSet f).sstore = ⟨true, true⟩)

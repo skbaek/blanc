@@ -121,6 +121,12 @@ lemma Ninst.runCompiled_push {sevm : Sevm} {devm : Devm} {xs : Bytes}
 drops every leading zero byte, so `(0 : B256)` leaves nothing at all. -/
 lemma pushCost_zero : pushCost ((0 : B256).toBytes.sig) = gBase := rfl
 
+/-- A nonzero word has a nonempty significant encoding, so its `PUSH` is never
+`PUSH0`. -/
+lemma B256.toBytes_sig_ne_nil {w : B256} (h : w ≠ 0) : w.toBytes.sig ≠ [] := by
+  intro h_nil
+  exact h (by rw [← B256.toB256_toBytes w, ← Bytes.toB256_sig, h_nil]; rfl)
+
 /-- Every other `Ninst.pushB256` carries an immediate and costs `gVerylow`.
 Proved from `Bytes.toB256_sig`, so it needs no computation on `w` — an
 `Ninst.pushB256` of a keccak-derived selector discharges it from `w ≠ 0`
@@ -128,8 +134,7 @@ alone. -/
 lemma pushCost_of_ne_zero {w : B256} (h : w ≠ 0) :
     pushCost (w.toBytes.sig) = gVerylow := by
   rw [pushCost, ite_eq_right]
-  intro h_nil
-  exact h (by rw [← B256.toB256_toBytes w, ← Bytes.toB256_sig, h_nil]; rfl)
+  exact B256.toBytes_sig_ne_nil h
 
 /-! ## The register instructions, evaluated forward
 
@@ -1166,6 +1171,27 @@ lemma Ninst.runCompiled_binary {sevm : Sevm} {devm : Devm} {r : Rinst}
   rw [← h_eq]
   exact Ninst.runCompiled_reg h_ne
     (h_def.trans (applyBinary_eq_ok h_stk (by omega) h_room))
+
+/-- `SHL` is a binary opcode under rules that select EIP-145. -/
+lemma Rinst.runCore_shl_of_shifts {devm : Devm} {sevm : Sevm}
+    (h : sevm.benvStat.rules.op.shifts = true) :
+    Rinst.runCore 0 devm sevm .shl =
+      applyBinary (fun x y => y <<< x.toNat) gVerylow devm := by
+  simp only [Rinst.runCore, h, ↓reduceIte]
+
+/-- `SHR` is a binary opcode under rules that select EIP-145. -/
+lemma Rinst.runCore_shr_of_shifts {devm : Devm} {sevm : Sevm}
+    (h : sevm.benvStat.rules.op.shifts = true) :
+    Rinst.runCore 0 devm sevm .shr =
+      applyBinary (fun x y => y >>> x.toNat) gVerylow devm := by
+  simp only [Rinst.runCore, h, ↓reduceIte]
+
+/-- `SAR` is a binary opcode under rules that select EIP-145. -/
+lemma Rinst.runCore_sar_of_shifts {devm : Devm} {sevm : Sevm}
+    (h : sevm.benvStat.rules.op.shifts = true) :
+    Rinst.runCore 0 devm sevm .sar =
+      applyBinary (fun x y => B256.arithShiftRight y x.toNat) gVerylow devm := by
+  simp only [Rinst.runCore, h, ↓reduceIte]
 
 /-- A unary register opcode: `NOT`, `ISZERO`, … -/
 lemma Ninst.runCompiled_unary {sevm : Sevm} {devm : Devm} {r : Rinst}
@@ -2736,6 +2762,9 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
     | assumption
     | intro empty; exact CoveredFork.rules_push0 (by assumption)
     | intro empty; rfl
+    | intro empty; exact absurd empty (List.cons_ne_nil _ _)
+    | intro empty; refine absurd empty (B256.toBytes_sig_ne_nil ?_); decide
+    | intro empty; refine absurd empty (B256.toBytes_sig_ne_nil ?_); decide +kernel
     | intro empty
       simp only [pushCost, empty, ↓reduceIte, gBase, gVerylow] at *
       contradiction)
@@ -3369,12 +3398,33 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         dischargeProfiled .gas hg (← gasTacs)
       | _ => throwError "func_run: SSTORE left {gs.length} obligations"
     | _ => do
-      let core ← whnfUntilHead
-        [``Jaune.applyBinary, ``Jaune.applyUnary, ``Jaune.pushItem] 16
-        (← mkAppM ``Jaune.Rinst.runCore #[mkNatLit 0, d, sevm, r'])
+      -- EIP-145 shifts are guarded by the selected rules; their binary
+      -- evaluation is a rule premised on that selection, discharged from a
+      -- local fact or from fork coverage, never evaluated through the guard.
+      let shift? : Option Name := match r'.getAppFnArgs with
+        | (``Jaune.Rinst.shl, #[]) => some ``Blanc.Rinst.runCore_shl_of_shifts
+        | (``Jaune.Rinst.shr, #[]) => some ``Blanc.Rinst.runCore_shr_of_shifts
+        | (``Jaune.Rinst.sar, #[]) => some ``Blanc.Rinst.runCore_sar_of_shifts
+        | _ => none
+      let core ← match shift? with
+        | some lem => do
+          let e ← mkAppOptM lem #[some d, some sevm, none]
+          let some (_, _, rhs) := (← instantiateMVars (← inferType e)).eq?
+            | throwError "func_run: shift rule shape"
+          pure rhs
+        | none => do
+          let ev ← mkAppM ``Jaune.Rinst.runCore #[mkNatLit 0, d, sevm, r']
+          pure (← whnfUntilHead [``Jaune.applyBinary, ``Jaune.applyUnary, ``Jaune.pushItem] 16 ev)
       let ne ← `(tactic| rintro ⟨⟩)
       let ne' ← `(tactic| exact nofun)
       let rfl' ← `(tactic| rfl)
+      let shiftDef ← match shift? with
+        | some lem => do
+          let lemId := mkIdent lem
+          `(tactic| first
+              | exact $lemId (by assumption)
+              | exact $lemId (CoveredFork.rules_shifts (by assumption)))
+        | none => `(tactic| rfl)
       match core.getAppFnArgs with
       | (``Jaune.applyBinary, #[f, costE, _]) => do
         let some cost ← natOf? costE
@@ -3393,7 +3443,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         match gs with
         | [hne, hdef, hstk, hval, hg, hr] =>
           discharge hne [ne, ne']
-          discharge hdef [rfl']
+          discharge hdef [rfl', shiftDef]
           discharge hstk (← rflTacs)
           dischargeValueProfiled hval (← valTacs)
           dischargeProfiled .gas hg (← gasTacs)
