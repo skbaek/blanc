@@ -1039,7 +1039,7 @@ macro "tw_defs" : tactic => `(tactic|
     Rinst.runCore, Bind.bind, Except.bind, Except.assert, assertDynamic,
     Devm.getOrigStorVal, getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
     sstoreNewRefundCounter, safeSub, twoWriteSevm, twoWritePre, twoWriteCode,
-    default, BenvStat.rules, Fork.ruleSet, pragueRules, Devm.balReadStorage, Devm.balReadAccount,
+    default, BenvStat.rules, Fork.ruleSet, pragueRules, pragueSstore, istanbulSstore, pragueAccess, Devm.balReadStorage, Devm.balReadAccount,
     Option.isSome, Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
     Devm.setWorld, Devm.stack, Devm.gasLeft, Devm.state,
     Devm.accessedStorageKeys, Devm.createdAccounts, Devm.refundCounter, addAccessedStorageKey,
@@ -1084,14 +1084,30 @@ macro "tw_norm" : tactic => `(tactic|
    tw_defs
    tw_lemmas))
 
+/-- Under Jaune's `State.setStorVal`, a write to an existing account goes
+through `setPresent`; for the non-empty literal accounts here that is the
+erasing `set` the named literal states are written with. -/
+private theorem twoWrite_setPresent_eq_set {w : State} {a : Adr} {ac : Acct}
+    (h : ac ≠ .nil) : w.setPresent a ac = w.set a ac := by
+  simp only [State.setPresent, State.set, h, ite_false]
+
+private theorem twoWrite_accountExists_set {w : State} {a : Adr} {ac : Acct}
+    (h : ac ≠ .nil) : AccountExists (w.set a ac) a := by
+  simp only [AccountExists, State.set, h, ite_false, Std.TreeMap.getElem?_insert_self,
+    Option.isSome_some]
+
 private theorem twoWriteStep0 :
     Rinst.run ⟨0, twoWriteSevm, twoWritePre⟩ .sstore = .ok twoWriteMid := by
   tw_norm
+  rw [ite_cond_eq_true _ _ (eq_true (twoWrite_accountExists_set (by decide +kernel))),
+    twoWrite_setPresent_eq_set (by decide +kernel)]
   rfl
 
 private theorem twoWriteStep1 :
     Rinst.run ⟨1, twoWriteSevm, twoWriteMid⟩ .sstore = .ok twoWriteEnd := by
   tw_norm
+  rw [ite_cond_eq_true _ _ (eq_true (twoWrite_accountExists_set (by decide +kernel))),
+    twoWrite_setPresent_eq_set (by decide +kernel)]
 
 private theorem twoWriteEvmStep0 :
     Evm.step ⟨0, twoWriteSevm, twoWritePre⟩ = .cont 1 twoWriteMid := by
@@ -1749,7 +1765,10 @@ theorem pre_control_arbitrary_target_code_control
     (hframe : sevm'.currentTarget = sevm.currentTarget)
     (hdataLength : sevm'.data.length = 36)
     (hmask : addressMask &&& reentrantTarget = 0)
-    (hdataTarget : Sevm.dataWord sevm' 4 = reentrantTarget) :
+    (hdataTarget : Sevm.dataWord sevm' 4 = reentrantTarget)
+    (h_push0 : sevm'.benvStat.rules.op.push0 = true)
+    (h_shifts : sevm'.benvStat.rules.op.shifts = true)
+    (h_transient : sevm'.benvStat.rules.op.transient = true) :
     CodeAt callPre target.toAdr code ∧
       callPre.getStorVal sevm.currentTarget (assignmentSlot target) = 0 ∧
       callPre.getTransVal sevm.currentTarget lockKey = 1 ∧
@@ -1768,6 +1787,7 @@ theorem pre_control_arbitrary_target_code_control
   obtain ⟨post, hrun, hout, _, _, _⟩ :=
     pause_body_runCompiledTo_error_of_locked dp sevm' callPre reentrantTarget G
       hdataLength hmask hdataTarget (by rw [hframe, hlock']; decide)
+      h_push0 h_shifts h_transient
   exact ⟨post, hrun, hout⟩
 
 /-! ## Call-boundary control: what the two outgoing messages carry

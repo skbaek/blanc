@@ -503,7 +503,7 @@ ROLES = {
     },
     "substrate": {
         "registerPauser_stageArgs_runCompiled":
-            "4f06fd9c9e0058056d634e3333995c0fe16ad3f9e82507debd45b07ec0d9f00c",
+            "a3586e76455a1b2ddcd4ca7c0093c5dbb794e9a46a64bdf50b9e619cd20659c7",
         "setPauserKernel_foundNonzero_finishSetPauser_runCompiled":
             "9ed9b31928b3cd610b7f49bca7a15006307f45ac1c0cfbc2563ddde213ea560d",
         "removeTarget_toFinish_runCompiled":
@@ -563,7 +563,7 @@ ROLES = {
         "setPauseDuration_body_runCompiledTo":
             "b8b48822be2599ba2e0c3be00fbd7cbe9752c79f2ad5c4e8ba620c96dec9d680",
         "setPauseDuration_dispatch_runCompiledTo":
-            "4defa468207ba96b94d5566aeea2150c9f3f7f27e7b35b27a504383c45a77928",
+            "9c492ddd7227367cb6ceb16d3e14b8d2526b2176eb4c6086f5cdd81cb9b0f7d3",
         # The shared witness tail.  Every main-function witness routes through
         # it, so a weakening here is invisible in each witness's own header --
         # which is exactly the blind spot `attainable_shape_control` covers for
@@ -891,10 +891,10 @@ ROLES = {
             "870ecb2b55649c76bd502afc1d08443d562651d5c27dfee94af9b5c3f669cb48",
         # P4: a re-entering pause takes the lock guard's refusal arm, whatever the target's code.
         "pause_body_runCompiledTo_error_of_locked":
-            "5d0dab35d93f64ad95f7f6cf6e2a25edf56f25332080fe6483ee4c13c5a3f270",
+            "aea586e3b015419f11064be34a1b2f05c087fe7a3b3597641d67dde24840eaa8",
         # P4 at the deployed runtime's own entry.
         "pause_runCompiledTo_error_of_locked":
-            "6fe906a961e9d74b02c1f54177897bd70da5697f35004264c8fba1783a2cf838",
+            "a88d8ae1c563a7bc7eb7bc125f1298bf106b528bc98198399ac624bcd7d790d3",
     },
     # ---- Stage 6: what the CircuitBreaker SENDS, and in what order ----
     #

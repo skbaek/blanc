@@ -672,7 +672,7 @@ A row's own **Premises** field names what that row adds to this shape. Reading a
 #### PAU-2 — A `pause` re-entered from the state at which the target holds control cannot pass the transient lock: it takes the refusal arm, reverts with the reentrancy payload, and writes nothing
 
 - **Declarations:** `Blanc.LidoCircuitBreaker.pause_body_runCompiledTo_error_of_locked`, `Blanc.LidoCircuitBreaker.pause_runCompiledTo_error_of_locked`
-- **Premises:** three hypotheses identifying the CircuitBreaker's own runtime, and the lock being held.
+- **Premises:** three hypotheses identifying the CircuitBreaker's own runtime, the lock being held, and selected PUSH0, shift and transient-storage availability (`sevm.benvStat.rules.op.push0`, `.shifts`, `.transient` all `true`).
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-access.sh`
 - **Differential channel:** the reentry and interference family — same-target and different-target nested pause
