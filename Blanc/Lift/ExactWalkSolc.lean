@@ -311,12 +311,19 @@ theorem afterSstore_getAcct {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr
     show ∃ st, ((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a =
       { d.state.get a with stor := st }
     unfold State.setStorVal
+    dsimp only
     by_cases h : sevm.currentTarget = a
     · subst h
-      rw [State.get_set_self]
-      exact ⟨_, rfl⟩
-    · rw [State.get_set_ne _ h]
-      exact ⟨(d.state.get a).stor, rfl⟩
+      split
+      · rw [State.get_setPresent_self]
+        exact ⟨_, rfl⟩
+      · rw [State.get_set_self]
+        exact ⟨_, rfl⟩
+    · split
+      · rw [State.get_setPresent_ne _ h]
+        exact ⟨(d.state.get a).stor, rfl⟩
+      · rw [State.get_set_ne _ h]
+        exact ⟨(d.state.get a).stor, rfl⟩
   unfold afterSstore
   split
   · exact core _ _
