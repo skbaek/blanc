@@ -461,7 +461,7 @@ private theorem implGuarded_exec_zero
     exact hdata
   obtain ⟨raw, hrun, herr, hout, hgas, hstate, htra, hlogs⟩ :=
     implGuarded_runCompiledTo_zero [implGuarded]
-      (initSevm msg) (initDevm msg) G hdata'
+      (initSevm msg) (initDevm msg) G hfork hdata'
   have hprog :
       Prog.RunCompiledTo (initSevm msg) (initDevm msg) implGuardedProg
         (.error (.revert, raw)) := by
@@ -817,7 +817,10 @@ private theorem proxy_delegatecall_success
         none := premises.covered.rules_stateGas_none
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, hsg, executeCode.handleErrorWith_none, executeCode.handleError,
-      proxyChild_benv_state, proxyChild_transientStorage, Except.bind_ok, h_ok]
+      proxyChild_benv_state, proxyChild_transientStorage, Except.bind_ok, h_ok,
+      Devm.recordTouch_of_not_touchedSweep
+        (rules := (proxyChild m atCallGas callCost childGas).benv.stat.rules)
+        premises.covered.rules_touchedSweep]
   have hresume :
       Resume.run (.call (proxyParent m atCallGas callCost) 0 0)
         ((Frame.ofCall (proxyChild m atCallGas callCost childGas)).settle
@@ -872,7 +875,9 @@ private theorem proxy_delegatecall_revert
     have hsg : child.benv.stat.rules.stateGas = none :=
       premises.covered.rules_stateGas_none
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      processMessage.settle, hsg, executeCode.handleErrorWith_none]
+      processMessage.settle, hsg, executeCode.handleErrorWith_none,
+      Devm.recordTouch_of_not_touchedSweep (rules := child.benv.stat.rules)
+        premises.covered.rules_touchedSweep]
     rfl
   have hce : childPost.error.isSome = true := by rfl
   have hresume :
@@ -929,7 +934,9 @@ private theorem proxy_delegatecall_halt
     have hsg : child.benv.stat.rules.stateGas = none :=
       premises.covered.rules_stateGas_none
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      processMessage.settle, hsg, executeCode.handleErrorWith_none]
+      processMessage.settle, hsg, executeCode.handleErrorWith_none,
+      Devm.recordTouch_of_not_touchedSweep (rules := child.benv.stat.rules)
+        premises.covered.rules_touchedSweep]
     rfl
   have hce : childPost.error.isSome = true := by rfl
   have hresume :
@@ -1011,6 +1018,7 @@ private theorem proxy_success_tail
         List.sliceD implReturnWord.toBytes 0 32 0 =
           implReturnWord.toBytes := by
       decide +kernel
+    have hpush0 : (initSevm m).benvStat.rules.op.push0 = true := premises.covered.rules_push0
     func_run [6]
     all_goals try
       (rw [Devm.gasLeft_setMach]
@@ -1163,6 +1171,7 @@ private theorem proxy_prefix
       (delegatecall ::: proxySuccessTail) result) :
     Func.RunCompiledTo [proxyFallback] (initSevm m)
       (proxyEntry m atCallGas) proxyFallback result := by
+  have hfork : CoveredFork (initSevm m).benvStat.fork := premises.covered
   change Func.RunCompiledTo [proxyFallback] (initSevm m)
     (proxyEntry m atCallGas)
     (calldatasize ::: pushB256 0 ::: pushB256 0 ::: calldatacopy :::
@@ -1523,10 +1532,11 @@ private theorem processMessage_correspondence_success
     processMessage_clean_of_exec (directCounterfactual m) direct
       (by simpa only [directCounterfactual_benvAfterTransfer, directCounterfactual_benv] using
         premises.entryIdentity)
-      (by simpa only [directCounterfactual_disablePrecompiles] using premises.disablePrecompiles) hdexec hderror
+      (by simpa only [directCounterfactual_disablePrecompiles] using premises.disablePrecompiles)
+      (by simpa only [directCounterfactual_benv] using premises.covered.rules_touchedSweep) hdexec hderror
   have hpmessage : processMessage m = .ok proxied :=
     processMessage_clean_of_exec m proxied premises.entryIdentity
-      premises.disablePrecompiles hpexec hperror
+      premises.disablePrecompiles premises.covered.rules_touchedSweep hpexec hperror
   rw [hdmessage, hpmessage]
   exact settledObservable_clean direct proxied hderror hperror
     (hdout.trans hpout.symm) (hdlogs.trans hplogs.symm)
@@ -1559,11 +1569,13 @@ private theorem processMessage_correspondence_revert
       (by simpa only [directCounterfactual_benvAfterTransfer, directCounterfactual_benv] using
         premises.entryIdentity)
       (by simpa only [directCounterfactual_disablePrecompiles] using premises.disablePrecompiles)
-      (by simpa only [directCounterfactual_benv] using premises.covered.rules_stateGas_none) hdexec
+      (by simpa only [directCounterfactual_benv] using premises.covered.rules_stateGas_none)
+      (by simpa only [directCounterfactual_benv] using premises.covered.rules_touchedSweep) hdexec
   have hpmessage :
       processMessage m = .ok (settledRevert m proxied) :=
     processMessage_revert_of_exec m proxied premises.entryIdentity
-      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none
+      premises.covered.rules_touchedSweep hpexec
   rw [hdmessage, hpmessage]
   exact settledObservable_revert m direct proxied hdout hpout hdlogs hplogs
 
@@ -1599,11 +1611,13 @@ private theorem processMessage_correspondence_halt
         premises.entryIdentity)
       (by simpa only [directCounterfactual_disablePrecompiles] using premises.disablePrecompiles)
       (by simpa only [directCounterfactual_benv] using premises.covered.rules_stateGas_none)
+      (by simpa only [directCounterfactual_benv] using premises.covered.rules_touchedSweep)
       (by simpa only [reason] using hdexec)
   have hpmessage :
       processMessage m = .ok (settledRevert m proxied) :=
     processMessage_revert_of_exec m proxied premises.entryIdentity
-      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none
+      premises.covered.rules_touchedSweep hpexec
   rw [hdmessage, hpmessage]
   exact settledObservable_halt_revert m reason direct proxied
     hdlogs hpout hplogs
@@ -1690,11 +1704,13 @@ theorem processMessage_static_halt_to_revert :
         premises.entryIdentity)
       (by simpa only [directCounterfactual_disablePrecompiles] using premises.disablePrecompiles)
       (by simpa only [directCounterfactual_benv] using premises.covered.rules_stateGas_none)
+      (by simpa only [directCounterfactual_benv] using premises.covered.rules_touchedSweep)
       (by simpa only [reason] using hdexec)
   have hpmessage :
       processMessage m = .ok (settledRevert m proxiedRaw) :=
     processMessage_revert_of_exec m proxiedRaw premises.entryIdentity
-      premises.disablePrecompiles premises.covered.rules_stateGas_none hpexec
+      premises.disablePrecompiles premises.covered.rules_stateGas_none
+      premises.covered.rules_touchedSweep hpexec
   refine ⟨settledHalt (directCounterfactual m) reason directRaw,
     settledRevert m proxiedRaw, ?_, ?_, ?_, ?_⟩
   · simpa only [m] using hdmessage

@@ -428,11 +428,15 @@ private theorem spawnChild_success
         using setupMain_compile
     · simpa only [List.append_nil] using hchildCodeList
   have process : processMessage spawn.child = .ok child := by
+    have hsweep : spawn.child.benv.stat.rules.settle.touchedSweep = false := by
+      change (initSevm spawn.child).benvStat.rules.settle.touchedSweep = false
+      exact hfork.rules_touchedSweep
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok,
-      show child.error.isSome = false by rw [error]; rfl]
+      show child.error.isSome = false by rw [error]; rfl,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   obtain ⟨trace⟩ := ExecutionTrace.exists_processMessageTrace
     spawn.child (.ok child) process
   have initError : (initDevm spawn.child).error = .none := rfl
@@ -874,7 +878,7 @@ private theorem decodeInitialize_success
       hcodeSizeNonzero haddressCold himplementationRaw
       himplementationOriginal himplementationCold hadminRaw hadminOriginal
       hadminCold hstatic hdepth hprecompile hruntime
-  have hrun := ossifiableConstructorDecode_oneWordSetup_runCompiled
+  have hrun := ossifiableConstructorDecode_oneWordSetup_runCompiled (hfork := hfork)
     (fs := ossifiableConstructorFunctions 1249 2188)
     (sevm := sevm) (base := base) (post := post)
     (body := ossifiableConstructorInitializeImplementation)

@@ -124,8 +124,7 @@ theorem V1SharedChildExecution.logical_effect
             (Devm.getStor (initDevm msg) upgradeProxy).set
               v1ValueSlot word := by
           simpa only [initSevm, execution.owner] using effect.1
-        rw [ownerStorage]
-        simp only [State.setStorVal, State.get_set_self]
+        rw [ownerStorage, State.setStorVal_get_self]
         by_cases same : key = v1ValueSlot
         · subst key
           rw [Stor.get_set_self, Stor.get_set_self]
@@ -182,8 +181,7 @@ theorem V2SharedChildExecution.logical_effect
             (Devm.getStor (initDevm msg) upgradeProxy).set
               v2ValueSlot word := by
           simpa only [initSevm, execution.owner] using effect.1
-        rw [ownerStorage]
-        simp only [State.setStorVal, State.get_set_self]
+        rw [ownerStorage, State.setStorVal_get_self]
         by_cases same : key = v2ValueSlot
         · subst key
           rw [Stor.get_set_self, Stor.get_set_self]
@@ -865,11 +863,10 @@ private theorem State.setStorVal_getCode_local
       state.getCode address := by
   change ((state.setStorVal owner slot value).get address).code =
     (state.get address).code
-  unfold State.setStorVal
   by_cases equal : owner = address
   · subst address
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ equal]
+    rw [State.setStorVal_get_self]
+  · rw [State.setStorVal_get_ne _ equal]
 
 private theorem fixturePrestate_v1Code :
     fixturePrestate.getCode v1Implementation = v1Code := by
@@ -1038,6 +1035,7 @@ private theorem fixtureV2ValueChild_value :
 
 private theorem fsig_prepend_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (selector : B256) (memory : Mem) (gas : Nat)
     (tail : Func) (post : Devm)
     (selectorEq : Sevm.selector sevm = selector)
@@ -1073,6 +1071,7 @@ private theorem fixtureV1ValueChild_run :
     · rfl
     · unfold v1Prog
       apply fsig_prepend_runCompiledTo
+        (hfork := by change CoveredFork .prague; exact CoveredFork.prague)
         (base := initDevm fixtureV1ValueChildMessage)
         (selector := valueSelector)
         (memory := (initDevm fixtureV1ValueChildMessage).memory)
@@ -1129,6 +1128,7 @@ private theorem fixtureV2ValueChild_run :
     · rfl
     · unfold v2Prog
       apply fsig_prepend_runCompiledTo
+        (hfork := by change CoveredFork .prague; exact CoveredFork.prague)
         (base := initDevm fixtureV2ValueChildMessage)
         (selector := valueSelector)
         (memory := (initDevm fixtureV2ValueChildMessage).memory)
@@ -1254,7 +1254,8 @@ private noncomputable def delegatedChildCertificate_of_run
       (initDevm spawn.child) program (.ok child))
     (compiled : some (initSevm spawn.child).code.toList =
       Prog.compile program)
-    (clean : child.error = none) :
+    (clean : child.error = none)
+    (sweep : spawn.child.benv.stat.rules.settle.touchedSweep = false) :
     DelegatedChildCertificate spawn.child (.ok child) := by
   have raw : exec (initEvm spawn.child) = .ok child := by
     simpa only [initEvm] using Prog.exec_of_runCompiledTo run compiled
@@ -1263,7 +1264,8 @@ private noncomputable def delegatedChildCertificate_of_run
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok,
-      show child.error.isSome = false by rw [clean]; rfl]
+      show child.error.isSome = false by rw [clean]; rfl,
+      Devm.recordTouch_of_not_touchedSweep sweep]
   let trace := Classical.choice
     (ExecutionTrace.exists_processMessageTrace spawn.child (.ok child)
       process)
@@ -1356,6 +1358,7 @@ theorem fixture_exactProxyPairSharedExecution_value :
       (by simpa only [fixtureV1ValueChildMessage] using runV1)
       (by simpa only [fixtureV1ValueChildMessage] using fixtureV1ValueChild_compiled)
       errorV1
+      rfl
     clean := by rw [errorV1]; rfl
   }
   have implementationV2 : V2SharedChildExecution v2ValueSpawn.child
@@ -1373,6 +1376,7 @@ theorem fixture_exactProxyPairSharedExecution_value :
       (by simpa only [fixtureV2ValueChildMessage] using runV2)
       (by simpa only [fixtureV2ValueChildMessage] using fixtureV2ValueChild_compiled)
       errorV2
+      rfl
     clean := by rw [errorV2]; rfl
   }
   let tailV1 : ForwardingTailBudget v1ValueSpawn childV1 :=

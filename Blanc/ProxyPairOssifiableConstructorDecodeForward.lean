@@ -295,6 +295,7 @@ private def decodeForwardAfterHead (body : Func) : Func :=
 private theorem decodeForwardImplementationStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {implementation : Adr} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (himplementation :
       ossifiableConstructorCodeWord sevm.code.toList 3437 =
         implementation.toB256)
@@ -350,6 +351,7 @@ private theorem decodeForwardImplementationStage_runCompiled
 private theorem decodeForwardAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {requestedAdmin : Adr} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hadmin : ossifiableConstructorCodeWord sevm.code.toList 3469 =
       requestedAdmin.toB256)
     (hrest : Func.RunCompiled fs sevm
@@ -694,6 +696,7 @@ private theorem decodeForwardPayloadCopyStage_runCompiled
 private theorem decodeForwardHeadStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcodeSize : sevm.code.size = 3565)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
@@ -817,6 +820,7 @@ theorem decodeForwardOneWordPayloadImage_setup
 private theorem decodeForwardOneWordHeadStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcodeSize : sevm.code.size = 3597)
     (hrest : Func.RunCompiled fs sevm
       (base.setMach ⟨[], decodeForwardHeadMemory sevm, G, base.stateGas⟩)
@@ -1034,6 +1038,7 @@ and the `160 → 288` memory expansion. -/
 theorem ossifiableConstructorDecode_oneWordSetup_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
     {body : Func} {implementation requestedAdmin : Adr} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (hcodeSize : sevm.code.size = 3597)
     (himplementation :
       ossifiableConstructorCodeWord sevm.code.toList 3437 =
@@ -1061,11 +1066,11 @@ theorem ossifiableConstructorDecode_oneWordSetup_runCompiled
     decodeForwardPointerStoreStage_runCompiled hoffset hlengthComplete
   have hoffsetBound :=
     decodeForwardOffsetBoundStage_runCompiled hoffset hpointer
-  have hadmin := decodeForwardAdminStage_runCompiled hrequested hoffsetBound
+  have hadmin := decodeForwardAdminStage_runCompiled (hfork := hfork) hrequested hoffsetBound
   have himplementation :=
-    decodeForwardImplementationStage_runCompiled himplementation hadmin
+    decodeForwardImplementationStage_runCompiled (hfork := hfork) himplementation hadmin
   have hdecode :=
-    decodeForwardOneWordHeadStage_runCompiled hcodeSize himplementation
+    decodeForwardOneWordHeadStage_runCompiled (hfork := hfork) hcodeSize himplementation
   simpa only [Nat.add_assoc] using hdecode
 
 /-- Execute the strict canonical-coordinate decoder and the complete empty-data
@@ -1148,10 +1153,10 @@ theorem ossifiableConstructorDecodeInitialize_emptySetup_runCompiled
     decodeForwardPointerStoreStage_runCompiled hoffset hlengthComplete
   have hoffsetBound :=
     decodeForwardOffsetBoundStage_runCompiled hoffset hpointer
-  have hadmin := decodeForwardAdminStage_runCompiled hrequested hoffsetBound
+  have hadmin := decodeForwardAdminStage_runCompiled (hfork := hfork) hrequested hoffsetBound
   have himplementation :=
-    decodeForwardImplementationStage_runCompiled himplementation hadmin
-  have hdecode := decodeForwardHeadStage_runCompiled hcodeSize himplementation
+    decodeForwardImplementationStage_runCompiled (hfork := hfork) himplementation hadmin
+  have hdecode := decodeForwardHeadStage_runCompiled (hfork := hfork) hcodeSize himplementation
   refine ⟨post, ?_, hstorage, hlogs, houtput, hgasPost, herrorPost⟩
   simpa only [Nat.add_assoc] using hdecode
 
