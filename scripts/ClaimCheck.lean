@@ -337,7 +337,7 @@ example (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain)
     (h_reach : BlockChain.ReachUsing cfg ch ch')
     (h_inv : Stable dp ca ch.state)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
   chain_reachable_backed_and_flash_zero dp ca cfg ch ch' h_reach h_inv hcov
@@ -841,8 +841,8 @@ example {cfg : ChainConfig} {fork : Fork}
     (sumNof : SumNof base.state.bal)
     (target_eq : ca = computeContractAddress sender (base.state.getNonce sender))
     (target_ne_zero : ca ≠ 0)
-    (target_not_precompile : ∀ {timestamp selected},
-      cfg.rulesAt timestamp = .ok selected → ¬ selected.isPrecomp ca)
+    (target_not_precompile : ∀ {number timestamp selected},
+      cfg.rulesAt number timestamp = .ok selected → ¬ selected.isPrecomp ca)
     (beacon_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp beaconRootsAddress)
     (history_not_precompile : ¬ (Fork.ruleSet fork).isPrecomp historyStorageAddress)
     (withdrawalRequest_not_precompile :
@@ -893,10 +893,10 @@ example {cfg : ChainConfig} {fork : Fork}
     {base : BlockChain} {cb : CanonicalBlock}
     {deploymentTxBytes : Bytes} {deploymentTx : Tx} {sender ca : Adr}
     (txs_eq : cb.block.txs = [.inl deploymentTxBytes])
-    (decode_eq : decodeTx (.inl deploymentTxBytes) = .ok deploymentTx)
+    (decode_eq : decodeTx (Fork.ruleSet fork) (.inl deploymentTxBytes) = .ok deploymentTx)
     (ommers_eq : cb.block.ommers = [])
     (withdrawals_eq : cb.block.wds = [])
-    (forkAt : cfg.forkAt cb.block.header.timestamp = .ok fork)
+    (forkAt : cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork)
     (type_eq : ∃ maxPriorityFee maxFee,
       deploymentTx.type = .two cfg.chainId maxPriorityFee maxFee none [])
     (value_eq : deploymentTx.value = 0)
@@ -1134,8 +1134,8 @@ example {cfg : ChainConfig} {base deployed : BlockChain}
     (params_eq : dp = freshDeployParams cfg.chainId.toB256 ca)
     (configValid : cfg.Valid)
     (target_ne_zero : ca ≠ 0)
-    (target_not_precompile : ∀ {timestamp rules},
-      cfg.rulesAt timestamp = .ok rules → ¬ rules.isPrecomp ca)
+    (target_not_precompile : ∀ {number timestamp rules},
+      cfg.rulesAt number timestamp = .ok rules → ¬ rules.isPrecomp ca)
     (emptyStorage : deployed.state.getStor ca = Stor.empty)
     (stable : Stable dp ca deployed.state)
     (deployed_validContext : deployed.ValidContext)
@@ -1211,7 +1211,7 @@ example (hroot : DeploymentRoot cfg base deployed dp ca) :
 example (hroot : DeploymentRoot cfg base deployed dp ca)
     (hreach : BlockChain.ReachUsing cfg
       deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f) :
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f) :
     Stable dp ca future.state :=
   hroot.reachable_stable hreach hcov
 
@@ -1242,24 +1242,24 @@ example {u : Adr}
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     SystemMessageTrace benv beaconRootsAddress
       benv.stat.parentBeaconBlockRoot.toBytes
       trace.beaconState trace.beaconOut :=
   trace.beacon
 
 example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     SystemMessageTrace (benv.withState trace.beaconState)
       historyStorageAddress trace.lastHash.toBytes
       trace.historyState trace.historyOut :=
   trace.history
 
 example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     SystemMessageTrace
       (trace.transactionBenv.withState
         (processWithdrawalsState trace.transactionBenv.state wds))
@@ -1268,8 +1268,8 @@ example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
   trace.requests.withdrawal
 
 example {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     SystemMessageTrace
       ((trace.transactionBenv.withState
         (processWithdrawalsState trace.transactionBenv.state wds)).withState
@@ -1327,7 +1327,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     (hreach : BlockChain.ReachUsing cfg
       checkpoint future)
     (hcovered : ∀ {pre post block}, stateTransitionUsing cfg pre block = .ok post → ∀ {fork},
-      cfg.forkAt block.header.timestamp = .ok fork → CoveredFork fork) :
+      cfg.forkAt block.header.number block.header.timestamp = .ok fork → CoveredFork fork) :
     Nonempty (AccountedHistory cfg dp ca checkpoint future) :=
   exists_accountedHistory_of_reachUsing hstable hreach hcovered
 
@@ -2169,7 +2169,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {q : Nat} {base deployed checkpoint future : BlockChain}
     {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2185,7 +2185,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2200,7 +2200,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed checkpoint future : BlockChain}
     {history : AccountedHistory cfg dp ca checkpoint future} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2214,7 +2214,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {history : AccountedHistory cfg dp ca checkpoint future}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hq : q ≤ bookedBalanceNat checkpoint.state ca u -
       ((history.weth10Flow u).redeemed +
@@ -2233,7 +2233,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {dp : DeployParams} {ca u recipient : Adr}
     {q : Nat} {base deployed future : BlockChain} {msg : Msg}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hq : q ≤ bookedBalanceNat future.state ca u)
     (henv : AdmissibleRedemptionMessage rules dp ca u recipient q future.state msg) :
@@ -2245,7 +2245,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
@@ -2257,7 +2257,7 @@ example {cfg : ChainConfig} {rules : ForkRules} {dp : DeployParams} {ca u : Adr}
     {q : Nat} {base deployed future : BlockChain}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
@@ -2271,7 +2271,7 @@ example {cfg : ChainConfig} {rules : ForkRules}
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {maxPriorityFee maxFee : Nat}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
     (hentry : benv.state = future.state)
     (hq : q ≤ bookedBalanceNat future.state ca u)
@@ -2361,7 +2361,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureRedemptionGuarantee
@@ -2371,7 +2371,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, FutureDualSelectorRedemptionGuarantee
@@ -2381,7 +2381,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
     {base deployed checkpoint future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hcheckpoint : BlockChain.ReachUsing cfg deployed checkpoint)
     (hfuture : BlockChain.ReachUsing cfg checkpoint future) :
     ∃ history, ∀ u : Adr, FutureRedemptionGuarantee
@@ -2397,7 +2397,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future) :
     AllowanceQuiescent ca u deployed.state ∧
       ∃ history, FutureRedemptionGuarantee
@@ -2465,7 +2465,7 @@ example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
 example {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
     {base deployed future : BlockChain}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
     (hfuture : BlockChain.ReachUsing cfg deployed future) :
     ∃ history : AccountedHistory cfg dp ca deployed future,
       NoAllowanceKeyCollision history →
@@ -2557,26 +2557,26 @@ example {rules : ForkRules} {dp : DeployParams} {ca : Adr} {w : State}
     ∃ post, RedemptionOutcome rules dp ca claims w post :=
   redeemEveryoneList_anyOrder hca hsel hstable hnodup hrecipients hperm
 
-example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+example {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
-    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   deployment_reachable_redeemClaims_anyOrder hroot hfuture hcov hrules hadm hperm
 
-example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
+example {cfg : ChainConfig} {rules : ForkRules} {number timestamp : Nat}
     {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : Weth10.DeploymentRoot cfg base deployed dp ca)
     (hfuture : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ t f, cfg.forkAt t = .ok f → CoveredFork f)
-    (hrules : cfg.rulesAt timestamp = .ok rules)
+    (hcov : ∀ number t f, cfg.forkAt number t = .ok f → CoveredFork f)
+    (hrules : cfg.rulesAt number timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
       ClaimAdmissible rules ca future.state
@@ -2591,17 +2591,18 @@ example {cfg : ChainConfig} {rules : ForkRules} {timestamp : Nat}
 /-! ## Current-mainnet and Prague specialization pins -/
 
 example
-    {timestamp : Nat} {rules : ForkRules}
-    (h : mainnetChainConfig.rulesAt timestamp = .ok rules) :
+    {number timestamp : Nat} {rules : ForkRules}
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (h : mainnetChainConfig.rulesAt number timestamp = .ok rules) :
     rules = pragueRules ∨ rules = osakaRules ∨
       rules = bpo1Rules ∨ rules = bpo2Rules :=
   by
     exact mainnet_rulesAt_eq_named
-      (timestamp := timestamp) (rules := rules) (h := h)
+      (timestamp := timestamp) (rules := rules) (h := h) (hmodern := hmodern)
 
 example
-    {timestamp : Nat} (h : mainnetBpo2Timestamp ≤ timestamp) :
-    mainnetChainConfig.rulesAt timestamp = .ok bpo2Rules :=
+    {number timestamp : Nat} (h : mainnetBpo2Timestamp ≤ timestamp) :
+    mainnetChainConfig.rulesAt number timestamp = .ok bpo2Rules :=
   by
     exact mainnet_rulesAt_eq_bpo2_of_ge
       (timestamp := timestamp) (h := h)
@@ -2634,18 +2635,18 @@ example (q : Nat) :
     exact bpo2Rules_redemptionRuntimeCeiling_gasCap
       (q := q)
 
-example {timestamp gas : Nat} {rules : ForkRules}
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+example {number timestamp gas : Nat} {rules : ForkRules}
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hgas : gas ≤ 2 ^ 24) :
     checkTransactionGasCap rules.tx gas = .ok () :=
   by
     exact mainnet_checkTransactionGasCap_of_le
       (hrules := hrules) (hgas := hgas)
 
-example :
-    mainnetChainConfig.rulesAt 1_767_747_683 = .ok bpo2Rules :=
+example (number : Nat) :
+    mainnetChainConfig.rulesAt number 1_767_747_683 = .ok bpo2Rules :=
   by
-    exact weth10CurrentMainnetCreation_rulesAt
+    exact weth10CurrentMainnetCreation_rulesAt number
 
 example
     (base deployed : BlockChain) (cb : CanonicalBlock)
@@ -2666,21 +2667,25 @@ example
 example
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
     (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
-    (hstable : Stable dp ca ch.state) :
+    (hstable : Stable dp ca ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      mainnetPragueTimestamp ≤ parent.header.timestamp) :
     Stable dp ca ch'.state :=
   by
     exact chainUsing_preserves_stable_mainnet
-      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable) (hstart := hstart)
 
 example
     (dp : DeployParams) (ca : Adr) (ch ch' : BlockChain)
     (hreach : BlockChain.ReachUsing mainnetChainConfig ch ch')
-    (hstable : Stable dp ca ch.state) :
+    (hstable : Stable dp ca ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      mainnetPragueTimestamp ≤ parent.header.timestamp) :
     (ch'.state.getStor ca).get flashMintedSlot = 0 ∧
       balSum (ch'.state.getStor ca) ≤ (ch'.state.bal ca).toNat :=
   by
     exact chain_reachable_backed_and_flash_zero_mainnet
-      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable)
+      (dp := dp) (ca := ca) (ch := ch) (ch' := ch') (hreach := hreach) (hstable := hstable) (hstart := hstart)
 
 example
     {rules : ForkRules} {dp : DeployParams} {ca u recipient : Adr}
@@ -2871,25 +2876,27 @@ example
       (dp := dp) (ca := ca) (u := u) (base := base) (deployed := deployed) (future := future) (hroot := hroot) (hfuture := hfuture)
 
 example
-    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {rules : ForkRules} {number timestamp : Nat} {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {cs ds : List RedemptionClaim}
     (hroot : MainnetDeploymentRoot base deployed dp ca)
     (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hadm : ClaimsAdmissible rules ca future.state cs)
     (hperm : cs.Perm ds) :
     ∃ post, RedemptionOutcome rules dp ca ds future.state post :=
   by
     exact deployment_reachable_redeemClaims_anyOrder_mainnet
-      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (cs := cs) (ds := ds) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hadm := hadm) (hperm := hperm)
+      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (cs := cs) (ds := ds) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hmodern := hmodern) (hadm := hadm) (hperm := hperm)
 
 example
-    {rules : ForkRules} {timestamp : Nat} {dp : DeployParams} {ca : Adr}
+    {rules : ForkRules} {number timestamp : Nat} {dp : DeployParams} {ca : Adr}
     {base deployed future : BlockChain} {holders : List Adr}
     {recipient : Adr → Adr} {claims : List RedemptionClaim}
     (hroot : MainnetDeploymentRoot base deployed dp ca)
     (hfuture : BlockChain.ReachUsing mainnetChainConfig deployed future)
-    (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
+    (hmodern : mainnetPragueTimestamp ≤ timestamp)
+    (hrules : mainnetChainConfig.rulesAt number timestamp = .ok rules)
     (hnodup : holders.Nodup)
     (hrecipients : ∀ u ∈ holders,
       ClaimAdmissible rules ca future.state
@@ -2899,7 +2906,7 @@ example
     ∃ post, RedemptionOutcome rules dp ca claims future.state post :=
   by
     exact deployment_reachable_redeemEveryoneList_anyOrder_mainnet
-      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (holders := holders) (recipient := recipient) (claims := claims) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hnodup := hnodup) (hrecipients := hrecipients) (hperm := hperm)
+      (rules := rules) (timestamp := timestamp) (dp := dp) (ca := ca) (base := base) (deployed := deployed) (future := future) (holders := holders) (recipient := recipient) (claims := claims) (hroot := hroot) (hfuture := hfuture) (hrules := hrules) (hmodern := hmodern) (hnodup := hnodup) (hrecipients := hrecipients) (hperm := hperm)
 
 end Weth10
 
@@ -4122,7 +4129,7 @@ example {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
     (h : CanonicalOfficialDeploymentBlock chainId base cb
       txBytes tx sender ca) :
     cb.block.txs = [.inl txBytes] ∧
-      decodeTx (.inl txBytes) = .ok tx ∧
+      decodeTx pragueRules (.inl txBytes) = .ok tx ∧
       cb.block.ommers = [] ∧
       cb.block.wds = [] ∧
       (∃ maxPriorityFee maxFee,
@@ -4768,7 +4775,7 @@ proof-only refactor does not. -/
 example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     balSum (future.state.getStor ca) =
         supplyN (future.state.getStor ca) ∧
       supplyN (future.state.getStor ca) ≤ maxSupply.toNat ∧
@@ -4824,7 +4831,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
 example {cfg : ChainConfig} {deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg deployed ca)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, ProrataTraceRealizes root steps future :=
   prorataTraceRealizes_exists_of_reachUsing root reach hcov
 
@@ -5790,7 +5797,7 @@ example
 example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (reach : BlockChain.ReachUsing cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧
       (PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∨
         ∃ r ∈ steps, 0 < r.step.debitAmount) :=
@@ -5801,8 +5808,8 @@ example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
     (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork)
-    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
+    {number timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt number timestamp = .ok rules) :
     PairStable vault rules future.state :=
   pair_reachable_stable root realizes collision hcov rulesAt
 
@@ -5811,7 +5818,7 @@ example {cfg : ChainConfig} {deployed : BlockChain} {vault : Adr}
     {steps : List (PairStepRecord vault)} {future : BlockChain}
     (realizes : PairTraceRealizes root steps future)
     (collision : NoVaultAllowanceKeyCollision (PairStepRecord.ledger steps) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state :=
   pair_reachable_backed root realizes collision hcov
@@ -5820,7 +5827,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state :=
   pair_history_backed root history collision hcov
@@ -5829,8 +5836,8 @@ example {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork)
-    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
+    {number timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt number timestamp = .ok rules) :
     PairStable vault rules future.state :=
   pair_history_stable root history collision hcov rulesAt
 
@@ -5882,7 +5889,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
     ∃ path : FourQuote.RealizedPath vault,
       path.steps = PairStepRecord.fourQuoteSteps steps ∧
@@ -5936,7 +5943,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (coalition : Finset Adr) (victim : Adr)
         (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution),
@@ -5951,7 +5958,7 @@ example {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (victim : Adr) (deposit exit : PairStepRecord vault) (v m p : Nat),
         victimMoves victim steps = [deposit, exit] →
@@ -6849,7 +6856,7 @@ example (k : Nat) :
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, DripTraceRealizes root coalition steps future ∧
       callKinds steps = history.dripCalls coalition ca :=
   dripTraceRealizes_transcript root coalition history hcov
@@ -6859,7 +6866,7 @@ example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     coalitionUnits coalition ca future.state * chiN (future.state.getStor ca) +
         (transcriptTally scale.toNat freshNat scale.toNat 0
           (history.dripCalls coalition ca)).joinResidue +
@@ -6935,7 +6942,7 @@ example {sevm : Sevm} {pre post : Devm}
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca) (coalition : Finset Adr)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     (transcriptTally scale.toNat freshNat scale.toNat 0
         (history.dripCalls coalition ca)).paid ≤
       (transcriptTally scale.toNat freshNat scale.toNat 0
@@ -6955,7 +6962,7 @@ example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
     (callsL : historyL.dripCalls coalition ca = left.map Kind.drip)
     (callsR : historyR.dripCalls coalition ca = right.map Kind.drip)
     (sameElapsed : left.sum = right.sum)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     natDistance (chiN (futureL.state.getStor ca)) (chiN (futureR.state.getStor ca)) ≤
       max (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat left right)
           (segmentDriftForward scale.toNat half.toNat rate.toNat scale.toNat right left) :=
@@ -6966,7 +6973,7 @@ example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
 example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
     (root : DeploymentRoot cfg base deployed ca)
     (history : ExecutionTrace.ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork, cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork, cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∀ t, future.blocks.getLast?.map (·.header.timestamp) = some t →
       ClockInv (chiN (deployed.state.getStor ca)) (rhoN (deployed.state.getStor ca))
         t (future.state.getStor ca) :=
