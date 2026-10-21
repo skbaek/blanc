@@ -75,6 +75,12 @@ registry has identified the likely vocabulary.
   real block number and timestamp and requires
   `mainnetPragueTimestamp ≤ timestamp`; it does not cover historical mainnet
   selections before Prague.
+  For such a schedule, preserve an invariant along a configured chain with
+  [`Blanc/LadderReached.lean`](../Blanc/LadderReached.lean):
+  `ContractSpec.chainUsing_preserves_inv_of_reached` asks coverage only at or
+  after a timestamp floor and a starting tip at or past it, and
+  `stateTransitionUsing_reachedStep` gives the strictly-later block and new tip
+  of one accepted step.
   To move an execution *between* covered forks, use
   [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean): `withFork` replaces the fork on
   `Sevm`/`Evm`/`Msg`/`Frame`; `evm_step_withFork` (one step commutes at an

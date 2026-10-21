@@ -1,4 +1,5 @@
 import Blanc.Ladder
+import Blanc.LadderReached
 
 /-!
 Controls for the fork-coverage restriction of 2026-09-23 (user decision
@@ -59,7 +60,8 @@ theorem frame_covered {s : Sevm}
 /-- Mainnet's activations are exactly the four covered forks, so the
 configured-chain premise holds there without assumption. -/
 theorem mainnet_schedule_covered :
-    ∀ t f, mainnetChainConfig.forkAt t = .ok f → CoveredFork f :=
+    ∀ number timestamp f, mainnetPragueTimestamp ≤ timestamp →
+      mainnetChainConfig.forkAt number timestamp = .ok f → CoveredFork f :=
   mainnetChainConfig_covered
 
 /-- End to end: the configured-chain ladder, restricted by the schedule
@@ -68,10 +70,12 @@ not assumed. -/
 theorem mainnet_chain_preserves_inv (c : ContractSpec) (wa : Adr)
     (hp : c.Preserves wa) (ch ch' : BlockChain)
     (h_reach : BlockChain.ReachUsing mainnetChainConfig ch ch')
-    (h_inv : c.StateInv wa ch.state) :
+    (h_inv : c.StateInv wa ch.state)
+    (hstart : ∃ parent, ch.blocks.getLast? = some parent ∧
+      mainnetPragueTimestamp ≤ parent.header.timestamp) :
     c.StateInv wa ch'.state :=
-  c.chainUsing_preserves_inv wa hp mainnetChainConfig ch ch' h_reach h_inv
-    mainnetChainConfig_covered
+  (c.chainUsing_preserves_inv_of_reached wa hp mainnetChainConfig
+    mainnetPragueTimestamp mainnetChainConfig_covered h_reach h_inv hstart).1
 
 /-! ### Amsterdam-negative control: no restricted statement reaches Amsterdam. -/
 
