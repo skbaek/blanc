@@ -127,7 +127,7 @@ theorem messageCallDelegation_accessed
     {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
     ∀ a, a ∈ msg.accessedAddresses → a ∈ delegated.accessedAddresses := by
-  unfold messageCallDelegation at run
+  unfold messageCallDelegation processMessageCall.legacyAuthorization at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
     rcases run with ⟨rfl, rfl⟩
@@ -141,7 +141,7 @@ theorem messageCallDelegation_accessed
 /-- Resolving delegated code only warms the delegate. -/
 theorem messageCallExecutionMessage_accessed (msg : Msg) :
     ∀ a, a ∈ msg.accessedAddresses → a ∈ (messageCallExecutionMessage msg).accessedAddresses := by
-  unfold messageCallExecutionMessage
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split
   · exact fun _ h => h
   · exact fun _ h => Std.HashSet.mem_insert.2 (Or.inr h)
@@ -213,14 +213,14 @@ theorem ApplyTransactionsTrace.rawFrames_precompile_warm
 
 /-- The frames entered by a block's system messages, which start cold on the covered forks. -/
 def AppliedBodyTrace.systemRawFrames
-    (trace : AppliedBodyTrace benv txs wds state bout) : List Exec.Deriv :=
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : List Exec.Deriv :=
   trace.beacon.rawFrames ++ trace.history.rawFrames ++ trace.requests.rawFrames
 
 /-- Every frame of a body is entered by a system message or by a transaction. -/
 theorem AppliedBodyTrace.rawFrames_system_or_tx
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) :
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
     ∀ root ∈ trace.rawFrames,
       root ∈ trace.systemRawFrames ∨ root ∈ trace.transactions.rawFrames := by
   intro root member
@@ -234,9 +234,9 @@ theorem AppliedBodyTrace.rawFrames_system_or_tx
 
 /-- The transaction frames of a body start with `a` warm, when `a` is a precompile. -/
 theorem AppliedBodyTrace.transactions_rawFrames_warm
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) {a : Adr}
     (ha : a ∈ benv.stat.rules.precompiles) :
     ∀ root ∈ trace.transactions.rawFrames, a ∈ root.devm.accessedAddresses :=
