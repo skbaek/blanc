@@ -20,6 +20,7 @@ set_option maxRecDepth 16384
 
 private theorem registerAfterSetLogExecSatOf
     {e : Sevm} {d : Devm} {M : Mem} {stack : Stack}
+    (hfork : CoveredFork e.benvStat.fork)
     (hnew : (M.read (newPauserWord * 32).toNat 32).1.toB256 = 9)
     (hsize : 768 ≤ M.size) (halign : M.size % 32 = 0)
     (hroom : stack.length < 1020)
@@ -66,7 +67,8 @@ private theorem registerAfterSetLogExecSatOf
     Devm.extCost_zero_of_le halignNew hzeroCoveredNew
   have hlogLen : ((1 : B256) * 32).toNat = 32 := by decide
   apply Func.execSat_of_runCompiledTo
-  · func_run [3, 1381]
+  · have hpush0 := hfork.rules_push0
+    func_run [3, 1381]
     all_goals try {
       simp only [hextNew, hnewMemory, hnew, gVerylow, Devm.setMach_gasLeft,
         Nat.reduceSub, Nat.reduceAdd, add_zero] }
@@ -102,6 +104,8 @@ private theorem registerAfterSetStoreExecSatOf
   · apply Ninst.runCompiled_sstore_warm
       (c := gasStorageSet) (G := 10000)
     · exact hfork.rules_stateGas_none
+    · exact hfork.rules_access
+    · exact hfork.rules_sstore
     · rfl
     · change (e.currentTarget, expirySlot 9) ∈ d.accessedStorageKeys
       exact hwarmExpiry
@@ -117,7 +121,7 @@ private theorem registerAfterSetStoreExecSatOf
     · rfl
     · simp only [Devm.gasLeft_setMach]
   · exact registerAfterSetLogExecSatOf
-      (stack := stack) hnew hsize halign hroom hstatic
+      (stack := stack) hfork hnew hsize halign hroom hstatic
 
 private theorem readNewPauser_after_writeZero
     {M : Mem} {bs : Bytes} {w : B256}
@@ -850,6 +854,8 @@ private theorem newCountUpdateTailExecSatOf
         (c := gasStorageSet)
         (G := 10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12)
       · exact hfork.rules_stateGas_none
+      · exact hfork.rules_access
+      · exact hfork.rules_sstore
       · rfl
       · exact hwarmCount₁
       · norm_num only [gCallStipend, gasStorageSet, Devm.gasLeft_setMach]
@@ -877,7 +883,7 @@ private theorem newCountUpdateTailExecSatOf
         (v := 0)
         (G := 10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
           gasStorageSet + 18)
-        hfork.rules_stateGas_none rfl hcountCold hcount rfl (by omega))
+        hfork.rules_stateGas_none hfork.rules_access rfl hcountCold hcount rfl (by omega))
   · exact newCountUpdateWarmTailExecSatOf hnew hsize halign hroom hstore
 
 private theorem afterOldPauserExecSatOf
@@ -1105,6 +1111,8 @@ private theorem execSat_successfulWrite_step
   apply Func.execSat_next
   · apply Ninst.runCompiled_sstore_warm (c := gasStorageSet) (G := G)
     · exact hfork.rules_stateGas_none
+    · exact hfork.rules_access
+    · exact hfork.rules_sstore
     · rfl
     · exact hwarm
     · simp only [Devm.gasLeft_setMach, gCallStipend, gasStorageSet]; omega
@@ -1130,6 +1138,7 @@ private theorem execSat_loadWord_prepend
     {word loaded : B256} {stack : List B256}
     {offsetCost G Gpre : Nat} {rest : Func}
     {P : Execution → Prop}
+    (hpush0 : e.benvStat.rules.op.push0 = true)
     (hcovered : (word * 32).toNat + 32 ≤ M.size)
     (halign : M.size % 32 = 0)
     (hread : (M.read (word * 32).toNat 32).1.toB256 = loaded)
@@ -1157,7 +1166,7 @@ private theorem execSat_loadWord_prepend
       · exact hroom
     · exact hnext
   apply Func.execSat_next
-  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl
+  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl (h_push0 := fun _ => hpush0)
     simpa only [Devm.stack_setMach] using hroom
   · exact hmload
 
@@ -1166,6 +1175,7 @@ private theorem execSat_tagTop_prepend
     {region : Nat} {top tagged : B256} {stack : List B256}
     {tagCost G Gpre : Nat} {rest : Func}
     {P : Execution → Prop}
+    (hpush0 : e.benvStat.rules.op.push0 = true)
     (htag : slot region top = tagged)
     (htagCost : pushCost (regionWord region).toBytes.sig = tagCost)
     (hroom : stack.length < 1023)
@@ -1185,7 +1195,7 @@ private theorem execSat_tagTop_prepend
         (by rfl) (by omega)
     · exact hnext
   apply Func.execSat_next
-  · apply Ninst.runCompiled_pushB256 htagCost rfl
+  · apply Ninst.runCompiled_pushB256 htagCost rfl (h_push0 := fun _ => hpush0)
     simp only [Devm.stack_setMach, List.length_cons]
     omega
   · exact hor
@@ -1195,6 +1205,7 @@ private theorem execSat_loadWord_pushB256_prepend
     {word loaded value : B256} {stack : List B256}
     {offsetCost valueCost G Gpre : Nat} {rest : Func}
     {P : Execution → Prop}
+    (hpush0 : e.benvStat.rules.op.push0 = true)
     (hcovered : (word * 32).toNat + 32 ≤ M.size)
     (halign : M.size % 32 = 0)
     (hread : (M.read (word * 32).toNat 32).1.toB256 = loaded)
@@ -1213,7 +1224,7 @@ private theorem execSat_loadWord_pushB256_prepend
       (d.setMach ⟨loaded :: stack, M, G + valueCost, d.stateGas⟩)
       (pushB256 value ::: rest) P := by
     apply Func.execSat_next
-    · apply Ninst.runCompiled_pushB256 hvalueCost rfl
+    · apply Ninst.runCompiled_pushB256 hvalueCost rfl (h_push0 := fun _ => hpush0)
       simp only [Devm.stack_setMach, List.length_cons]
       omega
     · exact hnext
@@ -1233,7 +1244,7 @@ private theorem execSat_loadWord_pushB256_prepend
       · omega
     · exact hpushValue
   apply Func.execSat_next
-  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl
+  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl (h_push0 := fun _ => hpush0)
     simp only [Devm.stack_setMach]
     omega
   · exact hmload
@@ -1243,6 +1254,7 @@ private theorem execSat_loadWord_targetIndexKey_prepend
     {word loaded target tagged : B256} {stack : List B256}
     {wordOffsetCost targetOffsetCost tagCost G Gpre : Nat}
     {rest : Func} {P : Execution → Prop}
+    (hpush0 : e.benvStat.rules.op.push0 = true)
     (hwordCovered : (word * 32).toNat + 32 ≤ M.size)
     (htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size)
     (halign : M.size % 32 = 0)
@@ -1283,7 +1295,7 @@ private theorem execSat_loadWord_targetIndexKey_prepend
         G + gVerylow + tagCost, d.stateGas⟩)
       (pushB256 (regionWord indexRegion) ::: .reg .or ::: rest) P := by
     apply Func.execSat_next
-    · apply Ninst.runCompiled_pushB256 htagCost rfl
+    · apply Ninst.runCompiled_pushB256 htagCost rfl (h_push0 := fun _ => hpush0)
       simp only [Devm.stack_setMach, List.length_cons]
       omega
     · exact hor
@@ -1303,7 +1315,7 @@ private theorem execSat_loadWord_targetIndexKey_prepend
       · simp only [List.length_cons]
         omega
     · exact htagPush
-  exact execSat_loadWord_pushB256_prepend
+  exact execSat_loadWord_pushB256_prepend (hpush0 := hpush0)
     hwordCovered halign hread hwordOffsetCost htargetOffsetCost
     (by omega) rfl htargetLoad
 
@@ -1331,6 +1343,7 @@ private theorem execSat_sload_cold_prepend
   apply Func.execSat_next
   · apply Ninst.runCompiled_sload_cold
     · exact hfork.rules_stateGas_none
+    · exact hfork.rules_access
     · rfl
     · exact hcold
     · exact hvalue
@@ -1343,6 +1356,7 @@ private theorem execSat_mstoreAt_word_prepend
     {fs : List Func} {e : Sevm} {d : Devm} {M : Mem} {bs : Bytes}
     {word value : B256} {stack : List B256}
     {offsetCost G Gpre : Nat} {rest : Func} {P : Execution → Prop}
+    (hpush0 : e.benvStat.rules.op.push0 = true)
     (hwf : Mem.Wf M) (hreads : Mem.Reads M bs)
     (hcovered : (word * 32).toNat + 32 ≤ M.size)
     (halign : M.size % 32 = 0)
@@ -1377,7 +1391,7 @@ private theorem execSat_mstoreAt_word_prepend
       · rfl
     · exact hnext hwf' hreads'
   apply Func.execSat_next
-  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl
+  · apply Ninst.runCompiled_pushB256 hoffsetCost rfl (h_push0 := fun _ => hpush0)
     simp only [Devm.stack_setMach, List.length_cons]
     omega
   · exact hmstore
@@ -1609,7 +1623,7 @@ private theorem appendTarget_write_suffixExecSatOf
       (loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         sstore ::: .call afterOldPauserSlot)
       (fun ex => ∃ post, ex = .ok post) := by
-    exact execSat_loadWord_pushB256_prepend
+    exact execSat_loadWord_pushB256_prepend (hpush0 := hfork.rules_push0)
       (offsetCost := 3) (valueCost := 3)
       hlengthCovered halign hlength hlengthOffsetCost hlengthSlotCost (by omega)
       (by norm_num only [gVerylow]) hlengthStore
@@ -1632,7 +1646,7 @@ private theorem appendTarget_write_suffixExecSatOf
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
           sstore ::: .call afterOldPauserSlot)
       (fun ex => ∃ post, ex = .ok post) := by
-    exact execSat_loadWord_targetIndexKey_prepend
+    exact execSat_loadWord_targetIndexKey_prepend (hpush0 := hfork.rules_push0)
       (wordOffsetCost := 3) (targetOffsetCost := 3) (tagCost := 3)
       hlengthCovered htargetCovered halign hlength htarget rfl
       hlengthOffsetCost htargetOffsetCost hindexTagCost (by omega)
@@ -1792,7 +1806,7 @@ private theorem appendTargetExecSatOf
         loadWord targetWord +++ loadWord arrayLengthWord +++
           tagTop arrayRegion +++ suffix)
       (fun ex => ∃ post, ex = .ok post) := by
-    apply execSat_mstoreAt_word_prepend
+    apply execSat_mstoreAt_word_prepend (hpush0 := hfork.rules_push0)
       (offsetCost := 3) (G := suffixGas + 18) (Gpre := suffixGas + 24)
       hwf hreads hlengthCovered halign (by decide) (by decide) (by
         norm_num only [gVerylow])
@@ -1843,7 +1857,7 @@ private theorem appendTargetExecSatOf
         e (d₁.setMach ⟨1 :: 7 :: 1 :: [], M₁, suffixGas + 6, d₁.stateGas⟩)
         (tagTop arrayRegion +++ suffix)
         (fun ex => ∃ post, ex = .ok post) := by
-      exact execSat_tagTop_prepend (region := arrayRegion)
+      exact execSat_tagTop_prepend (hpush0 := hfork.rules_push0) (region := arrayRegion)
         (top := 1) (tagged := arrayEntrySlot 1) (stack := [7, 1])
         (tagCost := 3) (G := suffixGas) (Gpre := suffixGas + 6)
         rfl (by decide) (by decide) (by norm_num only [gVerylow]) hsuffix
@@ -1852,11 +1866,11 @@ private theorem appendTargetExecSatOf
         e (d₁.setMach ⟨7 :: 1 :: [], M₁, suffixGas + 12, d₁.stateGas⟩)
         (loadWord arrayLengthWord +++ tagTop arrayRegion +++ suffix)
         (fun ex => ∃ post, ex = .ok post) := by
-      exact execSat_loadWord_prepend (offsetCost := 3)
+      exact execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
         (G := suffixGas + 6) (Gpre := suffixGas + 12)
         hlengthCovered₁ halign₁ hlengthM₁
         (by decide) (by decide) (by norm_num only [gVerylow]) htag
-    exact execSat_loadWord_prepend (offsetCost := 3)
+    exact execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
       (G := suffixGas + 12) (Gpre := suffixGas + 18)
       htargetCovered₁ halign₁ htargetM₁
       (by decide) (by decide) (by norm_num only [gVerylow]) hlengthLoad
@@ -1888,7 +1902,7 @@ private theorem appendTargetExecSatOf
     exact execSat_sload_cold_prepend hfork hlength hlengthCold (by decide)
       (by norm_num only [gasColdSload]) harith
   apply Func.execSat_next
-  · apply Ninst.runCompiled_pushB256 (c := 3) (G := suffixGas + 2133)
+  · apply Ninst.runCompiled_pushB256 (c := 3) (G := suffixGas + 2133) (h_push0 := fun _ => hfork.rules_push0)
       (by decide) rfl
     simp only [Devm.stack_setMach]
     decide
@@ -2200,7 +2214,7 @@ private theorem setPauserFreshBodyExecSatOf
       (mstoreAt previousPauserWord +++
         loadWord newPauserWord +++ targetKey +++ suffix)
       (fun ex => ∃ post, ex = .ok post) := by
-    apply execSat_mstoreAt_word_prepend
+    apply execSat_mstoreAt_word_prepend (hpush0 := hfork.rules_push0)
       (offsetCost := 3) (G := assignmentGas + 18)
       (Gpre := assignmentGas + 24)
       hwf hreads hpreviousCovered halign (by decide) (by decide)
@@ -2262,7 +2276,7 @@ private theorem setPauserFreshBodyExecSatOf
         e (d₁.setMach ⟨7 :: 9 :: 0 :: [], M₁, assignmentGas + 6, d₁.stateGas⟩)
         (tagTop assignmentRegion +++ suffix)
         (fun ex => ∃ post, ex = .ok post) := by
-      exact execSat_tagTop_prepend (region := assignmentRegion)
+      exact execSat_tagTop_prepend (hpush0 := hfork.rules_push0) (region := assignmentRegion)
         (top := 7) (tagged := assignmentSlot 7) (stack := [9, 0])
         (tagCost := 3) (G := assignmentGas)
         (Gpre := assignmentGas + 6)
@@ -2274,11 +2288,11 @@ private theorem setPauserFreshBodyExecSatOf
         (targetKey +++ suffix)
         (fun ex => ∃ post, ex = .ok post) := by
       simpa only [targetKey, prepend_append] using
-        (execSat_loadWord_prepend (offsetCost := 3)
+        (execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
           (G := assignmentGas + 6) (Gpre := assignmentGas + 12)
           htargetCovered₁ hMalign₁ htargetM₁
           (by decide) (by decide) (by norm_num only [gVerylow]) htag)
-    exact execSat_loadWord_prepend (offsetCost := 3)
+    exact execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
       (G := assignmentGas + 12) (Gpre := assignmentGas + 18)
       hnewCovered₁ hMalign₁ hnewM₁
       (by decide) (by decide) (by norm_num only [gVerylow]) htargetKey
@@ -2311,13 +2325,13 @@ private theorem setPauserFreshBodyExecSatOf
         mstoreAt previousPauserWord +++ loadWord newPauserWord +++
         targetKey +++ suffix)
       (fun ex => ∃ post, ex = .ok post) := by
-    exact execSat_tagTop_prepend (region := assignmentRegion)
+    exact execSat_tagTop_prepend (hpush0 := hfork.rules_push0) (region := assignmentRegion)
       (top := 7) (tagged := assignmentSlot 7) (stack := [])
       (tagCost := 3) (G := assignmentGas + 27 + gasColdSload)
       (Gpre := assignmentGas + 27 + gasColdSload + 6)
       rfl (by decide) (by decide) (by norm_num only [gVerylow]) hsload
   simpa only [targetKey, suffix, prepend_append] using
-    (execSat_loadWord_prepend (offsetCost := 3)
+    (execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
       (G := assignmentGas + 27 + gasColdSload + 6)
       (Gpre := assignmentGas + 2139)
       htargetCovered halign htarget (by decide) (by decide)
@@ -2424,7 +2438,7 @@ private theorem setPauserKernelFreshExecSatOf
         (by simp only [Devm.gasLeft_setMach, gVerylow]) (by decide)
     · exact hbranch
   simpa only [setPauserKernel, guarded, body] using
-    (execSat_loadWord_prepend (offsetCost := 3)
+    (execSat_loadWord_prepend (hpush0 := hfork.rules_push0) (offsetCost := 3)
       (G := assignmentGas + 2155) (Gpre := assignmentGas + 2161)
       htargetCovered halign htarget (by decide) (by decide)
       (by norm_num only [gVerylow]) htest)
