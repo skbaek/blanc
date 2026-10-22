@@ -192,6 +192,7 @@ import Blanc.ForwardStorageAccess
 import Blanc.ForwardSha256
 import Blanc.ForwardNoRawSstore
 import Blanc.ForwardStorageEffects
+import Blanc.TerminalStorage
 import Blanc.ForwardDispatchMiss
 import Blanc.ForwardLog
 import Blanc.CompiledStackSafety

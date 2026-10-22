@@ -5176,9 +5176,17 @@ contract-neutral.
   `Xinst.Run` preservation law. `runP_zero` and `progRunP_zero` fold through
   the actual lifted derivation, including callee returns and continuations,
   with explicit external-step and terminal semantic obligations.
-  `terminal_zero` discharges non-SELFDESTRUCT terminals. These tools do not
-  infer child effects, SELFDESTRUCT preservation, a historical zero seed or
-  hash separation from locality alone; those remain consumer proofs.
+  `terminal_zero` keeps the non-SELFDESTRUCT compatibility form;
+  `terminal_zero_all` handles every actual successful terminal, including
+  SELFDESTRUCT. Its storage law in
+  [`Blanc/TerminalStorage.lean`](../Blanc/TerminalStorage.lean),
+  `Linst.run_getStor_eq_or_empty` (and the SELFDESTRUCT-specific
+  `selfdestruct_getStor_eq_or_empty`), permits empty-account clearing rather
+  than asserting false storage equality. `runP_zero_of_children` and
+  `progRunP_zero_of_children` discharge the terminal premise using that actual
+  law; the initial seed and real external-step obligation remain explicit.
+  These tools do not infer child effects, transaction settlement, a historical
+  zero seed or hash separation from locality alone.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

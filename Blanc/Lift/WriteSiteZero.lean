@@ -1,12 +1,14 @@
 import Blanc.Lift.WriteSiteLocality
 import Blanc.Lift.Quiet
+import Blanc.TerminalStorage
 
 /-!
 # Zero preservation from checked write locality
 
 An actual SSTORE satisfying `GuardObs K False` preserves zero on the demanded
-slots. The lifted-run fold must separately consume actual external-step and
-terminal preservation laws; locality alone says nothing about child effects.
+slots. The general lifted-run fold exposes external-step and terminal laws;
+the terminal law can be discharged by actual terminal semantics, including
+SELFDESTRUCT. Locality alone says nothing about child effects.
 These are storage induction tools, with no contract, hash or signature premise.
 -/
 
@@ -81,12 +83,26 @@ theorem GuardObs.step_zero {K : B256 → Prop} {sevm : Sevm} {pre post : Devm} {
   | exchange imm =>
       exact zero.of_getStor_eq (congrFun (Ninst.world_of_quiet fork rfl run).1 _)
 
-/-- A non-SELFDESTRUCT terminal preserves the zero seed by its actual world
-semantics. A consumer reaching SELFDESTRUCT must supply that separate law. -/
+/-- Compatibility form for non-SELFDESTRUCT terminals. `terminal_zero_all`
+also handles SELFDESTRUCT's possible empty-account storage clearing. -/
 theorem terminal_zero {K : B256 → Prop} {a : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (terminal : l ≠ .selfdestruct) (run : Linst.Run sevm pre l (.ok post))
     (zero : ZeroSlots K a pre) : ZeroSlots K a post :=
   zero.of_getStor_eq (congrFun (Linst.world_of_ok terminal run).1 a)
+
+/-- Every successful terminal preserves demanded zero cells, including
+SELFDESTRUCT: each storage map is unchanged or becomes empty. No fork or
+account-protection premise is needed at this instruction boundary. -/
+theorem terminal_zero_all {K : B256 → Prop} {a : Adr} {sevm : Sevm} {pre post : Devm}
+    {l : Linst} (run : Linst.Run sevm pre l (.ok post))
+    (zero : ZeroSlots K a pre) : ZeroSlots K a post := by
+  intro slot tracked
+  change (post.getStor a).get slot = 0
+  rcases Blanc.Linst.run_getStor_eq_or_empty run a with same | empty
+  · rw [same]
+    exact zero slot tracked
+  · rw [empty]
+    rfl
 
 /-- Fold zero preservation through the actual lifted derivation, including
 callee returns and continuations. External and terminal laws concern their
@@ -163,5 +179,34 @@ theorem progRunP_zero {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm 
     ZeroSlots K sevm.currentTarget post := by
   obtain ⟨f, _, actual⟩ := run
   exact runP_zero fork steps observations children terminals actual zero
+
+/-- Actual terminals discharge the terminal premise of `runP_zero`. Only the
+genuine local external-step law remains for the concrete child consumer. -/
+theorem runP_zero_of_children {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (children : ∀ {d d' x xl}, P sevm d (.exec x) d' → xl.Filled →
+      Xinst.Run sevm d x xl (.ok d') →
+      ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d') :
+    ∀ {d f out}, SFunc.RunP P fs sevm d f out → ZeroSlots K sevm.currentTarget d →
+      ZeroSlots K sevm.currentTarget (Outcome.devm out) :=
+  runP_zero fork steps observations children (fun run zero => terminal_zero_all run zero)
+
+/-- Whole-program zero preservation with actual terminal semantics discharged;
+the initial seed and local actual child law remain explicit. -/
+theorem progRunP_zero_of_children
+    {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} {pre post : Devm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (children : ∀ {d d' x xl}, P sevm d (.exec x) d' → xl.Filled →
+      Xinst.Run sevm d x xl (.ok d') →
+      ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d')
+    (run : SProg.RunP P fs sevm pre post) (zero : ZeroSlots K sevm.currentTarget pre) :
+    ZeroSlots K sevm.currentTarget post := by
+  obtain ⟨f, _, actual⟩ := run
+  exact runP_zero_of_children fork steps observations children actual zero
 
 end Blanc.Lift.WriteSite
