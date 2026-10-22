@@ -933,7 +933,7 @@ example {post : Devm} {word result : B256}
 -- EXPECT: binary-dispatch-miss
 example (tree : DispatchTree) (selector : B256)
     {program : Prog} {sevm : Sevm} {base : Devm} (G : Nat)
-    (hmiss : ¬ tree.HasSelector selector) :
+    (hmiss : ¬ tree.HasSelector selector) (hpush0 : sevm.benvStat.rules.op.push0 = true) :
     ∃ run : Func.RunCompiledTo (program.main :: program.aux) sevm
         (base.setMach
           ⟨[selector], Mem.empty, G + tree.dispatchMissGas selector, base.stateGas⟩)
@@ -943,7 +943,7 @@ example (tree : DispatchTree) (selector : B256)
       Func.RunCompiledTo.NoRawSstorePath run := by
   expect_recipe_trigger "goal-shape:raw-sstore-free-compiled-path"
   blanc_suggest
-  exact DispatchTree.dispatchMiss_runCompiledTo_with_path tree selector G hmiss
+  exact DispatchTree.dispatchMiss_runCompiledTo_with_path tree selector G hmiss hpush0
 
 -- EXPECT: call-boundary-outcomes
 example {fs : List Func} {sevm : Sevm} {devm : Devm} {f : Func}
