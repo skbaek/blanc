@@ -1,5 +1,6 @@
 import Blanc.AddressSlotProofs
 import Blanc.Lift.CursorStateCuts
+import Blanc.Lift.CursorQuietReturn
 import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.InvWalkStep
 import Blanc.Lift.MapSlot
@@ -270,9 +271,9 @@ theorem pause_line {slot d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G 
   cases run
   exact ⟨_, rfl⟩
 
-def blacklistReadLine (base : UInt8) : List Ninst :=
+def mappedByteReadLine (depth : Fin 15) (base : UInt8) : List Ninst :=
   [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg (.dup 7),
+   .reg (.dup ⟨depth.val + 1, by omega⟩),
    .reg .and,
    .push [0x00] (by decide),
    .reg (.swap 0),
@@ -285,21 +286,22 @@ def blacklistReadLine (base : UInt8) : List Ninst :=
    .reg (.swap 0),
    .reg .keccak256,
    .reg .sload,
-   .reg (.dup 7),
+   .reg (.dup ⟨depth.val + 1, by omega⟩),
    .reg (.swap 0),
    .push [0xff] (by decide),
    .reg .and,
    .reg .iszero]
 
-theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {a0 a1 a2 a3 a4 a5 : B256} {owner : Adr} {S : List B256}
+theorem mapped_byte_read_line {depth : Fin 15} {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {owner : Adr} {S : List B256}
+    (source : S[depth.val]? = some owner.toB256)
     (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
     (run : Line.Run sevm
-      (St b (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M G)
-      (blacklistReadLine base) d) :
+      (St b S M G)
+      (mappedByteReadLine depth base) d) :
     ∃ G', d = St (afterSload sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
       (B256.eqCheck (255 &&& b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))) 0 ::
-        owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S)
+        owner.toB256 :: S)
       ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
   have ptr' := (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 (Bytes.toB256 [base]) (.inl (by decide))
   change PtrMem 128 96 ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) at ptr'
@@ -307,7 +309,7 @@ theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} 
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, rfl⟩ := ri_dup (by simpa only [List.getElem?_cons_succ] using source) step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, state⟩ := ri_and step
   rw [B256.and_comm, ff20_and_word, toAdr_toB256] at state
@@ -341,7 +343,7 @@ theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} 
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_sload fork step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, rfl⟩ := ri_dup (by simpa only [List.getElem?_cons_succ] using source) step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_swap rfl step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -352,6 +354,40 @@ theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} 
   obtain ⟨_, rfl⟩ := ri_iszero step
   cases run
   exact ⟨_, rfl⟩
+
+def blacklistReadLine (base : UInt8) : List Ninst :=
+  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg (.dup 7),
+   .reg .and,
+   .push [0x00] (by decide),
+   .reg (.swap 0),
+   .reg (.dup 1),
+   .reg .mstore,
+   .push [base] (by simp only [List.length_cons, List.length_nil]; decide),
+   .push [0x20] (by decide),
+   .reg .mstore,
+   .push [0x40] (by decide),
+   .reg (.swap 0),
+   .reg .keccak256,
+   .reg .sload,
+   .reg (.dup 7),
+   .reg (.swap 0),
+   .push [0xff] (by decide),
+   .reg .and,
+   .reg .iszero]
+
+theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {a0 a1 a2 a3 a4 a5 : B256} {owner : Adr} {S : List B256}
+    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Line.Run sevm
+      (St b (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M G)
+      (blacklistReadLine base) d) :
+    ∃ G', d = St (afterSload sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+      (B256.eqCheck (255 &&& b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))) 0 ::
+        owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S)
+      ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
+  exact mapped_byte_read_line (depth := ⟨6, by decide⟩) rfl ptr fork run
+
 
 def nonceLine (base : UInt8) : List Ninst :=
   [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
@@ -1186,6 +1222,368 @@ theorem v28_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
   obtain ⟨_, rfl⟩ := ri_eq step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_iszero step
+  cases run
+  exact ⟨_, rfl⟩
+
+def decodeAuthorizationLine (d0 d1 : UInt8) : List Ninst :=
+  [.reg .pop,
+   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+   .reg (.dup 1),
+   .reg .calldataload,
+   .reg (.dup 1),
+   .reg .and,
+   .reg (.swap 1),
+   .push [0x20] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .reg (.swap 1),
+   .reg .and,
+   .reg (.swap 0),
+   .push [0x40] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .push [0x60] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .push [0x80] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .push [0xa0] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .push [0xff] (by decide),
+   .push [0xc0] (by decide),
+   .reg (.dup 2),
+   .reg .add,
+   .reg .calldataload,
+   .reg .and,
+   .reg (.swap 0),
+   .push [0xe0] (by decide),
+   .reg (.dup 1),
+   .reg .add,
+   .reg .calldataload,
+   .reg (.swap 0),
+   .push [0x01, 0x00] (by decide),
+   .reg .add,
+   .reg .calldataload,
+   .push [d0, d1] (by simp only [List.length_cons, List.length_nil]; decide)]
+
+theorem decode_authorization_line {d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {available : B256} {S : List B256}
+    (run : Line.Run sevm (St b (available :: 4 :: S) M G) (decodeAuthorizationLine d0 d1) d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [d0, d1]) :: Sevm.dataWord sevm 260 :: Sevm.dataWord sevm 228 ::
+        (Sevm.dataWord sevm 196 &&& 255) :: Sevm.dataWord sevm 164 ::
+        Sevm.dataWord sevm 132 :: Sevm.dataWord sevm 100 :: Sevm.dataWord sevm 68 ::
+        (Sevm.dataWord sevm 36).toAdr.toB256 :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
+        S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_and step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_and step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_and step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  simp only [ff20_and_word]
+  exact ⟨_, rfl⟩
+
+
+/-- A selector comparison's exact four-instruction prefix. -/
+def compareLine (op : Rinst) (c0 c1 c2 c3 d0 d1 : UInt8) : List Ninst :=
+  [.reg (.dup 0), .push [c0,c1,c2,c3] (by simp only [List.length_cons,List.length_nil]; decide),
+   .reg op, .push [d0,d1] (by simp only [List.length_cons,List.length_nil]; decide)]
+
+theorem compare_gt_line {c0 c1 c2 c3 d0 d1 : UInt8} {sevm : Sevm}
+    {b d : Devm} {M : Mem} {G : Nat} {sel : B256} {S : List B256}
+    (run : Line.Run sevm (St b (sel :: S) M G)
+      (compareLine .gt c0 c1 c2 c3 d0 d1) d) :
+    ∃ G', d = St b (Bytes.toB256 [d0,d1] ::
+      B256.gtCheck (Bytes.toB256 [c0,c1,c2,c3]) sel :: sel :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  exact ⟨_, rfl⟩
+
+theorem compare_eq_line {c0 c1 c2 c3 d0 d1 : UInt8} {sevm : Sevm}
+    {b d : Devm} {M : Mem} {G : Nat} {sel : B256} {S : List B256}
+    (run : Line.Run sevm (St b (sel :: S) M G)
+      (compareLine .eq c0 c1 c2 c3 d0 d1) d) :
+    ∃ G', d = St b (Bytes.toB256 [d0,d1] ::
+      B256.eqCheck (Bytes.toB256 [c0,c1,c2,c3]) sel :: sel :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_eq step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  exact ⟨_, rfl⟩
+
+/-- Success excludes the zero branch when its actual source subtree has no success. -/
+theorem guardSucc {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {target flag : B256}
+    (cut : CursorStateAt code c F (.branch f g) b (target :: flag :: S) M K)
+    (checked : Cert.check code c = true) (dead : f.noOk = true)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    flag ≠ 0 ∧ Nonempty (CursorStateAt code c F g b S M K) := by
+  obtain ⟨gas, actual⟩ := cut.state
+  obtain ⟨outcome, run⟩ := cut.placed.sourceRun checked (cut.exn_eq.trans success)
+    (by rw [cut.sevm_eq]; exact fork)
+  rw [cut.tree, actual, cut.sevm_eq] at run
+  have nonzero : flag ≠ 0 := by
+    rcases rpw_branch run with ⟨_, _, rejected⟩ | ⟨taken, _, _⟩
+    · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk dead).elim
+    · exact taken
+  exact ⟨nonzero, cut.branchSucc checked success fork nonzero⟩
+
+theorem selector_gt_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc}
+    {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8}
+    (cut : CursorStateAt code c F
+      ((compareLine .gt c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branch f g)) b (sel :: S) M K)
+    (checked : Cert.check code c = true)
+    (zero : B256.gtCheck (Bytes.toB256 [c0,c1,c2,c3]) sel = 0)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code c F f b (sel :: S) M K) := by
+  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+    (by intro ni member xi same; subst ni
+        simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    compare_gt_line
+  rw [zero] at tested
+  exact tested.branchZero checked success fork
+
+theorem selector_gt_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc}
+    {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8}
+    (cut : CursorStateAt code c F
+      ((compareLine .gt c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branch f g)) b (sel :: S) M K)
+    (checked : Cert.check code c = true)
+    (nonzero : B256.gtCheck (Bytes.toB256 [c0,c1,c2,c3]) sel ≠ 0)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code c F g b (sel :: S) M K) := by
+  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+    (by intro ni member xi same; subst ni
+        simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    compare_gt_line
+  exact tested.branchSucc checked success fork nonzero
+
+theorem selector_eq_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f : SFunc} {k : Nat}
+    {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8}
+    (cut : CursorStateAt code c F
+      ((compareLine .eq c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branchTo f k)) b (sel :: S) M K)
+    (checked : Cert.check code c = true)
+    (zero : B256.eqCheck (Bytes.toB256 [c0,c1,c2,c3]) sel = 0)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code c F f b (sel :: S) M K) := by
+  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+    (by intro ni member xi same; subst ni
+        simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    compare_eq_line
+  rw [zero] at tested
+  exact tested.toZero checked success fork
+
+theorem selector_eq_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {k : Nat}
+    {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8}
+    (cut : CursorStateAt code c F
+      ((compareLine .eq c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branchTo f k)) b (sel :: S) M K)
+    (checked : Cert.check code c = true)
+    (nonzero : B256.eqCheck (Bytes.toB256 [c0,c1,c2,c3]) sel ≠ 0)
+    (lookup : c.prog[k]? = some g)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code c F g b (sel :: S) M K) := by
+  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+    (by intro ni member xi same; subst ni
+        simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    compare_eq_line
+  exact tested.toSucc checked success fork nonzero lookup
+
+/-- A failed taken branch is excluded by the original success. -/
+theorem guardZero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {target flag : B256}
+    (cut : CursorStateAt code c F (.branch f g) b (target :: flag :: S) M K)
+    (checked : Cert.check code c = true) (dead : g.noOk = true)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    flag = 0 ∧ Nonempty (CursorStateAt code c F f b S M K) := by
+  obtain ⟨gas, actual⟩ := cut.state
+  obtain ⟨outcome, run⟩ := cut.placed.sourceRun checked (cut.exn_eq.trans success)
+    (by rw [cut.sevm_eq]; exact fork)
+  rw [cut.tree, actual, cut.sevm_eq] at run
+  have zero : flag = 0 := by
+    rcases rpw_branch run with ⟨taken, _, _⟩ | ⟨_, _, rejected⟩
+    · exact taken
+    · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk dead).elim
+  rw [zero] at cut
+  exact ⟨zero, cut.branchZero checked success fork⟩
+
+/-- The actual first calldata word produces its selector prefix. -/
+def selectorLine : List Ninst :=
+  [.push [0] (by decide), .reg .calldataload, .push [0xe0] (by decide), .reg .shr]
+
+theorem selector_line {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (run : Line.Run sevm (St b S M G) selectorLine d) :
+    ∃ G', d = St b (Sevm.selector sevm :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_shr step
+  cases run
+  exact ⟨_, rfl⟩
+
+/-- The ABI wrapper's actual subtraction/length-guard prefix. -/
+def wrapperLine (r0 r1 : UInt8) (width : Bytes) (le : width.length ≤ 32)
+    (d0 d1 : UInt8) : List Ninst :=
+  [.push [r0,r1] (by simp only [List.length_cons,List.length_nil]; decide),
+   .push [4] (by decide), .reg (.dup 0), .reg .calldatasize, .reg .sub,
+   .push width le, .reg (.dup 1), .reg .lt, .reg .iszero,
+   .push [d0,d1] (by simp only [List.length_cons,List.length_nil]; decide)]
+
+theorem wrapper_line {r0 r1 d0 d1 : UInt8} {width : Bytes} {le : width.length ≤ 32}
+    {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat} {sel : B256}
+    (run : Line.Run sevm (St b [sel] M G) (wrapperLine r0 r1 width le d0 d1) d) :
+    ∃ G', d = St b
+      [Bytes.toB256 [d0,d1], B256.eqCheck
+        (B256.ltCheck (sevm.data.length.toB256 - 4) (Bytes.toB256 width)) 0,
+       sevm.data.length.toB256 - 4, 4, Bytes.toB256 [r0,r1], sel] M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_calldatasize step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_sub step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_lt step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
   cases run
   exact ⟨_, rfl⟩
 

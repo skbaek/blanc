@@ -94,7 +94,7 @@ review_date = "2026-08-29"
 id = "line-run-split"
 status = "active"
 triggers = ["implication-premise:Line.Run"]
-preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer."
+preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer. The authorization decoder covers nine calldata words; mapped_byte_read_line takes the original stack-index equality for its actual address, so the same inverse serves DUP7 and DUP9. Selector and wrapper inverses retain the actual instruction/guard values rather than assume a selected endpoint."
 boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six-word struct and typed-memory facts cover the shared permit allocation 128 to 352 to 450/480; the seven-word authorization allocation 384 to 482/512 needs a separate proved generalization."
 owner_module = "Blanc/CommonProofs.lean"
 canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
@@ -105,6 +105,12 @@ symbols = [
   "module:Blanc/Lift/SolcSignedQuery.lean",
   "declaration:Blanc.Lift.SolcSignedQuery.prologue_line",
   "declaration:Blanc.Lift.SolcSignedQuery.decode_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.decode_authorization_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.mapped_byte_read_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.selector_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.compare_gt_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.compare_eq_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.wrapper_line",
   "declaration:Blanc.Lift.SolcSignedQuery.pause_line",
   "declaration:Blanc.Lift.SolcSignedQuery.blacklist_read_line",
   "declaration:Blanc.Lift.SolcSignedQuery.nonce_line",

@@ -3058,13 +3058,24 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   epilogue before any owner comparison.
   Shared signed-query fragments live in
   [`Blanc/Lift/SolcSignedQuery.lean`](../Blanc/Lift/SolcSignedQuery.lean).
-  Its line inversions cover the prologue, calldata size and seven-argument
-  decoder, pause and mapped-byte reads, nonce update, six-word struct buffer,
+  Its line inversions cover the prologue, calldata size, seven-argument permit
+  and nine-argument authorization decoders, pause and mapped-byte reads,
+  nonce update, six-word struct buffer,
   typed-data encoding and signature guards. Source destinations, nonce base,
   type hash and return tags are parameters where supported by the actual
   instruction sequence. `recovery_epilogue` derives the returned answer and
   owner stack from the compiler's shuffle. Consumers still prove exact source
   equality and follow their own certificate and cursor route.
+  `mapped_byte_read_line` takes the actual indexed stack equality and proves
+  the mapping read for that depth; the original `blacklist_read_line` is its
+  permit specialization. `wrapper_line`, `selector_line`, `compare_gt_line`
+  and `compare_eq_line` derive the ABI wrapper and selector-test stacks.
+  The `selector_gt_zero`/`selector_gt_succ` and
+  `selector_eq_zero`/`selector_eq_succ` cursor adapters require the actual
+  source list, checked certificate and closed comparison result.
+  `guardSucc` and `guardZero` exclude an actual rejected subtree through its
+  `noOk` check and the original successful execution. These cursor adapters
+  are available by name here; no new dispatch head is required or admitted.
   `struct_memory_facts` and `typed_memory_facts` expose the ordered writes,
   free pointer and exact hash preimages. Their fixed permit allocation
   `128 → 352 → 450/480` is used by the checked V2_1 consumer; the V2 route
@@ -3083,6 +3094,18 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   deriving the nonzero calldata-owner answer. Existing fork coverage and
   address-1 nondelegation remain local premises; proxy/history entry, other
   selectors and failed-call enumeration remain separate obligations.
+  The V2 family in
+  [`Blanc/Lift/Usdc/OwnerQueriesV2.lean`](../Blanc/Lift/Usdc/OwnerQueriesV2.lean)
+  derives all four registered owner-selector prefixes through
+  `Usdc.ownerV2_source_prefix`; `ownerV2_source_prefix_of_owner_selector`
+  uses the existing `selV2.owners` table, including signed decrease.
+  Fresh successful execution yields the decoded arguments, pause/blacklist
+  facts, exact scratch memory, state, pointer and actual continuations.
+  Permit reaches the source tail after its nonce increment; the other three
+  paths return from authorization validation with strict time bounds,
+  unused authorization state and no storage write. Full struct hashing,
+  signature checks, native recovery consumption and historical transport
+  remain separate composition obligations.
   Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
