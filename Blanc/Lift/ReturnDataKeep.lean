@@ -60,12 +60,9 @@ private theorem balance_rd (rules : ForkRules) (d : Devm) :
   have core : Outcome.Rel (fun e => e.2.2.returnData) (fun v => v.2.2.returnData)
       Eq d.meta.returnData (Rinst.balanceCore rules d.world d.mach d.meta) := by
     unfold Rinst.balanceCore
-    split
-    · rfl
-    · dsimp only
-      split
-      · split <;> rfl
-      · split <;> split <;> split <;> rfl
+    dsimp only
+    repeat' split
+    all_goals rfl
   unfold liftMachMetaWorldExecution liftMachMetaExecution liftMachMeta
     Footprint.toExecution Footprint.liftOutcome
   dsimp only
@@ -106,7 +103,7 @@ private theorem nonce_rd (d : Devm) (a : Adr) :
     (d.incrNonce a).returnData = d.returnData := rfl
 
 macro "rd_pure" : tactic => `(tactic|
-  (first | rfl | (simp only [id_eq, delegation_rd, extends_rd, nonce_rd, refund_rd, accessAddress_rd, memWrite_rd, setStorVal_rd, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, balReadAccount_rd, balReadStorage_rd] <;> rfl) | ((try simp only [refund_rd]); split <;> simp only [accessAddress_rd, accessStorage_rd, balReadAccount_rd, balReadStorage_rd] <;> rfl)))
+  (first | rfl | (simp only [id_eq, delegation_rd, extends_rd, nonce_rd, refund_rd, accessAddress_rd, memWrite_rd, setStorVal_rd, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, balReadAccount_rd, balReadStorage_rd] <;> rfl) | ((try simp only [refund_rd]); (repeat' split) <;> (first | rfl | (simp only [accessAddress_rd, accessStorage_rd, balReadAccount_rd, balReadStorage_rd] <;> rfl)))))
 
 open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
 /-- Deterministic monadic walk. Every simplifier invocation lists its equations. -/

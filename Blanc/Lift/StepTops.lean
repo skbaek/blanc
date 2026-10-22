@@ -40,7 +40,9 @@ theorem run_shl_top (run : Ninst.Run sevm d (.reg .shl) d') (hs : d.stack = x ::
     d'.stack = (y <<< x.toNat) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
-  exact binary_top run hs
+  split at run
+  · exact binary_top run hs
+  · cases run
 
 /-- Pop one word, then continue: the popped word is the old top. -/
 private theorem pop_head {d d1 : Devm} {w : B256} (h : Devm.pop d = .ok ⟨w, d1⟩)
@@ -117,10 +119,9 @@ theorem run_sload_top (run : Ninst.Run sevm d (.reg .sload) d') (hs : d.stack = 
       Devm.push ((Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget a d2).getStorVal
         sevm.currentTarget a) (Devm.balReadStorage sevm.benvStat.rules sevm.currentTarget a d2) =
         .ok d' := by
-    split at e1
-    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
-      exact ⟨d2, ⟨(Devm.burn_of_chargeGas h2).state.symm, (Devm.burn_of_chargeGas h2).stack.symm⟩, h3⟩
-    · obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
+    repeat' split at e1
+    all_goals
+      obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok e1
       exact ⟨d2, ⟨(Devm.burn_of_chargeGas h2).state.symm, (Devm.burn_of_chargeGas h2).stack.symm⟩, h3⟩
   have hp := (Devm.push_of_push h3).stack
   rw [hp]

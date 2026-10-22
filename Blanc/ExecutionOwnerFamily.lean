@@ -76,7 +76,10 @@ theorem Xinst.step_delegatecall_spawn_owner {sevm : Sevm} {devm : Devm}
       Devm.popToNat_getCode h3, Devm.popToAdr_getCode h2, Devm.pop_getCode h1]
   have hnd : ¬ isValidDelegation ((addAccessedAddress d6 w.toAdr).getCode w.toAdr) := by
     rw [hcode]; exact notDelegation
-  simp only [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, Bind.bind, Except.bind] at spawn
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+  simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg,
+    h1, h2, h3, h4, h5, h6, Bind.bind, Except.bind] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals first

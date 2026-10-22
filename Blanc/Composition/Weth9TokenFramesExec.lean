@@ -160,7 +160,9 @@ theorem FramesOk.nextSome (hinj : KeyInj U) {pc : Nat} {sevm : Sevm} {pre inter 
     FramesOk ca U pc sevm pre out := by
   cases n with
   | reg r => cases (Step.run_ofExecution.mp step).1
-  | push xs length => cases (Step.run_ofExecution.mp step).1
+  | push xs length =>
+      rw [Ninst.StepRun, Ninst.step_push] at step
+      split at step <;> cases (Step.run_ofExecution.mp step).1
   | dupn imm => cases (Step.run_ofExecution.mp step).1
   | swapn imm => cases (Step.run_ofExecution.mp step).1
   | exchange imm => cases (Step.run_ofExecution.mp step).1

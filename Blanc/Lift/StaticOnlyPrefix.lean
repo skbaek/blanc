@@ -95,8 +95,10 @@ theorem Exec.Deriv.ParentStep.getStor_of_quiet {next node : Exec.Deriv}
             exact (Rinst.preserves_stor store stepRun.2.symm).symm
         | push bytes bound =>
             have hxl := stepRun
-            simp only [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hxl
-            obtain ⟨rfl, -⟩ := hxl
+            simp only [Ninst.StepRun, Ninst.step_push] at hxl
+            have hxl' : xl = .none := by
+              split at hxl <;> simp only [Step.run_ofExecution] at hxl <;> exact hxl.1
+            subst hxl'
             funext owner
             exact ((Ninst.push_instructionFrame_effectRec (hxs := bound) (xl := .none) trivial
               stepRun).getStor owner).symm

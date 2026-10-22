@@ -157,6 +157,9 @@ theorem mcopy_run_writesAt {d : B256}
     Mem.WritesAt pre.memory post.memory d.toNat := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
+  split at h
+  swap
+  · cases h
   obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok h
   obtain ⟨⟨j, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
   obtain ⟨⟨k, d3⟩, h3, e3⟩ := Except.bind_eq_ok e2
@@ -183,11 +186,9 @@ theorem extcodecopy_run_writesAt {d : B256}
   have key : ∃ d4, d4.memory = d3.memory ∧ post = (Devm.balReadAccount sevm.benvStat.rules adr d4).memWrite i
       (ByteArray.sliceD ((Devm.balReadAccount sevm.benvStat.rules adr d4).getCode adr) j k
         Linst.stop.toUInt8) := by
-    split at e3
-    · obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
-      cases h5
-      exact ⟨d4, (Devm.burn_of_chargeGas h4).memory.symm, rfl⟩
-    · obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
+    repeat' split at e3
+    all_goals
+      obtain ⟨d4, h4, h5⟩ := Except.bind_eq_ok e3
       cases h5
       exact ⟨d4, (Devm.burn_of_chargeGas h4).memory.symm, rfl⟩
   obtain ⟨d4, hm4, rfl⟩ := key
@@ -265,6 +266,10 @@ theorem call_run_writesAt {oi : B256}
   have hm7 : pre.memory = s7.memory :=
     f1.memory.trans (f2.memory.trans (f3.memory.trans (f4.memory.trans
       (f5.memory.trans (f6.memory.trans f7.memory)))))
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled
+    (show sevm.benvStat.rules.delegationEnabled = true from
+      hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl)]
+    at h_run
   rw [hfork.rules_stateGas_none] at h_run
   split at h_run
   · rename_i _ heq
@@ -392,6 +397,10 @@ private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .
     have hm7 : pre.memory = s7.memory :=
       f1.memory.trans (f2.memory.trans (f4.memory.trans
         (f5.memory.trans (f6.memory.trans f7.memory))))
+    simp only [hfork.rules_access, ForkRules.accessDelegation_enabled
+      (show sevm.benvStat.rules.delegationEnabled = true from
+        hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl)]
+      at h_run
     rw [hfork.rules_stateGas_none] at h_run
     split at h_run
     · rename_i _ heq

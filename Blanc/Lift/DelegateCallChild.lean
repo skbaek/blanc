@@ -34,7 +34,10 @@ theorem delegatecall_generic {sevm : Sevm} {d d' : Devm} {xl : Xlot}
     dsimp only [GasSchedule.accessDelegation]
     rw [show (addAccessedAddress (d.withStack S) w.toAdr).state.getCode w.toAdr =
       d.getCode w.toAdr from rfl, undelegated]
-  simp only [Xinst.step, hfork.rules_stateGas_none, Bind.bind, Except.bind,
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled hdeleg, Bind.bind, Except.bind,
     Devm.pop_cons hs, Devm.withStack_popToNat, Devm.withStack_popToAdr, hacc] at xrun
   split at xrun
   · cases XStep.run_ofExcept_error xrun

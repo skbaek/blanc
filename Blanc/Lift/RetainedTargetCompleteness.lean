@@ -265,6 +265,15 @@ private theorem GasSchedule.accessDelegation_codeAddress_of_none'
   dsimp only [GasSchedule.accessDelegation]
   rw [show getDelegatedCodeAddress (d.state.getCode adr) = none from h]
 
+private theorem ForkRules.accessDelegation_codeAddress_of_none'
+    {rules : ForkRules} {d : Devm} {adr : Adr}
+    (h : getDelegatedCodeAddress (d.getCode adr) = none) :
+    (rules.accessDelegation d adr).2.1 = adr := by
+  unfold ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_codeAddress_of_none' h
+  · rfl
+
 private theorem GasSchedule.delegationCost_codeAddress_of_none'
     {gas : GasSchedule} {d : Devm} {adr : Adr}
     (h : getDelegatedCodeAddress (d.getCode adr) = none) :
@@ -272,6 +281,15 @@ private theorem GasSchedule.delegationCost_codeAddress_of_none'
   have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := h
   unfold GasSchedule.delegationCost
   simp only [hnone]
+
+private theorem ForkRules.delegationCost_codeAddress_of_none'
+    {rules : ForkRules} {d : Devm} {adr : Adr}
+    (h : getDelegatedCodeAddress (d.getCode adr) = none) :
+    (rules.delegationCost d adr).2.1 = adr := by
+  unfold ForkRules.delegationCost
+  split
+  · exact GasSchedule.delegationCost_codeAddress_of_none' h
+  · rfl
 
 /-- A `CALL`/`STATICCALL` child message targets its current account. -/
 theorem Xinst.step_callKind_spawn_target {sevm : Sevm} {devm : Devm} {x : Xinst}
@@ -340,8 +358,10 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
             refine congrArg some
-              (GasSchedule.accessDelegation_codeAddress_of_none' ?_)
-            rw [hgc]
+              (ForkRules.accessDelegation_codeAddress_of_none' ?_)
+            first
+              | rw [hgc]
+              | rw [← addAccessedAddress_getCode (a := vcallee.1), hgc]
             exact hnodel
     · -- Amsterdam: delegation priced without warming.
       split at hs
@@ -384,7 +404,7 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
             refine congrArg some
-              (GasSchedule.delegationCost_codeAddress_of_none' ?_)
+              (ForkRules.delegationCost_codeAddress_of_none' ?_)
             rw [hgc]
             exact hnodel
   · simp only [Xinst.step, Bind.bind, Except.bind] at hs
@@ -427,8 +447,10 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
             refine congrArg some
-              (GasSchedule.accessDelegation_codeAddress_of_none' ?_)
-            rw [hgc]
+              (ForkRules.accessDelegation_codeAddress_of_none' ?_)
+            first
+              | rw [hgc]
+              | rw [← addAccessedAddress_getCode (a := vtgt.1), hgc]
             exact hnodel
     · -- Amsterdam: delegation priced without warming.
       split at hs
@@ -468,7 +490,7 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
           all_goals obtain ⟨rfl, rfl⟩ := hs
           all_goals
             refine congrArg some
-              (GasSchedule.delegationCost_codeAddress_of_none' ?_)
+              (ForkRules.delegationCost_codeAddress_of_none' ?_)
             rw [hgc]
             exact hnodel
 

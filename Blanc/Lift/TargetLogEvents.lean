@@ -576,9 +576,11 @@ theorem Lift.StepIn.codePreserve {R : Exec.Deriv} {sevm : Sevm} {pre post : Devm
         Ninst.codePreserve_effectRec Jinst.codePreserve_effect Linst.codePreserve_effect
         childRun) run
 
-/-- A clean committed call-frame body survives settlement unchanged. -/
+/-- A clean committed call-frame body survives settlement unchanged except for the
+touched-account record of its current target. -/
 theorem Frame.ofCall_settle_clean {msg : Msg} {child : Devm} (clean : child.error = none) :
-    (Frame.ofCall msg).settle (.ok child) = .ok child := by
+    (Frame.ofCall msg).settle (.ok child) =
+      .ok (child.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, executeCode.handleErrorWith_ok,
     processMessage.settle, Bind.bind, Except.bind, clean, Option.isSome_none,
     Bool.false_eq_true, ite_false]
@@ -636,10 +638,8 @@ theorem Xinst.call_run_logs {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xl
                   Bool.false_eq_true] at committed
             rw [Frame.ofCall_settle_clean clean] at settledEq
             cases settledEq
-            have notError : ¬ settledChild.error.isSome = true := by
-              rw [clean]
-              exact Bool.false_ne_true
-            rw [ite_eq_right notError] at callLogs
+            simp only [Devm.recordTouch_error, clean, Option.isSome_none, Bool.false_eq_true,
+              ite_false] at callLogs
             rw [callLogs, ← logs]
             rfl
         · intro rolled

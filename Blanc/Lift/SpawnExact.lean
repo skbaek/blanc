@@ -31,7 +31,10 @@ theorem Xinst.step_delegatecall_spawn_exact {sevm : Sevm} {devm : Devm}
   have hx := spawn
   simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
   have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rw [hsg] at hx
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg] at hx
   have hp : (g :: w :: s) <<+ devm.stack := by
     rw [hstack]
     simpa only [List.append_nil] using (pref_append (g :: w :: s) [])
@@ -213,12 +216,14 @@ theorem Resume.call_run_inv {parent : Devm} {oi os : Nat} {f : Frame} {raw : Exe
           subst this
           exact ⟨rfl, ⟨_, rfl⟩, rfl, rfl⟩
   have settledErr : ∀ {y : Devm}, y.error.isSome = true →
-      ∀ (w : State) (t : Tra) (k : KeySet),
-        Resume.run (.call parent oi os) (.ok ((y.rollback w t).withStorageWrites k)) = .ok d →
+      ∀ (w : State) (t : Tra) (k : KeySet) (rules : ForkRules) (c : Bool) (a : Adr),
+        Resume.run (.call parent oi os)
+          (.ok (((y.rollback w t).withStorageWrites k).recordTouch rules c a)) = .ok d →
         ∃ s, d.stack = 0 :: s := by
-    intro y hy w t k hr
+    intro y hy w t k rules c a hr
     rcases flag hr with ⟨hn, -⟩ | h0
-    · have : ((y.rollback w t).withStorageWrites k).error = y.error := rfl
+    · have : (((y.rollback w t).withStorageWrites k).recordTouch rules c a).error = y.error := by
+        rw [Devm.recordTouch_error]; rfl
       rw [this] at hn
       rw [hn] at hy
       cases hy
@@ -228,11 +233,11 @@ theorem Resume.call_run_inv {parent : Devm} {oi os : Nat} {f : Frame} {raw : Exe
     rcases e with r | _ | r | r <;>
       simp only [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
     · split at h
-      · exact settledErr rfl _ _ _ h
+      · exact settledErr rfl _ _ _ _ _ _ h
       · rename_i hn
         exact absurd rfl hn
     · split at h
-      · exact settledErr rfl _ _ _ h
+      · exact settledErr rfl _ _ _ _ _ _ h
       · rename_i hn
         exact absurd rfl hn
     · simp only [Resume.run, liftToExecution, bind, Except.bind, reduceCtorEq] at h
@@ -240,7 +245,7 @@ theorem Resume.call_run_inv {parent : Devm} {oi os : Nat} {f : Frame} {raw : Exe
   · simp only [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
     split at h
     · rename_i hx
-      exact .inr (settledErr hx _ _ _ h)
+      exact .inr (settledErr hx _ _ _ _ _ _ h)
     · rcases flag h with ⟨hn, rest⟩ | h0
       · exact .inl ⟨x, rfl, hn, rest⟩
       · exact .inr h0

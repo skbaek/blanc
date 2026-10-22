@@ -87,7 +87,11 @@ theorem Xinst.step_create2_spawn {sevm : Sevm} {b : Devm} {S : List B256} {M : M
     rw [chargeGas_eq_ok (by simp only [St.gasLeft]; omega)]
     simp only [St.stack, St.memory, St.gasLeft, Nat.add_sub_cancel]
     rfl
-  simp only [Xinst.step, hsg]
+  have hcreate2 : sevm.benvStat.rules.op.create2 = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).op.create2 = true) rfl rfl rfl rfl
+  have hinit : sevm.benvStat.rules.creation.initCodeLimit = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).creation.initCodeLimit = true) rfl rfl rfl rfl
+  simp only [Xinst.step, hsg, hcreate2, hinit, ↓reduceIte]
   rw [show (St b (v :: i :: sz :: salt :: S) M (G + create2Charge sevm M i sz)).pop =
     .ok (v, St b (i :: sz :: salt :: S) M (G + create2Charge sevm M i sz)) from rfl]
   simp only [Except.bind_ok]
@@ -108,7 +112,8 @@ theorem Xinst.step_create2_spawn {sevm : Sevm} {b : Devm} {S : List B256} {M : M
   rw [hc']
   simp only [Except.bind_ok]
   show genericCreate.step _ _ _ _ _ _ = _
-  have hmax' : sz.toNat ≤ sevm.benvStat.rules.code.maxInitCodeSize := hmax
+  have hmax' : sevm.benvStat.rules.creation.initCodeLimit = true →
+      sz.toNat ≤ sevm.benvStat.rules.code.maxInitCodeSize := fun _ => hmax
   simp only [genericCreate.step, Except.assert, ite_eq_left hmax', assertDynamic, hstatic,
     Bool.not_false, ite_true, Except.bind_ok]
   rw [ite_eq_right, ite_eq_right]

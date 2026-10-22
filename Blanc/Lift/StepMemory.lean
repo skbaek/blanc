@@ -51,6 +51,11 @@ theorem Devm.withStack_popToNat (d : Devm) (x : B256) (xs : List B256) :
 theorem Devm.withStack_popToAdr (d : Devm) (x : B256) (xs : List B256) :
     (d.withStack (x :: xs)).popToAdr = .ok (x.toAdr, d.withStack xs) := Devm.popToAdr_cons rfl
 
+/-- Every covered fork enables EIP-7702 delegation. -/
+private theorem coveredFork_delegationEnabled {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) : sevm.benvStat.rules.delegationEnabled = true :=
+  hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+
 /-- The tail of every `CALL`-family step: the result is the given parent memory with at most
 `os` bytes written at `oi`. -/
 theorem genericCall_memory {sevm : Sevm} {devm d' : Devm} {gas : Nat} {value : B256}
@@ -82,7 +87,8 @@ theorem run_call_memory {sevm : Sevm} {d d' : Devm} {g c v ii is oi os : B256} {
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
   obtain ⟨xl, -, pc, h⟩ := run
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind, Except.assert,
+    hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind, Except.assert,
     Devm.pop_cons hs, Devm.withStack_pop, Devm.withStack_popToNat,
     Devm.withStack_popToAdr] at h
   split at h
@@ -119,7 +125,8 @@ theorem run_delegatecall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
   obtain ⟨xl, -, pc, h⟩ := run
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind,
+    hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind,
     Devm.pop_cons hs, Devm.withStack_popToNat,
     Devm.withStack_popToAdr] at h
   split at h
@@ -142,7 +149,8 @@ theorem run_staticcall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B25
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
   obtain ⟨xl, -, pc, h⟩ := run
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind,
+    hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind,
     Devm.pop_cons hs, Devm.withStack_popToNat,
     Devm.withStack_popToAdr] at h
   split at h
@@ -192,6 +200,9 @@ theorem run_create2_memory {sevm : Sevm} {d d' : Devm} {e mi ms salt : B256} {re
     hfork.rules_stateGas_none, Bind.bind, Except.bind,
     Devm.pop_cons hs, Devm.withStack_pop, Devm.withStack_popToNat] at h
   split at h
+  swap
+  · cases XStep.run_ofExcept_error h
+  split at h
   · cases XStep.run_ofExcept_error h
   rename_i d5 hc
   rw [genericCreate_memory h]
@@ -209,15 +220,31 @@ theorem run_balance_memory {sevm : Sevm} {d d' : Devm}
   cases stack with
   | nil => cases h
   | cons x xs =>
-    cases hg : safeSub gasLeft (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
-        else sevm.benvStat.rules.gas.coldAccountAccess) with
-    | none => simp only [hg, reduceCtorEq] at h
-    | some g =>
-      by_cases hl : xs.length < 1024
-      · simp only [hg, hl, ↓reduceIte, Except.ok.injEq] at h
-        subst h
-        rfl
-      · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
+    revert h
+    generalize sevm.benvStat.rules.access = acc
+    intro h
+    cases acc with
+    | eip2929 =>
+      dsimp only at h
+      cases hg : safeSub gasLeft (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
+          else sevm.benvStat.rules.gas.coldAccountAccess) with
+      | none => simp only [hg, reduceCtorEq] at h
+      | some g =>
+        by_cases hl : xs.length < 1024
+        · simp only [hg, hl, ↓reduceIte, Except.ok.injEq] at h
+          subst h
+          rfl
+        · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
+    | flat fg =>
+      dsimp only at h
+      cases hg : safeSub gasLeft fg.balance with
+      | none => simp only [hg, reduceCtorEq] at h
+      | some g =>
+        by_cases hl : xs.length < 1024
+        · simp only [hg, hl, ↓reduceIte, Except.ok.injEq] at h
+          subst h
+          rfl
+        · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
 
 theorem run_extcodesize_memory {sevm : Sevm} {d d' : Devm}
     (run : Ninst.Run sevm d (.reg .extcodesize) d') : d'.memory = d.memory := by
@@ -228,7 +255,7 @@ theorem run_extcodesize_memory {sevm : Sevm} {d d' : Devm}
     obtain ⟨_, _, hp⟩ := Devm.pop_of_popToAdr h1
     exact (Devm.pop_of_pop hp).memory.symm
   dsimp only at h
-  split at h
+  repeat' split at h
   all_goals
     obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok h
     rw [← (Devm.push_of_push h3).memory, ← m1]
@@ -238,12 +265,15 @@ theorem run_extcodehash_memory {sevm : Sevm} {d d' : Devm}
     (run : Ninst.Run sevm d (.reg .extcodehash) d') : d'.memory = d.memory := by
   rcases of_run_reg run with ⟨pc, h⟩
   simp only [Rinst.run, Rinst.runCore] at h
+  split at h
+  swap
+  · cases h
   obtain ⟨⟨a, d1⟩, h1, h⟩ := Except.bind_eq_ok h
   have m1 : d1.memory = d.memory := by
     obtain ⟨_, _, hp⟩ := Devm.pop_of_popToAdr h1
     exact (Devm.pop_of_pop hp).memory.symm
   dsimp only at h
-  split at h
+  repeat' split at h
   all_goals
     obtain ⟨d2, h2, h3⟩ := Except.bind_eq_ok h
     rw [← (Devm.push_of_push h3).memory, ← m1]

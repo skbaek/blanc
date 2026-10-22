@@ -54,11 +54,17 @@ theorem revertingCode_exec_error {sevm : Sevm} {devm : Devm} {raw : Execution}
   have at0 : Ninst.At sevm.code 0 (.push [] (by decide)) := by rw [codeEq]; rfl
   have at1 : Ninst.At sevm.code 1 (.push [] (by decide)) := by rw [codeEq]; rfl
   have at2 : Linst.At sevm.code 2 .revert := by rw [codeEq]; rfl
-  rcases Exec.ofExecution_inv run (by rw [Evm.step_next at0, Ninst.step_push]) with
+  obtain ⟨ex0, step0⟩ : ∃ ex, Evm.step ⟨0, sevm, devm⟩ = Step.ofExecution 1 ex := by
+    rw [Evm.step_next at0, Ninst.step_push]
+    split <;> exact ⟨_, rfl⟩
+  rcases Exec.ofExecution_inv run step0 with
     done | ⟨d1, ⟨run1⟩⟩
   · exact done
   change Exec 1 sevm d1 raw at run1
-  rcases Exec.ofExecution_inv run1 (by rw [Evm.step_next at1, Ninst.step_push]) with
+  obtain ⟨ex1, step1⟩ : ∃ ex, Evm.step ⟨1, sevm, d1⟩ = Step.ofExecution 2 ex := by
+    rw [Evm.step_next at1, Ninst.step_push]
+    split <;> exact ⟨_, rfl⟩
+  rcases Exec.ofExecution_inv run1 step1 with
     done | ⟨d2, ⟨run2⟩⟩
   · exact done
   change Exec 2 sevm d2 raw at run2

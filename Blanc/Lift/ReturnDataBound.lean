@@ -64,12 +64,9 @@ private theorem balance_output (rules : ForkRules) (d : Devm) :
   have core : Outcome.Rel (fun e => e.2.2.output) (fun v => v.2.2.output)
       Eq d.meta.output (Rinst.balanceCore rules d.world d.mach d.meta) := by
     unfold Rinst.balanceCore
-    split
-    · rfl
-    · dsimp only
-      split
-      · split <;> rfl
-      · split <;> split <;> split <;> rfl
+    dsimp only
+    repeat' split
+    all_goals rfl
   unfold liftMachMetaWorldExecution liftMachMetaExecution liftMachMeta
     Footprint.toExecution Footprint.liftOutcome
   dsimp only
@@ -109,8 +106,31 @@ private theorem extends_output (d : Devm) (regions : List (Nat × Nat)) :
 private theorem nonce_output (d : Devm) (a : Adr) :
     (d.incrNonce a).output = d.output := rfl
 
+private theorem ruleDelegation_output (r : ForkRules) (d : Devm) (a : Adr) :
+    (r.accessDelegation d a).2.2.2.2.output = d.output := by
+  unfold ForkRules.accessDelegation
+  split
+  · exact delegation_output _ _ _
+  · rfl
+
+private theorem creditBeneficiary_output (r : ForkRules) (a : Adr) (v : B256) (d : Devm) :
+    (d.creditBeneficiary r a v).output = d.output := by
+  unfold Devm.creditBeneficiary
+  split <;> rfl
+
+private theorem setBal_output (d : Devm) (a : Adr) (v : B256) :
+    (d.setBal a v).output = d.output := rfl
+
+private theorem addAccountToDelete_output (d : Devm) (a : Adr) :
+    (addAccountToDelete d a).output = d.output := rfl
+
+private theorem selfdestructRefund_output (r : ForkRules) (p : Prop) [Decidable p] (d : Devm) :
+    (creditSelfdestructRefund r p d).output = d.output := by
+  unfold creditSelfdestructRefund
+  split <;> rfl
+
 macro "output_pure" : tactic => `(tactic|
-  (first | rfl | (simp only [id_eq, delegation_output, extends_output, nonce_output, refund_output, accessAddress_output, memWrite_output, setStorVal_output, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl) | ((try simp only [refund_output]); split <;> simp only [accessAddress_output, accessStorage_output, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl)))
+  (first | rfl | (simp only [id_eq, ruleDelegation_output, creditBeneficiary_output, selfdestructRefund_output, setBal_output, addAccountToDelete_output, delegation_output, extends_output, nonce_output, refund_output, accessAddress_output, memWrite_output, setStorVal_output, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl) | ((try simp only [refund_output]); (repeat' split) <;> (first | rfl | (simp only [ruleDelegation_output, accessAddress_output, accessStorage_output, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl)))))
 
 open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
 /-- Deterministic monadic walk. Every simplifier invocation lists its equations. -/
@@ -364,7 +384,9 @@ private theorem driver_output {pc : Nat} {sevm : Sevm} {pre : Devm}
     case reg r hgi => exact ofExecution_output _ (regular_output r hsg)
     case exec x hgi => exact toStep_output _ (spawn_output x hsg)
     all_goals simp only [Ninst.step]
-    all_goals apply ofExecution_output
+    all_goals first
+      | apply ofExecution_output
+      | (split <;> apply ofExecution_output)
     all_goals repeat' output_step
   · exact ofJump_output (jump_output _)
   · exact last_output _ hsg

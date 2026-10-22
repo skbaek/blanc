@@ -88,8 +88,8 @@ theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
     · show (afterSstore sevm _ _ _).logs = _
       rw [afterSstore_logs, afterSload_logs, List.append_nil]
     · intro _
-      change (afterSstore sevm _ _ _).output = b.output
-      rw [afterSstore_output, afterSload_output]
+      rw [show ∀ (d : Devm) S M G, (St d S M G).output = d.output from fun _ _ _ _ => rfl,
+        afterSstore_output, afterSload_output]
 
 -- SEGMENT: safeTransfer (107 nodes)
 /-- `transfer`.  Proof sketch: guards as `safeSetMinter`; `PUSH1 3 CALLER` and the scratch
