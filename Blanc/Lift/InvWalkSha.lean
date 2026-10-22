@@ -109,8 +109,11 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
         d = St b' (1 :: S) ((M.extends [⟨ii.toNat, 64⟩, ⟨oi.toNat, 32⟩]).write oi.toNat
           (Bytes.sha256 (M.read ii.toNat 64).1).toBytes) G' := by
   rcases h with ⟨xl, h_fill, pc, h_run⟩
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none] at h_run
+    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled hdeleg] at h_run
   rw [show (St b (g :: 2 :: ii :: 64 :: oi :: 32 :: S) M G).pop =
     .ok (g, St b (2 :: ii :: 64 :: oi :: 32 :: S) M G) from rfl] at h_run
   simp only at h_run

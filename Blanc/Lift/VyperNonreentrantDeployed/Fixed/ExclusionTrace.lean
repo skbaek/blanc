@@ -195,16 +195,16 @@ theorem _root_.Blanc.ExecutionTrace.MessageCallTrace.vplus {msg : Msg} {state : 
       exact coreTrace.vplus hfork collision hP hI
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
       have delegatedEq : delegated = msg := by
-        unfold messageCallDelegation at delegation
-        simp only [noAuths, ↓reduceIte] at delegation
+        unfold messageCallDelegation processMessageCall.legacyAuthorization at delegation
+        simp only [noAuths, Bool.or_true, ↓reduceIte] at delegation
         exact (congrArg Prod.fst (Except.ok.inj delegation)).symm
       subst delegatedEq
       subst execMsgEq
       have benvEq : (messageCallExecutionMessage delegated).benv = delegated.benv := by
-        unfold messageCallExecutionMessage; split <;> rfl
+        unfold messageCallExecutionMessage Msg.resolveCodeDelegation; split <;> rfl
       have targetEq : (messageCallExecutionMessage delegated).currentTarget =
           delegated.currentTarget := by
-        unfold messageCallExecutionMessage; split <;> rfl
+        unfold messageCallExecutionMessage Msg.resolveCodeDelegation; split <;> rfl
       refine coreTrace.vplus ?_ ?_ ?_ ?_
       · rw [benvEq]; exact hfork
       · rw [benvEq]; exact hP
@@ -215,7 +215,14 @@ theorem _root_.Blanc.ExecutionTrace.MessageCallTrace.vplus {msg : Msg} {state : 
         have none_eq : getDelegatedCodeAddress delegated.code = none := by
           rw [code_eq]; exact holds_not_delegation hP
         have exec_eq : messageCallExecutionMessage delegated = delegated := by
-          unfold messageCallExecutionMessage; rw [none_eq]
+          unfold messageCallExecutionMessage Msg.resolveCodeDelegation ForkRules.delegatedCodeAddress
+          split
+          · rfl
+          · rename_i address hsome
+            split at hsome
+            · rw [none_eq] at hsome
+              cases hsome
+            · cases hsome
         rw [exec_eq]; exact code_eq
 
 /-- The prepared message of a transaction: it keeps the transaction's authorization list, its

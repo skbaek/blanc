@@ -87,7 +87,39 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
-          func_run [tsSel, 1, 1, 0, 1, supplySlot, 3]
+          -- The four selector `PUSH`es (three dispatch forks and the leaf) are stepped by hand:
+          -- `func_run`'s `PUSH0`-guard discharge tries `assumption` first, and unifying the
+          -- guard of a keccak-derived selector with `h_cold` evaluates the selector past the
+          -- recursion ceiling (the WethLive diagnosis, d14b310b).
+          func_run (5) [tsSel]
+          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 64) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (2) [0]
+          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 83) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run [1, supplySlot, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 2218) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)

@@ -63,7 +63,7 @@ theorem deposit_runExact (sevm : Sevm) (base : Devm) (G : Nat)
   obtain ⟨post, hw, rfl⟩ := deposit_wrapper (g' := G) hdec hcd hbody
   have hsel' : Sevm.selector sevm = 0x22895118 :=
     hsel.trans Blanc.BeaconDeposit.depositSelector_eq
-  have hd := dispatch_deposit (b := base) hdataLength hcd hsel' hw
+  have hd := dispatch_deposit (b := base) hdataLength hcd hsel' hw hsha.fork.rules_shifts
   refine ⟨b', M', ⟨_, rfl, ?_⟩, hst, hacc, hother, hlogs⟩
   rw [show G + depositGasOf origLive origCount sevm base =
       G + 1 + bodyGasOf origLive origCount sevm base + depositDecodeGas + 95 by

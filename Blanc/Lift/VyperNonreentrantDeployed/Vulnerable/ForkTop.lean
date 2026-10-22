@@ -118,7 +118,7 @@ theorem frame0_of_child_at (hg : CoveredFork g) (post1 : Devm)
   obtain ⟨-, -, -, hcr, -, -, hsg, -, -⟩ := cp1_spec_at hg
   have hsettle : Resume.run (.call cp1.p cp1.oi cp1.os) ((cp1.withFork g).f.settle (.ok post1)) =
       .ok (d02 post1) := by
-    rw [frame_settle_ok hcr hsg he1]; exact resumeCallB_sound hr
+    rw [frame_settle_ok hcr hsg (CoveredFork.rules_touchedSweep hg) he1]; exact resumeCallB_sound hr
   have hsta : (e0_44 post1).sta = e0.sta := stepN_sta (evm := ⟨32, e0.sta, d02 post1⟩) ht
   have hstep_halt : Evm.step ((e0_44 post1).withFork g) = .halt (.ok (post0F post1)) := by
     have hp : (e0_44 post1).sta.benvStat.fork = .prague := by rw [hsta]; exact e0_block.1
@@ -143,7 +143,8 @@ theorem frame0_of_child_at (hg : CoveredFork g) (post1 : Devm)
   show (f0.withFork g).settle (exec ⟨(e0.withFork g).pc, (e0.withFork g).sta,
     (e0.withFork g).dyna⟩) = _
   rw [hex]
-  exact frame_settle_ok rfl hsg0 he0'
+  exact frame_settle_ok rfl hsg0
+    (CoveredFork.rules_touchedSweep (s := (f0.withFork g).inner.benv.stat) hg) he0'
 
 /-! ### The final theorem -/
 

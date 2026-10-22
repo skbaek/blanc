@@ -341,7 +341,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   rw [pagree_withFork_entry] at hagBal
   have hF2 := (scallPrep_node_facts hag2 sBal).2
   obtain ⟨t1, x3, sp1, ht1, e3, hx3, ex3, hdesc3, hag3⟩ :=
-    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr
+    spawn_resume_ok hx2 hag2 hF2 (CoveredFork.rules_touchedSweep ‹_›) step2 ent2 balErr
       ((resumeCallB_withFork cpBal fk (.ok dBal)).trans resB3)
       (fun t ht => by
         rw [nodeAt_withFork_entry] at ht
@@ -357,7 +357,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   obtain ⟨step4, ent4, -, hagRcv, hF4⟩ := call_node hag4 hat4 sEth nRcv
   rw [pagree_withFork_entry] at hagRcv
   obtain ⟨xr, x5, sp2, hxr, e5, hx5, ex5, hdesc5, hag5⟩ :=
-    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr
+    spawn_resume_ok hx4 hag4 hF4 (CoveredFork.rules_touchedSweep ‹_›) step4 ent4 rcvErr
       ((resumeCallB_withFork cpEth fk (.ok dRcv)).trans resB5)
       (fun X hX => by
         rw [nodeAt_withFork_entry] at hX
@@ -373,7 +373,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   obtain ⟨step6, ent6, -, hagXf, hF6⟩ := call_node hag6 hat6 sXf nXf
   rw [pagree_withFork_entry] at hagXf
   obtain ⟨t2, x7, sp3, ht2, e7, hx7, ex7, hdesc7, hag7⟩ :=
-    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr
+    spawn_resume_ok hx6 hag6 hF6 (CoveredFork.rules_touchedSweep ‹_›) step6 ent6 xfErr
       ((resumeCallB_withFork cpXf fk (.ok dXf)).trans resB7)
       (fun t ht => by
         rw [nodeAt_withFork_entry] at ht

@@ -108,7 +108,7 @@ theorem frame0_of_child (post1 : Devm) (hx1 : Nonempty (Exec 0 sevm1 pre1 (.ok p
   obtain ⟨-, -, -, hcr, -, -, hsg, -, -⟩ := cp1_spec
   have hsettle : Resume.run (.call cp1.p cp1.oi cp1.os) (cp1.f.settle (.ok post1)) =
       .ok (d02 post1) := by
-    rw [frame_settle_ok hcr hsg he1]; exact resumeCallB_sound hr
+    rw [frame_settle_ok hcr hsg (by kernel_rfl) he1]; exact resumeCallB_sound hr
   have hx0 : Nonempty (Exec e0.pc e0.sta e0.dyna (.ok (post0F post1))) :=
     exec_of_stepN_spawn_runOk prefix0 spawn0 enter1 hx1 hsettle (exec_of_stepN_halt ht hh)
   have hex := (exec_iff_exec_eq _ _ _ _).mp hx0
@@ -121,7 +121,7 @@ theorem frame0_of_child (post1 : Devm) (hx1 : Nonempty (Exec 0 sevm1 pre1 (.ok p
   rw [f0_enter]
   show f0.settle (exec ⟨e0.pc, e0.sta, e0.dyna⟩) = _
   rw [hex]
-  exact frame_settle_ok rfl hsg0 he0'
+  exact frame_settle_ok rfl hsg0 (by kernel_rfl) he0'
 
 /-! ### The final theorem -/
 

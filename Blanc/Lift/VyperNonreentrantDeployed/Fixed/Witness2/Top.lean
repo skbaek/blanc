@@ -134,7 +134,7 @@ theorem vplus_run2_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = eTop.sta.wit
     rw [hcT, pTop1]; exact decodeT_sound fwdTries decTop1
   obtain ⟨stepT, entB, -, hagB0, hFT⟩ := delegatecall_node hag1 hat1 sTop nB
   obtain ⟨F, x2, sp0, hF, e2, hx2, ex2, hdesc2, hag2⟩ :=
-    spawn_resume_ok hx1 hag1 hFT stepT entB dBerr resTop2
+    spawn_resume_ok hx1 hag1 hFT (CoveredFork.rules_touchedSweep ‹_›) stepT entB dBerr resTop2
       (fun F hF => let r := frameB hfk hagB0 F hF; ⟨r.1, r.2.1⟩)
   obtain ⟨exF, -, b, h, t1, xr, q, g, t2, ppFb, hbpc, ppbh, hhpc, hath, hrel, sph, ht1, hxr, hq,
     hg, ht2, dsF, dsr, dsq, hre, hashF⟩ := frameB hfk hagB0 F hF

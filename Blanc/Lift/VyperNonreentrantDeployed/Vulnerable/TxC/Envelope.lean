@@ -67,9 +67,13 @@ theorem txC_auth : checkTransactionAuthorizationList txC = .ok () := by kernel_r
 
 /-- The sender account: nonce 0 is the transaction's nonce, its balance 0 covers the maximum fee
 0 plus the value 0, and it has no code (EIP-3607): `E` is an EOA. -/
-theorem txC_sender :
-    checkTransactionSenderAccount (benvPre.beginTransaction.state.get eAddress) txC 0 = .ok () := by
-  kernel_rfl
+theorem txC_sender (hg : CoveredFork g) :
+    checkTransactionSenderAccountFor (benvPre.withFork g).beginTransaction.stat.rules
+      ((benvPre.withFork g).beginTransaction.state.get eAddress) txC 0 = .ok () :=
+  hg.cases (motive := fun g => checkTransactionSenderAccountFor
+      (benvPre.withFork g).beginTransaction.stat.rules
+      ((benvPre.withFork g).beginTransaction.state.get eAddress) txC 0 = .ok ())
+    (by kernel_rfl) (by kernel_rfl) (by kernel_rfl) (by kernel_rfl)
 
 /-- **Admission**: with room in the block for the transaction's gas, `checkTransaction` accepts
 `txC` (blob-free, effective gas price 0). -/
@@ -87,7 +91,7 @@ theorem txC_checked (hg : CoveredFork g) (bout : BlockOutput)
       (Nat.zero_le _)
     exact h
   exact checkTransaction_ok_of_parts hgas (txC_chain hg) txC_recoveredSender (txC_fee hg) (txC_blob hg)
-    txC_receiver txC_auth txC_sender
+    txC_receiver txC_auth (txC_sender hg)
 
 /-! ### The debit, the prepared message and the call wrapper -/
 
@@ -106,7 +110,12 @@ theorem txC_prepared (hg : CoveredFork g) :
     prepareMessage { (benvPre.withFork g).beginTransaction with state := worldTx }
       (transactionTenv (benvPre.withFork g).beginTransaction txC 0 eAddress 0 66664 []) txC =
       .ok (msgC.withFork g) :=
-  prepareMessage_at hg
+  hg.cases (motive := fun g =>
+      prepareMessage { (benvPre.withFork g).beginTransaction with state := worldTx }
+        (transactionTenv (benvPre.withFork g).beginTransaction txC 0 eAddress 0 66664 []) txC =
+        .ok (msgC.withFork g))
+    (prepareMessage_at .prague) (prepareMessage_at .osaka) (prepareMessage_at .bpo1)
+    (prepareMessage_at .bpo2)
 
 theorem msgC_call_shape0 : msgC.target.isNone = false ∧ msgC.tenv.stat.auths.isEmpty = true ∧
     getDelegatedCodeAddress msgC.code = none := by
@@ -152,7 +161,8 @@ theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
     (tx := txC) (index := 0) (intrinsicGas := 66664) (calldataFloorGas := 21160)
     (sender := eAddress) (effectiveGasPrice := 0) (blobVersionedHashes := []) (txBlobGasUsed := 0)
     (debit := worldTx) (msg := msgC.withFork g) (benvG_stateGas hg) (benvG_bal hg)
-    (txC_validated hg) (txC_checked hg bout hroom) (txC_debit hg) (txC_prepared hg)
+    (CoveredFork.rules_touchedSweep (s := (benvPre.withFork g).stat) hg)
+    (CoveredFork.rules_refundQuotient (s := (benvPre.withFork g).stat) hg) (txC_validated hg) (txC_checked hg bout hroom) (txC_debit hg) (txC_prepared hg)
     hcall (by rfl)
   refine ⟨_, bout', hproc, ?_⟩
   have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp only [Std.HashSet.toList_emptyWithCapacity]

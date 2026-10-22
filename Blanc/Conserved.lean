@@ -2248,7 +2248,7 @@ theorem stateTransitionUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (block : Block)
     (h_run : stateTransitionUsing cfg ch block = .ok ch')
     (h_wds : sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
+    (hfork : ∀ number timestamp f', cfg.forkAt number timestamp = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.stateTransitionUsing_preserves_inv fa (fmintSpec_preserves fa)
@@ -2268,7 +2268,7 @@ theorem chain_preserves_conserved (fa : Adr) (ch ch' : BlockChain)
 `CoveredFork`. -/
 theorem chainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (ch ch' : BlockChain) (h_reach : BlockChain.ReachUsing cfg ch ch')
-    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
+    (hfork : ∀ number timestamp f', cfg.forkAt number timestamp = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.chainUsing_preserves_inv fa (fmintSpec_preserves fa)
@@ -2292,7 +2292,7 @@ theorem addBlockToChainUsing_preserves_conserved (fa : Adr) (cfg : ChainConfig)
     (h_run : addBlockToChainUsing cfg ch rlp = .ok (.inl ch'))
     (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
       sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (hfork : ∀ t f', cfg.forkAt t = .ok f' → CoveredFork f')
+    (hfork : ∀ number timestamp f', cfg.forkAt number timestamp = .ok f' → CoveredFork f')
     (h_inv : StateInvC fa ch.state) : StateInvC fa ch'.state :=
   fmintSpec_stateInv_iff.mp
     (ContractSpec.addBlockToChainUsing_preserves_inv fa (fmintSpec_preserves fa)

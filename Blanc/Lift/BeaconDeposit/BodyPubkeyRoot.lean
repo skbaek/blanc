@@ -218,8 +218,8 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
     Nat.reduceLT]) ?_
   refine rx_push rfl (by simp only [hR0, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
-  refine rx_shl (v := 0) (by decide) (by simp only [hR0, List.length_cons, List.length_nil,
-    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_shl (h_shifts := hsha.fork.rules_shifts) (v := 0) (by decide) (by simp only [hR0,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push rfl (by simp only [hR0, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 256) ?_ (by rw [h40]; exact read_word hr 64 hfp0)

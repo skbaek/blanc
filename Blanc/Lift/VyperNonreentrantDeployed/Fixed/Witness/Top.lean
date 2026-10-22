@@ -172,7 +172,8 @@ theorem vplus_run_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = e0.sta.withFo
   obtain ⟨xF1, eF1, hxF1pc, hxF1s, hxF1d, exF1, dsF1⟩ :=
     okH dF1 (by
       rw [exc, show (cpH.withFork g).f = cpH.f.withFork g from rfl, settle_withFork hoH' hiH' hg,
-        frame_settle_ok (Prod.mk.inj cpH_facts).1 (Prod.mk.inj cpH_facts).2 cT2_err]
+        frame_settle_ok (Prod.mk.inj cpH_facts).1 (Prod.mk.inj cpH_facts).2 (by kernel_rfl)
+          cT2_err]
       exact resumeCallB_sound resumeF)
   have hagF1 : PAgree cF1 :=
     resume_agree_ok (cp := cpH.withFork g) hagH sH (by rw [cT2_err]; rfl) (childAgree_of_pagree hagT2) resumeF

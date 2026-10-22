@@ -11,7 +11,8 @@ open Blanc.Lift
 theorem dispatch_deposit {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = 0x22895118)
-    (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] mem0 g) t_00a4_c32 o) :
+    (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] mem0 g) t_00a4_c32 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (g + 95)) t_0000_c0 o := by
   refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
@@ -32,7 +33,7 @@ theorem dispatch_deposit {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_shr (v := Sevm.selector sevm) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_shr (h_shifts := h_shifts) (v := Sevm.selector sevm) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [show (Bytes.toB256 [0xe0]).toNat = 224 by decide,
       show Bytes.toB256 [0x00] = 0 by decide]
     rfl

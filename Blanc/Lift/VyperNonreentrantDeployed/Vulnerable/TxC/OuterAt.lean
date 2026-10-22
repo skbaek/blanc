@@ -91,7 +91,8 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
       show (f0C.withFork g).settle (exec ⟨(e0C.withFork g).pc, (e0C.withFork g).sta,
         (e0C.withFork g).dyna⟩) = _
       rw [hex]
-      exact frame_settle_ok rfl hsg0 herr'
+      exact frame_settle_ok rfl hsg0
+        (CoveredFork.rules_touchedSweep (s := (f0C.withFork g).inner.benv.stat) hg) herr'
     · simp only [obs0C, reduceCtorEq] at hk
     · simp only [obs0C, reduceCtorEq] at hk
   · simp only [obs0C, reduceCtorEq] at hk

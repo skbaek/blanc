@@ -79,7 +79,7 @@ theorem frame5_child : Nonempty (Exec e5T.pc e5T.sta e5T.dyna (.ok post5T)) ∧
     (adrs := cp5T.adrs) (stor := aCallT.stor) (n := 4505) e5T_eq
     (fun x => by rw [hik, hpk, e4T31_keys]; exact e4T_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e4T31_state]; exact e4T_world.1 a k)
-    (by rw [hst, e4T31_state]; exact e4T_world.2) hcr hsg
+    (by rw [hst, e4T31_state]; exact e4T_world.2) hcr hsg (by kernel_rfl)
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e5T_code e5T_fork hr) fs1_zero
     (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps5T]; exact ⟨id, fun _ _ r => r⟩) hrun herr
   rw [hk, ha, hs, hc] at h

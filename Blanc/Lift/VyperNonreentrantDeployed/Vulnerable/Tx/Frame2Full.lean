@@ -81,7 +81,7 @@ theorem frame2_child (d3 : Devm)
                 (fun x => by rw [hik, hpk, e1T31_keys]; exact e1T_keys x)
                 (fun a => by rw [hia]; exact hpa a)
                 (fun a k => by rw [hst, e1T31_state]; exact e1T_world.1 a k)
-                (by rw [hst, e1T31_state]; exact e1T_world.2) hcr hsg
+                (by rw [hst, e1T31_state]; exact e1T_world.2) hcr hsg (by kernel_rfl)
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2T_code e2T_fork hr) fs1_zero
                 (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps2T]; exact s) hr herr
               exact ⟨post, cl', hx, hs, ha, hg,

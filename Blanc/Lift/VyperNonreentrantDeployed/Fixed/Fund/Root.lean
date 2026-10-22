@@ -96,7 +96,7 @@ theorem forwarder_root_re {g : Fork} (hg : CoveredFork g) {W O : State} {acs : A
         ⟨0, (e.sta.withFork g).withOrig W, e.dyna, out, R⟩ := ⟨hpc.symm, rfl, rfl⟩
     obtain ⟨x1, hx1, -, ex01, -, -⟩ := h1 _ hP0
     obtain ⟨-, x2, -, -, -, hx2, ex2, -, hag2⟩ :=
-      spawn_resume_ok (cl := cl) hx1 hag1 hFT stepT entB hdB hr
+      spawn_resume_ok (cl := cl) hx1 hag1 hFT (CoveredFork.rules_touchedSweep ‹_›) stepT entB hdB hr
         (fun ch hch => hchild hsB hagB0 ch hch)
     obtain ⟨hag3, h3⟩ := pwalkH_cont .refuse fwdTries hcT okAny 10 _ c3 hag2 w3'
     obtain ⟨x3, hx3, -, ex3, -, -⟩ := h3 x2 hx2
@@ -114,6 +114,7 @@ theorem forwarder_root_re {g : Fork} (hg : CoveredFork g) {W O : State} {acs : A
   rw [hexec]
   exact ⟨frame_settle_ok rfl
     (CoveredFork.rules_stateGas_none (s := (rootCall g W proxyAddr fwd data gas v).benv.stat) hg)
+    (CoveredFork.rules_touchedSweep (s := (rootCall g W proxyAddr fwd data gas v).benv.stat) hg)
     hdT, hca3⟩
 
 /-- **A leaf root call settles cleanly**: a root frame whose walk halts without spawning. -/
@@ -155,6 +156,7 @@ theorem leaf_root_re {g : Fork} (hg : CoveredFork g) {W O : State} {acs : AcctSh
     rw [h0]; exact hex
   rw [hexec]
   exact ⟨frame_settle_ok rfl
-    (CoveredFork.rules_stateGas_none (s := (rootCall g W t cd data gas v).benv.stat) hg) hdT, hca⟩
+    (CoveredFork.rules_stateGas_none (s := (rootCall g W t cd data gas v).benv.stat) hg)
+    (CoveredFork.rules_touchedSweep (s := (rootCall g W t cd data gas v).benv.stat) hg) hdT, hca⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund

@@ -230,7 +230,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
   obtain ⟨step2, ent2, -, hagBal⟩ := staticcall_node hag2 hat2 sBal nBal
   have hF2 := (scallPrep_node_facts hag2 sBal).2
   obtain ⟨t1, x3, sp1, ht1, e3, hx3, ex3, hdesc3, hag3⟩ :=
-    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr
+    spawn_resume_ok hx2 hag2 hF2 (CoveredFork.rules_touchedSweep ‹_›) step2 ent2 balErr
       ((resumeCallB_re cpBal fk world8 (.ok dBal)).trans resB3)
       (fun t ht => let r := frameBal hfk hsBal (pagree_re hagBal) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
   rw [CallPrep.re_adrs] at hag3 hx3
@@ -242,7 +242,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
     rw [hcode, pB4]; exact decodeT_sound codeTries decB4
   obtain ⟨step4, ent4, -, hagRcv, hF4⟩ := call_node hag4 hat4 sEth nRcv
   obtain ⟨xr, x5, sp2, hxr, e5, hx5, ex5, hdesc5, hag5⟩ :=
-    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr
+    spawn_resume_ok hx4 hag4 hF4 (CoveredFork.rules_touchedSweep ‹_›) step4 ent4 rcvErr
       ((resumeCallB_re cpEth fk world8 (.ok dRcv)).trans resB5)
       (fun X hX => let r := frameRcv hfk hsRcv (pagree_re hagRcv) X (nodeAt_re hX); ⟨r.1, r.2.1⟩)
   rw [CallPrep.re_adrs] at hag5 hx5
@@ -254,7 +254,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
     rw [hcode, pB6]; exact decodeT_sound codeTries decB6
   obtain ⟨step6, ent6, -, hagXf, hF6⟩ := call_node hag6 hat6 sXf nXf
   obtain ⟨t2, x7, sp3, ht2, e7, hx7, ex7, hdesc7, hag7⟩ :=
-    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr
+    spawn_resume_ok hx6 hag6 hF6 (CoveredFork.rules_touchedSweep ‹_›) step6 ent6 xfErr
       ((resumeCallB_re cpXf fk world8 (.ok dXf)).trans resB7)
       (fun t ht => let r := frameXf hfk hsXf (pagree_re hagXf) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
   rw [CallPrep.re_adrs] at hag7 hx7

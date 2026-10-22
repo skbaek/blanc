@@ -99,7 +99,7 @@ theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
                 (fun x => by rw [hik, hpk, e1C31_keys]; exact e1C_keys x)
                 (fun a => by rw [hia]; exact hpa a)
                 (fun a k => by rw [hst, e1C31_state]; exact e1C_world.1 a k)
-                (by rw [hst, e1C31_state]; exact e1C_world.2) hcr hsg
+                (by rw [hst, e1C31_state]; exact e1C_world.2) hcr hsg (CoveredFork.rules_touchedSweep hg)
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2C_code (hg : CoveredFork g) hr)
                 fs1_zero (by rw [Blanc.Lift.Witness.storTransfer_of_keeps (by exact keeps2C)]; exact s) hr herr
               exact ⟨post, cl', hx, hs, ha, hgas,

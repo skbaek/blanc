@@ -182,7 +182,7 @@ theorem tx_message_of_child (d1 : Devm)
       rw [f0tx_enter]
       show f0tx.settle (exec ⟨e0tx.pc, e0tx.sta, e0tx.dyna⟩) = _
       rw [hex]
-      exact frame_settle_ok rfl hsg0 herr'
+      exact frame_settle_ok rfl hsg0 (by kernel_rfl) herr'
     · simp only [obs0, reduceCtorEq] at hk
     · simp only [obs0, reduceCtorEq] at hk
   · simp only [obs0, reduceCtorEq] at hk

@@ -28,19 +28,22 @@ open Jaune
 /-! ## Agreement under the remaining updates -/
 
 theorem Devm.EqModGas.withGasLeft (a : Devm) (g : Nat) : EqModGas a (a.withGasLeft g) :=
-  ⟨rfl, rfl, trivial, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨rfl, rfl, trivial, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+    rfl⟩
 
 theorem Devm.EqModGas.of_withOutput {a b : Devm} (o : Bytes) (h : EqModGas a b) :
     EqModGas (a.withOutput o) (b.withOutput o) :=
   ⟨h.stack, h.memory, trivial, h.logs, h.refundCounter, rfl, h.accountsToDelete, h.returnData,
     h.error, h.accessedAddresses, h.accessedStorageKeys, h.state, h.createdAccounts,
-    h.transientStorage, h.stateGas, h.accountReads, h.storageReads, h.storageWrites⟩
+    h.transientStorage, h.stateGas, h.accountReads, h.storageReads, h.storageWrites,
+    h.touchedAccounts⟩
 
 theorem Devm.EqModGas.of_addLog {a b : Devm} (l : Log) (h : EqModGas a b) :
     EqModGas (a.addLog l) (b.addLog l) :=
   ⟨h.stack, h.memory, trivial, congrArg (· ++ [l]) h.logs, h.refundCounter, h.output,
     h.accountsToDelete, h.returnData, h.error, h.accessedAddresses, h.accessedStorageKeys, h.state,
-    h.createdAccounts, h.transientStorage, h.stateGas, h.accountReads, h.storageReads, h.storageWrites⟩
+    h.createdAccounts, h.transientStorage, h.stateGas, h.accountReads, h.storageReads,
+    h.storageWrites, h.touchedAccounts⟩
 
 theorem Devm.EqModGas.output_eq {a b : Devm} (h : EqModGas a b) : a.output = b.output := h.output
 
@@ -65,7 +68,8 @@ theorem Devm.EqModGas.of_popList {a a₁ b b₁ : Devm} {xs ys : List B256}
     h1.stateGas.symm.trans (h.stateGas.trans h2.stateGas),
     h1.accountReads.symm.trans (h.accountReads.trans h2.accountReads),
     h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads),
-    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites)⟩⟩
+    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites),
+    h1.touchedAccounts.symm.trans (h.touchedAccounts.trans h2.touchedAccounts)⟩⟩
 
 /-- Two `PopBurn`s of equally many words from agreeing states pop the same words onto agreeing
 states. -/
@@ -89,7 +93,8 @@ theorem Devm.EqModGas.of_popBurnList {a a₁ b b₁ : Devm} {xs ys : List B256}
     h1.stateGas.symm.trans (h.stateGas.trans h2.stateGas),
     h1.accountReads.symm.trans (h.accountReads.trans h2.accountReads),
     h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads),
-    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites)⟩⟩
+    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites),
+    h1.touchedAccounts.symm.trans (h.touchedAccounts.trans h2.touchedAccounts)⟩⟩
 
 /-! ## `KECCAK256` and `LOG n` -/
 

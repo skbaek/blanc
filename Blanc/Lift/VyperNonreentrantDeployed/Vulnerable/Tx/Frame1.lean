@@ -121,7 +121,7 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
   · intro cp cevm hp he'
     rw [cp0_eq] at hp; cases hp
     rw [e1T_eq] at he'; cases he'
-    exact ⟨.ok (post1TF post2), hx1, frame_settle_ok hcr1 hsg1 herr⟩
+    exact ⟨.ok (post1TF post2), hx1, frame_settle_ok hcr1 hsg1 (by kernel_rfl) herr⟩
   · rw [hka, (hacc.1 a), hpe, hpa a, ha2.1 a]
     simp only [true_and, List.mem_append]
   · rw [hkk, (hacc.2 x), hpe, hpk, ha2.2.1 x]

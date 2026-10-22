@@ -171,7 +171,7 @@ theorem frame4C_child_at (hg : CoveredFork g) :
     hgas, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr, hrf, hatd⟩
   · rw [cp4C_at hg] at hp; cases hp
     rw [e4C_at hg] at he'; cases he'
-    exact ⟨.ok post4C, hx3, frame_settle_ok hcr3 hsg3 herr⟩
+    exact ⟨.ok post4C, hx3, frame_settle_ok hcr3 hsg3 (CoveredFork.rules_touchedSweep hg) herr⟩
   · show a ∈ post4C.accessedAddresses ↔ _
     rw [show post4C = post4CF post5C from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
     simp only [true_and, adrsH4C, List.mem_append]

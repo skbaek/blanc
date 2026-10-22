@@ -96,7 +96,7 @@ theorem exit_run_at {g : Fork} (hg : CoveredFork g) (hO : OrigAgree world8 O8)
     rw [hcT, pTop1]; exact decodeT_sound fwdTries decTop1
   obtain ⟨stepT, entB, -, hagB0, hFT⟩ := delegatecall_node hag1 hat1 sTop nB
   obtain ⟨F, x2, sp0, hF, e2, hx2, ex2, hdesc2, hag2⟩ :=
-    spawn_resume_ok hx1 hag1 hFT stepT entB dBerr resTop2
+    spawn_resume_ok hx1 hag1 hFT (CoveredFork.rules_touchedSweep ‹_›) stepT entB dBerr resTop2
       (fun F hF => let r := frameB hg hsB (pagree_re hagB0) F (nodeAt_re hF); ⟨r.1, r.2.1⟩)
   have hF' := nodeAt_re hF
   have hFs : F.sevm = reS eB.sta g := hF'.2.1.trans (re_sta eB g world8)
