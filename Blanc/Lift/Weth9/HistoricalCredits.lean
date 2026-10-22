@@ -61,4 +61,20 @@ theorem footprint_after_rewardStage {K : Key → Prop} {ca : Adr}
       exact (congrArg (fun w : Jaune.State => FootInv K (w.getStor ca) (w.bal ca))
         endpoint).mpr preserved
 
+/-- The configured pre-block bound supplies the reward budget at the actual
+request stage. The footprint and protection are still the preceding stage's
+inputs; earlier historical invariant preservation is not asserted here. -/
+theorem footprint_after_configured_rewardStage
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    {K : Key → Prop} {ca : Adr}
+    (trace : ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post)
+    (hsg : trace.fork.ruleSet.stateGas = none)
+    (initial : FootInv K (trace.bodyTrace.requestState.getStor ca)
+      (trace.bodyTrace.requestState.bal ca))
+    (protection : Blanc.State.Protected trace.bodyTrace.requestState ca) :
+    FootInv K (post.state.getStor ca) (post.state.bal ca) := by
+  rw [show post.state = trace.bodyState from congrArg BlockChain.state trace.postEq]
+  exact footprint_after_rewardStage trace.bodyTrace initial protection
+    (fun pow enabled => trace.request_reward_budget hsg pow enabled)
+
 end Blanc.Lift.Weth9

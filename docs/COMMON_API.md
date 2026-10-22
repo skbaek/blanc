@@ -4388,8 +4388,20 @@ reward budget. `ExecutionTrace.StagedBodyTrace.reward_preserves_and_sum`
 connects those laws to the retained body's actual reward endpoint and exact
 selected mint; `stateInv_of_requestState` and `reward_getStor_of_protected`
 provide its semantic-invariant and storage projections. Beneficiary collisions
-are permitted. These results do not establish preservation by the earlier
-historical interpreter stages, authentication, or deployment roots.
+are permitted.
+
+For the balance budget before that reward stage, the retained system-message,
+beacon, history, transaction-fold and request carriers expose
+`sum_le_of_stateGas_none`, using the actual selected rule's `stateGas = none`
+without modern fork coverage. `ExecutionTrace.sum_processWithdrawalsState_eq`
+gives the exact enabled-withdrawal mint under its opening bound.
+`ExecutionTrace.StagedBodyTrace.request_sum_le` combines those actual stages;
+`request_budget` transports a body-entry withdrawal-plus-future-mint bound to
+the request endpoint. `ExecutionTrace.ConfiguredBlockTraceIn.request_reward_budget`
+derives the selected PoW budget from the retained configured pre-block bound;
+`reward_preserves_and_sum` reaches its actual post-state and `sum_post_le`
+includes the configured reward mint. Earlier historical contract-invariant
+preservation, authentication and deployment roots remain separate obligations.
 
 For a gas-derived bound on actual retained frame occurrences, use
 [`Blanc/ExecutionBodyGas.lean`](../Blanc/ExecutionBodyGas.lean).
