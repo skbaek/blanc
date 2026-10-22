@@ -117,7 +117,7 @@ if [ "$BUILD" -eq 1 ]; then
   fi
   # The write-site checker tops sit outside the Blanc root until L3 consumes
   # them; scripts/AxiomCheck.lean imports them, so the union walk needs them.
-  if ! (cd "$ROOT" && lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality); then
+  if ! (cd "$ROOT" && lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality); then
     echo "REGRESSION — axiom audit: write-site checker tops build failed"
     exit 1
   fi
