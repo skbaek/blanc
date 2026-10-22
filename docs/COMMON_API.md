@@ -207,6 +207,14 @@ registry has identified the likely vocabulary.
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
   The `EXTCODESIZE` helper pins the exact code-size word from the instruction's
   input state and carries unchanged memory across address warming.
+  For an exact stack rather than a prefix, use
+  `Ninst.extcodesize_stack` in
+  [`Blanc/CodeReadInversion.lean`](../Blanc/CodeReadInversion.lean).
+  It derives the output word followed by the unchanged tail from the actual
+  input-stack equation and successful instruction run.
+  `Ninst.extcodesize_stack_length` supplies the arity fact behind it. Both
+  cover flat and warm/cold access without a fork or BAL restriction.
+  Their stack-equality conclusions have no reliable dedicated recipe trigger.
 - The common `fsig +++ dispatch` entry preserves logs and output by
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
 - Recover a known selected body from a sorted tree dispatcher with
@@ -6110,8 +6118,14 @@ contract-neutral.
   They derive the constructor argument, fixed label hashes, memory image and
   gas charges; the admin argument is the executing message's caller.
   `terminal_runtimeReturn` connects the final caller continuation to the
-  accepted runtime return. Callee execution, storage writes, bytecode lifting,
-  code installation and historical execution remain separate obligations.
+  accepted runtime return. For inversion of a successful whole registered
+  constructor run, `ProxyCreation.constructor_effects_of_run` in
+  [`Blanc/Lift/Usdc/ProxyCreation/Effects.lean`](../Blanc/Lift/Usdc/ProxyCreation/Effects.lean)
+  derives the implementation-slot write, admin-slot write using the actual
+  caller, returned runtime window, and preservation of every other account's
+  storage. Its internal-callee inversions consume actual successful runs and
+  work without a fork restriction. Bytecode lifting, code installation and
+  historical execution remain separate obligations.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry

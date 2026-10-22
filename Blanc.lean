@@ -179,6 +179,7 @@ import Blanc.DeploymentMessage
 import Blanc.DeploymentTouch
 import Blanc.Forward
 import Blanc.ForwardFlatAccess
+import Blanc.CodeReadInversion
 import Blanc.ForwardMstore8
 import Blanc.Reverts
 import Blanc.RevertCause
@@ -1655,6 +1656,7 @@ import Blanc.Lift.Usdc.ProxyCreation.RuntimeReturn
 import Blanc.Lift.Usdc.ProxyCreation.RuntimeWindow
 import Blanc.Lift.Usdc.ProxyCreation.ConstantsCheck
 import Blanc.Lift.Usdc.ProxyCreation.Prefix
+import Blanc.Lift.Usdc.ProxyCreation.Effects
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk

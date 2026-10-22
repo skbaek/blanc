@@ -138,6 +138,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionSenderOccurrences", "ExecutionDelegationEligibility",
+           "CodeReadInversion",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "TaggedStorage",
            "DelegatecallEnvelope",
@@ -1416,6 +1417,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxyCreation.RuntimeWindow",
         "Lift.Usdc.ProxyCreation.ConstantsCheck",
         "Lift.Usdc.ProxyCreation.Prefix",
+        "Lift.Usdc.ProxyCreation.Effects",
         "Lift.Usdc.ProxyForward",
         "Lift.Usdc.ProxyHalt",
         "Lift.Usdc.ProxyOk",
