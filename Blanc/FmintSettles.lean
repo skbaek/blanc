@@ -1346,13 +1346,14 @@ the flag and deliberately reverts.  The walk runs from a symbolic gas lower
 bound, which is the plan's A7 capability check: `func_run` needed no change. -/
 lemma execSat_flagZero_leaf {sevm : Sevm} {d : Devm} {amount receiver : B256}
     {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_gas : 21 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
     Func.ExecSat (fmint.main :: fmint.aux) sevm
       (d.setMach ⟨0 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (2) [1]
-    exact Func.runCompiledTo_revert_func (G := Gc - 21)
+    exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := Gc - 21)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
@@ -1363,6 +1364,7 @@ fewer than 32 bytes: `returnDataShorterThan 32` fires before any word is read �
 deliberately reverts. -/
 lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_rd : d.returnData.length < 32)
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
@@ -1378,7 +1380,7 @@ lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
     exact h_rd
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
-    exact Func.runCompiledTo_revert_func (G := Gc - 42)
+    exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := Gc - 42)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
   · exact hP _
@@ -1398,6 +1400,7 @@ of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
 word back through `returndatacopy`/`mload` and deliberately reverts. -/
 lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
     (h_neq : (erc3156Magic =? flashLoanReturnDataHead d M) = 0)
     (h32 : M.size % 32 = 0)
@@ -1441,7 +1444,7 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
         rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
         omega)]
       decide
-    · exact Func.runCompiledTo_revert_func (G := Gc - 82)
+    · exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := Gc - 82)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1484,6 +1487,7 @@ memory image a variable with only its size pinned (F8), the gas account
 exact. -/
 lemma execSat_spend_step {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_ge : (Nat.toB256 d.returnData.length <? (32 : B256)) = 0)
     (h_eq : (erc3156Magic =? flashLoanReturnDataHead d M) = 1)
     (h32 : M.size % 32 = 0)
@@ -1554,6 +1558,7 @@ with neither storage region: the walk hands the continuation the state
 entering `spendFromHash`, with the hash a variable named by `h_hash`. -/
 lemma execSat_spendGuard_step {sevm : Sevm} {d : Devm}
     {wad receiver h : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_hash : Bytes.keccak ((((M.write ((0 * 32 : B256)).toNat
       receiver.toBytes).write ((1 * 32 : B256)).toNat
         sevm.currentTarget.toB256.toBytes).read (B256.toNat 0)
@@ -1614,6 +1619,7 @@ write through the alias.  The two clause values are threaded as variables so
 one statement serves all three colliding combinations. -/
 lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
     {wad receiver h va mx : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_hash : Bytes.keccak ((((M.write ((0 * 32 : B256)).toNat
       receiver.toBytes).write ((1 * 32 : B256)).toNat
         sevm.currentTarget.toB256.toBytes).read (B256.toNat 0)
@@ -1655,7 +1661,7 @@ lemma execSat_slotCollision_leaf {sevm : Sevm} {d : Devm}
         rw [hw2, show B256.toNat 0 + B256.toNat 64 = 64 from by decide]
         omega)]
       decide
-    · exact Func.runCompiledTo_revert_func (G := Gc - 113)
+    · exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := Gc - 113)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1695,7 +1701,7 @@ lemma execSat_allowanceLow_leaf {sevm : Sevm} {d : Devm}
       omega
     apply Func.execSat_of_runCompiledTo
     · func_run (8) [~~~ amnt, 0, 1]
-      exact Func.runCompiledTo_revert_func (G := G - 49)
+      exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := G - 49)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -1843,7 +1849,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
     have hG : 27 ≤ G1 := by omega
     apply Func.execSat_of_runCompiledTo
     · func_run (4) [1]
-      exact Func.runCompiledTo_revert_func (G := G1 - 27)
+      exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := G1 - 27)
         (by simp only [Devm.gasLeft_setMach, gBase]; omega)
         (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
             omega)
@@ -2060,6 +2066,7 @@ case split: the machine compares `Nat.toB256 d.returnData.length` — the
 comparison and not on the bare `Nat` bound, which the model does not cap. -/
 lemma execSat_returnDataShort_leaf' {sevm : Sevm} {d : Devm}
     {amount receiver : B256} {M : Mem} {Gc : Nat} {P : Execution → Prop}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1)
     (h_gas : 42 ≤ Gc)
     (hP : ∀ post : Devm, P (.error (.revert, post))) :
@@ -2067,7 +2074,7 @@ lemma execSat_returnDataShort_leaf' {sevm : Sevm} {d : Devm}
       (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   apply Func.execSat_of_runCompiledTo
   · func_run (6) [0, 1]
-    exact Func.runCompiledTo_revert_func (G := Gc - 42)
+    exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := Gc - 42)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)
@@ -2132,12 +2139,12 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
     exact Or.inr (Or.inr ⟨e, dd, rfl, hnc⟩)
   · intro dd Gc hK
     rw [flashLoanContGasMax_eq] at hK
-    exact execSat_flagZero_leaf (by omega)
+    exact execSat_flagZero_leaf (hfork := hfork) (by omega)
       (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
   · intro dd Gc hK hEr
     rw [flashLoanContGasMax_eq] at hK
     by_cases hLen : Nat.toB256 dd.returnData.length < (32 : B256)
-    · refine execSat_returnDataShort_leaf' ?_ (by omega)
+    · refine execSat_returnDataShort_leaf' (hfork := hfork) ?_ (by omega)
         (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
       rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
         = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
@@ -2153,7 +2160,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
       by_cases hMagic : erc3156Magic
           = flashLoanReturnDataHead dd (flashLoanCallMem sevm amount data)
       case neg =>
-        refine execSat_magicMismatch_leaf h_ge ?_ h32c hmszc (by omega)
+        refine execSat_magicMismatch_leaf (hfork := hfork) h_ge ?_ h32c hmszc (by omega)
           (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
         rw [show (erc3156Magic =? flashLoanReturnDataHead dd
             (flashLoanCallMem sevm amount data))
@@ -2168,7 +2175,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
             = if erc3156Magic = flashLoanReturnDataHead dd
                 (flashLoanCallMem sevm amount data) then (1 : B256) else 0
             from rfl, ite_eq_left hMagic]
-        refine execSat_spend_step h_ge h_eq h32c hmszc (by omega) ?_
+        refine execSat_spend_step (hfork := hfork) h_ge h_eq h32c hmszc (by omega) ?_
         intro M' hsM'
         have h32' : M'.size % 32 = 0 := by rw [hsM']; exact h32c
         have hmsz' : 64 ≤ M'.size := by rw [hsM']; exact hmszc
@@ -2178,7 +2185,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
               (B256.toNat 64)).1) with hhash
         by_cases hA : ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
         · by_cases hB : ~~~ hh = 0
-          · exact execSat_slotCollision_leaf (va := 1) (mx := 1) hhash.symm
+          · exact execSat_slotCollision_leaf (hfork := hfork) (va := 1) (mx := 1) hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
@@ -2187,7 +2194,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                   = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_left hB])
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-          · exact execSat_slotCollision_leaf (va := 1) (mx := 0) hhash.symm
+          · exact execSat_slotCollision_leaf (hfork := hfork) (va := 1) (mx := 0) hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
@@ -2197,7 +2204,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
         · by_cases hB : ~~~ hh = 0
-          · exact execSat_slotCollision_leaf (va := 0) (mx := 1) hhash.symm
+          · exact execSat_slotCollision_leaf (hfork := hfork) (va := 0) (mx := 1) hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
@@ -2206,7 +2213,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                   = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_left hB])
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
-          · refine execSat_spendGuard_step hhash.symm
+          · refine execSat_spendGuard_step (hfork := hfork) hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
@@ -2348,6 +2355,7 @@ set_option maxRecDepth 674 in
 address-shaped has a gas-exact walk that reverts, with empty revert data. -/
 theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
     {receiver token amount : B256} {data : Bytes} {w : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
@@ -2368,7 +2376,37 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
-          func_run (33) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+          -- The dispatch's selector `PUSH`es are stepped by hand (the WethLive diagnosis, d14b310b:
+          -- `func_run`'s `PUSH0`-guard `assumption` evaluates keccak selectors past the ceiling).
+          func_run (5) [flashLoanSelector]
+          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [0]
+          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 63) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (2) [0]
+          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 82) (pushCost_of_ne_zero (by decide))
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            (fun _ => hfork.rules_push0))
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (16) [1, 1, 0,
             ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, w]
           repeat (case h_legacy => exact hfork.rules_stateGas_none)
           · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
@@ -2381,7 +2419,7 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
                 List.length_nil]; omega)
               (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh,
                 gJumpdest]; omega) ?_
-            exact Func.runCompiledTo_revert_func (G := g - 167)
+            exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := g - 167)
               (by simp only [Devm.gasLeft_setMach, gBase]; omega)
               (by simp only [Devm.stack_setMach, List.length_cons,
                 List.length_nil]; omega)),
@@ -2403,6 +2441,7 @@ of `Blanc/FmintReverts.lean` applies verbatim. -/
 theorem fmint_receiver_not_address_reverts {sevm : Sevm} {pre : Devm}
     {receiver token amount : B256} {data : Bytes}
     (h_code : some sevm.code.toList = Prog.compile fmint)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_sel : Sevm.selector sevm = flashLoanSelector)
     (h_dec : Sevm.DecodesCallWithTail sevm flashLoanSelector
       [receiver, token, amount] data)
@@ -2417,7 +2456,7 @@ theorem fmint_receiver_not_address_reverts {sevm : Sevm} {pre : Devm}
     rw [argWord_zero_of_decodes h_dec, ← addressMask_eq_shl]
     exact fun h => h_addr (validAdr_iff.mpr h)
   obtain ⟨post, h_run, h_out⟩ :=
-    receiverNotAddress_runCompiledTo h_sel h_dec h_token rfl h_ne h_stack h_gas
+    receiverNotAddress_runCompiledTo (hfork := hfork) h_sel h_dec h_token rfl h_ne h_stack h_gas
   exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code, h_out⟩
 
 /-- Guard (2)'s revert path: the dispatcher, guards (0) and (1) passing, and
@@ -2472,7 +2511,37 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
     (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
   apply Func.execSat_segment
   · intro ex hex
-    func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+    -- The dispatch's selector `PUSH`es are stepped by hand (the WethLive diagnosis, d14b310b:
+    -- `func_run`'s `PUSH0`-guard `assumption` evaluates keccak selectors past the ceiling).
+    func_run (5) [flashLoanSelector]
+    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0))
+    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+      Devm.stateGas_setMach]
+    func_run (3) [1]
+    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0))
+    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+      Devm.stateGas_setMach]
+    func_run (3) [0]
+    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 63) (pushCost_of_ne_zero (by decide))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0))
+    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+      Devm.stateGas_setMach]
+    func_run (2) [0]
+    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 82) (pushCost_of_ne_zero (by decide))
+      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+      (fun _ => hfork.rules_push0))
+    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+      Devm.stateGas_setMach]
+    func_run (22) [1, 1, 0,
       ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
@@ -2503,7 +2572,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
       rw [ite_eq_left h_lt]
     func_run (3) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 1]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    exact Func.runCompiledTo_revert_func (G := G - 24)
+    exact Func.runCompiledTo_revert_func (h_push0 := hfork.rules_push0) (G := G - 24)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
           omega)
@@ -2558,12 +2627,12 @@ theorem fmint_flashLoan_settles_of_call {sevm : Sevm} {pre : Devm}
           (Sevm.argWord sevm 0) ≠ 0 := by
         rw [argWord_zero_of_decodes h_dec, ← addressMask_eq_shl]
         exact fun h => h_adr (validAdr_iff.mpr h)
-      obtain ⟨post, h_run, -⟩ := receiverNotAddress_runCompiledTo h_sel h_dec
+      obtain ⟨post, h_run, -⟩ := receiverNotAddress_runCompiledTo (hfork := hfork) h_sel h_dec
         h_tok (w := ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
           (Sevm.argWord sevm 0)) rfl h_ne h_stack
         (by rw [receiverNotAddressGas_eq]; omega)
       exact ⟨post, Prog.exec_of_runCompiledTo h_run h_code⟩
-  · obtain ⟨post, h_exec, -⟩ := fmint_token_ne_self_reverts h_code h_sel h_dec
+  · obtain ⟨post, h_exec, -⟩ := fmint_token_ne_self_reverts h_code hfork h_sel h_dec
       h_tok h_stack (by rw [tokenNeSelfGas_eq]; omega)
     exact Or.inr (Or.inl ⟨post, h_exec⟩)
 
@@ -2649,7 +2718,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
       dsimp only [bind, Except.bind] at hset
       rw [ite_eq_right (by rw [herr]; simp only [Option.isSome_none, Bool.false_eq_true,
         not_false_eq_true])] at hset
-      exact Or.inl (by rw [Except.ok.inj hset, herr])
+      exact Or.inl (by rw [Except.ok.inj hset, Devm.recordTouch_error, herr])
     · rw [hx] at key
       have h_evm : post.withError (some .revert) = evm := Except.ok.inj key
       subst h_evm
