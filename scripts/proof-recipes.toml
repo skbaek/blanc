@@ -548,6 +548,22 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-01"
 
 [[recipe]]
+id = "touch-preserving-message-settlement"
+status = "active"
+triggers = ["goal-shape:touch-preserving-message-settlement"]
+preferred_path = "For the exact successful message equation retaining `recordTouch`, use `processMessage_ok_touch_of_exec`. For the exact successful CREATE equation retaining `setCode`, use `processCreateMessage_ok_touch_of_exec_and_charge`; supply the successful code charge on the touched raw result. Both live in `Blanc/DeploymentTouch.lean`."
+boundary = "This is syntactic discovery of direct success equations, not a check of address, rules or output correspondence. The theorems retain the actual successful post-transfer environment, none-code-address entry, successful total execution and raw.error = none; CREATE additionally retains actual code-charge success on the touched raw machine. No fork, value, state-gas, sweep-disable or endpoint-state premise is added. These bridges do not prove transaction-level touched-account sweeping, original constructor execution, historical inclusion or an allowance-zero seed."
+owner_module = "Blanc/DeploymentTouch.lean"
+canonical_example = "Blanc/DeploymentTouch.lean:processCreateMessage_ok_touch_of_exec_and_charge"
+symbols = [
+  "module:Blanc/DeploymentTouch.lean",
+  "declaration:processMessage_ok_touch_of_exec",
+  "declaration:processCreateMessage_ok_touch_of_exec_and_charge",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-23"
+
+[[recipe]]
 id = "raw-sstore-free-compiled-path"
 status = "active"
 triggers = ["goal-shape:raw-sstore-free-compiled-path"]

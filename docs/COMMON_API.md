@@ -3257,6 +3257,11 @@ candidate for folding into this walk, again as WETH10 family work.
 
 ### T1. I have `exec (initEvm msg)` and need `processMessage msg`
 
+For a clean no-code-address execution whose target touch must remain in the
+settled machine, use `processMessage_ok_touch_of_exec` in
+[`Blanc/DeploymentTouch.lean`](../Blanc/DeploymentTouch.lean); the composed
+CREATE adapter and its charge obligation are indexed in [C2](#c2-i-need-deploymentmessage-correspondence).
+
 Use Jaune's `Jaune/MessageExecution.lean`, imported by
 [`Blanc/MessageExecution.lean`](../Blanc/MessageExecution.lean):
 
@@ -4687,6 +4692,19 @@ current recipe matchers have no forward-transition shape to bind.
   `Prog.exec_of_runCompiled_appended` for successful creation prefixes and
   `Prog.exec_of_runCompiledTo_appended` when the retained compiled walk ends in
   an arbitrary success or failure outcome while runtime/ABI bytes follow it.
+- Successful no-code-address message and CREATE settlement with the actual
+  rules-selected touch retained:
+  [`Blanc/DeploymentTouch.lean`](../Blanc/DeploymentTouch.lean).
+  `processMessage_ok_touch_of_exec` consumes successful transfer, no separate
+  code address, actual raw execution and a clean raw result.
+  `processCreateMessage_ok_touch_of_exec_and_charge` additionally consumes
+  successful code charging on that touched result and installs its charged
+  output with the actual `setCode` normalization. Neither theorem assumes
+  touch recording is disabled, nor proves constructor execution, affordability,
+  final transaction sweeping or a historical starting state. The
+  `touch-preserving-message-settlement` recipe recognizes only the direct
+  successful outer forms; it does not establish the theorem's entry,
+  execution, address, output or charge obligations.
 - Generic deployment-message facts:
   [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).  An inner
   creation error crosses through
