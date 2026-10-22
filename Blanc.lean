@@ -1699,3 +1699,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 import Blanc.Lift.UniswapV2Pair.SkimForwardKept
 import Blanc.Lift.Usdc.HistoryEnd
 import Blanc.Lift.Usdc.HistoryEndFoot
+
+import Blanc.ExecutionRewardCredits
+import Blanc.Lift.Weth9.HistoricalCredits
+import Blanc.Lift.UniswapV2Pair.HistoricalCredits

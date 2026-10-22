@@ -4374,6 +4374,23 @@ Use
 
 ### T5. The wrapper is a block body and the fact is about an installed contract
 
+For proof-of-work reward credits, use
+[`Blanc/ExecutionRewardCredits.lean`](../Blanc/ExecutionRewardCredits.lean).
+`fold_addBal_nat_preserves` threads a direct-credit law and proves the exact
+natural total through a list of credits under its pre-credit sum bound.
+`payRewards_preserves_and_sum` specializes it to Jaune's actual miner and
+ommer credits; `sum_payRewards_eq` gives the exact `ChainConfig.rewardTotal`
+mint. `ContractSpecSem.StateInv.payRewards` transports an existing semantic
+invariant through that fold using its proved `addBal` law.
+`payRewards_getStor_of_protected` preserves a protected account's storage
+with no balance bound; `payRewards_balance_mono` additionally needs the exact
+reward budget. `ExecutionTrace.StagedBodyTrace.reward_preserves_and_sum`
+connects those laws to the retained body's actual reward endpoint and exact
+selected mint; `stateInv_of_requestState` and `reward_getStor_of_protected`
+provide its semantic-invariant and storage projections. Beneficiary collisions
+are permitted. These results do not establish preservation by the earlier
+historical interpreter stages, authentication, or deployment roots.
+
 For a gas-derived bound on actual retained frame occurrences, use
 [`Blanc/ExecutionBodyGas.lean`](../Blanc/ExecutionBodyGas.lean).
 `ExecutionTrace.ApplyTransactionsTrace.settledFrames_gas_budget` telescopes
