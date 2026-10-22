@@ -198,7 +198,8 @@ private theorem bn_pairing_output (evm : Evm) :
   unfold executePairingCheck
   apply chargeGas_output
   have hp := bn_pairing_inner_output evm.sta.data
-    (34000 * (evm.sta.data.length / 192) + 45000)
+    (evm.sta.benvStat.rules.bn254.pairingPerPair * (evm.sta.data.length / 192) +
+      evm.sta.benvStat.rules.bn254.pairingBase)
   dsimp only
   split
   · rename_i cost output he

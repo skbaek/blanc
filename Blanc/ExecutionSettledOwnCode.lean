@@ -38,7 +38,10 @@ theorem Xinst.step_create2_spawn_unprotected {sevm : Sevm} {d : Devm} {frame : F
     {rsm : Resume} (hfork : CoveredFork sevm.benvStat.fork)
     (h : Xinst.step sevm d .create2 = .spawn frame rsm) :
     ¬ State.Protected d.state frame.inner.currentTarget := by
-  simp only [Xinst.step, hfork.rules_stateGas_none, Bind.bind, Except.bind] at h
+  have hcreate2 : sevm.benvStat.rules.op.create2 = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).op.create2 = true) rfl rfl rfl rfl
+  simp only [Xinst.step, hfork.rules_stateGas_none, hcreate2, ↓reduceIte, Bind.bind,
+    Except.bind] at h
   rcases eq1 : Devm.pop d with _ | ⟨v1, s1⟩ <;> simp only [eq1] at h
   · simp only [XStep.ofExcept, reduceCtorEq] at h
   rcases eq2 : Devm.popToNat s1 with _ | ⟨n2, s2⟩ <;> simp only [eq2] at h

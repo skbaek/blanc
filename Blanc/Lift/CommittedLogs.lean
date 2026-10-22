@@ -180,7 +180,11 @@ private theorem chargeCodeGas_logs (rules : ForkRules) (pre : Devm) :
   split
   · dsimp only
     split
-    · rfl
+    · split
+      · rfl
+      · refine Lift.LogsWalk.bindE rfl (Lift.LogsWalk.chargeGas _ pre) ?_
+        intro d logs
+        split <;> exact logs.symm
     · refine Lift.LogsWalk.bindE rfl (Lift.LogsWalk.chargeGas _ pre) ?_
       intro d logs
       split <;> exact logs.symm
@@ -201,7 +205,7 @@ private theorem processMessage_settle_logs
   cases same
   rcases cases with ⟨_, eq⟩ | ⟨_, eq⟩
   · rw [← eq]; rfl
-  · rw [← eq]
+  · rw [← eq]; rfl
 
 private theorem processCreateMessage_settle_logs
     {msg : Msg} {pre post : Devm}
@@ -379,15 +383,29 @@ private theorem Linst_selfdestruct_logs
   have accessedLogs : d2.logs = d1.logs := by
     have logs := (Devm.burn_of_chargeGas charge).logs
     rw [← logs]
-    split <;> exact readLogs
+    repeat' split
+    all_goals exact readLogs
   have subLogs : d3.logs = d2.logs := by
     unfold Option.toExcept at sub
     split at sub
     · cases sub
     · cases sub
       exact Devm_subBal_logs ‹_ = some _›
+  have creditLogs : ∀ (r : ForkRules) (a : Adr) (v : B256) (d : Devm),
+      (d.creditBeneficiary r a v).logs = d.logs := by
+    intro r a v d
+    unfold Devm.creditBeneficiary
+    split <;> rfl
+  have refundLogs : ∀ (r : ForkRules) (p : Prop) [Decidable p] (d : Devm),
+      (creditSelfdestructRefund r p d).logs = d.logs := by
+    intro r p _ d
+    unfold creditSelfdestructRefund
+    split <;> rfl
   have finalLogs : post.logs = d3.logs := by
-    split at rest <;> cases rest <;> rfl
+    split at rest <;> cases rest
+    · rw [refundLogs]
+      exact creditLogs _ _ _ _
+    · exact creditLogs _ _ _ _
   obtain ⟨word, _, popWord⟩ := Devm.pop_of_popToAdr pop
   exact ((finalLogs.trans subLogs).trans accessedLogs).trans
     (Devm.pop_of_pop popWord).logs.symm
@@ -422,7 +440,9 @@ private theorem Evm_halt_logs
               · exact (Step.ofExecution_ne_halt_ok step).elim
               · cases step
           | reg regular => exact (Step.ofExecution_ne_halt_ok step).elim
-          | push bytes bound => exact (Step.ofExecution_ne_halt_ok step).elim
+          | push bytes bound =>
+              simp only [Ninst.step_push] at step
+              split at step <;> exact (Step.ofExecution_ne_halt_ok step).elim
           | dupn imm => exact (Step.ofExecution_ne_halt_ok step).elim
           | swapn imm => exact (Step.ofExecution_ne_halt_ok step).elim
           | exchange imm => exact (Step.ofExecution_ne_halt_ok step).elim
