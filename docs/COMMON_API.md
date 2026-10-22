@@ -5628,6 +5628,16 @@ contract-neutral.
   `ParentPrefix`. It covers every eventual frame outcome. This is local
   decoded-terminal exclusion, not account-deletion or contract preservation;
   child routing and inherited deletion safety require their own proofs.
+- For concrete WETH9 or Uniswap V2 Pair code that must exclude terminal
+  `SELFDESTRUCT`, use
+  [`Weth9/TerminalSafety.lean`](../Blanc/Lift/Weth9/TerminalSafety.lean) and
+  [`UniswapV2Pair/TerminalSafety.lean`](../Blanc/Lift/UniswapV2Pair/TerminalSafety.lean).
+  Each namespace supplies `cert_noSelfdestruct` for its actual checked runtime
+  certificate and `runtime_not_selfdestruct` for an actual same-frame prefix
+  from pc-zero entry of its installed code with selected state-gas absence.
+  The conclusion excludes decoded `Linst.At ... .selfdestruct` for every
+  eventual frame outcome. It does not assert deletion safety or a contract
+  invariant; child routing, admission and inherited deletions remain separate.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in
