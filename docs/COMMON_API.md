@@ -669,8 +669,23 @@ spawn/resume equations at the consumer:
   `staticcall_routing_of_process` establish the call frame and zero-value
   transfer before native classification. These facts require no
   `CoveredFork`, success flag or nonempty output. The payload is the actual
-  message's data; operand-to-payload equality, contract-wide relevance,
-  ordering and historical commitment are separate obligations.
+  message's data; contract-wide relevance, ordering and historical commitment
+  are separate obligations.
+- For the actual six popped words and original-memory payload, use
+  [`Blanc/StaticcallOperands.lean`](../Blanc/StaticcallOperands.lean).
+  `Xinst.step_staticcall_spawn_operands` derives `StaticcallSpawnOperands`
+  from the supplied spawn; `Ninst.step_staticcall_spawn_operands` also
+  derives the successor PC. The descriptor preserves the selected fork's
+  delegation lookup, exact capped gas, input and output windows, and both
+  ordinary and Amsterdam resumes, including the actual state-gas grant.
+  `Ninst.staticcall_observation_with_operands` and its
+  `Exec.NinstOccurrence` wrapper enrich the same observation, message and
+  original slot without filtering child failures. These theorems require
+  no fork-coverage, success or supplied-operand premise. A direct
+  `StaticcallSpawnOperands` goal uses the `call-boundary-outcomes` recipe;
+  the enriched disjunction is reached through the named theorem. Target
+  address alone does not establish enabled native execution or historical
+  relevance.
 - Consumption pattern: Blanc's compiled callers branch on the pushed flag, so a
   caller holding the success guard dismisses the failed arm with the trailing
   `iszero`+guard; the entered arm's `StepRun` aligns to the occurrence slot by

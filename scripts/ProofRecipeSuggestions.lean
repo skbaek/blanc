@@ -33,6 +33,7 @@ import Blanc.Lift.WriteSiteZero
 import Blanc.ExecutionSenderOccurrences
 import Blanc.DeploymentTouch
 import Blanc.StaticcallObservation
+import Blanc.StaticcallOperands
 
 namespace Blanc
 
@@ -1086,6 +1087,23 @@ example {fs : List Func} {sevm : Sevm} {devm : Devm} {f : Func}
   blanc_suggest
   exact h
 
+-- STATICCALL-OPERANDS-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  trivial
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-OPERANDS-POSITIVE
+example {sevm : Sevm} {pre : Devm} {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm pre .staticcall = .spawn frame resume) :
+    StaticcallSpawnOperands sevm pre frame resume := by
+  expect_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact Xinst.step_staticcall_spawn_operands spawn
+
 -- The new local heads remain selective even on an unrelated proposition.
 -- STATICCALL-OBSERVATION-TRUE-NEGATIVE
 example : True := by
@@ -1105,6 +1123,7 @@ example {pc : Nat} {sevm : Sevm} {pre : Devm} {slot : Xlot} {out : Execution}
     StaticcallObservation pc sevm pre slot out := by
   expect_recipe_trigger "goal-head:StaticcallObservation"
   expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
   expect_recipe_offered "call-boundary-outcomes"
   blanc_suggest
   exact Ninst.staticcall_observation filled run
@@ -1118,6 +1137,7 @@ example {msg : Msg} {slot : Xlot}
     StaticcallRouting msg slot settled := by
   expect_recipe_trigger "goal-head:StaticcallRouting"
   expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
   expect_recipe_offered "call-boundary-outcomes"
   blanc_suggest
   exact staticcall_routing_of_process zero filled process

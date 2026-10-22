@@ -22,6 +22,8 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-head:StaticcallSpawnOperands" =>
+      return head == some `Blanc.StaticcallSpawnOperands
   | "goal-head:StaticcallObservation" =>
       return head == some `Blanc.StaticcallObservation
   | "goal-head:StaticcallRouting" =>
