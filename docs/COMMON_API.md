@@ -5187,6 +5187,16 @@ contract-neutral.
   law; the initial seed and real external-step obligation remain explicit.
   These tools do not infer child effects, transaction settlement, a historical
   zero seed or hash separation from locality alone.
+  `exec_zero_of_committed_child` uses the actual filled `RunWith Q` child and
+  existing spawn/entry/settlement storage laws: STATICCALL, childless execution
+  and complete-settlement rollback close automatically. Only a committing
+  nonstatic child needs recursion, with its actual `Exec`, `Q` provenance,
+  smaller depth, inherited fork and the transported seed at the same observed
+  owner. `runP_zero_of_committed_children` and its `progRunP_` form compose
+  that producer. Nonstatic steps require nonempty world code at the observed
+  owner for protected childless storage and child-entry alignment; the child
+  need not execute at that owner. Initial zero and committing-child recursion
+  remain explicit, including every actual entered occurrence.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

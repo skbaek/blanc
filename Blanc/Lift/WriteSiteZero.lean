@@ -1,6 +1,7 @@
 import Blanc.Lift.WriteSiteLocality
 import Blanc.Lift.Quiet
 import Blanc.TerminalStorage
+import Blanc.Lift.TargetLogEvents
 
 /-!
 # Zero preservation from checked write locality
@@ -208,5 +209,112 @@ theorem progRunP_zero_of_children
     ZeroSlots K sevm.currentTarget post := by
   obtain ⟨f, _, actual⟩ := run
   exact runP_zero_of_children fork steps observations children actual zero
+
+/-- Reduce an actual executable step to its committing, nonstatic recursive
+child. Childless execution, STATICCALL and complete-settlement rollback use
+existing semantic storage laws. The actual child derivation and its `Q`
+provenance survive, and the seed is transported at the same observed owner,
+which need not be the child's execution target. -/
+theorem exec_zero_of_committed_child
+    {Q : ∀ pc sevm d out, Exec pc sevm d out → Prop}
+    {K : B256 → Prop} {a : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (code : x ≠ .staticcall → pre.getCode a ≠ .empty)
+    (run : Ninst.RunWith Q sevm pre (.exec x) post)
+    (children : ∀ {frame : Jaune.Frame} {resume : Resume} {child : Evm} {raw : Execution},
+      x ≠ .staticcall → (body : Exec child.pc child.sta child.dyna raw) →
+      Q _ _ _ _ body → Xinst.step sevm pre x = .spawn frame resume →
+      frame.enter = .run child → resume.run (frame.settle raw) = .ok post →
+      ∀ settles : frame.settlementCommits raw = true,
+      child.sta.depth < sevm.depth → CoveredFork child.sta.benvStat.fork →
+      ZeroSlots K a child.dyna →
+      ZeroSlots K a (Execution.committedPost raw
+        (Frame.raw_commits_of_settlementCommits settles)))
+    (zero : ZeroSlots K a pre) : ZeroSlots K a post := by
+  by_cases static : x = .staticcall
+  · subst x
+    exact zero.of_getStor_eq
+      (congrFun (Ninst.staticcall_inv_getStor_exact fork run.toRun).symm a)
+  · obtain ⟨xl, filled, pc, step⟩ := run
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at step
+    cases xl with
+    | none =>
+        have protection : State.Protected pre.state a := by
+          right
+          intro empty
+          exact code static (ByteArray.eq_empty_of_size_eq_zero empty)
+        exact zero.of_getStor_eq (Blanc.Xinst.none_getStor_eq step a protection)
+    | some slot =>
+        obtain ⟨child, raw⟩ := slot
+        obtain ⟨body, provenance⟩ := filled
+        obtain ⟨frame, resume, spawn, entered, resumed⟩ := XStep.Run.some_inv step
+        obtain ⟨world, _, _, _, childFork, _⟩ :=
+          Blanc.Xinst.spawn_child_world fork spawn entered
+        have seam := Blanc.Xinst.spawn_run_getStor fork spawn entered body resumed.symm
+          (code static)
+        by_cases settles : frame.settlementCommits raw = true
+        · have seed : ZeroSlots K a child.dyna := zero.of_getStor_eq (world a (code static))
+          have childZero := children static body provenance spawn entered resumed.symm settles
+            (Xinst.depth_lt step) childFork seed
+          intro key tracked
+          change (post.getStor a).get key = 0
+          rw [seam.1 settles key]
+          exact childZero key tracked
+        · intro key tracked
+          change (post.getStor a).get key = 0
+          rw [seam.2 settles key]
+          exact zero key tracked
+
+/-- A lifted fold whose only recursive zero obligation concerns actual
+nonstatic children that commit through complete settlement. `RunWith Q`
+retains occurrence/root provenance for the recursive producer. -/
+theorem runP_zero_of_committed_children
+    {Q : ∀ pc sevm d out, Exec pc sevm d out → Prop}
+    {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.RunWith Q sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (code : ∀ {d d' x}, P sevm d (.exec x) d' → x ≠ .staticcall →
+      d.getCode sevm.currentTarget ≠ .empty)
+    (children : ∀ {d d' x frame resume child raw}, P sevm d (.exec x) d' →
+      x ≠ .staticcall → (body : Exec child.pc child.sta child.dyna raw) →
+      Q _ _ _ _ body → Xinst.step sevm d x = .spawn frame resume →
+      frame.enter = .run child → resume.run (frame.settle raw) = .ok d' →
+      ∀ settles : frame.settlementCommits raw = true,
+      child.sta.depth < sevm.depth → CoveredFork child.sta.benvStat.fork →
+      ZeroSlots K sevm.currentTarget child.dyna →
+      ZeroSlots K sevm.currentTarget (Execution.committedPost raw
+        (Frame.raw_commits_of_settlementCommits settles))) :
+    ∀ {d f out}, SFunc.RunP P fs sevm d f out → ZeroSlots K sevm.currentTarget d →
+      ZeroSlots K sevm.currentTarget (Outcome.devm out) := by
+  apply runP_zero_of_children fork (fun step => (steps step).toRun) observations
+  intro d d' x xl step _ _ zero
+  exact exec_zero_of_committed_child fork (code step) (steps step) (children step) zero
+
+/-- Entry-zero, halted form of `runP_zero_of_committed_children`, with no
+obligation for childless, static or discarded recursive execution. -/
+theorem progRunP_zero_of_committed_children
+    {Q : ∀ pc sevm d out, Exec pc sevm d out → Prop}
+    {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} {pre post : Devm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.RunWith Q sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (code : ∀ {d d' x}, P sevm d (.exec x) d' → x ≠ .staticcall →
+      d.getCode sevm.currentTarget ≠ .empty)
+    (children : ∀ {d d' x frame resume child raw}, P sevm d (.exec x) d' →
+      x ≠ .staticcall → (body : Exec child.pc child.sta child.dyna raw) →
+      Q _ _ _ _ body → Xinst.step sevm d x = .spawn frame resume →
+      frame.enter = .run child → resume.run (frame.settle raw) = .ok d' →
+      ∀ settles : frame.settlementCommits raw = true,
+      child.sta.depth < sevm.depth → CoveredFork child.sta.benvStat.fork →
+      ZeroSlots K sevm.currentTarget child.dyna →
+      ZeroSlots K sevm.currentTarget (Execution.committedPost raw
+        (Frame.raw_commits_of_settlementCommits settles)))
+    (run : SProg.RunP P fs sevm pre post) (zero : ZeroSlots K sevm.currentTarget pre) :
+    ZeroSlots K sevm.currentTarget post := by
+  obtain ⟨f, _, actual⟩ := run
+  exact runP_zero_of_committed_children fork steps observations code children actual zero
 
 end Blanc.Lift.WriteSite
