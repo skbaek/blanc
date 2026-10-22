@@ -1645,6 +1645,9 @@ import Blanc.Lift.Usdc.Proxy.Check
 import Blanc.Lift.Usdc.Proxy.Contract
 import Blanc.Lift.Usdc.Proxy.Control
 import Blanc.Lift.Usdc.Proxy.Jumps
+import Blanc.Lift.Usdc.ProxyCreation.Cert
+import Blanc.Lift.Usdc.ProxyCreation.Check
+import Blanc.Lift.Usdc.ProxyCreation.Jumps
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk
