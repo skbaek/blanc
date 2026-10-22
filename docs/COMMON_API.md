@@ -3181,8 +3181,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   derivation through `CallOccurrenceStep.reRoot`, and derives the real
   `initEvm msg` ECRECOVER answer, native entry, settlement and resume equations.
   Its version-specific conclusion retains exact inputs, call sites and owner
-  comparisons. Local retention requires root commitment; complete historical
-  scope, ancestor settlement and write relevance remain separate obligations.
+  comparisons. `implV1_allowLocality_observed`, `implV2_allowLocality_observed`
+  and `implV2_1_allowLocality_observed` preserve the original `StepIn` and
+  per-version `RowSep` in forward `RunP` protected-write observations. V1 has
+  only caller/initializer exceptions; the signed versions replace the owner-word
+  exception by `OldUsdcNativePairAnswer`, retaining the actual original-root
+  call, native message and Pair answer. This result predicate is not a universe
+  of relevant queries. Local retention requires root commitment; complete
+  historical scope, ancestor settlement and attribution of arbitrary retained
+  SSTORE occurrences remain separate obligations.
   Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
