@@ -372,7 +372,19 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName
           `Blanc.ExecutionTrace.ConfiguredBlockTrace.FrameAdmitted target ||
         proofRecipeContainsName
-          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target
+          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted target
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||

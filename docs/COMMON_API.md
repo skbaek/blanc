@@ -1404,6 +1404,24 @@ chronology, target survival or contract preservation. Historical balance and
 contract-invariant transport remain separate obligations. These carriers do not widen
 `CoveredFork` or change modern `AppliedBodyTrace`.
 
+For entry admission on those same six supplied carrier families, import
+[`Blanc/ExecutionStagedAdmission.lean`](../Blanc/ExecutionStagedAdmission.lean).
+Each family's `FrameAdmitted` is equivalent, through
+`frameAdmitted_iff_rawFrames`, to the entry predicate at every actual raw root
+whose current target is the selected address. Optional skipped stages are
+vacuous; bodies preserve beacon/history/transactions/requests order, and the
+configured history predicate follows its supplied block spine. Failed and
+rolled-back raw entries remain included.
+`rawFrames_entered` transports an `EnteredCondition` to every raw root;
+`frameAdmitted_entered` specializes that guarantee to admission.
+`freshFrameAdmitted` supplies empty stack and memory, and `FrameAdmitted.and`
+combines independent entry predicates on the same supplied trace.
+These structural results require no historical-domain membership, coverage,
+state-gas absence, code-routing certificate, deletion safety or reward budget.
+They supply no world-state invariant, account survival or historical contract
+preservation; those producers remain separate. Existing modern admission and
+preservation APIs retain their existing meanings and coverage premises.
+
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
 `ExecutionTrace.RequestsTrace.requests_eq` preserves the arbitrary incoming

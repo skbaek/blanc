@@ -864,11 +864,48 @@ review_date = "2026-08-30"
 id = "trace-local-frame-admission"
 status = "active"
 triggers = ["goal-shape:trace-local-frame-admission"]
-preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. For an arbitrary normal-transaction cut after the actual opening system calls, extract `ApplyTransactionsTrace.splitPrefix`, derive admission on `AppliedBodyTrace.transactionPrefixFrames`, and apply `AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem`; `PrefixSplit.next_result` exposes the actual next transaction. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`."
-boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports."
+preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. For an arbitrary normal-transaction cut after the actual opening system calls, extract `ApplyTransactionsTrace.splitPrefix`, derive admission on `AppliedBodyTrace.transactionPrefixFrames`, and apply `AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem`; `PrefixSplit.next_result` exposes the actual next transaction. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`. For supplied optional beacon/history/request stages, StagedBodyTrace and ConfiguredBlockTraceIn/ConfiguredHistoryTraceIn, use ExecutionStagedAdmission FrameAdmitted and frameAdmitted_iff_rawFrames for all raw entries, rawFrames_entered/frameAdmitted_entered for genuine frame initialization, and freshFrameAdmitted/FrameAdmitted.and for independent entry conditions."
+boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports. Supplied staged/In admission is structural only: it has no coverage, state-gas, deletion or budget premise and supplies no historical StateInv transport. The modern preservation theorems retain their coverage premises."
 owner_module = "Blanc/ExecutionAdmission.lean"
 canonical_example = "Blanc/ExecutionHistoryAdmission.lean:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted"
 symbols = [
+  "module:Blanc/ExecutionStagedAdmission.lean",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted.and",
   "module:Blanc/ExecutionFrames.lean",
   "module:Blanc/ExecutionFrameEntry.lean",
   "module:Blanc/ExecutionAdmission.lean",
