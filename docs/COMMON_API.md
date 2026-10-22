@@ -3039,6 +3039,18 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   nondelegation and existing fork-coverage premises remain local producer
   obligations. It does not enumerate flag-zero invocations or establish
   complete historical permit coverage.
+  The concrete fresh-entry producer in
+  [`Blanc/Lift/Usdc/PermitQueryV2_1.lean`](../Blanc/Lift/Usdc/PermitQueryV2_1.lean),
+  `Usdc.permitV2_1_query_entry`, derives the recovery registers, pointer and
+  actual continuations from PC zero, empty stack/memory and the permit selector
+  on a successful checked V2_1 execution. Its digest uses the domain word
+  after the actual nonce write, without a storage-separation premise.
+  `Usdc.permitV2_1_query_consumed` connects that query's original native call
+  slot and answer through the real `0x471c` return to the `0x421e` owner check,
+  deriving the nonzero calldata-owner answer. Existing fork coverage and
+  address-1 nondelegation remain local premises; proxy/history entry, other
+  selectors and failed-call enumeration remain separate obligations.
+  Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
   `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding
