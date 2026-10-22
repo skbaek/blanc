@@ -177,9 +177,8 @@ lemma balance (rules : ForkRules) (x : Devm) :
     split
     · rfl
     · dsimp only
-      split
-      · split <;> rfl
-      · split <;> split <;> split <;> rfl
+      repeat' split
+      all_goals rfl
   unfold liftMachMetaWorldExecution liftMachMetaExecution liftMachMeta
     Footprint.toExecution Footprint.liftOutcome
   dsimp only
@@ -467,6 +466,8 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     (hfork : CoveredFork sevm.benvStat.fork) :
     Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) := by
   have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   cases x with
   | create =>
     simp only [Xinst.step, hsg]
@@ -477,14 +478,16 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     exact ShapeLogs.create (Or.inl trivial) h4
   | create2 =>
     simp only [Xinst.step, hsg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToNat d1) fun _ d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bind h3 (LogsWalk.pop d3) fun _ d4 h4 => ?_
-    refine ShapeLogs.bindE h4 (LogsWalk.chargeGas _ d4) fun d5 h5 => ?_
-    exact ShapeLogs.create (Or.inr trivial) h5
+    split
+    · refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+      refine ShapeLogs.bind h1 (LogsWalk.popToNat d1) fun _ d2 h2 => ?_
+      refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+      refine ShapeLogs.bind h3 (LogsWalk.pop d3) fun _ d4 h4 => ?_
+      refine ShapeLogs.bindE h4 (LogsWalk.chargeGas _ d4) fun d5 h5 => ?_
+      exact ShapeLogs.create (Or.inr trivial) h5
+    · exact ShapeLogs.error rfl
   | call =>
-    simp only [Xinst.step, hsg]
+    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
     refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
     refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
     refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
@@ -502,7 +505,7 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     · exact ShapeLogs.shortfall h9
     · exact ShapeLogs.call h9
   | callcode =>
-    simp only [Xinst.step, hsg]
+    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
     refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
     refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
     refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
@@ -519,7 +522,7 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     · exact ShapeLogs.shortfall' h9
     · exact ShapeLogs.call h9
   | delegatecall =>
-    simp only [Xinst.step, hsg]
+    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
     refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
     refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
     refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
@@ -533,7 +536,7 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
     exact ShapeLogs.call h8
   | staticcall =>
-    simp only [Xinst.step, hsg]
+    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
     refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
     refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
     refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
@@ -574,14 +577,19 @@ theorem ProcessMessage.clean_logs {msg : Msg} {xl : Xlot} {child : Devm}
   obtain ⟨evm2, rfl, hcase⟩ := processMessage.settle_ok_cases hset.symm
   have hclean' : ¬ child.error.isSome = true := by simp only [hclean, Bool.false_eq_true,
     not_false_eq_true]
-  have hc : evm2 = child := by
+  -- Settlement records the touch, which moves only the touched-account set.
+  have hc : child.logs = evm2.logs ∧ child.error = evm2.error := by
     rcases hcase with ⟨herr, hrb⟩ | ⟨_, h⟩
     · exfalso
       apply hclean'
       rw [← hrb]
       exact herr
-    · exact h
-  subst hc
+    · subst h
+      exact ⟨rfl, rfl⟩
+  rw [hc.1]
+  replace hclean' : ¬ evm2.error.isSome = true := by
+    rw [← hc.2]
+    exact hclean'
   unfold FrameBody at hbody
   rcases hbt : msg.benvAfterTransfer with e | benv <;> simp only [hbt] at hbody
   · cases hbody.2
