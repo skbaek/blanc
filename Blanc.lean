@@ -1589,6 +1589,11 @@ import Blanc.Lift.Usdc.HistorySlots
 import Blanc.Lift.Usdc.HistorySlotsCore
 import Blanc.Lift.Usdc.HistorySlotsFrames
 import Blanc.Lift.Usdc.HistorySlotsRescue
+import Blanc.Lift.Usdc.UpgraderHelperV2.Check
+import Blanc.Lift.Usdc.UpgraderHelperV2_2.Check
+import Blanc.Lift.Usdc.UpgraderV2.Check
+import Blanc.Lift.Usdc.UpgraderV2_1.Check
+import Blanc.Lift.Usdc.UpgraderV2_2.Check
 import Blanc.Lift.Usdc.Impl.Cert
 import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.Usdc.Impl.CheckPart0
