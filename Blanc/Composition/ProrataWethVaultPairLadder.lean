@@ -237,8 +237,8 @@ theorem PairWorldInv.afterHistory {vault : Adr} {cfg : ChainConfig}
     {checkpoint current : BlockChain}
     (inv : PairWorldInv vault checkpoint.state)
     (history : ConfiguredHistoryTrace cfg checkpoint current)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
     {ok : PairStepRecord vault → Prop}
     (replay : PairReplayWith vault ok (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault current.state)) :
@@ -622,7 +622,8 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
       (ainv : c.StateInv a benv.state) (notCreated : a ∉ benv.createdAccounts) :
       State.Protected trace.messageState a :=
     State.Protected.of_compile (ContractSpec.processMessageCall_preserves_inv messageFork
-      preserves trace.message.result (trace.msgInv ainv notCreated)).1.code
+      preserves trace.message.result (trace.msgInv ainv notCreated)
+      (trace.not_mem_msg_inheritedDeletions a)).1.code
   have creditKept {a : Adr} (hp : State.Protected trace.messageState a) :
       (trace.coinbaseState chronology.refundCounter).getStor a =
         trace.messageState.getStor a := by
@@ -740,8 +741,8 @@ theorem retainedRequestsPairReplayFaithful {vault : Adr} {benv : Benv} {bout : B
 
 /-- **R7, faithful.** -/
 theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (inv : PairBenvInv vault benv)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (blockIndex : Nat) :
     PairReplayWith vault
@@ -852,10 +853,10 @@ theorem retainedConfiguredHistoryPairReplayFaithful {vault : Adr} {cfg : ChainCo
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (inv : PairWorldInv vault checkpoint.state)
-    (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
-      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (schedule : ∀ {number timestamp : Nat} {rules : ForkRules},
+      cfg.rulesAt number timestamp = .ok rules → rules.isPrecomp wethAccount = false)
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun r => PairStepRecord.OwnIn vault history.rawFrames r)
       (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault future.state) := by
@@ -875,10 +876,10 @@ theorem retainedConfiguredHistoryPairReplay {vault : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint future)
     (inv : PairWorldInv vault checkpoint.state)
-    (schedule : ∀ {timestamp : Nat} {rules : ForkRules},
-      cfg.rulesAt timestamp = .ok rules → rules.isPrecomp wethAccount = false)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (schedule : ∀ {number timestamp : Nat} {rules : ForkRules},
+      cfg.rulesAt number timestamp = .ok rules → rules.isPrecomp wethAccount = false)
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun _ => True)
       (PairBoundary.ofState vault checkpoint.state)
       (PairBoundary.ofState vault future.state) :=
@@ -907,8 +908,8 @@ theorem PairWorldInv.of_root {cfg : ChainConfig} {deployed : BlockChain} {vault 
 theorem pair_history_replay {cfg : ChainConfig} {deployed future : BlockChain} {vault : Adr}
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairReplayWith vault (fun _ => True)
       (PairBoundary.ofState vault deployed.state) (PairBoundary.ofState vault future.state) :=
   retainedConfiguredHistoryPairReplay history (PairWorldInv.of_root root)
@@ -918,8 +919,8 @@ theorem pair_history_replay {cfg : ChainConfig} {deployed future : BlockChain} {
 theorem PairWorldInv.of_history {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairWorldInv vault future.state :=
   (PairWorldInv.of_root root).afterHistory history hcov (pair_history_replay root history hcov)
 
@@ -929,9 +930,9 @@ preservation needs supply-slot facts the share operations do not yet export (§7
 theorem PairStable.of_history {cfg : ChainConfig} {deployed future : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
-    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules)
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
+    {number timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt number timestamp = .ok rules)
     (capped : supplyN (future.state.getStor vault) ≤ Blanc.ProrataWethVault.maxSupplyN)
     (backing : supplyN (future.state.getStor vault) ≤
       Blanc.ProrataWethVault.offsetN *

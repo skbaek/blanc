@@ -115,6 +115,7 @@ re-derivation Step 1 of the gas-cost plan had to perform, because
 built, pays this module's dispatch keccak cost a second time. A target whose
 walk is written *inside* this module pays it once. -/
 theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -125,6 +126,7 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
       Devm.output post = (0x12 : B256).toBytes := by
   rw [decimalsGas_eq] at h_gas
   set g := pre.gasLeft with hg
+  have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   refine
     ⟨_,
       Prog.runCompiled_intro (G := g - 1)
@@ -134,7 +136,38 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
             simp only [B256.eqCheck, h_value, ↓reduceIte]
-          func_run [dcSel, 0, 1, 1, 1, 1, 1, 3]
+          -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
+          func_run (5) [dcSel]
+          apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [0]
+          apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (2) [1]
+          apply Func.runCompiled_pushB256_covered (G := g - 106) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run [1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 158) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
@@ -157,6 +190,7 @@ message-call altitude, one fixed selector, exact under `Blanc/Compiled.lean`'s
 compiler-shape assumption — plus this module's schedule limit. -/
 theorem weth_decimals_gas_exact {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -166,7 +200,7 @@ theorem weth_decimals_gas_exact {sevm : Sevm} {pre : Devm}
       post.gasLeft + decimalsGas = pre.gasLeft ∧
       Devm.output post = (0x12 : B256).toBytes := by
   obtain ⟨post, h_run, h_gas_eq, h_out⟩ :=
-    weth_decimals_runCompiled h_value h_sel h_stack h_mem h_gas
+    weth_decimals_runCompiled hfork h_value h_sel h_stack h_mem h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
 /-- **`weth`'s `decimals()` call succeeds**, and returns `0x12`.
@@ -176,6 +210,7 @@ conjunct dropped, so that a caller who only wants liveness and the return value
 does not have to carry the cost equation. -/
 theorem weth_decimals_succeeds {sevm : Sevm} {pre : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -184,7 +219,7 @@ theorem weth_decimals_succeeds {sevm : Sevm} {pre : Devm}
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
       Devm.output post = (0x12 : B256).toBytes := by
   obtain ⟨post, h_exec, _, h_out⟩ :=
-    weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
+    weth_decimals_gas_exact h_code hfork h_value h_sel h_stack h_mem h_gas
   exact ⟨post, h_exec, h_out⟩
 
 /-- **`weth`'s `decimals()` call costs exactly `decimalsGas`, from an arbitrary
@@ -194,6 +229,7 @@ By determinism, exactly as `weth_balanceOf_gas_of_runCompiled`; see that
 theorem's docstring for why this is not an inversion. -/
 theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -202,7 +238,7 @@ theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
     (h_run : Prog.RunCompiled sevm pre weth post) :
     pre.gasLeft = post.gasLeft + decimalsGas := by
   obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
+    weth_decimals_gas_exact h_code hfork h_value h_sel h_stack h_mem h_gas
   have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
     Prog.exec_of_runCompiled h_run h_code
   rw [h_exec] at h_exec'
@@ -252,7 +288,38 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
           (by
             have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
               simp only [B256.eqCheck, h_value, ↓reduceIte]
-            func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
+            -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
+            func_run (5) [boSel]
+            apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
+              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+              Devm.stateGas_setMach]
+            func_run (3) [0]
+            apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
+              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+              Devm.stateGas_setMach]
+            func_run (3) [1]
+            apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
+              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+              Devm.stateGas_setMach]
+            func_run (3) [1]
+            apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
+              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+              Devm.stateGas_setMach]
+            func_run (2) [0]
+            apply Func.runCompiled_pushB256_covered (G := g - 105) hfork (by decide)
+              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+              Devm.stateGas_setMach]
+            func_run [1, 1, 3]
             · exact Devm.extCost_empty_word
             · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
                 (Devm.extCost_word_word Mem.size_write_word)
@@ -345,7 +412,38 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
             simp only [B256.eqCheck, h_value, ↓reduceIte]
-          func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
+          -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
+          func_run (5) [boSel]
+          apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [0]
+          apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (3) [1]
+          apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run (2) [0]
+          apply Func.runCompiled_pushB256_covered (G := g - 105) hfork (by decide)
+            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
+            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
+          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
+            Devm.stateGas_setMach]
+          func_run [1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
@@ -569,6 +667,7 @@ two new arguments are supplied and ignored, which is what "reads no storage"
 looks like at this altitude. -/
 theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -581,7 +680,7 @@ theorem weth_decimals_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, wethGas_dcSel] at h_cost
   injection h_cost with h_cost
   subst h_cost
-  exact weth_decimals_gas_exact h_code h_value h_sel h_stack h_mem h_gas
+  exact weth_decimals_gas_exact h_code hfork h_value h_sel h_stack h_mem h_gas
 
 /-- **`balanceOf(address)` costs what `wethGas` says, from an arbitrary
 `Prog.RunCompiled` witness, with no assumption about the storage key.**
@@ -621,6 +720,7 @@ theorem weth_balanceOf_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm
 theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
     {cost : Nat}
     (h_code : some sevm.code.toList = Prog.compile weth)
+    (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = dcSel)
     (h_stack : pre.stack = [])
@@ -632,7 +732,7 @@ theorem weth_decimals_gas_of_runCompiled_wethGas {sevm : Sevm} {pre post : Devm}
   rw [h_sel, wethGas_dcSel] at h_cost
   injection h_cost with h_cost
   subst h_cost
-  exact weth_decimals_gas_of_runCompiled h_code h_value h_sel h_stack h_mem h_gas h_run
+  exact weth_decimals_gas_of_runCompiled h_code hfork h_value h_sel h_stack h_mem h_gas h_run
 
 /-! ## The bound: no state can make these calls dearer
 

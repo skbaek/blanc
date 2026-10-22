@@ -1655,11 +1655,14 @@ theorem ExactWethChildSuccess.worldProgramRun
   have stateGasNone : msg.benv.stat.rules.stateGas = none := by
     rw [childRules]
     exact hfork.rules_stateGas_none
+  have sweepNone : msg.benv.stat.rules.settle.touchedSweep = false := by
+    rw [childRules]
+    exact hfork.rules_touchedSweep
   have settleEq := (RunFrame.some_inv process).2
   have settledLogs : child.logs = rawPost.logs := by
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, stateGasNone, executeCode.handleErrorWith_ok,
-      Except.bind_ok] at settleEq
+      Except.bind_ok, Devm.recordTouch_of_not_touchedSweep sweepNone] at settleEq
     have childEq : child = rawPost := by
       simpa only [rawError, Option.isSome_none, Bool.false_eq_true, ↓reduceIte,
         Except.ok.injEq] using settleEq

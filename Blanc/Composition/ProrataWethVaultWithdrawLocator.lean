@@ -488,7 +488,9 @@ private theorem call_settle_clean_transport
     {raw : Execution}
     (process : ProcessMessage left
       (.some ⟨⟨pc, sevm, pre⟩, raw⟩) (.ok child))
-    (clean : child.error.isSome = false) :
+    (clean : child.error.isSome = false)
+    (sweepLeft : left.benv.stat.rules.settle.touchedSweep = false)
+    (sweepRight : right.benv.stat.rules.settle.touchedSweep = false) :
     (Frame.ofCall right).settle raw = .ok child := by
   rcases MessageExecution.processMessage_clean_rawPost process clean with
     ⟨rawPost, rawEq, rawClean, stateEq, outputEq⟩
@@ -497,12 +499,12 @@ private theorem call_settle_clean_transport
   have settled' : (Except.ok child : Execution) = Except.ok rawPost := by
     simpa only [Except.ok.injEq, Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true,
       ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, rawClean,
-      Option.isSome_none] using settled
+      Option.isSome_none, Devm.recordTouch_of_not_touchedSweep sweepLeft] using settled
   have childEq : child = rawPost := Except.ok.inj settled'
   rw [childEq]
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, rawClean,
-    Option.isSome_none]
+    Option.isSome_none, Devm.recordTouch_of_not_touchedSweep sweepRight]
 
 private theorem retained_rawFrames_of_slot
     {xl : Xlot} {retained : ExecutionTrace.RetainedXlot xl}
@@ -630,7 +632,12 @@ theorem wethWithdrawAcceptedPayoutAt_body {sevm : Sevm} {pre post : Devm} (run :
       rw [entered] at frameRun0
       rcases frameRun0 with ⟨raw, slotRaw, settledEq⟩
       cases slotRaw
+      have sweepMsg : msg.benv.stat.rules.settle.touchedSweep = false := by
+        injection frameEq with msgEq
+        rw [msgEq]
+        exact hfork.rules_touchedSweep
       have settled := call_settle_clean_transport (right := msg) hmessage hclean
+        hfork.rules_touchedSweep sweepMsg
       rw [settled] at settledEq
       subst settledEq
       have process : ProcessMessage msg facts.xl (.ok child) := by

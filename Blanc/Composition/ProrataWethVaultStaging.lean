@@ -1750,7 +1750,9 @@ theorem callGasAvailable_of_runCompiled
   have execution := steps 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegationOn : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have address : wethAccount.toB256.toAdr = wethAccount :=
@@ -1803,6 +1805,8 @@ theorem callGasAvailable_of_runCompiled
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stateGas_setMach, address, delegation,
     Nat.add_zero] at execution
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled delegationOn] at execution
+  simp only [delegation] at execution
   simp only [hfork.rules_stateGas_none, hgas, pragueRules_gas_accessCost]
     at execution
   split at execution
@@ -2525,7 +2529,9 @@ theorem staticGasAvailable_of_runCompiled
   have execution := steps 0
   rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at execution
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
+    BenvStat.gas_eq_prague_of_covered hfork
+  have delegationOn : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   let popped := pre.setMach ⟨rest, pre.memory, pre.gasLeft, pre.stateGas⟩
   let base := addAccessedAddress popped wethAccount
   have address : wethAccount.toB256.toAdr = wethAccount :=
@@ -2560,6 +2566,8 @@ theorem staticGasAvailable_of_runCompiled
       pre.stateGas⟩) rfl] at execution
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stateGas_setMach, address, delegation, Nat.add_zero] at execution
+  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled delegationOn] at execution
+  simp only [delegation] at execution
   simp only [hfork.rules_stateGas_none, hgas, pragueRules_gas_accessCost]
     at execution
   split at execution

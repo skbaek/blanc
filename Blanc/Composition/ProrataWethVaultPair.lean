@@ -61,7 +61,7 @@ structure PairRoot (cfg : ChainConfig) (deployed : BlockChain) (vault : Adr) :
   /-- The asset is not the system sender either. -/
   wethNotSystem : wethAccount ≠ systemAddress
   /-- Under any rules the schedule selects, neither account is a precompile. -/
-  notPrecompile : ∀ {timestamp rules}, cfg.rulesAt timestamp = .ok rules →
+  notPrecompile : ∀ {number timestamp rules}, cfg.rulesAt number timestamp = .ok rules →
     rules.isPrecomp vault = false ∧ rules.isPrecomp wethAccount = false
   /-- The vault runtime is installed at the vault. -/
   vaultInstalled : some (deployed.state.getCode vault).toList =
@@ -139,8 +139,8 @@ verbatim; the invariant itself holds for the reason genesis always does — an
 empty ledger is conserved, issues nothing, and books nothing. -/
 theorem PairStable.of_root {cfg : ChainConfig} {deployed : BlockChain}
     {vault : Adr} (root : PairRoot cfg deployed vault)
-    {timestamp : Nat} {rules : ForkRules}
-    (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    {number timestamp : Nat} {rules : ForkRules}
+    (rulesAt : cfg.rulesAt number timestamp = .ok rules) :
     PairStable vault rules deployed.state := by
   obtain ⟨vaultPrecomp, wethPrecomp⟩ := root.notPrecompile rulesAt
   refine ⟨root.vaultInstalled, root.wethInstalled, root.distinct,

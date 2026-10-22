@@ -21,8 +21,8 @@ def PairLedgerFaithful {cfg : ChainConfig} {deployed future : BlockChain} (vault
 theorem pairTraceRealizes_faithful_of_configuredHistoryTrace {cfg : ChainConfig}
     {deployed future : BlockChain} {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps := by
   induction history with
   | refl hcfg hctx hid =>
@@ -64,8 +64,8 @@ theorem pair_history_backed {cfg : ChainConfig} {deployed future : BlockChain} {
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     PairBacked vault (future.state.getStor vault) (future.state.getStor wethAccount) ∧
       State.Inv wethAccount future.state := by
   obtain ⟨steps, realizes, faithful⟩ :=
@@ -77,9 +77,9 @@ theorem pair_history_stable {cfg : ChainConfig} {deployed future : BlockChain} {
     (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork)
-    {timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt timestamp = .ok rules) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
+    {number timestamp : Nat} {rules : ForkRules} (rulesAt : cfg.rulesAt number timestamp = .ok rules) :
     PairStable vault rules future.state := by
   obtain ⟨steps, realizes, faithful⟩ :=
     pairTraceRealizes_faithful_of_configuredHistoryTrace root history hcov
@@ -90,8 +90,8 @@ theorem pair_history_realized_dust_trace_exact {cfg : ChainConfig} {deployed fut
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
     ∃ path : FourQuote.RealizedPath vault,
       path.steps = PairStepRecord.fourQuoteSteps steps ∧
@@ -137,8 +137,8 @@ theorem pair_history_attacker_open_context {cfg : ChainConfig} {deployed future 
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (coalition : Finset Adr) (victim : Adr)
         (charge : PairStepRecord vault → Blanc.Prorata.AttackAttribution),
@@ -158,8 +158,8 @@ theorem pair_history_victim_loss_bound {cfg : ChainConfig} {deployed future : Bl
     {vault : Adr} (root : PairRoot cfg deployed vault)
     (history : ConfiguredHistoryTrace cfg deployed future)
     (collision : NoVaultVisitKeyCollision (history.pairVisits vault) vault)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
+    (hcov : ∀ number timestamp fork,
+      cfg.forkAt number timestamp = .ok fork → CoveredFork fork) :
     ∃ steps, PairTraceRealizes root steps future ∧ PairLedgerFaithful vault history steps ∧
       ∀ (victim : Adr) (deposit exit : PairStepRecord vault) (v m p : Nat),
         victimMoves victim steps = [deposit, exit] →

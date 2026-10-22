@@ -226,6 +226,9 @@ theorem vault_rely_preserves_conserved (vault : Adr) :
       obtain ⟨childInv, back⟩ := VaultFrameInv.xinst_some hfork h_run child h_ne inv
       exact ⟨⟨childInv, Xinst.Run.some_child_fork hx hfork⟩,
         fun h_if => ⟨back h_if, hfork⟩⟩
+    | push xs le =>
+      simp only [Ninst.StepRun, Ninst.step_push] at h_run
+      split at h_run <;> cases (Step.run_ofExecution.mp h_run).1
     | _ =>
       have hrun := (Step.run_ofExecution
         (xl := (.some ⟨evm', out'⟩ : Xlot))).mp h_run
