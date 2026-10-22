@@ -64,13 +64,16 @@ theorem deposit_call_rawFrames {msg : Msg} {state : Jaune.State} {out : MsgCallO
   | createRun htarget => simp only [target, Bool.false_eq_true] at htarget
   | callRun htarget delegated refund hdelegation execMsg execMsgEq evm core coreTrace result =>
     have delegatedEq : delegated = msg := by
-      unfold messageCallDelegation at hdelegation
-      simp only [auths, ↓reduceIte] at hdelegation
+      simp only [messageCallDelegation, processMessageCall.legacyAuthorization, auths,
+        Bool.or_true, ↓reduceIte] at hdelegation
       exact (Prod.mk.inj (Except.ok.inj hdelegation)).1.symm
     subst delegated
     have execEq : execMsg = msg := by
       rw [execMsgEq]
-      simp only [messageCallExecutionMessage, nodeleg]
+      unfold messageCallExecutionMessage
+      cases enabled : msg.benv.stat.rules.delegationEnabled
+      · exact Msg.resolveCodeDelegation_disabled _ enabled
+      · rw [Msg.resolveCodeDelegation_enabled _ enabled, nodeleg]
     subst execEq
     exact deposit_message_rawFrames coreTrace enter execution pcZero installed fork deposit
 

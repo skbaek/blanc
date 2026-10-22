@@ -376,11 +376,12 @@ theorem weth9_withdraw_entry {sevm : Sevm} {pre : Devm} {E ca : Adr} {b wad : B2
 theorem withdrawTx_intrinsic (wad : B256) {rules : ForkRules} {tx : Tx} {sender : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr}
     (hsg : rules.stateGas = none) (htx : rules.gas.txBase = 21000) (hfl : rules.gas.floorTokenCost = 10)
+    (hnz : rules.txr.dataNonZero = 16) (hcf : rules.txr.calldataFloor = true)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
     (hdata : tx.data = withdrawCalldata wad) :
     calculateIntrinsicCost rules tx sender =
       (withdrawIntrinsicGas wad, calldataTokens (withdrawCalldata wad) * 10 + 21000) := by
-  rw [calculateIntrinsicCost_two_call hsg htype, hdata, htx, hfl]
+  rw [calculateIntrinsicCost_two_call hsg htype hnz hcf, hdata, htx, hfl]
   unfold withdrawIntrinsicGas standardCallDataTokenCost
   rw [Nat.mul_comm]
 
@@ -447,7 +448,9 @@ theorem weth9_tx_withdraw_run
     omega
   have hcost := withdrawTx_intrinsic wad (tx := tx) (sender := E) hsg
     (CoveredFork.rules_txBase (s := benv.stat) hfork)
-    (CoveredFork.rules_floorTokenCost (s := benv.stat) hfork) htype hdata
+    (CoveredFork.rules_floorTokenCost (s := benv.stat) hfork)
+    (CoveredFork.rules_dataNonZero (s := benv.stat) hfork)
+    (CoveredFork.rules_calldataFloor (s := benv.stat) hfork) htype hdata
   have hmaxgas : max (withdrawIntrinsicGas wad) (calldataTokens (withdrawCalldata wad) * 10 + 21000) ≤
       tx.gas := by
     have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
@@ -592,7 +595,10 @@ theorem weth9_tx_withdraw_run
     have hC' : (initDevm (msg.withBenv after)).state.get ca = after.state.get ca := rfl
     refine ⟨post, hex, herr, ?_, by omega, hrf, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [hrf]; exact Int.natCast_nonneg _
-    · rw [hatd]; rfl
+    · rw [hatd]
+      show msg.inheritedDeletions.isEmpty = true
+      rw [← hm]
+      exact Std.HashSet.isEmpty_emptyWithCapacity
     · have h1 := hst
       rw [show (initDevm (msg.withBenv after)).state.getStor ca = benv.state.getStor ca from
         hpre_stor ca] at h1

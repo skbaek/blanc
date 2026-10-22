@@ -32,9 +32,10 @@ def depositSettledState (st : Jaune.State) : Jaune.State :=
 
 theorem deposit_intrinsic {rules : ForkRules}
     (hsg : rules.stateGas = none) (hbase : rules.gas.txBase = 21000)
-    (hfloor : rules.gas.floorTokenCost = 10) :
+    (hfloor : rules.gas.floorTokenCost = 10) (hnz : rules.txr.dataNonZero = 16)
+    (hcf : rules.txr.calldataFloor = true) :
     calculateIntrinsicCost rules depositTx senderE = (21064, 21160) := by
-  rw [calculateIntrinsicCost_two_call hsg (by rfl)]
+  rw [calculateIntrinsicCost_two_call hsg (by rfl) hnz hcf]
   simp only [depositTx, dpSel_eq, hbase, hfloor]
   decide +kernel
 

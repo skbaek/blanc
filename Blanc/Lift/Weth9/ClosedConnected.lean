@@ -37,7 +37,7 @@ theorem deposited_systemCodes : SystemCodes depositedState := by
   exact deployment_systemCodes a ha
 
 structure ConnectedBodyFacts (bout : BlockOutput) : Prop where
-  run : applyBody (input deploymentPost.state) [Sum.inr depositTx] [] =
+  run : applyBody (input deploymentPost.state) [Sum.inr depositTx] [] [] =
     .ok (depositedState, bout)
   gas : bout.blockGasUsed = 45038
 

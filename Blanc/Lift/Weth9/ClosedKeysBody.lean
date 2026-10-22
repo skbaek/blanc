@@ -98,7 +98,7 @@ theorem deposit_fold_rawFrames {txs : List (Nat × Tx)} {benv finalBenv : Benv}
 
 /-- The actual body decoder fixes the configured block's nonempty transaction fold. -/
 theorem deposit_body_decoded {benv : Benv} {state : Jaune.State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv [.inr depositTx] [] state bout) :
+    (trace : AppliedBodyTrace benv [.inr depositTx] [] [] state bout) :
     trace.decodedTxs.putIndex = [(0, depositTx)] := by
   have decoded : trace.decodedTxs = [depositTx] := by
     have run := trace.decodeRun
@@ -109,7 +109,7 @@ theorem deposit_body_decoded {benv : Benv} {state : Jaune.State} {bout : BlockOu
 
 /-- Every WETH entry of the actual body is its admitted deposit root; that root really occurs. -/
 theorem deposit_body_roots {benv : Benv} {state : Jaune.State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv [.inr depositTx] [] state bout)
+    (trace : AppliedBodyTrace benv [.inr depositTx] [] [] state bout)
     {root : Exec.Deriv} (roots : trace.transactions.rawFrames = [root])
     (caller : root.sevm.caller = senderE) (data : root.sevm.data = depositTx.data)
     (beaconCode : some (benv.state.getCode beaconRootsAddress).toList =
@@ -166,7 +166,7 @@ theorem deposit_fold_terminal {txs : List (Nat × Tx)} {benv finalBenv : Benv}
 
 /-- The two retained STOP protocol roots preserve the exact transaction-entry world. -/
 theorem deposit_body_prefix {st post : Jaune.State} {bodyBout : BlockOutput}
-    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] post bodyBout)
+    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] [] post bodyBout)
     (beforeCodes : SystemCodes st) :
     trace.beaconState = st ∧ trace.historyState = st ∧
       ((input st).withState trace.beaconState).withState trace.historyState = input st := by
@@ -194,7 +194,7 @@ theorem deposit_body_prefix {st post : Jaune.State} {bodyBout : BlockOutput}
 
 /-- Actual system-call entry code follows from the retained body and the two settled worlds. -/
 theorem deposit_body_system_codes {st post : Jaune.State} {txBout bodyBout : BlockOutput}
-    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] post bodyBout)
+    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] [] post bodyBout)
     (beforeCodes : SystemCodes st) (afterCodes : SystemCodes post)
     (transaction : processTransaction (input st) .init depositTx 0 = .ok (post, txBout)) :
     (some ((input st).state.getCode beaconRootsAddress).toList =
@@ -260,13 +260,16 @@ theorem deposit_call_settledFrame {msg : Msg} {state : Jaune.State} {out : MsgCa
   | createRun htarget => simp only [target, Bool.false_eq_true] at htarget
   | callRun htarget delegated refund hdelegation execMsg execMsgEq evm core coreTrace result =>
     have delegatedEq : delegated = msg := by
-      unfold messageCallDelegation at hdelegation
-      simp only [auths, ↓reduceIte] at hdelegation
+      simp only [messageCallDelegation, processMessageCall.legacyAuthorization, auths,
+        Bool.or_true, ↓reduceIte] at hdelegation
       exact (Prod.mk.inj (Except.ok.inj hdelegation)).1.symm
     subst delegated
     have execEq : execMsg = msg := by
       rw [execMsgEq]
-      simp only [messageCallExecutionMessage, nodeleg]
+      unfold messageCallExecutionMessage
+      cases enabled : msg.benv.stat.rules.delegationEnabled
+      · exact Msg.resolveCodeDelegation_disabled _ enabled
+      · rw [Msg.resolveCodeDelegation_enabled _ enabled, nodeleg]
     change ∃ frame ∈ coreTrace.settledFrames, frame.sevm.currentTarget = contractAddress ∧
       frame.sevm.isStatic = false ∧
       decodeCall frame.sevm = some (.deposit senderE amount) ∧ frame.out = .ok post
@@ -318,7 +321,7 @@ theorem deposit_transaction_settledFrame {benv : Benv} {bout : BlockOutput} {ind
 
 /-- The singleton body's actual admitted head keeps its successful deposit frame. -/
 theorem deposit_body_settledFrame {benv : Benv} {state : Jaune.State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv [.inr depositTx] [] state bout)
+    (trace : AppliedBodyTrace benv [.inr depositTx] [] [] state bout)
     (headFrame : ∀ txState txBout,
       ∀ head : TransactionTrace
         ((benv.withState trace.beaconState).withState trace.historyState)

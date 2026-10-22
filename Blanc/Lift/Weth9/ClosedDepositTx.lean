@@ -26,7 +26,8 @@ theorem deposit_transaction {benv : Benv} (ctx : DepositTxContext benv) :
       (calldataFloorGas := 21160) (index := 0)
       fork (by rfl) ctx.chain.symm (by decide) (by rw [ctx.baseFee]; decide)
       (deposit_intrinsic (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by decide) (CoveredFork.checkTransactionGasCap_ok fork (by decide))
       (by decide +kernel) ctx.room
       (by rw [ctx.chain]; exact depositTx_recoveredSender)

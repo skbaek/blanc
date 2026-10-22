@@ -71,7 +71,9 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   rpush
   refine rx_caller (by rroom) ?_
   rhash
-  rsloadC
+  -- Charges named explicitly: `rsloadC`/`rsstoreC` search the context by
+  -- `assumption`, which whnf-evaluates the named storage charges.
+  refine rx_sload_selC hfork h0 (by rroom) ?_
   rreq hle
   rdest
   rdup
@@ -82,14 +84,14 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   rpush
   rdup
   rdup
-  rsloadC
+  refine rx_sload_selC hfork h1 (by rroom) ?_
   rsub
   rswap
   rpop
   rpop
   rdup
   rswap
-  rsstoreC
+  refine rx_sstoreC hfork hS (by rsent) hstatic ?_
   rpop
   refine rx_caller (by rroom) ?_
   rmask
@@ -145,7 +147,7 @@ theorem withdraw_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Me
   rswap
   rsub
   rswap
-  rlog2
+  refine rx_log2W hstatic ((hM.scratchW _ _).scratchW _ _) (by decide) (by decide) ?_
   rpop
   refine rx_ret (d := ret) (b := ?_) (M := ?_)
 
@@ -299,7 +301,7 @@ theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
   rpush
   refine rx_caller (by rroom) ?_
   rhash
-  rsloadC
+  refine rx_sload_selC hfork h0 (by rroom) ?_
   rreq hle
   rdest
   rdup
@@ -310,14 +312,14 @@ theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
   rpush
   rdup
   rdup
-  rsloadC
+  refine rx_sload_selC hfork h1 (by rroom) ?_
   rsub
   rswap
   rpop
   rpop
   rdup
   rswap
-  rsstoreC
+  refine rx_sstoreC hfork hS (by rsent) hstatic ?_
   rpop
   refine rx_caller (by rroom) ?_
   rmask
@@ -373,7 +375,7 @@ theorem withdraw_body_zero {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M
   rswap
   rsub
   rswap
-  rlog2
+  refine rx_log2W hstatic ((hM.scratchW _ _).scratchW _ _) (by decide) (by decide) ?_
   rpop
   refine rx_ret (d := ret) (b := ?_) (M := ?_)
 

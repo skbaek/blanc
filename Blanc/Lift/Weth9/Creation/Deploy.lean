@@ -133,7 +133,7 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
       change { ((((benv.state.setStorVal msg.currentTarget 0 nameSlotWord).setStorVal
         msg.currentTarget 1 symbolSlotWord).setStorVal msg.currentTarget 2 18).get
         msg.currentTarget) with code := Blanc.Lift.Weth9.code } = _
-      simp only [State.setStorVal, State.get_set_self]
+      simp only [State.setStorVal_get_self]
       rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_left rfl]
       rfl
     · rw [ite_eq_right ha, (liftCreatePost_facts _ raw).2.2.2 a ha, hworld]

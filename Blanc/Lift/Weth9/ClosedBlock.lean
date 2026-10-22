@@ -21,39 +21,36 @@ theorem depositBlock_header {st post : Jaune.State} {bout : BlockOutput}
     (hgas : bout.blockGasUsed ≤ 1000000) :
     validateHeader Fork.bpo2.ruleSet (checkpoint st)
       (depositBlock st post bout).header = .ok () := by
-  apply commitHeader_ok
-  · rfl
-  · change calculateBaseFeePerGas 1000000 1000000 500000 1 = .ok 1
-    exact calculateBaseFeePerGas_unit (by decide +kernel) (by decide +kernel)
-      (by decide +kernel) (by decide +kernel)
-  · exact hgas
-  · change ([] : Bytes).length ≤ 32
-    decide +kernel
-  · rfl
-  · rfl
+  exact commitHeader_ok (fork := .bpo2) (parentFee := 1) (fee := 1) CoveredFork.bpo2 rfl rfl rfl
+    (by
+      change calculateBaseFeePerGas 1000000 1000000 500000 1 = .ok 1
+      exact calculateBaseFeePerGas_unit (by decide +kernel) (by decide +kernel)
+        (by decide +kernel) (by decide +kernel))
+    rfl hgas (by change ([] : Bytes).length ≤ 32; decide +kernel) rfl rfl
 
 theorem depositBlock_transition {st post : Jaune.State} {bout : BlockOutput}
     (hgas : bout.blockGasUsed ≤ 1000000)
-    (hbody : applyBody (input st) [Sum.inr depositTx] [] = .ok (post, bout)) :
+    (hbody : applyBody (input st) [Sum.inr depositTx] [] [] = .ok (post, bout)) :
     stateTransitionUsing config (checkpoint st) (depositBlock st post bout) =
       .ok (depositChain st post bout) := by
   have hbody' : applyBody
       (initBenv .bpo2 (checkpoint st) (depositBlock st post bout).header)
-      (depositBlock st post bout).txs (depositBlock st post bout).wds = .ok (post, bout) := by
+      (depositBlock st post bout).txs (depositBlock st post bout).ommers
+      (depositBlock st post bout).wds = .ok (post, bout) := by
     change applyBody
       (initBenv .bpo2 (checkpoint st) (depositBlock st post bout).header)
-      [Sum.inr depositTx] [] = .ok (post, bout)
+      [Sum.inr depositTx] [] [] = .ok (post, bout)
     rw [depositBlock_input]
     exact hbody
-  exact stateTransitionUsing_forward rfl (config_forkAt _) (by decide +kernel)
+  exact stateTransitionUsing_forward rfl (config_forkAt _ _) (by decide +kernel)
     (depositBlock_header hgas) rfl hbody' rfl rfl rfl rfl rfl rfl rfl rfl
 
 theorem depositBlock_trace {st post : Jaune.State} {bout : BlockOutput}
     (hbound : SumNof st.bal)
     (hgas : bout.blockGasUsed ≤ 1000000)
-    (hbody : applyBody (input st) [Sum.inr depositTx] [] = .ok (post, bout)) :
+    (hbody : applyBody (input st) [Sum.inr depositTx] [] [] = .ok (post, bout)) :
     Nonempty (ConfiguredBlockTrace config (checkpoint st) (depositChain st post bout)) := by
-  exact configuredBlockTrace_forward hbound rfl (config_forkAt _) (by decide +kernel)
+  exact configuredBlockTrace_forward hbound rfl (config_forkAt _ _) (by decide +kernel)
     (depositBlock_transition hgas hbody)
 
 /-- One actual configured block yields a nonempty configured history. -/
@@ -67,7 +64,7 @@ theorem exists_depositHistory {st post : Jaune.State} {bout : BlockOutput}
     (hcanon : st.Canonical)
     (hbound : SumNof st.bal)
     (hgas : bout.blockGasUsed ≤ 1000000)
-    (hbody : applyBody (input st) [Sum.inr depositTx] [] = .ok (post, bout)) :
+    (hbody : applyBody (input st) [Sum.inr depositTx] [] [] = .ok (post, bout)) :
     Nonempty (ConfiguredHistoryTrace config (checkpoint st) (depositChain st post bout)) := by
   obtain ⟨trace⟩ := depositBlock_trace hbound hgas hbody
   exact ⟨depositHistory hcanon trace⟩

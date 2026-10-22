@@ -26,7 +26,7 @@ theorem deposit_body_of_transaction {st post : Jaune.State} {bout : BlockOutput}
     (beforeCodes : SystemCodes st) (afterCodes : SystemCodes post)
     (transaction : processTransaction (input st) BlockOutput.init depositTx 0 = .ok (post, bout))
     (requests : parseDepositRequests bout = .ok []) :
-    ∃ bodyBout, applyBody (input st) [Sum.inr depositTx] [] = .ok (post, bodyBout) ∧
+    ∃ bodyBout, applyBody (input st) [Sum.inr depositTx] [] [] = .ok (post, bodyBout) ∧
       bodyBout.blockGasUsed = bout.blockGasUsed := by
   have codeBefore (a : Adr) (ha : a ∈ systemAddresses) :
       some ((input st).state.getCode a).toList = Prog.compile deploymentSystemProgram := by
@@ -59,7 +59,7 @@ theorem deposit_body_of_transaction {st post : Jaune.State} {bout : BlockOutput}
   have same : (input st).withState (input st).state = input st := rfl
   have samePost : ((input st).withState post).withState ((input st).withState post).state =
       (input st).withState post := rfl
-  have body := applyBody_forward (txs := [Sum.inr depositTx]) (stHistory := (input st).state)
+  have body := applyBody_forward (txs := [Sum.inr depositTx]) (ommers := []) (stHistory := (input st).state)
     CoveredFork.bpo2 beacon (input_lastHash st)
     (by rw [same]; exact history) (txList := [depositTx]) rfl
     (by rw [same, same]; exact fold) requests runW (by rw [samePost]; exact runC)

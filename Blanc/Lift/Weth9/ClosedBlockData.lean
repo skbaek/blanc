@@ -11,22 +11,15 @@ namespace Blanc.Lift.Weth9.ClosedInstance
 
 open Jaune Blanc Blanc.BlockForward Blanc.ExecutionTrace
 
-def config : ChainConfig :=
-  { chainId := 1, activations := [⟨.bpo2, 0⟩] }
+def config : ChainConfig := ChainConfig.single 1 .bpo2
 
-theorem config_valid : config.Valid := by decide +kernel
+theorem config_valid : config.Valid := ChainConfig.single_valid 1 .bpo2
 
-theorem config_forkAt (t : Nat) : config.forkAt t = .ok .bpo2 := by
-  have h : config.forkAt? t = some .bpo2 := by
-    unfold ChainConfig.forkAt? config
-    simp only [zero_le, decide_true, List.filter_cons_of_pos, List.filter_nil,
-      List.getLast?_singleton, Option.map_some]
-  have hv : config.validate = .ok () := by decide +kernel
-  unfold ChainConfig.forkAt
-  simp only [bind, Except.bind, Except.mapError, hv, h]
+theorem config_forkAt (number t : Nat) : config.forkAt number t = .ok .bpo2 :=
+  ChainConfig.single_forkAt 1 .bpo2 number t
 
-theorem config_covered (t : Nat) (fork : Fork)
-    (h : config.forkAt t = .ok fork) : CoveredFork fork := by
+theorem config_covered (number t : Nat) (fork : Fork)
+    (h : config.forkAt number t = .ok fork) : CoveredFork fork := by
   rw [config_forkAt] at h
   cases h
   decide +kernel
@@ -47,11 +40,11 @@ def checkpointHeader (st : Jaune.State) : Header :=
     extraData := []
     prevRandao := 0
     nonce := 0
-    baseFeePerGas := 1
-    withdrawalsRoot := getWithdrawalsRoot BlockOutput.init
-    blobGasUsed := 0
-    excessBlobGas := 0
-    parentBeaconBlockRoot := 0
+    baseFeePerGas := some 1
+    withdrawalsRoot := some (getWithdrawalsRoot BlockOutput.init)
+    blobGasUsed := some 0
+    excessBlobGas := some 0
+    parentBeaconBlockRoot := some 0
     requestsHash := none
     blockAccessListHash := none
     slotNumber := none }
@@ -89,8 +82,8 @@ theorem checkpoint_validContext {st : Jaune.State} (hcanon : st.Canonical) :
     constructor
     · change (List.replicate 256 (0 : UInt8)).length = 256 ∧
         0 < 2 ^ 256 ∧ 0 < 2 ^ 256 ∧ 1000000 < 2 ^ 256 ∧
-        500000 < 2 ^ 256 ∧ 0 < 2 ^ 256 ∧ 1 < 2 ^ 256 ∧
-        0 < 2 ^ 64 ∧ 0 < 2 ^ 64
+        500000 < 2 ^ 256 ∧ 0 < 2 ^ 256 ∧ (∀ b ∈ some 1, b < 2 ^ 256) ∧
+        (∀ b ∈ some 0, b < 2 ^ 64) ∧ (∀ b ∈ some 0, b < 2 ^ 64)
       decide +kernel
     · refine Or.inr ?_
       intro b hb

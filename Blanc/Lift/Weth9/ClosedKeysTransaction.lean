@@ -22,7 +22,8 @@ theorem deposit_context_settledFrame {benv : Benv} {state : Jaune.State} {bout' 
     trace.root_frame_of_call_value (R := R) fork (by rfl) ctx.chain.symm
       (by decide) (by rw [ctx.baseFee]; decide)
       (deposit_intrinsic (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by decide) (CoveredFork.checkTransactionGasCap_ok fork (by decide))
       (by decide +kernel) ctx.room
       (by rw [ctx.chain]; exact depositTx_recoveredSender)
@@ -69,7 +70,8 @@ theorem deposit_context_execution {benv : Benv} {state : Jaune.State} {bout' : B
     trace.root_frame_of_call_value_with_message (R := R) fork (by rfl) ctx.chain.symm
       (by decide) (by rw [ctx.baseFee]; decide)
       (deposit_intrinsic (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by decide) (CoveredFork.checkTransactionGasCap_ok fork (by decide))
       (by decide +kernel) ctx.room
       (by rw [ctx.chain]; exact depositTx_recoveredSender)
@@ -101,7 +103,7 @@ theorem deposit_context_rawFrames {benv : Benv} {state : Jaune.State} {bout' : B
 
 /-- The actual body has finite deposit metadata, a genuine holder root, and a settled positive call. -/
 theorem deposit_context_body_frames {st post : Jaune.State} {txBout bodyBout : BlockOutput}
-    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] post bodyBout)
+    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] [] post bodyBout)
     (ctx : DepositTxContext (input st))
     (beforeCodes : SystemCodes st) (afterCodes : SystemCodes post)
     (transaction : processTransaction (input st) .init depositTx 0 = .ok (post, txBout)) :
