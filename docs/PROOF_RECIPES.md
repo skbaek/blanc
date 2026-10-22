@@ -570,3 +570,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/WriteSiteZero.lean](../Blanc/Lift/WriteSiteZero.lean) — `GuardObs.sstore_zero`
 - Registered symbols: `module:Blanc/Lift/WriteSiteZero.lean`, `declaration:Blanc.Lift.WriteSite.ZeroSlots`, `declaration:Blanc.Lift.WriteSite.GuardObs.sstore_zero`, `declaration:Blanc.Lift.WriteSite.GuardObs.step_zero`, `declaration:Blanc.Lift.WriteSite.terminal_zero`, `declaration:Blanc.Lift.WriteSite.runP_zero`, `declaration:Blanc.Lift.WriteSite.progRunP_zero`
 - Review: `proof-infrastructure` on `2026-10-22`
+
+## `admitted-sender-query-exclusion`
+
+- Status: `active`
+- Triggers: `goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt`, `goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt`, `goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt`
+- Preferred path: Use the supplied actual trace's senderQueries and its noSenderAt_of_senderQueries theorem. Exclude recovery to the protected address for every exact query in that complete projection. SenderOccurrence.recovered uses the actual TransactionTrace.checked admission proof; the transaction and selected-history projections include every normal transaction, including VM rollback and error outcomes. The modern-history theorem agrees with its unchanged existing NoSenderAt fold.
+- Boundary: This matches only the three direct qualified NoSenderAt heads, without unfolding aliases or an expanded fold. It consumes an actual trace and exact-query exclusion; it neither proves the cryptographic exclusion nor constructs a history from reachability. It covers admitted normal-transaction senders, not eligible authorization authorities, old recovery calls or system callers. Caller/code preservation, historical fork coverage, creation, committing-child recursion and the initial allowance-zero seed remain separate obligations. No fork domain or authentication assumption is strengthened.
+- Owner module: [Blanc/ExecutionSenderOccurrences.lean](../Blanc/ExecutionSenderOccurrences.lean)
+- Canonical example: [Blanc/ExecutionSenderOccurrences.lean](../Blanc/ExecutionSenderOccurrences.lean) — `ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries`
+- Registered symbols: `module:Blanc/ExecutionSenderOccurrences.lean`, `declaration:Blanc.ExecutionTrace.SenderOccurrence.recovered`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderOccurrences_indexed`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderQueries_at`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.toIn_noSenderAt_iff`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.noSenderAt_of_senderQueries`
+- Review: `proof-infrastructure` on `2026-10-23`

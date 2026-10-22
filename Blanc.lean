@@ -74,6 +74,8 @@ import Blanc.ExecutionTraceCallOnly
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceFrameEnv
 import Blanc.ExecutionTraceCallerExclusion
+import Blanc.ExecutionSenderOccurrences
+import Blanc.ExecutionDelegationEligibility
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
 import Blanc.ExecutionTraceRootFrame

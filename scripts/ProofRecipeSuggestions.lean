@@ -30,6 +30,7 @@ import Blanc.RevertPayload
 import Blanc.StaticStores
 import Blanc.Upgrade
 import Blanc.Lift.WriteSiteZero
+import Blanc.ExecutionSenderOccurrences
 
 namespace Blanc
 
@@ -1165,6 +1166,51 @@ example {K : B256 → Prop} {a : Adr} {d : Devm}
 -- Unrelated proposition heads must not receive zero-preservation advice.
 example : True := by
   expect_no_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  trivial
+
+-- EXPECT: admitted-sender-query-exclusion
+example {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    {a : Adr} (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) {a : Adr}
+    (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future) {a : Adr}
+    (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+-- Exact heads only: an unrelated proposition receives none of this advice.
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_offered "admitted-sender-query-exclusion"
   trivial
 
 end Blanc

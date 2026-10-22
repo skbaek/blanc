@@ -732,6 +732,9 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 # The set is pinned by name rather than counted so that losing a witness and
 # gaining an unrelated one cannot cancel out.
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
+    "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt",
+    "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt",
+    "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt",
     "goal-head:Lift.WriteSite.ZeroSlots",
     "goal-head:Devm.EqModGas",
     "goal-head:Lift.StaticWordChild",

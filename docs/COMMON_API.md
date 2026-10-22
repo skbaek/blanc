@@ -4295,6 +4295,18 @@ account, so its full-account equation must retain that normalization.
 
 ### T4. The wrapper is a message call and I must see through delegation
 
+For code preservation from exclusion of eligible authorization queries, use
+[`Blanc/ExecutionDelegationEligibility.lean`](../Blanc/ExecutionDelegationEligibility.lean).
+`AuthMayWrite` tests the actual intermediate state's chain, nonce and code
+gates; fork enablement is retained by `MessageCallDelegationTrace` at the
+wrapper. `exists_delegationOccurrence_at` covers every sequential tuple index,
+including repeated tuples and zero-target clears. Extract the wrapper with
+`exists_messageCallDelegationTrace`, then use
+`messageCallDelegation_getCode_of_eligible` with its `NoEligibleAuthorityAt`
+premise. The carrier retains the actual code refresh and refund conversion.
+`excluded_of_all` converts the older all-tuples exclusion only in the sound
+direction; eligible exclusion does not imply that stronger premise.
+
 For a whole-state balance preorder under `stateGas = none`,
 `processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
 `legacyAuthorization` and `Msg.resolveCodeDelegation`, preserving the actual
@@ -4494,6 +4506,21 @@ the actual selected fork. `ConfiguredBlockTraceIn.toModern` takes explicit
 coverage of its selected fork, while `ConfiguredHistoryTraceIn.toModern`
 consumes a history in the covered domain. Both block conversions' `bodyTrace`
 projection laws identify the supplied body's adapter exactly.
+
+For the exact admitted transaction sender population, use
+[`Blanc/ExecutionSenderOccurrences.lean`](../Blanc/ExecutionSenderOccurrences.lean).
+`SenderOccurrence.recovered` reads recovery from the actual admission check.
+`ApplyTransactionsTrace.senderOccurrences_indexed` and
+`senderOccurrences_getElem?` retain every input transaction and its position,
+including duplicates and transactions whose later VM execution fails.
+`ConfiguredHistoryTraceIn.senderQueries` projects those occurrences through
+the actual ordered block bodies; `noSenderAt_of_senderQueries` turns exclusion
+on precisely those queries into the selected history's `NoSenderAt` fold.
+The modern counterpart uses `toIn_noSenderAt_iff` to preserve the existing
+fold. These projections need no additional fork-domain assumption and do not
+supply delegation or old-contract ECRECOVER exclusions.
+The `admitted-sender-query-exclusion` recipe recognizes the three direct
+transaction, modern-history and selected-history `NoSenderAt` goal heads.
 
 The following effects APIs consume the modern covered carrier:
 

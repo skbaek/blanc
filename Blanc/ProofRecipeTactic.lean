@@ -43,6 +43,12 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.Lift.StaticWordChild
   | "goal-head:Lift.WriteSite.ZeroSlots" =>
       return head == some `Blanc.Lift.WriteSite.ZeroSlots
+  | "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ApplyTransactionsTrace.NoSenderAt
+  | "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt
+  | "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>
