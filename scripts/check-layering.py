@@ -1409,6 +1409,7 @@ CONTRACTS = {
         "Lift.Usdc.ModelLaws",
         "Lift.Usdc.PermitQueryV2_1",
         "Lift.Usdc.OwnerQueriesV2",
+        "Lift.Usdc.OldRecoveryRelevance",
         "Lift.Usdc.Proxy.Cert",
         "Lift.Usdc.Proxy.Check",
         "Lift.Usdc.Proxy.Contract",

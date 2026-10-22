@@ -3174,6 +3174,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   in the conclusion. Fork coverage and address-1 nondelegation are explicit
   local premises. Historical transport, complete retained-query relevance
   and failed-call enumeration remain separate obligations.
+  `Usdc.old_owner_query_native` in
+  [`Blanc/Lift/Usdc/OldRecoveryRelevance.lean`](../Blanc/Lift/Usdc/OldRecoveryRelevance.lean)
+  composes both version families at their original fresh execution root. It
+  preserves the actual call node, recursive slot, step result and returned
+  derivation through `CallOccurrenceStep.reRoot`, and derives the real
+  `initEvm msg` ECRECOVER answer, native entry, settlement and resume equations.
+  Its version-specific conclusion retains exact inputs, call sites and owner
+  comparisons. Local retention requires root commitment; complete historical
+  scope, ancestor settlement and write relevance remain separate obligations.
   Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
@@ -5623,7 +5632,11 @@ contract-neutral.
   The carrier keeps the exact `NinstOccurrence`, decoded external instruction,
   same-frame `ParentStep` and complete returned `Devm`; its
   `occurrence_stepRun_unique` comparison preserves both recursive slot and
-  step result. `CallOccurrenceStep.retained` additionally requires root
+  step result. `CallOccurrenceStep.reRoot` transports that same call along a
+  supplied earlier same-frame `ParentPrefix`; `reRoot_identity` exposes exact
+  preservation of the node, instruction, recursive slot, step result and
+  returned derivation. It changes only root-indexed reachability evidence.
+  `CallOccurrenceStep.retained` additionally requires root
   commitment. Raw occurrence identity alone does not establish settlement,
   call-free predecessor gaps or a child's queue/path origin. The
   `SyncCanonicalResult.firstOccurrenceStep`/`secondOccurrenceStep` projections

@@ -1672,6 +1672,7 @@ import Blanc.Lift.Usdc.RecoveryV2
 import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.PermitQueryV2_1
 import Blanc.Lift.Usdc.OwnerQueriesV2
+import Blanc.Lift.Usdc.OldRecoveryRelevance
 import Blanc.Lift.Usdc.RefineAdmin
 import Blanc.Lift.Usdc.RefineAdminBits
 import Blanc.Lift.Usdc.RefineAdminBodies
