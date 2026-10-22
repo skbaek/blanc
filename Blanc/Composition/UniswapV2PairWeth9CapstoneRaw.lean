@@ -30,28 +30,7 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 theorem execFreeUntil_rawFrameDescendants_eq {start stop : Exec.Deriv}
     (free : Exec.Deriv.ExecFreeUntil start stop) :
     Exec.rawFrameDescendants start.exc = Exec.rawFrameDescendants stop.exc := by
-  rcases free with ⟨reached, clean⟩
-  induction reached with
-  | refl => rfl
-  | @step root next tail edge rest ih =>
-      have rootClean : ∀ x : Xinst,
-          ¬ Ninst.At root.sevm.code root.pc (.exec x) := by
-        rcases clean root (.refl _) with back | rootClean
-        · exact ((Blanc.Exec.Deriv.ParentStep.not_parentPrefix_back edge) rest back).elim
-        · exact rootClean
-      have nextClean : ∀ node, Exec.Deriv.ParentPrefix next node →
-          Exec.Deriv.ParentPrefix tail node ∨
-            ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) :=
-        fun node reached => clean node (.step edge reached)
-      rw [← ih nextClean]
-      cases edge with
-      | cont hstep next => simp only [Exec.rawFrameDescendants]
-      | doneOk hstep henter hresume next =>
-          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
-          exact (rootClean x decoded).elim
-      | runOk hstep henter child hresume next =>
-          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
-          exact (rootClean x decoded).elim
+  exact Blanc.Exec.Deriv.ExecFreeUntil.rawFrameDescendants_eq free
 
 /-- Across one parent step, a raw descendant is a raw descendant of the continuation or a raw root
 of the child that the step entered. -/
@@ -62,19 +41,7 @@ theorem parentStep_rawFrameDescendants_cases {N returned : Exec.Deriv}
         (raw : Execution) (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw),
         Evm.step ⟨N.pc, N.sevm, N.devm⟩ = .spawn frame resume nextPc ∧
         frame.enter = .run childEvm ∧ d ∈ Exec.rawFrameRoots child := by
-  intro d member
-  cases edge with
-  | cont hstep next => exact Or.inl (by simpa only [Exec.rawFrameDescendants] using member)
-  | doneOk hstep henter hresume next =>
-      exact Or.inl (by simpa only [Exec.rawFrameDescendants] using member)
-  | runOk hstep henter child hresume next =>
-      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append] at member
-      rcases member with rfl | inChild | later
-      · exact Or.inr ⟨_, _, _, _, _, child, hstep, henter, Exec.mem_rawFrameRoots_self child⟩
-      · refine Or.inr ⟨_, _, _, _, _, child, hstep, henter, ?_⟩
-        simp only [Exec.rawFrameRoots, List.mem_cons]
-        exact Or.inr inChild
-      · exact Or.inl later
+  exact Blanc.Exec.Deriv.ParentStep.rawFrameDescendants_cases edge
 
 /-- A chain with no exec node enters no child. -/
 theorem deriv_rawFrameDescendants_nil (N : Exec.Deriv)

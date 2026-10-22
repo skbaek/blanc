@@ -9,6 +9,14 @@ namespace CompiledShape
 
 /-! Shared structural facts for inspecting compiled `Func` byte shapes. -/
 
+/-- Discharge only the bounded immediate-acceptance side condition introduced by
+`compile_prepend`; leave compiler equations and byte equalities untouched. -/
+scoped macro "discharge_prepend_acceptance" : tactic =>
+  `(tactic| first
+    | guard_target = ∀ i ∈ (_ : List Ninst), Ninst.immAccepted i = true
+      decide +kernel
+    | skip)
+
 def prefixByteSize : Line → Nat
   | [] => 0
   | inst :: rest => inst.size + prefixByteSize rest

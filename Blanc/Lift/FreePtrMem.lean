@@ -225,10 +225,6 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
     case selfbalance =>
       rw [fp_keep he rfl, ← (of_run_selfbalance hfork run).memory]
       exact hw
-    case gas =>
-      obtain ⟨_, hpb⟩ := of_run_gas run
-      rw [fp_keep he rfl, ← hpb.memory]
-      exact hw
     case mstore =>
       rcases kv with _ | ⟨a, _ | ⟨v, kv⟩⟩
       · cases ht

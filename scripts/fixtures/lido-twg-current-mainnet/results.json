@@ -65,7 +65,7 @@
   "provenance": {
     "breakerManifestSha256": "c5525f6d53f96c502cecbb5bbb676ad858bf9edcfd5b29b54b6c0e5203fbd951",
     "breakerReferenceSha256": "09e1732d8226b301bb8013ffecdd89a13fc174b736bb60e382bcfa8504fff909",
-    "currentMainnetHelperSha256": "c1cfaa965127bb7b86c47dccc0d465bf89c04b07cb81f288926c2a75d33238bf",
+    "currentMainnetHelperSha256": "50e8291412c4ef54fb76411dd89502beec607266c9cf372a2e7cb65b5c80e008",
     "evaluatorSha256": "7727a46df26adc6621645cbaeba19edc73ca965ce0c81b5eeebd24d9c51c66cd",
     "gatewayManifestSha256": "c8e8ee1d09dfb0e8f2173c6d4723a6517f593bb061132bbcf658b310548577c4",
     "gatewayReferenceSha256": "8e92a23746c47a9b065f6c042c98d9913785c40c0f27e0a1f82cfc37c0effc0f",
@@ -73,7 +73,7 @@
     "ledgerSha256": "da8ce495bb8a351c95466ba11773f6ed54b6fede3ff3cb685b41c1b26efec0eb",
     "profileSha256": "740868487ec0fdd4f1d88c3ba624a5bda2bed2b6e3c78c8f78841178efc9394b",
     "runtimeLockSha256": "5fa857e4a898e2d1e8fb12e2dccbbc952cad95919ca27fc2c40992793ea7bcbf",
-    "wrapperSha256": "65320546888322260101fd96ba9b1ef540eb4228d180189171c52eb04ea8b706"
+    "wrapperSha256": "5e58222088dab7a3360de9a524d3fea400df46a5aa41f2de95a8b5ce73102c82"
   },
   "rows": {
     "composed-public-pause-finite": {

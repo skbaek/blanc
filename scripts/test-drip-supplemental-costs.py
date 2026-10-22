@@ -173,9 +173,10 @@ class SupplementalControls(unittest.TestCase):
         options = [("--measure-supplemental-costs",)]
         options += [("--measure-supplemental-costs", mode) for mode in
                     ("--measure-costs", "--write", "--check-runtime", "--validate-runtime")]
+        run = getattr(sys, "_blanc_gate_read_audit_run", legacy.subprocess.run)
         for arguments in options:
             with self.subTest(arguments=arguments):
-                result = legacy.subprocess.run([sys.executable, "-B", script, *arguments],
+                result = run([sys.executable, "-B", script, *arguments],
                     capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 2)
                 self.assertNotIn("DRIP_SUPPLEMENTAL_MEASUREMENTS", result.stdout)

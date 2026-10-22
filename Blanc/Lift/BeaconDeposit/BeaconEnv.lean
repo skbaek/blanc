@@ -4,6 +4,7 @@ import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceSystemCode
+import Blanc.ExecutionTraceFrameEnv
 
 /-!
 # The Beacon committed-history headlines without per-frame environment premises
@@ -109,28 +110,12 @@ theorem code_size : code.size = 6358 := by decide +kernel
 
 theorem not_mem_systemTargets_of_installed {w : State} {ca : Adr}
     (installed : w.getCode ca = code) (system : SystemCodeInstalled w) :
-    ca ∉ systemTargets := by
-  intro hmem
-  simp only [systemTargets, List.mem_cons, List.not_mem_nil, or_false] at hmem
-  have hsize : ∀ p ∈ systemContracts, p.1 = ca → False := by
-    intro p hp hca
-    have h := system p hp
-    rw [hca, installed] at h
-    have := congrArg ByteArray.size h
-    rw [code_size] at this
+    ca ∉ systemTargets :=
+  not_mem_systemTargets_of_size installed system (by
+    intro p hp
+    rw [code_size]
     simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl | rfl | rfl <;> revert this <;> decide +kernel
-  rcases hmem with rfl | rfl | rfl | rfl
-  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp only [systemContracts,
-    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]) rfl
-  · exact hsize (historyStorageAddress, historyStorageCode) (by simp only [systemContracts,
-    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]) rfl
-  · exact hsize (withdrawalRequestPredeployAddress, withdrawalRequestCode)
-      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
-        true_or, or_true]) rfl
-  · exact hsize (consolidationRequestPredeployAddress, consolidationRequestCode)
-      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
-        or_true]) rfl
+    rcases hp with rfl | rfl | rfl | rfl <;> decide +kernel)
 
 /-- **The system exclusion is derived** from the canonical system code being installed at the
 checkpoint. -/

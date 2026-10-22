@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 
 if [ "$#" -ne 0 ]; then
   echo "REGRESSION — Blanc OssifiableProxy artifact gate: expected no arguments" >&2
@@ -15,7 +16,7 @@ if ! PYTHONDONTWRITEBYTECODE=1 python3 \
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 python3 \
+if ! PYTHONDONTWRITEBYTECODE=1 gate_audit_python python3 \
     "$SCRIPT_DIR/test-lido-ossifiable-proxy-artifact-falsifiers.py" >/dev/null; then
   exit 1
 fi

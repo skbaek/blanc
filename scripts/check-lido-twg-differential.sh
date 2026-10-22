@@ -3,6 +3,7 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -35,7 +36,7 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-twg-artifacts.lean >"$ARTIFA
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/gen-lido-twg-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@" >"$GENERATOR_OUT"; then
   exit 1

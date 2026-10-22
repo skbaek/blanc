@@ -576,9 +576,9 @@ private theorem pushItem_eqModGas {x : B256} {c : Nat} {a a' b b' : Devm}
   h.of_pushBurn (Devm.pushBurn_of_pushItem h1) (Devm.pushBurn_of_pushItem h2)
 
 /-- Regular instructions whose successful effect never reads `gasLeft`: the
-`regularTransfer` opcode list minus `gas`. Never `pc`, never `gas`. -/
+`regularTransfer` opcode list minus `gas`, plus XOR. Never `pc`, never `gas`. -/
 def Rinst.gasFree : Rinst → Bool
-  | .add | .mul | .sub | .div | .lt | .gt | .eq | .iszero | .and | .shr
+  | .add | .mul | .sub | .div | .lt | .gt | .eq | .iszero | .and | .xor | .shr
   | .caller | .callvalue | .calldataload | .calldatasize | .timestamp
   | .pop | .mload | .mstore | .sload | .sstore | .dup _ | .swap _ => true
   | _ => false
@@ -656,6 +656,13 @@ private theorem run_iszero {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
 private theorem run_and {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     (h1 : Rinst.run ⟨pc1, e, a⟩ .and = .ok a')
     (h2 : Rinst.run ⟨pc2, e, b⟩ .and = .ok b')
+    (h : Devm.EqModGas a b) : Devm.EqModGas a' b' := by
+  simp only [Rinst.run, Rinst.runCore] at h1 h2
+  exact applyBinary_eqModGas h1 h2 h
+
+private theorem run_xor {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
+    (h1 : Rinst.run ⟨pc1, e, a⟩ .xor = .ok a')
+    (h2 : Rinst.run ⟨pc2, e, b⟩ .xor = .ok b')
     (h : Devm.EqModGas a b) : Devm.EqModGas a' b' := by
   simp only [Rinst.run, Rinst.runCore] at h1 h2
   exact applyBinary_eqModGas h1 h2 h
@@ -1041,6 +1048,7 @@ theorem Rinst.run_eqModGas {e : Sevm} {a a' b b' : Devm} {r : Rinst}
   case eq => exact run_eq h1 h2 h
   case iszero => exact run_iszero h1 h2 h
   case and => exact run_and h1 h2 h
+  case xor => exact run_xor h1 h2 h
   case shr => exact run_shr h1 h2 h
   case caller => exact run_caller h1 h2 h
   case callvalue => exact run_callvalue h1 h2 h

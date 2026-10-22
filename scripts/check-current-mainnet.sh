@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 : "${HOME:?HOME is required}"
 
 if [[ -n "${JAUNE_T8N_TARGET:-}" ]]; then
@@ -37,14 +38,14 @@ if [[ -n "${TMPDIR:-}" ]]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" \
   "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
     --self-check
-/usr/bin/env -i "${CHILD_ENV[@]}" \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" \
   "$TARGET_PYTHON" -B -s "$SCRIPT_DIR/gen-current-mainnet-runtime-lock.py" \
     --check --root "$TARGET_ROOT"
 
-exec /usr/bin/env -i "${CHILD_ENV[@]}" \
+gate_audit_exec_python /usr/bin/env -i "${CHILD_ENV[@]}" \
   "$TARGET_PYTHON" -I -s "$SCRIPT_DIR/current_mainnet.py" \
     --check \
     --root "$TARGET_ROOT" \

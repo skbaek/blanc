@@ -31,7 +31,9 @@
 # close); an unseeded ledger is reported and is not a failure.
 #
 # `Blanc.ProofRecipeTactic` and `Blanc.ProofRecipesGenerated` (deliberately unreachable from
-# Blanc.lean) are built explicitly so the suggestion controls and the union walk can see them.
+# Blanc.lean) are built explicitly so the suggestion controls and the union walk can see them, and
+# so are the write-site checker tops `Blanc.Lift.Usdc.ImplWs` and `Blanc.Lift.WriteSiteLocality`,
+# which AxiomCheck.lean imports.
 #
 # Usage: scripts/check.sh [--no-build | --suggestions-only]
 #
@@ -111,6 +113,12 @@ if [ "$BUILD" -eq 1 ]; then
   # suggestion controls and the union walk below need it.
   if ! (cd "$ROOT" && lake build Blanc.ProofRecipeTactic); then
     echo "REGRESSION — axiom audit: proof-recipe leaf build failed"
+    exit 1
+  fi
+  # The write-site checker tops sit outside the Blanc root until L3 consumes
+  # them; scripts/AxiomCheck.lean imports them, so the union walk needs them.
+  if ! (cd "$ROOT" && lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality); then
+    echo "REGRESSION — axiom audit: write-site checker tops build failed"
     exit 1
   fi
 fi

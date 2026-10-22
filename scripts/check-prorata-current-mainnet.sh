@@ -6,6 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 : "${HOME:?HOME is required}"
 
@@ -56,7 +57,7 @@ if [ -n "${TMPDIR:-}" ]; then
   CHILD_ENV+=("TMPDIR=$TMPDIR")
 fi
 
-GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+GENERATOR_OUT="$(gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-prorata-fixtures.py" --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$GENERATOR_OUT" >&2
   echo "REGRESSION — prorata current-mainnet: BPO2 regeneration check failed" >&2
@@ -64,7 +65,7 @@ GENERATOR_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
 }
 printf '%s\n' "$GENERATOR_OUT"
 
-BENCHMARK_OUT="$(/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+BENCHMARK_OUT="$(gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-prorata-benchmark.py" --root "$TARGET_ROOT" 2>&1)" || {
   printf '%s\n' "$BENCHMARK_OUT" >&2
   echo "REGRESSION — prorata current-mainnet: BPO2 benchmark check failed" >&2

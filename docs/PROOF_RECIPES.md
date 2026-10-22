@@ -537,3 +537,25 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/PackedSha.lean](../Blanc/Lift/PackedSha.lean) — `bexp_256_32`
 - Registered symbols: `module:Blanc/Lift/PackedSha.lean`, `declaration:Blanc.Lift.bexp_256_32`
 - Review: `proof-infrastructure` on `2026-10-15`
+
+## `static-word-child`
+
+- Status: `active`
+- Triggers: `goal-head:Lift.StaticWordChild`
+- Preferred path: Use Lift.StaticWordChild as the shared observation carrier for a static reply: supply its exact target, calldata, staticness, at-least-32-byte output and empty child logs. Extract those facts from an actual frame walk; preserve XAt or ChildOf separately when parent-child provenance matters.
+- Boundary: This carrier does not establish a parent-child relation, successful execution, a decoded answer value, storage preservation, or a fixed return length. It allows extra return bytes. The recipe matches only a direct StaticWordChild goal; a nested carrier is not a match.
+- Owner module: [Blanc/Lift/FrameWalk.lean](../Blanc/Lift/FrameWalk.lean)
+- Canonical example: [Blanc/Lift/FrameWalk.lean](../Blanc/Lift/FrameWalk.lean) — `StaticWordChild`
+- Registered symbols: `module:Blanc/Lift/FrameWalk.lean`, `declaration:Blanc.Lift.StaticWordChild`
+- Review: `proof-infrastructure` on `2026-10-17`
+
+## `normalized-call-world-transport`
+
+- Status: `active`
+- Triggers: `goal-head:Devm.EqModGas`
+- Preferred path: For full state agreement modulo execution gas, use Devm.EqModGas.withGasLeft_eq to obtain literal equality at a common gas value, or Devm.EqModGas.of_normalized_eq to reduce the goal to equality after gas normalization. Preserve agreement through stack/memory replacement with .st, address warming with .addAccessedAddress, suspended-parent preparation with .callSpawnParent, and clean child incorporation with .callChildPost. The last step needs both parent and child agreement and preserves returndata, warm sets, refunds, original-pricing inputs, state-gas and tracking metadata.
+- Boundary: This matches only the explicit Devm.EqModGas goal head. It establishes agreement outside execution gas, not an equality of gasLeft or consumed charges, and does not establish callee success, gas independence of arbitrary code, a profile, or caller liveness. Supply the parent and child relations; do not infer them from storage equality or a bounded-success call premise.
+- Owner module: [Blanc/Lift/CallProfileTransport.lean](../Blanc/Lift/CallProfileTransport.lean)
+- Canonical example: [Blanc/Lift/CallProfileTransport.lean](../Blanc/Lift/CallProfileTransport.lean) — `Devm.EqModGas.callChildPost`
+- Registered symbols: `module:Blanc/Lift/CallProfileTransport.lean`, `declaration:Blanc.Devm.EqModGas.withGasLeft_eq`, `declaration:Blanc.Devm.EqModGas.of_normalized_eq`, `declaration:Blanc.Devm.EqModGas.st`, `declaration:Blanc.Devm.EqModGas.addAccessedAddress`, `declaration:Blanc.Devm.EqModGas.callSpawnParent`, `declaration:Blanc.Devm.EqModGas.callChildPost`
+- Review: `proof-infrastructure` on `2026-10-19`

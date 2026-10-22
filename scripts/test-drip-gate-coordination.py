@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -49,8 +50,13 @@ fi
     def run_gate(self, *arguments):
         self.log.unlink(missing_ok=True)
         self.log.touch()
-        result = subprocess.run(["/bin/bash", str(self.root / "scripts/check-drip.sh"), *arguments],
-                                env=self.env, capture_output=True, text=True)
+        command = ["/bin/bash", str(self.root / "scripts/check-drip.sh"), *arguments]
+        run = getattr(sys, "_blanc_gate_read_audit_shell_run", None)
+        if run is None:
+            result = subprocess.run(command, env=self.env, capture_output=True, text=True)
+        else:
+            result = run(command, env=self.env, capture_output=True, text=True,
+                         _read_audit_boundary={"id": "drip-routing", "root": str(self.root)})
         return result, self.log.read_text().splitlines()
 
     def test_admission_is_lazy_and_released(self):

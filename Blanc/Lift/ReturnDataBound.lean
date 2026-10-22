@@ -526,7 +526,9 @@ theorem processMessage_output {msg : Msg} {xl : Xlot} {child : Devm}
       · exact hi
   exact hp
 
-private def CallShape : XStep → Prop
+/-- A call-family step's shape: a done step leaves no return data, a spawned one runs a message
+frame and resumes the parent with `Resume.call`. -/
+def CallShape : XStep → Prop
   | .done ex => ∀ post, ex = .ok post → post.returnData = []
   | .spawn f rsm => ∃ msg parent oi os,
       f = Frame.ofCall msg ∧ rsm = Resume.call parent oi os
@@ -579,7 +581,8 @@ elab "call_shape_step" : tactic => do
     | some ``XStep.spawn => run `(tactic| exact ⟨_, _, _, _, rfl, rfl⟩)
     | _ => run `(tactic| split)
 
-private theorem call_shape {sevm : Sevm} {pre : Devm} {x : Xinst}
+/-- **The shape of a `CALL`/`STATICCALL` step.** -/
+theorem call_shape {sevm : Sevm} {pre : Devm} {x : Xinst}
     (hx : x = .call ∨ x = .staticcall)
     (hsg : sevm.benvStat.rules.stateGas = none) : CallShape (Xinst.step sevm pre x) := by
   rcases hx with rfl | rfl

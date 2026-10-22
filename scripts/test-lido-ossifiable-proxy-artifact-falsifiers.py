@@ -224,7 +224,8 @@ def generator_process(root: Path, *arguments: str) -> subprocess.CompletedProces
         "PATH": os.environ.get("PATH", ""),
         "PYTHONDONTWRITEBYTECODE": "1",
     }
-    return subprocess.run(
+    run = getattr(sys, "_blanc_gate_read_audit_run", subprocess.run)
+    return run(
         [sys.executable, str(root / GENERATOR), *arguments],
         cwd=root,
         env=environment,

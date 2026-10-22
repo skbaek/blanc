@@ -30,6 +30,7 @@ if [ "$DISPATCH_SELECTION_STAGE" = "selected" ] && \
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -59,7 +60,7 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-dispatchers.
 fi
 
 if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src:$SCRIPT_DIR" \
-    "$EELS_PY" "$SCRIPT_DIR/check-lido-circuit-breaker-dispatchers.py" \
+    gate_audit_python "$EELS_PY" "$SCRIPT_DIR/check-lido-circuit-breaker-dispatchers.py" \
     --eels-root "$EELS_ROOT" \
     --blanc-artifacts "$BLANC_ARTIFACTS" \
     --dispatcher-artifacts "$DISPATCH_ARTIFACTS" \
@@ -68,7 +69,7 @@ if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src:$SCRIPT_DIR" \
   exit 1
 fi
 
-if ! SUMMARY="$("$EELS_PY" -c 'import json,sys
+if ! SUMMARY="$(gate_audit_python "$EELS_PY" -c 'import json,sys
 p=json.load(open(sys.argv[1], encoding="utf-8")); label=p["selection"]["selected"]
 c=p["candidates"][label]; f=p["fullVector"]["candidates"][label]; s=f["runtimeSummary"]
 print(f"OK — Lido CircuitBreaker dispatcher: {len(p['"'"'candidateOrder'"'"'])} legal .branch candidates; selected {label} at {c['"'"'byteLength'"'"']} bytes; {len(c['"'"'directRows'"'"'])} focused rows + {len(c['"'"'reachableEndpoints'"'"'])} endpoint cases + {f['"'"'caseCount'"'"']}-case/{f['"'"'boundaryCount'"'"']}-boundary replay; {s['"'"'adequacyCounts'"'"']['"'"'adequate'"'"']} adequate runtime boundaries cheaper, {s['"'"'adequacyCounts'"'"']['"'"'oog-control'"'"']} equal OOG, {s['"'"'adequatePositiveDeltaCount'"'"']} positives; dual-world production match; {s['"'"'successfulStrictImprovementCount'"'"']} strict successful improvements")' \

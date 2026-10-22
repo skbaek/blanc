@@ -3,10 +3,13 @@ import Blanc.Lift.CallChildren
 import Blanc.PrefixTransport
 
 /-!
-# Direct children along a same-frame chain, and completeness of target selection
+# Raw and retained children along a same-frame chain, and target selection
 
-Contract-neutral facts about the frames a run retains:
+Contract-neutral facts about raw frame roots and the frames a run retains:
 
+* `Exec.Deriv.ExecFreeUntil.rawFrameDescendants_eq` and
+  `Exec.Deriv.ParentStep.rawFrameDescendants_cases`: preserve raw descendants across
+  an entry-free span and separate a parent continuation from its entered child;
 * `Exec.mem_descendantFrames_of_mem_childFrames`, `Exec.Deriv.ExecFreeUntil.childFrames_eq` and
   `Exec.childFrames_eq_nil_of_free`: a span of the chain that decodes no `Xinst` has no direct child;
 * `Exec.Deriv.ParentStep.childFrames_spawn` / `descendantFrames_spawn`: at a spawning node, the
@@ -92,6 +95,56 @@ theorem Exec.Deriv.ExecFreeUntil.childFrames_eq {start stop : Exec.Deriv}
       | runOk hstep henter child hresume next =>
           rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
           exact (rootClean x decoded).elim
+
+/-- An exec-free span of the chain enters no child of its own. -/
+theorem Exec.Deriv.ExecFreeUntil.rawFrameDescendants_eq {start stop : Exec.Deriv}
+    (free : Exec.Deriv.ExecFreeUntil start stop) :
+    Exec.rawFrameDescendants start.exc = Exec.rawFrameDescendants stop.exc := by
+  rcases free with ⟨reached, clean⟩
+  induction reached with
+  | refl => rfl
+  | @step root next tail edge rest ih =>
+      have rootClean : ∀ x : Xinst,
+          ¬ Ninst.At root.sevm.code root.pc (.exec x) := by
+        rcases clean root (.refl _) with back | rootClean
+        · exact ((Blanc.Exec.Deriv.ParentStep.not_parentPrefix_back edge) rest back).elim
+        · exact rootClean
+      have nextClean : ∀ node, Exec.Deriv.ParentPrefix next node →
+          Exec.Deriv.ParentPrefix tail node ∨
+            ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) :=
+        fun node reached => clean node (.step edge reached)
+      rw [← ih nextClean]
+      cases edge with
+      | cont hstep next => simp only [Exec.rawFrameDescendants]
+      | doneOk hstep henter hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+      | runOk hstep henter child hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+
+/-- Across one parent step, a raw descendant is a raw descendant of the continuation or a raw root
+of the child that the step entered. -/
+theorem Exec.Deriv.ParentStep.rawFrameDescendants_cases {N returned : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep returned N) :
+    ∀ d ∈ Exec.rawFrameDescendants N.exc, d ∈ Exec.rawFrameDescendants returned.exc ∨
+      ∃ (frame : Jaune.Frame) (resume : Resume) (nextPc : Nat) (childEvm : Evm)
+        (raw : Execution) (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw),
+        Evm.step ⟨N.pc, N.sevm, N.devm⟩ = .spawn frame resume nextPc ∧
+        frame.enter = .run childEvm ∧ d ∈ Exec.rawFrameRoots child := by
+  intro d member
+  cases edge with
+  | cont hstep next => exact Or.inl (by simpa only [Exec.rawFrameDescendants] using member)
+  | doneOk hstep henter hresume next =>
+      exact Or.inl (by simpa only [Exec.rawFrameDescendants] using member)
+  | runOk hstep henter child hresume next =>
+      simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append] at member
+      rcases member with rfl | inChild | later
+      · exact Or.inr ⟨_, _, _, _, _, child, hstep, henter, Exec.mem_rawFrameRoots_self child⟩
+      · refine Or.inr ⟨_, _, _, _, _, child, hstep, henter, ?_⟩
+        simp only [Exec.rawFrameRoots, List.mem_cons]
+        exact Or.inr inChild
+      · exact Or.inl later
 
 /-- At a spawning node, a direct child is the entered child or a child of the continuation. -/
 theorem Exec.Deriv.ParentStep.childFrames_spawn {N returned : Exec.Deriv}

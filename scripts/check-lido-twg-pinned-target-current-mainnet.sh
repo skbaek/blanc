@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 : "${HOME:?HOME is required}"
@@ -47,9 +48,10 @@ if [[ "${1:-}" == "--static-self-check" ]]; then
     echo "REGRESSION — Lido TWG pinned-target current-mainnet: static self-check takes no other arguments" >&2
     exit 2
   fi
-  exec /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
+  gate_audit_exec_python /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
     "$SCRIPT_DIR/gen-lido-twg-pinned-target-current-mainnet.py" \
     --static-self-check "${WRAPPER_ARGS[@]}"
+  exit "$?"
 fi
 
 COMPOSED_PREREQUISITES=0
@@ -66,7 +68,7 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-/usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
+gate_audit_python /usr/bin/env -i "${STATIC_ENV[@]}" /usr/bin/python3 -B \
   "$SCRIPT_DIR/gen-lido-twg-pinned-target-current-mainnet.py" \
   --static-self-check "${WRAPPER_ARGS[@]}"
 
@@ -128,6 +130,6 @@ if [[ "$WRITE" -eq 1 ]]; then
   GENERATOR_ARGS+=(--write)
 fi
 
-/usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
+gate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \
   "$SCRIPT_DIR/gen-lido-twg-pinned-target-current-mainnet.py" \
   "${GENERATOR_ARGS[@]}"

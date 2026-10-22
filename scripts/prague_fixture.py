@@ -144,7 +144,8 @@ def run_t8n(env, alloc, txs, *, eels_root):
             "--output.body", "out-body.txt", "--state.fork", "Prague",
             "--state.chainid", "1", "--state.reward", "0",
         ]
-        subprocess.run(
+        run = getattr(sys, "_blanc_gate_read_audit_run", subprocess.run)
+        run(
             command, check=True, capture_output=True, text=True,
             env={**os.environ, "PYTHONPATH": os.path.join(str(eels_root), "src")},
         )

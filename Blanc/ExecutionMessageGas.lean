@@ -65,10 +65,13 @@ theorem ProcessCreateMessageTrace.settledFrames_length_gas_le {msg : Msg} {post 
       simp only [List.length_nil, Nat.zero_add]
       omega
 
-/-- The delegation-prefix gas preservations live in `Blanc.LadderBase`
-(`setDelegationStep_gas`, `setDelegationLoop_gas`, `setDelegation_gas`,
-`messageCallDelegation_gas`); only the execution-message wrapper stays here. -/
-private theorem messageCallExecutionMessage_gas (msg : Msg) :
+/-- Preserve the execution-trace API through the shared delegation gas lemma. -/
+theorem messageCallDelegation_gas {msg delegated : Msg} {refund : Nat}
+    (run : messageCallDelegation msg = .ok (delegated, refund)) :
+    delegated.gas = msg.gas := by
+  exact Blanc.messageCallDelegation_gas run
+
+theorem messageCallExecutionMessage_gas (msg : Msg) :
     (messageCallExecutionMessage msg).gas = msg.gas := by
   unfold messageCallExecutionMessage Msg.resolveCodeDelegation
   split <;> rfl

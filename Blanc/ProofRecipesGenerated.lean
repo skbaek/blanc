@@ -401,6 +401,22 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/PackedSha.lean", "declaration:Blanc.Lift.bexp_256_32"]
     boundary := "EVM exponentiation wraps modulo 2^256; ordinary unbounded-power identities need that modulus. This does not justify evaluating a large symbolic exponent or concrete memory. Advice recognizes only a direct equality whose left side is B256.bexp; nested arithmetic and reversed equalities are left to the author."
   },
+  {
+    id := "static-word-child"
+    status := "active"
+    triggers := ["goal-head:Lift.StaticWordChild"]
+    preferredPath := "Use Lift.StaticWordChild as the shared observation carrier for a static reply: supply its exact target, calldata, staticness, at-least-32-byte output and empty child logs. Extract those facts from an actual frame walk; preserve XAt or ChildOf separately when parent-child provenance matters."
+    symbols := ["module:Blanc/Lift/FrameWalk.lean", "declaration:Blanc.Lift.StaticWordChild"]
+    boundary := "This carrier does not establish a parent-child relation, successful execution, a decoded answer value, storage preservation, or a fixed return length. It allows extra return bytes. The recipe matches only a direct StaticWordChild goal; a nested carrier is not a match."
+  },
+  {
+    id := "normalized-call-world-transport"
+    status := "active"
+    triggers := ["goal-head:Devm.EqModGas"]
+    preferredPath := "For full state agreement modulo execution gas, use Devm.EqModGas.withGasLeft_eq to obtain literal equality at a common gas value, or Devm.EqModGas.of_normalized_eq to reduce the goal to equality after gas normalization. Preserve agreement through stack/memory replacement with .st, address warming with .addAccessedAddress, suspended-parent preparation with .callSpawnParent, and clean child incorporation with .callChildPost. The last step needs both parent and child agreement and preserves returndata, warm sets, refunds, original-pricing inputs, state-gas and tracking metadata."
+    symbols := ["module:Blanc/Lift/CallProfileTransport.lean", "declaration:Blanc.Devm.EqModGas.withGasLeft_eq", "declaration:Blanc.Devm.EqModGas.of_normalized_eq", "declaration:Blanc.Devm.EqModGas.st", "declaration:Blanc.Devm.EqModGas.addAccessedAddress", "declaration:Blanc.Devm.EqModGas.callSpawnParent", "declaration:Blanc.Devm.EqModGas.callChildPost"]
+    boundary := "This matches only the explicit Devm.EqModGas goal head. It establishes agreement outside execution gas, not an equality of gasLeft or consumed charges, and does not establish callee success, gas independence of arbitrary code, a profile, or caller liveness. Supply the parent and child relations; do not infer them from storage equality or a bounded-success call premise."
+  },
 ]
 
 end Blanc.ProofRecipes

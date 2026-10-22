@@ -7,6 +7,7 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 trap gate_semaphore_release EXIT
@@ -50,7 +51,7 @@ fi
 # byte-compare every prospective artifact with the committed fixture/manifest.
 # A coherent golden rewrite therefore cannot preserve a green Jaune replay by
 # merely updating consensus roots and manifest metadata.
-SEMANTIC_OUT="$(PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+SEMANTIC_OUT="$(PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/gen-weth10-redemption-fixtures.py" --check 2>&1)"
 SEMANTIC_STATUS=$?
 printf '%s\n' "$SEMANTIC_OUT"

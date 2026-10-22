@@ -407,7 +407,8 @@ def _run(
     text: bool = True,
 ) -> subprocess.CompletedProcess[Any]:
     try:
-        return subprocess.run(
+        runner = getattr(sys, "_blanc_gate_read_audit_run", subprocess.run)
+        return runner(
             argv,
             cwd=cwd,
             env=env,

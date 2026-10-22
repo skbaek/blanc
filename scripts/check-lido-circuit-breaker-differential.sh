@@ -4,6 +4,7 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
 ROOT="$(dirname "$SCRIPT_DIR")"
 . "$SCRIPT_DIR/gate-semaphore.sh"
 EELS_ROOT="${EELS_ROOT:-$HOME/execution-specs}"
@@ -25,7 +26,7 @@ if ! (cd "$ROOT" && lake env lean scripts/eval-lido-circuit-breaker-artifacts.le
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/gen-lido-circuit-breaker-differential.py" \
   --eels-root "$EELS_ROOT" --blanc-artifacts "$ARTIFACTS" "$@" >"$GENERATOR_OUT"; then
   exit 1
@@ -43,18 +44,18 @@ done
 # ordered 77-tag list plus a terminating newline.
 MANIFEST="$SCRIPT_DIR/fixtures/lido-circuit-breaker/manifest.json"
 EXPECTED_REQUIRED_TAGS_SHA256="c54962c0811e6ac20eb7d069fac549ff7a703ca2705d40c89f51d838c8c2877e"
-TAG_INFO="$($EELS_PY -c 'import hashlib,json,sys; p=json.load(open(sys.argv[1])); tags=p["coverage"]["requiredTags"]; payload=("\n".join(tags)+"\n").encode(); print(p["schema"],len(tags),hashlib.sha256(payload).hexdigest())' "$MANIFEST")"
+TAG_INFO="$(gate_audit_python $EELS_PY -c 'import hashlib,json,sys; p=json.load(open(sys.argv[1])); tags=p["coverage"]["requiredTags"]; payload=("\n".join(tags)+"\n").encode(); print(p["schema"],len(tags),hashlib.sha256(payload).hexdigest())' "$MANIFEST")"
 if [ "$TAG_INFO" != "2 77 $EXPECTED_REQUIRED_TAGS_SHA256" ]; then
   echo "REGRESSION — Lido CircuitBreaker differential: manifest schema or exact required-tag ownership drifted"
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/lido_circuit_breaker_resource_schema.py" "$MANIFEST" >/dev/null; then
   exit 1
 fi
 
-if ! PYTHONDONTWRITEBYTECODE=1 "$EELS_PY" \
+if ! PYTHONDONTWRITEBYTECODE=1 gate_audit_python "$EELS_PY" \
   "$SCRIPT_DIR/test-lido-circuit-breaker-resource-falsifiers.py" >/dev/null; then
   exit 1
 fi
