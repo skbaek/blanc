@@ -35,9 +35,10 @@ theorem requestsTrace_withdrawal_result {benv : Benv} {bout bout' : BlockOutput}
     (code : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
     trace.withdrawalState = (systemProtocolPost benv).state ∧
     trace.withdrawalOut = systemProtocolOutput benv := by
-  have same := Except.ok.inj
+  have same : (trace.withdrawalState, trace.withdrawalOut) =
+      ((systemProtocolPost benv).state, systemProtocolOutput benv) := Except.ok.inj
     (trace.withdrawalRun.symm.trans (processCheckedSystemTransaction_withdrawal fork code))
-  exact ⟨congrArg Prod.fst same, congrArg Prod.snd same⟩
+  exact Prod.mk.inj same
 
 /-- The actual withdrawal bytes sit after arbitrary prior/deposit entries
 and before the retained consolidation output; empty payload omission remains. -/

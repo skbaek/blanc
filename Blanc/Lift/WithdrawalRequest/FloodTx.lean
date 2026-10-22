@@ -141,9 +141,10 @@ theorem calldataTokens_payload : calldataTokens payload = 200 := by decide
 /-- Block C's intrinsic cost: the base cost plus the 200 calldata tokens at four gas,
 and their floor at ten. -/
 theorem txC_intrinsic {rules : ForkRules} (hsg : rules.stateGas = none)
-    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10) (E : Adr) :
+    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10)
+    (hnz : rules.txr.dataNonZero = 16) (hcf : rules.txr.calldataFloor = true) (E : Adr) :
     calculateIntrinsicCost rules txC E = (21800, 23000) := by
-  rw [calculateIntrinsicCost_two_call hsg rfl, hbase, hfloor]
+  rw [calculateIntrinsicCost_two_call hsg rfl hnz hcf, hbase, hfloor]
   show (21000 + calldataTokens payload * standardCallDataTokenCost,
     calldataTokens payload * 10 + 21000) = _
   rw [calldataTokens_payload]
@@ -473,7 +474,9 @@ theorem txC_exec
       submissionTailRead, afterSload_accountsToDelete, submissionCountStore,
       afterSstore_accountsToDelete, submissionCountRead, afterSload_accountsToDelete, hb0,
       afterSload_accountsToDelete]
-    rfl
+    show msg.inheritedDeletions.isEmpty = true
+    rw [← hm]
+    exact Std.HashSet.isEmpty_emptyWithCapacity
   · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct senderE).bal = _
     rw [(hacct senderE).2, hb0, afterSload_getAcct]
     show (after.state.get senderE).bal = _
@@ -538,7 +541,8 @@ theorem txC_processTransaction
         some (makeReceipt txC none bout'.cumulativeGasUsed post.logs) := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hcost : calculateIntrinsicCost benv.stat.rules txC senderE = (21800, 23000) :=
-    txC_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
+    txC_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork)
+      (CoveredFork.rules_dataNonZero hfork) (CoveredFork.rules_calldataFloor hfork) _
   have hprec : benv.stat.rules.isPrecomp withdrawalRequestPredeployAddress = false :=
     propext (iff_of_false (withdrawalRequest_not_precompile hfork) (by decide))
   have hnodeleg :
@@ -581,9 +585,10 @@ theorem calldataTokens_txBData : calldataTokens txB.data = 238 := by decide
 /-- Block B's intrinsic cost: the base cost plus the 2636 calldata tokens at four gas,
 and their floor at ten. -/
 theorem txB_intrinsic {rules : ForkRules} (hsg : rules.stateGas = none)
-    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10) (E : Adr) :
+    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10)
+    (hnz : rules.txr.dataNonZero = 16) (hcf : rules.txr.calldataFloor = true) (E : Adr) :
     calculateIntrinsicCost rules txB E = (21952, 23380) := by
-  rw [calculateIntrinsicCost_two_call hsg rfl, hbase, hfloor]
+  rw [calculateIntrinsicCost_two_call hsg rfl hnz hcf, hbase, hfloor]
   show (21000 + calldataTokens txB.data * standardCallDataTokenCost,
     calldataTokens txB.data * 10 + 21000) = _
   rw [calldataTokens_txBData]
@@ -677,7 +682,8 @@ theorem txB_processTransaction
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hEL : senderE ≠ looperAddress := by decide
   have hcost : calculateIntrinsicCost benv.stat.rules txB senderE = (21952, 23380) :=
-    txB_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
+    txB_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork)
+      (CoveredFork.rules_dataNonZero hfork) (CoveredFork.rules_calldataFloor hfork) _
   have hcap : checkTransactionGasCap benv.stat.rules.tx txB.gas = .ok () := by
     unfold checkTransactionGasCap
     rw [hnocap]
@@ -852,6 +858,10 @@ theorem txB_processTransaction
         show Blanc.WithdrawalRequest.RepresentsStorage (after.state.getStor _).get σ0
         rw [hstor]; exact hrep)
       hbalL hgasm (by show msg.gas < 2 ^ 256; rw [hm_gas]; decide)
+      (by
+        show msg.inheritedDeletions.isEmpty = true
+        rw [← hm]
+        exact Std.HashSet.isEmpty_emptyWithCapacity)
     have hmid_get : ∀ a, mid.get a = if senderE = a then
         (debit.get senderE).withBal (debit.bal senderE - (2895 : Nat).toB256) else debit.get a := by
       intro a

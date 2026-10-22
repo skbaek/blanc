@@ -391,8 +391,7 @@ private theorem afterSstore_get_ne {sevm : Sevm} {b : Devm} {key value : B256} {
         d.state.get a := by
     intro d rc
     show ((d.withRefundCounter rc).state.setStorVal sevm.currentTarget key value).get a = _
-    unfold State.setStorVal
-    rw [State.get_set_ne _ ha]
+    rw [State.setStorVal_get_ne _ ha]
     rfl
   unfold afterSstore
   split
@@ -783,8 +782,8 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
     exact h
   have catd : (submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
       Mem.empty (fwd + gCallStipend - U)).accountsToDelete.isEmpty = true := by
-    rw [submissionPost_accountsToDelete, afterSload_accountsToDelete]
-    exact Std.HashSet.isEmpty_emptyWithCapacity
+    rw [submissionPost_accountsToDelete, afterSload_accountsToDelete, ← hmsg]
+    exact callChildMsg_initDevm_accountsToDelete_isEmpty hfork
   have cothers : ∀ a, a ≠ withdrawalRequestPredeployAddress →
       (submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
         Mem.empty (fwd + gCallStipend - U)).state.get a = (initDevm msg).state.get a := by

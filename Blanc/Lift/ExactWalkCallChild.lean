@@ -30,6 +30,23 @@ def callChildMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (value : B256) (callee dad
     msg.withBenv (((msg.benv.withState stmid).clearStorageWritesIfEmpty msg.caller).addBal
       callee value)
 
+/-- At a covered fork (no self-destruct refund) a `CALL` child inherits no pending
+deletions, so its entry machine's deletion set is empty. -/
+theorem callChildMsg_initDevm_accountsToDelete_isEmpty {sevm : Sevm} {p : Devm} {mcs : Nat}
+    {value : B256} {callee dadr : Adr} {ii is : Nat} {code : ByteArray} {dp : Bool}
+    {stmid : State} (hfork : CoveredFork sevm.benvStat.fork) :
+    (initDevm (callChildMsg sevm p mcs value callee dadr ii is code dp stmid)).accountsToDelete.isEmpty
+      = true := by
+  have hsd : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
+      rfl rfl rfl rfl
+  change (callChildMsg sevm p mcs value callee dadr ii is code dp stmid).inheritedDeletions.isEmpty
+    = true
+  unfold callChildMsg
+  split <;>
+    simp only [valueCallSpawnMsg, Msg.withBenv, callMsg, hsd, ↓reduceIte,
+      Std.HashSet.isEmpty_emptyWithCapacity]
+
 /-- The parent state a `CALL` resumes in after its child halted cleanly. -/
 def callChildPost (p cpost : Devm) (oi os : Nat) : Devm :=
   ((incorporateChildOnSuccess p cpost cpost.output).setMach

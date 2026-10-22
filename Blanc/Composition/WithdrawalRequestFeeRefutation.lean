@@ -190,6 +190,13 @@ def stW (b : Benv) : State := (Blanc.Lift.WithdrawalRequest.systemProtocolPost b
 def benvC (benv : Benv) (s : State) : Benv :=
   ((benvH benv).withState s).withState (stW ((benvH benv).withState s))
 
+/-- `benvC`'s state, named without unfolding the 7002 frame: unifying it against
+`systemProtocolPost`'s state by defeq whnf-evaluates the frame. -/
+theorem benvC_state (benv : Benv) (s : State) :
+    (benvC benv s).state =
+      (Blanc.Lift.WithdrawalRequest.systemProtocolPost ((benvH benv).withState s)).state := by
+  dsimp only [benvC, Benv.withState, stW]
+
 /-- The body's final state. -/
 def bodyPost (benv : Benv) (s : State) : State :=
   (Blanc.Lift.ConsolidationRequest.systemPost (benvC benv s)).state
@@ -203,7 +210,7 @@ def bodyOut (benv : Benv) (s : State) (bout : BlockOutput) : BlockOutput :=
 theorem benvC_state_getStor7251 (benv : Benv) (s : State) :
     (benvC benv s).state.getStor consolidationRequestPredeployAddress =
       s.getStor consolidationRequestPredeployAddress :=
-  systemW_post_getStor_other ((benvH benv).withState s) _ (by decide)
+  by rw [benvC_state]; exact systemW_post_getStor_other ((benvH benv).withState s) _ (by decide)
 
 /-- **A body without withdrawals**: the two unchecked system calls, the given transaction fold
 settling at `s`, and the two checked request calls on an empty 7251 queue. -/
@@ -211,14 +218,14 @@ theorem body_of_txs {benv : Benv} {txs : List (Bytes ⊕ Tx)} {decoded : List Tx
     {s : State} {bout : BlockOutput} {lastHash : B256}
     (hfork : CoveredFork benv.stat.fork) (installed : SystemCodeInstalled benv.state)
     (hlast : benv.stat.blockHashes.getLast? = some lastHash)
-    (hdecode : txs.mapM decodeTx = .ok decoded)
+    (hdecode : txs.mapM (decodeTx benv.stat.rules) = .ok decoded)
     (htxs : applyTransactions decoded.putIndex (benvH benv) BlockOutput.init =
       .ok ((benvH benv).withState s, bout))
     (hdeposit : parseDepositRequests bout = .ok [])
     (hWcode : s.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
     (hCcode : s.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
     (hz : Slots7251Zero s) :
-    applyBody benv txs [] = .ok (bodyPost benv s, bodyOut benv s bout) := by
+    applyBody benv txs [] [] = .ok (bodyPost benv s, bodyOut benv s bout) := by
   have hbeaconCode := systemCodeInstalled_beaconRoots installed
   have hhistoryCode := systemCodeInstalled_historyStorage installed
   obtain ⟨hbeacon, -⟩ := stBeacon_step hfork hbeaconCode
@@ -227,7 +234,7 @@ theorem body_of_txs {benv : Benv} {txs : List (Bytes ⊕ Tx)} {decoded : List Tx
     (benv := (benvH benv).withState s) hfork hWcode
   have hCcode' : (benvC benv s).state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode :=
-    (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
+    by rw [benvC_state]; exact (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
   have hC := (checkedC_of_zero (benvC benv s) hfork hCcode'
     (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz)).1
   exact applyBody_forward hfork hbeacon hlast hhistory hdecode htxs hdeposit hW hC
@@ -241,10 +248,10 @@ theorem bodyPost_get_other {benv : Benv} {s : State} (hfork : CoveredFork benv.s
     (bodyPost benv s).get a = s.get a := by
   have hCcode' : (benvC benv s).state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode :=
-    (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
+    by rw [benvC_state]; exact (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
   unfold bodyPost
   rw [systemC_post_get_other (benvC benv s) hfork hCcode'
-    (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz) a (Ne.symm hC)]
+    (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz) a (Ne.symm hC), benvC_state]
   exact systemW_post_get_other ((benvH benv).withState s) a hW
 
 /-- The body's final 7002 account is the one the 7002 system call leaves. -/
@@ -255,18 +262,18 @@ theorem bodyPost_get7002 {benv : Benv} {s : State} (hfork : CoveredFork benv.sta
       (stW ((benvH benv).withState s)).get withdrawalRequestPredeployAddress := by
   have hCcode' : (benvC benv s).state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode :=
-    (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
+    by rw [benvC_state]; exact (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
   unfold bodyPost
   rw [systemC_post_get_other (benvC benv s) hfork hCcode'
-    (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz) _ (by decide)]
-  rfl
+    (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz) _ (by decide), benvC_state,
+    stW]
 
 theorem bodyPost_zero {benv : Benv} {s : State} (hfork : CoveredFork benv.stat.fork)
     (hCcode : s.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
     (hz : Slots7251Zero s) : Slots7251Zero (bodyPost benv s) := by
   have hCcode' : (benvC benv s).state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode :=
-    (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
+    by rw [benvC_state]; exact (systemW_post_getCode ((benvH benv).withState s) _).trans hCcode
   exact systemC_post_zero (benvC benv s) hfork hCcode'
     (slots7251Zero_of_getStor (benvC_state_getStor7251 benv s) hz)
 
@@ -347,7 +354,8 @@ theorem txC_submissionFrame {benv : Benv} {state : State} {bout' : BlockOutput}
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hEP : senderE ≠ withdrawalRequestPredeployAddress := by decide
   have hcost : calculateIntrinsicCost benv.stat.rules txC senderE = (21800, 23000) :=
-    txC_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
+    txC_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork)
+      (CoveredFork.rules_dataNonZero hfork) (CoveredFork.rules_calldataFloor hfork) _
   have hprec : benv.stat.rules.isPrecomp withdrawalRequestPredeployAddress = false :=
     propext (iff_of_false (Blanc.Lift.WithdrawalRequest.withdrawalRequest_not_precompile hfork)
       (by decide))
@@ -514,7 +522,7 @@ theorem blockA_run {benv : Benv} {lastHash : B256}
       checkpointState.getStor withdrawalRequestPredeployAddress)
     (h7251 : benv.state.getStor consolidationRequestPredeployAddress =
       checkpointState.getStor consolidationRequestPredeployAddress) :
-    applyBody benv [] [] =
+    applyBody benv [] [] [] =
       .ok (bodyPost benv (stHistory benv), bodyOut benv (stHistory benv) BlockOutput.init) ∧
     Slots7251Zero (bodyPost benv (stHistory benv)) ∧
     Blanc.WithdrawalRequest.RepresentsStorage
@@ -605,7 +613,7 @@ theorem blockB_run {benv : Benv} {lastHash : B256}
     (hbase : benv.stat.baseFeePerGas = 1) (hroom : 2 ^ 28 ≤ benv.stat.blockGasLimit)
     (hcb : benv.stat.coinbase ≠ senderE) :
     ∃ (s : State) (bout : BlockOutput),
-      applyBody benv [Sum.inr txB] [] = .ok (bodyPost benv s, bodyOut benv s bout) ∧
+      applyBody benv [Sum.inr txB] [] [] = .ok (bodyPost benv s, bodyOut benv s bout) ∧
       bout.blockGasUsed ≤ 2 ^ 28 ∧ PreC (bodyPost benv s) := by
   have hsender : (stHistory benv).get senderE = checkpointState.get senderE :=
     (stHistory_get_of_installed hfork installed hlast (by decide) (by decide)).trans hpre.sender
@@ -696,7 +704,7 @@ theorem blockB_run {benv : Benv} {lastHash : B256}
     slots7251Zero_of_getStor ((TxBPost_settled_stor7251 hQ (by decide) (by decide) (by decide)
       _ _ _ _ hpB).trans (stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide)))
       hpre.zero
-  refine ⟨sB, bout', body_of_txs hfork installed hlast (decode_single txB) htxs hdeposit
+  refine ⟨sB, bout', body_of_txs hfork installed hlast (decode_single _ txB) htxs hdeposit
     hWcode hCcode hz, ?_, ?_⟩
   · rw [hblk]
     exact (Nat.zero_add _).le.trans (txGasUsed_le (by decide))
@@ -818,7 +826,7 @@ theorem blockC_run {benv : Benv} {lastHash : B256}
     (hchain : benv.stat.chainId = 1) (hbase : benv.stat.baseFeePerGas = 1)
     (hroom : 2 ^ 20 ≤ benv.stat.blockGasLimit) :
     ∃ (s : State) (bout : BlockOutput),
-      applyBody benv [Sum.inr txC] [] = .ok (bodyPost benv s, bodyOut benv s bout) ∧
+      applyBody benv [Sum.inr txC] [] [] = .ok (bodyPost benv s, bodyOut benv s bout) ∧
       bout.blockGasUsed ≤ 2 ^ 20 := by
   have hready := txCReady_stHistory hfork installed hlast hpre
   have hrecover : recoverSender benv.stat.chainId txC = .ok senderE := by
@@ -870,7 +878,7 @@ theorem blockC_run {benv : Benv} {lastHash : B256}
   have hz : Slots7251Zero sC :=
     slots7251Zero_of_getStor ((TxCPost_settled_stor7251 hQ (by decide) _ _ _ _ hpC).trans
       (stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide))) hpre.zero
-  refine ⟨sC, bout', body_of_txs hfork installed hlast (decode_single txC) htxs hdeposit
+  refine ⟨sC, bout', body_of_txs hfork installed hlast (decode_single _ txC) htxs hdeposit
     hWcode hCcode hz, ?_⟩
   rw [hblk]
   exact (Nat.zero_add _).le.trans (txGasUsed_le (by decide))
@@ -918,23 +926,22 @@ theorem witnessBlockTrace {pre : BlockChain} {parent : Block} {txs : List (Bytes
     (hlastBlock : pre.blocks.getLast? = some parent)
     (hbound : sum pre.state.bal < 2 ^ 256) (hid : pre.chainId = 1)
     (hparentLimit : parent.header.gasLimit = 2 ^ 29)
-    (hparentBase : parent.header.baseFeePerGas = 1)
+    (hparentBase : parent.header.baseFeePerGas = some 1)
     (hparentUsed : parent.header.gasUsed ≤ 2 ^ 28)
-    (hbody : applyBody (benvAt pre parent) txs [] = .ok (st, bout))
+    (hbody : applyBody (benvAt pre parent) txs [] [] = .ok (st, bout))
     (hgas : bout.blockGasUsed ≤ 2 ^ 29) :
     Nonempty (ConfiguredBlockTrace witnessConfig pre
       (mkChain pre (mkBlock parent txs st bout) st)) := by
-  have hbase : calculateBaseFeePerGas
-      (commitHeader (Fork.ruleSet .prague) parent witnessTemplate st bout).gasLimit
-      parent.header.gasLimit parent.header.gasUsed parent.header.baseFeePerGas =
-      .ok (commitHeader (Fork.ruleSet .prague) parent witnessTemplate st bout).baseFeePerGas := by
-    rw [hparentLimit, hparentBase]
+  have hbase : calculateBaseFeePerGas witnessTemplate.gasLimit parent.header.gasLimit
+      parent.header.gasUsed 1 = .ok 1 := by
+    rw [hparentLimit]
     exact calculateBaseFeePerGas_unit (gasLimit := 2 ^ 29) (by decide) (by decide) (by decide)
       (by show parent.header.gasUsed ≤ 2 ^ 29 / 2; omega)
-  have hheader := commitHeader_ok (rules := Fork.ruleSet .prague) (chain := pre)
-    (template := witnessTemplate) hlastBlock hbase hgas (by decide) rfl rfl
+  have hheader := commitHeader_ok (fork := .prague) (chain := pre) (template := witnessTemplate)
+    (st := st) (bout := bout) prague_covered hlastBlock hparentBase rfl hbase rfl hgas
+    (by decide) rfl rfl
   exact blockTrace_of_body (block := mkBlock parent txs st bout) hbound rfl
-    (by rw [witnessConfig_chainId, hid]) (witnessConfig_forkAt _) prague_covered hheader rfl
+    (by rw [witnessConfig_chainId, hid]) (witnessConfig_forkAt _ _) prague_covered hheader rfl
     hbody rfl rfl rfl rfl rfl rfl rfl rfl
 
 /-! ## Creation-freedom of the witness world -/
@@ -1008,8 +1015,8 @@ theorem checkpoint_callOnly : CodesCallOnly checkpointState.getCode := by
 
 /-- A retained body's pre-transaction states are the functional ones. -/
 theorem AppliedBodyTrace.history_eq {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {st : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds st bout) (hfork : CoveredFork benv.stat.fork)
+    {ommers : List Header} {wds : List Withdrawal} {st : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds st bout) (hfork : CoveredFork benv.stat.fork)
     (installed : SystemCodeInstalled benv.state) :
     trace.beaconState = stBeacon benv ∧ trace.historyState = stHistory benv := by
   have hbeaconCode := systemCodeInstalled_beaconRoots installed
@@ -1035,8 +1042,8 @@ theorem ApplyTransactionsTrace.noSender_single {txs : List (Nat × Tx)} {benv fi
 
 /-- The one transaction of a witness block is a call without authorizations. -/
 theorem calls_of_single {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {tx : Tx}
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) {tx : Tx}
     (hdecoded : trace.decodedTxs = [tx]) {t : Adr} (hreceiver : tx.type.receiver? = some t)
     (hauths : tx.auths = []) :
     ∀ p ∈ trace.decodedTxs.putIndex, (∃ t, p.2.type.receiver? = some t) ∧ p.2.auths = [] := by
@@ -1046,8 +1053,8 @@ theorem calls_of_single {benv : Benv} {txs : List (Bytes ⊕ Tx)}
   exact ⟨⟨t, hreceiver⟩, hauths⟩
 
 theorem calls_of_nil {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (hdecoded : trace.decodedTxs = []) :
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) (hdecoded : trace.decodedTxs = []) :
     ∀ p ∈ trace.decodedTxs.putIndex, (∃ t, p.2.type.receiver? = some t) ∧ p.2.auths = [] := by
   intro p hp
   rw [hdecoded] at hp
@@ -1096,6 +1103,9 @@ theorem chain_blocks_ne (pre : BlockChain) (block : Block) (st : State) :
     (mkChain pre block st).blocks ≠ [] :=
   appendBlock_ne_nil _ _
 
+theorem mkChain_state (pre : BlockChain) (block : Block) (st : State) :
+    (mkChain pre block st).state = st := rfl
+
 theorem mkChain_getLast (pre : BlockChain) (block : Block) (st : State) :
     (mkChain pre block st).blocks.getLast? = some block :=
   appendBlock_getLast? _ _
@@ -1106,7 +1116,7 @@ structure ChainReady (chain : BlockChain) (parent : Block) : Prop where
   nonempty : chain.blocks ≠ []
   chainId : chain.chainId = 1
   gasLimit : parent.header.gasLimit = 2 ^ 29
-  baseFee : parent.header.baseFeePerGas = 1
+  baseFee : parent.header.baseFeePerGas = some 1
   gasUsed : parent.header.gasUsed ≤ 2 ^ 28
 
 theorem chainReady_mk (pre : BlockChain) (parent : Block) (txs : List (Bytes ⊕ Tx))
@@ -1157,11 +1167,15 @@ theorem stageB {pre : BlockChain} {parent : Block} (ready : ChainReady pre paren
   have hchain : (((initBenv trace.fork pre trace.block.header).withState
       trace.bodyTrace.beaconState).withState trace.bodyTrace.historyState).stat.chainId = 1 :=
     ready.chainId
-  exact ⟨_, trace, _, blockOk_of trace hworld installed hbound (by rw [blockEq]; rfl)
+  -- `PreC` is reached through `mkChain_state`: unifying the chain's state with
+  -- `bodyPost` by defeq whnf-evaluates the body.
+  refine ⟨_, trace, mkBlock parent [Sum.inr txB] (bodyPost (benvAt pre parent) sB)
+      (bodyOut (benvAt pre parent) sB boutB), ?_, by rw [mkChain_state]; exact hpreC,
+    chainReady_mk _ _ _ _ _ ready.chainId hgas⟩
+  exact blockOk_of trace hworld installed hbound (by rw [blockEq]; rfl)
     (calls_of_single _ decoded rfl rfl)
     (ApplyTransactionsTrace.noSender_single trace.bodyTrace.transactions
-      (by rw [decoded]; rfl) (by rw [hchain]; exact txB_recoveredSender)),
-    hpreC, chainReady_mk _ _ _ _ _ ready.chainId hgas⟩
+      (by rw [decoded]; rfl) (by rw [hchain]; exact txB_recoveredSender))
 
 /-- **Stage C**, with block C's committed submission frame. -/
 theorem stageC {pre : BlockChain} {parent : Block} (ready : ChainReady pre parent)
@@ -1194,7 +1208,7 @@ theorem stageC {pre : BlockChain} {parent : Block} (ready : ChainReady pre paren
     exact txCReady_stHistory hfork0 installed0 hl0 hpre
   have hchain : benv0.stat.chainId = 1 := ready.chainId
   have hbase : benv0.stat.baseFeePerGas = 1 := by
-    show trace.block.header.baseFeePerGas = 1
+    show (trace.block.header.baseFeePerGas).getD 0 = 1
     rw [blockEq]; rfl
   have hlimit : benv0.stat.blockGasLimit = 2 ^ 29 := by
     show trace.block.header.gasLimit = 2 ^ 29

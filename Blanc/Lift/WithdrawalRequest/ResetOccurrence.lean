@@ -69,7 +69,12 @@ private theorem systemProtocol_call_occurrence {benv : Benv} {state : State} {ou
     change ∃ frame : Exec.Frame, coreTrace.settledFrames = [frame] ∧
       frame.sevm = systemProtocolSevm benv ∧ frame.pre = systemProtocolBase benv ∧
       frame.post = systemProtocolPost benv
-    change Except.ok (systemProtocolMsg benv, 0) = Except.ok (delegated, refund) at delegation
+    have hauths : (systemProtocolMsg benv).tenv.stat.auths.isEmpty = true := rfl
+    have delegationEq : messageCallDelegation (systemProtocolMsg benv) =
+        .ok (systemProtocolMsg benv, 0) := by
+      simp only [messageCallDelegation, processMessageCall.legacyAuthorization, hauths,
+        Bool.or_true, ↓reduceIte]
+    rw [delegationEq] at delegation
     rcases Prod.mk.inj (Except.ok.inj delegation) with ⟨delegatedEq, refundEq⟩
     subst delegated refund
     have executionMessage : messageCallExecutionMessage (systemProtocolMsg benv) =
@@ -77,7 +82,9 @@ private theorem systemProtocol_call_occurrence {benv : Benv} {state : State} {ou
       unfold messageCallExecutionMessage
       have nondelegated : getDelegatedCodeAddress (systemProtocolMsg benv).code = none :=
         withdrawalRequestCode_nondelegated
-      rw [nondelegated]
+      cases enabled : (systemProtocolMsg benv).benv.stat.rules.delegationEnabled
+      · exact Msg.resolveCodeDelegation_disabled _ enabled
+      · rw [Msg.resolveCodeDelegation_enabled _ enabled, nondelegated]
     rw [executionMessage] at execMsgEq
     subst execMsg
     have evmEq : evm = systemProtocolPost benv :=

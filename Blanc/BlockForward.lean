@@ -181,8 +181,10 @@ theorem processGeneralPurposeRequests_forward {benv : Benv} {bout : BlockOutput}
 /-! ## The body -/
 
 /-- The forward block body: two unchecked system calls, a transaction fold from
-`BlockOutput.init`, no withdrawals, and the two checked request calls. -/
-theorem applyBody_forward {benv : Benv} {txs : List (Bytes ⊕ Tx)} {txList : List Tx}
+`BlockOutput.init`, no withdrawals, and the two checked request calls. A covered
+fork pays no proof-of-work reward, so the ommer list is never read. -/
+theorem applyBody_forward {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {txList : List Tx}
     {stBeacon stHistory : State} {outBeacon outHistory : MsgCallOutput} {lastHash : B256}
     {benvTxs : Benv} {boutTxs : BlockOutput}
     {stW stC : State} {outW outC : MsgCallOutput}
@@ -192,7 +194,7 @@ theorem applyBody_forward {benv : Benv} {txs : List (Bytes ⊕ Tx)} {txList : Li
     (hlast : benv.stat.blockHashes.getLast? = some lastHash)
     (hhistory : processUncheckedSystemTransaction (benv.withState stBeacon)
       historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory))
-    (hdecode : txs.mapM decodeTx = .ok txList)
+    (hdecode : txs.mapM (decodeTx benv.stat.rules) = .ok txList)
     (htxs : applyTransactions txList.putIndex ((benv.withState stBeacon).withState stHistory)
       BlockOutput.init = .ok (benvTxs, boutTxs))
     (hdeposit : parseDepositRequests boutTxs = .ok [])
@@ -200,45 +202,65 @@ theorem applyBody_forward {benv : Benv} {txs : List (Bytes ⊕ Tx)} {txList : Li
       .ok (stW, outW))
     (hC : processCheckedSystemTransaction (benvTxs.withState stW)
       consolidationRequestPredeployAddress [] = .ok (stC, outC)) :
-    applyBody benv txs [] = .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) := by
+    applyBody benv txs ommers [] =
+      .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) := by
   have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
-  have hinit : ({} : BalBuilder).incorporateSystem benv.stat.rules 0 benv.state stBeacon
-      (beaconRootsAddress :: outBeacon.accountReads.toList) outBeacon.storageReads.toList outBeacon.storageWrites.toList =
-      ({} : BalBuilder) := by
-    unfold BalBuilder.incorporateSystem
-    rw [hbal]
-  have hinit' : ({} : BalBuilder).incorporateSystem benv.stat.rules 0
-      (benv.withState stBeacon).state stHistory
-      (historyStorageAddress :: outHistory.accountReads.toList) outHistory.storageReads.toList outHistory.storageWrites.toList =
-      ({} : BalBuilder) := by
+  have hbeaconOn : benv.stat.rules.sys.beaconRoots = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).sys.beaconRoots = true) rfl rfl rfl rfl
+  have hhistoryOn : benv.stat.rules.sys.historyStorage = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).sys.historyStorage = true) rfl rfl rfl rfl
+  have hwdsOn : benv.stat.rules.header.withdrawalsRoot = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).header.withdrawalsRoot = true)
+      rfl rfl rfl rfl
+  have hrequestsOn : benv.stat.rules.header.requestsHash = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).header.requestsHash = true) rfl rfl rfl rfl
+  have hpow : benv.stat.rules.pow = none :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).pow = none) rfl rfl rfl rfl
+  have hB : beaconRootsCall benv.stat.rules benv = .ok (stBeacon, ({} : BalBuilder)) := by
+    unfold beaconRootsCall
+    rw [if_pos hbeaconOn]
+    simp only [Except.mapError, hbeacon, bind, Except.bind]
     unfold BalBuilder.incorporateSystem
     rw [hbal]
   have hlast' : (benv.withState stBeacon).stat.blockHashes.getLast? = some lastHash := hlast
+  have hH : historyStorageCall benv.stat.rules (benv.withState stBeacon) ({} : BalBuilder) =
+      .ok (stHistory, ({} : BalBuilder)) := by
+    unfold historyStorageCall
+    rw [if_pos hhistoryOn]
+    simp only [hlast', Option.toExcept, Except.mapError, hhistory, bind, Except.bind]
+    unfold BalBuilder.incorporateSystem
+    rw [hbal]
+  have hdecode' : txs.mapM (decodeTx ((benv.withState stBeacon).withState stHistory).stat.rules) =
+      .ok txList := hdecode
+  have hinitEq : ({ BlockOutput.init with bal := ({} : BalBuilder) } : BlockOutput) =
+      BlockOutput.init := rfl
   have hforkTxs : CoveredFork benvTxs.stat.fork := by
     obtain ⟨trace⟩ := exists_applyTransactionsTrace htxs hfork
     rw [trace.stat_eq]
     exact hfork
   have hrequests := processGeneralPurposeRequests_forward hforkTxs hdeposit hW hC
-  have hwithdrawals : processWithdrawals benvTxs boutTxs [] = (benvTxs.state, boutTxs) := rfl
+  have hwds : withdrawalsPass benv.stat.rules benvTxs boutTxs [] = (benvTxs.state, boutTxs) := by
+    unfold withdrawalsPass
+    rw [if_pos hwdsOn]
+    unfold BalBuilder.incorporateSystem
+    rw [hbal]
+    rfl
   have hself : benvTxs.withState benvTxs.state = benvTxs := by
     cases benvTxs
     rfl
-  have hinitEq : ({ BlockOutput.init with bal := ({} : BalBuilder) } : BlockOutput) =
-      BlockOutput.init := rfl
-  cases boutTxs
+  have hR : requestsPass benv.stat.rules (benvTxs.withState benvTxs.state) boutTxs =
+      .ok (stC, { boutTxs with requests := (boutTxs.requests ++
+        optionalRequestEntry 1 outW.returnData ++ optionalRequestEntry 2 outC.returnData) }) := by
+    unfold requestsPass
+    rw [if_pos hrequestsOn, hself, hrequests]
   unfold applyBody
-  rw [hbeacon]
-  simp only [Except.mapError, bind, Except.bind]
-  rw [hlast']
-  simp only [Option.toExcept]
-  rw [hhistory, hdecode]
-  simp only [BalBuilder.incorporateSystem, hbal]
+  simp only [hB, hH, hdecode', bind, Except.bind]
   rw [hinitEq, htxs]
   dsimp only
-  rw [hwithdrawals]
+  rw [hwds]
   dsimp only
-  rw [hself, hrequests]
-  simp only [checkBlockAccessListGasLimit, hbal]
+  rw [hR]
+  simp only [hpow, hbal, checkBlockAccessListGasLimit]
   rfl
 
 /-! ## The header -/
@@ -293,30 +315,65 @@ theorem calculateBaseFeePerGas_unit {gasLimit parentGasUsed : Nat}
       omega
     rw [hzero]
 
+/-- A covered fork's header rules: every pre-Prague optional field is defined
+and the consensus is proof of stake. -/
+theorem coveredFork_header_rules {fork : Fork} (hcovered : CoveredFork fork) :
+    fork.ruleSet.header.baseFee = true ∧ fork.ruleSet.header.withdrawalsRoot = true ∧
+      fork.ruleSet.header.blobGas = true ∧ fork.ruleSet.header.parentBeaconBlockRoot = true ∧
+        fork.ruleSet.pow = none :=
+  hcovered.cases (motive := fun f => f.ruleSet.header.baseFee = true ∧
+      f.ruleSet.header.withdrawalsRoot = true ∧ f.ruleSet.header.blobGas = true ∧
+        f.ruleSet.header.parentBeaconBlockRoot = true ∧ f.ruleSet.pow = none)
+    ⟨rfl, rfl, rfl, rfl, rfl⟩ ⟨rfl, rfl, rfl, rfl, rfl⟩ ⟨rfl, rfl, rfl, rfl, rfl⟩
+    ⟨rfl, rfl, rfl, rfl, rfl⟩
+
 /-- A header validates against the chain it extends when its parent fields
-and its own rule-dependent fields are exactly as `validateHeader` demands. -/
-theorem validateHeader_ok_of_facts {rules : ForkRules} {chain : BlockChain}
-    {header : Header} {parent : Block}
+and its own rule-dependent fields are exactly as `validateHeader` demands, at a
+covered fork whose parent already carries a base fee. -/
+theorem validateHeader_ok_of_facts {fork : Fork} {chain : BlockChain}
+    {header : Header} {parent : Block} {parentFee fee : Nat}
+    (hcovered : CoveredFork fork)
     (hlast : chain.blocks.getLast? = some parent)
     (hparentHash : header.parentHash = parent.header.hash)
+    (hparentFee : parent.header.baseFeePerGas = some parentFee)
+    (hfee : header.baseFeePerGas = some fee)
     (hbase : calculateBaseFeePerGas header.gasLimit parent.header.gasLimit
-      parent.header.gasUsed parent.header.baseFeePerGas = .ok header.baseFeePerGas)
-    (hblob : header.excessBlobGas = calculateExcessBlobGas rules.blob parent.header)
+      parent.header.gasUsed parentFee = .ok fee)
+    (hwds : header.withdrawalsRoot.isSome = true)
+    (hblobGasUsed : header.blobGasUsed.isSome = true)
+    (hblob : header.excessBlobGas = some (calculateExcessBlobGas fork.ruleSet.blob parent.header))
+    (hbeacon : header.parentBeaconBlockRoot.isSome = true)
     (hgas : header.gasUsed ≤ header.gasLimit)
     (htime : parent.header.timestamp < header.timestamp)
     (hnumber : header.number = parent.header.number + 1)
     (hextra : header.extraData.length ≤ 32)
     (hdifficulty : header.difficulty = 0) (hnonce : header.nonce = 0)
     (hommers : header.ommersHash = emptyOmmerHash)
-    (hbal : header.blockAccessListHash.isSome = rules.header.blockAccessListHash)
-    (hslot : header.slotNumber.isSome = rules.header.slotNumber) :
-    validateHeader rules chain header = .ok () := by
+    (hbal : header.blockAccessListHash.isSome = fork.ruleSet.header.blockAccessListHash)
+    (hslot : header.slotNumber.isSome = fork.ruleSet.header.slotNumber) :
+    validateHeader fork.ruleSet chain header = .ok () := by
+  obtain ⟨hbaseFeeOn, hwdsOn, hblobOn, hbeaconOn, hpow⟩ := coveredFork_header_rules hcovered
   have hgt : ¬ header.gasUsed > header.gasLimit := Nat.not_lt.mpr hgas
   have hle : ¬ header.timestamp ≤ parent.header.timestamp := Nat.not_le.mpr htime
   have hextra' : ¬ header.extraData.length > 32 := Nat.not_lt.mpr hextra
-  simp only [validateHeader, hlast, Option.toExcept, bind, Except.bind, hparentHash, Header.hash,
-    hbase, Except.mapError, hblob, hgt, hle, hnumber, hextra', hdifficulty, hnonce, hommers, hbal,
-    hslot, ne_eq, not_true_eq_false, ite_false]
+  have hshape : checkHeaderShape fork.ruleSet header = .ok () := by
+    simp only [checkHeaderShape, checkHeaderFieldPresence, hfee, hwds, hblobGasUsed, hblob,
+      hbeacon, hbaseFeeOn, hwdsOn, hblobOn, hbeaconOn, Option.isSome_some, ne_eq,
+      not_true_eq_false, ite_false, bind, Except.bind]
+  have hfirst : checkFirstFeeGasLimit header parent.header = .ok () := by
+    simp only [checkFirstFeeGasLimit, hfee, hparentFee, Option.isSome_some,
+      Option.isNone_some, Bool.and_false, Bool.false_eq_true, ite_false]
+  have hexpected : expectedBaseFee header parent.header = .ok (some fee) := by
+    simp only [expectedBaseFee, hfee, hparentFee, hbase]
+    rfl
+  have hconsensus : checkConsensusFields fork.ruleSet header parent.header = .ok () := by
+    simp only [checkConsensusFields, hpow, hdifficulty, hnonce, hommers, ne_eq,
+      not_true_eq_false, ite_false, bind, Except.bind]
+    rfl
+  simp only [validateHeader, hshape, hlast, Option.toExcept, bind, Except.bind, hparentHash,
+    Header.hash, Except.mapError, hfirst, hexpected, hblob, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true, ite_false, hgt, hfee, hle, hnumber, hextra', hconsensus, hbal, hslot,
+    ne_eq, not_true_eq_false]
   rfl
 
 /-- A header template with the block-dependent fields committed to a body and
@@ -341,23 +398,24 @@ def commitHeader (rules : ForkRules) (parent : Block) (template : Header)
     requestsHash := some (computeRequestsHash bout.requests) }
 
 /-- The committed header validates from its parent tip, base-fee equation,
-extra-data bound, and rule-dependent optional-field facts. -/
-theorem commitHeader_ok {rules : ForkRules} {chain : BlockChain} {parent : Block}
-    {template : Header} {st : State} {bout : BlockOutput}
+extra-data bound, and rule-dependent optional-field facts, at a covered fork. -/
+theorem commitHeader_ok {fork : Fork} {chain : BlockChain} {parent : Block}
+    {template : Header} {st : State} {bout : BlockOutput} {parentFee fee : Nat}
+    (hcovered : CoveredFork fork)
     (hlast : chain.blocks.getLast? = some parent)
-    (hbase : calculateBaseFeePerGas (commitHeader rules parent template st bout).gasLimit
-      parent.header.gasLimit parent.header.gasUsed parent.header.baseFeePerGas =
-      .ok (commitHeader rules parent template st bout).baseFeePerGas)
+    (hparentFee : parent.header.baseFeePerGas = some parentFee)
+    (hfee : template.baseFeePerGas = some fee)
+    (hbase : calculateBaseFeePerGas template.gasLimit parent.header.gasLimit
+      parent.header.gasUsed parentFee = .ok fee)
+    (hbeacon : template.parentBeaconBlockRoot.isSome = true)
     (hgas : bout.blockGasUsed ≤ template.gasLimit)
     (hextra : template.extraData.length ≤ 32)
-    (hbal : template.blockAccessListHash.isSome = rules.header.blockAccessListHash)
-    (hslot : template.slotNumber.isSome = rules.header.slotNumber) :
-    validateHeader rules chain (commitHeader rules parent template st bout) = .ok () := by
-  apply validateHeader_ok_of_facts (header := commitHeader rules parent template st bout)
-  · exact hlast
-  · rfl
-  · exact hbase
-  · rfl
+    (hbal : template.blockAccessListHash.isSome = fork.ruleSet.header.blockAccessListHash)
+    (hslot : template.slotNumber.isSome = fork.ruleSet.header.slotNumber) :
+    validateHeader fork.ruleSet chain (commitHeader fork.ruleSet parent template st bout) =
+      .ok () := by
+  apply validateHeader_ok_of_facts (header := commitHeader fork.ruleSet parent template st bout)
+    hcovered hlast rfl hparentFee hfee hbase rfl rfl rfl hbeacon
   · change bout.blockGasUsed ≤ template.gasLimit
     exact hgas
   · change parent.header.timestamp < parent.header.timestamp + 1
@@ -392,8 +450,8 @@ theorem stateTransitionChecks_ok_of_eq {bout : BlockOutput} {header : Header}
     rw [hstateGas]
     exact Nat.max_eq_left (Nat.zero_le _)
   simp only [stateTransitionChecks, hmax, hgasUsed, htxsRoot, hstateRoot, hreceiptRoot, hbloom,
-    hwithdrawalsRoot, hblobGasUsed, hrequestsHash, ne_eq, not_true_eq_false, ite_false, bind,
-    Except.bind]
+    hwithdrawalsRoot, hblobGasUsed, hrequestsHash, Option.any_some, bne_self_eq_false,
+    Bool.false_eq_true, ne_eq, not_true_eq_false, ite_false, bind, Except.bind]
   rfl
 
 /-- The configured transition of a block whose header validates, whose body
@@ -401,11 +459,12 @@ succeeds, and whose commitments are the body's results, on a covered fork. -/
 theorem stateTransitionUsing_forward {cfg : ChainConfig} {pre : BlockChain} {block : Block}
     {fork : Fork} {st : State} {bout : BlockOutput}
     (hid : cfg.chainId = pre.chainId)
-    (hforkAt : cfg.forkAt block.header.timestamp = .ok fork)
+    (hforkAt : cfg.forkAt block.header.number block.header.timestamp = .ok fork)
     (hcovered : CoveredFork fork)
     (hheader : validateHeader fork.ruleSet pre block.header = .ok ())
     (hommers : block.ommers = [])
-    (hbody : applyBody (initBenv fork pre block.header) block.txs block.wds = .ok (st, bout))
+    (hbody : applyBody (initBenv fork pre block.header) block.txs block.ommers block.wds =
+      .ok (st, bout))
     (hgasUsed : block.header.gasUsed = bout.blockGasUsed)
     (htxsRoot : block.header.txsRoot = getTransactionsRoot bout)
     (hstateRoot : block.header.stateRoot = st.root)
@@ -421,24 +480,31 @@ theorem stateTransitionUsing_forward {cfg : ChainConfig} {pre : BlockChain} {blo
   have hchecks := stateTransitionChecks_ok_of_eq (header := block.header) hstateGas hgasUsed
     htxsRoot hstateRoot hreceiptRoot hbloom hwithdrawalsRoot hblobGasUsed hrequestsHash
   have hbalNone : fork.ruleSet.bal = none := hcovered.bal_none
-  have hommersCheck : stateTransitionOmmersCheck block.ommers = .ok () := by
+  have hpow : fork.ruleSet.pow = none := (coveredFork_header_rules hcovered).2.2.2.2
+  have hrequestsOn : fork.ruleSet.header.requestsHash = true :=
+    hcovered.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  have hommersCheck : checkBlockOmmersScheduledE cfg fork.ruleSet pre block.header
+      block.ommers = .ok () := by
     rw [hommers]
+    simp only [checkBlockOmmersScheduledE, hpow]
     rfl
+  have hcore : stateTransitionCoreE Sum.inr fork pre block
+      (fun _ => checkBlockOmmersScheduledE cfg fork.ruleSet pre block.header block.ommers) =
+      .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩ := by
+    simp only [stateTransitionCoreE, hheader, hommersCheck, hbody, hrequestsOn, ↓reduceIte,
+      Except.mapError, bind, Except.bind]
+    rw [hchecks]
+    simp only [blockAccessListCheck, hbalNone]
   rw [stateTransitionUsing_eq_of_chainId_eq hid, hforkAt]
   simp only [Except.mapError, Except.bind]
-  rw [stateTransitionAt_eq_ok_iff, stateTransitionE, hheader, hommersCheck]
-  simp only [bind, Except.bind, Except.mapError]
-  rw [hbody]
-  simp only
-  rw [hchecks]
-  simp only [blockAccessListCheck, hbalNone]
+  rw [stateTransitionScheduledE_eq_ok_iff.mpr hcore]
 
 /-- The retained configured block trace of a forward-constructed block
 without withdrawals. -/
 theorem configuredBlockTrace_forward {cfg : ChainConfig} {pre : BlockChain} {block : Block}
     {fork : Fork} {st : State}
     (hbound : sum pre.state.bal < 2 ^ 256) (hwds : block.wds = [])
-    (hforkAt : cfg.forkAt block.header.timestamp = .ok fork)
+    (hforkAt : cfg.forkAt block.header.number block.header.timestamp = .ok fork)
     (hcovered : CoveredFork fork)
     (hstep : stateTransitionUsing cfg pre block = .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩) :
     Nonempty (ConfiguredBlockTrace cfg pre ⟨appendBlock pre.blocks block, st, pre.chainId⟩) := by

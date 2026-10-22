@@ -488,11 +488,18 @@ theorem systemPost_facts (benv : Benv) :
       (benv.state.setStorVal beaconRootsAddress (systemKey benv)
         (systemSevm benv).benvStat.time).setStorVal beaconRootsAddress
         (systemRootKey benv) (systemValue benv) := by
+  -- Rewrite through `St` rather than `change`: unifying the projection of
+  -- `systemPost` against an `afterSstore` pattern whnf-evaluates the store.
+  have stRefund : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
+      (St b S M G).refundCounter = b.refundCounter := fun _ _ _ _ => rfl
+  have stError : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
+      (St b S M G).error = b.error := fun _ _ _ _ => rfl
+  have stState : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
+      (St b S M G).state = b.state := fun _ _ _ _ => rfl
   refine ⟨?_, ?_, ?_⟩
-  · change (afterSstore (systemSevm benv) (systemMid benv) _ _).error = none
-    rw [afterSstore_error, systemMid, afterSstore_error]
+  · rw [systemPost, stError, afterSstore_error, systemMid, afterSstore_error]
     rfl
-  · change 0 ≤ (afterSstore (systemSevm benv) (systemMid benv) _ _).refundCounter
+  · rw [systemPost, stRefund]
     have safe1 : RefundSafe ((systemBase benv).getOrigStorVal (systemSevm benv)
         (systemSevm benv).currentTarget (systemKey benv))
         ((systemBase benv).getStorVal (systemSevm benv).currentTarget
@@ -514,8 +521,7 @@ theorem systemPost_facts (benv : Benv) :
           Stor.get_set_ne _ (systemKey_ne benv), ← getStorVal_eq_getStor]
         exact Or.inl rfl
     refine first.trans (afterSstore_refundCounter_ge_of_safe _ _ _ _ safe2)
-  · change (afterSstore (systemSevm benv) (systemMid benv) _ _).state = _
-    rw [afterSstore_state, systemMid, afterSstore_state]
+  · rw [systemPost, stState, afterSstore_state, systemMid, afterSstore_state]
     rfl
 
 /-- **The EIP-4788 unchecked system call** on the real installed code: it succeeds and

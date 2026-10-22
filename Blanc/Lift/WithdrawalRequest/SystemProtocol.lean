@@ -91,7 +91,8 @@ theorem systemProtocol_message {benv : Benv} (fork : CoveredFork benv.stat.fork)
     rw [systemProtocolPost, systemFramePost_error]
     rfl
   exact MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry
-    _ _ _ entry codeEntry (by rw [self]; exact systemProtocol_exec fork) clean
+    _ _ _ entry codeEntry (fork.rules_touchedSweep (s := benv.beginTransaction.stat))
+    (by rw [self]; exact systemProtocol_exec fork) clean
 
 private theorem systemLoopFold_refund (sevm : Sevm) (head : B256) (index remaining : Nat)
     (base : Devm) (memory : Mem) :
@@ -193,7 +194,8 @@ def systemProtocolOutput (benv : Benv) : MsgCallOutput :=
     logs := (systemProtocolPost benv).logs
     accountsToDelete := (systemProtocolPost benv).accountsToDelete
     error := none
-    returnData := (systemProtocolPost benv).output }
+    returnData := (systemProtocolPost benv).output
+    touchedAccounts := (systemProtocolPost benv).meta.touchedAccounts }
 
 theorem systemProtocol_call {benv : Benv} (fork : CoveredFork benv.stat.fork) :
     processMessageCall (systemProtocolMsg benv) =
@@ -222,16 +224,17 @@ theorem processCheckedSystemTransaction_withdrawal {benv : Benv}
       Blanc.withdrawalRequestCode [] =
         .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) :=
     systemProtocol_call fork
+  have herr : (systemProtocolOutput benv).error = none := rfl
   rw [system]
-  rfl
+  simp only [Except.mapError, bind, Except.bind, herr]
 
 theorem systemProtocolOutput_facts (benv : Benv) :
     (systemProtocolOutput benv).error = none ∧
     (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
     (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
     (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter := by
-  refine ⟨rfl, ?_, rfl, rfl⟩
-  change (systemProtocolPost benv).gasLeft = _
+  refine ⟨rfl, ?_, by simp only [systemProtocolOutput], by simp only [systemProtocolOutput]⟩
+  simp only [systemProtocolOutput]
   rw [systemProtocolPost, systemFramePost, systemBookkeepingPost,
     (returnPost_facts _ _ _ _).2.2.2]
   rfl

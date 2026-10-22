@@ -167,7 +167,9 @@ theorem tail_run {sevm : Sevm} {b : Devm} {G : Nat}
       (.halted (returnPost
         (St (bookBase sevm (storeBase sevm b)) [0, 0] .empty G)
         0 0 [])) :=
-    rx_return hext rfl
+    -- `rx_return_any` states the `returnPost` form directly; matching
+    -- `rx_return`'s `memRead` form against it whnf-evaluates the stores.
+    rx_return_any rfl hext
   have gasEq : G + finalGas sevm b =
       G + 2 + 5 + 3 +
         sstoreCost sevm (afterSstore sevm b 0 0) 1 0 + 3 + 2 +

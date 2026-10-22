@@ -255,7 +255,9 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
   · rw [← hchild]
     change (base.accountsToDelete.union _).isEmpty = _
     rw [hld.2]
-    exact adrSet_union_isEmpty _ _ (Std.HashSet.isEmpty_emptyWithCapacity)
+    exact adrSet_union_isEmpty _ _ (by
+      rw [← hmsg]
+      exact callChildMsg_initDevm_accountsToDelete_isEmpty hfork)
   · rw [← hchild]
     change base.refundCounter ≤ base.refundCounter + _
     have h0 : (initDevm msg).refundCounter = 0 := rfl
@@ -279,7 +281,8 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
     (hsum : Blanc.WithdrawalRequest.effectiveExcess σ + σ.count < 2 ^ 256)
     (horig : ∀ key, (msg.benv.stat.origState.getStor withdrawalRequestPredeployAddress).get key =
       (msg.benv.state.getStor withdrawalRequestPredeployAddress).get key)
-    (hgas : 427217 ≤ msg.gas) (hlt : msg.gas < 2 ^ 256) :
+    (hgas : 427217 ≤ msg.gas) (hlt : msg.gas < 2 ^ 256)
+    (hinherited : msg.inheritedDeletions.isEmpty = true) :
     ∃ post, exec (initEvm msg) = .ok post ∧ post.error = none ∧
       Blanc.WithdrawalRequest.RepresentsStorage
         (post.getStor withdrawalRequestPredeployAddress).get
@@ -324,7 +327,7 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
     rw [hsg]
   · change post.accountsToDelete.isEmpty = true
     rw [pdel]
-    exact Std.HashSet.isEmpty_emptyWithCapacity
+    exact hinherited
   · change 0 ≤ post.refundCounter
     exact prefund
 

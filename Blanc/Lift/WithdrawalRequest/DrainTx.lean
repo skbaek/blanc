@@ -71,9 +71,10 @@ theorem txD_recoveredSender : recoverSender 1 txD = .ok senderE := by
 
 /-- The drain transaction's intrinsic cost: the bare base cost, empty calldata. -/
 theorem txD_intrinsic {rules : ForkRules} (hsg : rules.stateGas = none)
-    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10) (E : Adr) :
+    (hbase : rules.gas.txBase = 21000) (hfloor : rules.gas.floorTokenCost = 10)
+    (hnz : rules.txr.dataNonZero = 16) (hcf : rules.txr.calldataFloor = true) (E : Adr) :
     calculateIntrinsicCost rules txD E = (21000, 21000) := by
-  rw [calculateIntrinsicCost_two_call hsg rfl, hbase, hfloor]
+  rw [calculateIntrinsicCost_two_call hsg rfl hnz hcf, hbase, hfloor]
   rfl
 
 theorem systemAddress_not_precompile {fork : Fork} (covered : CoveredFork fork) :
@@ -168,6 +169,10 @@ theorem txD_exec {benv : Benv} {index : Nat} {σ : Blanc.WithdrawalRequest.State
         rfl)
       (by show 427217 ≤ msg.gas; rw [hm_gas]; decide)
       (by show msg.gas < 2 ^ 256; rw [hm_gas]; decide)
+      (by
+        show msg.inheritedDeletions.isEmpty = true
+        rw [← hm]
+        exact Std.HashSet.isEmpty_emptyWithCapacity)
   refine ⟨post, hex, herr, hrefP, hrepP, hlogsP, ?_, ?_, hdelP⟩
   · intro a ha
     show post.getStor a = _
@@ -215,7 +220,8 @@ theorem txD_processTransaction
         some (makeReceipt txD none bout'.cumulativeGasUsed post.logs) := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
   have hcost : calculateIntrinsicCost benv.stat.rules txD senderE = (21000, 21000) :=
-    txD_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
+    txD_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork)
+      (CoveredFork.rules_dataNonZero hfork) (CoveredFork.rules_calldataFloor hfork) _
   have hprec : benv.stat.rules.isPrecomp systemAddress = false :=
     propext (iff_of_false (systemAddress_not_precompile hfork) (by decide))
   have hnodeleg : getDelegatedCodeAddress (benv.state.getCode systemAddress) = none := by

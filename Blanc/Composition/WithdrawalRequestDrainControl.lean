@@ -201,8 +201,8 @@ theorem ApplyTransactionsTrace.noSenderAt_of_recover {txs : List (Nat × Tx)}
     exact (by decide : senderE ≠ systemAddress) (hsender'.trans hsender)
 
 theorem calls_of_two {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hdecoded : trace.decodedTxs = [txC, txD]) :
     ∀ p ∈ trace.decodedTxs.putIndex, (∃ t, p.2.type.receiver? = some t) ∧ p.2.auths = [] := by
   intro p hp
@@ -253,7 +253,7 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
     ∃ (s : State) (bout : BlockOutput),
       applyTransactions [txC, txD].putIndex (benvH benv) BlockOutput.init =
         .ok ((benvH benv).withState s, bout) ∧
-      applyBody benv [Sum.inr txC, Sum.inr txD] [] =
+      applyBody benv [Sum.inr txC, Sum.inr txD] [] [] =
         .ok (bodyPost benv s, bodyOut benv s bout) ∧
       bout.blockGasUsed ≤ 2 ^ 28 ∧
       Blanc.WithdrawalRequest.RepresentsStorage
@@ -505,7 +505,7 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
   have hpre0 : PreD benv0.state := hpre
   have hchain : benv0.stat.chainId = 1 := ready.chainId
   have hbase : benv0.stat.baseFeePerGas = 1 := by
-    show trace.block.header.baseFeePerGas = 1
+    show (trace.block.header.baseFeePerGas).getD 0 = 1
     rw [blockEq]; rfl
   have hlimit : benv0.stat.blockGasLimit = 2 ^ 29 := by
     show trace.block.header.gasLimit = 2 ^ 29

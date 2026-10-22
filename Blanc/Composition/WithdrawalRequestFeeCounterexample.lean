@@ -40,17 +40,18 @@ theorem applyTransactions_single {benv : Benv} {bout bout' : BlockOutput} {tx : 
 
 theorem putIndex_single (tx : Tx) : [tx].putIndex = [(0, tx)] := rfl
 
-theorem decode_single (tx : Tx) : [Sum.inr tx].mapM decodeTx = .ok [tx] := rfl
+theorem decode_single (rules : ForkRules) (tx : Tx) :
+    [Sum.inr tx].mapM (decodeTx rules) = .ok [tx] := rfl
 
 theorem AppliedBodyTrace.decodedTxs_eq_of_txs_eq
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {tx : Tx} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {tx : Tx} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (htxs : txs = [Sum.inr tx]) :
     trace.decodedTxs = [tx] := by
-  have hdecode : txs.mapM decodeTx = .ok [tx] := by
+  have hdecode : txs.mapM (decodeTx benv.stat.rules) = .ok [tx] := by
     rw [htxs]
-    exact decode_single tx
+    exact decode_single _ tx
   exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
 
 theorem noSenderAt_single {benv finalBenv : Benv} {bout finalBout : BlockOutput}
@@ -329,8 +330,8 @@ theorem witnessConfig_valid : witnessConfig.Valid := ChainConfig.pragueOnly_vali
 
 theorem witnessConfig_chainId : witnessConfig.chainId = 1 := rfl
 
-theorem witnessConfig_forkAt (t : Nat) : witnessConfig.forkAt t = .ok .prague :=
-  Blanc.ChainConfig.pragueOnly_forkAt 1 t
+theorem witnessConfig_forkAt (n t : Nat) : witnessConfig.forkAt n t = .ok .prague :=
+  ChainConfig.pragueOnly_forkAt 1 n t
 
 /-- Funded sender balance: covers block C's `2 ^ 20 * 8 + 2 ^ 245` with room. -/
 def senderEFunds : Nat := 2 ^ 245 + 2 ^ 31
@@ -625,11 +626,11 @@ def genesisHeader : Header :=
     extraData := []
     prevRandao := 0
     nonce := 0
-    baseFeePerGas := 1
-    withdrawalsRoot := getWithdrawalsRoot BlockOutput.init
-    blobGasUsed := 0
-    excessBlobGas := 0
-    parentBeaconBlockRoot := 0
+    baseFeePerGas := some 1
+    withdrawalsRoot := some (getWithdrawalsRoot BlockOutput.init)
+    blobGasUsed := some 0
+    excessBlobGas := some 0
+    parentBeaconBlockRoot := some 0
     requestsHash := none
     blockAccessListHash := none
     slotNumber := none }
@@ -663,11 +664,12 @@ theorem blockTrace_of_body {cfg : ChainConfig} {pre : BlockChain} {block : Block
     {fork : Fork} {st : State} {bout : BlockOutput}
     (hbound : sum pre.state.bal < 2 ^ 256) (hwds : block.wds = [])
     (hid : cfg.chainId = pre.chainId)
-    (hforkAt : cfg.forkAt block.header.timestamp = .ok fork)
+    (hforkAt : cfg.forkAt block.header.number block.header.timestamp = .ok fork)
     (hcovered : CoveredFork fork)
     (hheader : validateHeader fork.ruleSet pre block.header = .ok ())
     (hommers : block.ommers = [])
-    (hbody : applyBody (initBenv fork pre block.header) block.txs block.wds = .ok (st, bout))
+    (hbody : applyBody (initBenv fork pre block.header) block.txs block.ommers block.wds =
+      .ok (st, bout))
     (hgasUsed : block.header.gasUsed = bout.blockGasUsed)
     (htxsRoot : block.header.txsRoot = getTransactionsRoot bout)
     (hstateRoot : block.header.stateRoot = st.root)
