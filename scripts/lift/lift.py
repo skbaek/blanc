@@ -33,6 +33,9 @@ every certificate registered without it regenerates byte-identically.  `--pc`
 own pc; off by default.  `--decide-jumpi` (registry option `"decide_jumpi":
 true`) emits a JUMPI with a constant condition with its dead side `.undefined`,
 which `checkNode` does not check (`AVal.jumps?`); off by default.
+`--fold-div-or` (registry option `"fold_div_or": true`, requiring `"fold": true`)
+also folds unsigned DIV (including a zero divisor) and bitwise OR.  This separate
+opt-in preserves the historical eight-operation fold path for existing rows.
 `--frame-loops` (registry option `"frame_loops": true`, with the memory-tracking mode below)
 unrolls Vyper 0.2.x frame save/restore loops, whose stack height changes every iteration: a
 back edge is a revisit of the same pc at the same stack height, a constant JUMPI condition is
@@ -319,6 +322,14 @@ def run_registry(args: argparse.Namespace) -> int:
         for row in rows:
             ident = row["id"]
             opts = row.get("options", {})
+            if "fold_div_or" in opts and not isinstance(opts["fold_div_or"], bool):
+                print(f"FAIL {ident}: fold_div_or registry option must be a boolean")
+                failures += 1
+                continue
+            if opts.get("fold_div_or") is True and opts.get("fold") is not True:
+                print(f"FAIL {ident}: fold_div_or needs options.fold=true")
+                failures += 1
+                continue
             supplied = [option for option in ("code_import", "code_ref") if option in opts]
             error = ("code_import/code_ref registry options must be strings"
                      if any(not isinstance(opts[option], str) for option in supplied)
@@ -358,6 +369,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv += ["--wrapper-order", opts["wrapper_order"]]
             if opts.get("fold") is True:
                 argv.append("--fold")
+            if opts.get("fold_div_or") is True:
+                argv.append("--fold-div-or")
             if "max_run" in opts:
                 argv += ["--max-run", str(opts["max_run"])]
             if opts.get("pc") is True:
@@ -542,6 +555,8 @@ parser.add_argument("--pc", action="store_true",
                     help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
                     help="fold ADD/MUL/SUB/LT/GT/EQ/AND/ISZERO over constant operands (mirror of foldConst)")
+parser.add_argument("--fold-div-or", action="store_true",
+                    help="also fold unsigned DIV and bitwise OR over constants (requires --fold)")
 parser.add_argument("--max-run", type=int, default=None,
                     help="name the rest of a straight-line .next run after this many nodes (a long "
                          "run of unoptimized code exceeds the elaborator's recursion depth); off by default")
@@ -565,6 +580,8 @@ parser.add_argument("--qualified-refs", action="store_true", help="write the cer
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
+if args.fold_div_or and not args.fold:
+    parser.error("--fold-div-or needs --fold")
 error = code_reference_error(args.code_import, args.code_ref)
 if error is not None:
     parser.error(error)
@@ -681,6 +698,11 @@ FOLD2 = {
     0x14: lambda x, y: 1 if x == y else 0,  # EQ
     0x16: lambda x, y: x & y,               # AND
 }
+if args.fold_div_or:
+    FOLD2.update({
+        0x04: lambda x, y: 0 if y == 0 else x // y,  # DIV: top / second
+        0x17: lambda x, y: x | y,                   # OR
+    })
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
     if op == 0x58 and args.pc:  # PC: the node's own pc (SFunc.pcAt)
         if cur_pc is None:
@@ -713,7 +735,7 @@ def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Option
         if not st: return None
         st.pop(0)
         return st
-    elif op in (0x01, 0x02, 0x03, 0x04, 0x0a, 0x10, 0x11, 0x14, 0x16, 0x1c, 0x20): # 2 -> 1
+    elif op in (0x01, 0x02, 0x03, 0x04, 0x0a, 0x10, 0x11, 0x14, 0x16, 0x17, 0x1c, 0x20): # 2 -> 1
         if len(st) < 2: return None
         x, y = st.pop(0), st.pop(0)
         if args.fold and op in FOLD2 and x[0] == 'const' and y[0] == 'const':

@@ -5229,7 +5229,8 @@ contract-neutral.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
-  constant arithmetic, comparison and bitwise `AND` folds (`foldConst`) and
+  constant arithmetic (including top-first `DIV`, with zero denominator),
+  comparison and bitwise `AND`/`OR` folds (`foldConst`) and
   decided `JUMPI`s (`AVal.jumps?`) are part of `checkNode`; the memory-tracking
   checker `checkNodeM`/`Cert.checkM` over declared
   maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
