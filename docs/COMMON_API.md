@@ -6092,6 +6092,18 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+  A concrete consumer of `rx_codecopy` and `rx_return_any` is
+  `ProxyCreation.runtimeReturn_runExact` in
+  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean).
+  It copies and returns the executing code's 2186-byte window at offset 671,
+  with 226 fixed gas plus the actual memory-expansion charge. It requires
+  aligned incoming memory and stack room, and derives zero further expansion
+  at RETURN from the copied memory. The separate kernel-checked
+  `ProxyCreation.runtime_window` in
+  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean)
+  identifies that window in the registered creation input with the registered
+  proxy runtime. Actual constructor entry, storage writes, code installation
+  and historical execution remain separate obligations.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry

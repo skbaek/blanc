@@ -1412,6 +1412,8 @@ CONTRACTS = {
         "Lift.Usdc.ProxyCreation.Check",
         "Lift.Usdc.ProxyCreation.Jumps",
         "Lift.Usdc.ProxyCreation.CodeSize",
+        "Lift.Usdc.ProxyCreation.RuntimeReturn",
+        "Lift.Usdc.ProxyCreation.RuntimeWindow",
         "Lift.Usdc.ProxyForward",
         "Lift.Usdc.ProxyHalt",
         "Lift.Usdc.ProxyOk",
