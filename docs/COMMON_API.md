@@ -656,6 +656,21 @@ spawn/resume equations at the consumer:
   compatibility projection of this single inversion. The supplied-slot form
   retains occurrence provenance; it does not establish child order or root
   commitment.
+- For arbitrary-result STATICCALL occurrences, use
+  [`Blanc/StaticcallObservation.lean`](../Blanc/StaticcallObservation.lean).
+  `Ninst.staticcall_observation` consumes the actual `Ninst.StepRun` and its
+  filled slot; `Exec.NinstOccurrence.staticcall_observation` takes these from
+  the supplied occurrence. `StaticcallObservation` distinguishes direct
+  completion without a spawn from the exact spawned message, original slot,
+  unrestricted settlement and resume. `StaticcallRouting` retains either
+  the interpreted child's actual `Exec` or the enabled native address,
+  `executePrecomp` result and settlement with slot `.none`, including native
+  OOG. `Xinst.step_staticcall_spawn_frame_zero` and
+  `staticcall_routing_of_process` establish the call frame and zero-value
+  transfer before native classification. These facts require no
+  `CoveredFork`, success flag or nonempty output. The payload is the actual
+  message's data; operand-to-payload equality, contract-wide relevance,
+  ordering and historical commitment are separate obligations.
 - Consumption pattern: Blanc's compiled callers branch on the pushed flag, so a
   caller holding the success guard dismisses the failed arm with the trailing
   `iszero`+guard; the entered arm's `StepRun` aligns to the occurrence slot by

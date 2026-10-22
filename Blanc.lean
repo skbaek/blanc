@@ -57,6 +57,7 @@ import Blanc.ExecutionModelAccounting
 import Blanc.ExecutionWholeFrameAccounting
 import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
+import Blanc.StaticcallObservation
 import Blanc.StaticCallStorage
 import Blanc.ExecutionTraceFrames
 import Blanc.ExecutionTraceAdmission

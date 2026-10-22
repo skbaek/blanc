@@ -22,6 +22,10 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-head:StaticcallObservation" =>
+      return head == some `Blanc.StaticcallObservation
+  | "goal-head:StaticcallRouting" =>
+      return head == some `Blanc.StaticcallRouting
   | "goal-shape:touch-preserving-message-settlement" =>
       -- Advice for exact outer success forms; the theorem retains the actual
       -- entry, execution, error and code-charge obligations.

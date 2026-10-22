@@ -32,6 +32,7 @@ import Blanc.Upgrade
 import Blanc.Lift.WriteSiteZero
 import Blanc.ExecutionSenderOccurrences
 import Blanc.DeploymentTouch
+import Blanc.StaticcallObservation
 
 namespace Blanc
 
@@ -1084,6 +1085,42 @@ example {fs : List Func} {sevm : Sevm} {devm : Devm} {f : Func}
   expect_recipe_trigger "goal-head:Func.ExecSat"
   blanc_suggest
   exact h
+
+-- The new local heads remain selective even on an unrelated proposition.
+-- STATICCALL-OBSERVATION-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  trivial
+
+-- STATICCALL-ROUTING-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  trivial
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-OBSERVATION-POSITIVE
+example {pc : Nat} {sevm : Sevm} {pre : Devm} {slot : Xlot} {out : Execution}
+    (filled : slot.Filled)
+    (run : Ninst.StepRun pc sevm pre Ninst.staticcall slot out) :
+    StaticcallObservation pc sevm pre slot out := by
+  expect_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact Ninst.staticcall_observation filled run
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-ROUTING-POSITIVE
+example {msg : Msg} {slot : Xlot}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (zero : msg.value = 0) (filled : slot.Filled)
+    (process : ProcessMessage msg slot settled) :
+    StaticcallRouting msg slot settled := by
+  expect_recipe_trigger "goal-head:StaticcallRouting"
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact staticcall_routing_of_process zero filled process
 
 -- EXPECT: constant-error-guard
 example {fs : List Func} {sevm : Sevm} {devm : Devm} {reason : String}
