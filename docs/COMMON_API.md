@@ -103,6 +103,16 @@ registry has identified the likely vocabulary.
   reads. `settleMsg_withFork` requires coverage of both saved messages as
   well as the destination. These are covered-fork transports, with no claim
   of equality across arbitrary historical forks.
+- Historical extraction uses the separate `HistFork` / `histForks` domain in
+  [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean): exactly Byzantium through
+  BPO2, including synthetic Constantinople and excluding Amsterdam.
+  `HistFork.stateGas_none`, `bal_none`, and `neutral` supply the two
+  `NeutralFork` projections. `HistFork.requests_covered` derives existing
+  `CoveredFork` coverage only when the selected fork enables requests;
+  `CoveredFork.histFork` embeds modern coverage. `mainnet_histFork` applies to
+  an actual successful lookup at both number and timestamp, without asserting
+  a selection below the schedule's floor. These facts retain historical runs;
+  they supply no opcode, gas-price, settlement, invariant or reward-free law.
 - Build a configured block *forward* from proof-produced evidence about its
   parts (a reachable history, a counterexample, a liveness witness): go to
   [T7](#t7-i-must-construct-a-configured-block-forward-from-its-parts).
@@ -4469,6 +4479,14 @@ exposes only the selected fork and the successful scheduled transition, for
 inverting header validation or the appended block through Jaune's
 `stateTransitionCoreE_*` facts. The modern carrier adds its own
 `CoveredFork` evidence and unconditional modern body trace.
+
+For the accepted historical domain, `BodyStageCapabilities.historical`
+derives both extraction capabilities from `HistFork` membership.
+`exists_mainnetConfiguredBlockTrace_of_transition` retains an actual mainnet
+transition with its explicit reward-inclusive bound;
+`exists_mainnetConfiguredHistoryTrace_of_reachUsing` retains a mainnet history
+with the existing explicit `ConfiguredRewardBudget`. Neither wrapper infers
+that budget from reachability or asserts historical contract preservation.
 
 For a selected historical domain `F`, use `ConfiguredBlockTraceIn F` and
 `ConfiguredHistoryTraceIn F` in the same owner. They retain the selected fork,

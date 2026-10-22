@@ -1143,4 +1143,40 @@ example (a : Devm) : a.gasLeft = a.gasLeft := by
   expect_no_recipe_trigger "goal-head:Devm.EqModGas"
   rfl
 
+-- EXPECT: historical-fork-domain
+example {number timestamp : Nat} {fork : Fork}
+    (lookup : mainnetChainConfig.forkAt number timestamp = .ok fork) :
+    HistFork fork := by
+  expect_recipe_trigger "goal-head:HistFork"
+  expect_recipe_offered "historical-fork-domain"
+  blanc_suggest
+  exact mainnet_histFork lookup
+
+-- EXPECT: historical-fork-domain
+example {fork : Fork} (historical : HistFork fork) : NeutralFork fork := by
+  expect_recipe_trigger "goal-head:NeutralFork"
+  expect_recipe_offered "historical-fork-domain"
+  blanc_suggest
+  exact historical.neutral
+
+-- Expanded membership has no direct historical predicate head.
+example {fork : Fork} (historical : HistFork fork) : fork ∈ histForks := by
+  expect_no_recipe_trigger "goal-head:HistFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact historical
+
+-- An expanded conjunction is not the NeutralFork structure head.
+example {fork : Fork} (historical : HistFork fork) :
+    fork.ruleSet.stateGas = none ∧ fork.ruleSet.bal = none := by
+  expect_no_recipe_trigger "goal-head:NeutralFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact ⟨historical.stateGas_none, historical.bal_none⟩
+
+-- Modern coverage is a separate proposition.
+example {fork : Fork} (covered : CoveredFork fork) : CoveredFork fork := by
+  expect_no_recipe_trigger "goal-head:HistFork"
+  expect_no_recipe_trigger "goal-head:NeutralFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact covered
+
 end Blanc

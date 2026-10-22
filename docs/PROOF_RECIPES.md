@@ -559,3 +559,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/CallProfileTransport.lean](../Blanc/Lift/CallProfileTransport.lean) — `Devm.EqModGas.callChildPost`
 - Registered symbols: `module:Blanc/Lift/CallProfileTransport.lean`, `declaration:Blanc.Devm.EqModGas.withGasLeft_eq`, `declaration:Blanc.Devm.EqModGas.of_normalized_eq`, `declaration:Blanc.Devm.EqModGas.st`, `declaration:Blanc.Devm.EqModGas.addAccessedAddress`, `declaration:Blanc.Devm.EqModGas.callSpawnParent`, `declaration:Blanc.Devm.EqModGas.callChildPost`
 - Review: `proof-infrastructure` on `2026-10-19`
+
+## `historical-fork-domain`
+
+- Status: `active`
+- Triggers: `goal-head:HistFork`, `goal-head:NeutralFork`
+- Preferred path: Use mainnet_histFork on an actual successful two-coordinate mainnet schedule lookup, or CoveredFork.histFork on existing modern coverage, to establish HistFork membership. Use HistFork.neutral, stateGas_none or bal_none for only the neutral rule facts, and HistFork.requests_covered for request-enabled modern coverage. ExecutionTrace.BodyStageCapabilities.historical derives the existing extraction capabilities. The mainnet configured block/history extraction wrappers retain actual execution and the explicit reward-inclusive block or prefix budget.
+- Boundary: Advice matches only a direct HistFork or NeutralFork goal head, without unfolding aliases or expanded membership/conjunctions. HistFork is the exact16-fork non-Amsterdam domain; modern CoveredFork is unchanged. Neutrality does not establish opcode availability, gas schedules, settlement identities, no-deletion, system-pass enablement, contract preservation or a reward-free body. Successful reachability does not establish ConfiguredRewardBudget.
+- Owner module: [Blanc/HistoricalFork.lean](../Blanc/HistoricalFork.lean)
+- Canonical example: [Blanc/HistoricalFork.lean](../Blanc/HistoricalFork.lean) — `mainnet_histFork`
+- Registered symbols: `module:Blanc/HistoricalFork.lean`, `module:Blanc/ExecutionHistory.lean`, `declaration:Blanc.NeutralFork`, `declaration:Blanc.histForks`, `declaration:Blanc.HistFork`, `declaration:Blanc.HistFork.stateGas_none`, `declaration:Blanc.HistFork.bal_none`, `declaration:Blanc.HistFork.neutral`, `declaration:Blanc.HistFork.requests_covered`, `declaration:Blanc.CoveredFork.histFork`, `declaration:Blanc.HistFork.not_amsterdam`, `declaration:Blanc.mainnet_histFork`, `declaration:Blanc.ExecutionTrace.BodyStageCapabilities.historical`, `declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredBlockTrace_of_transition`, `declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredHistoryTrace_of_reachUsing`
+- Review: `proof-infrastructure` on `2026-10-22`

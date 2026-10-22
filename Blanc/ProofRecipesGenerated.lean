@@ -417,6 +417,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/CallProfileTransport.lean", "declaration:Blanc.Devm.EqModGas.withGasLeft_eq", "declaration:Blanc.Devm.EqModGas.of_normalized_eq", "declaration:Blanc.Devm.EqModGas.st", "declaration:Blanc.Devm.EqModGas.addAccessedAddress", "declaration:Blanc.Devm.EqModGas.callSpawnParent", "declaration:Blanc.Devm.EqModGas.callChildPost"]
     boundary := "This matches only the explicit Devm.EqModGas goal head. It establishes agreement outside execution gas, not an equality of gasLeft or consumed charges, and does not establish callee success, gas independence of arbitrary code, a profile, or caller liveness. Supply the parent and child relations; do not infer them from storage equality or a bounded-success call premise."
   },
+  {
+    id := "historical-fork-domain"
+    status := "active"
+    triggers := ["goal-head:HistFork", "goal-head:NeutralFork"]
+    preferredPath := "Use mainnet_histFork on an actual successful two-coordinate mainnet schedule lookup, or CoveredFork.histFork on existing modern coverage, to establish HistFork membership. Use HistFork.neutral, stateGas_none or bal_none for only the neutral rule facts, and HistFork.requests_covered for request-enabled modern coverage. ExecutionTrace.BodyStageCapabilities.historical derives the existing extraction capabilities. The mainnet configured block/history extraction wrappers retain actual execution and the explicit reward-inclusive block or prefix budget."
+    symbols := ["module:Blanc/HistoricalFork.lean", "module:Blanc/ExecutionHistory.lean", "declaration:Blanc.NeutralFork", "declaration:Blanc.histForks", "declaration:Blanc.HistFork", "declaration:Blanc.HistFork.stateGas_none", "declaration:Blanc.HistFork.bal_none", "declaration:Blanc.HistFork.neutral", "declaration:Blanc.HistFork.requests_covered", "declaration:Blanc.CoveredFork.histFork", "declaration:Blanc.HistFork.not_amsterdam", "declaration:Blanc.mainnet_histFork", "declaration:Blanc.ExecutionTrace.BodyStageCapabilities.historical", "declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredBlockTrace_of_transition", "declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredHistoryTrace_of_reachUsing"]
+    boundary := "Advice matches only a direct HistFork or NeutralFork goal head, without unfolding aliases or expanded membership/conjunctions. HistFork is the exact16-fork non-Amsterdam domain; modern CoveredFork is unchanged. Neutrality does not establish opcode availability, gas schedules, settlement identities, no-deletion, system-pass enablement, contract preservation or a reward-free body. Successful reachability does not establish ConfiguredRewardBudget."
+  },
 ]
 
 end Blanc.ProofRecipes

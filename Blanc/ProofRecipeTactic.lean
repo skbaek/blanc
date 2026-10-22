@@ -1,6 +1,7 @@
 -- ProofRecipeTactic.lean : leaf-only access to generated proof-recipe advice.
 
 import Blanc.Tactics
+import Blanc.HistoricalFork
 import Blanc.ProofRecipesGenerated
 
 namespace Blanc
@@ -22,6 +23,10 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-head:HistFork" =>
+      return head == some `Blanc.HistFork
+  | "goal-head:NeutralFork" =>
+      return head == some `Blanc.NeutralFork
   | "goal-shape:extcodesize-compiled-step" =>
       -- One exact compiled-instruction shape and one named definition lookup.
       -- Do not normalize the goal or inspect unrelated operands.
