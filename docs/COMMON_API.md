@@ -3809,11 +3809,11 @@ The immediate consumer is actual-entry composition in `Lift.ReturnDataBound`.
 Use [`Blanc/Lift/PrecompileAnswer.lean`](../Blanc/Lift/PrecompileAnswer.lean).
 `precompileRun_gas_mono` shows remaining gas only gates a precompile's success,
 so `precompileRun_ok_output_unique` makes the successful output a function of
-calldata and `MODEXP` pricing alone, named by `precompileAnswer` (and
+calldata and the fork rules alone, named by `precompileAnswer` (and
 `precompileAnswer_of_ok`); `precompileRun_ok_mem` bounds the succeeding
 addresses by `precompileRunAddresses`. `ProcessMessage.ok_output` splits an
 error-free successful call message into that precompile answer (empty slot) or
-its entered frame's raw success (`callFrame_settle_ok`). Together with
+its entered frame's raw success (`callFrame_settle_ok`), up to the settlement's recorded touch of the current target (`Devm.recordTouch`). Together with
 `Exec.rawFrameRoots` this gives a finite list, fixed by the root execution, that
 contains any STATICCALL reply to a fixed request (consumer:
 `UniswapV2Pair.mintFeeReplyKeys`).
