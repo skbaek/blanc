@@ -2084,6 +2084,16 @@ The `Linst.selfdestruct_preserves_noDel`, `Linst.run_noDel` and
 existing coded account can schedule itself for deletion. These helpers do not
 assert a historical-uniform NoDel invariant.
 
+For a weaker actual step condition,
+`Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign` in
+`Blanc/CommonProofs.lean` accepts the modern creation restriction **or**
+`sevm.currentTarget ≠ wa`. SELFDESTRUCT schedules its executing storage target,
+not its beneficiary. `Linst.run_noDel_of_safe` handles an actual terminal run
+when that target is foreign or the decoded terminal is not SELFDESTRUCT.
+Both preserve `Execution.NoDel`, including live error payloads, from the input
+`Devm.NoDel`; they do not require a successful outcome or establish safety of
+a protected target executing arbitrary code.
+
 ### I2. The property concerns a complete execution or child frames
 
 - `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
@@ -2093,6 +2103,19 @@ assert a historical-uniform NoDel invariant.
   traversal APIs remain available. `Linst.noDelCode_effectFork` and
   `Exec.inv_noDel` in `Blanc/LadderBase.lean` consume this interface without
   assuming historical-uniform no-deletion behavior.
+- `Xinst.inv_noDel_noStateGas` and `Ninst.inv_noDel_noStateGas` in
+  `Blanc/LadderBase.lean` preserve NoDel through actual instruction steps under
+  `sevm.benvStat.rules.stateGas = none`. Their explicit `Xlot.InvNoDel` premise
+  is the selected child's recursive preservation obligation; it must be proved
+  for that child, not supplied as an environment or endpoint survival axiom.
+  The original `Xinst.inv_noDel_gen` and `Ninst.inv_noDel_gen` remain modern
+  compatibility wrappers. The core uses the actual ordinary done/create/call
+  shape, retaining unavailable-opcode errors and actual inherited/collision
+  guards. These are step facts, not historical `Exec.inv_noDel`, raw-tree
+  routing, whole-message safety or contract/history preservation. There is no
+  reliable single goal-head recipe distinguishing these premise-specific NoDel
+  routes; use this branch and the named step declaration. The existing
+  `xinst-step-shape` recipe selects only the decomposition donor.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the

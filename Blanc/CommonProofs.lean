@@ -10585,16 +10585,19 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
   exact (Devm.InstructionFrame.delSets hf).symm
 
 -- Halting/terminal instructions (Linst) preserve NoDel.
-lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+/-- SELFDESTRUCT preserves the protected account under the modern creation
+restriction or when its actual executing storage target is foreign. -/
+lemma Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign {wa : Adr} {sevm : Sevm} {devm : Devm}
     {exn : Execution} (run : Linst.Run sevm devm .selfdestruct exn)
     (h : Devm.NoDel wa devm)
-    (h_onlyCreated : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true) :
+    (safe : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true ∨
+      sevm.currentTarget ≠ wa) :
     Execution.NoDel wa exn := by
   dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
     Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
-  · -- Covered-fork lane: pop, read both accounts, price, charge, sweep.
+  · -- Ordinary lane: pop, read both accounts, price, charge, sweep.
     intro run
     dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
@@ -10669,13 +10672,15 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
                 (sevm.currentTarget ∈ credited.accountsToDelete)
                 (addAccountToDelete (credited.setBal sevm.currentTarget 0)
                   sevm.currentTarget)) else .ok credited) = exn → _
-            rw [h_onlyCreated]
-            simp only [Bool.true_eq_false, or_false]
             split
             · rename_i hmem
               have hne : sevm.currentTarget ≠ wa := by
-                intro heq
-                exact hc.ca (heq ▸ hmem)
+                rcases safe with h_onlyCreated | hforeign
+                · have hcreated : sevm.currentTarget ∈ credited.createdAccounts := by
+                    simpa only [h_onlyCreated, Bool.true_eq_false, or_false] using hmem
+                  intro heq
+                  exact hc.ca (heq ▸ hcreated)
+                · exact hforeign
               have hd : Devm.NoDel wa
                   (addAccountToDelete (credited.setBal sevm.currentTarget 0)
                     sevm.currentTarget) := by
@@ -10796,6 +10801,31 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
                   · exact hdE.atd
                   · exact hdE.ca
                   · exact hdE.code
+
+/-- Modern settlement specialization of the shared SELFDESTRUCT proof. -/
+lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {exn : Execution} (run : Linst.Run sevm devm .selfdestruct exn)
+    (h : Devm.NoDel wa devm)
+    (h_onlyCreated : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true) :
+    Execution.NoDel wa exn :=
+  Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign run h (Or.inl h_onlyCreated)
+
+/-- A terminal preserves the protected account when it executes in a foreign
+storage context or is not SELFDESTRUCT. This covers both execution outcomes. -/
+theorem Linst.run_noDel_of_safe {wa : Adr} {sevm : Sevm} {devm : Devm}
+    {l : Linst} {exn : Execution} (run : Linst.Run sevm devm l exn)
+    (h : Devm.NoDel wa devm)
+    (safe : sevm.currentTarget ≠ wa ∨ l ≠ .selfdestruct) :
+    Execution.NoDel wa exn := by
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · rcases safe with hforeign | hnot
+    · exact Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign run h
+        (Or.inr hforeign)
+    · exact (hnot rfl).elim
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
+    rw [run] at hf
+    cases exn <;>
+      exact Devm.NoDel.of_eqs (Devm.InstructionFrame.delSets hf) (hf.getCode wa) h
 
 
 theorem Linst.run_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
