@@ -140,6 +140,13 @@ registry has identified the likely vocabulary.
   and the selected transient-storage, `CHAINID` and `BASEFEE` flags are
   `CoveredFork.rules_transient`, `rules_chainId` and `rules_baseFee` (all in
   [`Blanc/Forward.lean`](../Blanc/Forward.lean)).
+- For flat account-access pricing, `Ninst.runCompiled_extcodesize_flat` in
+  [`Blanc/ForwardFlatAccess.lean`](../Blanc/ForwardFlatAccess.lean) constructs
+  the exact EXTCODESIZE step from `rules.access = .flat prices`,
+  `rules.bal = none`, the actual stack, exact entry gas
+  `G + prices.extCode + rules.gas.codeReadSurcharge`, and stack room.
+  It returns the actual pre-state code-size word, preserves `d.stateGas`,
+  and needs no covered-fork, staticness or selected code-size premise.
 - For the loose gas-free walk prefix reaching an intermediate cut of a
   successful source run, with source-path accumulation, use
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
@@ -5710,6 +5717,13 @@ contract-neutral.
   unfolding the nested world update; the Pair mint prefix consumes all three.
   The existing Lido temporal access names are compatibility declarations over
   this common owner.
+  For the separate flat-pricing route, use
+  `Ninst.runCompiled_extcodesize_flat` in
+  [`Blanc/ForwardFlatAccess.lean`](../Blanc/ForwardFlatAccess.lean), with explicit
+  flat prices and disabled BAL recording. Its successor retains the original
+  base and actual code-size word; use `Ninst.exec_of_stepRun` for continuation.
+  Neither route proves nonzero code size, callee liveness or the concrete
+  constructor execution.
 - A callee that fails on every input: `revertingCode` (`PUSH0 PUSH0 REVERT`); every pc-zero
   frame over it ends in an error (`revertingCode_exec_error`, via the generic non-spawning
   step inversion `Exec.ofExecution_inv`); an ordinary non-precompile message over it never

@@ -1121,12 +1121,14 @@ review_date = "2026-09-10"
 id = "extcodesize-compiled-step"
 status = "active"
 triggers = ["goal-shape:extcodesize-compiled-step"]
-preferred_path = "Use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor; temporalAccountAccessBase_state, temporalAccountAccessBase_output and temporalAccountAccessBase_logs project its unchanged state, output and logs. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly."
+preferred_path = "For flat pricing use Blanc.Ninst.runCompiled_extcodesize_flat from Blanc/ForwardFlatAccess.lean with rules.access = .flat prices, rules.bal = none, the actual stack, exact entry gas G + prices.extCode + rules.gas.codeReadSurcharge, and stack room. It returns the actual pre-state code-size word over d.setMach and preserves d.stateGas. Compose a continuation through existing Ninst.exec_of_stepRun. For warm/cold pricing use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor; temporalAccountAccessBase_state, temporalAccountAccessBase_output and temporalAccountAccessBase_logs project its unchanged state, output and logs. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly."
 boundary = "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness."
 owner_module = "Blanc/Lift/CodeSizeWalk.lean"
 canonical_example = "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean:temporal_extcodesize_runCompiled"
 symbols = [
   "module:Blanc/Lift/CodeSizeWalk.lean",
+  "module:Blanc/ForwardFlatAccess.lean",
+  "declaration:Blanc.Ninst.runCompiled_extcodesize_flat",
   "declaration:Blanc.Lift.temporalAccountAccessBase",
   "declaration:Blanc.Lift.temporalAccountAccessBase_state",
   "declaration:Blanc.Lift.temporalAccountAccessBase_output",

@@ -177,6 +177,7 @@ import Blanc.Compiled
 import Blanc.DeploymentCompiled
 import Blanc.DeploymentMessage
 import Blanc.Forward
+import Blanc.ForwardFlatAccess
 import Blanc.ForwardMstore8
 import Blanc.Reverts
 import Blanc.RevertCause
