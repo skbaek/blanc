@@ -742,6 +742,7 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-head:StaticcallSpawnOperands",
     "goal-head:StaticcallObservation",
     "goal-head:StaticcallRouting",
+    "goal-head:Lift.EcrecoverCall.ReturnChecks",
     "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt",
     "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt",
     "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt",

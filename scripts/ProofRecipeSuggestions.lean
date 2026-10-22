@@ -34,6 +34,7 @@ import Blanc.ExecutionSenderOccurrences
 import Blanc.DeploymentTouch
 import Blanc.StaticcallObservation
 import Blanc.StaticcallOperands
+import Blanc.Lift.EcrecoverCall
 
 namespace Blanc
 
@@ -1398,6 +1399,37 @@ example : True := by
 
 example : True := by
   expect_no_recipe_offered "admitted-sender-query-exclusion"
+  trivial
+
+
+-- EXPECT: ecrecover-return-layout
+example : Lift.EcrecoverCall.ReturnChecks
+    ⟨[0x51, 0x00], by decide, [0x51, 0xad], by decide,
+      .last .revert, .last .revert⟩ := by
+  expect_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  expect_recipe_offered "ecrecover-return-layout"
+  blanc_suggest
+  exact ⟨rfl, rfl, rfl, rfl⟩
+
+-- A different proposition head does not denote the layout checks.
+example : True := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  trivial
+
+-- Do not discover a check hidden inside a compound proposition.
+example (layout : Lift.EcrecoverCall.ReturnLayout)
+    (checks : Lift.EcrecoverCall.ReturnChecks layout) :
+    True ∧ Lift.EcrecoverCall.ReturnChecks layout := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  exact ⟨True.intro, checks⟩
+
+-- The neighboring data carrier is not a ReturnChecks goal.
+example (layout : Lift.EcrecoverCall.ReturnLayout) : Lift.EcrecoverCall.ReturnLayout := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  exact layout
+
+example : True := by
+  expect_no_recipe_offered "ecrecover-return-layout"
   trivial
 
 end Blanc

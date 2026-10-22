@@ -139,6 +139,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionSenderOccurrences", "ExecutionDelegationEligibility",
            "CodeReadInversion",
+           "ExecutionSystemDelegation",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "TaggedStorage",
            "DelegatecallEnvelope",
@@ -177,7 +178,7 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
 # Parameterized free-pointer memory for lifted walks.
-SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
+SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover", "Lift.EcrecoverCall", "Lift.SolcSignedQuery"]
 # Free-pointer and write-site checker kits (usdc-neversigner-freepointer-v1):
 # each imports only SHARED modules and Jaune, and no statement names a contract.
 SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePtrFacts",
@@ -1406,6 +1407,8 @@ CONTRACTS = {
         "Lift.Usdc.Model",
         "Lift.Usdc.ModelControls",
         "Lift.Usdc.ModelLaws",
+        "Lift.Usdc.PermitQueryV2_1",
+        "Lift.Usdc.OwnerQueriesV2",
         "Lift.Usdc.Proxy.Cert",
         "Lift.Usdc.Proxy.Check",
         "Lift.Usdc.Proxy.Contract",
@@ -1425,6 +1428,8 @@ CONTRACTS = {
         "Lift.Usdc.ProxyOk",
         "Lift.Usdc.ProxyReach",
         "Lift.Usdc.ProxyWalk",
+        "Lift.Usdc.RecoveryV2",
+        "Lift.Usdc.RecoveryV2_1",
         "Lift.Usdc.RefineAdmin",
         "Lift.Usdc.RefineAdminBits",
         "Lift.Usdc.RefineAdminBodies",

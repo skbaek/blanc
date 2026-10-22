@@ -3080,6 +3080,101 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   that signatures are unforgeable. Consumers: the Uniswap V2 Pair permit
   canonical corollary; `Blanc/Weth10Permit.lean`'s two address-1 clean-child
   theorems can become corollaries (proposed migration). Discovery is manual.
+  The checked request-and-return engine lives in
+  [`Blanc/Lift/EcrecoverCall.lean`](../Blanc/Lift/EcrecoverCall.lean).
+  `EcrecoverCall.entry` exposes its exact source calling convention through
+  `ReturnLayout`; `ReturnChecks` records the four structural return checks.
+  `EcrecoverCall.consumes` takes the actual code/certificate, source cursor,
+  entry registers, pointer, nondelegation and successful execution. It derives
+  the real query, native call and paid gas, canonical nonzero answer, original
+  slot and return continuation. Each version must prove its exact source
+  equality and structural checks against its own certificate. The call PC is
+  relative to the actual entry; the theorem assumes no desired answer or gas
+  budget. Direct `ReturnChecks` goals use the `ecrecover-return-layout` recipe;
+  the existential semantic consumer is found here by name.
+  The concrete `Usdc.recoveryV2_1_consumes` specialization in
+  [`Blanc/Lift/Usdc/RecoveryV2_1.lean`](../Blanc/Lift/Usdc/RecoveryV2_1.lean)
+  follows the actual checked V2_1 recovery entry to STATICCALL at PC `0x4a78`,
+  derives its four-word input from the entry registers and memory writes,
+  and connects the actual native invocation and nonzero canonical answer to
+  the original checked caller's returned stack. Its entry, pointer,
+  nondelegation and existing fork-coverage premises remain local producer
+  obligations. It does not enumerate flag-zero invocations or establish
+  complete historical permit coverage.
+  `Usdc.recoveryV2_consumes` in
+  [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
+  specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
+  Its actual caller remains a producer obligation, including the `0x4d93`
+  epilogue before any owner comparison.
+  Shared signed-query fragments live in
+  [`Blanc/Lift/SolcSignedQuery.lean`](../Blanc/Lift/SolcSignedQuery.lean).
+  Its line inversions cover the prologue, calldata size, seven-argument permit
+  and nine-argument authorization decoders, pause and mapped-byte reads,
+  nonce update, six- and seven-word struct buffers,
+  typed-data encoding and signature guards. Source destinations, nonce base,
+  type hash and return tags are parameters where supported by the actual
+  instruction sequence. `recovery_epilogue` derives the returned answer and
+  owner stack from the compiler's shuffle. Consumers still prove exact source
+  equality and follow their own certificate and cursor route.
+  `mapped_byte_read_line` takes the actual indexed stack equality and proves
+  the mapping read for that depth; the original `blacklist_read_line` is its
+  permit specialization. `wrapper_line`, `selector_line`, `compare_gt_line`
+  and `compare_eq_line` derive the ABI wrapper and selector-test stacks.
+  The `selector_gt_zero`/`selector_gt_succ` and
+  `selector_eq_zero`/`selector_eq_succ` cursor adapters require the actual
+  source list, checked certificate and closed comparison result.
+  `guardSucc` and `guardZero` exclude an actual rejected subtree through its
+  `noOk` check and the original successful execution. These cursor adapters
+  are available by name here; no new dispatch head is required or admitted.
+  `guardSucc_pc` additionally derives the reached numeric PC from the actual
+  decoded jump target. `masked_owner_line` inverts the four-instruction
+  address-mask/equality prefix using the canonical returned address word;
+  successful owner equality still requires the consumer's actual branch proof.
+  `struct_memory_facts` and `seven_word_memory_facts` expose the ordered
+  six- and seven-word writes, free pointer and exact struct hash preimages.
+  `seven_word_head_line`, `seven_word_body_line` and `seven_word_tail_line`
+  invert the actual authorization builder; its source tag, domain slot and
+  return destination remain explicit parameters. `typed_memory_facts_at`
+  handles the overlapping 66-byte typed image at either supported struct end,
+  352 or 384, yielding `450/480` or `482/512` for the recovery pointer/size.
+  `struct_hash_line_at`, `typed_words_line_at`, `typed_length_line_at` and
+  `typed_hash_line_at` use the actual pointer, length and read bounds.
+  The fixed permit APIs, including `typed_memory_facts`, specialize the shared
+  proofs and retain their public statements. Consumers must derive every
+  buffer fact and actual source route. Use the existing `line-run-split`
+  recipe for line inversions and these named facts for memory goals. The
+  helpers do not establish a whole selector path or historical occurrence.
+  The concrete fresh-entry producer in
+  [`Blanc/Lift/Usdc/PermitQueryV2_1.lean`](../Blanc/Lift/Usdc/PermitQueryV2_1.lean),
+  `Usdc.permitV2_1_query_entry`, derives the recovery registers, pointer and
+  actual continuations from PC zero, empty stack/memory and the permit selector
+  on a successful checked V2_1 execution. Its digest uses the domain word
+  after the actual nonce write, without a storage-separation premise.
+  `Usdc.permitV2_1_query_consumed` connects that query's original native call
+  slot and answer through the real `0x471c` return to the `0x421e` owner check,
+  deriving the nonzero calldata-owner answer. Existing fork coverage and
+  address-1 nondelegation remain local premises; proxy/history entry, other
+  selectors and failed-call enumeration remain separate obligations.
+  The V2 family in
+  [`Blanc/Lift/Usdc/OwnerQueriesV2.lean`](../Blanc/Lift/Usdc/OwnerQueriesV2.lean)
+  derives all four registered owner-selector prefixes through
+  `Usdc.ownerV2_source_prefix`; `ownerV2_source_prefix_of_owner_selector`
+  uses the existing `selV2.owners` table, including signed decrease.
+  Fresh successful execution yields the decoded arguments, pause/blacklist
+  facts, exact scratch memory, state, pointer and actual continuations.
+  Permit reaches the source tail after its nonce increment; the other three
+  paths return from authorization validation with strict time bounds,
+  unused authorization state and no storage write. `ownerV2_query_entry`
+  derives the actual six- or seven-word struct hash, typed-data digest,
+  signature-guard route, full registers and continuations at `0x50a4`.
+  `ownerV2_query_consumed` uses existing owner-selector membership to connect
+  the actual `0x50ef` native call, its original slot, paid gas and canonical
+  nonzero answer through `0x4d93` and each real owner comparison. The answer
+  is the calldata owner; the native message and return observations remain
+  in the conclusion. Fork coverage and address-1 nondelegation are explicit
+  local premises. Historical transport, complete retained-query relevance
+  and failed-call enumeration remain separate obligations.
+  Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
   `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding
@@ -4363,6 +4458,20 @@ including repeated tuples and zero-target clears. Extract the wrapper with
 premise. The carrier retains the actual code refresh and refund conversion.
 `excluded_of_all` converts the older all-tuples exclusion only in the sound
 direction; eligible exclusion does not imply that stronger premise.
+
+For canonical system messages, use
+[`Blanc/ExecutionSystemDelegation.lean`](../Blanc/ExecutionSystemDelegation.lean).
+`systemTransactionMessage_auths_nil` derives the empty list from Jaune's own
+system preparation, `systemTransactionDelegationTrace` constructs the skipped
+wrapper, and `systemTransactionMessage_delegation_eq` gives its exact unchanged
+message and zero refund. `SystemMessageTrace.delegation_empty` consumes the
+retained system message, excludes CREATE arms, and proves that every actual
+delegation-phase witness has `NoEligibleAuthorityAt a`, for any address.
+No fork coverage, state-gas, or cryptographic premise is needed. This says
+nothing about the system VM's child calls, recovery queries, or storage writes.
+The shared `MessageCallDelegationTrace.noEligibleAuthorityAt_of_auths_nil`
+also works for any actual message whose authorization list is known empty;
+its direct exclusion goal has no registered reliable recipe trigger.
 
 For a whole-state balance preorder under `stateGas = none`,
 `processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
