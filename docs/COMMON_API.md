@@ -1383,8 +1383,25 @@ embedding's `toStaged_transactions`, `toStaged_beacon`, `toStaged_history` and
 data; `StagedBodyTrace.toModern_preserves` retains all four components on the
 return path. These adapters use the supplied witnesses. They neither select a
 fresh execution trace nor infer modern coverage from historical membership.
-Descendant-frame enumeration, historical balance and contract-invariant
-transport remain separate obligations. These carriers do not widen
+For raw or settlement-retained frames of supplied optional stages and
+selected-domain block/history spines, import
+[`Blanc/ExecutionStagedFrames.lean`](../Blanc/ExecutionStagedFrames.lean).
+`BeaconStageTrace`, `HistoryStageTrace`, `RequestStageTrace`, `StagedBodyTrace`,
+`ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn` each expose `rawFrames`
+and `settledFrames`. Skipped stages enumerate nothing; called requests keep
+withdrawal before consolidation, bodies keep beacon/history/transactions/requests,
+and histories append prior blocks before the next block. Withdrawals, rewards
+and BAL finishing contribute no interpreter frames. The optional stages'
+`rawFrames_of_disabled` / `settledFrames_of_disabled` retain their actual
+disabled guard; each family's `mem_rawFrames_of_mem_settledFrames` transports
+committed membership to its raw root using the existing full message/CREATE
+settlement filters. Modern `toStaged`, `toModern` and `toIn` projection
+equalities retain the supplied execution evidence with the adapters' existing
+coverage premises. None of these supplied-carrier projections needs historical
+capabilities, no-deletion or a reward budget. Raw lists include rolled-back
+entries; these results prove neither occurrence uniqueness nor world-state
+chronology, target survival or contract preservation. Historical balance and
+contract-invariant transport remain separate obligations. These carriers do not widen
 `CoveredFork` or change modern `AppliedBodyTrace`.
 
 For the exact request bytes appended by a retained request pass, import

@@ -11,6 +11,7 @@ import Blanc.LinearDispatchCorrectness
 import Blanc.SymbolicProgram
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
+import Blanc.ExecutionStagedFrames
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
 import Blanc.TaggedStorage
@@ -832,6 +833,60 @@ example {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : Nonempty (ExecutionTrace.MessageCallTrace msg state out)) :
     Nonempty (ExecutionTrace.MessageCallTrace msg state out) := by
   expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: BeaconStageTrace
+example {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal)) :
+    Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: HistoryStageTrace
+example {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal)) :
+    Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: RequestStageTrace
+example {rules : ForkRules} {benv : Benv} {bout bout' : BlockOutput} {state : State}
+    (trace : Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout')) :
+    Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout') := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: StagedBodyTrace
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout)) :
+    Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: ConfiguredBlockTraceIn
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post)) :
+    Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: ConfiguredHistoryTraceIn
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)) :
+    Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
   blanc_suggest
   exact trace
 

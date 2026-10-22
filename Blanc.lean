@@ -76,6 +76,7 @@ import Blanc.ExecutionTraceFrameEnv
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
