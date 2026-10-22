@@ -35,6 +35,7 @@ theorem Devm.EqModGas.withGasLeft_eq {a b : Devm} (h : EqModGas a b) (G : Nat) :
     · exact h.createdAccounts
     · exact h.accountReads
     · exact h.storageReads
+    · exact h.touchedAccounts
   · apply World.ext
     · exact h.state
     · exact h.transientStorage

@@ -285,9 +285,9 @@ theorem ApplyTransactionsTrace.rawFrames_gas_lt
 /-- A block body enters only frames with gas below the larger of the block gas limit and the
 system-message grant. -/
 theorem AppliedBodyTrace.rawFrames_gas_lt {benv : Benv}
-    {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork) :
     ∀ root ∈ trace.rawFrames,
       root.devm.gasMeasure < benv.stat.blockGasLimit + systemTransactionGas + 1 := by
@@ -434,8 +434,8 @@ theorem ApplyTransactionsTrace.rawFrames_closed
   | cons head tail ih => exact RawFramesClosed.append head.message.rawFrames_closed ih
 
 theorem AppliedBodyTrace.rawFrames_closed {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) : RawFramesClosed trace.rawFrames :=
+    {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) : RawFramesClosed trace.rawFrames :=
   RawFramesClosed.append (RawFramesClosed.append (RawFramesClosed.append
     trace.beacon.message.rawFrames_closed trace.history.message.rawFrames_closed)
     trace.transactions.rawFrames_closed)

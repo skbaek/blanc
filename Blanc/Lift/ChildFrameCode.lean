@@ -51,15 +51,17 @@ theorem Xinst.step_staticcall_spawn
   rcases h7 : d6.popToNat with err | ⟨osz, d7⟩
   · simp only [Xinst.step, hsg, h1, h2, h4, h5, h6, h7, Bind.bind, Except.bind,
       XStep.ofExcept, reduceCtorEq] at spawn
-  have hcode : (addAccessedAddress d7 callee).getCode callee =
-      devm.getCode callee := by
-    rw [addAccessedAddress_getCode]
-    exact (Devm.popToNat_getCode h7).trans
+  have hcode7 : d7.getCode callee = devm.getCode callee :=
+    (Devm.popToNat_getCode h7).trans
       ((Devm.popToNat_getCode h6).trans
       ((Devm.popToNat_getCode h5).trans
       ((Devm.popToNat_getCode h4).trans
       ((Devm.popToAdr_getCode h2).trans
         (Devm.pop_getCode h1)))))
+  have hcode : (addAccessedAddress d7 callee).getCode callee =
+      devm.getCode callee := by
+    rw [addAccessedAddress_getCode]
+    exact hcode7
   simp only [Xinst.step, hsg, h1, h2, h4, h5, h6, h7, Bind.bind, Except.bind] at spawn
   repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
@@ -67,14 +69,21 @@ theorem Xinst.step_staticcall_spawn
     | cases spawn
     | have hf := genericCall.step_spawn_frame spawn
       intro notDelegation
-      have hnd : ¬ isValidDelegation
-          ((addAccessedAddress d7 callee).getCode callee) := by
-        rw [hcode, ← hf.2.1]
-        exact notDelegation
-      have hdel := Blanc.GasSchedule.accessDelegation_of_not_delegation
-        (gas := sevm.benvStat.rules.gas) hnd
-      rw [hf.2.2, congrArg (fun t => t.2.2.1) hdel, hcode]
-      exact congrArg devm.getCode hf.2.1.symm
+      rw [hf.2.2]
+      first
+        | (have hnd : ¬ isValidDelegation
+              ((addAccessedAddress d7 callee).getCode callee) := by
+            rw [hcode, ← hf.2.1]
+            exact notDelegation
+           rw [congrArg (fun t => t.2.2.1) (ForkRules.accessDelegation_of_not_delegation hnd),
+             hcode]
+           exact congrArg devm.getCode hf.2.1.symm)
+        | (have hnd : ¬ isValidDelegation (d7.getCode callee) := by
+            rw [hcode7, ← hf.2.1]
+            exact notDelegation
+           rw [congrArg (fun t => t.2.2.1) (ForkRules.accessDelegation_of_not_delegation hnd),
+             hcode7]
+           exact congrArg devm.getCode hf.2.1.symm)
 
 /-- `Exec.childFrames_spawnedAt`, with the child's entry machine. -/
 theorem Exec.childFrames_spawnedAt_entry {root : Exec.Deriv} :

@@ -44,16 +44,17 @@ def oneTxChain (tx : Tx) (st post : Jaune.State) (bout : BlockOutput) : BlockCha
 limit. -/
 theorem oneTx_transition {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
     (gas : bout.blockGasUsed ≤ 1000000)
-    (body : applyBody (input st) [.inr tx] [] = .ok (post, bout)) :
+    (body : applyBody (input st) [.inr tx] [] [] = .ok (post, bout)) :
     stateTransitionUsing config (checkpoint st) (oneTxBlock tx st post bout) =
       .ok (oneTxChain tx st post bout) := by
   have body' : applyBody
       (initBenv .bpo2 (checkpoint st) (oneTxBlock tx st post bout).header)
-      (oneTxBlock tx st post bout).txs (oneTxBlock tx st post bout).wds = .ok (post, bout) := by
+      (oneTxBlock tx st post bout).txs (oneTxBlock tx st post bout).ommers
+      (oneTxBlock tx st post bout).wds = .ok (post, bout) := by
     rw [show initBenv .bpo2 (checkpoint st) (oneTxBlock tx st post bout).header = input st from
       depositBlock_input st post bout]
     exact body
-  exact stateTransitionUsing_forward rfl (config_forkAt _) CoveredFork.bpo2
+  exact stateTransitionUsing_forward rfl (config_forkAt _ _) CoveredFork.bpo2
     (depositBlock_header (post := post) gas) rfl body' rfl rfl rfl rfl rfl rfl rfl rfl
 
 /-- **The body from its one transaction**, the STOP fixture at the system addresses before and
@@ -62,7 +63,7 @@ theorem oneTx_body {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
     (beforeCodes : SystemCodes st) (afterCodes : SystemCodes post)
     (run : processTransaction (input st) BlockOutput.init tx 0 = .ok (post, bout))
     (requests : parseDepositRequests bout = .ok []) :
-    applyBody (input st) [.inr tx] [] = .ok (post, requestsOutput bout [] []) := by
+    applyBody (input st) [.inr tx] [] [] = .ok (post, requestsOutput bout [] []) := by
   have codeBefore (a : Adr) (ha : a ∈ systemAddresses) :
       some ((input st).state.getCode a).toList = Prog.compile deploymentSystemProgram := by
     change some (st.getCode a).toList = _
@@ -100,7 +101,8 @@ theorem oneTx_body {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
   have same : (input st).withState (input st).state = input st := rfl
   have samePost : ((input st).withState post).withState ((input st).withState post).state =
       (input st).withState post := rfl
-  have body := applyBody_forward (txs := [.inr tx]) (stHistory := (input st).state)
+  have body := applyBody_forward (txs := [.inr tx]) (ommers := [])
+    (stHistory := (input st).state)
     CoveredFork.bpo2 beacon (input_lastHash st)
     (by rw [same]; exact history) (txList := [tx]) rfl
     (by rw [same, same]; exact fold) requests runW (by rw [samePost]; exact runC)
@@ -109,14 +111,14 @@ theorem oneTx_body {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
 
 /-- The retained body trace of a successful body run. -/
 noncomputable def oneTxBodyTrace {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
-    (body : applyBody (input st) [.inr tx] [] = .ok (post, bout)) :
-    AppliedBodyTrace (input st) [.inr tx] [] post bout :=
+    (body : applyBody (input st) [.inr tx] [] [] = .ok (post, bout)) :
+    AppliedBodyTrace (input st) [.inr tx] [] [] post bout :=
   Classical.choice (exists_appliedBodyTrace body CoveredFork.bpo2)
 
 /-- The configured block trace of the closed block. -/
 noncomputable def oneTxBlockTrace {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
     (bound : SumNof st.bal) (gas : bout.blockGasUsed ≤ 1000000)
-    (body : applyBody (input st) [.inr tx] [] = .ok (post, bout)) :
+    (body : applyBody (input st) [.inr tx] [] [] = .ok (post, bout)) :
     ConfiguredBlockTrace config (checkpoint st) (oneTxChain tx st post bout) where
   block := oneTxBlock tx st post bout
   bound := by
@@ -124,7 +126,7 @@ noncomputable def oneTxBlockTrace {tx : Tx} {st post : Jaune.State} {bout : Bloc
     rw [Nat.add_zero]
     exact bound
   fork := .bpo2
-  forkAt := config_forkAt _
+  forkAt := config_forkAt _ _
   rules := Fork.bpo2.ruleSet
   rulesEq := rfl
   rulesAt := by
@@ -142,7 +144,7 @@ noncomputable def oneTxBlockTrace {tx : Tx} {st post : Jaune.State} {bout : Bloc
 /-- The configured history: the checkpoint, then the closed block. -/
 noncomputable def oneTxHistory {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
     (canonical : st.Canonical) (bound : SumNof st.bal) (gas : bout.blockGasUsed ≤ 1000000)
-    (body : applyBody (input st) [.inr tx] [] = .ok (post, bout)) :
+    (body : applyBody (input st) [.inr tx] [] [] = .ok (post, bout)) :
     ConfiguredHistoryTrace config (checkpoint st) (oneTxChain tx st post bout) :=
   .step (.refl config_valid (checkpoint_validContext canonical) rfl) (oneTxBlockTrace bound gas body)
 

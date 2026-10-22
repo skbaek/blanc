@@ -114,9 +114,12 @@ theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b
         d = St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
           oi.toNat ((M.read ii.toNat is.toNat).1.take os.toNat)) G' := by
   have hfork := hid.fork
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none] at h_run
+    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled hdeleg] at h_run
   rw [show (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (g, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run
@@ -328,11 +331,13 @@ theorem call_identity_step_canonical {g ii is oi os : B256} {ext : Nat} (hid : I
   have henter : (Frame.ofCall msg).enter = .done ((Frame.ofCall msg).settle (.ok child)) := by
     rw [Frame.enter_eq_done_executePrecomp (f := Frame.ofCall msg) hbt rfl hpre']
     exact congrArg _ (congrArg _ hexec)
+  have hsw : msg.benv.stat.rules.settle.touchedSweep = false := hfork.rules_touchedSweep
   have hsettle : (Frame.ofCall msg).settle (.ok child) = .ok child := by
     rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules,
-      Except.bind_ok, ite_eq_right_iff, Except.ok.injEq, child, cev]
+      Except.bind_ok, ite_eq_right_iff, Except.ok.injEq, child, cev,
+      Devm.recordTouch_of_not_touchedSweep hsw]
     intro h
     cases h
   have hproom : p.stack.length < 1024 := hroom

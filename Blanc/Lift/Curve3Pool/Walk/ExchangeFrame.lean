@@ -127,9 +127,12 @@ theorem ri_call_identity_depth0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Me
     ∃ G', d = St (b.withReturnData []) (0 :: S)
       (M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]) G' := by
   have hfork := hid.fork
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none] at h_run
+    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled hdeleg] at h_run
   rw [show (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (g, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run

@@ -24,10 +24,11 @@ section TransferFromDispatch
 variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- `transferFrom`: the second comparison matches, jumping to entry 4.  56 gas. -/
-theorem dispatch_transferFrom (hsel : Sevm.selector sevm = 0x23b872dd)
+theorem dispatch_transferFrom (h_shifts : sevm.benvStat.rules.op.shifts = true)
+    (hsel : Sevm.selector sevm = 0x23b872dd)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] M G) t_007c_c4 o) :
     SFunc.RunExact prog sevm (St b [] M (G + 56)) t_0000_c0 o :=
-  head (cmp_miss (by rw [hsel]; decide) (cmp_hit (j := 4) (by rw [hsel]; decide) rfl k))
+  head h_shifts (cmp_miss (by rw [hsel]; decide) (cmp_hit (j := 4) (by rw [hsel]; decide) rfl k))
 
 end TransferFromDispatch
 
@@ -148,7 +149,7 @@ theorem transferFrom_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
         (tfAllow sevm pre - tfVal sevm) + 45 +
       sloadCost sevm pre (allowSlot (tfFrom sevm) sevm.caller) + 87 + 56)) t_0000_c0
       (.halted (transferFromPost sevm pre G)) := by
-    refine dispatch_transferFrom hsel (transferFrom_entry hfork hstatic (Nat.lt_of_lt_of_le hsent
+    refine dispatch_transferFrom hfork.rules_shifts hsel (transferFrom_entry hfork hstatic (Nat.lt_of_lt_of_le hsent
       (by omega)) hal ?_)
     refine move hfork hstatic (by simp only [List.length_cons, List.length_nil]; omega)
       (Nat.lt_add_right _ hsent) hle hnof ?_

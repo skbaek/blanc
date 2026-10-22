@@ -48,7 +48,7 @@ theorem popBurnBy_setMach {xs : List B256} {cost : Nat} {devm devm' : Devm}
   refine Devm.eq_of_proj rfl h.memory ?_ h.logs h.refundCounter h.output
     h.accountsToDelete h.returnData h.error h.accessedAddresses
     h.accessedStorageKeys h.state h.createdAccounts h.transientStorage h.stateGas
-    h.accountReads h.storageReads h.storageWrites
+    h.accountReads h.storageReads h.storageWrites h.touchedAccounts
   have hg := h.gasLeft
   change devm.gasLeft - cost = devm'.gasLeft
   omega

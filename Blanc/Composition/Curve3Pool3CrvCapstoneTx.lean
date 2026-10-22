@@ -83,7 +83,8 @@ theorem ex_transaction :
       (calldataFloorGas := 22500) (index := 0)
       fork (by rfl) ctx.chain.symm (by decide) (by rw [ctx.baseFee]; decide)
       (ex_intrinsic 1 exchangeSigR exchangeSigS (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by rw [show signedExchangeTx.gas = 900000 from rfl]; decide)
       (CoveredFork.checkTransactionGasCap_ok fork
         (by rw [show signedExchangeTx.gas = 900000 from rfl]; decide))
@@ -141,7 +142,8 @@ theorem ex_trace_raw {state : Jaune.State} {bout' : BlockOutput}
       (calldataFloorGas := 22500)
       fork (by rfl) ctx.chain.symm (by decide) (by rw [ctx.baseFee]; decide)
       (ex_intrinsic 1 exchangeSigR exchangeSigS (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by rw [show signedExchangeTx.gas = 900000 from rfl]; decide)
       (CoveredFork.checkTransactionGasCap_ok fork
         (by rw [show signedExchangeTx.gas = 900000 from rfl]; decide))

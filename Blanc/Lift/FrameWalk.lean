@@ -321,8 +321,9 @@ theorem xa_call (fork : CoveredFork sevm.benvStat.fork)
       have clean : body.error = none := by
         simpa only [Execution.commits, Option.isNone_iff_eq_none] using hc
       have hsettle : f.settle (.ok body) = .ok body := by
-        rw [hf]
-        exact Frame.ofCall_settle_clean clean
+        rw [hf, Frame.ofCall_settle_clean clean]
+        congr 1
+        exact Devm.recordTouch_of_not_touchedSweep (by exact fork.rules_touchedSweep) _ _ _
       have hsc : Frame.settlementCommits f (.ok body) = true := by
         simp only [Frame.settlementCommits, hsettle, clean, Option.isNone_none]
       right
@@ -461,8 +462,9 @@ theorem xa_staticcall (fork : CoveredFork sevm.benvStat.fork)
       have clean : body.error = none := by
         simpa only [Execution.commits, Option.isNone_iff_eq_none] using hc
       have hsettle : f.settle (.ok body) = .ok body := by
-        rw [hf]
-        exact Frame.ofCall_settle_clean clean
+        rw [hf, Frame.ofCall_settle_clean clean]
+        congr 1
+        exact Devm.recordTouch_of_not_touchedSweep (by exact fork.rules_touchedSweep) _ _ _
       have hsc : Frame.settlementCommits f (.ok body) = true := by
         simp only [Frame.settlementCommits, hsettle, clean, Option.isNone_none]
       right

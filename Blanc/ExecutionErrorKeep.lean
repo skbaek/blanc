@@ -282,24 +282,56 @@ theorem Rinst.balanceCore_err (rules : ForkRules) (world : World) (mach : Mach) 
   · rw [hp] at h; cases h
   · rw [hp] at h
     dsimp only at h
-    rcases hc : Mach.chargeGas
-        (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
-          else rules.gas.coldAccountAccess) m1 with ⟨err, m2⟩ | ⟨u, m2⟩
-    · rw [hc] at h; cases h
-    · rw [hc] at h
-      dsimp only at h
-      rcases hpu : Mach.push (world.state.get x.toAdr).bal m2 with ⟨err, m3⟩ | ⟨u2, m3⟩
-      · rw [hpu] at h; cases h
-      · rw [hpu] at h
-        dsimp only at h
-        simp only [Except.ok.injEq, Prod.mk.injEq] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
         obtain ⟨-, -, rfl⟩ := h
-        split <;> (try split) <;> rfl
+        split <;> split <;> (try split) <;> rfl
 
 theorem Rinst.balance_errKeep (rules : ForkRules) (devm : Devm) :
     Except.OkOn (Devm.ErrKeep devm) (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
   liftMachMetaExecution_errKeep _ Devm.ErrKeep.rfl
     (fun _ _ _ _ h => Rinst.balanceCore_err _ _ _ _ _ _ h)
+
+/-- The fork-selected delegation access keeps the error field. -/
+theorem Devm.ErrKeep.forkAccessDelegation {pre d : Devm} (h : Devm.ErrKeep pre d)
+    (rules : ForkRules) (adr : Adr) :
+    Devm.ErrKeep pre (rules.accessDelegation d adr).2.2.2.2 := by
+  unfold ForkRules.accessDelegation
+  split
+  · unfold GasSchedule.accessDelegation
+    dsimp only
+    split
+    · exact h.warm _
+    · exact h
+  · exact h
+
+/-- Crediting a selfdestruct beneficiary keeps the error field. -/
+theorem Devm.ErrKeep.creditBeneficiary {pre d : Devm} (h : Devm.ErrKeep pre d)
+    (rules : ForkRules) (donee : Adr) (val : B256) :
+    Devm.ErrKeep pre (Devm.creditBeneficiary rules donee val d) := by
+  unfold Devm.creditBeneficiary
+  split
+  · exact h.keep (Eq.refl _)
+  · exact h.keep (Eq.refl _)
+
+/-- The selfdestruct refund credit keeps the error field. -/
+theorem Devm.ErrKeep.selfdestructRefund {pre d : Devm} (h : Devm.ErrKeep pre d)
+    (rules : ForkRules) (p : Prop) [Decidable p] :
+    Devm.ErrKeep pre (creditSelfdestructRefund rules p d) := by
+  unfold creditSelfdestructRefund
+  split
+  · exact h
+  · exact h.keep (Eq.refl _)
+
+macro_rules
+  | `(tactic| err_keep1) => `(tactic| with_reducible apply Devm.ErrKeep.forkAccessDelegation)
+macro_rules
+  | `(tactic| err_keep1) => `(tactic| with_reducible apply Devm.ErrKeep.creditBeneficiary)
+macro_rules
+  | `(tactic| err_keep1) => `(tactic| with_reducible apply Devm.ErrKeep.selfdestructRefund)
 
 theorem Rinst.runCore_errKeep (pc : Nat) (sevm : Sevm) (devm : Devm) (r : Rinst)
     (hsg : sevm.benvStat.rules.stateGas = none) :
@@ -425,7 +457,9 @@ theorem Xinst.step_errKeep (sevm : Sevm) (devm : Devm) (x : Xinst)
     XStep.ErrKeep devm (Xinst.step sevm devm x) := by
   have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
   cases x <;> simp only [Xinst.step, hsg]
-  all_goals with_reducible apply XStep.ErrKeep.ofExcept
+  all_goals first
+    | with_reducible apply XStep.ErrKeep.ofExcept
+    | (split <;> with_reducible apply XStep.ErrKeep.ofExcept)
   all_goals err_walk devm
 
 /-! ### One interpreter step -/
@@ -468,8 +502,7 @@ theorem Ninst.step_errKeep (evm : Evm) (n : Ninst)
     exact Step.ErrKeep.toStep (Xinst.step_errKeep _ _ x hsg)
   | push xs hxs =>
     simp only [Ninst.step]
-    apply Step.ErrKeep.ofExecution
-    err_walk evm.dyna
+    split <;> apply Step.ErrKeep.ofExecution <;> err_walk evm.dyna
   | dupn imm =>
     simp only [Ninst.step]
     apply Step.ErrKeep.ofExecution

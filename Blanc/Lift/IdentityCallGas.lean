@@ -88,9 +88,12 @@ theorem ri_call_identity_gas_fail {ii is oi os : B256} {d : Devm} (hid : IdReady
       (.exec .call) d)
     (h0 : d.stack = 0 :: S) : d.gasLeft = 0 := by
   have hfork := hid.fork
+  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none] at h_run
+    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
+    ForkRules.accessDelegation_enabled hdeleg] at h_run
   rw [show (St b (Nat.toB256 G :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (Nat.toB256 G, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run

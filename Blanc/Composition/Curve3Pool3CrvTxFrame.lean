@@ -98,9 +98,10 @@ theorem ex_value (v : Nat) (r s : Bytes) : (exchangeTx v r s).value = 0 := rfl
 
 theorem ex_intrinsic {rules : ForkRules} (v : Nat) (r s : Bytes)
     (hsg : rules.stateGas = none) (hbase : rules.gas.txBase = 21000)
-    (hfloor : rules.gas.floorTokenCost = 10) :
+    (hfloor : rules.gas.floorTokenCost = 10) (hnz : rules.txr.dataNonZero = 16)
+    (hcf : rules.txr.calldataFloor = true) :
     calculateIntrinsicCost rules (exchangeTx v r s) trader = (21600, 22500) := by
-  rw [calculateIntrinsicCost_two_call hsg (by rfl)]
+  rw [calculateIntrinsicCost_two_call hsg (by rfl) hnz hcf]
   simp only [exchangeTx, hbase, hfloor]
   decide +kernel
 
@@ -207,7 +208,8 @@ theorem ex_prepared_frame {benv : Benv} (ctx : ExTxContext benv)
     rw [h4.2]
     exact ctx.code4
   case w4 =>
-    change (4 : Adr) ∈ (Std.HashSet.ofList [benv.stat.coinbase]).insertMany
+    change (4 : Adr) ∈ (if benv.stat.rules.txr.warmCoinbase then
+      Std.HashSet.ofList [benv.stat.coinbase] else Std.HashSet.ofList []).insertMany
       (benv.stat.rules.precompiles ++ [trader, poolAddr])
     rw [ctx.coinbase, ex_rules_bpo2 ctx.fork]
     exact ex_warm4

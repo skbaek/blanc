@@ -38,9 +38,9 @@ theorem RequestsTrace.mem_rawFrames_of_mem_settledFrames
   · exact Or.inr (trace.consolidation.mem_rawFrames_of_mem_settledFrames frame h)
 
 theorem AppliedBodyTrace.mem_rawFrames_of_mem_settledFrames
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (frame : Exec.Frame)
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) (frame : Exec.Frame)
     (member : frame ∈ trace.settledFrames) :
     (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ trace.rawFrames := by
   simp only [AppliedBodyTrace.settledFrames, List.mem_append] at member
