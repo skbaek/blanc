@@ -5181,6 +5181,12 @@ contract-neutral.
   inductions `bndOfG_sound`/`bnd2G_sound`; each checker's `bndOf_sound`/
   `bnd2_sound` keeps its statement, discharging one per-fact bridge over its
   own `Fact` type.
+  For selected state-gas absence, `SymTransfer.transfer_val_noStateGas` in
+  the same shared owner carries symbols through the actual successful
+  instruction using the generic stack-transfer theorem. It retains the
+  frame-size, one-fresh-result and index-map hypotheses; the original modern
+  `transfer_val` statement remains a wrapper. Its existential result requires
+  these joint transfer/run premises, so discovery remains in this registry.
 - For the free-pointer checker's soundness, use
   [`Blanc/Lift/FreePtrSound.lean`](../Blanc/Lift/FreePtrSound.lean) and
   [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
@@ -5197,6 +5203,14 @@ contract-neutral.
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
   `resume_sound` and `callNext_obs` (joins, calls and returns); `map_of_zip_prefix` (an
   annotation's entry words name a prefix of the incoming ones).
+  For a selected rule set with `stateGas = none`,
+  `WriteSite.memEff_sound_noStateGas`,
+  `WriteSite.getStor_of_writesStor_noStateGas` and
+  `WriteSite.wstep_sound_noStateGas` keep the same actual instruction/run,
+  frame, valuation, stack bound and accepted-step premises. The single proof
+  tree uses common call-write effects, raw storage keeping and symbolic
+  transfer; the modern statements remain wrappers. These routes require the
+  checker/run premises; a bare memory or storage equality does not select them.
   Write-site refinement keeps comparison chains through three live-symbol closures and
   applies one learning round after `FreePtr.refineFacts`; `refine_sound` reuses
   `learn1_sound`, `zeros_sound` and `ones_sound` for that additional round without changing
@@ -5210,6 +5224,15 @@ contract-neutral.
   `RetObs.of_callee` and `tail_entry`), `Term.eval_argFree` (an entry-word-free term reads the
   same in every environment of a frame), and `SFunc.RunP.mono_at` (a run under a step relation
   implied at the run's own frame).
+  The capability forms `WriteSite.wstep_keeps_noStateGas`,
+  `WriteSite.ws_run_noStateGas`, `WriteSite.wsRun_sound_noStateGas` and
+  `WriteSite.lift_sound_ws_noStateGas` require selected `stateGas = none`
+  instead of modern coverage. They retain the original accepted certificate,
+  frame/run and summary premises, with the same `WsStep`/`RetObs` meanings;
+  the byte-facing endpoint still takes an actual successful frame and
+  preserves its `StepIn` relation. Historical membership supplies the
+  capability through `HistFork.stateGas_none`. Old modern statements remain
+  wrappers; no additional outcome or storage-survival premise is introduced.
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   (the capability forms `call_run_writesAt_noStateGas`,
@@ -5220,6 +5243,11 @@ contract-neutral.
 - For the stack top after one lifted step of an environment or hashing instruction, use
   [`Blanc/Lift/StepTops.lean`](../Blanc/Lift/StepTops.lean): `run_{caller,address,not,shl,exp,
   calldataload,keccak256,sload}_top`, `Ninst.Run.getStor_of_storKeep` and `getStor_push`.
+  `Ninst.Run.getStor_of_storKeep_noStateGas` takes only selected state-gas
+  absence plus the same regular-non-SSTORE-or-actual-STATICCALL premise.
+  Its STATICCALL arm uses the shared capability-level raw-storage theorem;
+  the original modern statement remains a wrapper. A storage equality alone
+  does not select this route without the actual instruction/run premises.
 - For the return-data buffer across one lifted step, use
   [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
   `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
@@ -5297,6 +5325,11 @@ contract-neutral.
   Their existential step/reach conclusions require the joint certificate and
   actual-edge/prefix premises, so select the route here rather than matching
   an arbitrary existential or reachability goal.
+  `CursorOK.tree_of_last` places an actual decoded terminal instruction
+  at the cursor's checked `.last` node. It uses only `CursorOK` and
+  `Linst.At`, with no fork or successful-outcome premise. This is terminal
+  decoding, not a claim that the certificate excludes `SELFDESTRUCT`;
+  `Cert.callOnly` continues to permit every terminal instruction.
 - To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
   certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
   `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):
@@ -5579,6 +5612,22 @@ contract-neutral.
   `Xinst.notDelegatecall` with `CursorOK.exec_spawn_undelegated` is the restriction the
   `OwnSpawns` producers use: a cursor whose `ExecsSatisfy Xinst.notDelegatecall` decodes only
   `CALL`, `STATICCALL` or `CREATE2`.
+  The same owner separately defines `SFunc.lastsSatisfy` and
+  `Cursor.LastsSatisfy` for terminal families, with `SStep.lastsSatisfy` and
+  `Cursor.lastsSatisfy_of_reachable` propagating a certificate-wide check.
+  `SFunc.noSelfdestruct` / `Cert.noSelfdestruct` specialize this walk to
+  reject terminal `SELFDESTRUCT`; `Cursor.noSelfdestruct_of_reach` retains
+  that checked restriction at active and suspended trees. This terminal
+  check is separate from `Cert.callOnly`, which still permits every halt.
+  `CursorOK.lastsSatisfy` applies that restriction to actual `Linst.At`
+  decoding through the shared `CursorOK.tree_of_last` donor;
+  `CursorOK.not_selfdestruct` gives the terminal exclusion. For a whole
+  same-frame chain use `not_selfdestruct_of_parentPrefix_noStateGas` with
+  `Cert.check`, the actual certificate's `noSelfdestruct` check, pc-zero
+  entry, installed-code equality, selected state-gas absence and the actual
+  `ParentPrefix`. It covers every eventual frame outcome. This is local
+  decoded-terminal exclusion, not account-deletion or contract preservation;
+  child routing and inherited deletion safety require their own proofs.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in

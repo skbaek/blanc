@@ -650,6 +650,77 @@ theorem cursor_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check co
     ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c n κ :=
   cursor_of_parentPrefix_noStateGas hc hpc hcode hfork.rules_stateGas_none hp
 
+/-- A cursor-placed node decoding a terminal instruction sits at that
+instruction's checked `last` node, independently of its execution outcome. -/
+theorem CursorOK.tree_of_last {code : ByteArray} {c : Cert} {n : Exec.Deriv}
+    {κ : Cursor} (ok : CursorOK code c n κ) {l : Linst}
+    (hat : Linst.At n.sevm.code n.pc l) : κ.f = .last l := by
+  obtain ⟨hcode, hpc, hcheck, -, -⟩ := ok
+  obtain ⟨f, pc, a, m, K⟩ := κ
+  dsimp only at hpc hcheck ⊢
+  rw [hcode, hpc] at hat
+  have hjump : ∀ j : Jinst, byteAt code pc = some j.toUInt8 → False := fun j hb => by
+    have hj := byteAt_jinst_at hb
+    unfold Jinst.At at hj
+    unfold Linst.At at hat
+    rw [hat] at hj
+    cases hj
+  cases f with
+  | last l' =>
+    have hl := byteAt_linst_at (show byteAt code pc = some l'.toUInt8 by
+      simpa only [checkNode, beq_iff_eq] using hcheck)
+    unfold Linst.At at hl hat
+    rw [hat] at hl
+    cases hl
+    rfl
+  | next i g =>
+    simp only [checkNode, Bool.and_eq_true] at hcheck
+    have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hcheck.1.1)
+    unfold Ninst.At at hi
+    unfold Linst.At at hat
+    rw [hat] at hi
+    cases hi
+  | undefined =>
+    have hnone : code.getInst pc = none := by
+      simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
+    unfold Linst.At at hat
+    rw [hat] at hnone
+    cases hnone
+  | dest g => exact (hjump _ (by simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
+  | branch g h =>
+    simp only [checkNode] at hcheck
+    split at hcheck
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1)).elim
+    · cases hcheck
+  | branchTo g k =>
+    simp only [checkNode] at hcheck
+    split at hcheck
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1.1.1)).elim
+    · cases hcheck
+  | jump k =>
+    simp only [checkNode] at hcheck
+    split at hcheck
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1.1.1)).elim
+    · cases hcheck
+  | callNext k g =>
+    simp only [checkNode] at hcheck
+    split at hcheck
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck; exact hcheck.1.1.1)).elim
+    · cases hcheck
+  | ret =>
+    simp only [checkNode] at hcheck
+    split at hcheck
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
+    · cases hcheck
+  | pcAt p g =>
+    simp only [checkNode, Bool.and_eq_true] at hcheck
+    have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil (.reg .pc)) hcheck.1.1)
+    unfold Ninst.At at hi
+    unfold Linst.At at hat
+    rw [hat] at hi
+    cases hi
+
+
 /-- A cursor-placed node decoding an external instruction sits at that
 instruction's `next` node. -/
 theorem CursorOK.tree_of_exec {code : ByteArray} {c : Cert} {n : Exec.Deriv}

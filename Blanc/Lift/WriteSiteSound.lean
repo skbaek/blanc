@@ -221,8 +221,8 @@ theorem wstep_length {R : WRet} {n : Ninst} {σ σ' : WSt} {a a' : List AVal} {s
     exact transfer_length_mono ho hA hlen
 
 /-- A keeping summary's accepted step keeps the executing account's storage. -/
-theorem wstep_keeps {R : WRet} {n : Ninst} {σ σ' : WSt} {sevm : Sevm} {d d' : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hw : wstep R n σ = some σ') (hk : R.keeps = true)
+theorem wstep_keeps_noStateGas {R : WRet} {n : Ninst} {σ σ' : WSt} {sevm : Sevm} {d d' : Devm}
+    (hfork : sevm.benvStat.rules.stateGas = none) (hw : wstep R n σ = some σ') (hk : R.keeps = true)
     (run : Ninst.Run sevm d n d') : Devm.getStor d' = Devm.getStor d := by
   by_cases hpush : ∃ bs fits, n = .push bs fits
   · obtain ⟨bs, fits, rfl⟩ := hpush
@@ -230,7 +230,12 @@ theorem wstep_keeps {R : WRet} {n : Ninst} {σ σ' : WSt} {sevm : Sevm} {d d' : 
   · have hn : ∀ bs fits, n ≠ .push bs fits := fun bs fits he => hpush ⟨bs, fits, he⟩
     obtain ⟨out, -, -, -, -, -, ho, -, hkeep, -⟩ := wstep_nonpush hn hw
     rw [hk, Bool.true_and] at hkeep
-    exact getStor_of_writesStor hfork ho hkeep run
+    exact getStor_of_writesStor_noStateGas hfork ho hkeep run
+
+theorem wstep_keeps {R : WRet} {n : Ninst} {σ σ' : WSt} {sevm : Sevm} {d d' : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork) (hw : wstep R n σ = some σ') (hk : R.keeps = true)
+    (run : Ninst.Run sevm d n d') : Devm.getStor d' = Devm.getStor d :=
+  wstep_keeps_noStateGas hfork.rules_stateGas_none hw hk run
 
 /-- A run under a step relation is a run under any relation it implies at the run's frame. -/
 theorem _root_.Blanc.Lift.SFunc.RunP.mono_at {P Q : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc}
@@ -432,10 +437,10 @@ theorem RetObs.stor {ε : Env} {sevm : Sevm} {R : WRet} {rest : List B256} {d d'
 /-- **The recursion.**  A run of a tree the walk accepts under summary `R`, from a machine the
 walk's state describes in the environment `ε` of the frame, is a run under `WsStep R.sites ε`;
 if it returns, the summary holds of the result above the same untouched base. -/
-theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem ws_run_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
-    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
+    {sevm : Sevm} (hfork : sevm.benvStat.rules.stateGas = none) {d : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunP P c.prog sevm d f o) :
     ∀ {a : List AVal} {σ : WSt} {R : WRet} {ε : Env} {rest : List B256},
       wsNode c.entries ann R a σ f = true → σ.kv.length ≤ a.length → ε.Frame sevm →
@@ -492,10 +497,10 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨a', σ', ha, hs, hn'⟩ := wsNode_next_inv hn
     have hrun := hP h
     obtain ⟨hl1024, hl⟩ := wstep_length hs ha hlen hS (List.Forall₂.length_eq hh.kv).symm hrun
-    obtain ⟨sat', hobs, -⟩ := wstep_sound hfork hε hh hS hl1024 hs hrun
+    obtain ⟨sat', hobs, -⟩ := wstep_sound_noStateGas hfork hε hh hS hl1024 hs hrun
     obtain ⟨r1, r2⟩ := ih hn' hl hε sat'
     exact ⟨.next ⟨h, hobs⟩ r1, fun d'' ho => (r2 d'' ho).stor fun hk =>
-      congrFun (wstep_keeps hfork hs hk hrun) _⟩
+      congrFun (wstep_keeps_noStateGas hfork hs hk hrun) _⟩
   | dest burn _ ih =>
     intro a σ R ε rest hn hlen hε sat
     obtain ⟨r1, r2⟩ := ih hn hlen hε (sat.burn burn)
@@ -571,15 +576,27 @@ theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
     simp only [wsNode] at hn
     cases hn
 
+theorem ws_run {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
+    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunP P c.prog sevm d f o) :
+    ∀ {a : List AVal} {σ : WSt} {R : WRet} {ε : Env} {rest : List B256},
+      wsNode c.entries ann R a σ f = true → σ.kv.length ≤ a.length → ε.Frame sevm →
+      σ.Sat ε sevm d rest →
+      SFunc.RunP (WsStep R.sites ε P) c.prog sevm d f o ∧
+        ∀ d'', o = .returned d'' → RetObs ε sevm R rest d d'' :=
+  ws_run_noStateGas hP hw hfork.rules_stateGas_none run
+
 /-! ## The frozen statements -/
 
 /-- **Soundness of the write-site checker** (tree level, no bytes): every run of entry `0` of an
 accepted certificate executes only `SSTORE`s that meet a root site, read in the frame's root
 environment. -/
-theorem wsRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem wsRun_sound_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
-    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {pre post : Devm}
+    {sevm : Sevm} (hfork : sevm.benvStat.rules.stateGas = none) {pre post : Devm}
     (run : SProg.RunP P c.prog sevm pre post) :
     SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) P) c.prog sevm pre post := by
   obtain ⟨f, hf0, r⟩ := run
@@ -602,17 +619,33 @@ theorem wsRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
     simp only [wsRoot, hA, Option.map_some, Option.getD_some]
   rw [hinit] at hnode
   rw [hroot]
-  exact ⟨f, hf0, (ws_run hP hw hfork r hnode (Nat.zero_le _) (Env.root_frame sevm)
+  exact ⟨f, hf0, (ws_run_noStateGas hP hw hfork r hnode (Nat.zero_le _) (Env.root_frame sevm)
     (init_sat sevm pre)).1⟩
+
+theorem wsRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {c : Cert} {ann : List WAnn} (hw : wsCert c ann = true)
+    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {pre post : Devm}
+    (run : SProg.RunP P c.prog sevm pre post) :
+    SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) P) c.prog sevm pre post :=
+  wsRun_sound_noStateGas hP hw hfork.rules_stateGas_none run
 
 /-- **The walk-facing lifting theorem**: a successful frame of certified bytes is a run of the
 certified program whose steps sit in the derivation and whose `SSTORE`s meet a root site. -/
+theorem lift_sound_ws_noStateGas {code : ByteArray} {c : Cert} {ann : List WAnn}
+    (hc : Cert.check code c = true) (hw : wsCert c ann = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) (StepIn ⟨0, sevm, pre, .ok post, exc⟩))
+      c.prog sevm pre post := by
+  exact wsRun_sound_noStateGas (fun h => StepIn.toRun h) hw hfork (lift_sound_in_noStateGas hc hcode hfork exc)
+
 theorem lift_sound_ws {code : ByteArray} {c : Cert} {ann : List WAnn}
     (hc : Cert.check code c = true) (hw : wsCert c ann = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (WsStep (wsRoot ann) (Env.root sevm) (StepIn ⟨0, sevm, pre, .ok post, exc⟩))
-      c.prog sevm pre post := by
-  exact wsRun_sound (fun h => StepIn.toRun h) hw hfork (lift_sound_in hc hcode hfork exc)
+      c.prog sevm pre post :=
+  lift_sound_ws_noStateGas hc hw hcode hfork.rules_stateGas_none exc
 
 end Blanc.Lift.WriteSite

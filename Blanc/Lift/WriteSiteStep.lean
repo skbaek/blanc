@@ -304,8 +304,8 @@ theorem forall₂_eq_map {ν : Nat → B256} :
 /-- **The memory map after a step** (`memEff`): a constant `MSTORE` records its word; every
 write whose offset the facts bound from below keeps the words ending below that bound; every
 other instruction keeps memory or forgets the map. -/
-theorem memEff_sound {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S rest : List B256}
-    {d d' : Devm} {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
+theorem memEff_sound_noStateGas {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S rest : List B256}
+    {d d' : Devm} {n : Ninst} (hfork : sevm.benvStat.rules.stateGas = none)
     (h : σ.Holds ε sevm ν S d) (hS : d.stack = S ++ rest) (run : Ninst.Run sevm d n d')
     (hcc : n ≠ .exec .callcode) : MemHolds ν (memEff σ n) d'.memory := by
   have hst : d.stack = σ.kv.map ν ++ rest := by rw [hS, forall₂_eq_map h.kv]
@@ -371,14 +371,14 @@ theorem memEff_sound {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S 
     exact memBelow_holds hm ((extcodecopy_run_writesAt run
       (hget (by rw [hkv]; rfl))).agreeBelow.mono (FreePtr.lo_le h.facts dd))
   · rename_i h4 h3 h2 h1 h0 o t hkv
-    exact memBelow_holds hm ((call_run_writesAt hfork run
+    exact memBelow_holds hm ((call_run_writesAt_noStateGas hfork run
       (hget (by rw [hkv]; rfl))).agreeBelow.mono (FreePtr.lo_le h.facts o))
   · exact absurd rfl hcc
   · rename_i h3 h2 h1 h0 o t hkv
-    exact memBelow_holds hm ((delegatecall_run_writesAt hfork run
+    exact memBelow_holds hm ((delegatecall_run_writesAt_noStateGas hfork run
       (hget (by rw [hkv]; rfl))).agreeBelow.mono (FreePtr.lo_le h.facts o))
   · rename_i h3 h2 h1 h0 o t hkv
-    exact memBelow_holds hm ((staticcall_run_writesAt hfork run
+    exact memBelow_holds hm ((staticcall_run_writesAt_noStateGas hfork run
       (hget (by rw [hkv]; rfl))).agreeBelow.mono (FreePtr.lo_le h.facts o))
   · dsimp only
     split
@@ -386,6 +386,12 @@ theorem memEff_sound {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S 
       exact hm.keep (ninstMemKeeps_run hk run)
     · intro p hp
       cases hp
+
+theorem memEff_sound {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt} {S rest : List B256}
+    {d d' : Devm} {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
+    (h : σ.Holds ε sevm ν S d) (hS : d.stack = S ++ rest) (run : Ninst.Run sevm d n d')
+    (hcc : n ≠ .exec .callcode) : MemHolds ν (memEff σ n) d'.memory :=
+  memEff_sound_noStateGas hfork.rules_stateGas_none h hS run hcc
 
 /-! ## Provenance terms of fresh results -/
 
@@ -647,24 +653,30 @@ theorem WSt.Holds.of_keep {ε : Env} {sevm : Sevm} {ν : Nat → B256} {σ : WSt
   guards := h.guards
 
 /-- A step `wstep` accepts that does not write storage keeps it. -/
-theorem getStor_of_writesStor {sevm : Sevm} {d d' : Devm} {n : Ninst} {p out : Pattern}
-    (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+theorem getStor_of_writesStor_noStateGas {sevm : Sevm} {d d' : Devm} {n : Ninst} {p out : Pattern}
+    (hfork : sevm.benvStat.rules.stateGas = none) (ho : ninstTransfer n p = some out)
     (hn : n.writesStor = false) (run : Ninst.Run sevm d n d') :
     Devm.getStor d' = Devm.getStor d := by
   cases n with
   | reg q =>
-    refine Ninst.Run.getStor_of_storKeep hfork (.inl ⟨q, rfl, fun hq => ?_⟩) run
+    refine Ninst.Run.getStor_of_storKeep_noStateGas hfork (.inl ⟨q, rfl, fun hq => ?_⟩) run
     subst hq
     cases hn
   | exec x =>
     have : x = .staticcall := by
       simpa only [Ninst.writesStor, bne_eq_false_iff_eq] using hn
     subst this
-    exact Ninst.Run.getStor_of_storKeep hfork (.inr rfl) run
+    exact Ninst.Run.getStor_of_storKeep_noStateGas hfork (.inr rfl) run
   | push bs fits => simp only [ninstTransfer, reduceCtorEq] at ho
   | dupn _ => simp only [ninstTransfer, reduceCtorEq] at ho
   | swapn _ => simp only [ninstTransfer, reduceCtorEq] at ho
   | exchange _ => simp only [ninstTransfer, reduceCtorEq] at ho
+
+theorem getStor_of_writesStor {sevm : Sevm} {d d' : Devm} {n : Ninst} {p out : Pattern}
+    (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+    (hn : n.writesStor = false) (run : Ninst.Run sevm d n d') :
+    Devm.getStor d' = Devm.getStor d :=
+  getStor_of_writesStor_noStateGas hfork.rules_stateGas_none ho hn run
 
 private theorem list_shape {α : Type} (l : List α) :
     l = [] ∨ (∃ k, l = [k]) ∨ ∃ k v t, l = k :: v :: t := by
@@ -881,9 +893,9 @@ state `d` (frame words `S` above `rest`) and `wstep R n σ` accepts with `σ'`, 
 step `d → d'` the state `σ'` holds of `d'` above the same `rest`; an `SSTORE` meets a site of the
 current function's summary `R` (`Site.Obs`, read in `ε` before the step: the frozen `WsObs`
 body); and a keeping summary's step writes no storage. -/
-theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sevm}
+theorem wstep_sound_noStateGas {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sevm}
     {ν : Nat → B256} {S rest : List B256} {d d' : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hε : ε.Frame sevm)
+    (hfork : sevm.benvStat.rules.stateGas = none) (hε : ε.Frame sevm)
     (h : σ.Holds ε sevm ν S d) (hS : d.stack = S ++ rest) (hlen : σ.kv.length ≤ 1024)
     (hw : wstep R n σ = some σ') (run : Ninst.Run sevm d n d') :
     σ'.Sat ε sevm d' rest ∧
@@ -922,7 +934,7 @@ theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sev
   have hr : σ.fresh ∉ σ.kv := fun hm => Nat.lt_irrefl _ (WSt.lt_fresh (by
     simp only [WSt.syms, List.mem_append]; exact .inl (.inl (.inl (.inl (.inl (.inl (.inl hm))))))))
   obtain ⟨kv'', hm'', hswap⟩ := mapM_swap (r := σ.fresh) hm
-  obtain ⟨S', w, hst', hf⟩ := transfer_val hfork ho hlen hc hm'' hr h.kv hS run
+  obtain ⟨S', w, hst', hf⟩ := transfer_val_noStateGas hfork ho hlen hc hm'' hr h.kv hS run
   -- the fresh result is the top word whenever the transfer pushes it
   have htop : ∀ q, n = .reg q → pushesTop q = true → ∃ rs, d'.stack = w :: rs := by
     intro q hq hpq
@@ -932,7 +944,7 @@ theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sev
   have hA : σ.Holds ε sevm (Function.update ν σ.fresh w) S d := h.agree hagree
   have hkeepS : n.writesStor = false →
       Devm.getStor d' sevm.currentTarget = Devm.getStor d sevm.currentTarget := fun hws => by
-    rw [getStor_of_writesStor hfork ho hws run]
+    rw [getStor_of_writesStor_noStateGas hfork ho hws run]
   have hcc : n ≠ .exec .callcode := fun he => by subst he; simp only [ninstTransfer, reduceCtorEq] at ho
   refine ⟨⟨Function.update ν σ.fresh w, S', hst', WSt.Holds.prune ?_⟩, ?_, ?_⟩
   rotate_left
@@ -1010,7 +1022,7 @@ theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sev
       · cases hp
     · exact hA.prov p hp
   · -- memory
-    exact memEff_sound hfork hA hS run hcc
+    exact memEff_sound_noStateGas hfork hA hS run hcc
   · -- current slot values
     intro p hp
     rcases List.mem_append.mp hp with hp1 | hp2
@@ -1070,6 +1082,17 @@ theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sev
         rw [run_eq_top run hs2, List.cons.injEq] at hrs
         exact ⟨ν x, ν y, by rw [Function.update_self, ← hrs.1], h.provOf x, h.provOf y⟩
     · exact hA.eqs e he2
+
+theorem wstep_sound {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} {sevm : Sevm}
+    {ν : Nat → B256} {S rest : List B256} {d d' : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork) (hε : ε.Frame sevm)
+    (h : σ.Holds ε sevm ν S d) (hS : d.stack = S ++ rest) (hlen : σ.kv.length ≤ 1024)
+    (hw : wstep R n σ = some σ') (run : Ninst.Run sevm d n d') :
+    σ'.Sat ε sevm d' rest ∧
+      (n = .reg .sstore → ∀ x v rs, d.stack = x :: v :: rs →
+        ∃ s ∈ R.sites, s.Obs ε sevm d x v) ∧
+      (R.keeps = true → n.writesStor = false) :=
+  wstep_sound_noStateGas hfork.rules_stateGas_none hε h hS hlen hw run
 
 
 end Blanc.Lift.WriteSite
