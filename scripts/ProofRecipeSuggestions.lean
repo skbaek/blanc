@@ -1199,4 +1199,33 @@ example (sevm : Sevm) (pre : Devm) (op : Xinst)
   expect_no_recipe_offered "xinst-step-shape"
   exact shape
 
+-- EXPECT: lift-node-no-state-gas
+-- Matcher controls only; the named theorem proves the lifting property.
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (checked : Lift.Cert.CheckedM code c ms b) (root node : Exec.Deriv) :
+    Lift.NodeClaimNoStateGas code c ms b root node := by
+  expect_recipe_trigger "goal-head:Blanc.Lift.NodeClaimNoStateGas"
+  expect_recipe_offered "lift-node-no-state-gas"
+  blanc_suggest
+  exact Lift.node_soundM_noStateGas checked root node
+
+-- EXPECT: lift-node-no-state-gas
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (checked : Lift.Cert.CheckedM code c ms b) (root node : Exec.Deriv)
+    (included : ∀ r ∈ Exec.rawFrameDescendants node.exc, r ∈ Exec.rawFrameRoots root.exc) :
+    Lift.NodeClaim0NoStateGas code c ms b root node := by
+  expect_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
+  expect_recipe_offered "lift-node-no-state-gas"
+  blanc_suggest
+  exact Lift.node_soundM_noStateGas checked root node included
+
+-- The original modern carrier is distinct, even with identical certificate arguments.
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (root node : Exec.Deriv) (modern : Lift.NodeClaim code c ms b root node) :
+    Lift.NodeClaim code c ms b root node := by
+  expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaimNoStateGas"
+  expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
+  expect_no_recipe_offered "lift-node-no-state-gas"
+  exact modern
+
 end Blanc

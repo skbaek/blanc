@@ -5132,6 +5132,16 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+  For an actual successful execution with selected `rules.stateGas = none`,
+  use `lift_sound_inM_noStateGas` / `lift_sound_in_noStateGas` to retain
+  `StepIn`, or `lift_soundM_noStateGas` / `lift_sound_noStateGas` for the
+  ordinary lifted run. `NodeClaim0NoStateGas`, `NodeClaimNoStateGas`, and
+  `node_soundM_noStateGas` own the capability-level recursion; the original
+  modern `NodeClaim0`/`NodeClaim` definitions and theorem statements retain
+  their meaning. The `lift-node-no-state-gas` recipe matches only the two
+  direct capability carriers; a general `SProg.Run` or `RunP` goal does not
+  select this route from other constructive program proofs. These successful
+  execution theorems assert neither opcode availability nor no-deletion.
 - For one lifted step's effect on memory, use
   [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
   forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
@@ -5202,6 +5212,9 @@ contract-neutral.
   implied at the run's own frame).
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
+  (the capability forms `call_run_writesAt_noStateGas`,
+  `delegatecall_run_writesAt_noStateGas` and `staticcall_run_writesAt_noStateGas`
+  use the common actual-rule CallEffects owner; modern statements remain wrappers)
   and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
   `CALL`/`DELEGATECALL`/`STATICCALL` (every outcome, including a failed call).
 - For the stack top after one lifted step of an environment or hashing instruction, use
@@ -5274,6 +5287,16 @@ contract-neutral.
   `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
   `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+  With only selected state-gas absence, use
+  `Cursor.absNinst_run_stack_noStateGas`, `cursor_stepS_noStateGas`,
+  `cursor_step_noStateGas`, `cursor_of_parentPrefix_noStateGas` and
+  `reach_of_parentPrefix_noStateGas` in the same module. They retain the
+  exact actual same-frame edge/prefix, cursor invariant and child provenance,
+  cover every frame outcome, and add no success premise. Original modern
+  statements forward to these cores; no cursor/checker carrier changed.
+  Their existential step/reach conclusions require the joint certificate and
+  actual-edge/prefix premises, so select the route here rather than matching
+  an arbitrary existential or reachability goal.
 - To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
   certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
   `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):

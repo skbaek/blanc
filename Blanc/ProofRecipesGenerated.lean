@@ -433,6 +433,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/CommonProofs.lean", "declaration:Blanc.Xinst.ShapeCovered", "declaration:Blanc.Xinst.step_shapeNoStateGas", "declaration:Blanc.Xinst.step_shapeCovered", "declaration:Blanc.Xinst.Run.some_child_benvStat", "declaration:Blanc.Evm.step_spawn_child_benvStat"]
     boundary := "This selects the ordinary no-state-gas lane. It proves no opcode availability, successful execution, gas equality or child commitment. For a state-gas lane use the general `Xinst.step_shape`, whose additional creation/call arms remain explicit. Child-environment equality alone proves no child state or storage preservation."
   },
+  {
+    id := "lift-node-no-state-gas"
+    status := "active"
+    triggers := ["goal-head:Blanc.Lift.NodeClaimNoStateGas", "goal-head:Blanc.Lift.NodeClaim0NoStateGas"]
+    preferredPath := "Apply node_soundM_noStateGas with the actual Cert.CheckedM proof and root derivation. For NodeClaim0NoStateGas, additionally provide the actual raw-frame-descendant inclusion required by NodeClaimNoStateGas. The public lift_sound_inM_noStateGas/lift_sound_in_noStateGas and lift_soundM_noStateGas/lift_sound_noStateGas package the resulting successful entry lift."
+    symbols := ["module:Blanc/Lift/Sound.lean", "declaration:Blanc.Lift.NodeClaim0NoStateGas", "declaration:Blanc.Lift.NodeClaimNoStateGas", "declaration:Blanc.Lift.node_soundM_noStateGas", "declaration:Blanc.Lift.lift_sound_inM_noStateGas", "declaration:Blanc.Lift.lift_sound_in_noStateGas", "declaration:Blanc.Lift.lift_soundM_noStateGas", "declaration:Blanc.Lift.lift_sound_noStateGas"]
+    boundary := "Matches only these two direct capability-level recursion carriers, without unfolding aliases, forall goals, or the original modern NodeClaim0/NodeClaim carriers. The checked certificate, actual derivation, selected stateGas-none capability and successful node outcome remain explicit. This proves no opcode availability, liveness, gas equality, rollback commitment or no-deletion; outcome-independent prefixes use the separate cursor theorems."
+  },
 ]
 
 end Blanc.ProofRecipes
