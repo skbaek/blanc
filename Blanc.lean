@@ -1653,6 +1653,8 @@ import Blanc.Lift.Usdc.ProxyCreation.Jumps
 import Blanc.Lift.Usdc.ProxyCreation.CodeSize
 import Blanc.Lift.Usdc.ProxyCreation.RuntimeReturn
 import Blanc.Lift.Usdc.ProxyCreation.RuntimeWindow
+import Blanc.Lift.Usdc.ProxyCreation.ConstantsCheck
+import Blanc.Lift.Usdc.ProxyCreation.Prefix
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk

@@ -6102,8 +6102,16 @@ contract-neutral.
   `ProxyCreation.runtime_window` in
   [`Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean)
   identifies that window in the registered creation input with the registered
-  proxy runtime. Actual constructor entry, storage writes, code installation
-  and historical execution remain separate obligations.
+  proxy runtime. The companion `ProxyCreation.prefix_runExact` and
+  `adminPrefix_runExact` in
+  [`Blanc/Lift/Usdc/ProxyCreation/Prefix.lean`](../Blanc/Lift/Usdc/ProxyCreation/Prefix.lean)
+  consume the shared `rx_callRet` API to compose the actual registered entry
+  and admin-label guard with their actual internal callees and continuations.
+  They derive the constructor argument, fixed label hashes, memory image and
+  gas charges; the admin argument is the executing message's caller.
+  `terminal_runtimeReturn` connects the final caller continuation to the
+  accepted runtime return. Callee execution, storage writes, bytecode lifting,
+  code installation and historical execution remain separate obligations.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry
