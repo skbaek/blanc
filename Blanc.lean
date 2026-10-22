@@ -1562,6 +1562,7 @@ import Blanc.Lift.ReachSilentTail
 import Blanc.Lift.ReachSkip
 import Blanc.Lift.RegionStor
 import Blanc.Lift.RunPWalk
+import Blanc.Lift.SolcStorageClear
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.ShuffleSkip
@@ -1724,4 +1725,5 @@ import Blanc.Lift.Usdc.HistoryEndFoot
 import Blanc.Lift.Usdc.AllowLocalityInit
 import Blanc.Lift.Usdc.AllowLocalityV2_2
 import Blanc.Lift.Usdc.InitializerClearing
+import Blanc.Lift.Usdc.OldInitializerEffects
 import Blanc.Lift.WriteSiteZero

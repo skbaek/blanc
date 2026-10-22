@@ -5294,6 +5294,31 @@ contract-neutral.
   owner for protected childless storage and child-entry alignment; the child
   need not execute at that owner. Initial zero and committing-child recursion
   remain explicit, including every actual entered occurrence.
+- For solc's storage-string clearing tail, use
+  [`Blanc/Lift/SolcStorageClear.lean`](../Blanc/Lift/SolcStorageClear.lean).
+  `body_store_cut` derives the literal-zero value from the actual
+  push/duplicate/store sequence and retains its continuation. Given the
+  actual function-table entry and erasure of the step relation to `Ninst.Run`,
+  `runP_zeroStores` strengthens the same source run with zero-store
+  observations; `runP_zeroStores_noExec` also derives that the same source
+  run contains no external instruction. `runP_nonInc` exposes the existing
+  `GuardObs K False` interface. The source-shaped `head`, `body`, `tail` and `exitTree` retain
+  the concrete destination bytes and back edge. The USDC clearing consumer
+  specializes this common proof. These observations need no slot separation,
+  but neither establish an initial zero seed nor preserve an arbitrary
+  nonzero administrative word when a cleared cell aliases it.
+  The concrete V2 consumer in
+  [`Blanc/Lift/Usdc/OldInitializerEffects.lean`](../Blanc/Lift/Usdc/OldInitializerEffects.lean)
+  derives `implV2_initializeV2_observed` from successful fresh execution and
+  the actual initializer selector: every store targets metadata key4/15/18,
+  writes zero, or targets a bounded modular payload word of the actual long
+  decoded name; the same route has no external instruction. The wrapper
+  derives its calldata bounds. `implV2_initializeV2_writeClass` projects
+  the write classification. `implV2_initializeV2_short_nonInc` and
+  `implV2_initializeV2_short_zero` require an actual decoded length at most31
+  and separation from the three fixed keys; the latter also requires the
+  initial zero seed. They do not establish the historical name profile,
+  seed, long-payload separation or arbitrary nonzero-word preservation.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
