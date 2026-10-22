@@ -3060,7 +3060,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   [`Blanc/Lift/SolcSignedQuery.lean`](../Blanc/Lift/SolcSignedQuery.lean).
   Its line inversions cover the prologue, calldata size, seven-argument permit
   and nine-argument authorization decoders, pause and mapped-byte reads,
-  nonce update, six-word struct buffer,
+  nonce update, six- and seven-word struct buffers,
   typed-data encoding and signature guards. Source destinations, nonce base,
   type hash and return tags are parameters where supported by the actual
   instruction sequence. `recovery_epilogue` derives the returned answer and
@@ -3076,11 +3076,22 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `guardSucc` and `guardZero` exclude an actual rejected subtree through its
   `noOk` check and the original successful execution. These cursor adapters
   are available by name here; no new dispatch head is required or admitted.
-  `struct_memory_facts` and `typed_memory_facts` expose the ordered writes,
-  free pointer and exact hash preimages. Their fixed permit allocation
-  `128 → 352 → 450/480` is used by the checked V2_1 consumer; the V2 route
-  still needs its own composition proof. It does not cover the authorization
-  allocation `384 → 482/512`. Use the existing `line-run-split`
+  `guardSucc_pc` additionally derives the reached numeric PC from the actual
+  decoded jump target. `masked_owner_line` inverts the four-instruction
+  address-mask/equality prefix using the canonical returned address word;
+  successful owner equality still requires the consumer's actual branch proof.
+  `struct_memory_facts` and `seven_word_memory_facts` expose the ordered
+  six- and seven-word writes, free pointer and exact struct hash preimages.
+  `seven_word_head_line`, `seven_word_body_line` and `seven_word_tail_line`
+  invert the actual authorization builder; its source tag, domain slot and
+  return destination remain explicit parameters. `typed_memory_facts_at`
+  handles the overlapping 66-byte typed image at either supported struct end,
+  352 or 384, yielding `450/480` or `482/512` for the recovery pointer/size.
+  `struct_hash_line_at`, `typed_words_line_at`, `typed_length_line_at` and
+  `typed_hash_line_at` use the actual pointer, length and read bounds.
+  The fixed permit APIs, including `typed_memory_facts`, specialize the shared
+  proofs and retain their public statements. Consumers must derive every
+  buffer fact and actual source route. Use the existing `line-run-split`
   recipe for line inversions and these named facts for memory goals. The
   helpers do not establish a whole selector path or historical occurrence.
   The concrete fresh-entry producer in
@@ -3103,9 +3114,16 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   facts, exact scratch memory, state, pointer and actual continuations.
   Permit reaches the source tail after its nonce increment; the other three
   paths return from authorization validation with strict time bounds,
-  unused authorization state and no storage write. Full struct hashing,
-  signature checks, native recovery consumption and historical transport
-  remain separate composition obligations.
+  unused authorization state and no storage write. `ownerV2_query_entry`
+  derives the actual six- or seven-word struct hash, typed-data digest,
+  signature-guard route, full registers and continuations at `0x50a4`.
+  `ownerV2_query_consumed` uses existing owner-selector membership to connect
+  the actual `0x50ef` native call, its original slot, paid gas and canonical
+  nonzero answer through `0x4d93` and each real owner comparison. The answer
+  is the calldata owner; the native message and return observations remain
+  in the conclusion. Fork coverage and address-1 nondelegation are explicit
+  local premises. Historical transport, complete retained-query relevance
+  and failed-call enumeration remain separate obligations.
   Discovery is manual for these concrete source-specific consumers.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):

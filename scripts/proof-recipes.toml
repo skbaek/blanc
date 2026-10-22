@@ -94,8 +94,8 @@ review_date = "2026-08-29"
 id = "line-run-split"
 status = "active"
 triggers = ["implication-premise:Line.Run"]
-preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer. The authorization decoder covers nine calldata words; mapped_byte_read_line takes the original stack-index equality for its actual address, so the same inverse serves DUP7 and DUP9. Selector and wrapper inverses retain the actual instruction/guard values rather than assume a selected endpoint."
-boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six-word struct and typed-memory facts cover the shared permit allocation 128 to 352 to 450/480; the seven-word authorization allocation 384 to 482/512 needs a separate proved generalization."
+preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer. The authorization decoder covers nine calldata words; mapped_byte_read_line takes the original stack-index equality for its actual address, so the same inverse serves DUP7 and DUP9. Selector and wrapper inverses retain the actual instruction/guard values rather than assume a selected endpoint. The seven_word_head/body/tail_line inverses share the authorization builder; the struct_hash_line_at and typed_words/length/hash_line_at inverses retain actual buffer lengths, pointers and read bounds. The masked_owner_line inverse derives the canonical address-mask equality flag; the actual successful branch remains a consumer obligation."
+boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six- and seven-word struct facts and shared typed_memory_facts_at cover the supported layouts 128 to 352 to 450/480 and 128 to 384 to 482/512. These are buffer consequences under their explicit local premises; the consumer still derives those premises and the actual whole query route."
 owner_module = "Blanc/CommonProofs.lean"
 canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
 symbols = [
@@ -117,6 +117,14 @@ symbols = [
   "declaration:Blanc.Lift.SolcSignedQuery.buffer_head_line",
   "declaration:Blanc.Lift.SolcSignedQuery.struct_hash_line",
   "declaration:Blanc.Lift.SolcSignedQuery.typed_hash_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.seven_word_head_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.seven_word_body_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.seven_word_tail_line",
+  "declaration:Blanc.Lift.SolcSignedQuery.struct_hash_line_at",
+  "declaration:Blanc.Lift.SolcSignedQuery.typed_words_line_at",
+  "declaration:Blanc.Lift.SolcSignedQuery.typed_length_line_at",
+  "declaration:Blanc.Lift.SolcSignedQuery.typed_hash_line_at",
+  "declaration:Blanc.Lift.SolcSignedQuery.masked_owner_line",
   "declaration:Blanc.Lift.SolcSignedQuery.recovery_epilogue",
 ]
 review_owner = "proof-infrastructure"

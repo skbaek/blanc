@@ -1031,4 +1031,516 @@ theorem ownerV2_source_prefix_of_owner_selector {F : Exec.Deriv} {post : Devm}
   obtain ⟨op,selector⟩ := chosen
   exact ⟨op,selector,ownerV2_source_prefix op pc code stack memory selector success fork⟩
 
+namespace OwnerOpV2
+
+/-- Actual PUSH32 instruction words of the four checked constructors. -/
+def typeWord : OwnerOpV2 → B256
+  | .permit => 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
+  | .approveAuth => 0x808c10407a796f3ef2c7ea38c0638ea9d2b8a1c63e3ca9e1f56ce84ae59df73c
+  | .increaseAuth => 0x424222bb050a1f7f14017232a5671f2680a2d3420f504bd565cf03035c53198a
+  | .decreaseAuth => 0xb70559e94cbda91958ebec07f9b65b3b490097c8d25c8dacd71105df1015b6d8
+
+def comparison : OwnerOpV2 → SFunc
+  | .permit => ImplV2.t_486d_c71
+  | .approveAuth => ImplV2.t_4a15_c66
+  | .increaseAuth => ImplV2.t_46c4_c70
+  | .decreaseAuth => ImplV2.t_44f5_c72
+
+def comparisonTag : OwnerOpV2 → UInt8 × UInt8
+  | .permit => (0x48,0x6d)
+  | .approveAuth => (0x4a,0x15)
+  | .increaseAuth => (0x46,0xc4)
+  | .decreaseAuth => (0x44,0xf5)
+
+def structEnd (op : OwnerOpV2) : B256 := if op = .permit then 352 else 384
+
+def structLength (op : OwnerOpV2) : B256 := if op = .permit then 192 else 224
+
+def recoveryPointer (op : OwnerOpV2) : B256 := 98 + op.structEnd
+
+def recoveryMemorySize (op : OwnerOpV2) : Nat := op.structEnd.toNat + 128
+
+def sWord (op : OwnerOpV2) (sevm : Sevm) : B256 :=
+  Sevm.dataWord sevm (if op = .permit then 196 else 260)
+
+def rWord (op : OwnerOpV2) (sevm : Sevm) : B256 :=
+  Sevm.dataWord sevm (if op = .permit then 164 else 228)
+
+def vWord (op : OwnerOpV2) (sevm : Sevm) : B256 :=
+  Sevm.dataWord sevm (if op = .permit then 132 else 196) &&& 255
+
+/-- The domain read sees the actual prefix storage state, including any nonce-slot collision. -/
+def queryDomain (op : OwnerOpV2) (F : Exec.Deriv) : B256 :=
+  ((op.prefixState F).get F.sevm.currentTarget).stor.get 15
+
+def structHash (op : OwnerOpV2) (F : Exec.Deriv) : B256 :=
+  let owner := (Sevm.dataWord F.sevm 4).toAdr
+  let spender := (Sevm.dataWord F.sevm 36).toAdr
+  if op = .permit then SolcSignedQuery.sixWordHash op.typeWord owner spender
+    (Sevm.dataWord F.sevm 68) (F.devm.getStorVal F.sevm.currentTarget (nonceSlot owner))
+    (Sevm.dataWord F.sevm 100)
+  else SolcSignedQuery.sevenWordHash op.typeWord owner spender (Sevm.dataWord F.sevm 68)
+    (Sevm.dataWord F.sevm 100) (Sevm.dataWord F.sevm 132) (Sevm.dataWord F.sevm 164)
+
+def digest (op : OwnerOpV2) (F : Exec.Deriv) : B256 :=
+  ([0x19,0x01] ++ (op.queryDomain F).toBytes ++ (op.structHash F).toBytes : Bytes).keccak
+
+def savedStack (op : OwnerOpV2) (sevm : Sevm) : List B256 := 128 :: op.internalStack sevm
+
+def recoveryStackWith (op : OwnerOpV2) (sevm : Sevm) (digest domain : B256) : List B256 :=
+  0 :: op.sWord sevm :: op.rWord sevm :: op.vWord sevm :: digest :: 0x4d93 :: digest ::
+    0 :: 128 :: op.sWord sevm :: op.rWord sevm :: op.vWord sevm :: domain ::
+    Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
+    op.savedStack sevm
+
+def recoveryStack (op : OwnerOpV2) (F : Exec.Deriv) : List B256 :=
+  op.recoveryStackWith F.sevm (op.digest F) (op.queryDomain F)
+
+def recoveryContinuations (op : OwnerOpV2) : List SFunc :=
+  [ImplV2.t_4d93_c84,op.comparison,op.internalReturn,op.returnTree]
+
+end OwnerOpV2
+
+private theorem permit_construct {F : Exec.Deriv} {post b : Devm} {M : Mem}
+    {nonce s r v deadline value : B256} {owner spender : Adr} {S : List B256} {K : List SFunc}
+    (cut : CursorStateAt ImplV2.code ImplV2.cert F ownerV2PermitNonceTail b
+      (nonce :: 32 :: 64 :: owner.toB256 :: (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
+        s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M K)
+    (ptr : PtrMem 128 96 M)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4d2c_c84
+      (afterSload F.sevm b 15)
+      (128 :: s :: r :: v :: b.getStorVal F.sevm.currentTarget 15 :: 0x486d :: owner.toB256 ::
+        128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
+      (SolcSignedQuery.structMemory OwnerOpV2.permit.typeWord M owner spender value nonce deadline)
+      (ImplV2.t_486d_c71 :: K)) := by
+  obtain ⟨head⟩ := cut.line ImplV2.cert_check success fork
+    (SolcSignedQuery.bufferHeadLine OwnerOpV2.permit.typeWord.toBytes
+      (by rw [B256.length_toBytes]))
+    rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.bufferHeadLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.buffer_head_line ptr)
+  rw [B256.toB256_toBytes] at head
+  obtain ⟨body⟩ := head.line ImplV2.cert_check success fork SolcSignedQuery.bufferBodyLine rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.bufferBodyLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    SolcSignedQuery.buffer_body_line
+  have ptrHead := (ptr.write 160 OwnerOpV2.permit.typeWord (.inr (by decide))).write
+    192 owner.toB256 (.inr (by decide))
+  have ptrBody : PtrMem 128 352
+      (SolcSignedQuery.structBodyMemory
+        (SolcSignedQuery.structHeadMemory OwnerOpV2.permit.typeWord M owner)
+        spender value nonce deadline) :=
+    (((ptrHead.write 224 spender.toB256 (.inr (by decide))).write 256 value (.inr (by decide))).write
+      288 nonce (.inr (by decide))).write 320 deadline (.inr (by decide))
+  obtain ⟨tail⟩ := body.line ImplV2.cert_check success fork
+    (SolcSignedQuery.bufferTailLine 15 0x48 0x6d 0x4d 0x2c) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.bufferTailLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.buffer_tail_line ptrBody fork)
+  exact tail.call ImplV2.cert_check success fork rfl
+
+private theorem authorization_construct (op : OwnerOpV2) (authorization : op ≠ .permit)
+    {F : Exec.Deriv} {post b : Devm} {M : Mem}
+    {nonce validBefore validAfter value s r v : B256} {owner spender : Adr}
+    {S : List B256} {K : List SFunc}
+    (cut : CursorStateAt ImplV2.code ImplV2.cert F op.validationReturn b
+      (s :: r :: v :: nonce :: validBefore :: validAfter :: value :: spender.toB256 ::
+        owner.toB256 :: S) M K)
+    (ptr : PtrMem 128 96 M)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4d2c_c84
+      (afterSload F.sevm b 15)
+      (128 :: s :: r :: v :: b.getStorVal F.sevm.currentTarget 15 ::
+        Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] :: owner.toB256 ::
+        128 :: s :: r :: v :: nonce :: validBefore :: validAfter :: value ::
+        spender.toB256 :: owner.toB256 :: S)
+      (SolcSignedQuery.sevenWordMemory op.typeWord M owner spender value validAfter validBefore nonce)
+      (op.comparison :: K)) := by
+  have shape : op.validationReturn = .dest
+      ((SolcSignedQuery.sevenWordHeadLine op.typeWord.toBytes (by rw [B256.length_toBytes])).foldr SFunc.next
+        (SolcSignedQuery.sevenWordBodyLine.foldr SFunc.next
+          ((SolcSignedQuery.sevenWordTailLine 15 op.comparisonTag.1 op.comparisonTag.2 0x4d 0x2c).foldr
+            SFunc.next (.callNext 84 op.comparison)))) := by
+    cases op
+    · exact (authorization rfl).elim
+    · rfl
+    · rfl
+    · rfl
+  rw [shape] at cut
+  obtain ⟨opened⟩ := cut.dest ImplV2.cert_check success fork
+  obtain ⟨head⟩ := opened.line ImplV2.cert_check success fork
+    (SolcSignedQuery.sevenWordHeadLine op.typeWord.toBytes (by rw [B256.length_toBytes])) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.sevenWordHeadLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.seven_word_head_line ptr)
+  rw [B256.toB256_toBytes] at head
+  obtain ⟨body⟩ := head.line ImplV2.cert_check success fork SolcSignedQuery.sevenWordBodyLine rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.sevenWordBodyLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    SolcSignedQuery.seven_word_body_line
+  have ptrHead := (ptr.write 160 op.typeWord (.inr (by decide))).write 192 owner.toB256 (.inr (by decide))
+  have ptrBody : PtrMem 128 384
+      (SolcSignedQuery.sevenWordBodyMemory (SolcSignedQuery.structHeadMemory op.typeWord M owner)
+        spender value validAfter validBefore nonce) :=
+    ((((ptrHead.write 224 spender.toB256 (.inr (by decide))).write 256 value (.inr (by decide))).write
+      288 validAfter (.inr (by decide))).write 320 validBefore (.inr (by decide))).write
+      352 nonce (.inr (by decide))
+  obtain ⟨tail⟩ := body.line ImplV2.cert_check success fork
+    (SolcSignedQuery.sevenWordTailLine 15 op.comparisonTag.1 op.comparisonTag.2 0x4d 0x2c) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.sevenWordTailLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.seven_word_tail_line ptrBody fork)
+  exact tail.call ImplV2.cert_check success fork rfl
+
+private theorem query_call91 {F : Exec.Deriv} {post b : Devm} {M : Mem}
+    {p len s r v domain hash ret : B256} {owner : Adr} {S : List B256} {K : List SFunc}
+    (cut : CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4d2c_c84 b
+      (128 :: s :: r :: v :: domain :: ret :: owner.toB256 :: S) M K)
+    (layout : p = 352 ∨ p = 384) (ptr : PtrMem p p.toNat M)
+    (length : memWord M 128 = len) (fit : 160 + len.toNat ≤ p.toNat)
+    (hashRead : (M.read 160 len.toNat).1.keccak = hash)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    let digest := ([0x19,0x01] ++ domain.toBytes ++ hash.toBytes : Bytes).keccak
+    Nonempty (CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4fbb_c91 b
+      (s :: r :: v :: digest :: 0x4d93 :: digest :: 0 :: 128 ::
+        s :: r :: v :: domain :: ret :: owner.toB256 :: S)
+      (SolcSignedQuery.typedMemoryAt p M domain hash) (ImplV2.t_4d93_c84 :: K)) := by
+  obtain ⟨opened⟩ := cut.dest ImplV2.cert_check success fork
+  obtain ⟨hashed⟩ := opened.line ImplV2.cert_check success fork SolcSignedQuery.structHashLine rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.structHashLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.struct_hash_line_at ptr length fit hashRead)
+  obtain ⟨words⟩ := hashed.line ImplV2.cert_check success fork SolcSignedQuery.typedWordsLine rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.typedWordsLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.typed_words_line_at layout ptr)
+  obtain ⟨ptrWords,ptrTyped,lengthTyped,bytesTyped⟩ := SolcSignedQuery.typed_memory_facts_at layout ptr
+  obtain ⟨sized⟩ := words.line ImplV2.cert_check success fork SolcSignedQuery.typedLengthLine rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.typedLengthLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.typed_length_line_at ptrWords)
+  obtain ⟨args⟩ := sized.line ImplV2.cert_check success fork
+    (SolcSignedQuery.typedHashLine 0x4d 0x93 0x4f 0xbb) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.typedHashLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (SolcSignedQuery.typed_hash_line_at (p := p) ptrTyped lengthTyped
+      (by rcases layout with rfl | rfl <;> decide)
+      (by rcases layout with rfl | rfl <;> decide) (congrArg Bytes.keccak bytesTyped))
+  exact args.call ImplV2.cert_check success fork rfl
+
+private theorem signature_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
+    {s r v : B256} {S : List B256} {K : List SFunc}
+    (cut : CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4fbb_c91 b
+      (s :: r :: v :: S) M K)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ reached : CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_50a4_c6 b
+      (0 :: s :: r :: v :: S) M K, reached.node.pc = 0x50a4 := by
+  obtain ⟨opened⟩ := cut.dest ImplV2.cert_check success fork
+  obtain ⟨low⟩ := opened.line ImplV2.cert_check success fork
+    (SolcSignedQuery.lowSLine 0x50 0x36) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.lowSLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    SolcSignedQuery.lows_line
+  obtain ⟨_,⟨validS⟩⟩ := SolcSignedQuery.guardSucc low ImplV2.cert_check rfl success fork
+  obtain ⟨openedV⟩ := validS.dest ImplV2.cert_check success fork
+  obtain ⟨v27⟩ := openedV.line ImplV2.cert_check success fork
+    (SolcSignedQuery.v27Line 0x50 0x4e) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.v27Line,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    SolcSignedQuery.v27_line
+  have alternatives : ∃ flag, Nonempty (CursorStateAt ImplV2.code ImplV2.cert F
+      ImplV2.t_504e_c6 b (flag :: 0 :: s :: r :: v :: S) M K) := by
+    by_cases taken : B256.eqCheck (B256.eqCheck (B256.eqCheck 27 (255 &&& v)) 0) 0 ≠ 0
+    · exact ⟨_,v27.toSucc ImplV2.cert_check success fork taken rfl⟩
+    · have zero := not_not.mp taken
+      rw [zero] at v27
+      obtain ⟨otherV⟩ := v27.toZero ImplV2.cert_check success fork
+      obtain ⟨v28⟩ := otherV.line ImplV2.cert_check success fork SolcSignedQuery.v28Line rfl
+        (by intro ni member xi same; subst ni
+            simp only [SolcSignedQuery.v28Line,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+        SolcSignedQuery.v28_line
+      exact ⟨_,⟨v28⟩⟩
+  obtain ⟨flag,⟨before⟩⟩ := alternatives
+  obtain ⟨opened⟩ := before.dest ImplV2.cert_check success fork
+  obtain ⟨guard⟩ := opened.line ImplV2.cert_check success fork
+    [.reg .iszero,.push [0x50,0xa4] (by decide)] rfl
+    (by intro ni member xi same; subst ni
+        simp only [List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    (by intro gas d run
+        obtain ⟨_,step,run⟩ := Line.of_run_cons run
+        obtain ⟨_,rfl⟩ := ri_iszero step
+        obtain ⟨_,step,run⟩ := Line.of_run_cons run
+        obtain ⟨_,rfl⟩ := ri_push step
+        cases run
+        exact ⟨_,rfl⟩)
+  obtain ⟨_,reached,actualPc⟩ := SolcSignedQuery.guardSucc_pc guard ImplV2.cert_check rfl success fork
+  exact ⟨reached,actualPc⟩
+
+namespace OwnerOpV2
+
+def outerStack (op : OwnerOpV2) (sevm : Sevm) : List B256 :=
+  Bytes.toB256 [op.internalReturnTag.1,op.internalReturnTag.2] ::
+    (Sevm.dataWord sevm 36).toAdr.toB256 :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
+    (op.args sevm ++ [0x470,op.selector])
+
+theorem internalStack_eq (op : OwnerOpV2) (sevm : Sevm) :
+    op.internalStack sevm = op.args sevm ++ op.outerStack sevm := rfl
+
+end OwnerOpV2
+
+private theorem constructor_cut (op : OwnerOpV2) {F : Exec.Deriv} {post b : Devm} {M : Mem}
+    (cut : CursorStateAt ImplV2.code ImplV2.cert F op.prefixTree b (op.prefixStack F) M
+      [op.internalReturn,op.returnTree])
+    (ptr : PtrMem 128 96 M)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ Ms, PtrMem op.structEnd op.structEnd.toNat Ms ∧ memWord Ms 128 = op.structLength ∧
+      (Ms.read 160 op.structLength.toNat).1.keccak = op.structHash F ∧
+      Nonempty (CursorStateAt ImplV2.code ImplV2.cert F ImplV2.t_4d2c_c84
+        (afterSload F.sevm b 15)
+        (128 :: op.sWord F.sevm :: op.rWord F.sevm :: op.vWord F.sevm ::
+          b.getStorVal F.sevm.currentTarget 15 :: Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] ::
+          (Sevm.dataWord F.sevm 4).toAdr.toB256 :: op.savedStack F.sevm)
+        Ms [op.comparison,op.internalReturn,op.returnTree]) := by
+  let owner := (Sevm.dataWord F.sevm 4).toAdr
+  let spender := (Sevm.dataWord F.sevm 36).toAdr
+  by_cases permit : op = .permit
+  · subst op
+    obtain ⟨constructed⟩ := permit_construct cut ptr success fork
+    obtain ⟨ptrStruct,lengthStruct,hashStruct⟩ := SolcSignedQuery.struct_memory_facts
+      (tag := OwnerOpV2.permit.typeWord) (owner := owner) (spender := spender)
+      (value := Sevm.dataWord F.sevm 68)
+      (nonce := F.devm.getStorVal F.sevm.currentTarget (nonceSlot owner))
+      (deadline := Sevm.dataWord F.sevm 100) ptr
+    generalize image : SolcSignedQuery.structMemory OwnerOpV2.permit.typeWord M owner spender
+      (Sevm.dataWord F.sevm 68) (F.devm.getStorVal F.sevm.currentTarget (nonceSlot owner))
+      (Sevm.dataWord F.sevm 100) = Ms at constructed ptrStruct lengthStruct hashStruct
+    exact ⟨Ms,ptrStruct,lengthStruct,hashStruct,⟨constructed⟩⟩
+  · have argsShape : op.args F.sevm =
+        [Sevm.dataWord F.sevm 260,Sevm.dataWord F.sevm 228,Sevm.dataWord F.sevm 196 &&& 255,
+         Sevm.dataWord F.sevm 164,Sevm.dataWord F.sevm 132,Sevm.dataWord F.sevm 100,
+         Sevm.dataWord F.sevm 68,spender.toB256,owner.toB256] := by
+      cases op
+      · exact (permit rfl).elim
+      · rfl
+      · rfl
+      · rfl
+    have stackShape := op.internalStack_eq F.sevm
+    rw [argsShape] at stackShape
+    rw [OwnerOpV2.prefixTree,ite_eq_right permit,OwnerOpV2.prefixStack,ite_eq_right permit,
+      stackShape] at cut
+    obtain ⟨constructed⟩ := authorization_construct op permit cut ptr success fork
+    obtain ⟨ptrStruct,lengthStruct,hashStruct⟩ := SolcSignedQuery.seven_word_memory_facts
+      (tag := op.typeWord) (owner := owner) (spender := spender)
+      (value := Sevm.dataWord F.sevm 68) (validAfter := Sevm.dataWord F.sevm 100)
+      (validBefore := Sevm.dataWord F.sevm 132) (nonce := Sevm.dataWord F.sevm 164) ptr
+    generalize image : SolcSignedQuery.sevenWordMemory op.typeWord M owner spender
+      (Sevm.dataWord F.sevm 68) (Sevm.dataWord F.sevm 100) (Sevm.dataWord F.sevm 132)
+      (Sevm.dataWord F.sevm 164) = Ms at constructed ptrStruct lengthStruct hashStruct
+    refine ⟨Ms,?_,?_,?_,?_⟩
+    · rw [OwnerOpV2.structEnd,ite_eq_right permit]
+      exact ptrStruct
+    · simpa only [OwnerOpV2.structLength,ite_eq_right permit] using lengthStruct
+    · rw [OwnerOpV2.structLength,ite_eq_right permit,OwnerOpV2.structHash,ite_eq_right permit]
+      exact hashStruct
+    · simp only [OwnerOpV2.sWord,OwnerOpV2.rWord,OwnerOpV2.vWord,ite_eq_right permit,
+        OwnerOpV2.savedStack,stackShape]
+      exact ⟨constructed⟩
+
+/-- Every existing V2 owner selector derives its full actual50a4 query registers and continuations. -/
+theorem ownerV2_query_entry (op : OwnerOpV2) {F : Exec.Deriv} {post : Devm}
+    (pc : F.pc = 0) (code : F.sevm.code = ImplV2.code)
+    (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
+    (selector : Sevm.selector F.sevm = op.selector)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ (b : Devm) (M : Mem) (R : Exec.Deriv) (κ : Cursor),
+      R.pc = 0x50a4 ∧ Exec.Deriv.ExecFreeUntil F R ∧ R.sevm = F.sevm ∧ R.exn = F.exn ∧
+      CursorOK ImplV2.code ImplV2.cert R κ ∧ κ.f = ImplV2.t_50a4_c6 ∧
+      κ.K.map Cont.f = op.recoveryContinuations ∧
+      (∃ G, R.devm = St b (op.recoveryStack F) M G) ∧
+      PtrMem op.recoveryPointer op.recoveryMemorySize M ∧ b.getCode 1 = F.devm.getCode 1 ∧
+      b.state = op.prefixState F := by
+  obtain ⟨_,b,M,state,mem,ptr,⟨before⟩⟩ :=
+    ownerV2_source_prefix op pc code stack memory selector success fork
+  obtain ⟨Ms,ptrStruct,lengthStruct,hashStruct,⟨constructed⟩⟩ :=
+    constructor_cut op before ptr success fork
+  have layout : op.structEnd = 352 ∨ op.structEnd = 384 := by
+    cases op
+    · exact Or.inl rfl
+    · exact Or.inr rfl
+    · exact Or.inr rfl
+    · exact Or.inr rfl
+  have fit : 160 + op.structLength.toNat ≤ op.structEnd.toNat := by cases op <;> decide
+  obtain ⟨at91⟩ := query_call91 constructed layout ptrStruct lengthStruct fit hashStruct success fork
+  have domainEq : b.getStorVal F.sevm.currentTarget 15 = op.queryDomain F := by
+    unfold Devm.getStorVal Devm.getAcct OwnerOpV2.queryDomain
+    rw [state]
+  have ptrFinal := (SolcSignedQuery.typed_memory_facts_at layout
+    (domain := b.getStorVal F.sevm.currentTarget 15) (hash := op.structHash F) ptrStruct).2.1
+  rw [domainEq] at at91 ptrFinal
+  generalize image : SolcSignedQuery.typedMemoryAt op.structEnd Ms (op.queryDomain F)
+    (op.structHash F) = Mt at at91 ptrFinal
+  obtain ⟨reached,actualPc⟩ := signature_recovery_cut at91 success fork
+  obtain ⟨gas,actualState⟩ := reached.state
+  have registers : ∃ G, reached.node.devm = St (afterSload F.sevm b 15) (op.recoveryStack F) Mt G :=
+    ⟨gas,actualState⟩
+  have readState : (afterSload F.sevm b 15).state = b.state := by
+    unfold afterSload
+    split <;> rfl
+  refine ⟨afterSload F.sevm b 15,Mt,reached.node,reached.cursor,actualPc,reached.free,
+    reached.sevm_eq,reached.exn_eq,reached.placed,reached.tree,reached.continuations,registers,
+    ptrFinal,?_,readState.trans state⟩
+  unfold Devm.getCode Devm.getAcct
+  rw [readState,state]
+  by_cases permit : op = .permit
+  · rw [OwnerOpV2.prefixState,ite_eq_left permit]
+    exact Devm.setStorVal_getCode F.devm F.sevm.currentTarget
+      (nonceSlot (Sevm.dataWord F.sevm 4).toAdr)
+      (F.devm.getStorVal F.sevm.currentTarget (nonceSlot (Sevm.dataWord F.sevm 4).toAdr) + 1) 1
+  · rw [OwnerOpV2.prefixState,ite_eq_right permit]
+
+namespace OwnerOpV2
+
+def comparisonReject : OwnerOpV2 → SFunc
+  | .permit => ImplV2.t_4889_c71
+  | .approveAuth => ImplV2.t_4a31_c66
+  | .increaseAuth => ImplV2.t_46e0_c70
+  | .decreaseAuth => ImplV2.t_4511_c72
+
+def comparisonSuccess : OwnerOpV2 → SFunc
+  | .permit => ImplV2.t_48ef_c71
+  | .approveAuth => ImplV2.t_4a97_c66
+  | .increaseAuth => ImplV2.t_4746_c70
+  | .decreaseAuth => ImplV2.t_4577_c72
+
+def comparisonSuccessTag : OwnerOpV2 → UInt8 × UInt8
+  | .permit => (0x48,0xef)
+  | .approveAuth => (0x4a,0x97)
+  | .increaseAuth => (0x47,0x46)
+  | .decreaseAuth => (0x45,0x77)
+
+end OwnerOpV2
+
+private theorem owner_comparison (op : OwnerOpV2) {N : Exec.Deriv} {κ : Cursor}
+    {post : Devm} {adr : Adr} {owner : B256} {S : List B256}
+    (placed : CursorOK ImplV2.code ImplV2.cert N κ) (tree : κ.f = op.comparison)
+    (stack : N.devm.stack = adr.toB256 :: owner :: S)
+    (success : N.exn = .ok post) (fork : CoveredFork N.sevm.benvStat.fork) :
+    owner = adr.toB256 := by
+  have first : CursorStateAt ImplV2.code ImplV2.cert N op.comparison N.devm
+      (adr.toB256 :: owner :: S) N.devm.memory (κ.K.map Cont.f) :=
+    ⟨N,κ,.refl _,rfl,rfl,placed,tree,⟨_,St.self stack rfl⟩,rfl⟩
+  have shape : op.comparison = .dest
+      ((SolcSignedQuery.maskedOwnerLine op.comparisonSuccessTag.1 op.comparisonSuccessTag.2).foldr
+        SFunc.next (.branch op.comparisonReject op.comparisonSuccess)) := by cases op <;> rfl
+  rw [shape] at first
+  obtain ⟨opened⟩ := first.dest ImplV2.cert_check success fork
+  obtain ⟨guard⟩ := opened.line ImplV2.cert_check success fork
+    (SolcSignedQuery.maskedOwnerLine op.comparisonSuccessTag.1 op.comparisonSuccessTag.2) rfl
+    (by intro ni member xi same; subst ni
+        simp only [SolcSignedQuery.maskedOwnerLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
+    SolcSignedQuery.masked_owner_line
+  obtain ⟨equal,_⟩ := SolcSignedQuery.guardSucc guard ImplV2.cert_check
+    (by cases op <;> rfl) success fork
+  have answerEq : adr.toB256 = owner := by
+    unfold B256.eqCheck at equal
+    by_contra different
+    exact equal (ite_eq_right different)
+  exact answerEq.symm
+
+private theorem owner_return (op : OwnerOpV2) {N : Exec.Deriv} {κ : Cursor} {post : Devm}
+    {adr : Adr} {digest s r v domain owner : B256} {S : List B256} {K : List SFunc}
+    (placed : CursorOK ImplV2.code ImplV2.cert N κ)
+    (tree : κ.f = ImplV2.t_4d93_c84)
+    (stack : N.devm.stack = adr.toB256 :: digest :: 0 :: 128 :: s :: r :: v :: domain ::
+      Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] :: owner :: S)
+    (continuations : κ.K.map Cont.f = op.comparison :: K)
+    (success : N.exn = .ok post) (fork : CoveredFork N.sevm.benvStat.fork) :
+    ∃ (Q : Exec.Deriv) (next : Cursor), Exec.Deriv.ExecFreeUntil N Q ∧
+      Q.sevm = N.sevm ∧ Q.exn = N.exn ∧ CursorOK ImplV2.code ImplV2.cert Q next ∧
+      next.f = op.comparison ∧ next.K.map Cont.f = K ∧
+      Q.devm.stack = adr.toB256 :: owner :: S ∧ owner = adr.toB256 := by
+  obtain ⟨Q,next,span,sameEnv,sameExn,finalPlaced,callerTree,callerK,returned⟩ :=
+    placed.quietReturn ImplV2.cert_check success fork (E := []) (by rfl) (by rfl)
+      (by rw [tree]; rfl) (by rw [tree]; rfl) continuations
+  rw [tree,St.self stack rfl] at returned
+  obtain ⟨gas,state⟩ := SolcSignedQuery.recovery_epilogue returned
+  have comparisonStack : Q.devm.stack = adr.toB256 :: owner :: S := by rw [state,St.stack]
+  have equal := owner_comparison op finalPlaced callerTree comparisonStack
+    (sameExn.trans success) (by rw [sameEnv]; exact fork)
+  exact ⟨Q,next,span,sameEnv,sameExn,finalPlaced,callerTree,callerK,comparisonStack,equal⟩
+
+/-- Existing owner-selector coverage produces the actual query/native answer and real owner comparison.
+Every native-consumer message/slot/payment/return conjunct is retained. Failed invocations and history
+are separate scopes; address1 nondelegation and CoveredFork are the explicit local premises. -/
+theorem ownerV2_query_consumed {F : Exec.Deriv} {post : Devm}
+    (pc : F.pc = 0) (code : F.sevm.code = ImplV2.code)
+    (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
+    (member : Sevm.selector F.sevm ∈ selV2.owners)
+    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ (op : OwnerOpV2) (R : Exec.Deriv) (call : CallOccurrenceStep R .staticcall)
+      (parent child : Devm) (gas : Nat) (N : Exec.Deriv) (returned : Cursor)
+      (Q : Exec.Deriv) (next : Cursor),
+      let owner := (Sevm.dataWord F.sevm 4).toAdr
+      let input := (op.digest F).toBytes ++ (op.vWord F.sevm).toBytes ++
+        (op.rWord F.sevm).toBytes ++ (op.sWord F.sevm).toBytes
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      Sevm.selector F.sevm = op.selector ∧
+      R.pc = 0x50a4 ∧ Exec.Deriv.ExecFreeUntil F R ∧ R.sevm = F.sevm ∧ R.exn = F.exn ∧
+      call.occurrence.node.pc = 0x50ef ∧ Exec.Deriv.ExecFreeUntil R call.occurrence.node ∧
+      call.occurrence.node.sevm = F.sevm ∧
+      Ninst.step ⟨call.occurrence.node.pc,call.occurrence.node.sevm,call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent op.recoveryPointer.toNat 32) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧ call.occurrence.slot = .none ∧
+      (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) ∧
+      gasEcrecover ≤ gas ∧ child.error.isSome = false ∧ child.output = owner.toB256.toBytes ∧
+      ecrecoverOutput input = owner.toB256.toBytes ∧ owner ≠ 0 ∧
+      call.returned.devm.returnData = owner.toB256.toBytes ∧
+      Exec.Deriv.ExecFreeUntil call.returned N ∧ N.exn = R.exn ∧ N.sevm = R.sevm ∧
+      CursorOK ImplV2.code ImplV2.cert N returned ∧ returned.f = ImplV2.t_4d93_c84 ∧
+      returned.K.map Cont.f = [op.comparison,op.internalReturn,op.returnTree] ∧
+      N.devm.stack = owner.toB256 :: op.digest F :: 0 :: 128 ::
+        op.sWord F.sevm :: op.rWord F.sevm :: op.vWord F.sevm :: op.queryDomain F ::
+        Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] :: owner.toB256 :: op.savedStack F.sevm ∧
+      Exec.Deriv.ExecFreeUntil N Q ∧ Q.sevm = N.sevm ∧ Q.exn = N.exn ∧
+      CursorOK ImplV2.code ImplV2.cert Q next ∧ next.f = op.comparison ∧
+      next.K.map Cont.f = [op.internalReturn,op.returnTree] ∧
+      Q.devm.stack = owner.toB256 :: owner.toB256 :: op.savedStack F.sevm ∧
+      Exec.Deriv.ExecFreeUntil call.returned Q := by
+  obtain ⟨op,selector,_⟩ := ownerV2_source_prefix_of_owner_selector pc code stack memory member success fork
+  obtain ⟨b,M,R,κ,actualPc,origin,sameEnv,sameExn,placed,tree,continuations,
+    ⟨G,state⟩,ptr,code1,_⟩ := ownerV2_query_entry op pc code stack memory selector success fork
+  dsimp only [OwnerOpV2.recoveryStack,OwnerOpV2.recoveryStackWith] at state
+  obtain ⟨call,parent,child,gas,adr,N,returned,callPc,beforeSpan,spawned,process,emptySlot,
+    native,paid,clean,childOutput,output,nonzero,returnData,suffix,suffixExn,suffixEnv,
+    finalPlaced,callerTree,callerK,callerStack⟩ :=
+    recoveryV2_consumes placed tree actualPc state ptr (by cases op <;> decide)
+      (by cases op <;> decide) (by rw [code1]; exact nodeleg) continuations
+      (sameExn.trans success) (by rw [sameEnv]; exact fork)
+  obtain ⟨Q,next,epilogue,comparisonEnv,comparisonExn,comparisonPlaced,comparisonTree,
+    comparisonK,comparisonStack,ownerEq⟩ := owner_return op finalPlaced callerTree callerStack callerK
+      ((suffixExn.trans sameExn).trans success) (by rw [suffixEnv,sameEnv]; exact fork)
+  have mask : (255 &&& op.vWord F.sevm) = op.vWord F.sevm := by
+    unfold OwnerOpV2.vWord
+    rw [B256.and_comm,B256.and_idem_right]
+  rw [mask] at spawned process native output
+  rw [← ownerEq] at childOutput output returnData callerStack comparisonStack
+  have ownerAdrEq : (Sevm.dataWord F.sevm 4).toAdr = adr := by
+    simpa only [toAdr_toB256] using congrArg B256.toAdr ownerEq
+  have ownerNonzero : (Sevm.dataWord F.sevm 4).toAdr ≠ 0 := by
+    intro vanished
+    exact nonzero (ownerAdrEq.symm.trans vanished)
+  exact ⟨op,R,call,parent,child,gas,N,returned,Q,next,selector,actualPc,origin,sameEnv,sameExn,
+    callPc,beforeSpan,(Blanc.Exec.Deriv.ParentPrefix.sevm_eq beforeSpan.1).trans sameEnv,
+    spawned,process,emptySlot,native,paid,clean,childOutput,output,ownerNonzero,returnData,
+    suffix,suffixExn,suffixEnv,finalPlaced,callerTree,callerK,callerStack,
+    epilogue,comparisonEnv,comparisonExn,comparisonPlaced,comparisonTree,comparisonK,comparisonStack,
+    suffix.trans epilogue⟩
+
 end Blanc.Lift.Usdc
