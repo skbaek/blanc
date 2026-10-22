@@ -3020,6 +3020,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   malformed `v`, zero or out-of-range scalars, or failed recovery; otherwise the
   recovered address as one word), defined through Jaune's `executeEcrecover`;
   `executeEcrecover_eq` states it for any machine that can pay the fixed charge.
+  `ecrecoverOutput_spectrum` proves for arbitrary calldata, without premises,
+  that this output is empty or a canonical address word.
   `ecrecover_output_of_processMessage_clean` turns a clean synchronous
   non-delegated address-1 child (the `ProcessMessage` a `StaticAnswered` witness
   exhibits) into `gasEcrecover ≤ gas` and that output, and `ecrecover_active`
