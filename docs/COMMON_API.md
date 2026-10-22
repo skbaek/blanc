@@ -4314,6 +4314,20 @@ premise. The carrier retains the actual code refresh and refund conversion.
 `excluded_of_all` converts the older all-tuples exclusion only in the sound
 direction; eligible exclusion does not imply that stronger premise.
 
+For canonical system messages, use
+[`Blanc/ExecutionSystemDelegation.lean`](../Blanc/ExecutionSystemDelegation.lean).
+`systemTransactionMessage_auths_nil` derives the empty list from Jaune's own
+system preparation, `systemTransactionDelegationTrace` constructs the skipped
+wrapper, and `systemTransactionMessage_delegation_eq` gives its exact unchanged
+message and zero refund. `SystemMessageTrace.delegation_empty` consumes the
+retained system message, excludes CREATE arms, and proves that every actual
+delegation-phase witness has `NoEligibleAuthorityAt a`, for any address.
+No fork coverage, state-gas, or cryptographic premise is needed. This says
+nothing about the system VM's child calls, recovery queries, or storage writes.
+The shared `MessageCallDelegationTrace.noEligibleAuthorityAt_of_auths_nil`
+also works for any actual message whose authorization list is known empty;
+its direct exclusion goal has no registered reliable recipe trigger.
+
 For a whole-state balance preorder under `stateGas = none`,
 `processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
 `legacyAuthorization` and `Msg.resolveCodeDelegation`, preserving the actual

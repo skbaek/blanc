@@ -138,6 +138,7 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionSenderOccurrences", "ExecutionDelegationEligibility",
+           "ExecutionSystemDelegation",
            "RootedExecution", "AddressSlot", "AddressSlotProofs", "MessageResult",
            "TaggedStorage",
            "DelegatecallEnvelope",
