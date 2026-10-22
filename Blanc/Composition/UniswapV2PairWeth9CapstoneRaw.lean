@@ -106,6 +106,18 @@ theorem token20_rawFrameDescendants_nil {sevm : Sevm} {pre : Devm} {out : Execut
   Exec.rawFrameDescendants_eq_nil_of_reach run (noPushBefore_zero _ _)
     (hcode ▸ VyperNonreentrantDeployed.Token20.spawnFreeReach)
 
+/-- A message whose code carries no delegation designator resolves to itself. -/
+private theorem resolveCodeDelegation_of_none {msg : Msg}
+    (h : getDelegatedCodeAddress msg.code = none) : msg.resolveCodeDelegation = msg := by
+  unfold Msg.resolveCodeDelegation ForkRules.delegatedCodeAddress
+  split
+  · rfl
+  · rename_i address hsome
+    split at hsome
+    · rw [h] at hsome
+      cases hsome
+    · cases hsome
+
 /-- **A call trace's raw frames are the raw roots of its entered frame's derivation.** -/
 theorem messageCallTrace_rawFrames_run {msg : Msg} {state : Jaune.State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out) (target : msg.target.isNone = false)
@@ -119,13 +131,13 @@ theorem messageCallTrace_rawFrames_run {msg : Msg} {state : Jaune.State} {out : 
   | createRun htarget => simp only [target, Bool.false_eq_true] at htarget
   | callRun htarget delegated refund hdelegation execMsg execMsgEq evm core coreTrace result =>
     have delegatedEq : delegated = msg := by
-      unfold messageCallDelegation at hdelegation
-      simp only [auths, ↓reduceIte] at hdelegation
+      unfold messageCallDelegation processMessageCall.legacyAuthorization at hdelegation
+      simp only [auths, Bool.or_true, ↓reduceIte] at hdelegation
       exact (Prod.mk.inj (Except.ok.inj hdelegation)).1.symm
     subst delegated
     have execEq : execMsg = msg := by
       rw [execMsgEq]
-      simp only [messageCallExecutionMessage, nodeleg]
+      exact resolveCodeDelegation_of_none nodeleg
     subst execEq
     rcases coreTrace with ⟨slot, retained, run⟩
     have hrun := run

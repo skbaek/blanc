@@ -17,11 +17,10 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Composition.UniswapV2PairWeth9
 theorem setStorVal_state_bal (d : Devm) (adr : Adr) (k v : B256) (a : Adr) :
     (d.setStorVal adr k v).state.bal a = d.state.bal a := by
   show ((d.state.setStorVal adr k v).get a).bal = (d.state.get a).bal
-  unfold State.setStorVal
   by_cases h : adr = a
   · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+    rw [State.setStorVal_get_self]
+  · rw [State.setStorVal_get_ne _ h]
 
 theorem afterSstore_bal (sevm : Sevm) (b : Devm) (k v : B256) (a : Adr) :
     (afterSstore sevm b k v).state.bal a = b.state.bal a := by

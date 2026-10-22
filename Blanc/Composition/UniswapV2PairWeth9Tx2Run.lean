@@ -134,7 +134,8 @@ theorem tx2_frame_exec :
     (Or.inr (by rw [tx2_amount1 h.data]; decide)) (by rw [tx2_amount0 h.data]; decide)
     (by rw [tx2_amount1 h.data]; decide) (by rw [tx2_recipient h.data]; decide +kernel)
     (by rw [tx2_recipient h.data]; decide +kernel) (tx2_guards h.data) back front
-  have pc0 := swapPc0_exact h.value (tx2_size h.data) (tx2_selector h.data) (tx2_guards h.data) body
+  have pc0 := swapPc0_exact (h_shifts := (tx2_fork h).rules_shifts) h.value (tx2_size h.data)
+    (tx2_selector h.data) (tx2_guards h.data) body
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok h.code (tx2_fork h) ⟨t_0000_c0, rfl, pc0⟩
   rw [hgas, tx2Callee_gas h, tx2_frontGas h, tx2_prefix_gas h, hpost, hmem,
     show 265906 + 11669 + 279 + 166 = b.gasLeft by rw [h.gas], ← St.self h.stack h.memory] at run

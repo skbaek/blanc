@@ -59,8 +59,11 @@ lemma Ninst.runCompiled_staticcall_child {sevm : Sevm} {devm : Devm}
     simpa only [child, msg, p, staticcallSpawnMsg, callMsg, Msg.withBenv] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false :=
+      CoveredFork.rules_touchedSweep (s := sevm.benvStat) hfork
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
-      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdi := accessDelegation_inv h_del
   have hpstack : p.stack.length < 1024 := by
     change d1.stack.length < 1024

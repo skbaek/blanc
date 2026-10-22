@@ -108,10 +108,12 @@ theorem parentStep_descendantFrames_runOk_eq {N returned : Exec.Deriv}
   · rw [Exec.descendantFrames_runOk_of_not_settlementCommits spawn enter childRun resumed next
       settles, dite_eq_right_of_eq_false (eq_false settles), List.nil_append]
 
-/-- A committed call frame's settlement is its committed post-machine. -/
+/-- A committed call frame's settlement is its committed post-machine, with the touch of the
+message's current target recorded. -/
 theorem ofCall_settle_committed {msg : Msg} {raw : Execution}
     (committed : Execution.commits raw = true) :
-    (Jaune.Frame.ofCall msg).settle raw = .ok (Execution.committedPost raw committed) := by
+    (Jaune.Frame.ofCall msg).settle raw = .ok ((Execution.committedPost raw committed).recordTouch
+      msg.benv.stat.rules true msg.currentTarget) := by
   cases raw with
   | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
@@ -276,10 +278,11 @@ theorem pair_token_stepOracle {pair T : Adr} {B : Book} (C : CoreW T B)
         fun h => staticFact (static.trans h), ?_, ?_, ?_⟩
       · intro atT readData _ _
         obtain ⟨output, lt⟩ := readFact (target.trans atT) (data.trans readData)
-        have childEq : observed.child = c.post := by
+        have childEq : observed.child.output = c.post.output := by
           have settled := settleEq.trans
             (ofCall_settle_committed (Jaune.Frame.raw_commits_of_settlementCommits settles))
-          exact Except.ok.inj settled
+          rw [Except.ok.inj settled, Devm.recordTouch_output]
+          rfl
         have returned : reply.returndata = (Nat.toB256 (B.bal l pair)).toBytes := by
           rw [replyFacts.2, childEq, output]
         refine ⟨returned, ?_⟩

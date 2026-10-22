@@ -23,14 +23,14 @@ theorem tx1FrameWrites_get_self (st : Jaune.State) (xT xP : B256) :
       { st.get tokenX with
         stor := ((st.get tokenX).stor.set (balSlot trader) (xT - amountIn)).set (balSlot pair)
           (amountIn + xP) } := by
-  unfold tx1FrameWrites State.setStorVal
-  rw [State.get_set_self, State.get_set_self]
+  unfold tx1FrameWrites
+  rw [State.setStorVal_get_self, State.setStorVal_get_self]
 
 /-- The token frame's writes leave every other account alone. -/
 theorem tx1FrameWrites_get_ne (st : Jaune.State) (xT xP : B256) {a : Adr} (h : tokenX ≠ a) :
     (tx1FrameWrites st xT xP).get a = st.get a := by
-  unfold tx1FrameWrites State.setStorVal
-  rw [State.get_set_ne _ h, State.get_set_ne _ h]
+  unfold tx1FrameWrites
+  rw [State.setStorVal_get_ne _ h, State.setStorVal_get_ne _ h]
 
 /-- **Every account other than the trader, `X` and the coinbase `0` is untouched by `tx1`.** -/
 theorem tx1_settled_get_other (st : Jaune.State) (xT xP : B256) {a : Adr}
@@ -64,8 +64,8 @@ theorem tx1_settled_get_trader (st : Jaune.State) (xT xP : B256)
   have hbal : ((st.incrNonce trader).setBal trader 9900000).bal trader = 9900000 := by
     change (((st.incrNonce trader).setBal trader 9900000).get trader).bal = 9900000
     rw [debit_get_self hnonce]
-  rw [tx1FrameWrites, State.setStorVal, State.setStorVal, State.bal,
-    State.get_set_ne _ trader_ne_tokenX.symm, State.get_set_ne _ trader_ne_tokenX.symm]
+  rw [tx1FrameWrites, State.bal,
+    State.setStorVal_get_ne _ trader_ne_tokenX.symm, State.setStorVal_get_ne _ trader_ne_tokenX.symm]
   change (({ st.get trader with nonce := (st.get trader).nonce + 1, bal := 9900000 } : Acct).withBal
     (((st.incrNonce trader).setBal trader 9900000).bal trader + 36486)).clearIfEmpty = _
   rw [hbal, hsum, Acct.clearIfEmpty_of_not_empty]

@@ -70,9 +70,10 @@ theorem tx2_value (v : Nat) (r s : Bytes) : (tx2 v r s).value = 0 := rfl
 
 theorem tx2_intrinsic {rules : ForkRules} (v : Nat) (r s : Bytes)
     (hsg : rules.stateGas = none) (hbase : rules.gas.txBase = 21000)
-    (hfloor : rules.gas.floorTokenCost = 10) :
+    (hfloor : rules.gas.floorTokenCost = 10) (hnz : rules.txr.dataNonZero = 16)
+    (hcf : rules.txr.calldataFloor = true) :
     calculateIntrinsicCost rules (tx2 v r s) trader = (21980, 23450) := by
-  rw [calculateIntrinsicCost_two_call hsg (by rfl)]
+  rw [calculateIntrinsicCost_two_call hsg (by rfl) hnz hcf]
   simp only [tx2, hbase, hfloor]
   decide +kernel
 
@@ -143,13 +144,13 @@ theorem tx2_prepared_frame {benv : Benv} (ctx : Tx2Context benv)
     rw [Std.HashSet.mem_ofList] at hk
     simp only [List.contains_nil, Bool.false_eq_true] at hk
   case coldX =>
-    change tokenX ∉ (Std.HashSet.ofList [benv.stat.coinbase]).insertMany
-      (benv.stat.rules.precompiles ++ [trader, pair])
+    change tokenX ∉ (if benv.stat.rules.txr.warmCoinbase then Std.HashSet.ofList [benv.stat.coinbase]
+      else Std.HashSet.ofList []).insertMany (benv.stat.rules.precompiles ++ [trader, pair])
     rw [ctx.coinbase, rules_bpo2 ctx.fork]
     exact tx2_cold_list (Or.inl rfl)
   case coldW =>
-    change weth ∉ (Std.HashSet.ofList [benv.stat.coinbase]).insertMany
-      (benv.stat.rules.precompiles ++ [trader, pair])
+    change weth ∉ (if benv.stat.rules.txr.warmCoinbase then Std.HashSet.ofList [benv.stat.coinbase]
+      else Std.HashSet.ofList []).insertMany (benv.stat.rules.precompiles ++ [trader, pair])
     rw [ctx.coinbase, rules_bpo2 ctx.fork]
     exact tx2_cold_list (Or.inr rfl)
   case pairStor => exact hP.1.trans ctx.pairStor
@@ -218,7 +219,8 @@ theorem tx2_transaction {benv : Benv} (ctx : Tx2Context benv) {bout : BlockOutpu
       (calldataFloorGas := 23450) (index := 1)
       fork (by rfl) ctx.chain.symm (by decide) (by rw [ctx.baseFee]; decide)
       (tx2_intrinsic v r s (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by rw [tx2_gas]; decide)
       (CoveredFork.checkTransactionGasCap_ok fork (by rw [tx2_gas]; decide))
       (by change (1 : UInt64) ≠ UInt64.max; decide)
@@ -288,9 +290,10 @@ theorem weth_ne_zero : weth ≠ 0 := by decide +kernel
 
 theorem tx2FrameWrites_get_ne (st : Jaune.State) {a : Adr} (hp : pair ≠ a) (hw : weth ≠ a) :
     (tx2FrameWrites st).get a = st.get a := by
-  unfold tx2FrameWrites wethTransferWrites State.setStorVal
-  rw [State.get_set_ne _ hp, State.get_set_ne _ hp, State.get_set_ne _ hp, State.get_set_ne _ hp,
-    State.get_set_ne _ hw, State.get_set_ne _ hw, State.get_set_ne _ hp]
+  unfold tx2FrameWrites wethTransferWrites
+  rw [State.setStorVal_get_ne _ hp, State.setStorVal_get_ne _ hp, State.setStorVal_get_ne _ hp,
+    State.setStorVal_get_ne _ hp, State.setStorVal_get_ne _ hw, State.setStorVal_get_ne _ hw,
+    State.setStorVal_get_ne _ hp]
 
 /-- **Every account other than the trader, the Pair, WETH9 and the coinbase `0` is untouched by
 `tx2`.** -/

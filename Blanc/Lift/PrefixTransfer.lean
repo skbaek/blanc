@@ -163,8 +163,10 @@ theorem create2_run_result {sevm : Sevm} {d d' : Devm} (hfork : CoveredFork sevm
     ∃ (v i sz salt w : B256) (xs : Stack), d.stack = v :: i :: sz :: salt :: xs ∧
       d'.stack = w :: xs ∧ (w = 0 ∨ ∃ na, w = na.toB256 ∧ ¬ State.Protected d.state na) := by
   rcases run with ⟨xl, -, pc, h_run⟩
+  have hcreate2 : sevm.benvStat.rules.op.create2 = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).op.create2 = true) rfl rfl rfl rfl
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
+    hfork.rules_stateGas_none, hcreate2, ↓reduceIte, Bind.bind, Except.bind] at h_run
   rcases eq1 : Devm.pop d with _ | ⟨v1, s1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
   have e1 := (Devm.pop_of_pop eq1)

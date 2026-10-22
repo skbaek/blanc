@@ -24,14 +24,14 @@ open Blanc.Lift.Weth9.ClosedInstance (config config_valid config_forkAt checkpoi
 
 /-- The retained body trace of a successful body run. -/
 noncomputable def swapBodyTrace {st post : Jaune.State} {bout : BlockOutput}
-    (body : applyBody (input st) swapTxs [] = .ok (post, bout)) :
-    AppliedBodyTrace (input st) swapTxs [] post bout :=
+    (body : applyBody (input st) swapTxs [] [] = .ok (post, bout)) :
+    AppliedBodyTrace (input st) swapTxs [] [] post bout :=
   Classical.choice (exists_appliedBodyTrace body CoveredFork.bpo2)
 
 /-- The configured block trace of the closed instance's block. -/
 noncomputable def swapBlockTrace {st post : Jaune.State} {bout : BlockOutput}
     (bound : SumNof st.bal) (gas : bout.blockGasUsed ≤ 1000000)
-    (body : applyBody (input st) swapTxs [] = .ok (post, bout)) :
+    (body : applyBody (input st) swapTxs [] [] = .ok (post, bout)) :
     ConfiguredBlockTrace config (checkpoint st) (swapChain st post bout) where
   block := swapBlock st post bout
   bound := by
@@ -39,7 +39,7 @@ noncomputable def swapBlockTrace {st post : Jaune.State} {bout : BlockOutput}
     rw [Nat.add_zero]
     exact bound
   fork := .bpo2
-  forkAt := config_forkAt _
+  forkAt := config_forkAt _ _
   rules := Fork.bpo2.ruleSet
   rulesEq := rfl
   rulesAt := by
@@ -57,7 +57,7 @@ noncomputable def swapBlockTrace {st post : Jaune.State} {bout : BlockOutput}
 /-- The configured history: the checkpoint, then the closed instance's block. -/
 noncomputable def swapHistory {st post : Jaune.State} {bout : BlockOutput}
     (canonical : st.Canonical) (bound : SumNof st.bal) (gas : bout.blockGasUsed ≤ 1000000)
-    (body : applyBody (input st) swapTxs [] = .ok (post, bout)) :
+    (body : applyBody (input st) swapTxs [] [] = .ok (post, bout)) :
     ConfiguredHistoryTrace config (checkpoint st) (swapChain st post bout) :=
   .step (.refl config_valid (checkpoint_validContext canonical) rfl) (swapBlockTrace bound gas body)
 
@@ -80,7 +80,7 @@ theorem swapHistory_frames {st s1 s2 : Jaune.State} {bout1 bout2 bout : BlockOut
     (beforeCodes : SystemCodes st) (afterCodes : SystemCodes s2)
     (run1 : processTransaction (input st) BlockOutput.init signedTx1 0 = .ok (s1, bout1))
     (run2 : processTransaction ((input st).withState s1) bout1 signedTx2 1 = .ok (s2, bout2))
-    (body : applyBody (input st) swapTxs [] = .ok (s2, bout)) :
+    (body : applyBody (input st) swapTxs [] [] = .ok (s2, bout)) :
     ∃ (t1 : TransactionTrace (input st) BlockOutput.init signedTx1 0 s1 bout1)
       (t2 : TransactionTrace ((input st).withState s1) bout1 signedTx2 1 s2 bout2)
       (sysRaw sysRaw' : List Exec.Deriv) (sysSet sysSet' : List Exec.Frame),

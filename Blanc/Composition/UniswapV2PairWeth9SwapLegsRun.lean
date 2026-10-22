@@ -417,7 +417,7 @@ theorem weth9_balanceOf_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
   · rw [ite_eq_left hw] at h_gas
     have hrun := bal_entry_post (b := pre) (g := G) (G := G + 53 + 191) h_value
       (bal_callee_warm (b := pre) (g := G + 53) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' h_sel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
@@ -428,7 +428,7 @@ theorem weth9_balanceOf_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
   · rw [ite_eq_right hw] at h_gas
     have hrun := bal_entry_post (b := pre) (g := G) (G := G + 53 + 2191) h_value
       (bal_callee_cold (b := pre) (g := G + 53) (S := [Sevm.selector sevm])
-        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hfork.rules_access hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' h_sel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0

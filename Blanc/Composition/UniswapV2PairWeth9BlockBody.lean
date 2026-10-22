@@ -26,7 +26,7 @@ theorem swap_body_of_transactions {st s1 s2 : Jaune.State} {bout1 bout2 : BlockO
     (run1 : processTransaction (input st) BlockOutput.init signedTx1 0 = .ok (s1, bout1))
     (run2 : processTransaction ((input st).withState s1) bout1 signedTx2 1 = .ok (s2, bout2))
     (requests : parseDepositRequests bout2 = .ok []) :
-    applyBody (input st) swapTxs [] = .ok (s2, requestsOutput bout2 [] []) := by
+    applyBody (input st) swapTxs [] [] = .ok (s2, requestsOutput bout2 [] []) := by
   have codeBefore (a : Adr) (ha : a ∈ systemAddresses) :
       some ((input st).state.getCode a).toList = Prog.compile deploymentSystemProgram := by
     change some (st.getCode a).toList = _
@@ -65,7 +65,7 @@ theorem swap_body_of_transactions {st s1 s2 : Jaune.State} {bout1 bout2 : BlockO
   have same : (input st).withState (input st).state = input st := rfl
   have samePost : ((input st).withState s2).withState ((input st).withState s2).state =
       (input st).withState s2 := rfl
-  have body := applyBody_forward (txs := swapTxs) (stHistory := (input st).state)
+  have body := applyBody_forward (txs := swapTxs) (ommers := []) (stHistory := (input st).state)
     CoveredFork.bpo2 beacon (input_lastHash st)
     (by rw [same]; exact history) (txList := [signedTx1, signedTx2]) rfl
     (by rw [same, same]; exact fold) requests runW (by rw [samePost]; exact runC)

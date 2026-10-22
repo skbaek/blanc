@@ -40,15 +40,16 @@ theorem swapBlock_input (st post : Jaune.State) (bout : BlockOutput) :
 /-- **The block's state transition** succeeds from any successful body run within the gas limit. -/
 theorem swapBlock_transition {st post : Jaune.State} {bout : BlockOutput}
     (hgas : bout.blockGasUsed ≤ 1000000)
-    (hbody : applyBody (input st) swapTxs [] = .ok (post, bout)) :
+    (hbody : applyBody (input st) swapTxs [] [] = .ok (post, bout)) :
     stateTransitionUsing config (checkpoint st) (swapBlock st post bout) =
       .ok (swapChain st post bout) := by
   have hbody' : applyBody
       (initBenv .bpo2 (checkpoint st) (swapBlock st post bout).header)
-      (swapBlock st post bout).txs (swapBlock st post bout).wds = .ok (post, bout) := by
+      (swapBlock st post bout).txs (swapBlock st post bout).ommers
+      (swapBlock st post bout).wds = .ok (post, bout) := by
     rw [swapBlock_input]
     exact hbody
-  exact stateTransitionUsing_forward rfl (config_forkAt _) CoveredFork.bpo2
+  exact stateTransitionUsing_forward rfl (config_forkAt _ _) CoveredFork.bpo2
     (depositBlock_header (post := post) hgas) rfl hbody' rfl rfl rfl rfl rfl rfl rfl rfl
 
 end Blanc.Composition.UniswapV2PairWeth9Instance

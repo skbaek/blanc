@@ -86,7 +86,8 @@ theorem occChild_of_spawn {root : Exec.Deriv} {x : Xinst} {step : CallOccurrence
     (spawn : Evm.step ⟨step.occurrence.node.pc, step.occurrence.node.sevm,
       step.occurrence.node.devm⟩ = .spawn (Jaune.Frame.ofCall msg) resume nextPc)
     (filled : xl.Filled) (process : ProcessMessage msg xl (.ok cd))
-    (clean : cd.error.isSome = false) (occ : OccChild step d) :
+    (clean : cd.error.isSome = false) (occ : OccChild step d)
+    (sweep : msg.benv.stat.rules.settle.touchedSweep = false) :
     ∃ benv, msg.benvAfterTransfer = .ok benv ∧
       ∃ child : Exec 0 (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) (.ok cd),
         d ∈ Exec.rawFrameRoots child := by
@@ -100,8 +101,9 @@ theorem occChild_of_spawn {root : Exec.Deriv} {x : Xinst} {step : CallOccurrence
   obtain ⟨run'⟩ := filled
   have same := Exec.result_unique child run'
   subst same
-  have ok := callFrame_settle_ok settled.symm clean
-  subst ok
+  obtain ⟨body, ok, cdEq⟩ := callFrame_settle_ok settled.symm clean
+  rw [Devm.recordTouch_of_not_touchedSweep sweep] at cdEq
+  subst ok cdEq
   obtain ⟨benv, after, rfl⟩ := Jaune.Frame.enter_run_inv enter
   exact ⟨benv, after, child, mem⟩
 
@@ -139,6 +141,7 @@ theorem staticcall_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root 
     have spawn' := (Evm.step_next decoded).trans spawn
     obtain ⟨benv, after, child, mem⟩ :=
       occChild_of_spawn spawn' step.occurrence.filled process clean occ
+        (CoveredFork.rules_touchedSweep fork)
     refine ⟨_, cd, benv, rfl, rfl, rfl, rfl, rfl, fun undelegated => ?_, returnData.symm,
       after, child, mem⟩
     rcases resolved with ⟨-, -, hc, -⟩ | ⟨e, hd, -⟩
@@ -167,6 +170,7 @@ theorem call_occChild {root : Exec.Deriv} (step : CallOccurrenceStep root .call)
     have spawn' := (Evm.step_next decoded).trans spawn
     obtain ⟨benv, after, child, mem⟩ :=
       occChild_of_spawn spawn' step.occurrence.filled process clean occ
+        (CoveredFork.rules_touchedSweep fork)
     refine ⟨_, cd, benv, rfl, rfl, rfl, rfl, rfl, fun undelegated => ?_, returnData.symm,
       after, child, mem⟩
     rcases resolved with ⟨-, -, hc, -⟩ | ⟨e, hd, -⟩

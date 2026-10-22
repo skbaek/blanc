@@ -359,8 +359,8 @@ private def stepTac (f : Expr) : MetaM (Option (TSyntax `tactic)) := do
       | some ``Jaune.Rinst.iszero =>
           return some (← `(tactic| (apply rk; refine rx_iszero rfl (by xroom) ?_)))
       | some ``Jaune.Rinst.not => return some (← `(tactic| (apply rk; refine rx_not rfl (by xroom) ?_)))
-      | some ``Jaune.Rinst.shr => return some (← `(tactic| (apply rk; refine rx_shr rfl (by xroom) ?_)))
-      | some ``Jaune.Rinst.shl => return some (← `(tactic| (apply rk; refine rx_shl rfl (by xroom) ?_)))
+      | some ``Jaune.Rinst.shr => return some (← `(tactic| (apply rk; refine rx_shr (h_shifts := CoveredFork.rules_shifts ‹_›) rfl (by xroom) ?_)))
+      | some ``Jaune.Rinst.shl => return some (← `(tactic| (apply rk; refine rx_shl (h_shifts := CoveredFork.rules_shifts ‹_›) rfl (by xroom) ?_)))
       | some ``Jaune.Rinst.div => return some (← `(tactic| (apply rk; refine rx_div rfl (by xroom) ?_)))
       | some ``Jaune.Rinst.mul => return some (← `(tactic| (apply rk; refine rx_mul rfl (by xroom) ?_)))
       | some ``Jaune.Rinst.caller =>
@@ -522,8 +522,11 @@ lemma Ninst.runCompiled_delegatecall_child {sevm : Sevm} {devm : Devm}
     simpa only [msg, p, delegatecallSpawnMsg, callMsg, Msg.withBenv] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec (initEvm (msg.withBenv msg.benv))) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
+    have hsweep : msg.benv.stat.rules.settle.touchedSweep = false :=
+      CoveredFork.rules_touchedSweep (s := sevm.benvStat) hfork
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
-      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind]
+      Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
+      Devm.recordTouch_of_not_touchedSweep hsweep]
   have hdi := accessDelegation_inv h_del
   have hpstack : p.stack.length < 1024 := by
     change d1.stack.length < 1024

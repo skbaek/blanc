@@ -126,21 +126,21 @@ theorem getStor_eq' (d : Devm) (a : Adr) : d.getStor a = d.state.getStor a := rf
 
 theorem State.setStorVal_getStor_self (S : Jaune.State) (a : Adr) (k v : B256) :
     (S.setStorVal a k v).getStor a = (S.getStor a).set k v := by
-  unfold State.setStorVal State.getStor
-  rw [State.get_set_self]
+  unfold State.getStor
+  rw [State.setStorVal_get_self]
 
 theorem State.setStorVal_getStor_ne (S : Jaune.State) {a a' : Adr} (h : a ≠ a') (k v : B256) :
     (S.setStorVal a k v).getStor a' = S.getStor a' := by
-  unfold State.setStorVal State.getStor
-  rw [State.get_set_ne _ h]
+  unfold State.getStor
+  rw [State.setStorVal_get_ne _ h]
 
 theorem State.setStorVal_getCode (S : Jaune.State) (a a' : Adr) (k v : B256) :
     (S.setStorVal a k v).getCode a' = S.getCode a' := by
-  unfold State.setStorVal State.getCode
+  unfold State.getCode
   by_cases h : a = a'
   · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+    rw [State.setStorVal_get_self]
+  · rw [State.setStorVal_get_ne _ h]
 
 /-! ## The view -/
 
@@ -358,7 +358,12 @@ theorem DView.initDevm_callMsg (h : DView b d K A S rc L) {sevm : Sevm}
   logs := by
     change (match sevm.benvStat.rules.stateGas with | none => [] | some _ => _) = []
     rw [hsg]
-  deleted a := Std.HashSet.not_mem_emptyWithCapacity
+  deleted a := by
+    change a ∉ (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then .emptyWithCapacity
+      else d.accountsToDelete)
+    split
+    · exact Std.HashSet.not_mem_emptyWithCapacity
+    · exact h.deleted a
   error := rfl
 
 /-- A parent resumed after its child halted cleanly: the union of keys and addresses, the child's

@@ -15,14 +15,14 @@ namespace Blanc.Composition.UniswapV2PairWeth9Capstone
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair
 
-theorem answer_some {data : Bytes} {rules : ModexpRules} {adr : Adr} {e : Evm} {c : Nat} {o : Bytes}
-    (hd : e.sta.data = data) (hr : e.sta.benvStat.rules.modexp = rules)
+theorem answer_some {data : Bytes} {rules : ForkRules} {adr : Adr} {e : Evm} {c : Nat} {o : Bytes}
+    (hd : e.sta.data = data) (hr : e.sta.benvStat.rules = rules)
     (h : precompileRun e adr = .ok c o) : precompileAnswer data rules adr = some o := by
   rw [← hd, ← hr]
   exact precompileAnswer_of_ok h
 
-theorem answer_none {data : Bytes} {rules : ModexpRules} {adr : Adr}
-    (h : ∀ e : Evm, e.sta.data = data → e.sta.benvStat.rules.modexp = rules →
+theorem answer_none {data : Bytes} {rules : ForkRules} {adr : Adr}
+    (h : ∀ e : Evm, e.sta.data = data → e.sta.benvStat.rules = rules →
       ∀ c o, precompileRun e adr ≠ .ok c o) : precompileAnswer data rules adr = none := by
   unfold precompileAnswer
   rw [dite_eq_right]
@@ -40,7 +40,7 @@ macro "precheck_fail " h:ident : tactic =>
   `(tactic| (dsimp only at $h:ident; split at $h:ident <;>
     first | cases $h:ident | (exfalso; rename_i hc _; revert hc; decide)))
 
-local notation "M" => Fork.bpo2.ruleSet.modexp
+local notation "M" => Fork.bpo2.ruleSet
 
 theorem answer_9 : precompileAnswer feeToData M 9 = none :=
   answer_none fun e hd _ c o h => by
@@ -88,11 +88,13 @@ theorem answer_17 : precompileAnswer feeToData M 17 = none :=
     unfold executeBls12MapFp2ToG2 at h; rw [hd] at h; precheck_fail h
 
 theorem answer_8 : precompileAnswer feeToData M 8 = none :=
-  answer_none fun e hd _ c o h => by
+  answer_none fun e hd hr c o h => by
     rw [show precompileRun e 8 = executePairingCheck e from rfl] at h
-    unfold executePairingCheck PrecompResult.chargeGas at h; rw [hd] at h; dsimp only at h
+    unfold executePairingCheck PrecompResult.chargeGas at h; rw [hd, hr] at h; dsimp only at h
     split at h
-    · rw [show executePairingCheckInner feeToData (34000 * (feeToData.length / 192) + 45000) =
+    · rw [show executePairingCheckInner feeToData
+          (Fork.bpo2.ruleSet.bn254.pairingPerPair * (feeToData.length / 192) +
+            Fork.bpo2.ruleSet.bn254.pairingBase) =
         .error ⟨.halt (.outOfGas .none), 34000 * (feeToData.length / 192) + 45000⟩ from rfl] at h
       cases h
     · cases h

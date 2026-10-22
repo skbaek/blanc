@@ -144,11 +144,10 @@ theorem afterSload_state (sevm : Sevm) (b : Devm) (k : B256) :
 theorem setStorVal_state_getCode (d : Devm) (adr : Adr) (k v : B256) (a : Adr) :
     (d.setStorVal adr k v).state.getCode a = d.state.getCode a := by
   show ((d.state.setStorVal adr k v).get a).code = (d.state.get a).code
-  unfold State.setStorVal
   by_cases h : adr = a
   · subst h
-    rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+    rw [State.setStorVal_get_self]
+  · rw [State.setStorVal_get_ne _ h]
 
 theorem afterSstore_getCode (sevm : Sevm) (b : Devm) (k v : B256) (a : Adr) :
     (afterSstore sevm b k v).state.getCode a = b.state.getCode a := by

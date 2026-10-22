@@ -150,7 +150,7 @@ theorem history_pairFresh {cfg : ChainConfig} {checkpoint future : BlockChain}
                     obtain rfl := Option.some.inj eqF'
                     exact mintReplyRow_mem_of_word word (by decide +kernel)
               · change k ∈ precompileRunAddresses.filterMap (fun adr =>
-                  (precompileAnswer (ExternalOperation.encode .feeTo) sevm.benvStat.rules.modexp
+                  (precompileAnswer (ExternalOperation.encode .feeTo) sevm.benvStat.rules
                     adr).map mintReplyRow) at fromPrecompiles
                 rw [rules_bpo2 h.fork, feeTo_precompileRows] at fromPrecompiles
                 exact mem_of_all feeToRows_sub fromPrecompiles

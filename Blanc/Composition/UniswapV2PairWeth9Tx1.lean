@@ -64,9 +64,10 @@ theorem tx1_value (v : Nat) (r s : Bytes) : (tx1 v r s).value = 0 := rfl
 
 theorem tx1_intrinsic {rules : ForkRules} (v : Nat) (r s : Bytes)
     (hsg : rules.stateGas = none) (hbase : rules.gas.txBase = 21000)
-    (hfloor : rules.gas.floorTokenCost = 10) :
+    (hfloor : rules.gas.floorTokenCost = 10) (hnz : rules.txr.dataNonZero = 16)
+    (hcf : rules.txr.calldataFloor = true) :
     calculateIntrinsicCost rules (tx1 v r s) trader = (21584, 22460) := by
-  rw [calculateIntrinsicCost_two_call hsg (by rfl)]
+  rw [calculateIntrinsicCost_two_call hsg (by rfl) hnz hcf]
   simp only [tx1, hbase, hfloor]
   decide +kernel
 
@@ -84,7 +85,8 @@ theorem tx1_message_success {msg : Msg} {xT xP : B256}
     (hcreated : tokenX ∉ msg.benv.createdAccounts)
     (hcoldT : (tokenX, balSlot trader) ∉ msg.accessedStorageKeys)
     (hcoldP : (tokenX, balSlot pair) ∉ msg.accessedStorageKeys)
-    (hcov : amountIn < xT) (hP0 : xP ≠ 0) (hnof : B256.Nof amountIn xP) :
+    (hcov : amountIn < xT) (hP0 : xP ≠ 0) (hnof : B256.Nof amountIn xP)
+    (hinherited : msg.inheritedDeletions.isEmpty = true) :
     ∃ post, exec (initEvm msg) = .ok post ∧
       post.error = none ∧ post.refundCounter = 0 ∧
       post.gasLeft = 18243 ∧ post.accountsToDelete.toList = [] ∧
@@ -98,8 +100,9 @@ theorem tx1_message_success {msg : Msg} {xT xP : B256}
       hcoldT hcoldP hcov hP0 hnof rfl rfl
   refine ⟨post, execution, error, refund, gas, ?_, state, ?_⟩
   · rw [deleted]
-    change (Std.HashSet.emptyWithCapacity : AdrSet).toList = []
-    exact Std.HashSet.toList_emptyWithCapacity
+    change msg.inheritedDeletions.toList = []
+    rw [← List.isEmpty_iff, Std.HashSet.isEmpty_toList]
+    exact hinherited
   · rw [logs]
     change (match msg.benv.stat.rules.stateGas with | none => [] | some _ => _) = []
     rw [CoveredFork.rules_stateGas_none hfork]
@@ -161,7 +164,7 @@ theorem tx1_prepared_success {benv : Benv} {xT xP : B256} (ctx : Tx1Context benv
       (by change ((tx1DebitState benv.state).getStor tokenX).get (balSlot pair) = xP
           rw [hstor]; exact ctx.slotPair)
       ctx.slotTrader ctx.slotPair ctx.created (hkeys _) (hkeys _)
-      ctx.covers ctx.pairNonzero ctx.noWrap
+      ctx.covers ctx.pairNonzero ctx.noWrap rfl
   exact ⟨post, execution, error, refund, gas, deleted, state, logs⟩
 
 /-- **The first transaction of the closed instance**, on any block environment satisfying
@@ -188,7 +191,8 @@ theorem tx1_transaction {benv : Benv} {xT xP : B256} (ctx : Tx1Context benv xT x
       (calldataFloorGas := 22460) (index := 0)
       fork (by rfl) ctx.chain.symm (by decide) (by rw [ctx.baseFee]; decide)
       (tx1_intrinsic v r s (CoveredFork.rules_stateGas_none fork)
-        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork))
+        (CoveredFork.rules_txBase fork) (CoveredFork.rules_floorTokenCost fork)
+        (CoveredFork.rules_dataNonZero fork) (CoveredFork.rules_calldataFloor fork))
       (by rw [tx1_gas]; decide)
       (CoveredFork.checkTransactionGasCap_ok fork (by rw [tx1_gas]; decide))
       (by change (0 : UInt64) ≠ UInt64.max; decide) ctx.room
