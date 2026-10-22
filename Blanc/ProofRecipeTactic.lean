@@ -41,6 +41,8 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.Devm.EqModGas
   | "goal-head:Lift.StaticWordChild" =>
       return head == some `Blanc.Lift.StaticWordChild
+  | "goal-head:Lift.WriteSite.ZeroSlots" =>
+      return head == some `Blanc.Lift.WriteSite.ZeroSlots
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>

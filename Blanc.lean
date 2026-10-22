@@ -1704,3 +1704,6 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 import Blanc.Lift.UniswapV2Pair.SkimForwardKept
 import Blanc.Lift.Usdc.HistoryEnd
 import Blanc.Lift.Usdc.HistoryEndFoot
+import Blanc.Lift.Usdc.AllowLocalityInit
+import Blanc.Lift.Usdc.AllowLocalityV2_2
+import Blanc.Lift.WriteSiteZero

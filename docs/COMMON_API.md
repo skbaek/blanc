@@ -5166,6 +5166,19 @@ contract-neutral.
   listed site, `top` included, names a key) under the frame-local collision
   premise `RowSep`, with `rowOf`/`rowOf_eval` (a row slot term's owner and key)
   and `GuardObs.mono`.
+- To preserve demanded zero cells using that locality, use
+  [`Blanc/Lift/WriteSiteZero.lean`](../Blanc/Lift/WriteSiteZero.lean):
+  `ZeroSlots` states the seed; `GuardObs.sstore_zero` combines
+  `GuardObs K False` with the actual SSTORE storage update, for the written
+  cell and every distinct cell, without a fork or hash premise.
+  `GuardObs.step_zero` covers the other instructions on a `CoveredFork`,
+  while its external arm requires the actual filled recursive slot and
+  `Xinst.Run` preservation law. `runP_zero` and `progRunP_zero` fold through
+  the actual lifted derivation, including callee returns and continuations,
+  with explicit external-step and terminal semantic obligations.
+  `terminal_zero` discharges non-SELFDESTRUCT terminals. These tools do not
+  infer child effects, SELFDESTRUCT preservation, a historical zero seed or
+  hash separation from locality alone; those remain consumer proofs.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

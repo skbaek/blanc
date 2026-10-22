@@ -559,3 +559,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/CallProfileTransport.lean](../Blanc/Lift/CallProfileTransport.lean) — `Devm.EqModGas.callChildPost`
 - Registered symbols: `module:Blanc/Lift/CallProfileTransport.lean`, `declaration:Blanc.Devm.EqModGas.withGasLeft_eq`, `declaration:Blanc.Devm.EqModGas.of_normalized_eq`, `declaration:Blanc.Devm.EqModGas.st`, `declaration:Blanc.Devm.EqModGas.addAccessedAddress`, `declaration:Blanc.Devm.EqModGas.callSpawnParent`, `declaration:Blanc.Devm.EqModGas.callChildPost`
 - Review: `proof-infrastructure` on `2026-10-19`
+
+## `write-site-zero-preservation`
+
+- Status: `active`
+- Triggers: `goal-head:Lift.WriteSite.ZeroSlots`
+- Preferred path: For an actual SSTORE and GuardObs K False, apply GuardObs.sstore_zero to the initial ZeroSlots seed. For one actual instruction, use GuardObs.step_zero with its filled recursive-slot and Xinst.Run preservation law. For an actual SFunc.RunP or SProg.RunP derivation, use runP_zero or progRunP_zero, supplying the actual step producer, checked observations, and genuine local child and terminal preservation laws. terminal_zero discharges non-SELFDESTRUCT terminals.
+- Boundary: This matches only the explicit ZeroSlots head, without unfolding an alias or an expanded forall. Locality does not establish child effects, SELFDESTRUCT preservation, the historical zero seed, or hash separation. The seed is an induction input, not P1 assumed at a chosen checkpoint; child and terminal semantic obligations must be proved by the concrete consumer. Modern CoveredFork premises stay explicit where the quiet-step producer needs them.
+- Owner module: [Blanc/Lift/WriteSiteZero.lean](../Blanc/Lift/WriteSiteZero.lean)
+- Canonical example: [Blanc/Lift/WriteSiteZero.lean](../Blanc/Lift/WriteSiteZero.lean) — `GuardObs.sstore_zero`
+- Registered symbols: `module:Blanc/Lift/WriteSiteZero.lean`, `declaration:Blanc.Lift.WriteSite.ZeroSlots`, `declaration:Blanc.Lift.WriteSite.GuardObs.sstore_zero`, `declaration:Blanc.Lift.WriteSite.GuardObs.step_zero`, `declaration:Blanc.Lift.WriteSite.terminal_zero`, `declaration:Blanc.Lift.WriteSite.runP_zero`, `declaration:Blanc.Lift.WriteSite.progRunP_zero`
+- Review: `proof-infrastructure` on `2026-10-22`

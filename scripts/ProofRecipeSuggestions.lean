@@ -29,6 +29,7 @@ import Blanc.PinnedPauseTarget
 import Blanc.RevertPayload
 import Blanc.StaticStores
 import Blanc.Upgrade
+import Blanc.Lift.WriteSiteZero
 
 namespace Blanc
 
@@ -1142,5 +1143,28 @@ example (a b c d : Devm) (hp : Devm.EqModGas a b) (hc : Devm.EqModGas c d)
 example (a : Devm) : a.gasLeft = a.gasLeft := by
   expect_no_recipe_trigger "goal-head:Devm.EqModGas"
   rfl
+
+-- EXPECT: write-site-zero-preservation
+example {K : B256 → Prop} {sevm : Sevm} {pre post : Devm}
+    (obs : Lift.WriteSite.GuardObs K False sevm pre (.reg .sstore))
+    (run : Ninst.Run sevm pre (.reg .sstore) post)
+    (seed : Lift.WriteSite.ZeroSlots K sevm.currentTarget pre) :
+    Lift.WriteSite.ZeroSlots K sevm.currentTarget post := by
+  expect_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  expect_recipe_offered "write-site-zero-preservation"
+  blanc_suggest
+  exact Lift.WriteSite.GuardObs.sstore_zero obs run seed
+
+-- An expanded forall is deliberately outside this exact-head recipe.
+example {K : B256 → Prop} {a : Adr} {d : Devm}
+    (seed : Lift.WriteSite.ZeroSlots K a d) :
+    ∀ slot, K slot → d.getStorVal a slot = 0 := by
+  expect_no_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  exact seed
+
+-- Unrelated proposition heads must not receive zero-preservation advice.
+example : True := by
+  expect_no_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  trivial
 
 end Blanc

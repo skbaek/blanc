@@ -417,6 +417,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/CallProfileTransport.lean", "declaration:Blanc.Devm.EqModGas.withGasLeft_eq", "declaration:Blanc.Devm.EqModGas.of_normalized_eq", "declaration:Blanc.Devm.EqModGas.st", "declaration:Blanc.Devm.EqModGas.addAccessedAddress", "declaration:Blanc.Devm.EqModGas.callSpawnParent", "declaration:Blanc.Devm.EqModGas.callChildPost"]
     boundary := "This matches only the explicit Devm.EqModGas goal head. It establishes agreement outside execution gas, not an equality of gasLeft or consumed charges, and does not establish callee success, gas independence of arbitrary code, a profile, or caller liveness. Supply the parent and child relations; do not infer them from storage equality or a bounded-success call premise."
   },
+  {
+    id := "write-site-zero-preservation"
+    status := "active"
+    triggers := ["goal-head:Lift.WriteSite.ZeroSlots"]
+    preferredPath := "For an actual SSTORE and GuardObs K False, apply GuardObs.sstore_zero to the initial ZeroSlots seed. For one actual instruction, use GuardObs.step_zero with its filled recursive-slot and Xinst.Run preservation law. For an actual SFunc.RunP or SProg.RunP derivation, use runP_zero or progRunP_zero, supplying the actual step producer, checked observations, and genuine local child and terminal preservation laws. terminal_zero discharges non-SELFDESTRUCT terminals."
+    symbols := ["module:Blanc/Lift/WriteSiteZero.lean", "declaration:Blanc.Lift.WriteSite.ZeroSlots", "declaration:Blanc.Lift.WriteSite.GuardObs.sstore_zero", "declaration:Blanc.Lift.WriteSite.GuardObs.step_zero", "declaration:Blanc.Lift.WriteSite.terminal_zero", "declaration:Blanc.Lift.WriteSite.runP_zero", "declaration:Blanc.Lift.WriteSite.progRunP_zero"]
+    boundary := "This matches only the explicit ZeroSlots head, without unfolding an alias or an expanded forall. Locality does not establish child effects, SELFDESTRUCT preservation, the historical zero seed, or hash separation. The seed is an induction input, not P1 assumed at a chosen checkpoint; child and terminal semantic obligations must be proved by the concrete consumer. Modern CoveredFork premises stay explicit where the quiet-step producer needs them."
+  },
 ]
 
 end Blanc.ProofRecipes
