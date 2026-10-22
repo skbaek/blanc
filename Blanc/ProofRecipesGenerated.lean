@@ -441,6 +441,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/ExecutionSenderOccurrences.lean", "declaration:Blanc.ExecutionTrace.SenderOccurrence.recovered", "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderOccurrences_indexed", "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderQueries_at", "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.noSenderAt_of_senderQueries", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.toIn_noSenderAt_iff", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.noSenderAt_of_senderQueries"]
     boundary := "This matches only the three direct qualified NoSenderAt heads, without unfolding aliases or an expanded fold. It consumes an actual trace and exact-query exclusion; it neither proves the cryptographic exclusion nor constructs a history from reachability. It covers admitted normal-transaction senders, not eligible authorization authorities, old recovery calls or system callers. Caller/code preservation, historical fork coverage, creation, committing-child recursion and the initial allowance-zero seed remain separate obligations. No fork domain or authentication assumption is strengthened."
   },
+  {
+    id := "ecrecover-return-layout"
+    status := "active"
+    triggers := ["goal-head:Lift.EcrecoverCall.ReturnChecks"]
+    preferredPath := "Use EcrecoverCall.ReturnChecks.mk to supply the two rejected subtrees' haltsOnly facts and the exact answer tail's execFreeIn [] and noHalt checks. Bind the actual source with EcrecoverCall.entry and its concrete ReturnLayout first; then use EcrecoverCall.consumes with the original checked cursor, memory, nondelegation and actual caller premises."
+    symbols := ["module:Blanc/Lift/EcrecoverCall.lean", "declaration:Blanc.Lift.EcrecoverCall.ReturnLayout", "declaration:Blanc.Lift.EcrecoverCall.entry", "declaration:Blanc.Lift.EcrecoverCall.ReturnChecks", "declaration:Blanc.Lift.EcrecoverCall.consumes"]
+    boundary := "Advice recognizes only the direct EcrecoverCall.ReturnChecks head, without unfolding aliases or searching nested propositions. It does not prove arbitrary layouts valid, infer any recovered address, successful query, affordable gas, caller continuation or historical coverage, or establish complete selector/write relevance. Its four facts are structural checks; the common consumer separately derives the actual invocation and answer from the real run."
+  },
 ]
 
 end Blanc.ProofRecipes

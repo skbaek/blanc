@@ -58,6 +58,8 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
           | some value => return instruction == value.consumeMData
           | none => return false
       | _ => pure false
+  | "goal-head:Lift.EcrecoverCall.ReturnChecks" =>
+      return head == some `Blanc.Lift.EcrecoverCall.ReturnChecks
   | "goal-head:Devm.EqModGas" =>
       return head == some `Blanc.Devm.EqModGas
   | "goal-head:Lift.StaticWordChild" =>

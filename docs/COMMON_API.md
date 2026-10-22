@@ -3030,7 +3030,19 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   that signatures are unforgeable. Consumers: the Uniswap V2 Pair permit
   canonical corollary; `Blanc/Weth10Permit.lean`'s two address-1 clean-child
   theorems can become corollaries (proposed migration). Discovery is manual.
-  The concrete `Usdc.recoveryV2_1_consumes` consumer in
+  The checked request-and-return engine lives in
+  [`Blanc/Lift/EcrecoverCall.lean`](../Blanc/Lift/EcrecoverCall.lean).
+  `EcrecoverCall.entry` exposes its exact source calling convention through
+  `ReturnLayout`; `ReturnChecks` records the four structural return checks.
+  `EcrecoverCall.consumes` takes the actual code/certificate, source cursor,
+  entry registers, pointer, nondelegation and successful execution. It derives
+  the real query, native call and paid gas, canonical nonzero answer, original
+  slot and return continuation. Each version must prove its exact source
+  equality and structural checks against its own certificate. The call PC is
+  relative to the actual entry; the theorem assumes no desired answer or gas
+  budget. Direct `ReturnChecks` goals use the `ecrecover-return-layout` recipe;
+  the existential semantic consumer is found here by name.
+  The concrete `Usdc.recoveryV2_1_consumes` specialization in
   [`Blanc/Lift/Usdc/RecoveryV2_1.lean`](../Blanc/Lift/Usdc/RecoveryV2_1.lean)
   follows the actual checked V2_1 recovery entry to STATICCALL at PC `0x4a78`,
   derives its four-word input from the entry registers and memory writes,
@@ -3039,6 +3051,11 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   nondelegation and existing fork-coverage premises remain local producer
   obligations. It does not enumerate flag-zero invocations or establish
   complete historical permit coverage.
+  `Usdc.recoveryV2_consumes` in
+  [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
+  specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
+  Its actual caller remains a producer obligation, including the `0x4d93`
+  epilogue before any owner comparison.
   The concrete fresh-entry producer in
   [`Blanc/Lift/Usdc/PermitQueryV2_1.lean`](../Blanc/Lift/Usdc/PermitQueryV2_1.lean),
   `Usdc.permitV2_1_query_entry`, derives the recovery registers, pointer and

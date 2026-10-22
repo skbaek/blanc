@@ -592,3 +592,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/ExecutionSenderOccurrences.lean](../Blanc/ExecutionSenderOccurrences.lean) — `ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries`
 - Registered symbols: `module:Blanc/ExecutionSenderOccurrences.lean`, `declaration:Blanc.ExecutionTrace.SenderOccurrence.recovered`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderOccurrences_indexed`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.senderQueries_at`, `declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.noSenderAt_of_senderQueries`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.toIn_noSenderAt_iff`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTrace.noSenderAt_of_senderQueries`
 - Review: `proof-infrastructure` on `2026-10-23`
+
+## `ecrecover-return-layout`
+
+- Status: `active`
+- Triggers: `goal-head:Lift.EcrecoverCall.ReturnChecks`
+- Preferred path: Use EcrecoverCall.ReturnChecks.mk to supply the two rejected subtrees' haltsOnly facts and the exact answer tail's execFreeIn [] and noHalt checks. Bind the actual source with EcrecoverCall.entry and its concrete ReturnLayout first; then use EcrecoverCall.consumes with the original checked cursor, memory, nondelegation and actual caller premises.
+- Boundary: Advice recognizes only the direct EcrecoverCall.ReturnChecks head, without unfolding aliases or searching nested propositions. It does not prove arbitrary layouts valid, infer any recovered address, successful query, affordable gas, caller continuation or historical coverage, or establish complete selector/write relevance. Its four facts are structural checks; the common consumer separately derives the actual invocation and answer from the real run.
+- Owner module: [Blanc/Lift/EcrecoverCall.lean](../Blanc/Lift/EcrecoverCall.lean)
+- Canonical example: [Blanc/Lift/Usdc/RecoveryV2.lean](../Blanc/Lift/Usdc/RecoveryV2.lean) — `recoveryV2_consumes`
+- Registered symbols: `module:Blanc/Lift/EcrecoverCall.lean`, `declaration:Blanc.Lift.EcrecoverCall.ReturnLayout`, `declaration:Blanc.Lift.EcrecoverCall.entry`, `declaration:Blanc.Lift.EcrecoverCall.ReturnChecks`, `declaration:Blanc.Lift.EcrecoverCall.consumes`
+- Review: `proof-infrastructure` on `2026-10-23`

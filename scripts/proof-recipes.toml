@@ -1259,3 +1259,22 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-23"
+
+
+[[recipe]]
+id = "ecrecover-return-layout"
+status = "active"
+triggers = ["goal-head:Lift.EcrecoverCall.ReturnChecks"]
+preferred_path = "Use EcrecoverCall.ReturnChecks.mk to supply the two rejected subtrees' haltsOnly facts and the exact answer tail's execFreeIn [] and noHalt checks. Bind the actual source with EcrecoverCall.entry and its concrete ReturnLayout first; then use EcrecoverCall.consumes with the original checked cursor, memory, nondelegation and actual caller premises."
+boundary = "Advice recognizes only the direct EcrecoverCall.ReturnChecks head, without unfolding aliases or searching nested propositions. It does not prove arbitrary layouts valid, infer any recovered address, successful query, affordable gas, caller continuation or historical coverage, or establish complete selector/write relevance. Its four facts are structural checks; the common consumer separately derives the actual invocation and answer from the real run."
+owner_module = "Blanc/Lift/EcrecoverCall.lean"
+canonical_example = "Blanc/Lift/Usdc/RecoveryV2.lean:recoveryV2_consumes"
+symbols = [
+  "module:Blanc/Lift/EcrecoverCall.lean",
+  "declaration:Blanc.Lift.EcrecoverCall.ReturnLayout",
+  "declaration:Blanc.Lift.EcrecoverCall.entry",
+  "declaration:Blanc.Lift.EcrecoverCall.ReturnChecks",
+  "declaration:Blanc.Lift.EcrecoverCall.consumes",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-23"
