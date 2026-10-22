@@ -176,6 +176,7 @@ import Blanc.FlashSpec
 import Blanc.Compiled
 import Blanc.DeploymentCompiled
 import Blanc.DeploymentMessage
+import Blanc.DeploymentTouch
 import Blanc.Forward
 import Blanc.ForwardMstore8
 import Blanc.Reverts

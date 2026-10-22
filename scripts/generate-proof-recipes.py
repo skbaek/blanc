@@ -624,6 +624,10 @@ UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
         "names Jaune.List.sliceD only",
     "goal-shape:message-execution-settlement":
         "names Jaune.processMessage, Jaune.exec and Jaune.initEvm only",
+    "goal-shape:touch-preserving-message-settlement":
+        "matches direct Eq and Except.ok with Jaune message drivers and "
+        "recordTouch/setCode payload heads only; foreign names are checked "
+        "by the core inventory and pinned Jaune surface",
     "goal-shape:successor-projection":
         "names Jaune.Devm updaters and reuses the same Jaune-only projection "
         "bridge",
@@ -679,9 +683,11 @@ JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.Devm.meta",
     "Jaune.Devm.output",
     "Jaune.Devm.refundCounter",
+    "Jaune.Devm.recordTouch",
     "Jaune.Devm.returnData",
     "Jaune.Devm.setMach",
     "Jaune.Devm.setMeta",
+    "Jaune.Devm.setCode",
     "Jaune.Devm.setStorVal",
     "Jaune.Devm.setWorld",
     "Jaune.Devm.stack",
@@ -697,12 +703,13 @@ JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.exec",
     "Jaune.initEvm",
     "Jaune.processMessage",
+    "Jaune.processCreateMessage",
 })
 
 # Names outside both namespaces that an arm may dispatch on. These are Lean core
 # and are not pinned by this repository at all, so they are stated here rather
 # than left to fall through whichever of the two checks happens to ignore them.
-CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne"})
+CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne", "Except.ok"})
 
 # Registered recipes with no case in ``scripts/ProofRecipeSuggestions.lean``,
 # each with what a case would have to exhibit.
@@ -775,6 +782,7 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-shape:full-length-slice",
     "goal-shape:linear-dispatch-selection",
     "goal-shape:message-execution-settlement",
+    "goal-shape:touch-preserving-message-settlement",
     "goal-shape:raw-sstore-free-compiled-path",
     "goal-shape:retained-wrapper-trace",
     "goal-shape:retained-write-noninterference",

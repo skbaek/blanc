@@ -234,6 +234,14 @@ def recipes : List Recipe := [
     boundary := "The generic enter bridge requires only the exact successful entry equation. Post-transfer bridges name the successful transferred environment: exact-code-entry and non-precompile variants work with ordinary `disablePrecompiles = false` messages, the no-code-address variant covers creation code, and the convenience bridge requires disabled precompiles. The unsuffixed specialization additionally requires entry-state identity. Retained-frame inversion exposes storage equality rather than whole-state equality because value transfer may change balances. Static-precompile inversion does not prove native routing: its enabled-precompile and clean-child premises remain load-bearing, delegation must already be ruled out, and the SHA result is fixed only for address 2 and exactly 64 bytes. These facts describe ordinary call-message settlement, not CREATE settlement."
   },
   {
+    id := "touch-preserving-message-settlement"
+    status := "active"
+    triggers := ["goal-shape:touch-preserving-message-settlement"]
+    preferredPath := "For the exact successful message equation retaining `recordTouch`, use `processMessage_ok_touch_of_exec`. For the exact successful CREATE equation retaining `setCode`, use `processCreateMessage_ok_touch_of_exec_and_charge`; supply the successful code charge on the touched raw result. Both live in `Blanc/DeploymentTouch.lean`."
+    symbols := ["module:Blanc/DeploymentTouch.lean", "declaration:processMessage_ok_touch_of_exec", "declaration:processCreateMessage_ok_touch_of_exec_and_charge"]
+    boundary := "This is syntactic discovery of direct success equations, not a check of address, rules or output correspondence. The theorems retain the actual successful post-transfer environment, none-code-address entry, successful total execution and raw.error = none; CREATE additionally retains actual code-charge success on the touched raw machine. No fork, value, state-gas, sweep-disable or endpoint-state premise is added. These bridges do not prove transaction-level touched-account sweeping, original constructor execution, historical inclusion or an allowance-zero seed."
+  },
+  {
     id := "raw-sstore-free-compiled-path"
     status := "active"
     triggers := ["goal-shape:raw-sstore-free-compiled-path"]

@@ -31,6 +31,7 @@ import Blanc.StaticStores
 import Blanc.Upgrade
 import Blanc.Lift.WriteSiteZero
 import Blanc.ExecutionSenderOccurrences
+import Blanc.DeploymentTouch
 
 namespace Blanc
 
@@ -806,6 +807,135 @@ example (msg : Msg)
   expect_recipe_trigger "goal-shape:message-execution-settlement"
   blanc_suggest
   exact MessageExecution.processMessage_eq_settle_exec msg hentry hdisable
+
+-- EXPECT: touch-preserving-message-settlement
+example {msg : Msg} {benv : Benv} {raw : Devm}
+    (htransfer : msg.benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = none)
+    (hexec : exec (initEvm (msg.withBenv benv)) = .ok raw)
+    (herror : raw.error = none) :
+    processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  expect_recipe_offered "touch-preserving-message-settlement"
+  blanc_suggest
+  exact processMessage_ok_touch_of_exec htransfer hcodeAddress hexec herror
+
+-- EXPECT: touch-preserving-message-settlement
+example (msg : Msg) {benv : Benv} {raw charged : Devm}
+    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = none)
+    (hexec : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw)
+    (herror : raw.error = none)
+    (hcharge : processCreateMessage.chargeCodeGas msg.benv.stat.rules
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) = .ok charged) :
+    processCreateMessage msg =
+      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) := by
+  expect_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  expect_recipe_offered "touch-preserving-message-settlement"
+  blanc_suggest
+  exact processCreateMessage_ok_touch_of_exec_and_charge msg
+    htransfer hcodeAddress hexec herror hcharge
+
+-- Nearby shapes exercise only production dispatch; no semantic promise is
+-- inferred from a syntactically suitable goal.
+example (msg : Msg) (raw : Devm)
+    (h : .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) =
+      processMessage msg) :
+    .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) =
+      processMessage msg := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    (processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) ∧ True := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact ⟨h, True.intro⟩
+
+example (msg : Msg) (failure : EvmError × State × AdrSet × Tra)
+    (h : processMessage msg = .error failure) :
+    processMessage msg = .error failure := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) (h : processMessage msg = .ok raw) :
+    processMessage msg = .ok raw := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) (h : processCreateMessage msg = .ok raw) :
+    processCreateMessage msg = .ok raw := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = .ok (raw.setCode msg.currentTarget ⟨⟨raw.output⟩⟩)) :
+    processMessage msg = .ok (raw.setCode msg.currentTarget ⟨⟨raw.output⟩⟩) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processCreateMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    processCreateMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      id (.ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget))) :
+    processMessage msg =
+      id (.ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      .ok (id (raw.recordTouch msg.benv.stat.rules true msg.currentTarget))) :
+    processMessage msg =
+      .ok (id (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) :
+    (raw.recordTouch msg.benv.stat.rules true msg.currentTarget).output =
+      raw.output := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  rfl
+
+-- Fully qualified name identity: both impostors retain the real application
+-- arity and leaf spelling, but are not the constructors/operations selected.
+namespace TouchDiscoveryForgery
+
+def Except.ok (ε α : Type) (value : α) : _root_.Except ε α :=
+  _root_.Except.ok value
+
+def Devm.recordTouch (rules : ForkRules) (cond : Bool) (adr : Adr) (raw : Devm) :
+    Devm := raw.recordTouch rules cond adr
+
+end TouchDiscoveryForgery
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = TouchDiscoveryForgery.Except.ok
+      (EvmError × State × AdrSet × Tra) Devm
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    processMessage msg = TouchDiscoveryForgery.Except.ok
+      (EvmError × State × AdrSet × Tra) Devm
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = .ok (TouchDiscoveryForgery.Devm.recordTouch
+      msg.benv.stat.rules true msg.currentTarget raw)) :
+    processMessage msg = .ok (TouchDiscoveryForgery.Devm.recordTouch
+      msg.benv.stat.rules true msg.currentTarget raw) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
 
 -- EXPECT: devm-common-update-laws
 example (devm : Devm) (index : Nat) (value : Bytes) :

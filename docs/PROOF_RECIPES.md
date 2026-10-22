@@ -306,6 +306,17 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Registered symbols: `module:Blanc/MessageExecution.lean`, `module:Blanc/MessageExecutionInversion.lean`, `module:Blanc/StaticPrecompileMessage.lean`, `declaration:MessageExecution.processMessage_clean_rawPost`, `declaration:MessageExecution.processMessage_entry_facts`, `declaration:MessageExecution.processMessage_entry_stack`, `declaration:MessageExecution.processMessage_entry_memory`, `declaration:Blanc.stor_of_processMessage_staticPrecomp`, `declaration:Blanc.gasSha25664_le_of_processMessage_clean`, `declaration:Blanc.output_of_processMessage_sha256_64_clean`, `declaration:Blanc.frame_of_processMessage_sha256_64_clean`
 - Review: `proof-infrastructure` on `2026-09-01`
 
+## `touch-preserving-message-settlement`
+
+- Status: `active`
+- Triggers: `goal-shape:touch-preserving-message-settlement`
+- Preferred path: For the exact successful message equation retaining `recordTouch`, use `processMessage_ok_touch_of_exec`. For the exact successful CREATE equation retaining `setCode`, use `processCreateMessage_ok_touch_of_exec_and_charge`; supply the successful code charge on the touched raw result. Both live in `Blanc/DeploymentTouch.lean`.
+- Boundary: This is syntactic discovery of direct success equations, not a check of address, rules or output correspondence. The theorems retain the actual successful post-transfer environment, none-code-address entry, successful total execution and raw.error = none; CREATE additionally retains actual code-charge success on the touched raw machine. No fork, value, state-gas, sweep-disable or endpoint-state premise is added. These bridges do not prove transaction-level touched-account sweeping, original constructor execution, historical inclusion or an allowance-zero seed.
+- Owner module: [Blanc/DeploymentTouch.lean](../Blanc/DeploymentTouch.lean)
+- Canonical example: [Blanc/DeploymentTouch.lean](../Blanc/DeploymentTouch.lean) — `processCreateMessage_ok_touch_of_exec_and_charge`
+- Registered symbols: `module:Blanc/DeploymentTouch.lean`, `declaration:processMessage_ok_touch_of_exec`, `declaration:processCreateMessage_ok_touch_of_exec_and_charge`
+- Review: `proof-infrastructure` on `2026-10-23`
+
 ## `raw-sstore-free-compiled-path`
 
 - Status: `active`
