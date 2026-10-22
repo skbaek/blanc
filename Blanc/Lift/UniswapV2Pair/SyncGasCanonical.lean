@@ -86,7 +86,7 @@ private theorem sync_dispatch_cut {sevm : Sevm} {b post : Devm} {G : Nat}
     refine rx_push (w := 0) rfl stack_room ?_
     refine rx_calldataload stack_room ?_
     refine rx_push (w := 224) rfl stack_room ?_
-    refine rx_shr (v := 0xfff6cae9) selector stack_room ?_
+    refine rx_shr (h_shifts := fork.rules_shifts) (v := 0xfff6cae9) selector stack_room ?_
     refine rx_dup1 stack_room ?_
     refine rx_push (w := 0x6a627842) rfl stack_room ?_
     refine rx_gt (v := 0) (by decide) stack_room ?_

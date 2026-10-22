@@ -48,13 +48,14 @@ structure SkimQueryEnv (sevm : Sevm) (b : Devm) (M : Mem) (p t : B256) (S : List
 theorem skimDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
     (body : SFunc.RunExact cert.prog sevm
-      (St b [0xbc25cf77] getterInitMemory G) t_059f_c80 o) :
+      (St b [0xbc25cf77] getterInitMemory G) t_059f_c80 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] getterInitMemory (G + 123)) t_001a_c0 o := by
   unfold t_001a_c0
   apply rx_push (w := 0) rfl (by decide)
   apply rx_calldataload (by decide)
   apply rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_shr selector (by decide)
+  apply rx_shr (h_shifts := h_shifts) selector (by decide)
   apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
@@ -793,11 +794,12 @@ theorem skimPc0_exact {sevm : Sevm} {b : Devm} {G : Nat} {post : Devm}
     (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (body : SFunc.RunExact cert.prog sevm
       (St b [skimToWord sevm, 0x0257, 0xbc25cf77] getterInitMemory G) t_18de_c34
-      (.halted post)) :
+      (.halted post))
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty ((G + 63 + 123) + 63)) t_0000_c0
       (.halted post) :=
   getterString_guards_exact value size
-    (skimDispatch_exact selector (skimWrapper_exact abi body))
+    (skimDispatch_exact (h_shifts := h_shifts) selector (skimWrapper_exact abi body))
 
 /-- Every positive window fits in the allocation it opens over an aligned
 image. Generic; the two halves of `memExtSize_of_le` /
@@ -1237,7 +1239,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
       (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
         [0x0257, 0xbc25cf77]).length ≤ 1000)
     qenv0 tenv0 cover0 secondHalfRun
-  have pc0Run := skimPc0_exact value size selector abi firstHalfRun
+  have pc0Run := skimPc0_exact (h_shifts := fork.rules_shifts) value size selector abi firstHalfRun
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
     ⟨t_0000_c0, rfl, pc0Run⟩
   exact ⟨run, fun inj apart =>

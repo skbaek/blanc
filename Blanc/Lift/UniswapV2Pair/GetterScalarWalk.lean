@@ -14,7 +14,7 @@ theorem getterScalar_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
       (getterWordPost (s.after sevm b) [s.tag, s.selector]
         getterInitMemory (s.value sevm b) G) := by
   refine ⟨t_0000_c0, rfl, ?_⟩
-  exact getterScalar_dispatch_exact s value size selector
+  exact getterScalar_dispatch_exact (h_shifts := fork.rules_shifts) s value size selector
     (getterScalar_entry_exact s fork rfl getterInitMemory_ptr)
 
 theorem getterScalar_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}

@@ -40,7 +40,7 @@ theorem singleMapping_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   have body := singleMapping_entry_exact (G := G) (sel := s.selector) s fork getterInitMemory_ptr guard cost
   rw [← s.storage_entryTree, ← s.storage_selector] at body
   rw [← s.storage_selector]
-  exact getterStorage_dispatch_exact s.storageGetter value size sel body
+  exact getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) s.storageGetter value size sel body
 
 theorem singleMapping_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (s : SingleMappingGetter) (fork : CoveredFork sevm.benvStat.fork)
@@ -167,7 +167,7 @@ theorem allowance_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   refine ⟨t_0000_c0, rfl, ?_⟩
   have gas : G + c + 493 = (G + c + 286) + 207 := by omega
   rw [gas]
-  exact getterStorage_dispatch_exact .allowance value size selector
+  exact getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) .allowance value size selector
     (allowance_entry_exact fork getterInitMemory_ptr guard cost)
 
 theorem allowance_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}

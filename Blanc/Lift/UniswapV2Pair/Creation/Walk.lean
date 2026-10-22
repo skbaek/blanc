@@ -34,11 +34,12 @@ variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G
   {f : SFunc} {o : Outcome}
 
 /-- `3 + 2322 + 3 + 3 + 3 + 3 + sstoreCost sevm (w3 sevm b) 5 sevm.caller.toB256 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (w2 sevm b) 5 + 3 + 3 + 2 + sstoreCost sevm (w1 sevm b) 3 (domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget) + 3 + 60 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 48 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 24 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 2 + 1 + 10 + 3 + 3 + 3 + 2 + sstoreCost sevm b 12 1 + 3 + 3 + 12 + 3 + 3ID`. -/
-private theorem rx_chainid (hroom : S.length < 1024)
+private theorem rx_chainid (h_chain : sevm.benvStat.rules.op.chainId = true)
+    (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm (St b (sevm.benvStat.chainId.toB256 :: S) M G) f o) :
     SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.reg .chainid) f) o :=
   .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
-    (by rintro ⟨⟩) rfl rfl hroom) k
+    (by rintro ⟨⟩) (Rinst.runCore_chainid_of_chainId h_chain) rfl hroom) k
 
 /-- `ADDRESS`. -/
 private theorem rx_address (hroom : S.length < 1024)
@@ -325,7 +326,7 @@ theorem ctor_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
   refine rx_pop ?_
   refine rx_push (w := (0x40 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_mload (c := 3) (v := (0x80 : B256)) (charge_covered m1_size (by decide) (by decide)) (by decide +kernel) (read_covered m1_size (by decide) (by decide)) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_chainid (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_chainid hfork.rules_chainId (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_swap (n := 0) (S' := [(0x80 : B256), sevm.benvStat.chainId.toB256]) rfl ?_
   refine rx_dup (n := 0) rfl (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0x52 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
@@ -364,7 +365,7 @@ theorem ctor_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
   · rw [St.extCost_eq m3_size]; decide
   refine rx_push (w := (0x2ab734b9bbb0b8102b19 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0xb1 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_shl (v := nameWord) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := nameWord) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0x20 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_swap (n := 3) (S' := [(0x80 : B256), nameWord, typeHash, (0x40 : B256), (0x20 : B256), (0x80 : B256), sevm.benvStat.chainId.toB256]) rfl ?_
   refine rx_dup (n := 4) rfl (Nat.le_of_ble_eq_true rfl) ?_
@@ -385,7 +386,7 @@ theorem ctor_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
   · rw [St.extCost_eq m6_size]; decide
   refine rx_push (w := (0x31 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0xf8 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_shl (v := versionWord) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := versionWord) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_swap (n := 0) (S' := [(0xc0 : B256), versionWord, typeHash, (0x40 : B256), (0x20 : B256), (0x80 : B256), sevm.benvStat.chainId.toB256]) rfl ?_
   refine rx_dup (n := 4) rfl (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_add' (v := (0xe0 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
@@ -470,7 +471,7 @@ theorem ctor_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
   refine rx_push (w := (0x1 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0x1 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0xa0 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_shl (v := (0x10000000000000000000000000000000000000000 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_shl (h_shifts := hfork.rules_shifts) (v := (0x10000000000000000000000000000000000000000 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_sub' (v := addressBits) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_not (v := (~~~ addressBits)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_and (v := 0) (b256_and_zero _) (Nat.le_of_ble_eq_true rfl) ?_

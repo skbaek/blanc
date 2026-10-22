@@ -209,7 +209,8 @@ theorem totalSupply_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outco
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x18160ddd)
     (body : SFunc.RunExact cert.prog sevm
-      (St b [0x18160ddd] getterInitMemory G) t_0393_c98 o) :
+      (St b [0x18160ddd] getterInitMemory G) t_0393_c98 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 209)) t_0000_c0 o := by
   unfold t_0000_c0
   refine rx_push (w := 128) rfl (by decide) ?_
@@ -235,7 +236,7 @@ theorem totalSupply_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outco
   refine rx_push (w := 0) rfl (by decide) ?_
   refine rx_calldataload (by decide) ?_
   refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (v := 0x18160ddd) selector (by decide) ?_
+  refine rx_shr (h_shifts := h_shifts) (v := 0x18160ddd) selector (by decide) ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -271,7 +272,7 @@ theorem totalSupply_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
       (getterWordPost (afterSload sevm b 0) [0x039b, 0x18160ddd]
         getterInitMemory (b.getStorVal sevm.currentTarget 0) G) := by
   refine ⟨t_0000_c0, rfl, ?_⟩
-  exact totalSupply_dispatch_exact value size selector
+  exact totalSupply_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (totalSupply_entry_exact fork cost getterInitMemory_ptr)
 
 /-- Exact liveness on the certified deployed bytes, on every covered fork and both static settings. -/

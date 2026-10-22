@@ -1494,13 +1494,14 @@ theorem syncPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
 /-- The actual sync selector dispatcher costs166 gas after the public guards. -/
 theorem syncSelector_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] M G) t_067b_c78 o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] M G) t_067b_c78 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] M (G + 166)) t_001a_c0 o := by
   unfold t_001a_c0
   apply rx_push (w := 0) rfl (by decide)
   apply rx_calldataload (by decide)
   apply rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_shr (v := 0xfff6cae9) selector (by decide)
+  apply rx_shr (h_shifts := h_shifts) (v := 0xfff6cae9) selector (by decide)
   apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide)
   apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
@@ -1532,9 +1533,10 @@ existing scratch initialization and no imposed upper calldata-size premise. -/
 theorem syncDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] getterInitMemory G) t_067b_c78 o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] getterInitMemory G) t_067b_c78 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 229)) t_0000_c0 o := by
-  exact getterString_guards_exact value size (syncSelector_exact selector body)
+  exact getterString_guards_exact value size (syncSelector_exact (h_shifts := h_shifts) selector body)
 
 /-- The wrapper adds15 gas before the callee and one gas for the final
 JUMPDEST; STOP preserves all returned raw fields except that last gas charge. -/
@@ -1640,7 +1642,7 @@ theorem syncPc0_exact {sevm : Sevm} {b d0 d1 : Devm}
   dsimp only
   intro headerCharge packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9 unlockSentry
   refine ⟨t_0000_c0, rfl, ?_⟩
-  apply syncDispatch_exact value size selector
+  apply syncDispatch_exact (h_shifts := fork.rules_shifts) value size selector
   apply syncEntry_exact (by decide)
   exact syncCallee_exact fork getterInitMemory_ptr (by decide) static unlocked sentry nonzero0
     call0 success0 returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1 bound0 bound1

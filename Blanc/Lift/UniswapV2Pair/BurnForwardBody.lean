@@ -628,7 +628,7 @@ theorem burnPc0_exact {K : WriterKey → Prop} {st : State}
     (amount1 := (burnBodyWords sevm b env.d0 env.d1 env.dF).amount1) memE lower2 width covered (by decide)
   have abi := burnAbi_exact guard callee tail
   rw [show env.initial.gas + 63 = (env.initial.gas + 20) + 43 by omega] at abi
-  exact burnDispatch_exact value size selector abi
+  exact burnDispatch_exact (h_shifts := fork.rules_shifts) value size selector abi
 
 /-- **Burn forward schedule from pc zero.** From the nonpayable, size, ABI-length and selector
 guards, the entry storage representing `current.state` with the Pair's LP row tracked, the

@@ -8,7 +8,8 @@ open Jaune
 theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (s : ScalarGetter) (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = s.selector)
-    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + s.dispatchGas)) t_0000_c0 o := by
   cases s with
   | constant s =>
@@ -20,7 +21,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x313ce567) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x313ce567) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -53,7 +54,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0xba9a7a56) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0xba9a7a56) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -81,7 +82,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x30adf81f) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x30adf81f) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -114,7 +115,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x3644e515) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x3644e515) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -142,7 +143,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x5909c0d5) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x5909c0d5) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -174,7 +175,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x5a3d5493) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x5a3d5493) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -208,7 +209,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0x7464fc3d) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0x7464fc3d) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -243,7 +244,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0xc45a0155) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0xc45a0155) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -275,7 +276,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0xdfe1681) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0xdfe1681) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -306,7 +307,7 @@ theorem getterScalar_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
       refine rx_push (w := 0) rfl (by decide) ?_
       refine rx_calldataload (by decide) ?_
       refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-      refine rx_shr (v := 0xd21220a7) selector (by decide) ?_
+      refine rx_shr (h_shifts := h_shifts) (v := 0xd21220a7) selector (by decide) ?_
       refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
       refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_

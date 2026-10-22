@@ -29,25 +29,29 @@ private theorem chargeGas_mono {cost : Nat} {e e' : Evm} {pr pr' : Unit → Prec
     exact h
   · cases h
 
-/-- More gas never changes a successful precompile result; only the calldata and the `MODEXP`
-pricing are read. -/
+/-- More gas never changes a successful precompile result under the same rules; only the calldata
+and the rules' prices are read. -/
 theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
-    (rules : e'.sta.benvStat.rules.modexp = e.sta.benvStat.rules.modexp)
+    (rules : e'.sta.benvStat.rules = e.sta.benvStat.rules)
     (gas : e.dyna.gasLeft ≤ e'.dyna.gasLeft) {adr : Adr} {c : Nat} {o : Bytes}
     (h : precompileRun e adr = .ok c o) : precompileRun e' adr = .ok c o := by
   unfold precompileRun at h ⊢
   split at h
   · unfold executeEcrecover at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeSha256 at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeRipemd160 at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeId at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeModexp at h ⊢
     rw [data, rules]
@@ -58,15 +62,19 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeEcadd at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeEcmul at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executePairingCheck at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · unfold executeBlake2F at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -74,6 +82,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executePointEval at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -81,6 +90,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12G1Add at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -88,6 +98,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12G1Msm at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -95,6 +106,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12G2Add at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -102,6 +114,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12G2Msm at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -109,6 +122,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12Pairing at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -116,6 +130,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12MapFpToG1 at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -123,6 +138,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeBls12MapFp2ToG2 at h ⊢
     rw [data]
+    try rw [rules]
     dsimp only at h ⊢
     split at h
     · cases h
@@ -130,6 +146,7 @@ theorem precompileRun_gas_mono {e e' : Evm} (data : e'.sta.data = e.sta.data)
       exact chargeGas_mono gas rfl h
   · unfold executeP256Verify at h ⊢
     rw [data]
+    try rw [rules]
     exact chargeGas_mono gas rfl h
   · cases h
 
@@ -142,10 +159,10 @@ theorem precompileRun_ok_mem {e : Evm} {adr : Adr} {c : Nat} {o : Bytes}
     | (unfold precompileRunAddresses
        repeat (first | exact List.Mem.head _ | apply List.Mem.tail))
 
-/-- Two successful precompile runs on the same calldata and `MODEXP` pricing return the same
-output, whatever their gas. -/
+/-- Two successful precompile runs on the same calldata and rules return the same output,
+whatever their gas. -/
 theorem precompileRun_ok_output_unique {e e' : Evm} (data : e'.sta.data = e.sta.data)
-    (rules : e'.sta.benvStat.rules.modexp = e.sta.benvStat.rules.modexp) {adr : Adr}
+    (rules : e'.sta.benvStat.rules = e.sta.benvStat.rules) {adr : Adr}
     {c c' : Nat} {o o' : Bytes} (h : precompileRun e adr = .ok c o)
     (h' : precompileRun e' adr = .ok c' o') : o = o' := by
   let big : Evm := { e with dyna := e.dyna.withGasLeft (max e.dyna.gasLeft e'.dyna.gasLeft) }
@@ -156,30 +173,31 @@ theorem precompileRun_ok_output_unique {e e' : Evm} (data : e'.sta.data = e.sta.
   rw [up] at up'
   injection up'
 
-/-- The successful answer of the precompile at `adr` to calldata `data` under `MODEXP` pricing
+/-- The successful answer of the precompile at `adr` to calldata `data` under the fork rules
 `rules`, if it has one (unique by `precompileRun_ok_output_unique`). -/
-noncomputable def precompileAnswer (data : Bytes) (rules : ModexpRules) (adr : Adr) :
+noncomputable def precompileAnswer (data : Bytes) (rules : ForkRules) (adr : Adr) :
     Option Bytes :=
   open Classical in
   if h : ∃ o : Bytes, ∃ (e : Evm) (c : Nat), e.sta.data = data ∧
-      e.sta.benvStat.rules.modexp = rules ∧ precompileRun e adr = .ok c o
+      e.sta.benvStat.rules = rules ∧ precompileRun e adr = .ok c o
   then some (Classical.choose h) else none
 
 theorem precompileAnswer_of_ok {e : Evm} {adr : Adr} {c : Nat} {o : Bytes}
     (h : precompileRun e adr = .ok c o) :
-    precompileAnswer e.sta.data e.sta.benvStat.rules.modexp adr = some o := by
+    precompileAnswer e.sta.data e.sta.benvStat.rules adr = some o := by
   have ex : ∃ o : Bytes, ∃ (e' : Evm) (c' : Nat), e'.sta.data = e.sta.data ∧
-      e'.sta.benvStat.rules.modexp = e.sta.benvStat.rules.modexp ∧
+      e'.sta.benvStat.rules = e.sta.benvStat.rules ∧
       precompileRun e' adr = .ok c' o := ⟨o, e, c, rfl, rfl, h⟩
   unfold precompileAnswer
   rw [dite_eq_left_of_eq_true (eq_true ex)]
   obtain ⟨_, _, data, rules, chosen⟩ := Classical.choose_spec ex
   rw [precompileRun_ok_output_unique data rules h chosen]
 
-/-- A settled call frame whose result carries no error is its raw execution's success. -/
+/-- A settled call frame whose result carries no error is its raw execution's success, with the
+touch of the message's current target recorded. -/
 theorem callFrame_settle_ok {msg : Msg} {raw : Execution} {child : Devm}
     (settled : (Frame.ofCall msg).settle raw = .ok child) (clean : child.error.isSome = false) :
-    raw = .ok child := by
+    ∃ body, raw = .ok body ∧ child = body.recordTouch msg.benv.stat.rules true msg.currentTarget := by
   unfold Frame.settle Frame.settleMsg processMessage.settle at settled
   dsimp only [Frame.ofCall] at settled
   simp only [Bool.false_eq_true, ite_false] at settled
@@ -206,7 +224,7 @@ theorem callFrame_settle_ok {msg : Msg} {raw : Execution} {child : Devm}
           | unfold executeCode.handleErrorAmsterdam at handled
         split at handled
         · injection handled with same
-          rw [same]
+          exact ⟨_, by rw [same], rfl⟩
         all_goals
           cases handled
           try exact Bool.noConfusion clean
@@ -217,14 +235,16 @@ frame's raw execution. -/
 theorem ProcessMessage.ok_output {msg : Msg} {xl : Xlot} {child : Devm}
     (process : ProcessMessage msg xl (.ok child)) (clean : child.error.isSome = false) :
     (xl = .none ∧ ∃ adr ∈ precompileRunAddresses,
-      precompileAnswer msg.data msg.benv.stat.rules.modexp adr = some child.output) ∨
-    ∃ evm raw, xl = .some (evm, raw) ∧ raw = .ok child := by
+      precompileAnswer msg.data msg.benv.stat.rules adr = some child.output) ∨
+    ∃ evm raw, xl = .some (evm, raw) ∧ ∃ body, raw = .ok body ∧
+      child = body.recordTouch msg.benv.stat.rules true msg.currentTarget := by
   unfold ProcessMessage RunFrame at process
   cases entered : (Frame.ofCall msg).enter with
   | run evm =>
     rw [entered] at process
     obtain ⟨raw, slot, settled⟩ := process
-    exact Or.inr ⟨evm, raw, slot, callFrame_settle_ok settled.symm clean⟩
+    obtain ⟨body, rawEq, childEq⟩ := callFrame_settle_ok settled.symm clean
+    exact Or.inr ⟨evm, raw, slot, body, rawEq, childEq⟩
   | done result =>
     rw [entered] at process
     obtain ⟨slot, resultEq⟩ := process
@@ -241,8 +261,9 @@ theorem ProcessMessage.ok_output {msg : Msg} {xl : Xlot} {child : Devm}
       · cases entered
       · rename_i raw entry
         cases entered
-        have settled := callFrame_settle_ok resultEq.symm clean
-        subst settled
+        obtain ⟨body, rawEq, childEq⟩ := callFrame_settle_ok resultEq.symm clean
+        subst rawEq childEq
+        rw [Devm.recordTouch_output]
         have stat := benvAfterTransfer_stat transfer
         unfold executeCode.enter at entry
         split at entry
@@ -258,7 +279,7 @@ theorem ProcessMessage.ok_output {msg : Msg} {xl : Xlot} {child : Devm}
               refine ⟨adr, precompileRun_ok_mem run, ?_⟩
               have answer := precompileAnswer_of_ok run
               rw [← childEq]
-              change precompileAnswer msg.data benv.stat.rules.modexp adr = some o at answer
+              change precompileAnswer msg.data benv.stat.rules adr = some o at answer
               rw [stat] at answer
               exact answer
           · cases entry

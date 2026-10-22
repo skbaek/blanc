@@ -680,7 +680,8 @@ def StringGetter.dispatchGas : StringGetter → Nat
 theorem getterString_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (s : StringGetter) (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = s.selector)
-    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + s.dispatchGas)) t_0000_c0 o := by
   cases s with
   | name =>
@@ -690,7 +691,7 @@ theorem getterString_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0x06fdde03) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0x06fdde03) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -722,7 +723,7 @@ theorem getterString_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0x95d89b41) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0x95d89b41) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -750,13 +751,14 @@ theorem getterString_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
 
 theorem getterString_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
     (s : StringGetter) (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
-    (selector : Blanc.Sevm.selector sevm = s.selector) :
+    (selector : Blanc.Sevm.selector sevm = s.selector)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty (G + 476 + s.dispatchGas)) post ∧
       post.output = encodeWords [32, s.length, s.word] ∧
       (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧ post.gasLeft = G := by
   obtain ⟨post, entry, out, stor, logs, gas⟩ :=
     getterString_entry_exact (sevm := sevm) (b := b) (sel := s.selector) (G := G) s getterInitMemory_ptr
-  exact ⟨post, ⟨t_0000_c0, rfl, getterString_dispatch_exact s value size selector entry⟩,
+  exact ⟨post, ⟨t_0000_c0, rfl, getterString_dispatch_exact (h_shifts := h_shifts) s value size selector entry⟩,
     out, stor, logs, gas⟩
 
 
@@ -919,7 +921,7 @@ theorem getterString_bytecode_live {sevm : Sevm} {b : Devm} {G : Nat} (st : Stat
     ∃ post, Nonempty (Exec 0 sevm (St b [] Mem.empty (G + 476 + s.dispatchGas)) (.ok post)) ∧
       post.gasLeft = G ∧ some post.output = getterResult st s.entry ∧
       (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
-  obtain ⟨post, run, out, stor, logs, gas⟩ := getterString_pc0_exact s value size selector
+  obtain ⟨post, run, out, stor, logs, gas⟩ := getterString_pc0_exact (h_shifts := fork.rules_shifts) s value size selector
   exact ⟨post, lift_exact cert_check jumps_ok codeEq fork run, gas,
     by rw [out, s.result st], stor, logs⟩
 

@@ -148,10 +148,11 @@ theorem proxy_spawn_exists {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pr
         omega
       · exact Exec.spawn_of_mem_rawFrameDescendants run (.refl _) _ hmem
 
-/-- A clean successful raw run of a call frame settles to itself. -/
+/-- A clean successful raw run of a call frame settles to itself, with the touch of its current
+target recorded. -/
 theorem Frame.settle_ok_clean {f : Frame} {x : Devm} (hf : f.isCreate = false)
     (hsg : f.inner.benv.stat.rules.stateGas = none) (hx : x.error = none) :
-    f.settle (.ok x) = .ok x := by
+    f.settle (.ok x) = .ok (x.recordTouch f.inner.benv.stat.rules true f.inner.currentTarget) := by
   unfold Frame.settle Frame.settleMsg
   rw [hsg, hf]
   simp only [executeCode.handleErrorWith, executeCode.handleError, processMessage.settle, bind,
@@ -251,7 +252,7 @@ theorem proxy_forwards_ok {sevm : Sevm} {pre : Devm} {out : Execution} (run : Ex
       have hcommit : Frame.settlementCommits f (.ok xr) = true := by
         unfold Frame.settlementCommits
         rw [Frame.settle_ok_clean hcreate hsg hxe]
-        simp only [hxe, Option.isNone_none]
+        simp only [Devm.recordTouch_error, hxe, Option.isNone_none]
       refine ⟨Exec.Frame.ofRun child (Frame.raw_commits_of_settlementCommits hcommit), ?_, ?_, ?_⟩
       · apply Exec.Deriv.ParentPrefix.childFrames_subset chain
         simp only [Exec.childFrames, hcommit, ↓reduceDIte, List.mem_append, List.mem_singleton, true_or]

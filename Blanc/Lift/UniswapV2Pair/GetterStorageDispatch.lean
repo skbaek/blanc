@@ -28,7 +28,8 @@ def StorageGetter.dispatchGas : StorageGetter → Nat
 theorem getterStorage_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (s : StorageGetter) (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = s.selector)
-    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + s.dispatchGas)) t_0000_c0 o := by
   cases s with
   | balanceOf =>
@@ -38,7 +39,7 @@ theorem getterStorage_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0x70a08231) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0x70a08231) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -69,7 +70,7 @@ theorem getterStorage_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0x7ecebe00) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0x7ecebe00) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -97,7 +98,7 @@ theorem getterStorage_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0xdd62ed3e) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0xdd62ed3e) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -128,7 +129,7 @@ theorem getterStorage_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
     refine rx_push (w := 0) rfl (by decide) ?_
     refine rx_calldataload (by decide) ?_
     refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (v := 0x0902f1ac) selector (by decide) ?_
+    refine rx_shr (h_shifts := h_shifts) (v := 0x0902f1ac) selector (by decide) ?_
     refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
     refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_

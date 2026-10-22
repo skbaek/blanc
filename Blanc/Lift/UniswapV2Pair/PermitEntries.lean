@@ -766,14 +766,15 @@ theorem permitEntry_exact {sevm : Sevm} {b d : Devm} {G callGas : Nat} {sel : B2
 theorem permit_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (body : SFunc.RunExact cert.prog sevm (St b [0xd505accf] getterInitMemory G) t_05e2_c76 o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [0xd505accf] getterInitMemory G) t_05e2_c76 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 185)) t_0000_c0 o := by
   refine getterString_guards_exact (G := G + 122) value size ?_
   unfold t_001a_c0
   refine rx_push (w := 0) rfl (by decide) ?_
   refine rx_calldataload (by decide) ?_
   refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (v := 0xd505accf) selector (by decide) ?_
+  refine rx_shr (h_shifts := h_shifts) (v := 0xd505accf) selector (by decide) ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -819,7 +820,7 @@ theorem permit_pc0_exact {sevm : Sevm} {b d : Devm} {G callGas : Nat}
   refine ⟨t_0000_c0, rfl, ?_⟩
   rw [show callGas + permitNonceStoreCharge sevm b + permitNonceCharge sevm b + 1137 =
     (callGas + permitNonceStoreCharge sevm b + permitNonceCharge sevm b + 952) + 185 by omega]
-  exact permit_dispatch_exact value size selector
+  exact permit_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (permitEntry_exact fork guard nonstatic timely sentry3 call success returnedGas recovered
       signer sentry)
 

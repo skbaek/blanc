@@ -160,7 +160,9 @@ theorem SlotsOkF.nextSome {pc : Nat} {sevm : Sevm} {pre inter : Devm} {n : Ninst
     SlotsOkF P U a₀ pc sevm pre out := by
   cases n with
   | reg r => cases (Step.run_ofExecution.mp step).1
-  | push xs length => cases (Step.run_ofExecution.mp step).1
+  | push xs length =>
+      rw [Ninst.StepRun, Ninst.step_push] at step
+      split at step <;> cases (Step.run_ofExecution.mp step).1
   | dupn imm => cases (Step.run_ofExecution.mp step).1
   | swapn imm => cases (Step.run_ofExecution.mp step).1
   | exchange imm => cases (Step.run_ofExecution.mp step).1

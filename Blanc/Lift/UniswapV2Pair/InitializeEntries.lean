@@ -201,14 +201,15 @@ theorem initialize_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
 theorem initialize_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x485cc955)
-    (body : SFunc.RunExact cert.prog sevm (St b [0x485cc955] getterInitMemory G) t_041e_c90 o) :
+    (body : SFunc.RunExact cert.prog sevm (St b [0x485cc955] getterInitMemory G) t_041e_c90 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 186)) t_0000_c0 o := by
   refine getterString_guards_exact (G := G + 123) value size ?_
   unfold t_001a_c0
   refine rx_push (w := 0) rfl (by decide) ?_
   refine rx_calldataload (by decide) ?_
   refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (v := 0x485cc955) selector (by decide) ?_
+  refine rx_shr (h_shifts := h_shifts) (v := 0x485cc955) selector (by decide) ?_
   refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
@@ -289,7 +290,7 @@ theorem initialize_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
   refine ⟨t_0000_c0, rfl, ?_⟩
   rw [show G + initializeStorageCharge sevm b + 377 =
     (G + initializeStorageCharge sevm b + 191) + 186 from by omega]
-  exact initialize_dispatch_exact value size selector
+  exact initialize_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (initialize_entry_exact fork guard authorized sentry0 sentry1 nonstatic)
 
 theorem initialize_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}

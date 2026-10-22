@@ -17,7 +17,7 @@ theorem reserves_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   refine ⟨t_0000_c0, rfl, ?_⟩
   have body := reserves_entry_exact (G := G) (sel := 0x0902f1ac) fork cost getterInitMemory_ptr
   simpa only [StorageGetter.dispatchGas, StorageGetter.selector, StorageGetter.entryTree,
-    Nat.add_assoc, Nat.reduceAdd] using getterStorage_dispatch_exact .getReserves value size selector body
+    Nat.add_assoc, Nat.reduceAdd] using getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) .getReserves value size selector body
 
 theorem reserves_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (fork : CoveredFork sevm.benvStat.fork)

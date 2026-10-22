@@ -14,7 +14,7 @@ noncomputable def mintFeeReplyKeys (root : Exec.Deriv) : List WriterKey :=
     | .ok d => some (mintReplyRow d.output)
     | .error _ => none) ++
   precompileRunAddresses.filterMap (fun adr =>
-    (precompileAnswer (ExternalOperation.encode .feeTo) root.sevm.benvStat.rules.modexp
+    (precompileAnswer (ExternalOperation.encode .feeTo) root.sevm.benvStat.rules
       adr).map mintReplyRow)
 
 noncomputable def mintTraceKeys (root : Exec.Deriv) : List WriterKey :=
@@ -64,22 +64,23 @@ theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S
     exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
   · rw [returned]
     rcases Blanc.Lift.ProcessMessage.ok_output process clean with
-      ⟨_, adr, listed, answer⟩ | ⟨evm, raw, slot, rawEq⟩
+      ⟨_, adr, listed, answer⟩ | ⟨evm, raw, slot, body, rawEq, childEq⟩
     · refine List.mem_append_right _ (List.mem_filterMap.mpr ⟨adr, listed, ?_⟩)
       have request :
           ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c).memory.read
           (128 : B256).toNat (4 : B256).toNat).1 = ExternalOperation.encode .feeTo :=
         feeRequestMemory_read wf
       change precompileAnswer ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M)
-        c).memory.read (128 : B256).toNat (4 : B256).toNat).1 root.sevm.benvStat.rules.modexp adr =
+        c).memory.read (128 : B256).toNat (4 : B256).toNat).1 root.sevm.benvStat.rules adr =
         some child.output at answer
       rw [request] at answer
       rw [answer]
       rfl
     · subst slot
-      subst rawEq
+      subst rawEq childEq
+      rw [Devm.recordTouch_output]
       obtain ⟨childRun, roots⟩ := inRoots
       refine List.mem_append_left _ (List.mem_filterMap.mpr
-        ⟨⟨evm.pc, evm.sta, evm.dyna, .ok child, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
+        ⟨⟨evm.pc, evm.sta, evm.dyna, .ok body, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
 
 end Blanc.Lift.UniswapV2Pair

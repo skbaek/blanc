@@ -20,7 +20,8 @@ theorem swapDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (body : SFunc.RunExact cert.prog sevm
-      (St b [0x022c0d9f] getterInitMemory G) t_01be_c99 o) :
+      (St b [0x022c0d9f] getterInitMemory G) t_01be_c99 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 166)) t_0000_c0 o := by
   rw [show G + 166 = (G + 103) + 63 by omega]
   refine getterString_guards_exact value size ?_
@@ -28,7 +29,7 @@ theorem swapDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
   apply rx_push (w := 0) rfl (by decide)
   apply rx_calldataload (by decide)
   apply rx_push (w := 224) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_shr (v := 0x022c0d9f) selector (by decide)
+  apply rx_shr (h_shifts := h_shifts) (v := 0x022c0d9f) selector (by decide)
   apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
   apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons,List.length_nil]; decide)
   apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
@@ -142,10 +143,11 @@ theorem swapPc0_exact {sevm : Sevm} {b x : Devm} {R : List B256} {M : Mem} {G g 
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm)
     (body : SFunc.RunExact cert.prog sevm (St b (swapBodyStack sevm) getterInitMemory G)
-      t_0683_c54 (.returned (St x R M (g + 1)))) :
+      t_0683_c54 (.returned (St x R M (g + 1))))
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 279 + 166)) t_0000_c0
       (.halted (St x R M g)) := by
-  refine swapDispatch_exact value size selector (swapAbi_exact guards body ?_)
+  refine swapDispatch_exact (h_shifts := h_shifts) value size selector (swapAbi_exact guards body ?_)
   unfold t_0257_c99
   exact rx_dest rx_stop
 
@@ -226,7 +228,7 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
   have body := swapBody_exact fork rep unlocked nonstatic output liquidity0 liquidity1
     to0 to1 guards back front
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
-    ⟨t_0000_c0, rfl, swapPc0_exact value size selector guards body⟩
+    ⟨t_0000_c0, rfl, swapPc0_exact (h_shifts := fork.rules_shifts) value size selector guards body⟩
   exact ⟨run, fun inj apart =>
     swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
       selector run inj apart⟩

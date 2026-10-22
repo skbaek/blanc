@@ -52,7 +52,7 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   have m3 : PtrMem 128 256 M3 := m2.write 164 19 (Or.inr (by decide))
   have m4 : PtrMem 128 256 M4 := m3.write 196 overflowText (Or.inr (by decide))
   unfold overflowFailureBody
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 87) rfl rfl (by change S.length + 0 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 87) rfl rfl (by change S.length + 0 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (64 :: S) M (G + 87)) _ _
   refine .next (Ninst.runCompiled_dup (G := G + 84) rfl rfl (by change S.length + 1 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (64 :: 64 :: S) M (G + 84)) _ _
@@ -60,7 +60,7 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   · change 3 + (St b (64 :: 64 :: S) M (G + 84)).extCost [(64, 32)] = 3
     rw [St.extCost_eq mem.size]; rfl
   change Func.RunCompiledTo [] sevm (St b (128 :: 64 :: S) M (G + 81)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 78) rfl rfl (by change S.length + 2 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 78) rfl rfl (by change S.length + 2 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (overflowSelector :: 128 :: 64 :: S) M (G + 78)) _ _
   refine .next (Ninst.runCompiled_dup (G := G + 75) rfl rfl (by change S.length + 3 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (128 :: overflowSelector :: 128 :: 64 :: S) M (G + 75)) _ _
@@ -68,9 +68,9 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   · change (St b (128 :: overflowSelector :: 128 :: 64 :: S) M (G + 75)).extCost [(128, 32)] = 0
     rw [St.extCost_eq mem.size]; rfl
   change Func.RunCompiledTo [] sevm (St b (128 :: 64 :: S) M1 (G + 72)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 69) rfl rfl (by change S.length + 2 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 69) rfl rfl (by change S.length + 2 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (32 :: 128 :: 64 :: S) M1 (G + 69)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 66) rfl rfl (by change S.length + 3 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 66) rfl rfl (by change S.length + 3 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (4 :: 32 :: 128 :: 64 :: S) M1 (G + 66)) _ _
   refine .next (Ninst.runCompiled_dup (G := G + 63) rfl rfl (by change S.length + 4 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (128 :: 4 :: 32 :: 128 :: 64 :: S) M1 (G + 63)) _ _
@@ -80,9 +80,9 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   · change (St b (132 :: 32 :: 128 :: 64 :: S) M1 (G + 60)).extCost [(132, 32)] = 0
     rw [St.extCost_eq m1.size]; rfl
   change Func.RunCompiledTo [] sevm (St b (128 :: 64 :: S) M2 (G + 57)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 54) rfl rfl (by change S.length + 2 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 54) rfl rfl (by change S.length + 2 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (19 :: 128 :: 64 :: S) M2 (G + 54)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 51) rfl rfl (by change S.length + 3 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 51) rfl rfl (by change S.length + 3 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (36 :: 19 :: 128 :: 64 :: S) M2 (G + 51)) _ _
   refine .next (Ninst.runCompiled_dup (G := G + 48) rfl rfl (by change S.length + 4 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (128 :: 36 :: 19 :: 128 :: 64 :: S) M2 (G + 48)) _ _
@@ -92,9 +92,9 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   · change (St b (164 :: 19 :: 128 :: 64 :: S) M2 (G + 45)).extCost [(164, 32)] = 0
     rw [St.extCost_eq m2.size]; rfl
   change Func.RunCompiledTo [] sevm (St b (128 :: 64 :: S) M3 (G + 42)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 39) rfl rfl (by change S.length + 2 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 39) rfl rfl (by change S.length + 2 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (overflowText :: 128 :: 64 :: S) M3 (G + 39)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 36) rfl rfl (by change S.length + 3 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 36) rfl rfl (by change S.length + 3 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (68 :: overflowText :: 128 :: 64 :: S) M3 (G + 36)) _ _
   refine .next (Ninst.runCompiled_dup (G := G + 33) rfl rfl (by change S.length + 4 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (128 :: 68 :: overflowText :: 128 :: 64 :: S) M3 (G + 33)) _ _
@@ -118,7 +118,7 @@ theorem overflowFailureBody_run {sevm : Sevm} {b : Devm} {S : List B256}
   change Func.RunCompiledTo [] sevm (St b (128 :: 128 :: 128 :: S) M4 (G + 12)) _ _
   refine .next (Ninst.runCompiled_binary (G := G + 9) (v := 0) (by rintro ⟨⟩) rfl rfl (by decide) rfl (by change S.length + 1 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (0 :: 128 :: S) M4 (G + 9)) _ _
-  refine .next (Ninst.runCompiled_pushBytes (G := G + 6) rfl rfl (by change S.length + 2 < 1024; omega)) ?_
+  refine .next (Ninst.runCompiled_pushBytes (G := G + 6) rfl rfl (by change S.length + 2 < 1024; omega) (by intro h; cases h)) ?_
   change Func.RunCompiledTo [] sevm (St b (100 :: 0 :: 128 :: S) M4 (G + 6)) _ _
   refine .next (Ninst.runCompiled_binary (G := G + 3) (v := 100) (by rintro ⟨⟩) rfl rfl (by decide) rfl (by change S.length + 1 < 1024; omega)) ?_
   change Func.RunCompiledTo [] sevm (St b (100 :: 128 :: S) M4 (G + 3)) _ _
@@ -283,7 +283,7 @@ theorem update_overflow_exec {sevm : Sevm} {b : Devm} {R : List B256}
   have n1 : Ninst.RunCompiled sevm (St b (S) M (G + 135))
       (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)) (St b (reserveMask112 :: S) M (G + 132)) := by
     exact Ninst.runCompiled_pushBytes (G := G + 132) rfl rfl
-      (by change R.length + 5 < 1024; omega)
+      (by change R.length + 5 < 1024; omega) (by intro h; cases h)
   have n2 : Ninst.RunCompiled sevm (St b (reserveMask112 :: S) M (G + 132))
       (.reg (.dup 4)) (St b ((2 ^ 112 : Nat).toB256 :: reserveMask112 :: S) M (G + 129)) := by
     exact Ninst.runCompiled_dup (G := G + 129) rfl rfl
@@ -308,7 +308,7 @@ theorem update_overflow_exec {sevm : Sevm} {b : Devm} {R : List B256}
   have n7 : Ninst.RunCompiled sevm (St b (1 :: 0 :: S) M (G + 117))
       (.push [0x23, 0x0c] (by decide)) (St b (0x230c :: 1 :: 0 :: S) M (G + 114)) := by
     exact Ninst.runCompiled_pushBytes (G := G + 114) rfl rfl
-      (by change R.length + 7 < 1024; omega)
+      (by change R.length + 7 < 1024; omega) (by intro h; cases h)
   have j1 := Evm.jumpi_cont_jump (devm := St b (0x230c :: 1 :: 0 :: S) M (G + 114))
     a8 rfl (by decide : (1 : B256) ≠ 0) (by change 10 ≤ G + 114; omega) jp
   change Evm.step ⟨0x22f8, sevm, St b (0x230c :: 1 :: 0 :: S) M (G + 114)⟩ =
@@ -320,7 +320,7 @@ theorem update_overflow_exec {sevm : Sevm} {b : Devm} {R : List B256}
   have n8 : Ninst.RunCompiled sevm (St b (0 :: S) M (G + 103))
       (.push [0x23, 0x77] (by decide))
         (St b (0x2377 :: 0 :: S) M (G + 100)) :=
-    Ninst.runCompiled_pushBytes rfl rfl (by change R.length + 6 < 1024; omega)
+    Ninst.runCompiled_pushBytes rfl rfl (by change R.length + 6 < 1024; omega) (by intro h; cases h)
   have j2 := Evm.jumpi_cont_zero (devm := St b (0x2377 :: 0 :: S) M (G + 100))
     a11 rfl (by change 10 ≤ G + 100; omega)
   change Evm.step ⟨0x2310, sevm, St b (0x2377 :: 0 :: S) M (G + 100)⟩ =

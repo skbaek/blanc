@@ -139,7 +139,10 @@ theorem reachWorld_configured :
     rw [pairAcct]
     change (((default : Devm).state.setStor reachPair _).get reachPair).stor = _
     unfold State.setStor
-    rw [State.get_set_self]
+    dsimp only
+    split
+    · rw [State.get_setPresent_self]
+    · rw [State.get_set_self]
   refine ⟨⟨?_, 1, 0x4000, reachToken, 0x3000, pairStor⟩, ?_, ?_, ?_⟩
   · unfold Devm.getCode
     rw [pairAcct]

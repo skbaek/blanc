@@ -72,7 +72,7 @@ macro "sfc_rx" : tactic => `(tactic| first
   | apply rx_and rfl (by simp only [List.length_cons]; omega)
   | apply rx_add (by simp only [List.length_cons]; omega)
   | apply rx_sub (by simp only [List.length_cons]; omega)
-  | apply rx_shl rfl (by simp only [List.length_cons]; omega)
+  | apply rx_shl (h_shifts := CoveredFork.rules_shifts ‹_›) rfl (by simp only [List.length_cons]; omega)
   | apply rx_not rfl (by simp only [List.length_cons]; omega)
   | apply rx_caller (by simp only [List.length_cons]; omega)
   | apply rx_iszero rfl (by simp only [List.length_cons]; omega))

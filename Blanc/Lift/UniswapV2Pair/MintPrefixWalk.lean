@@ -1212,7 +1212,8 @@ theorem mintDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x6a627842)
     (body : SFunc.RunExact cert.prog sevm
-      (St b [0x6a627842] getterInitMemory G) t_0469_c86 o) :
+      (St b [0x6a627842] getterInitMemory G) t_0469_c86 o)
+    (h_shifts : sevm.benvStat.rules.op.shifts = true) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 165)) t_0000_c0 o := by
   rw [show G + 165 = (G + 102) + 63 by omega]
   refine getterString_guards_exact value size ?_
@@ -1220,7 +1221,7 @@ theorem mintDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
   apply rx_push (w := 0) rfl (by decide)
   apply rx_calldataload (by decide)
   apply rx_push (w := 224) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_shr (v := 0x6a627842) selector (by decide)
+  apply rx_shr (h_shifts := h_shifts) (v := 0x6a627842) selector (by decide)
   apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
   apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons,List.length_nil]; decide)
   apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
@@ -1845,7 +1846,7 @@ theorem mintPc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
   have actualTail := (congrArg (fun start : Devm => SFunc.RunExact cert.prog sevm start t_039b_c86
     (.halted (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G))) self).mpr tail
   have abi := mintAbi_exact guard callee actualTail
-  have root := mintDispatch_exact value size selector abi
+  have root := mintDispatch_exact (h_shifts := fork.rules_shifts) value size selector abi
   refine ⟨liquidity,?_,?_⟩
   · simpa only [Nat.add_assoc] using root
   · exact (getterWordPost_facts mem.wf).1

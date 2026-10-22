@@ -366,7 +366,7 @@ theorem feePreparation_exact {sevm : Sevm} {b : Devm} {R : List B256}
   apply rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega)
   apply rx_and (v := 0x017e7e58) (by decide) (by simp only [List.length_cons]; omega)
   apply rx_push (w := 224) rfl (by simp only [List.length_cons]; omega)
-  apply rx_shl (v := feeToSelectorWord) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_shl (h_shifts := fork.rules_shifts) (v := feeToSelectorWord) (by decide) (by simp only [List.length_cons]; omega)
   apply rx_dup rfl (by simp only [List.length_cons]; omega)
   apply rx_mstore (i := 128) (c := 3) (M' := feeRequestMemory M)
     (by rw [St.extCost_eq mem.size]; rfl) rfl
