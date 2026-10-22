@@ -3030,6 +3030,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   that signatures are unforgeable. Consumers: the Uniswap V2 Pair permit
   canonical corollary; `Blanc/Weth10Permit.lean`'s two address-1 clean-child
   theorems can become corollaries (proposed migration). Discovery is manual.
+  The concrete `Usdc.recoveryV2_1_consumes` consumer in
+  [`Blanc/Lift/Usdc/RecoveryV2_1.lean`](../Blanc/Lift/Usdc/RecoveryV2_1.lean)
+  follows the actual checked V2_1 recovery entry to STATICCALL at PC `0x4a78`,
+  derives its four-word input from the entry registers and memory writes,
+  and connects the actual native invocation and nonzero canonical answer to
+  the original checked caller's returned stack. Its entry, pointer,
+  nondelegation and existing fork-coverage premises remain local producer
+  obligations. It does not enumerate flag-zero invocations or establish
+  complete historical permit coverage.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
   `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding

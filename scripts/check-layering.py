@@ -1414,6 +1414,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxyOk",
         "Lift.Usdc.ProxyReach",
         "Lift.Usdc.ProxyWalk",
+        "Lift.Usdc.RecoveryV2_1",
         "Lift.Usdc.RefineAdmin",
         "Lift.Usdc.RefineAdminBits",
         "Lift.Usdc.RefineAdminBodies",

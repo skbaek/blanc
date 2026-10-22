@@ -1652,6 +1652,7 @@ import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk
 import Blanc.Lift.Usdc.ProxyReach
 import Blanc.Lift.Usdc.ProxyWalk
+import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.RefineAdmin
 import Blanc.Lift.Usdc.RefineAdminBits
 import Blanc.Lift.Usdc.RefineAdminBodies
