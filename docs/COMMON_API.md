@@ -3056,6 +3056,22 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
   Its actual caller remains a producer obligation, including the `0x4d93`
   epilogue before any owner comparison.
+  Shared signed-query fragments live in
+  [`Blanc/Lift/SolcSignedQuery.lean`](../Blanc/Lift/SolcSignedQuery.lean).
+  Its line inversions cover the prologue, calldata size and seven-argument
+  decoder, pause and mapped-byte reads, nonce update, six-word struct buffer,
+  typed-data encoding and signature guards. Source destinations, nonce base,
+  type hash and return tags are parameters where supported by the actual
+  instruction sequence. `recovery_epilogue` derives the returned answer and
+  owner stack from the compiler's shuffle. Consumers still prove exact source
+  equality and follow their own certificate and cursor route.
+  `struct_memory_facts` and `typed_memory_facts` expose the ordered writes,
+  free pointer and exact hash preimages. Their fixed permit allocation
+  `128 → 352 → 450/480` is used by the checked V2_1 consumer; the V2 route
+  still needs its own composition proof. It does not cover the authorization
+  allocation `384 → 482/512`. Use the existing `line-run-split`
+  recipe for line inversions and these named facts for memory goals. The
+  helpers do not establish a whole selector path or historical occurrence.
   The concrete fresh-entry producer in
   [`Blanc/Lift/Usdc/PermitQueryV2_1.lean`](../Blanc/Lift/Usdc/PermitQueryV2_1.lean),
   `Usdc.permitV2_1_query_entry`, derives the recovery registers, pointer and

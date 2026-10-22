@@ -177,7 +177,7 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
 # Parameterized free-pointer memory for lifted walks.
-SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover", "Lift.EcrecoverCall"]
+SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover", "Lift.EcrecoverCall", "Lift.SolcSignedQuery"]
 # Free-pointer and write-site checker kits (usdc-neversigner-freepointer-v1):
 # each imports only SHARED modules and Jaune, and no statement names a contract.
 SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePtrFacts",

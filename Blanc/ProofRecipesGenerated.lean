@@ -53,9 +53,9 @@ def recipes : List Recipe := [
     id := "line-run-split"
     status := "active"
     triggers := ["implication-premise:Line.Run"]
-    preferredPath := "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed."
-    symbols := ["tactic:line_execute", "tactic:line_execute_with", "declaration:Line.Run"]
-    boundary := "The tactic performs one split and does not automatically transport an arbitrary set of observations."
+    preferredPath := "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer."
+    symbols := ["tactic:line_execute", "tactic:line_execute_with", "declaration:Line.Run", "module:Blanc/Lift/SolcSignedQuery.lean", "declaration:Blanc.Lift.SolcSignedQuery.prologue_line", "declaration:Blanc.Lift.SolcSignedQuery.decode_line", "declaration:Blanc.Lift.SolcSignedQuery.pause_line", "declaration:Blanc.Lift.SolcSignedQuery.blacklist_read_line", "declaration:Blanc.Lift.SolcSignedQuery.nonce_line", "declaration:Blanc.Lift.SolcSignedQuery.buffer_head_line", "declaration:Blanc.Lift.SolcSignedQuery.struct_hash_line", "declaration:Blanc.Lift.SolcSignedQuery.typed_hash_line", "declaration:Blanc.Lift.SolcSignedQuery.recovery_epilogue"]
+    boundary := "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six-word struct and typed-memory facts cover the shared permit allocation 128 to 352 to 450/480; the seven-word authorization allocation 384 to 482/512 needs a separate proved generalization."
   },
   {
     id := "func-run-prefix-split"

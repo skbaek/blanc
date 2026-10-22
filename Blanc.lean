@@ -1653,6 +1653,7 @@ import Blanc.Lift.Usdc.ProxyOk
 import Blanc.Lift.Usdc.ProxyReach
 import Blanc.Lift.Usdc.ProxyWalk
 import Blanc.Lift.EcrecoverCall
+import Blanc.Lift.SolcSignedQuery
 import Blanc.Lift.Usdc.RecoveryV2
 import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.PermitQueryV2_1

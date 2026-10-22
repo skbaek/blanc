@@ -2,6 +2,7 @@ import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.Slots
 import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.InvWalkStep
+import Blanc.Lift.SolcSignedQuery
 
 /-! Actual V2_1 permit inputs, typed-data query and retained owner consumer. -/
 namespace Blanc.Lift.Usdc
@@ -32,7 +33,7 @@ def permitV2_1Domain (sevm : Sevm) (pre : Devm) : B256 :=
   (storage.set key (storage.get key + 1)).get 15
 
 /-- The complete entry stack produced by the permit route at the actual recovery jump. -/
-private def permitV2_1RecoveryStackWith (sevm : Sevm) (digest domain : B256) : List B256 :=
+private abbrev permitV2_1RecoveryStackWith (sevm : Sevm) (digest domain : B256) : List B256 :=
   let s := Sevm.dataWord sevm 196
   let r := Sevm.dataWord sevm 164
   let v := Sevm.dataWord sevm 132 &&& 255
@@ -48,63 +49,10 @@ private def permitV2_1RecoveryStackWith (sevm : Sevm) (digest domain : B256) : L
 def permitV2_1RecoveryStack (sevm : Sevm) (pre : Devm) : List B256 :=
   permitV2_1RecoveryStackWith sevm (permitV2_1Digest sevm pre) (permitV2_1Domain sevm pre)
 
-private theorem permit_recovery_epilogue
-    {sevm : Sevm} {b D : Devm} {M : Mem} {G : Nat}
-    {answer digest s r v domain ret owner : B256} {S : List B256}
-    (run : SFunc.Run ImplV2_1.cert.prog sevm
-      (St b (answer :: digest :: 0 :: 128 :: s :: r :: v :: domain :: ret :: owner :: S) M G)
-      ImplV2_1.t_471c_c83 (.returned D)) :
-    ∃ G', D = St b (answer :: owner :: S) M G' := by
-  unfold ImplV2_1.t_471c_c83 at run
-  obtain ⟨_, run⟩ := rpw_dest run
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := rpw_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  exact rpw_ret run
-
-private def permitPrologue : List Ninst :=
-  [.push [0x80] (by decide), .push [0x40] (by decide), .reg .mstore,
-   .reg .callvalue, .reg (.dup 0), .reg .iszero, .push [0x00, 0x10] (by decide)]
+private abbrev permitPrologue := SolcSignedQuery.prologue 0x00 0x10
 
 private theorem permit_prologue_shape : ImplV2_1.t_0000_c0 =
     permitPrologue.foldr SFunc.next (.branch ImplV2_1.t_000c_c0 ImplV2_1.t_0010_c0) := rfl
-
-private theorem permit_prologue_line {sevm : Sevm} {b d : Devm} {M : Mem}
-    {G : Nat} {S : List B256}
-    (run : Line.Run sevm (St b S M G) permitPrologue d) :
-    ∃ G', d = St b (16 :: B256.eqCheck sevm.value 0 :: sevm.value :: S)
-      (M.write 64 (128 : B256).toBytes) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_callvalue step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
 
 private theorem permit_root_nonpayable
     {F : Exec.Deriv} {post : Devm}
@@ -122,8 +70,8 @@ private theorem permit_root_nonpayable
   obtain ⟨guard⟩ := first.line ImplV2_1.cert_check success fork permitPrologue
     permit_prologue_shape (by
       intro ni member xi same; subst ni
-      simp only [permitPrologue, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_prologue_line
+      simp only [permitPrologue, Blanc.Lift.SolcSignedQuery.prologue, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.prologue_line (d0 := 0x00) (d1 := 0x10))
   obtain ⟨gas, actualState⟩ := guard.state
   obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
     (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
@@ -135,26 +83,7 @@ private theorem permit_root_nonpayable
   have valueZero : F.sevm.value = 0 := eq_zero_of_iszero_ne_zero nonzero
   exact ⟨valueZero, guard.branchSucc ImplV2_1.cert_check success fork nonzero⟩
 
-private def permitSizeLine : List Ninst :=
-  [.reg .pop, .push [0x04] (by decide), .reg .calldatasize, .reg .lt,
-   .push [0x03, 0x36] (by decide)]
-
-private theorem permit_size_line {sevm : Sevm} {b d : Devm} {M : Mem}
-    {G : Nat} {value : B256}
-    (run : Line.Run sevm (St b [value] M G) permitSizeLine d) :
-    ∃ G', d = St b [0x336, B256.ltCheck sevm.data.length.toB256 4] M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldatasize step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_lt step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitSizeLine := SolcSignedQuery.sizeLine 0x03 0x36
 
 private theorem permit_root_size
     {F : Exec.Deriv} {post : Devm}
@@ -168,8 +97,8 @@ private theorem permit_root_size
   obtain ⟨opened⟩ := start.dest ImplV2_1.cert_check success fork
   obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork permitSizeLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitSizeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_size_line
+        simp only [permitSizeLine, Blanc.Lift.SolcSignedQuery.sizeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.size_line (d0 := 0x03) (d1 := 0x36))
   obtain ⟨gas, actualState⟩ := guard.state
   obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
     (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
@@ -393,142 +322,7 @@ private theorem permit_wrapper_guard
   change 224 ≤ F.sevm.data.length.toB256.toNat - 4 at bound
   exact ⟨by omega, guard.branchSucc ImplV2_1.cert_check success fork taken⟩
 
-private def permitDecodeLine : List Ninst :=
-  [.reg .pop,
-   .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg (.dup 1),
-   .reg .calldataload,
-   .reg (.dup 1),
-   .reg .and,
-   .reg (.swap 1),
-   .push [0x20] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg .calldataload,
-   .reg (.swap 0),
-   .reg (.swap 1),
-   .reg .and,
-   .reg (.swap 0),
-   .push [0x40] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg .calldataload,
-   .reg (.swap 0),
-   .push [0x60] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg .calldataload,
-   .reg (.swap 0),
-   .push [0xff] (by decide),
-   .push [0x80] (by decide),
-   .reg (.dup 2),
-   .reg .add,
-   .reg .calldataload,
-   .reg .and,
-   .reg (.swap 0),
-   .push [0xa0] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg .calldataload,
-   .reg (.swap 0),
-   .push [0xc0] (by decide),
-   .reg .add,
-   .reg .calldataload,
-   .push [0x30, 0x92] (by decide)]
-
-private theorem permit_decode_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {available : B256}
-    (run : Line.Run sevm (St b [available, 4, 0x452, 0xd505accf] M G) permitDecodeLine d) :
-    ∃ G', d = St b
-      [0x3092, Sevm.dataWord sevm 196, Sevm.dataWord sevm 164,
-        Sevm.dataWord sevm 132 &&& 255, Sevm.dataWord sevm 100, Sevm.dataWord sevm 68,
-        (Sevm.dataWord sevm 36).toAdr.toB256, (Sevm.dataWord sevm 4).toAdr.toB256,
-        0x452, 0xd505accf] M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_calldataload step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  simp only [ff20_and_word]
-  exact ⟨_, rfl⟩
+private abbrev permitDecodeLine := SolcSignedQuery.decodeLine 0x30 0x92
 
 private theorem permit_root_decoded
     {F : Exec.Deriv} {post : Devm}
@@ -550,43 +344,11 @@ private theorem permit_root_decoded
   obtain ⟨opened⟩ := accepted.dest ImplV2_1.cert_check success fork
   obtain ⟨decoded⟩ := opened.line ImplV2_1.cert_check success fork permitDecodeLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitDecodeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_decode_line
+        simp only [permitDecodeLine, Blanc.Lift.SolcSignedQuery.decodeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.decode_line (d0 := 0x30) (d1 := 0x92))
   exact ⟨valueZero, bound, decoded.call ImplV2_1.cert_check success fork rfl⟩
 
-private def permitPauseLine : List Ninst :=
-  [.push [0x01] (by decide), .reg .sload,
-   .push [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
-   .reg (.swap 0), .reg .div, .push [0xff] (by decide), .reg .and,
-   .reg .iszero, .push [0x31, 0x1c] (by decide)]
-
-private theorem permit_pause_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {S : List B256} (fork : CoveredFork sevm.benvStat.fork)
-    (run : Line.Run sevm (St b S M G) permitPauseLine d) :
-    ∃ G', d = St (afterSload sevm b 1)
-      (0x311c :: B256.eqCheck (255 &&& (b.getStorVal sevm.currentTarget 1 /
-        (0x10000000000000000000000000000000000000000 : B256))) 0 :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_div step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitPauseLine := SolcSignedQuery.pauseLine 0x01 0x31 0x1c
 
 private theorem permit_pause_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {S : List B256} {K : List SFunc}
@@ -597,8 +359,8 @@ private theorem permit_pause_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork permitPauseLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitPauseLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_pause_line fork)
+        simp only [permitPauseLine, Blanc.Lift.SolcSignedQuery.pauseLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.pause_line (slot := 0x01) (d0 := 0x31) (d1 := 0x1c)) fork)
   obtain ⟨gas, actualState⟩ := guard.state
   obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
     (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
@@ -610,88 +372,7 @@ private theorem permit_pause_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     · exact nonzero
   exact guard.branchSucc ImplV2_1.cert_check success fork taken
 
-private def permitBlacklistReadLine : List Ninst :=
-  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg (.dup 7),
-   .reg .and,
-   .push [0x00] (by decide),
-   .reg (.swap 0),
-   .reg (.dup 1),
-   .reg .mstore,
-   .push [0x03] (by decide),
-   .push [0x20] (by decide),
-   .reg .mstore,
-   .push [0x40] (by decide),
-   .reg (.swap 0),
-   .reg .keccak256,
-   .reg .sload,
-   .reg (.dup 7),
-   .reg (.swap 0),
-   .push [0xff] (by decide),
-   .reg .and,
-   .reg .iszero]
-
-private theorem permit_blacklist_read_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {a0 a1 a2 a3 a4 a5 : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
-    (run : Line.Run sevm
-      (St b (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M G)
-      permitBlacklistReadLine d) :
-    ∃ G', d = St (afterSload sevm b (mapSlot owner.toB256 3))
-      (B256.eqCheck (255 &&& b.getStorVal sevm.currentTarget (mapSlot owner.toB256 3)) 0 ::
-        owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S)
-      ((M.write 0 owner.toB256.toBytes).write 32 (3 : B256).toBytes) G' := by
-  have ptr' := (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 3 (.inl (by decide))
-  change PtrMem 128 96 ((M.write 0 owner.toB256.toBytes).write 32 (3 : B256).toBytes) at ptr'
-  have noGrowth := ptr'.read_self (i := 0) (sz := 64) (by decide)
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_and step
-  rw [B256.and_comm, ff20_and_word, toAdr_toB256] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_keccak step
-  rw [keccak_scratch] at state
-  rw [show (Bytes.toB256 [0x00]).toNat = 0 from rfl,
-    show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
-    show (Bytes.toB256 [0x20]).toNat = 32 from rfl,
-    show Bytes.toB256 [0x03] = (3 : B256) from rfl, noGrowth] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitBlacklistReadLine := SolcSignedQuery.blacklistReadLine 0x03
 
 private theorem permit_owner_blacklist_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {a0 a1 a2 a3 a4 a5 : B256} {owner : Adr} {S : List B256} {K : List SFunc}
@@ -705,8 +386,8 @@ private theorem permit_owner_blacklist_guard {F : Exec.Deriv} {post b : Devm} {M
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨read⟩ := opened.line ImplV2_1.cert_check success fork permitBlacklistReadLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitBlacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_blacklist_read_line ptr fork)
+        simp only [permitBlacklistReadLine, Blanc.Lift.SolcSignedQuery.blacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.blacklist_read_line (base := 0x03)) ptr fork)
   obtain ⟨guard⟩ := read.line ImplV2_1.cert_check success fork
     [.push [0x31, 0x9d] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -742,8 +423,8 @@ private theorem permit_spender_blacklist_guard {F : Exec.Deriv} {post b : Devm} 
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨read⟩ := opened.line ImplV2_1.cert_check success fork permitBlacklistReadLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitBlacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_blacklist_read_line ptr fork)
+        simp only [permitBlacklistReadLine, Blanc.Lift.SolcSignedQuery.blacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.blacklist_read_line (base := 0x03)) ptr fork)
   obtain ⟨guard⟩ := read.line ImplV2_1.cert_check success fork
     [.push [0x32, 0x1e] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -880,443 +561,13 @@ private theorem permit_root_417b {F : Exec.Deriv} {post : Devm}
   unfold afterSload
   split <;> rfl
 
-private def permitNonceLine : List Ninst :=
-  [.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-   .reg (.dup 0),
-   .reg (.dup 8),
-   .reg .and,
-   .push [0x00] (by decide),
-   .reg (.dup 1),
-   .reg (.dup 1),
-   .reg .mstore,
-   .push [0x11] (by decide),
-   .push [0x20] (by decide),
-   .reg (.swap 0),
-   .reg (.dup 1),
-   .reg .mstore,
-   .push [0x40] (by decide),
-   .reg (.swap 1),
-   .reg (.dup 2),
-   .reg (.swap 0),
-   .reg .keccak256,
-   .reg (.dup 0),
-   .reg .sload,
-   .push [0x01] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg (.swap 0),
-   .reg (.swap 1),
-   .reg .sstore]
+private abbrev permitNonceLine := SolcSignedQuery.nonceLine 0x11
 
-private theorem permit_nonce_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
-    (run : Line.Run sevm (St b
-      (s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
-      permitNonceLine d) :
-    let nonce := b.getStorVal sevm.currentTarget (nonceSlot owner)
-    ∃ G', d = St (afterSstore sevm (afterSload sevm b (nonceSlot owner))
-      (nonceSlot owner) (nonce + 1))
-      (nonce :: 32 :: 64 :: owner.toB256 ::
-        (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
-        s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      ((M.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes) G' := by
-  have ptr' := (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 17 (.inl (by decide))
-  change PtrMem 128 96 ((M.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes) at ptr'
-  have noGrowth := ptr'.read_self (i := 0) (sz := 64) (by decide)
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_and step
-  rw [B256.and_comm, ff20_and_word, toAdr_toB256] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_keccak step
-  rw [keccak_scratch] at state
-  rw [show (Bytes.toB256 [0x00]).toNat = 0 from rfl,
-    show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
-    show (Bytes.toB256 [0x20]).toNat = 32 from rfl,
-    show Bytes.toB256 [0x11] = (17 : B256) from rfl, noGrowth] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sstore fork step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitBufferHeadLine := SolcSignedQuery.bufferHeadLine [0x6e, 0x71, 0xed, 0xae, 0x12, 0xb1, 0xb9, 0x7f, 0x4d, 0x1f, 0x60, 0x37, 0x0f, 0xef, 0x10, 0x10, 0x5f, 0xa2, 0xfa, 0xae, 0x01, 0x26, 0x11, 0x4a, 0x16, 0x9c, 0x64, 0x84, 0x5d, 0x61, 0x26, 0xc9] (by decide)
 
-private def permitStructHeadMemory (M : Mem) (owner : Adr) : Mem :=
-  (M.write 160 (0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9 : B256).toBytes).write
-    192 owner.toB256.toBytes
+private abbrev permitBufferBodyLine := SolcSignedQuery.bufferBodyLine
 
-private def permitStructBodyMemory (M : Mem) (spender : Adr) (value nonce deadline : B256) : Mem :=
-  (((M.write 224 spender.toB256.toBytes).write 256 value.toBytes).write
-    288 nonce.toBytes).write 320 deadline.toBytes
-
-private def permitStructMemory (M : Mem) (owner spender : Adr) (value nonce deadline : B256) : Mem :=
-  let M := permitStructHeadMemory M owner
-  let M := permitStructBodyMemory M spender value nonce deadline
-  (M.write 128 (192 : B256).toBytes).write 64 (352 : B256).toBytes
-
-private def permitBufferHeadLine : List Ninst :=
-  [.reg (.dup 2),
-   .reg .mload,
-   .push [0x6e, 0x71, 0xed, 0xae, 0x12, 0xb1, 0xb9, 0x7f, 0x4d, 0x1f, 0x60, 0x37, 0x0f, 0xef, 0x10, 0x10, 0x5f, 0xa2, 0xfa, 0xae, 0x01, 0x26, 0x11, 0x4a, 0x16, 0x9c, 0x64, 0x84, 0x5d, 0x61, 0x26, 0xc9] (by decide),
-   .reg (.swap 2),
-   .reg (.dup 1),
-   .reg .add,
-   .reg (.swap 2),
-   .reg (.swap 0),
-   .reg (.swap 2),
-   .reg .mstore,
-   .reg (.dup 1),
-   .reg (.dup 3),
-   .reg .add,
-   .reg (.dup 4),
-   .reg (.swap 0),
-   .reg .mstore,
-   .reg (.swap 3)]
-
-private theorem permit_buffer_head_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {nonce s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 96 M)
-    (run : Line.Run sevm (St b
-      (nonce :: 32 :: 64 :: owner.toB256 :: (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
-       s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
-      permitBufferHeadLine d) :
-    ∃ G', d = St b
-      ((0xffffffffffffffffffffffffffffffffffffffff : B256) :: 128 :: 64 :: owner.toB256 :: nonce ::
-       s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      (permitStructHeadMemory M owner) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 64 :: _) (Mem.read M 64 32).2 _ at state
-  rw [ptr.word, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  simp only at run
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitBufferBodyLine : List Ninst :=
-  [.reg (.dup 10),
-   .reg .and,
-   .push [0x60] (by decide),
-   .reg (.dup 2),
-   .reg .add,
-   .reg .mstore,
-   .push [0x80] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg (.dup 9),
-   .reg (.swap 0),
-   .reg .mstore,
-   .push [0xa0] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg (.swap 3),
-   .reg (.swap 0),
-   .reg (.swap 3),
-   .reg .mstore,
-   .push [0xc0] (by decide),
-   .reg (.dup 0),
-   .reg (.dup 4),
-   .reg .add,
-   .reg (.dup 8),
-   .reg (.swap 0),
-   .reg .mstore]
-
-private theorem permit_buffer_body_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {nonce s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (run : Line.Run sevm (St b
-      ((0xffffffffffffffffffffffffffffffffffffffff : B256) :: 128 :: 64 :: owner.toB256 :: nonce ::
-       s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
-      permitBufferBodyLine d) :
-    ∃ G', d = St b
-      (192 :: 64 :: owner.toB256 :: 128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      (permitStructBodyMemory M spender value nonce deadline) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_and step
-  have canonical : (spender.toB256 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256)) = spender.toB256 := by
-    change (spender.toB256 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) = _
-    rw [B256.and_comm, ff20_and_word, toAdr_toB256]
-  rw [canonical] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  simp only at run
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitBufferTailLine : List Ninst :=
-  [.reg (.dup 1),
-   .reg .mload,
-   .reg (.dup 0),
-   .reg (.dup 5),
-   .reg .sub,
-   .reg (.swap 0),
-   .reg (.swap 1),
-   .reg .add,
-   .reg (.dup 1),
-   .reg .mstore,
-   .push [0xe0] (by decide),
-   .reg (.swap 0),
-   .reg (.swap 3),
-   .reg .add,
-   .reg (.swap 0),
-   .reg .mstore,
-   .push [0x0f] (by decide),
-   .reg .sload,
-   .push [0x42, 0x1e] (by decide),
-   .reg (.swap 0),
-   .reg (.dup 6),
-   .reg (.dup 6),
-   .reg (.dup 6),
-   .reg (.dup 6),
-   .push [0x46, 0xb5] (by decide)]
-
-private theorem permit_buffer_tail_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 352 M) (fork : CoveredFork sevm.benvStat.fork)
-    (run : Line.Run sevm (St b
-      (192 :: 64 :: owner.toB256 :: 128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      M G) permitBufferTailLine d) :
-    ∃ G', d = St (afterSload sevm b 15)
-      (0x46b5 :: 128 :: s :: r :: v :: b.getStorVal sevm.currentTarget 15 :: 0x421e ::
-       owner.toB256 :: 128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      ((M.write 128 (192 : B256).toBytes).write 64 (352 : B256).toBytes) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 64 :: _) (Mem.read M 64 32).2 _ at state
-  rw [ptr.word, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sub step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  simp only [List.set_cons_zero] at run
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  simp only at run
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
-
-private theorem permit_struct_memory_facts {M : Mem} {owner spender : Adr}
-    {value nonce deadline : B256} (ptr : PtrMem 128 96 M) :
-    PtrMem 352 352 (permitStructMemory M owner spender value nonce deadline) ∧
-    memWord (permitStructMemory M owner spender value nonce deadline) 128 = 192 ∧
-    ((permitStructMemory M owner spender value nonce deadline).read 160 192).1.keccak =
-      permitV2_1StructHash owner spender value nonce deadline := by
-  have p1 := (ptr.write 160
-    (0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9 : B256)
-    (.inr (by decide))).write 192 owner.toB256 (.inr (by decide))
-  have p2 := (((p1.write 224 spender.toB256 (.inr (by decide))).write 256 value
-    (.inr (by decide))).write 288 nonce (.inr (by decide))).write 320 deadline (.inr (by decide))
-  have p3 := (p2.write 128 192 (.inr (by decide))).set (q := 352)
-  refine ⟨p3, ?_, ?_⟩
-  · unfold permitStructMemory
-    rw [memWord_congr (μ := (permitStructBodyMemory (permitStructHeadMemory M owner) spender value nonce deadline).write 128 (192 : B256).toBytes)
-      (fun j hj => ?_)]
-    · exact (Mem.memWord_write_word _ 128 192).1
-    · exact (Mem.write_agree _ 64 (352 : B256).toBytes).2 (128 + j)
-        (by
-          have hs : ((permitStructBodyMemory (permitStructHeadMemory M owner) spender value nonce deadline).write
-            128 (192 : B256).toBytes).size = 352 := (p2.write 128 192 (.inr (by decide))).size
-          rw [hs]
-          omega)
-        (by rw [B256.length_toBytes]; omega)
-  · have image := (Mem.reads_data M).write ptr.wf 160
-      (0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9 : B256).toBytes
-    have wf := ptr.wf.write 160
-      (0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9 : B256).toBytes
-    have image := image.write wf 192 owner.toB256.toBytes
-    have wf := wf.write 192 owner.toB256.toBytes
-    have image := image.write wf 224 spender.toB256.toBytes
-    have wf := wf.write 224 spender.toB256.toBytes
-    have image := image.write wf 256 value.toBytes
-    have wf := wf.write 256 value.toBytes
-    have image := image.write wf 288 nonce.toBytes
-    have wf := wf.write 288 nonce.toBytes
-    have image := image.write wf 320 deadline.toBytes
-    have wf := wf.write 320 deadline.toBytes
-    have image := image.write wf 128 (192 : B256).toBytes
-    have wf := wf.write 128 (192 : B256).toBytes
-    have image := image.write wf 64 (352 : B256).toBytes
-    unfold permitStructMemory permitStructBodyMemory permitStructHeadMemory
-    rw [Mem.Reads.read image,
-      Bytes.sliceD_writeAt_word_after _ 64 160 192 352 (by decide),
-      Bytes.sliceD_writeAt_word_after _ 128 160 192 192 (by decide),
-      Bytes.sliceD_writeAt_word_last _ 160 160 320 192 deadline rfl rfl,
-      Bytes.sliceD_writeAt_word_last _ 160 128 288 160 nonce rfl rfl,
-      Bytes.sliceD_writeAt_word_last _ 160 96 256 128 value rfl rfl,
-      Bytes.sliceD_writeAt_word_last _ 160 64 224 96 spender.toB256 rfl rfl,
-      Bytes.sliceD_writeAt_word_last _ 160 32 192 64 owner.toB256 rfl rfl,
-      sliceD_word_same]
-    rfl
+private abbrev permitBufferTailLine := SolcSignedQuery.bufferTailLine 0x0f 0x42 0x1e 0x46 0xb5
 
 private theorem permit_call83 {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v deadline value : B256} {spender owner : Adr} {S : List B256} {K : List SFunc}
@@ -1331,338 +582,43 @@ private theorem permit_call83 {F : Exec.Deriv} {post b : Devm} {M : Mem}
       (afterSload F.sevm b' 15)
       (128 :: s :: r :: v :: b'.getStorVal F.sevm.currentTarget 15 :: 0x421e :: owner.toB256 ::
        128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
-      (permitStructMemory M' owner spender value nonce deadline) (ImplV2_1.t_421e_c71 :: K)) := by
+      ((SolcSignedQuery.structMemory 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9) M' owner spender value nonce deadline) (ImplV2_1.t_421e_c71 :: K)) := by
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨updated⟩ := opened.line ImplV2_1.cert_check success fork permitNonceLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitNonceLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_nonce_line ptr fork)
+        simp only [permitNonceLine, Blanc.Lift.SolcSignedQuery.nonceLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.nonce_line (base := 0x11)) ptr fork)
   have ptr' := (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 17 (.inl (by decide))
   change PtrMem 128 96 ((M.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes) at ptr'
   obtain ⟨head⟩ := updated.line ImplV2_1.cert_check success fork permitBufferHeadLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitBufferHeadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_buffer_head_line ptr')
+        simp only [permitBufferHeadLine, Blanc.Lift.SolcSignedQuery.bufferHeadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.buffer_head_line (tag := [0x6e, 0x71, 0xed, 0xae, 0x12, 0xb1, 0xb9, 0x7f, 0x4d, 0x1f, 0x60, 0x37, 0x0f, 0xef, 0x10, 0x10, 0x5f, 0xa2, 0xfa, 0xae, 0x01, 0x26, 0x11, 0x4a, 0x16, 0x9c, 0x64, 0x84, 0x5d, 0x61, 0x26, 0xc9]) (le := by decide)) ptr')
   obtain ⟨body⟩ := head.line ImplV2_1.cert_check success fork permitBufferBodyLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitBufferBodyLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_buffer_body_line
+        simp only [permitBufferBodyLine, Blanc.Lift.SolcSignedQuery.bufferBodyLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    SolcSignedQuery.buffer_body_line
   have ptrHead := (ptr'.write 160
     (0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9 : B256)
     (.inr (by decide))).write 192 owner.toB256 (.inr (by decide))
   have ptrBody : PtrMem 128 352
-      (permitStructBodyMemory (permitStructHeadMemory _ owner) spender value
+      (SolcSignedQuery.structBodyMemory ((SolcSignedQuery.structHeadMemory 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9) _ owner) spender value
         (b.getStorVal F.sevm.currentTarget (nonceSlot owner)) deadline) :=
     (((ptrHead.write 224 spender.toB256 (.inr (by decide))).write 256 value
       (.inr (by decide))).write 288 _ (.inr (by decide))).write 320 deadline (.inr (by decide))
   obtain ⟨tail⟩ := body.line ImplV2_1.cert_check success fork permitBufferTailLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitBufferTailLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_buffer_tail_line ptrBody fork)
+        simp only [permitBufferTailLine, Blanc.Lift.SolcSignedQuery.bufferTailLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.buffer_tail_line (slot := 0x0f) (r0 := 0x42) (r1 := 0x1e) (d0 := 0x46) (d1 := 0xb5)) ptrBody fork)
   exact tail.call ImplV2_1.cert_check success fork rfl
 
-private def permitTypedWords (M : Mem) (domain structHash : B256) : Mem :=
-  ((M.write 384
-    (0x1901000000000000000000000000000000000000000000000000000000000000 : B256).toBytes).write
-    386 domain.toBytes).write 418 structHash.toBytes
+private abbrev permitStructHashLine := SolcSignedQuery.structHashLine
 
-private def permitTypedMemory (M : Mem) (domain structHash : B256) : Mem :=
-  ((permitTypedWords M domain structHash).write 352 (66 : B256).toBytes).write 64 (450 : B256).toBytes
+private abbrev permitTypedWordsLine := SolcSignedQuery.typedWordsLine
 
-private def permitStructHashLine : List Ninst :=
-  [.reg (.dup 0),
-   .reg .mload,
-   .push [0x20] (by decide),
-   .reg (.dup 0),
-   .reg (.dup 3),
-   .reg .add,
-   .reg (.swap 1),
-   .reg (.swap 0),
-   .reg (.swap 1),
-   .reg .keccak256]
+private abbrev permitTypedLengthLine := SolcSignedQuery.typedLengthLine
 
-private theorem permit_struct_hash_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v domain hash : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 352 352 M) (length : memWord M 128 = 192)
-    (hashRead : (M.read 160 192).1.keccak = hash)
-    (run : Line.Run sevm (St b
-      (128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G)
-      permitStructHashLine d) :
-    ∃ G', d = St b
-      (hash :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 128 :: _) (Mem.read M 128 32).2 _ at state
-  rw [length, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_keccak step
-  change _ = St _ ((M.read 160 192).1.keccak :: _) (Mem.read M 160 192).2 _ at state
-  rw [hashRead, ptr.read_self (by decide)] at state
-  subst state
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitTypedWordsLine : List Ninst :=
-  [.push [0x40] (by decide),
-   .reg (.dup 0),
-   .reg .mload,
-   .push [0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
-   .reg (.dup 1),
-   .reg (.dup 5),
-   .reg .add,
-   .reg .mstore,
-   .push [0x22] (by decide),
-   .reg (.dup 1),
-   .reg .add,
-   .reg (.dup 9),
-   .reg (.swap 0),
-   .reg .mstore,
-   .push [0x42] (by decide),
-   .reg (.dup 0),
-   .reg (.dup 2),
-   .reg .add,
-   .reg (.swap 3),
-   .reg (.swap 0),
-   .reg (.swap 3),
-   .reg .mstore]
-
-private theorem permit_typed_words_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v domain hash : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 352 352 M)
-    (run : Line.Run sevm (St b
-      (hash :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G)
-      permitTypedWordsLine d) :
-    ∃ G', d = St b
-      (352 :: 64 :: 66 :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S)
-      (permitTypedWords M domain hash) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 64 :: _) (Mem.read M 64 32).2 _ at state
-  rw [ptr.word, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitTypedLengthLine : List Ninst :=
-  [.reg (.dup 1),
-   .reg .mload,
-   .reg (.dup 0),
-   .reg (.dup 2),
-   .reg .sub,
-   .reg (.swap 0),
-   .reg (.swap 3),
-   .reg .add,
-   .reg (.dup 3),
-   .reg .mstore,
-   .push [0x62] (by decide),
-   .reg .add,
-   .reg (.swap 0),
-   .reg .mstore]
-
-private theorem permit_typed_length_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v domain : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 352 480 M)
-    (run : Line.Run sevm (St b
-      (352 :: 64 :: 66 :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G)
-      permitTypedLengthLine d) :
-    ∃ G', d = St b
-      (352 :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S)
-      ((M.write 352 (66 : B256).toBytes).write 64 (450 : B256).toBytes) G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 64 :: _) (Mem.read M 64 32).2 _ at state
-  rw [ptr.word, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sub step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_mstore step
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitTypedHashLine : List Ninst :=
-  [.reg (.dup 0),
-   .reg .mload,
-   .reg (.swap 1),
-   .reg .add,
-   .reg .keccak256,
-   .push [0x00] (by decide),
-   .reg (.swap 0),
-   .push [0x47, 0x1c] (by decide),
-   .reg (.dup 1),
-   .reg (.dup 7),
-   .reg (.dup 7),
-   .reg (.dup 7),
-   .push [0x49, 0x44] (by decide)]
-
-private theorem permit_typed_hash_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v domain hash : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 450 480 M) (length : memWord M 352 = 66)
-    (hashRead : (M.read 384 66).1.keccak = hash)
-    (run : Line.Run sevm (St b
-      (352 :: 32 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G)
-      permitTypedHashLine d) :
-    ∃ G', d = St b
-      (0x4944 :: s :: r :: v :: hash :: 0x471c :: hash :: 0 :: 128 ::
-       s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_mload step
-  change _ = St _ (memWord M 352 :: _) (Mem.read M 352 32).2 _ at state
-  rw [length, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_add step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, state⟩ := ri_keccak step
-  change _ = St _ ((M.read 384 66).1.keccak :: _) (Mem.read M 384 66).2 _ at state
-  rw [hashRead, ptr.read_self (by decide)] at state
-  subst state
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
-
-private theorem permit_typed_memory_facts {M : Mem} {domain hash : B256}
-    (ptr : PtrMem 352 352 M) :
-    PtrMem 352 480 (permitTypedWords M domain hash) ∧
-    PtrMem 450 480 (permitTypedMemory M domain hash) ∧
-    memWord (permitTypedMemory M domain hash) 352 = 66 ∧
-    ((permitTypedMemory M domain hash).read 384 66).1 =
-      ([0x19, 0x01] ++ domain.toBytes ++ hash.toBytes : Bytes) := by
-  have p1 := ((ptr.write 384
-    (0x1901000000000000000000000000000000000000000000000000000000000000 : B256)
-    (.inr (by decide))).write 386 domain (.inr (by decide))).write 418 hash (.inr (by decide))
-  have p2 := (p1.write 352 66 (.inr (by decide))).set (q := 450)
-  refine ⟨p1, p2, ?_, ?_⟩
-  · unfold permitTypedMemory
-    rw [memWord_congr (μ := (permitTypedWords M domain hash).write 352 (66 : B256).toBytes)
-      (fun j hj => ?_)]
-    · exact (Mem.memWord_write_word _ 352 66).1
-    · exact (Mem.write_agree _ 64 (450 : B256).toBytes).2 (352 + j)
-        (by
-          have hs : ((permitTypedWords M domain hash).write 352 (66 : B256).toBytes).size = 480 :=
-            (p1.write 352 66 (.inr (by decide))).size
-          rw [hs]
-          omega)
-        (by rw [B256.length_toBytes]; omega)
-  · have image := (Mem.reads_data M).write ptr.wf 384
-      (0x1901000000000000000000000000000000000000000000000000000000000000 : B256).toBytes
-    have wf := ptr.wf.write 384
-      (0x1901000000000000000000000000000000000000000000000000000000000000 : B256).toBytes
-    have image := image.write wf 386 domain.toBytes
-    have wf := wf.write 386 domain.toBytes
-    have image := image.write wf 418 hash.toBytes
-    have wf := wf.write 418 hash.toBytes
-    have image := image.write wf 352 (66 : B256).toBytes
-    have wf := wf.write 352 (66 : B256).toBytes
-    have image := image.write wf 64 (450 : B256).toBytes
-    unfold permitTypedMemory permitTypedWords
-    rw [Mem.Reads.read image,
-      Bytes.sliceD_writeAt_word_after _ 64 384 66 450 (by decide),
-      Bytes.sliceD_writeAt_word_after _ 352 384 66 66 (by decide),
-      Bytes.sliceD_writeAt_word_last _ 384 34 418 66 hash rfl rfl,
-      Bytes.sliceD_writeAt_word_last _ 384 2 386 34 domain rfl rfl,
-      Bytes.sliceD_writeAt_inside _ _ 384 384 2 (by decide) (by rw [B256.length_toBytes]; decide)]
-    rfl
+private abbrev permitTypedHashLine := SolcSignedQuery.typedHashLine 0x47 0x1c 0x49 0x44
 
 private theorem permit_call89 {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v domain hash : B256} {owner : Adr} {S : List B256} {K : List SFunc}
@@ -1675,121 +631,32 @@ private theorem permit_call89 {F : Exec.Deriv} {post b : Devm} {M : Mem}
     Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_4944_c89 b
       (s :: r :: v :: digest :: 0x471c :: digest :: 0 :: 128 ::
        s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S)
-      (permitTypedMemory M domain hash) (ImplV2_1.t_471c_c83 :: K)) := by
+      (SolcSignedQuery.typedMemory M domain hash) (ImplV2_1.t_471c_c83 :: K)) := by
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨hashed⟩ := opened.line ImplV2_1.cert_check success fork permitStructHashLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitStructHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_struct_hash_line ptr length hashRead)
+        simp only [permitStructHashLine, Blanc.Lift.SolcSignedQuery.structHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.struct_hash_line ptr length hashRead)
   obtain ⟨words⟩ := hashed.line ImplV2_1.cert_check success fork permitTypedWordsLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitTypedWordsLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_typed_words_line ptr)
-  obtain ⟨ptrWords, ptrTyped, lengthTyped, bytesTyped⟩ := permit_typed_memory_facts (domain := domain) (hash := hash) ptr
+        simp only [permitTypedWordsLine, Blanc.Lift.SolcSignedQuery.typedWordsLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.typed_words_line ptr)
+  obtain ⟨ptrWords, ptrTyped, lengthTyped, bytesTyped⟩ := SolcSignedQuery.typed_memory_facts (domain := domain) (hash := hash) ptr
   obtain ⟨sized⟩ := words.line ImplV2_1.cert_check success fork permitTypedLengthLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitTypedLengthLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_typed_length_line ptrWords)
+        simp only [permitTypedLengthLine, Blanc.Lift.SolcSignedQuery.typedLengthLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.typed_length_line ptrWords)
   obtain ⟨args⟩ := sized.line ImplV2_1.cert_check success fork permitTypedHashLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitTypedHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (permit_typed_hash_line ptrTyped lengthTyped (congrArg Bytes.keccak bytesTyped))
+        simp only [permitTypedHashLine, Blanc.Lift.SolcSignedQuery.typedHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    ((SolcSignedQuery.typed_hash_line (r0 := 0x47) (r1 := 0x1c) (d0 := 0x49) (d1 := 0x44)) ptrTyped lengthTyped (congrArg Bytes.keccak bytesTyped))
   exact args.call ImplV2_1.cert_check success fork rfl
 
-private def permitLowSLine : List Ninst :=
-  [.push [0x00] (by decide),
-   .push [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46, 0x68, 0x1b, 0x20, 0xa0] (by decide),
-   .reg (.dup 2),
-   .reg .gt,
-   .reg .iszero,
-   .push [0x49, 0xbf] (by decide)]
+private abbrev permitLowSLine := SolcSignedQuery.lowSLine 0x49 0xbf
 
-private theorem permit_lows_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v : B256} {S : List B256}
-    (run : Line.Run sevm (St b (s :: r :: v :: S) M G) permitLowSLine d) :
-    ∃ G', d = St b (0x49bf :: B256.eqCheck (B256.gtCheck s
-        (0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0 : B256)) 0 :: 0 :: s :: r :: v :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_gt step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitV27Line := SolcSignedQuery.v27Line 0x49 0xd7
 
-private def permitV27Line : List Ninst :=
-  [.reg (.dup 3),
-   .push [0xff] (by decide),
-   .reg .and,
-   .push [0x1b] (by decide),
-   .reg .eq,
-   .reg .iszero,
-   .reg (.dup 0),
-   .reg .iszero,
-   .push [0x49, 0xd7] (by decide)]
-
-private theorem permit_v27_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v : B256} {S : List B256}
-    (run : Line.Run sevm (St b (0 :: s :: r :: v :: S) M G) permitV27Line d) :
-    ∃ G', d = St b (0x49d7 :: B256.eqCheck (B256.eqCheck (B256.eqCheck 27 (255 &&& v)) 0) 0 :: B256.eqCheck (B256.eqCheck 27 (255 &&& v)) 0 :: 0 :: s :: r :: v :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run
-  exact ⟨_, rfl⟩
-
-private def permitV28Line : List Ninst :=
-  [.reg .pop,
-   .reg (.dup 3),
-   .push [0xff] (by decide),
-   .reg .and,
-   .push [0x1c] (by decide),
-   .reg .eq,
-   .reg .iszero]
-
-private theorem permit_v28_line {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {s r v : B256} {S : List B256}
-    {flag : B256}
-    (run : Line.Run sevm (St b (flag :: 0 :: s :: r :: v :: S) M G) permitV28Line d) :
-    ∃ G', d = St b ((B256.eqCheck (B256.eqCheck 28 (255 &&& v)) 0) :: 0 :: s :: r :: v :: S) M G' := by
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_and step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  cases run
-  exact ⟨_, rfl⟩
+private abbrev permitV28Line := SolcSignedQuery.v28Line
 
 private theorem permit_signature_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v : B256} {S : List B256} {K : List SFunc}
@@ -1801,8 +668,8 @@ private theorem permit_signature_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
   obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
   obtain ⟨low⟩ := opened.line ImplV2_1.cert_check success fork permitLowSLine rfl
     (by intro ni member xi same; subst ni
-        simp only [permitLowSLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_lows_line
+        simp only [permitLowSLine, Blanc.Lift.SolcSignedQuery.lowSLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.lows_line (d0 := 0x49) (d1 := 0xbf))
   obtain ⟨gas, actualState⟩ := low.state
   obtain ⟨outcome, actualRun⟩ := low.placed.sourceRun ImplV2_1.cert_check
     (low.exn_eq.trans success) (by rw [low.sevm_eq]; exact fork)
@@ -1816,8 +683,8 @@ private theorem permit_signature_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
   obtain ⟨openedV⟩ := validS.dest ImplV2_1.cert_check success fork
   obtain ⟨v27⟩ := openedV.line ImplV2_1.cert_check success fork permitV27Line rfl
     (by intro ni member xi same; subst ni
-        simp only [permitV27Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    permit_v27_line
+        simp only [permitV27Line, Blanc.Lift.SolcSignedQuery.v27Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (SolcSignedQuery.v27_line (d0 := 0x49) (d1 := 0xd7))
   by_cases takenV : B256.eqCheck (B256.eqCheck (B256.eqCheck 27 (255 &&& v)) 0) 0 ≠ 0
   · exact ⟨_, v27.toSucc ImplV2_1.cert_check success fork takenV rfl⟩
   · have zeroV := not_not.mp takenV
@@ -1825,8 +692,8 @@ private theorem permit_signature_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     obtain ⟨otherV⟩ := v27.toZero ImplV2_1.cert_check success fork
     obtain ⟨v28⟩ := otherV.line ImplV2_1.cert_check success fork permitV28Line rfl
       (by intro ni member xi same; subst ni
-          simp only [permitV28Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-      permit_v28_line
+          simp only [permitV28Line, Blanc.Lift.SolcSignedQuery.v28Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+      SolcSignedQuery.v28_line
     exact ⟨_, ⟨v28⟩⟩
 
 private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
@@ -1914,17 +781,20 @@ theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
   have ptr1 : PtrMem 128 96 M1 :=
     (ptr0.write 0 owner.toB256 (.inl (by decide))).write 32 17 (.inl (by decide))
   obtain ⟨at83⟩ := permit_call83 before ptr0 success fork
-  obtain ⟨ptrStruct, lengthStruct, hashStruct⟩ := permit_struct_memory_facts
+  obtain ⟨ptrStruct, lengthStruct, hashStruct⟩ := SolcSignedQuery.struct_memory_facts (tag := 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9)
     (owner := owner) (spender := spender) (value := Sevm.dataWord F.sevm 68)
     (nonce := nonce) (deadline := Sevm.dataWord F.sevm 100) ptr1
-  generalize structMemory : permitStructMemory M1 owner spender (Sevm.dataWord F.sevm 68) nonce
+  generalize structMemory : (SolcSignedQuery.structMemory 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9) M1 owner spender (Sevm.dataWord F.sevm 68) nonce
     (Sevm.dataWord F.sevm 100) = Ms at at83 ptrStruct lengthStruct hashStruct
+  change (Ms.read 160 192).1.keccak =
+    permitV2_1StructHash owner spender (Sevm.dataWord F.sevm 68) nonce
+      (Sevm.dataWord F.sevm 100) at hashStruct
   obtain ⟨at89⟩ := permit_call89 at83 ptrStruct lengthStruct hashStruct success fork
-  have ptrFinal := (permit_typed_memory_facts
+  have ptrFinal := (SolcSignedQuery.typed_memory_facts
     (domain := b1.getStorVal F.sevm.currentTarget 15)
     (hash := permitV2_1StructHash owner spender (Sevm.dataWord F.sevm 68) nonce
       (Sevm.dataWord F.sevm 100)) ptrStruct).2.1
-  generalize typedMemory : permitTypedMemory Ms (b1.getStorVal F.sevm.currentTarget 15)
+  generalize typedMemory : SolcSignedQuery.typedMemory Ms (b1.getStorVal F.sevm.currentTarget 15)
     (permitV2_1StructHash owner spender (Sevm.dataWord F.sevm 68) nonce (Sevm.dataWord F.sevm 100)) = Mt at at89 ptrFinal
   obtain ⟨reached, actualPc⟩ := permit_recovery_cut at89 success fork
   have originalStorage : Devm.getStor b0 F.sevm.currentTarget = Devm.getStor F.devm F.sevm.currentTarget := by
@@ -1984,7 +854,7 @@ private theorem permit_owner_return {N : Exec.Deriv} {κ : Cursor} {post : Devm}
     placed.quietReturn ImplV2_1.cert_check success fork
       (E := []) (by rfl) (by rfl) (by rw [tree]; rfl) (by rw [tree]; rfl) continuations
   rw [tree, St.self stack rfl] at returned
-  obtain ⟨gas, state⟩ := permit_recovery_epilogue returned
+  obtain ⟨gas, state⟩ := SolcSignedQuery.recovery_epilogue returned
   have comparisonStack : Q.devm.stack = adr.toB256 :: owner :: S := by rw [state, St.stack]
   have ownerEq := recoveryV2_1_owner_comparison finalPlaced callerTree comparisonStack
     (sameExn.trans success) (by rw [sameEnv]; exact fork)
