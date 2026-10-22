@@ -3,7 +3,7 @@ import Blanc.ExecutionStagedBodyTrace
 import Blanc.Lift.UniswapV2Pair.WriterStorage
 
 /-!
-# Pair representation across historical proof-of-work reward credits
+# Pair historical fork selection and proof-of-work reward credits
 
 The represented model and tracked keys are unchanged by the actual reward
 fold. Installed code supplies protection; token-answer assumptions play no
@@ -13,6 +13,19 @@ part in this frame-free storage transition.
 namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
+
+/-- The mainnet schedule selects Muir Glacier at the Pair's approved deployment
+coordinates: block 10008355, timestamp 1588710145. Plans
+`evidence/mac-l4-anchor-reads-20261022/anchor-adoption-proposal.json` binds these
+coordinates to block
+`0x359d1dc4f14f9a07cba3ae8416958978ce98f78ad7b8d505925dad9722081f04`
+and transaction
+`0xd07cbde817318492092cc7a27b3064a69bd893c01cb593d6029683ffd290ab3a`.
+This theorem selects rules; it does not prove historical configured creation,
+receipt inclusion or consensus authentication. -/
+theorem pair_deployment_fork :
+    mainnetChainConfig.forkAt 10008355 1588710145 = .ok .muirGlacier := by
+  decide +kernel
 
 /-- Real miner and ommer rewards leave the represented storage/model exactly
 unchanged. This storage fact needs no token answers or nonwrap premise. -/
