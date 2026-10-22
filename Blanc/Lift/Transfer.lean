@@ -1,6 +1,7 @@
 import Blanc.Lift.Basic
 import Blanc.AbstractStackTransfer
 import Blanc.Ladder
+import Blanc.Lift.CallEffects
 import Blanc.TransientSettlement
 
 /-!
@@ -17,8 +18,8 @@ consumes (`ninstTransfer_append`).
 
 `ninstTransfer_run` is the success-only reading of a transfer: unlike
 `regularTransfer_safe` it needs no bound on the stack, because a successful run
-has already had room for every push.  It is stated on Blanc's covered forks,
-the scope of every lifting claim, because Blanc's CALL inversions are.
+has already had room for every push.  The generic core selects the actual no-state-gas lane and handles both access and
+delegation settings; `ninstTransfer_run` retains its covered-fork interface.
 -/
 
 namespace Blanc.Lift
@@ -687,205 +688,33 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
     sf.stack = 0 :: xs := by
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
-  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, Except.assert] at h_run
-  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
-  rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
-    simp only [eq1] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  have e1 := (Devm.pop_of_pop eq1).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
-  rcases eq2 : Devm.popToAdr s1 with _ | ⟨callee2, s2⟩ <;>
-    simp only [eq2] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, hp2⟩
-  have e2 := (Devm.pop_of_pop hp2).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
-  rcases eq3 : Devm.pop s2 with _ | ⟨value3, s3⟩ <;>
-    simp only [eq3] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  have e3 := (Devm.pop_of_pop eq3).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
-  rcases eq4 : Devm.popToNat s3 with _ | ⟨inputIndex4, s4⟩ <;>
-    simp only [eq4] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hk4⟩
-  have e4 := f4.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
-  rcases eq5 : Devm.popToNat s4 with _ | ⟨inputSize5, s5⟩ <;>
-    simp only [eq5] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hk5⟩
-  have e5 := f5.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
-  rcases eq6 : Devm.popToNat s5 with _ | ⟨outputIndex6, s6⟩ <;>
-    simp only [eq6] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hk6⟩
-  have e6 := f6.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
-  rcases eq7 : Devm.popToNat s6 with _ | ⟨outputSize7, s7⟩ <;>
-    simp only [eq7] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq7 with ⟨x7, f7, hk7⟩
-  have e7 := f7.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e7
-  have estack : s.stack = gas1 :: x2 :: value3 :: x4 :: x5 :: x6 :: x7 :: s7.stack := by
-    rw [e1, e2, e3, e4, e5, e6, e7]
-  have hparts :
-      g = gas1 ∧ c = x2 ∧ v = value3 ∧ ii = x4 ∧ is = x5 ∧
-        oi = x6 ∧ os = x7 ∧ xs = s7.stack := by
-    simpa only [List.cons.injEq] using hs.symm.trans estack
-  have hs7 : s7.stack = xs := hparts.2.2.2.2.2.2.2.symm
-  rw [hfork.rules_stateGas_none] at h_run
-  split at h_run
-  · rename_i _ heq
-    cases heq
-    split at h_run
-    · cases XStep.run_ofExcept_error h_run
-    · rename_i s10 eq10
-      rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-          (addAccessedAddress s7 callee2) callee2 with
-        ⟨dp, na, code0, dagc, s9⟩
-      simp only [hp11] at eq10 h_run
-      have hs9 : s9.stack = s7.stack := by
-        have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
-        dsimp only at h
-        rw [← h, GasSchedule.accessDelegation_stack]
-        rfl
-      have hs10 : s10.stack = xs := by
-        exact (Devm.burn_of_chargeGas eq10).stack.symm.trans
-          (hs9.trans hs7)
-      split at h_run
-      · cases XStep.run_ofExcept_error h_run
-      · by_cases hbal : ((s10.memExtends
-            [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).getAcct
-              sevm.currentTarget).bal < value3
-        · rw [ite_eq_left hbal] at h_run
-          rcases eq12 : Devm.push 0
-                (s10.memExtends [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]) with
-                _ | ⟨v12, s12, world12⟩ <;> simp only [eq12] at h_run
-          · cases XStep.run_ofExcept_error h_run
-          · have h_ex := Except.ok.inj h_run.2
-            rw [h_ex]
-            have hpush := (Devm.push_of_push eq12).stack
-            show ({ mach := v12, «meta» := s12, world := world12 } : Devm).stack = 0 :: xs
-            rw [hpush]
-            have hmem : (s10.memExtends
-                [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = xs := by
-              exact hs10
-            simpa only [List.nil_append, List.cons_append] using congrArg
-              (fun z => (0 :: z)) hmem
-        · rw [ite_eq_right hbal] at h_run
-          simp only [genericCall.step] at h_run
-          split at h_run
-          · simp only [Bind.bind, Except.bind] at h_run
-            split at h_run
-            · cases XStep.run_ofExcept_error h_run
-            · rename_i s12 hpush
-              have h_ex := Except.ok.inj h_run.2
-              rw [h_ex]
-              have hstack := (Devm.push_of_push hpush).stack
-              change s12.stack = 0 :: xs
-              rw [hstack]
-              change 0 :: (s10.memExtends
-                [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = 0 :: xs
-              have hmem : (s10.memExtends
-                  [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).stack = xs := by
-                exact hs10
-              simpa only [List.nil_append, List.cons_append] using congrArg
-                (fun z => (0 :: z)) hmem
-          · rename_i h_depth_ne
-            simp only [XStep.Run] at h_run
-            rcases h_run with ⟨ex', run_pm₀, h_split⟩
-            rcases ex' with err' | child
-            · cases Resume.call_run_error h_split.symm
-            have hparent :
-                ((s10.memExtends
-                  [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).withReturnData
-                  []).stack = xs := by
-              show s10.stack = xs
-              exact hs10
-            by_cases herr : child.error.isSome
-            · have hsf := Resume.call_stack_flag h_split.symm
-              rw [ite_eq_left herr] at hsf
-              rw [hsf, hparent]
-            · have hsf := Resume.call_stack_flag h_split.symm
-              rw [ite_eq_right herr] at hsf
-              rw [hsf, hparent] at hfail
-              have hz : (0 : B256) = 1 :=
-                pref_head_unique hfail.1 (pref_append [1] xs)
-              exact (B256.zero_ne_one hz).elim
-  · rename_i s10 heq
-    cases heq
+  obtain ⟨w, hw⟩ := (CallEffects.call_run_effects hfork.rules_stateGas_none hs h_run).1
+  have hz : (0 : B256) = w :=
+    pref_head_unique (by simpa only [hw, List.cons_append, List.nil_append] using hfail.1) (pref_append [w] xs)
+  rw [hw, ← hz]
+
+private theorem ninstTransfer_run_call_noStateGas {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (matched : Matches input devm.stack)
+    (checked : callTransfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .call) devm') :
+    Matches output devm'.stack := by
+  match input, checked with
+  | a :: b :: c :: d :: e :: f :: g :: rest, checked =>
+      simp only [callTransfer, Option.some.injEq] at checked
+      cases checked
+      obtain ⟨x1, x2, x3, x4, x5, x6, x7, xs, hstack, hrest⟩ := matches_seven matched
+      obtain ⟨w, hw⟩ := (CallEffects.call_run_effects hstateGas hstack run).1
+      rw [hw]
+      exact ⟨Or.inl rfl, hrest⟩
 
 private theorem ninstTransfer_run_call {sevm : Sevm} {devm devm' : Devm}
     {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : callTransfer input = some output)
     (run : Ninst.Run sevm devm (.exec .call) devm') :
-    Matches output devm'.stack := by
-  cases input with
-  | nil => simp only [callTransfer, reduceCtorEq] at checked
-  | cons a input =>
-      cases input with
-      | nil => simp only [callTransfer, reduceCtorEq] at checked
-      | cons b input =>
-          cases input with
-          | nil => simp only [callTransfer, reduceCtorEq] at checked
-          | cons c input =>
-              cases input with
-              | nil => simp only [callTransfer, reduceCtorEq] at checked
-              | cons d input =>
-                  cases input with
-                  | nil => simp only [callTransfer, reduceCtorEq] at checked
-                  | cons e input =>
-                      cases input with
-                      | nil => simp only [callTransfer, reduceCtorEq] at checked
-                      | cons f input =>
-                          cases input with
-                          | nil => simp only [callTransfer, reduceCtorEq] at checked
-                          | cons g rest =>
-                              simp only [callTransfer, Option.some.injEq] at checked
-                              cases checked
-                              obtain ⟨gas, callee, value, inputIndex, inputSize,
-                                outputIndex, outputSize, xs, hstack, hrest⟩ :=
-                                matches_seven matched
-                              have hp :
-                                  (gas :: callee :: value :: inputIndex :: inputSize ::
-                                    outputIndex :: outputSize :: xs) <<+ devm.stack := by
-                                rw [hstack]
-                                simpa only [List.append_nil] using
-                                  (pref_append
-                                    (gas :: callee :: value :: inputIndex :: inputSize ::
-                                      outputIndex :: outputSize :: xs) [])
-                              have run' : Ninst.Run sevm devm Ninst.call devm' := by
-                                simpa only [Ninst.call] using run
-                              rcases of_run_call_val hp run' hfork with hfail | hsuccess
-                              · have hsf := call_fail_stack_exact hstack run' hfork hfail
-                                rw [hsf]
-                                exact ⟨Or.inl rfl, hrest⟩
-                              · rcases hsuccess with
-                                  ⟨parent, child, xl, dp, na, code, avail,
-                                    hparentStack, hstate, hmemory, hdelegated,
-                                    hfilled, hmessage, herror, hresume, hsfstate,
-                                    hsfreturn, hsfmemory, hflag⟩
-                                have hparent : parent.stack = xs := by
-                                  have hparts :
-                                      True ∧ True ∧ True ∧ True ∧ True ∧ True ∧ True ∧
-                                        parent.stack = xs := by
-                                    simpa only [List.cons.injEq] using
-                                      (hstack.symm.trans hparentStack).symm
-                                  exact hparts.2.2.2.2.2.2.2
-                                rw [hflag, hparent]
-                                exact matches_push_word (head := none)
-                                  (x := (1 : B256))
-                                  (headMatch := Or.inl rfl) hrest
-                                  (by simp only [Stack.Push, Split, List.cons_append,
-                                    List.nil_append])
+    Matches output devm'.stack :=
+  ninstTransfer_run_call_noStateGas hfork.rules_stateGas_none matched checked run
 
 private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     {g t ii is oi os : B256} {xs : Stack}
@@ -894,173 +723,33 @@ private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hfail : ((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) :
     sf.stack = 0 :: xs := by
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
-  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind] at h_run
-  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
-  rcases eq1 : Devm.pop s with _ | ⟨gas1, s1⟩ <;>
-    simp only [eq1] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  have e1 := (Devm.pop_of_pop eq1).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
-  rcases eq2 : Devm.popToAdr s1 with _ | ⟨target, s2⟩ <;>
-    simp only [eq2] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, hx2, hp2⟩
-  have e2 := (Devm.pop_of_pop hp2).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
-  rcases eq3 : Devm.popToNat s2 with _ | ⟨inputIndex, s3⟩ <;>
-    simp only [eq3] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, hx3⟩
-  have e3 := f3.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
-  rcases eq4 : Devm.popToNat s3 with _ | ⟨inputSize, s4⟩ <;>
-    simp only [eq4] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, hx4⟩
-  have e4 := f4.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
-  rcases eq5 : Devm.popToNat s4 with _ | ⟨outputIndex, s5⟩ <;>
-    simp only [eq5] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, hx5⟩
-  have e5 := f5.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
-  rcases eq6 : Devm.popToNat s5 with _ | ⟨outputSize, s6⟩ <;>
-    simp only [eq6] at h_run
-  · cases XStep.run_ofExcept_error_stateGas h_run
-  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, hx6⟩
-  have e6 := f6.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
-  have estack : s.stack = gas1 :: x2 :: x3 :: x4 :: x5 :: x6 :: s6.stack := by
-    rw [e1, e2, e3, e4, e5, e6]
-  have hparts : g = gas1 ∧ t = x2 ∧ ii = x3 ∧ is = x4 ∧
-      oi = x5 ∧ os = x6 ∧ xs = s6.stack := by
-    simpa only [List.cons.injEq] using hs.symm.trans estack
-  subst hx2
-  subst hx3
-  subst hx4
-  subst hx5
-  subst hx6
-  have hs6 : s6.stack = xs := hparts.2.2.2.2.2.2.symm
-  rw [hfork.rules_stateGas_none] at h_run
-  split at h_run
-  · rename_i _ heq
-    cases heq
-    split at h_run
-    · cases XStep.run_ofExcept_error h_run
-    · rename_i s10 eq10
-      rcases hp10 : sevm.benvStat.rules.gas.accessDelegation
-          (addAccessedAddress s6 x2.toAdr) x2.toAdr with
-        ⟨dp, na, code0, dagc, s9⟩
-      simp only [hp10] at eq10 h_run
-      have hs9 : s9.stack = s6.stack := by
-        have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp10
-        dsimp only at h
-        rw [← h, GasSchedule.accessDelegation_stack]
-        rfl
-      have hs10 : s10.stack = xs := by
-        exact (Devm.burn_of_chargeGas eq10).stack.symm.trans (hs9.trans hs6)
-      simp only [genericCall.step] at h_run
-      split at h_run
-      · simp only [Bind.bind, Except.bind] at h_run
-        split at h_run
-        · cases XStep.run_ofExcept_error h_run
-        · rename_i s12 hpush
-          have h_ex := Except.ok.inj h_run.2
-          rw [h_ex]
-          have hstack := (Devm.push_of_push hpush).stack
-          change s12.stack = 0 :: xs
-          rw [hstack]
-          change 0 :: s10.stack = 0 :: xs
-          exact congrArg (fun z => (0 :: z)) hs10
-      · rename_i h_depth_ne
-        simp only [XStep.Run] at h_run
-        rcases h_run with ⟨ex', run_pm₀, h_split⟩
-        rcases ex' with err' | child
-        · cases Resume.call_run_error h_split.symm
-        have hparent :
-            ((s10.memExtends
-              [(x3.toNat, x4.toNat), (x5.toNat, x6.toNat)]).withReturnData
-              []).stack = xs := by
-          show s10.stack = xs
-          exact hs10
-        by_cases herr : child.error.isSome
-        · have hsf := Resume.call_stack_flag h_split.symm
-          rw [ite_eq_left herr] at hsf
-          rw [hsf, hparent]
-        · have hsf := Resume.call_stack_flag h_split.symm
-          rw [ite_eq_right herr] at hsf
-          rw [hsf, hparent] at hfail
-          have hz : (0 : B256) = 1 :=
-            pref_head_unique hfail.1 (pref_append [1] xs)
-          exact (B256.zero_ne_one hz).elim
-  · rename_i s10 heq
-    cases heq
+  obtain ⟨w, hw⟩ := (CallEffects.call6_run_effects (Or.inr rfl) hfork.rules_stateGas_none hs h_run).1
+  have hz : (0 : B256) = w :=
+    pref_head_unique (by simpa only [hw, List.cons_append, List.nil_append] using hfail.1) (pref_append [w] xs)
+  rw [hw, ← hz]
+
+private theorem ninstTransfer_run_staticcall_noStateGas {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (matched : Matches input devm.stack)
+    (checked : staticcallTransfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .staticcall) devm') :
+    Matches output devm'.stack := by
+  match input, checked with
+  | a :: b :: c :: d :: e :: f :: rest, checked =>
+      simp only [staticcallTransfer, Option.some.injEq] at checked
+      cases checked
+      obtain ⟨x1, x2, x3, x4, x5, x6, xs, hstack, hrest⟩ := matches_six matched
+      obtain ⟨w, hw⟩ := (CallEffects.call6_run_effects (Or.inr rfl) hstateGas hstack run).1
+      rw [hw]
+      exact ⟨Or.inl rfl, hrest⟩
 
 private theorem ninstTransfer_run_staticcall {sevm : Sevm} {devm devm' : Devm}
     {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : staticcallTransfer input = some output)
     (run : Ninst.Run sevm devm (.exec .staticcall) devm') :
-    Matches output devm'.stack := by
-  cases input with
-  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-  | cons a input =>
-      cases input with
-      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-      | cons b input =>
-          cases input with
-          | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-          | cons c input =>
-              cases input with
-              | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-              | cons d input =>
-                  cases input with
-                  | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-                  | cons e input =>
-                      cases input with
-                      | nil => simp only [staticcallTransfer, reduceCtorEq] at checked
-                      | cons f rest =>
-                          simp only [staticcallTransfer, Option.some.injEq] at checked
-                          cases checked
-                          obtain ⟨gas, target, inputIndex, inputSize, outputIndex,
-                            outputSize, xs, hstack, hrest⟩ := matches_six matched
-                          have hp :
-                              (gas :: target :: inputIndex :: inputSize :: outputIndex ::
-                                outputSize :: xs) <<+ devm.stack := by
-                            rw [hstack]
-                            simpa only [List.append_nil] using
-                              (pref_append
-                                (gas :: target :: inputIndex :: inputSize :: outputIndex ::
-                                  outputSize :: xs) [])
-                          have run' : Ninst.Run sevm devm Ninst.staticcall devm' := by
-                            simpa only [Ninst.staticcall] using run
-                          rcases of_run_staticcall_val_with_depth hp run' hfork with
-                            hfail | hsuccess
-                          · have hsf := staticcall_fail_stack_exact hstack run' hfork
-                              ⟨hfail.1, hfail.2.1⟩
-                            rw [hsf]
-                            exact ⟨Or.inl rfl, hrest⟩
-                          · rcases hsuccess with
-                              ⟨parent, child, xl, dp, na, code, avail, hdepth,
-                                hparentStack, hstate, hmemory, hdelegated, hfilled,
-                                hmessage, herror, hresume, hsfstate, hsfreturn,
-                                hsfmemory, hflag⟩
-                            have hparent : parent.stack = xs := by
-                              have hparts :
-                                  True ∧ True ∧ True ∧ True ∧ True ∧ True ∧
-                                    parent.stack = xs := by
-                                simpa only [List.cons.injEq] using
-                                  (hstack.symm.trans hparentStack).symm
-                              exact hparts.2.2.2.2.2.2
-                            rw [hflag, hparent]
-                            exact matches_push_word (head := none) (x := (1 : B256))
-                              (headMatch := Or.inl rfl) hrest
-                              (by simp only [Stack.Push, Split, List.cons_append, List.nil_append])
+    Matches output devm'.stack :=
+  ninstTransfer_run_staticcall_noStateGas hfork.rules_stateGas_none matched checked run
 
 /-- A `CREATE` resume leaves exactly one word on the parent's stack. -/
 private theorem create_resume_stack {parent : Devm} {na : Adr}
@@ -1124,13 +813,16 @@ private theorem matches_four {a b c d : Option B256} {tail : Pattern}
 private theorem create2_run_stack {sevm : Sevm} {s sf : Devm} {v i sz salt : B256}
     {xs : Stack} (hs : s.stack = v :: i :: sz :: salt :: xs)
     (h_run : Ninst.Run sevm s Ninst.create2 sf)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hstateGas : sevm.benvStat.rules.stateGas = none) :
     ∃ w, sf.stack = w :: xs := by
-  have henabled : sevm.benvStat.rules.op.create2 = true :=
-    hfork.cases (motive := fun f => f.ruleSet.op.create2 = true) rfl rfl rfl rfl
   rcases h_run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, henabled, ↓reduceIte, Bind.bind, Except.bind] at h_run
+    hstateGas] at h_run
+  have henabled : sevm.benvStat.rules.op.create2 = true := by
+    by_contra disabled
+    simp only [disabled, ↓reduceIte] at h_run
+    cases XStep.run_ofExcept_error h_run
+  simp only [henabled, ↓reduceIte, Bind.bind, Except.bind] at h_run
   rcases eq1 : Devm.pop s with _ | ⟨v1, s1⟩ <;> simp only [eq1] at h_run
   · cases XStep.run_ofExcept_error h_run
   have e1 := (Devm.pop_of_pop eq1).stack
@@ -1161,8 +853,8 @@ private theorem create2_run_stack {sevm : Sevm} {s sf : Devm} {v i sz salt : B25
   obtain ⟨w, hw⟩ := genericCreate_stack h_run
   exact ⟨w, hw.trans (congrArg (w :: ·) hs5)⟩
 
-private theorem ninstTransfer_run_create2 {sevm : Sevm} {devm devm' : Devm}
-    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+private theorem ninstTransfer_run_create2_noStateGas {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
     (matched : Matches input devm.stack)
     (checked : create2Transfer input = some output)
     (run : Ninst.Run sevm devm (.exec .create2) devm') :
@@ -1172,9 +864,17 @@ private theorem ninstTransfer_run_create2 {sevm : Sevm} {devm devm' : Devm}
       simp only [create2Transfer, Option.some.injEq] at checked
       cases checked
       obtain ⟨x1, x2, x3, x4, xs, hstack, hrest⟩ := matches_four matched
-      obtain ⟨w, hw⟩ := create2_run_stack hstack (by simpa only [Ninst.create2] using run) hfork
+      obtain ⟨w, hw⟩ := create2_run_stack hstack (by simpa only [Ninst.create2] using run) hstateGas
       rw [hw]
       exact ⟨Or.inl rfl, hrest⟩
+
+private theorem ninstTransfer_run_create2 {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : create2Transfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .create2) devm') :
+    Matches output devm'.stack :=
+  ninstTransfer_run_create2_noStateGas hfork.rules_stateGas_none matched checked run
 
 /-- A successful `genericCall` step leaves exactly one word (the success flag) on its input
 stack. -/
@@ -1183,21 +883,8 @@ private theorem genericCall_stack {sevm : Sevm} {d : Devm} {gas : Nat} {value : 
     {code : ByteArray} {dp : Bool} {xl : Xlot} {sf : Devm}
     (h : XStep.Run (genericCall.step sevm d gas value caller target codeAddress transfer static
       ii is oi os code dp) xl (.ok sf)) :
-    ∃ w, sf.stack = w :: d.stack := by
-  simp only [genericCall.step] at h
-  split at h
-  · simp only [Bind.bind, Except.bind] at h
-    split at h
-    · cases XStep.run_ofExcept_error h
-    · rename_i e hpush
-      refine ⟨0, ?_⟩
-      rw [Except.ok.inj h.2, (Devm.push_of_push hpush).stack]
-      rfl
-  · simp only [XStep.Run] at h
-    rcases h with ⟨ex, -, hsplit⟩
-    rcases ex with err | child
-    · cases Resume.call_run_error hsplit.symm
-    · exact ⟨_, Resume.call_stack_flag hsplit.symm⟩
+    ∃ w, sf.stack = w :: d.stack :=
+  CallEffects.genericCall_stack h
 
 /-- A successful `DELEGATECALL` pops six words and pushes one. -/
 private theorem delegatecall_run_stack {sevm : Sevm} {s sf : Devm}
@@ -1205,65 +892,11 @@ private theorem delegatecall_run_stack {sevm : Sevm} {s sf : Devm}
     (hs : s.stack = g :: t :: ii :: is :: oi :: os :: xs)
     (h_run : Ninst.Run sevm s (.exec .delegatecall) sf)
     (hfork : CoveredFork sevm.benvStat.fork) :
-    ∃ w, sf.stack = w :: xs := by
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
-  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind] at h_run
-  simp only [hfork.rules_access, ForkRules.accessDelegation, hdeleg, ↓reduceIte] at h_run
-  rcases eq1 : Devm.pop s with _ | ⟨x1, s1⟩ <;> simp only [eq1] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  have e1 := (Devm.pop_of_pop eq1).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1
-  rcases eq2 : Devm.popToAdr s1 with _ | ⟨a2, s2⟩ <;> simp only [eq2] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rcases Devm.pop_of_popToAdr eq2 with ⟨x2, -, hp2⟩
-  have e2 := (Devm.pop_of_pop hp2).stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e2
-  rcases eq3 : Devm.popToNat s2 with _ | ⟨n3, s3⟩ <;> simp only [eq3] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rcases Devm.pop_of_popToNat_val eq3 with ⟨x3, f3, -⟩
-  have e3 := f3.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e3
-  rcases eq4 : Devm.popToNat s3 with _ | ⟨n4, s4⟩ <;> simp only [eq4] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rcases Devm.pop_of_popToNat_val eq4 with ⟨x4, f4, -⟩
-  have e4 := f4.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e4
-  rcases eq5 : Devm.popToNat s4 with _ | ⟨n5, s5⟩ <;> simp only [eq5] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rcases Devm.pop_of_popToNat_val eq5 with ⟨x5, f5, -⟩
-  have e5 := f5.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e5
-  rcases eq6 : Devm.popToNat s5 with _ | ⟨n6, s6⟩ <;> simp only [eq6] at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rcases Devm.pop_of_popToNat_val eq6 with ⟨x6, f6, -⟩
-  have e6 := f6.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e6
-  have hs6 : s6.stack = xs := by
-    have estack : s.stack = x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: s6.stack := by
-      rw [e1, e2, e3, e4, e5, e6]
-    have hparts := hs.symm.trans estack
-    simp only [List.cons.injEq] at hparts
-    exact hparts.2.2.2.2.2.2.symm
-  rcases hp9 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress s6 a2) a2 with
-    ⟨dp, na, code0, dagc, s9⟩
-  simp only [hp9] at h_run
-  have hs9 : s9.stack = s6.stack := by
-    have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp9
-    dsimp only at h
-    rw [← h, GasSchedule.accessDelegation_stack]
-    rfl
-  split at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rename_i s10 eq10
-  have hs10 : s10.stack = xs := (Devm.burn_of_chargeGas eq10).stack.symm.trans (hs9.trans hs6)
-  obtain ⟨w, hw⟩ := genericCall_stack h_run
-  exact ⟨w, hw.trans (congrArg (w :: ·) hs10)⟩
+    ∃ w, sf.stack = w :: xs :=
+  (CallEffects.call6_run_effects (Or.inl rfl) hfork.rules_stateGas_none hs h_run).1
 
-private theorem ninstTransfer_run_delegatecall {sevm : Sevm} {devm devm' : Devm}
-    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+private theorem ninstTransfer_run_delegatecall_noStateGas {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
     (matched : Matches input devm.stack)
     (checked : delegatecallTransfer input = some output)
     (run : Ninst.Run sevm devm (.exec .delegatecall) devm') :
@@ -1273,9 +906,17 @@ private theorem ninstTransfer_run_delegatecall {sevm : Sevm} {devm devm' : Devm}
       simp only [delegatecallTransfer, Option.some.injEq] at checked
       cases checked
       obtain ⟨x1, x2, x3, x4, x5, x6, xs, hstack, hrest⟩ := matches_six matched
-      obtain ⟨w, hw⟩ := delegatecall_run_stack hstack run hfork
+      obtain ⟨w, hw⟩ := (CallEffects.call6_run_effects (Or.inl rfl) hstateGas hstack run).1
       rw [hw]
       exact ⟨Or.inl rfl, hrest⟩
+
+private theorem ninstTransfer_run_delegatecall {sevm : Sevm} {devm devm' : Devm}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : delegatecallTransfer input = some output)
+    (run : Ninst.Run sevm devm (.exec .delegatecall) devm') :
+    Matches output devm'.stack :=
+  ninstTransfer_run_delegatecall_noStateGas hfork.rules_stateGas_none matched checked run
 
 /-- `EXTCODEHASH` at a known stack, read through Jaune's arm: it pops the address, charges the
 warm access or the fork's cold access (warming the address), and pushes zero for an empty
@@ -1324,10 +965,48 @@ theorem run_extcodehash_val {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
     · rw [← hq.memory]
       exact (hp.memory.trans hb.memory).symm
 
+/-- Successful BALANCE reads its input account and replaces exactly the top word,
+under either access schedule. -/
+theorem run_balance_stack {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
+    (hs : s.stack = x :: xs) (run : Ninst.Run sevm s (.reg .balance) r) :
+    r.stack = (s.getAcct x.toAdr).bal :: xs := by
+  rcases of_run_reg run with ⟨pc, h⟩
+  rcases s with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
+  change stack = x :: xs at hs
+  subst hs
+  simp only [Rinst.run, Rinst.runCore, liftMachMetaWorldExecution, liftMachMetaExecution,
+    liftMachMeta, Rinst.balanceCore, Footprint.toExecution, Footprint.liftOutcome,
+    Mach.pop, Mach.chargeGas, Mach.push] at h
+  revert h
+  generalize sevm.benvStat.rules.access = acc
+  intro h
+  cases acc with
+  | eip2929 =>
+    dsimp only at h
+    cases hg : safeSub gasLeft (if x.toAdr ∈ view.accessedAddresses then gasWarmAccess
+        else sevm.benvStat.rules.gas.coldAccountAccess) with
+    | none => simp only [hg, reduceCtorEq] at h
+    | some g =>
+      by_cases hl : xs.length < 1024
+      · simp only [hg, hl, ↓reduceIte, Except.ok.injEq] at h
+        subst h
+        rfl
+      · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
+  | flat fg =>
+    dsimp only at h
+    cases hg : safeSub gasLeft fg.balance with
+    | none => simp only [hg, reduceCtorEq] at h
+    | some g =>
+      by_cases hl : xs.length < 1024
+      · simp only [hg, hl, ↓reduceIte, Except.ok.injEq] at h
+        subst h
+        rfl
+      · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
+
 /-- Success-only soundness: a successful run of an accepted instruction leaves
 a stack matching the transferred pattern. -/
-theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
     (matched : Matches input devm.stack)
     (checked : ninstTransfer n input = some output)
     (run : Ninst.Run sevm devm n devm') :
@@ -1509,58 +1188,13 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
           exact matches_diff matched (diff_of_push (of_run_selfbalance_stack run))
       | balance =>
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
-          rcases of_run_reg run with ⟨pc, hr⟩
-          simp only [Rinst.run, Rinst.runCore, Rinst.balanceCore, hfork.rules_access,
-            liftMachMetaWorldExecution, liftMachMetaExecution, liftMachMeta,
-            Footprint.toExecution, Footprint.liftOutcome] at hr
-          cases hpop : devm.mach.pop with
-          | error e => simp only [ExceptT.stM_eq, hpop, reduceCtorEq] at hr
-          | ok p =>
-              rcases p with ⟨top, mach0⟩
-              cases hgas : Mach.chargeGas
-                (if top.toAdr ∈ devm.meta.accessedAddresses then gasWarmAccess
-                 else sevm.benvStat.rules.gas.coldAccountAccess) mach0 with
-              | error e => simp only [ExceptT.stM_eq, hpop, hgas, reduceCtorEq] at hr
-              | ok q =>
-                  rcases q with ⟨u, mach1⟩
-                  cases hpush : Mach.push (devm.world.state.get top.toAdr).bal mach1 with
-                  | error e => simp only [ExceptT.stM_eq, hpop, hgas, hpush, reduceCtorEq] at hr
-                  | ok q =>
-                      rcases q with ⟨u, mach2⟩
-                      simp only [ExceptT.stM_eq, hpop, hgas, hpush, Except.ok.injEq] at hr
-                      rw [← hr]
-                      have hp0 : Stack.Pop [top] devm.stack mach0.stack := by
-                        cases hstack : devm.mach.stack with
-                        | nil => simp only [ExceptT.stM_eq, Mach.pop, hstack, reduceCtorEq] at hpop
-                        | cons a rest =>
-                            simp only [ExceptT.stM_eq, Mach.pop, hstack, Except.ok.injEq,
-                              Prod.mk.injEq] at hpop
-                            rcases hpop with ⟨htop, hmach⟩
-                            change devm.mach.stack = top :: mach0.stack
-                            rw [hstack, htop]
-                            simpa only [List.cons.injEq, true_and] using congrArg Mach.stack hmach
-                      have h01 : mach0.stack = mach1.stack := by
-                        simp only [Mach.chargeGas] at hgas
-                        split at hgas
-                        · cases hgas
-                        · cases hgas
-                          rfl
-                      have hpopped : Stack.Pop [top] devm.stack mach1.stack := by
-                        rw [← h01]
-                        exact hp0
-                      have htail := matches_pop matched hpopped
-                      have hpushed : Stack.Push
-                          [(devm.world.state.get top.toAdr).bal]
-                          mach1.stack mach2.stack := by
-                        simp only [Mach.push] at hpush
-                        split at hpush
-                        · cases hpush
-                          simp only [Stack.Push, Split, List.cons_append, List.nil_append]
-                        · cases hpush
-                      apply matches_push_word (head := none)
-                        (x := (devm.world.state.get top.toAdr).bal)
-                        (headMatch := Or.inl rfl) htail
-                      exact hpushed
+          cases hstack : devm.stack with
+          | nil => simp only [hstack, Matches] at matched
+          | cons address xs =>
+              rw [hstack] at matched
+              obtain ⟨_, tailMatched⟩ := matched
+              rw [run_balance_stack hstack run]
+              exact ⟨Or.inl rfl, tailMatched⟩
       | extcodesize =>
           rcases unary_checked checked with ⟨head, tail, rfl, rfl⟩
           cases hstack : devm.stack with
@@ -1574,11 +1208,12 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
                   (by rw [hstack]; simpa only [List.append_nil] using pref_append (address :: xs) []) run).1
               have sameLength : devm'.stack.length = (address :: xs).length := by
                 rcases of_run_reg run with ⟨pc, hr⟩
-                simp only [Rinst.run, Rinst.runCore, hfork.rules_access] at hr
+                simp only [Rinst.run, Rinst.runCore] at hr
                 rcases Except.bind_eq_ok hr with ⟨⟨adr, d0⟩, hpop, hr⟩
                 rcases Devm.pop_of_popToAdr hpop with ⟨word, _, hp⟩
                 have hpStack := (Devm.pop_of_pop hp).stack
-                split at hr
+                cases haccess : sevm.benvStat.rules.access <;> simp only [haccess] at hr
+                all_goals try (split at hr)
                 all_goals
                   rcases Except.bind_eq_ok hr with ⟨d1, hgas, hpush⟩
                   have hbStack := (Devm.burn_of_chargeGas hgas).stack
@@ -1631,18 +1266,27 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       cases x with
       | call =>
           simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_call hfork matched checked run
+          exact ninstTransfer_run_call_noStateGas hstateGas matched checked run
       | staticcall =>
           simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_staticcall hfork matched checked run
+          exact ninstTransfer_run_staticcall_noStateGas hstateGas matched checked run
       | create2 =>
           simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_create2 hfork matched checked run
+          exact ninstTransfer_run_create2_noStateGas hstateGas matched checked run
       | delegatecall =>
           simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_delegatecall hfork matched checked run
+          exact ninstTransfer_run_delegatecall_noStateGas hstateGas matched checked run
       | _ => cases checked
   | _ => cases checked
+
+/-- Modern compatibility statement for success-only checked stack transfer. -/
+theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    (matched : Matches input devm.stack)
+    (checked : ninstTransfer n input = some output)
+    (run : Ninst.Run sevm devm n devm') :
+    Matches output devm'.stack :=
+  ninstTransfer_run_noStateGas hfork.rules_stateGas_none matched checked run
 
 /-- Naturality: an accepted transfer commutes with any relabelling of words
 that keeps unknown words unknown. -/

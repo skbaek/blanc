@@ -23,6 +23,8 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-head:Blanc.Xinst.ShapeCovered" =>
+      return head == some `Blanc.Xinst.ShapeCovered
   | "goal-head:HistFork" =>
       return head == some `Blanc.HistFork
   | "goal-head:NeutralFork" =>

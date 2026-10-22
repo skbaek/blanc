@@ -582,16 +582,28 @@ lemma Xinst.depth_lt
   rw [Frame.enter_run_depth henter]
   exact Xinst.step_spawn_depth hs
 
+/-- The actual entered child inherits the parent block environment. -/
+lemma Xinst.Run.some_child_benvStat {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {evm' : Evm} {exn' : Execution} {out : Execution}
+    (h : Xinst.Run sevm pre x (.some ⟨evm', exn'⟩) out) : evm'.sta.benvStat = sevm.benvStat := by
+  obtain ⟨f, rsm, hs, henter, _⟩ := XStep.Run.some_inv h
+  exact (Frame.enter_run_benvStat henter).trans (Xinst.step_spawn_benvStat hs)
+
 lemma Xinst.Run.some_child_fork {sevm : Sevm} {pre : Devm} {x : Xinst}
     {evm' : Evm} {exn' : Execution} {out : Execution}
     (h : Xinst.Run sevm pre x (.some ⟨evm', exn'⟩) out)
     (hfork : CoveredFork sevm.benvStat.fork) :
     CoveredFork evm'.sta.benvStat.fork := by
-  obtain ⟨f, rsm, hs, henter, _⟩ := XStep.Run.some_inv h
-  have h1 : f.inner.benv.stat = sevm.benvStat := Xinst.step_spawn_benvStat hs
-  have h2 : evm'.sta.benvStat = f.inner.benv.stat :=
-    Frame.enter_run_benvStat henter
-  rw [h2, h1]; exact hfork
+  rw [Xinst.Run.some_child_benvStat h]
+  exact hfork
+
+/-- The actual entered child inherits the parent block environment. -/
+lemma Evm.step_spawn_child_benvStat {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run child) : child.sta.benvStat = sevm.benvStat := by
+  obtain ⟨x, _, hspawn, _⟩ := Evm.step_spawn_inv hstep
+  exact (Frame.enter_run_benvStat henter).trans (Xinst.step_spawn_benvStat hspawn)
 
 lemma Evm.step_spawn_child_fork {pc : Nat} {sevm : Sevm} {pre : Devm}
     {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
@@ -599,11 +611,8 @@ lemma Evm.step_spawn_child_fork {pc : Nat} {sevm : Sevm} {pre : Devm}
     (henter : f.enter = .run child)
     (hfork : CoveredFork sevm.benvStat.fork) :
     CoveredFork child.sta.benvStat.fork := by
-  obtain ⟨x, _, hspawn, _⟩ := Evm.step_spawn_inv hstep
-  have h1 : f.inner.benv.stat = sevm.benvStat := Xinst.step_spawn_benvStat hspawn
-  have h2 : child.sta.benvStat = f.inner.benv.stat :=
-    Frame.enter_run_benvStat henter
-  rw [h2, h1]; exact hfork
+  rw [Evm.step_spawn_child_benvStat hstep henter]
+  exact hfork
 
 lemma chargeGas_getCode_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (chargeGas_worldEq_of_ok h).getCode a |>.symm
@@ -3363,9 +3372,9 @@ def Xinst.Shape (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
       s = genericCallAmsterdam.step sevm state d gas reservoir value caller
             target codeAddress stv isSt ii isz oi osz code dp nac ib)
 
-/-- The covered-fork restriction of `Xinst.Shape`: only the done / create /
-call arms, which are the only ones reachable when `sevm.benvStat.fork` is a
-`CoveredFork` (every covered fork forces `rules.stateGas = none`). -/
+/-- The ordinary-lane restriction of `Xinst.Shape`: only done/create/call arms.
+These are the shapes selected by `rules.stateGas = none`; the established
+`ShapeCovered` name is retained for existing consumers. -/
 def Xinst.ShapeCovered (sevm : Sevm) (devm : Devm) (s : XStep) : Prop :=
   (∃ ex, s = .done ex ∧ Execution.Rel Devm.InstructionFrame devm ex) ∨
   (∃ d endowment newAddress mi ms,
@@ -4070,13 +4079,11 @@ lemma Xinst.step_shape (sevm : Sevm) (devm : Devm) (x : Xinst) :
         h6' (Or.inl ⟨rfl, rfl⟩)
         (Or.inr fun hnd => amsterdamCallCode_of_not_delegation hnd)
 
-lemma Xinst.step_shapeCovered (sevm : Sevm) (devm : Devm) (x : Xinst)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+/-- Without state gas, actual execution has only the ordinary done/create/call
+shapes. An unavailable CREATE2 is retained as its actual error outcome. -/
+lemma Xinst.step_shapeNoStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (hsg : sevm.benvStat.rules.stateGas = none) :
     Xinst.ShapeCovered sevm devm (Xinst.step sevm devm x) := by
-  have hsg : sevm.benvStat.rules.stateGas = none :=
-    hfork.rules_stateGas_none
-  have hc2 : sevm.benvStat.rules.op.create2 = true :=
-    hfork.cases (motive := fun f => f.ruleSet.op.create2 = true) rfl rfl rfl rfl
   cases x with
   | create =>
     simp only [Xinst.step]
@@ -4092,19 +4099,23 @@ lemma Xinst.step_shapeCovered (sevm : Sevm) (devm : Devm) (x : Xinst)
     | some _state =>
       rw [hsg] at hcase; cases hcase
   | create2 =>
-    simp only [Xinst.step, hc2, ↓reduceIte]
-    cases hcase : sevm.benvStat.rules.stateGas with
-    | none =>
-      refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
-        (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
-      refine Xinst.shapeCovered_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
-      refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
-      refine Xinst.shapeCovered_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
-      refine Xinst.shapeCovered_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
-      exact Xinst.shapeCovered_create
-        (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
-    | some _state =>
-      rw [hsg] at hcase; cases hcase
+    by_cases hc2 : sevm.benvStat.rules.op.create2 = true
+    ·
+      simp only [Xinst.step, hc2, ↓reduceIte]
+      cases hcase : sevm.benvStat.rules.stateGas with
+      | none =>
+        refine Xinst.shapeCovered_bind (Devm.instructionFrame_refl devm)
+          (Devm.pop_instructionFrame devm) fun _ d1 h1 => ?_
+        refine Xinst.shapeCovered_bind h1 (Devm.popToNat_instructionFrame d1) fun _ d2 h2 => ?_
+        refine Xinst.shapeCovered_bind h2 (Devm.popToNat_instructionFrame d2) fun _ d3 h3 => ?_
+        refine Xinst.shapeCovered_bind h3 (Devm.pop_instructionFrame d3) fun _ d4 h4 => ?_
+        refine Xinst.shapeCovered_bindE h4 (chargeGas_instructionFrame _ d4) fun d5 h5 => ?_
+        exact Xinst.shapeCovered_create
+          (Devm.instructionFrame_trans h5 (Devm.memExtends_instructionFrame d5 _))
+      | some _state =>
+        rw [hsg] at hcase; cases hcase
+    · simp only [Xinst.step, hc2]
+      exact Xinst.shapeCovered_error (Devm.instructionFrame_refl devm)
   | call =>
     simp only [Xinst.step]
     cases hcase : sevm.benvStat.rules.stateGas with
@@ -4262,6 +4273,11 @@ lemma Xinst.step_shapeCovered (sevm : Sevm) (devm : Devm) (x : Xinst)
       exact (congrArg (fun t => t.2.2.1) hdel).symm
     | some _state =>
       rw [hsg] at hcase; cases hcase
+
+lemma Xinst.step_shapeCovered (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Xinst.ShapeCovered sevm devm (Xinst.step sevm devm x) :=
+  Xinst.step_shapeNoStateGas sevm devm x hfork.rules_stateGas_none
 
 /-! ### What a spawned child frame starts from
 

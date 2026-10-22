@@ -1,4 +1,5 @@
 import Blanc.Lift.MemMap
+import Blanc.Lift.CallEffects
 
 /-!
 # What one instruction step does to memory (contract-neutral)
@@ -22,34 +23,28 @@ namespace Blanc.Lift
 
 open Jaune
 theorem Devm.pop_cons {d : Devm} {x : B256} {xs : List B256} (h : d.stack = x :: xs) :
-    d.pop = .ok (x, d.withStack xs) := by
-  rcases d with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
-  change stack = x :: xs at h
-  subst h
-  rfl
+    d.pop = .ok (x, d.withStack xs) :=
+  CallEffects.Devm.pop_cons h
 
 theorem Devm.popToNat_cons {d : Devm} {x : B256} {xs : List B256} (h : d.stack = x :: xs) :
-    d.popToNat = .ok (x.toNat, d.withStack xs) := by
-  rcases d with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
-  change stack = x :: xs at h
-  subst h
-  rfl
+    d.popToNat = .ok (x.toNat, d.withStack xs) :=
+  CallEffects.Devm.popToNat_cons h
 
 theorem Devm.popToAdr_cons {d : Devm} {x : B256} {xs : List B256} (h : d.stack = x :: xs) :
-    d.popToAdr = .ok (x.toAdr, d.withStack xs) := by
-  rcases d with ⟨⟨stack, memory, gasLeft, stateGas⟩, view, world⟩
-  change stack = x :: xs at h
-  subst h
-  rfl
+    d.popToAdr = .ok (x.toAdr, d.withStack xs) :=
+  CallEffects.Devm.popToAdr_cons h
 
 theorem Devm.withStack_pop (d : Devm) (x : B256) (xs : List B256) :
-    (d.withStack (x :: xs)).pop = .ok (x, d.withStack xs) := Devm.pop_cons rfl
+    (d.withStack (x :: xs)).pop = .ok (x, d.withStack xs) :=
+  CallEffects.Devm.withStack_pop d x xs
 
 theorem Devm.withStack_popToNat (d : Devm) (x : B256) (xs : List B256) :
-    (d.withStack (x :: xs)).popToNat = .ok (x.toNat, d.withStack xs) := Devm.popToNat_cons rfl
+    (d.withStack (x :: xs)).popToNat = .ok (x.toNat, d.withStack xs) :=
+  CallEffects.Devm.withStack_popToNat d x xs
 
 theorem Devm.withStack_popToAdr (d : Devm) (x : B256) (xs : List B256) :
-    (d.withStack (x :: xs)).popToAdr = .ok (x.toAdr, d.withStack xs) := Devm.popToAdr_cons rfl
+    (d.withStack (x :: xs)).popToAdr = .ok (x.toAdr, d.withStack xs) :=
+  CallEffects.Devm.withStack_popToAdr d x xs
 
 /-- Every covered fork enables EIP-7702 delegation. -/
 private theorem coveredFork_delegationEnabled {sevm : Sevm}
@@ -63,20 +58,8 @@ theorem genericCall_memory {sevm : Sevm} {devm d' : Devm} {gas : Nat} {value : B
     {xl : Xlot}
     (h : XStep.Run (genericCall.step sevm devm gas value caller target ca st isc ii is oi os code dp)
       xl (.ok d')) :
-    ∃ ys : Bytes, ys.length ≤ os ∧ d'.memory = devm.memory.write oi ys := by
-  unfold genericCall.step at h
-  split at h
-  · simp only [Bind.bind, Except.bind] at h
-    split at h
-    · cases XStep.run_ofExcept_error h
-    rename_i d1 hp
-    obtain ⟨-, hd⟩ := h
-    cases hd
-    exact ⟨[], Nat.zero_le _, (Devm.push_of_push hp).memory.symm⟩
-  · obtain ⟨r, -, hr⟩ := h
-    rcases r with e | child
-    · exact (Resume.call_run_error hr.symm).elim
-    · exact ⟨_, List.length_take_le _ _, Resume.call_memory hr.symm⟩
+    ∃ ys : Bytes, ys.length ≤ os ∧ d'.memory = devm.memory.write oi ys :=
+  CallEffects.genericCall_memory h
 
 /-- `CALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
 theorem run_call_memory {sevm : Sevm} {d d' : Devm} {g c v ii is oi os : B256} {rest : List B256}
@@ -84,37 +67,8 @@ theorem run_call_memory {sevm : Sevm} {d d' : Devm} {g c v ii is oi os : B256} {
     (hs : d.stack = g :: c :: v :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .call) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
-      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
-  obtain ⟨xl, -, pc, h⟩ := run
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind, Except.assert,
-    Devm.pop_cons hs, Devm.withStack_pop, Devm.withStack_popToNat,
-    Devm.withStack_popToAdr] at h
-  split at h
-  · cases XStep.run_ofExcept_error h
-  rename_i d5 hc
-  have hm5 : d5.memory = d.memory :=
-    (Devm.burn_of_chargeGas hc).memory.symm.trans GasSchedule.accessDelegation_memory
-  split at h
-  · cases XStep.run_ofExcept_error h
-  split at h
-  · split at h
-    · cases XStep.run_ofExcept_error h
-    rename_i d7 hp
-    have hd : d' = _ := Except.ok.inj h.2
-    subst hd
-    refine ⟨[], Nat.zero_le _, ?_⟩
-    change d7.memory = _
-    rw [← (Devm.push_of_push hp).memory]
-    change d5.memory.extends _ = _
-    rw [hm5]
-    rfl
-  · obtain ⟨ys, hl, hm⟩ := genericCall_memory h
-    refine ⟨ys, hl, ?_⟩
-    rw [hm]
-    change (d5.memory.extends _).write _ _ = _
-    rw [hm5]
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call_run_effects hfork.rules_stateGas_none hs run).2
 
 /-- `DELEGATECALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
 theorem run_delegatecall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
@@ -122,23 +76,8 @@ theorem run_delegatecall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B
     (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .delegatecall) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
-      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
-  obtain ⟨xl, -, pc, h⟩ := run
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind,
-    Devm.pop_cons hs, Devm.withStack_popToNat,
-    Devm.withStack_popToAdr] at h
-  split at h
-  · cases XStep.run_ofExcept_error h
-  rename_i d5 hc
-  have hm5 : d5.memory = d.memory :=
-    (Devm.burn_of_chargeGas hc).memory.symm.trans GasSchedule.accessDelegation_memory
-  obtain ⟨ys, hl, hm⟩ := genericCall_memory h
-  refine ⟨ys, hl, ?_⟩
-  rw [hm]
-  change (d5.memory.extends _).write _ _ = _
-  rw [hm5]
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call6_run_effects (Or.inl rfl) hfork.rules_stateGas_none hs run).2
 
 /-- `STATICCALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
 theorem run_staticcall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
@@ -146,23 +85,8 @@ theorem run_staticcall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B25
     (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .staticcall) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
-      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys := by
-  obtain ⟨xl, -, pc, h⟩ := run
-  simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled (coveredFork_delegationEnabled hfork), Bind.bind, Except.bind,
-    Devm.pop_cons hs, Devm.withStack_popToNat,
-    Devm.withStack_popToAdr] at h
-  split at h
-  · cases XStep.run_ofExcept_error h
-  rename_i d5 hc
-  have hm5 : d5.memory = d.memory :=
-    (Devm.burn_of_chargeGas hc).memory.symm.trans GasSchedule.accessDelegation_memory
-  obtain ⟨ys, hl, hm⟩ := genericCall_memory h
-  refine ⟨ys, hl, ?_⟩
-  rw [hm]
-  change (d5.memory.extends _).write _ _ = _
-  rw [hm5]
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call6_run_effects (Or.inr rfl) hfork.rules_stateGas_none hs run).2
 
 /-- The `CREATE`-family return path leaves the parent's memory as it was. -/
 theorem resume_create_memory {parent child sf : Devm} {a : Adr}

@@ -1179,4 +1179,24 @@ example {fork : Fork} (covered : CoveredFork fork) : CoveredFork fork := by
   expect_no_recipe_offered "historical-fork-domain"
   exact covered
 
+-- EXPECT: xinst-step-shape
+-- These assertions exercise only the production suggestion matcher; the
+-- closing theorem owns the execution-shape property.
+example (sevm : Sevm) (pre : Devm) (op : Xinst)
+    (ordinary : sevm.benvStat.rules.stateGas = none) :
+    Xinst.ShapeCovered sevm pre (Xinst.step sevm pre op) := by
+  expect_recipe_trigger "goal-head:Blanc.Xinst.ShapeCovered"
+  expect_recipe_offered "xinst-step-shape"
+  blanc_suggest
+  exact Xinst.step_shapeNoStateGas sevm pre op ordinary
+
+-- The general shape carrier is a nearby, distinct goal and must not offer
+-- an ordinary-lane recipe merely because it mentions the same instruction.
+example (sevm : Sevm) (pre : Devm) (op : Xinst)
+    (shape : Xinst.Shape sevm pre (Xinst.step sevm pre op)) :
+    Xinst.Shape sevm pre (Xinst.step sevm pre op) := by
+  expect_no_recipe_trigger "goal-head:Blanc.Xinst.ShapeCovered"
+  expect_no_recipe_offered "xinst-step-shape"
+  exact shape
+
 end Blanc

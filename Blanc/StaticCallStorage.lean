@@ -12,12 +12,20 @@ namespace Blanc
 
 open Jaune
 
+/-- Actual STATICCALL preserves raw storage whenever the selected rules have no state gas. -/
+theorem Ninst.staticcall_inv_getStor_exact_noStateGas
+    {sevm : Sevm} {pre post : Devm}
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (run : Ninst.Run sevm pre Ninst.staticcall post) :
+    Devm.getStor pre = Devm.getStor post :=
+  Ninst.staticcall_getStor_eq_noStateGas hstateGas run
+
 /-- Every successful STATICCALL leaves every raw storage map equal on a covered fork. -/
 theorem Ninst.staticcall_inv_getStor_exact
     {sevm : Sevm} {pre post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.Run sevm pre Ninst.staticcall post) :
     Devm.getStor pre = Devm.getStor post :=
-  Ninst.staticcall_getStor_eq hfork run
+  Ninst.staticcall_inv_getStor_exact_noStateGas hfork.rules_stateGas_none run
 
 end Blanc

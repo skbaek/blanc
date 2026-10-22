@@ -1220,6 +1220,22 @@ lemma GasSchedule.accessDelegation_memory {gas : GasSchedule} {devm : Devm} {adr
   dsimp only [GasSchedule.accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
+/-- Fork-gated delegation preserves the operand stack in both availability branches. -/
+lemma ForkRules.accessDelegation_stack {rules : ForkRules} {devm : Devm} {adr : Adr} :
+    (rules.accessDelegation devm adr).2.2.2.2.stack = devm.stack := by
+  unfold Jaune.ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_stack
+  · rfl
+
+/-- Fork-gated delegation preserves memory in both availability branches. -/
+lemma ForkRules.accessDelegation_memory {rules : ForkRules} {devm : Devm} {adr : Adr} :
+    (rules.accessDelegation devm adr).2.2.2.2.memory = devm.memory := by
+  unfold Jaune.ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_memory
+  · rfl
+
 lemma GasSchedule.accessDelegation_transientStorage {gas : GasSchedule} {devm : Devm} {adr : Adr} :
     (gas.accessDelegation devm adr).2.2.2.2.transientStorage
       = devm.transientStorage := by

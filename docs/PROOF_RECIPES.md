@@ -570,3 +570,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/HistoricalFork.lean](../Blanc/HistoricalFork.lean) — `mainnet_histFork`
 - Registered symbols: `module:Blanc/HistoricalFork.lean`, `module:Blanc/ExecutionHistory.lean`, `declaration:Blanc.NeutralFork`, `declaration:Blanc.histForks`, `declaration:Blanc.HistFork`, `declaration:Blanc.HistFork.stateGas_none`, `declaration:Blanc.HistFork.bal_none`, `declaration:Blanc.HistFork.neutral`, `declaration:Blanc.HistFork.requests_covered`, `declaration:Blanc.CoveredFork.histFork`, `declaration:Blanc.HistFork.not_amsterdam`, `declaration:Blanc.mainnet_histFork`, `declaration:Blanc.ExecutionTrace.BodyStageCapabilities.historical`, `declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredBlockTrace_of_transition`, `declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredHistoryTrace_of_reachUsing`
 - Review: `proof-infrastructure` on `2026-10-22`
+
+## `xinst-step-shape`
+
+- Status: `active`
+- Triggers: `goal-head:Blanc.Xinst.ShapeCovered`
+- Preferred path: For the shape of an actual `Xinst.step sevm devm x` under `sevm.benvStat.rules.stateGas = none`, apply `Xinst.step_shapeNoStateGas`. The done/create/call decomposition retains the actual disabled-CREATE2 error arm and actual access/delegation rules. The existing `Xinst.step_shapeCovered` supplies the modern compatibility interface. When crossing an entered child, transport selected capabilities with the exact environment equality from `Xinst.Run.some_child_benvStat` or `Evm.step_spawn_child_benvStat`.
+- Boundary: This selects the ordinary no-state-gas lane. It proves no opcode availability, successful execution, gas equality or child commitment. For a state-gas lane use the general `Xinst.step_shape`, whose additional creation/call arms remain explicit. Child-environment equality alone proves no child state or storage preservation.
+- Owner module: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean)
+- Canonical example: [Blanc/CommonProofs.lean](../Blanc/CommonProofs.lean) — `Xinst.step_shapeNoStateGas`
+- Registered symbols: `module:Blanc/CommonProofs.lean`, `declaration:Blanc.Xinst.ShapeCovered`, `declaration:Blanc.Xinst.step_shapeNoStateGas`, `declaration:Blanc.Xinst.step_shapeCovered`, `declaration:Blanc.Xinst.Run.some_child_benvStat`, `declaration:Blanc.Evm.step_spawn_child_benvStat`
+- Review: `proof-infrastructure` on `2026-10-23`

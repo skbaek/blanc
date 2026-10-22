@@ -1222,3 +1222,22 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-22"
+
+[[recipe]]
+id = "xinst-step-shape"
+status = "active"
+triggers = ["goal-head:Blanc.Xinst.ShapeCovered"]
+preferred_path = "For the shape of an actual `Xinst.step sevm devm x` under `sevm.benvStat.rules.stateGas = none`, apply `Xinst.step_shapeNoStateGas`. The done/create/call decomposition retains the actual disabled-CREATE2 error arm and actual access/delegation rules. The existing `Xinst.step_shapeCovered` supplies the modern compatibility interface. When crossing an entered child, transport selected capabilities with the exact environment equality from `Xinst.Run.some_child_benvStat` or `Evm.step_spawn_child_benvStat`."
+boundary = "This selects the ordinary no-state-gas lane. It proves no opcode availability, successful execution, gas equality or child commitment. For a state-gas lane use the general `Xinst.step_shape`, whose additional creation/call arms remain explicit. Child-environment equality alone proves no child state or storage preservation."
+owner_module = "Blanc/CommonProofs.lean"
+canonical_example = "Blanc/CommonProofs.lean:Xinst.step_shapeNoStateGas"
+symbols = [
+  "module:Blanc/CommonProofs.lean",
+  "declaration:Blanc.Xinst.ShapeCovered",
+  "declaration:Blanc.Xinst.step_shapeNoStateGas",
+  "declaration:Blanc.Xinst.step_shapeCovered",
+  "declaration:Blanc.Xinst.Run.some_child_benvStat",
+  "declaration:Blanc.Evm.step_spawn_child_benvStat",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-23"

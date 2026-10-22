@@ -1845,7 +1845,12 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `processCreateMessage.chargeCodeGas_instructionFrame` covers code-deposit
   charging on both outcomes, including optional EF rejection and state-gas
   charges. `ForkRules.accessDelegation_instructionFrame` covers the activated
-  facade, including disabled delegation. The coarse frame preserves state,
+  facade, including disabled delegation. For exact operand-stack and memory
+  projections, use `ForkRules.accessDelegation_stack` and
+  `ForkRules.accessDelegation_memory` in
+  [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean). Both cover enabled and
+  disabled delegation without a modern-fork premise. Their equality conclusions
+  have no reliable registered single goal-head trigger. The coarse frame preserves state,
   deletion and created-account sets, transient storage, and storage-write
   annotations; it leaves touched-account metadata unobserved. Exact
   `Pop`/`Burn` and Mach-only frames retain touched-account equality.
@@ -1855,6 +1860,39 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   These operation-specific relations occur inside the shared outcome carrier;
   no existing registered single goal-head trigger distinguishes them, so use
   this branch and the exact operation declaration before unfolding its walk.
+- For successful calls under `rules.stateGas = none`, use
+  `CallEffects.call_run_effects` for seven-operand `CALL` and
+  `CallEffects.call6_run_effects` for six-operand `DELEGATECALL` or `STATICCALL`
+  in [`Blanc/Lift/CallEffects.lean`](../Blanc/Lift/CallEffects.lean). They give
+  the exact one-word stack result and bounded output-window memory write,
+  handling flat and EIP-2929 access, enabled or disabled delegation, balance
+  and depth failure, and child failure as well as success. The same owner
+  provides `CallEffects.genericCall_stack`, `CallEffects.genericCall_memory`,
+  and the `CallEffects.Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons` and
+  `withStack_pop`/`withStack_popToNat`/`withStack_popToAdr` operand helpers.
+  These observations prove no settlement or gas equality; their
+  conjunction/equality goals have no reliable registered single goal-head
+  trigger.
+- `Xinst.step_shapeNoStateGas` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) gives the
+  `Xinst.ShapeCovered` done/create/call decomposition from the actual
+  `rules.stateGas = none` capability, including disabled CREATE2's error arm.
+  Its existing `Xinst.step_shapeCovered` wrapper keeps the modern interface.
+  The `xinst-step-shape` recipe applies only to this ordinary-lane shape goal;
+  it proves no opcode availability, successful run, gas equality or child commitment.
+  For capability transport into an actual entered child, use
+  `Xinst.Run.some_child_benvStat` or `Evm.step_spawn_child_benvStat` in the same
+  owner: each gives exact parent/child block-environment equality without a
+  fork-domain premise. Existing modern child-fork facts wrap these equalities.
+  Their equality conclusions have no additional reliable single-head trigger.
+- For successful checked stack transfer, use `ninstTransfer_run_noStateGas`
+  in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean). It requires only
+  `rules.stateGas = none`, handles both access schedules and delegation
+  settings, and derives opcode availability from actual success where needed.
+  `run_balance_stack` in the same module gives BALANCE's exact account-read
+  stack result under either access schedule. The original `ninstTransfer_run`
+  retains its modern statement. These stack observations have no reliable
+  registered single goal-head trigger.
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
   `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
@@ -2144,6 +2182,18 @@ assert a historical-uniform NoDel invariant.
   `Msg.getStor_eq_of_safeTransfer` gives global storage equality for disabled
   transfer, zero value, or self-transfer at a protected account. These facts
   say nothing about transient storage, logs, balances or gas.
+  For an actual historical or modern run whose selected rules satisfy
+  `sevm.benvStat.rules.stateGas = none`, use
+  `Exec.getStor_committedPost_eq_of_static_noStateGas`,
+  `Exec.storageView_committedPost_eq_of_static_noStateGas`,
+  `Exec.getStor_committedPost_eq_of_static_protected_noStateGas`, and
+  `Exec.protected_committedPost_of_static_noStateGas` with the same static,
+  committed and protected-target-or-empty-code premises as their modern
+  wrappers. `Ninst.staticcall_getStor_eq_noStateGas` and
+  `Ninst.staticcall_inv_getStor_noStateGas` derive readiness from actual
+  STATICCALL routing, including flat/EIP-2929 access and disabled/enabled
+  delegation. These equality conclusions do not identify a unique proof
+  route by goal head; select the theorem with its actual-run premises here.
 - Representation-exact storage silence of static execution:
   [`Blanc/StaticCallStorage.lean`](../Blanc/StaticCallStorage.lean).  Use it
   when the boundary is the `Stor` tree itself (a replay carrier that meets at
@@ -2153,6 +2203,11 @@ assert a historical-uniform NoDel invariant.
   `Ninst.staticcall_inv_getStor_exact` exposes the same equality for one
   successful `STATICCALL` on a fork named by `CoveredFork` (Prague, Osaka,
   BPO1 and BPO2; Amsterdam is excluded), with no new caller premise.
+  Its capability-level counterpart is
+  `Ninst.staticcall_inv_getStor_exact_noStateGas`: it needs only the selected
+  rules' state-gas absence and the actual successful STATICCALL. It inherits
+  the same raw-storage equality without supplying opcode availability,
+  child commitment, gas equality or any other modern fork capability.
   For a recursive source walk at one covered `Sevm`, use
   `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
   `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use
@@ -5202,6 +5257,13 @@ contract-neutral.
   in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
   (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
   map across `GAS` and constant-window `STATICCALL`).
+  The state-gas-capability forms are `staticcall_run_memory_noStateGas`,
+  `absMem_sound_noStateGas` and `step_mem_sound_noStateGas`. They preserve
+  the same bounded output-window and memory-map invariants using actual
+  selected access/delegation rules. Existing covered theorem statements
+  forward to these cores. Select these routes from the actual instruction
+  and memory-map premises; a general equality or memory-preservation goal
+  alone does not distinguish them from writes, extension or pure steps.
 - Every execution prefix to a certificate node (all outcomes, no success
   premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
   (checked node, pc, stack segments matched per pending function), the
