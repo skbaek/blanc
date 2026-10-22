@@ -1650,6 +1650,7 @@ import Blanc.Lift.Usdc.Proxy.Jumps
 import Blanc.Lift.Usdc.ProxyCreation.Cert
 import Blanc.Lift.Usdc.ProxyCreation.Check
 import Blanc.Lift.Usdc.ProxyCreation.Jumps
+import Blanc.Lift.Usdc.ProxyCreation.CodeSize
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk

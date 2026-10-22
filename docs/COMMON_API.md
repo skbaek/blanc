@@ -147,6 +147,11 @@ registry has identified the likely vocabulary.
   `G + prices.extCode + rules.gas.codeReadSurcharge`, and stack room.
   It returns the actual pre-state code-size word, preserves `d.stateGas`,
   and needs no covered-fork, staticness or selected code-size premise.
+  A concrete source-fragment consumer is `ProxyCreation.isContract_runExact`
+  in [`Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean`](../Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean):
+  the registered constructor entry returns the actual B256 code-size predicate
+  at the flat charge plus 47 gas. This is an exact compiled source walk;
+  actual bytecode entry/return and whole-constructor execution remain separate.
 - For the loose gas-free walk prefix reaching an intermediate cut of a
   successful source run, with source-path accumulation, use
   [`Blanc/RunPrefix.lean`](../Blanc/RunPrefix.lean).
