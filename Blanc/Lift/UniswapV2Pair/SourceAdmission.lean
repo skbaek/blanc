@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.MutableTurns
+import Blanc.ExecutionFrameTime
 
 namespace Blanc.Lift.UniswapV2Pair
 
@@ -158,5 +159,78 @@ theorem AdmittedSourceConsumes.of_done {Auth : Exec.Deriv → Entry → Transcri
   cases consumed with
   | finished frame bytes => exact .finished frame bytes free
   | failed frame failure genuine => exact .failed frame failure genuine free
+
+/-- A frame selected into a mutable call's event queue runs at the calling root's block statics:
+it is a raw frame root of the entered child (`Exec.retainedTargetFramesFromAt_rawFrameRoot`), which
+inherits the caller's statics (`Exec.frameAdmitted_benvStat`, `Evm.step_spawn_child_benvStat`). -/
+theorem SourceSlotEvents.located_benvStat {root : Exec.Deriv} {x : Xinst}
+    {call : CallOccurrenceStep root x} {pair : Adr} {index : Nat}
+    {events : List (Log ⊕ Exec.LocatedFrame)} (observed : SourceSlotEvents call pair index events)
+    {located : Exec.LocatedFrame} (member : Sum.inr located ∈ events) :
+    located.frame.sevm.benvStat = root.sevm.benvStat := by
+  rcases observed with ⟨-, rfl⟩ |
+    ⟨evm, raw, callee, resume, pc, child, next, spawn, enter, resumed, -, -, rfl⟩
+  · cases member
+  by_cases settles : Jaune.Frame.settlementCommits callee raw = true
+  · rw [dite_eq_left_of_eq_true (eq_true settles)] at member
+    have selected : located ∈ (Exec.targetLogEventsFrom pair [index] 0 child
+        (Jaune.Frame.raw_commits_of_settlementCommits settles)).filterMap Sum.getRight? :=
+      List.mem_filterMap.mpr ⟨_, member, rfl⟩
+    rw [Exec.targetLogEventsFrom_frames] at selected
+    obtain ⟨rawRoot, target⟩ := Exec.retainedTargetFramesFromAt_rawFrameRoot pair child _ selected
+    rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq call.sameFrame]
+    exact (Exec.frameAdmitted_benvStat child pair _ rawRoot target).trans
+      (Evm.step_spawn_child_benvStat spawn enter)
+  · rw [dite_eq_right_of_eq_false (eq_false settles)] at member
+    cases member
+
+mutual
+/-- Admission under `Auth` is admission under `Auth'` when `Auth` implies `Auth'` at every frame
+whose block statics satisfy `P` and the root's statics satisfy `P`: every frame admitted below the
+root runs at the root's statics (`SourceSlotEvents.located_benvStat`). -/
+theorem SourceAdmission.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {root start : Exec.Deriv} {index : Nat} {segment : SegmentResult} {transcript : Transcript}
+    {out : RunResult} {selected : PositionalConsumes root start index segment transcript out}
+    (admits : P root.sevm.benvStat) :
+    SourceAdmission Auth selected → SourceAdmission Auth' selected
+  | .finished frame bytes free => .finished frame bytes free
+  | .failed frame failure genuine free => .failed frame failure genuine free
+  | .nextCall observed gap staticExternal present noCodeTurns during rest admittedRest =>
+      .nextCall observed gap staticExternal present noCodeTurns during rest
+        (SourceAdmission.mono_benvStat weaken admits admittedRest)
+  | .nextMutableCall (events := events) observed gap queue present noCodeTurns during rest
+      selectedTurns mapped transcriptEq authentic admittedDuring admittedRest =>
+      have inherited : ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat :=
+        fun located member => (queue.located_benvStat member).symm ▸ admits
+      .nextMutableCall observed gap queue present noCodeTurns during rest selectedTurns mapped
+        transcriptEq
+        (fun located entry nested member => weaken _ entry nested
+          (inherited located (by rw [← mapped]; exact List.mem_map_of_mem (f := MutableTurn.event) member))
+          (authentic located entry nested member))
+        (MutableAdmission.mono_benvStat weaken inherited admittedDuring)
+        (SourceAdmission.mono_benvStat weaken admits admittedRest)
+
+/-- `SourceAdmission.mono_benvStat` for a mutable turn queue whose selected frames run at block
+statics satisfying `P`. -/
+theorem MutableAdmission.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {frame : Frame} {request : Request} {turn : Nat} {events : List (Log ⊕ Exec.LocatedFrame)}
+    {transcript : Transcript} {out : TurnsResult}
+    {selected : PositionalMutableTurns frame request turn events transcript out}
+    (inherited : ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat) :
+    MutableAdmission Auth selected → MutableAdmission Auth' selected
+  | .done frame request turn => .done frame request turn
+  | .foreignLog mutable rest admittedRest =>
+      .foreignLog mutable rest (MutableAdmission.mono_benvStat weaken
+        (fun other member => inherited other (List.mem_cons_of_mem _ member)) admittedRest)
+  | .invoke (located := located) selected output rest admittedChild admittedRest =>
+      .invoke selected output rest
+        (SourceAdmission.mono_benvStat weaken (inherited located List.mem_cons_self) admittedChild)
+        (MutableAdmission.mono_benvStat weaken
+          (fun other member => inherited other (List.mem_cons_of_mem _ member)) admittedRest)
+end
 
 end Blanc.Lift.UniswapV2Pair

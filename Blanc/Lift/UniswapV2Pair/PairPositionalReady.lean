@@ -18,7 +18,7 @@ theorem pair_admitted_transfer_supplyH {U : WriterKey → Prop}
     (invocation := invocation) rep
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
     representable codeEq stateGas bal selector run
-  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
+  refine pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep touched
     (PairEntryAt.transfer selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transfer.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
@@ -26,7 +26,7 @@ theorem pair_admitted_transfer_supplyH {U : WriterKey → Prop}
 theorem pair_admitted_transfer_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb) :=
-  PairStepSupplyWithH.covered (pair_admitted_transfer_supplyH inj apart)
+  PairAdmittedSupplyH.covered (pair_admitted_transfer_supplyH inj apart)
 
 
 /-- The approve entry's admitted supply from the historical rule facts alone. -/
@@ -40,13 +40,13 @@ theorem pair_admitted_approve_supplyH {U : WriterKey → Prop}
     approve_bytecode_positional_consumesH (invocation := invocation) rep
       (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
       representable codeEq stateGas bal selector run
-  exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
+  exact pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep touched
     (PairEntryAt.approve selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) representation
 
 theorem pair_admitted_approve_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) :=
-  PairStepSupplyWithH.covered (pair_admitted_approve_supplyH inj apart)
+  PairAdmittedSupplyH.covered (pair_admitted_approve_supplyH inj apart)
 
 
 /-- The transferFrom entry's admitted supply from the historical rule facts alone. -/
@@ -60,7 +60,7 @@ theorem pair_admitted_transferFrom_supplyH {U : WriterKey → Prop}
     (invocation := invocation) rep
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
     representable codeEq stateGas bal selector run
-  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
+  refine pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep touched
     (PairEntryAt.transferFrom selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transferFrom.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
@@ -68,7 +68,7 @@ theorem pair_admitted_transferFrom_supplyH {U : WriterKey → Prop}
 theorem pair_admitted_transferFrom_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd) :=
-  PairStepSupplyWithH.covered (pair_admitted_transferFrom_supplyH inj apart)
+  PairAdmittedSupplyH.covered (pair_admitted_transferFrom_supplyH inj apart)
 
 
 /-- The initialize entry's admitted supply from the historical rule facts alone. -/
@@ -79,7 +79,7 @@ theorem pair_admitted_initialize_supplyH {U : WriterKey → Prop}
     representable selector good sub rep
   obtain ⟨_, _, _, _, _, result, consumed, _⟩ := initialize_bytecode_positional_consumesH
     (invocation := invocation) rep representable freshOutput codeEq stateGas bal selector run
-  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
+  refine pairStepOutcome_with (Consumes := PairAdmittedConsumesH) (keys := []) inj apart sub rep
     (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.initializeEntry selector)
     (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.«initialize».root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => Or.inl h) ?_
   rw [result.sourceCurrent]
@@ -88,7 +88,7 @@ theorem pair_admitted_initialize_supplyH {U : WriterKey → Prop}
 theorem pair_admitted_initialize_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) :=
-  PairStepSupplyWithH.covered (pair_admitted_initialize_supplyH inj apart)
+  PairAdmittedSupplyH.covered (pair_admitted_initialize_supplyH inj apart)
 
 
 /-- The permit entry's admitted supply from the historical rule facts alone. -/
@@ -100,17 +100,17 @@ theorem pair_admitted_permit_supplyH {U : WriterKey → Prop}
     representable selector good sub rep
   have touched := good.permitOwn selector
   obtain ⟨_, _, _, _, actual, settled, views, result, _, positional, _, _, _⟩ :=
-    permit_bytecode_admitted_consumesH (Auth := LockedAuth) (invocation := invocation) inj apart sub sem image rep touched
+    permit_bytecode_admitted_consumesH (Auth := LockedAuthH) (invocation := invocation) inj apart sub sem image rep touched
       (by rw [installed]; exact image.symm) representable codeEq stateGas bal selector freshOutput run good.views
   obtain ⟨_, representation, _, _, _, _, _, _, _, _, output, _⟩ := result
-  exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
+  exact pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep touched
     (PairEntryAt.permit selector) positional rfl output.symm (fun _ h => h) representation
 
 theorem pair_admitted_permit_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf) :=
-  PairStepSupplyWithH.covered (pair_admitted_permit_supplyH inj apart sem image)
+  PairAdmittedSupplyH.covered (pair_admitted_permit_supplyH inj apart sem image)
 
 
 /-- The seventeen views' admitted supply from the historical rule facts alone. -/
@@ -123,7 +123,7 @@ theorem pair_admitted_view_supplyH {U : WriterKey → Prop}
   obtain ⟨_, _, _, storage, _, _, _, consumed, _, frameCurrent, _, _⟩ :=
     staticView_source_positional_selectedH (ctx := writerContext sevm invocation) rep fresh
       representable rfl codeEq stateGas bal view selector run
-  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep good.viewsOwn
+  refine pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep good.viewsOwn
     (PairEntryAt.view view selector) (AdmittedSourceConsumes.of_done consumed (view.noCallEntry.root_noExecH codeEq stateGas (by rw [StaticView.noCallEntry_selector]; exact selector) run)) rfl rfl (fun _ h => h) ?_
   rw [frameCurrent, storage sevm.currentTarget]
   exact rep.extend fresh
@@ -131,7 +131,7 @@ theorem pair_admitted_view_supplyH {U : WriterKey → Prop}
 theorem pair_admitted_view_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (view : StaticView) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = view.selector) :=
-  PairStepSupplyWithH.covered (pair_admitted_view_supplyH inj apart view)
+  PairAdmittedSupplyH.covered (pair_admitted_view_supplyH inj apart view)
 
 
 theorem pair_admitted_mint_supply {U : WriterKey → Prop}
@@ -160,15 +160,15 @@ theorem pair_admitted_sync_supplyH {U : WriterKey → Prop}
   obtain ⟨_, _, result, _, representation, _, _, output⟩ := sync_bytecode_exact_consumesH
     invocation rep sem image (by rw [installed]; exact image.symm) freshOutput codeEq stateGas bal
     selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
+  exact pairStepOutcome_with (Consumes := PairAdmittedConsumesH) (keys := []) inj apart sub rep
     (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.sync selector)
-    (result.admittedConsumes (Auth := LockedAuth)) rfl output.symm (fun _ h => Or.inl h) representation
+    (result.admittedConsumes (Auth := LockedAuthH)) rfl output.symm (fun _ h => Or.inl h) representation
 
 theorem pair_admitted_sync_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9) :=
-  PairStepSupplyWithH.covered (pair_admitted_sync_supplyH inj apart sem image)
+  PairAdmittedSupplyH.covered (pair_admitted_sync_supplyH inj apart sem image)
 
 
 /-- Ready rules retain recursive admission on the same selected source result. -/

@@ -6935,7 +6935,15 @@ rules that rule out state gas (`PairFrameSupplyWithOn`,
 authenticated by `PermitRecoveryAuthH`; `LockedAuthH.toCovered` recovers
 `LockedAuth`), `lockedPairSupplyH`, `lockedPairAdmittedSupplyH` and
 `locked_admitted_mutable_source_slot_turnsH` in `LockedSupply.lean` and
-`MutablePositionalLockedSupply.lean`.
+`MutablePositionalLockedSupply.lean`. Every frame admitted below a root runs at
+the root's block statics (`SourceSlotEvents.located_benvStat`, from the generic
+`Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Exec.frameAdmitted_benvStat`),
+so `SourceAdmission.mono_benvStat` and `MutableAdmission.mono_benvStat` in
+`SourceAdmission.lean` weaken the authentication wherever it holds under a
+predicate of those statics. The Pair endpoint under the historical facts is
+`PairAdmittedConsumesH` (`LockedAuthH` admission) with `PairAdmittedSupplyH`;
+`PairAdmittedConsumesH.covered` and `PairAdmittedSupplyH.covered` recover the
+modern forms under `CoveredFork`.
 
 For a retained factory fee observation, `PairFeeObservation.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
