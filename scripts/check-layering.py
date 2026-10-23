@@ -1385,6 +1385,7 @@ CONTRACTS = {
         "Lift.Usdc.OldInitializerV1Payload",
         "Lift.Usdc.OldInitializerV1Staging",
         "Lift.Usdc.OldInitializerV1Callee",
+        "Lift.Usdc.OldInitializerV1Root",
         "Lift.Usdc.ImplV1Ws",
         "Lift.Usdc.ImplV1Ws.Ann",
         "Lift.Usdc.ImplV1Ws.Check",

@@ -106,27 +106,16 @@ theorem terminal_zero_all {K : B256 → Prop} {a : Adr} {sevm : Sevm} {pre post 
     rfl
 
 /-- Fold zero preservation through the actual lifted derivation, including
-callee returns and continuations. External and terminal laws concern their
-real one-step executions; neither is a whole-run endpoint premise. They must
-be discharged by the eventual runtime/history consumer. -/
-theorem runP_zero {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
-    {fs : List SFunc} {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
-    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
-    (children : ∀ {d d' x xl}, P sevm d (.exec x) d' → xl.Filled →
-      Xinst.Run sevm d x xl (.ok d') →
+callee returns and continuations, from any one-step zero law. Fork-free: the
+step law and terminal law are the caller's. -/
+theorem runP_zero_of_step {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm}
+    (stepZero : ∀ {d n d'}, P sevm d n d' →
       ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d')
     (terminals : ∀ {d d' l}, Linst.Run sevm d l (.ok d') →
       ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d') :
     ∀ {d f out}, SFunc.RunP P fs sevm d f out → ZeroSlots K sevm.currentTarget d →
       ZeroSlots K sevm.currentTarget (Outcome.devm out) := by
-  have stepZero : ∀ {d n d'}, P sevm d n d' →
-      ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d' := by
-    intro d n d' step zero
-    refine (observations step).step_zero fork (steps step) ?_ zero
-    intro x xl instruction filled run
-    subst n
-    exact children step filled run
   intro d f out run
   induction run with
   | zero _ popped _ ih =>
@@ -164,6 +153,79 @@ theorem runP_zero {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → 
   | pcAt step _ _ ih =>
       intro seed
       exact ih (stepZero step seed)
+
+/-- Fold zero preservation through the actual lifted derivation, including
+callee returns and continuations. External and terminal laws concern their
+real one-step executions; neither is a whole-run endpoint premise. They must
+be discharged by the eventual runtime/history consumer. -/
+theorem runP_zero {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (children : ∀ {d d' x xl}, P sevm d (.exec x) d' → xl.Filled →
+      Xinst.Run sevm d x xl (.ok d') →
+      ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d')
+    (terminals : ∀ {d d' l}, Linst.Run sevm d l (.ok d') →
+      ZeroSlots K sevm.currentTarget d → ZeroSlots K sevm.currentTarget d') :
+    ∀ {d f out}, SFunc.RunP P fs sevm d f out → ZeroSlots K sevm.currentTarget d →
+      ZeroSlots K sevm.currentTarget (Outcome.devm out) := by
+  refine runP_zero_of_step ?_ terminals
+  intro d n d' step zero
+  refine (observations step).step_zero fork (steps step) ?_ zero
+  intro x xl instruction filled run
+  subst n
+  exact children step filled run
+
+/-- Zero across one actual non-external instruction, with no fork premise:
+an SSTORE by `GuardObs.sstore_zero`, every other such instruction is
+state-silent. -/
+theorem GuardObs.step_zero_noExec {K : B256 → Prop} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (obs : GuardObs K False sevm pre n) (run : Ninst.Run sevm pre n post)
+    (noExec : ∀ x, n ≠ .exec x)
+    (zero : ZeroSlots K sevm.currentTarget pre) : ZeroSlots K sevm.currentTarget post := by
+  by_cases store : n = .reg .sstore
+  · subst store
+    exact obs.sstore_zero run zero
+  have silent : n.stateSilent = true := by
+    cases n with
+    | exec x => exact (noExec x rfl).elim
+    | reg r =>
+        cases r <;> first | rfl | exact (store rfl).elim
+    | push => rfl
+    | dupn => rfl
+    | swapn => rfl
+    | exchange => rfl
+  have state : post.state = pre.state := by
+    have whole : SFunc.RunP Ninst.Run ([] : List SFunc) sevm pre (.next n (.last .stop))
+        (.halted post) := .next run (.last rfl)
+    exact SFunc.RunP.state_of_silent id (S := []) rfl
+      (by simp only [SFunc.silent, silent, Bool.true_and]; rfl) rfl whole
+  exact zero.of_getStor_eq (by simp only [Devm.getStor, Devm.getAcct, state])
+
+/-- Fork-free zero fold for a lifted run with no external instruction:
+every step is observed non-increasing on `K` and not `.exec`; terminals use
+their actual semantics. Only the initial seed remains explicit. -/
+theorem runP_zero_noExec {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm}
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (noExec : ∀ {d n d'}, P sevm d n d' → ∀ x, n ≠ .exec x) :
+    ∀ {d f out}, SFunc.RunP P fs sevm d f out → ZeroSlots K sevm.currentTarget d →
+      ZeroSlots K sevm.currentTarget (Outcome.devm out) :=
+  runP_zero_of_step
+    (fun step zero => (observations step).step_zero_noExec (steps step) (noExec step) zero)
+    (fun run zero => terminal_zero_all run zero)
+
+/-- Halted whole-program form of `runP_zero_noExec`. -/
+theorem progRunP_zero_noExec {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} {pre post : Devm}
+    (steps : ∀ {d n d'}, P sevm d n d' → Ninst.Run sevm d n d')
+    (observations : ∀ {d n d'}, P sevm d n d' → GuardObs K False sevm d n)
+    (noExec : ∀ {d n d'}, P sevm d n d' → ∀ x, n ≠ .exec x)
+    (run : SProg.RunP P fs sevm pre post) (zero : ZeroSlots K sevm.currentTarget pre) :
+    ZeroSlots K sevm.currentTarget post := by
+  obtain ⟨f, _, actual⟩ := run
+  exact runP_zero_noExec steps observations noExec actual zero
 
 /-- Entry zero's whole-program form of `runP_zero`, for an actual halted run. -/
 theorem progRunP_zero {K : B256 → Prop} {P : Sevm → Devm → Ninst → Devm → Prop}

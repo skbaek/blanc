@@ -5705,6 +5705,11 @@ contract-neutral.
   `Xinst.Run` preservation law. `runP_zero` and `progRunP_zero` fold through
   the actual lifted derivation, including callee returns and continuations,
   with explicit external-step and terminal semantic obligations.
+  `runP_zero_of_step` is that fold from any one-step zero law, with no fork.
+  For a run whose same-run observation excludes every external instruction,
+  `GuardObs.step_zero_noExec`, `runP_zero_noExec` and `progRunP_zero_noExec`
+  need no fork premise and discharge terminals by actual semantics; only the
+  initial seed remains explicit.
   `terminal_zero` keeps the non-SELFDESTRUCT compatibility form;
   `terminal_zero_all` handles every actual successful terminal, including
   SELFDESTRUCT. Its storage law in
@@ -5811,6 +5816,18 @@ contract-neutral.
   `qdest`, `qbranch`, `qbranchTo` for strengthening a run in place.
   [`Blanc/Lift/Usdc/OldInitializerV1Callee.lean`](../Blanc/Lift/Usdc/OldInitializerV1Callee.lean)
   is the worked V1 consumer (`callee_obs`).
+  [`Blanc/Lift/Usdc/OldInitializerV1Root.lean`](../Blanc/Lift/Usdc/OldInitializerV1Root.lean)
+  composes it with the original successful fresh V1 execution as V2 does:
+  `implV1_initialize_observed` walks the actual dispatcher (free-pointer
+  store, `div`/`and` selector, comparison chain, nonpayable entry 60), which
+  derives the wrapper-entry seams, and lifts by `lift_sound_in_noStateGas`
+  and `FreePtr.SFunc.RunP.withPot`. Its local premises are `stateGas = none`
+  (`_hist` discharges it from `HistFork`) and the initial potential
+  `pre.gasMeasure < 2 ^ 256`. `implV1_initialize_writeClass`,
+  `implV1_initialize_short_nonInc` and `implV1_initialize_short_zero`
+  (fork-free, through `progRunP_zero_noExec`) mirror the V2 consumers; they
+  do not establish the historical string profile, seed or payload-key
+  separation.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

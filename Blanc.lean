@@ -1756,4 +1756,5 @@ import Blanc.Lift.Usdc.OldInitializerV1Clearing
 import Blanc.Lift.Usdc.OldInitializerV1Payload
 import Blanc.Lift.Usdc.OldInitializerV1Staging
 import Blanc.Lift.Usdc.OldInitializerV1Callee
+import Blanc.Lift.Usdc.OldInitializerV1Root
 import Blanc.Lift.WriteSiteZero
