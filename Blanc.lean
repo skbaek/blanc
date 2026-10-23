@@ -71,6 +71,7 @@ import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
 import Blanc.ExecutionDeletionSafety
 import Blanc.ExecutionNoDelProducer
+import Blanc.ExecutionNoDelSafeHistory
 import Blanc.ExecutionNoDelTransaction
 import Blanc.ExecutionNoDelHistory
 import Blanc.ExecutionHistoricalAdmission
@@ -1563,6 +1564,8 @@ import Blanc.ExecutionOwnerFamily
 import Blanc.ExecutionOwnerFamilyPositional
 import Blanc.ExecutionRawFramesCodeImage
 import Blanc.ExecutionSettledCodeImage
+import Blanc.ExecutionInCodeImage
+import Blanc.ExecutionInOwnCode
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
 import Blanc.Lift.CheckChain
