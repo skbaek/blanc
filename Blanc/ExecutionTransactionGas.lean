@@ -46,11 +46,10 @@ private theorem validation_cost_none {rules : ForkRules} {tx : Tx} {sender : Adr
         exact finish validation
 
 /-- Preparation allocates exactly the transaction gas left after intrinsic cost. -/
-theorem TransactionTrace.msg_gas
+theorem TransactionTrace.msg_gas_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (_fork : CoveredFork benv.stat.fork) :
+    (trace : TransactionTrace benv bout tx index state bout') :
     trace.msg.gas = tx.gas - trace.intrinsicGas := by
   have prepared := trace.prepared
   unfold prepareMessage at prepared
@@ -58,6 +57,14 @@ theorem TransactionTrace.msg_gas
   all_goals
     simp only [receiver] at prepared
     exact (congrArg Msg.gas (Except.ok.inj prepared)).symm
+
+theorem TransactionTrace.msg_gas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (_fork : CoveredFork benv.stat.fork) :
+    trace.msg.gas = tx.gas - trace.intrinsicGas :=
+  trace.msg_gas_noStateGas
 
 /-- Covered-fork validation retains the intrinsic base charge and reservation bounds. -/
 theorem TransactionTrace.intrinsicGas_bounds
@@ -139,11 +146,11 @@ theorem TransactionTrace.chargedGas_le
   omega
 
 /-- Checked reservation fits the remaining allowance, retaining the incoming counter. -/
-theorem TransactionTrace.gas_le_remaining
+theorem TransactionTrace.gas_le_remaining_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
-    (fork : CoveredFork benv.stat.fork) :
+    (fork : benv.stat.rules.stateGas = none) :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed := by
   have checked := trace.checked
   simp only [checkTransaction] at checked
@@ -151,7 +158,7 @@ theorem TransactionTrace.gas_le_remaining
   rw [Except.mapError_eq_ok_iff] at limits
   simp only [checkTransactionGasLimits] at limits
   have stateGas : benv.beginTransaction.stat.rules.stateGas = none :=
-    fork.rules_stateGas_none
+    fork
   rw [stateGas] at limits
   change (if tx.gas > benv.stat.blockGasLimit - bout.blockGasUsed then _ else _) =
     Except.ok _ at limits
@@ -159,6 +166,14 @@ theorem TransactionTrace.gas_le_remaining
   · rw [ite_eq_left exceeds] at limits
     cases limits
   · exact Nat.le_of_not_lt exceeds
+
+theorem TransactionTrace.gas_le_remaining
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (fork : CoveredFork benv.stat.fork) :
+    tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed :=
+  trace.gas_le_remaining_noStateGas fork.rules_stateGas_none
 
 /-- Successful settlement never decreases actual block gas consumption. -/
 theorem TransactionTrace.blockGasUsed_mono

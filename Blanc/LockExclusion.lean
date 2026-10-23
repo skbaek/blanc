@@ -1105,6 +1105,61 @@ theorem rawFrameRoots_entry
   · exact ⟨rfl, hfork⟩
   · exact Exec.rawFrameDescendants_entry run hfork F hF
 
+/-- A spawned child inherits its parent's selected fork predicate. -/
+theorem Evm.step_spawn_child_forkIn
+    {F : Fork → Prop} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run child)
+    (hfork : F sevm.benvStat.fork) :
+    F child.sta.benvStat.fork := by
+  rw [Evm.step_spawn_child_benvStat hstep henter]
+  exact hfork
+
+/-- Every actually entered descendant frame starts at program counter zero
+and inherits its ancestors' selected fork predicate. -/
+theorem Exec.rawFrameDescendants_entryIn
+    {F : Fork → Prop} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hfork : F sevm.benvStat.fork) :
+    ∀ root ∈ Exec.rawFrameDescendants run,
+      root.pc = 0 ∧ F root.sevm.benvStat.fork := by
+  induction run with
+  | halt => simp only [Exec.rawFrameDescendants, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
+  | cont hstep next ih =>
+      simpa only [Exec.rawFrameDescendants] using ih hfork
+  | doneErr => simp only [Exec.rawFrameDescendants, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
+  | doneOk hstep henter hresume next ih =>
+      simpa only [Exec.rawFrameDescendants] using ih hfork
+  | runErr hstep henter child hresume ih =>
+      have childFork := Evm.step_spawn_child_forkIn hstep henter hfork
+      intro root member
+      simp only [Exec.rawFrameDescendants, List.mem_cons] at member
+      rcases member with rfl | member
+      · exact ⟨Frame.enter_run_pc henter, childFork⟩
+      · exact ih childFork root member
+  | runOk hstep henter child hresume next childIh nextIh =>
+      have childFork := Evm.step_spawn_child_forkIn hstep henter hfork
+      intro root member
+      simp only [Exec.rawFrameDescendants, List.mem_cons,
+        List.mem_append] at member
+      rcases member with rfl | member | member
+      · exact ⟨Frame.enter_run_pc henter, childFork⟩
+      · exact childIh childFork root member
+      · exact nextIh hfork root member
+
+/-- Every raw frame root of an execution started at pc 0 on a selected fork
+starts at pc 0 on a selected fork. -/
+theorem rawFrameRoots_entryIn
+    {F : Fork → Prop} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec 0 sevm pre out) (hfork : F sevm.benvStat.fork)
+    {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots run) :
+    G.pc = 0 ∧ F G.sevm.benvStat.fork := by
+  simp only [Exec.rawFrameRoots, List.mem_cons] at hG
+  rcases hG with rfl | hG
+  · exact ⟨rfl, hfork⟩
+  · exact Exec.rawFrameDescendants_entryIn run hfork G hG
+
 /-! ## Public theorems -/
 
 /-- **V+ (generic lock exclusion).**  In any execution `R` — of any outcome,

@@ -134,9 +134,10 @@ theorem tx_gas_le_blockGasLimit_of_checked {benv : Benv} {bout : BlockOutput}
 
 /-- A transitioned block's header gas limit is below `2 ^ 63`: `validateHeader`
 runs `calculateBaseFeePerGas`, which runs `checkGasLimit`. -/
-theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
-    {pre post : BlockChain} (trace : ConfiguredBlockTrace cfg pre post) :
-    trace.block.header.gasLimit < 2 ^ 63 := by
+theorem header_gasLimit_lt_of_transition {cfg : ChainConfig}
+    {pre : BlockChain} {block : Block} {post : BlockChain}
+    (transition : stateTransitionUsing cfg pre block = .ok post) :
+    block.header.gasLimit < 2 ^ 63 := by
   have key : ∀ {g p : Nat}, checkGasLimit g p = .ok () → g < 2 ^ 63 := by
     intro g p h
     unfold checkGasLimit at h
@@ -145,16 +146,16 @@ theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
       cases h
     · have hmax : gasLimitMaximum = 2 ^ 63 := rfl
       omega
-  obtain ⟨_, -, hs⟩ := stateTransitionUsing_scheduled_ok trace.transition
+  obtain ⟨_, -, hs⟩ := stateTransitionUsing_scheduled_ok transition
   have hvh := stateTransitionCoreE_header (stateTransitionScheduledE_eq_ok_iff.mp hs)
   unfold validateHeader at hvh
   obtain ⟨_, -, hvh⟩ := Except.bind_eq_ok hvh
   obtain ⟨parent, -, hvh⟩ := Except.bind_eq_ok hvh
   dsimp only at hvh
-  by_cases hpar : trace.block.header.parentHash ≠
+  by_cases hpar : block.header.parentHash ≠
       (Header.toBLT parent.header).toBytes.keccak
   · simp only [ne_eq, hpar, not_false_eq_true, ↓reduceIte] at hvh
-    by_cases hz : trace.block.header.parentHash = 0
+    by_cases hz : block.header.parentHash = 0
     · simp only [hz, ↓reduceIte] at hvh
       obtain ⟨_, hcontra, _⟩ := Except.bind_eq_ok hvh
       cases hcontra
@@ -167,7 +168,7 @@ theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
     rw [Except.mapError_eq_ok_iff] at hfirst hexp
     unfold checkFirstFeeGasLimit at hfirst
     unfold expectedBaseFee at hexp
-    cases hb : trace.block.header.baseFeePerGas with
+    cases hb : block.header.baseFeePerGas with
     | none =>
       rw [hb] at hexp
       obtain ⟨_, hcl, -⟩ := Except.bind_eq_ok hexp
@@ -181,7 +182,7 @@ theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
       | some pbf =>
         rw [hb, hp] at hexp
         dsimp only at hexp
-        cases hcalc : calculateBaseFeePerGas trace.block.header.gasLimit
+        cases hcalc : calculateBaseFeePerGas block.header.gasLimit
             parent.header.gasLimit parent.header.gasUsed pbf with
         | error e =>
           rw [hcalc] at hexp
@@ -191,6 +192,11 @@ theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
           dsimp only at hcalc
           obtain ⟨_, hcl, -⟩ := Except.bind_eq_ok hcalc
           exact key hcl
+
+theorem ConfiguredBlockTrace.header_gasLimit_lt {cfg : ChainConfig}
+    {pre post : BlockChain} (trace : ConfiguredBlockTrace cfg pre post) :
+    trace.block.header.gasLimit < 2 ^ 63 :=
+  header_gasLimit_lt_of_transition trace.transition
 
 /-! ## Message data is preserved by delegation -/
 

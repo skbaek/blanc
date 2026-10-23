@@ -3955,6 +3955,20 @@ consumer needs canonical interpreter ingress as one conjunct:
   every canonical system code; hoisted from the Beacon deposit contract, whose
   `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
   (curve-3pool-stableswap-v1).
+- To discharge the same per-frame gas/entry premises over a selected-domain
+  (`In`) carrier instead of a modern one: with `BodyStageCapabilities F`,
+  `ConfiguredHistoryTraceIn.rootEntryIn` (`root.pc = 0 ∧ F root.sevm.benvStat.fork`),
+  `ConfiguredHistoryTraceIn.gas_bound` (`< 2 ^ 64`),
+  `ConfiguredHistoryTraceIn.frameAdmitted_gas` and `ConfiguredHistoryTraceIn.rawFrame_gas`
+  ([`Blanc/ExecutionStagedFrameEnv.lean`](../Blanc/ExecutionStagedFrameEnv.lean)).
+  The entry chain is predicate-parametric (`RootEntryIn F`, every transport
+  rewrites a `benvStat` equality, no rule fact needed); the gas chain runs on
+  the `stateGas = none` twins (`TransactionTrace.msg_gas_noStateGas`,
+  `gas_le_remaining_noStateGas`, the `rawFrames_gasMeasure_le_noStateGas`
+  family, `header_gasLimit_lt_of_transition`, the modern statements unchanged
+  as wrappers). Bounds needing a numerical rule value (`txBase` for the strict
+  `rawFrames_gas_lt` chain, `dataNonZero` for the calldata chain) are not
+  derivable from the capabilities and are not covered here.
 - To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
   to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
   a history are closed under descent, `RawFramesClosed`, layer by layer from
