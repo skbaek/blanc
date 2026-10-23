@@ -25,6 +25,10 @@ def PairAdmittedOutcome (U : WriterKey → Prop) (current : Checkpoint)
 def PairAdmittedSupply (U : WriterKey → Prop) (selected : Sevm → Prop) : Prop :=
   PairStepSupplyWith PairAdmittedConsumes PairEntryAuth U selected
 
+/-- `PairAdmittedSupply` from the historical rule facts (`PairStepSupplyWithH`). -/
+def PairAdmittedSupplyH (U : WriterKey → Prop) (selected : Sevm → Prop) : Prop :=
+  PairStepSupplyWithH PairAdmittedConsumes PairEntryAuth U selected
+
 theorem PairAdmittedConsumes.positional {root : Exec.Deriv} {segment : SegmentResult}
     {transcript : Transcript} {out : RunResult}
     (admitted : PairAdmittedConsumes root segment transcript out) :

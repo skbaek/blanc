@@ -901,6 +901,17 @@ theorem getterString_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, out, stor, logs⟩
 
+theorem getterString_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} (st : State)
+    (s : StringGetter) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (selector : Blanc.Sevm.selector sevm = s.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      some post.output = getterResult st s.entry ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
+  obtain ⟨value, size, out, stor, logs⟩ :=
+    getterString_pc0_inv s selector (lift_sound_noStateGas cert_check codeEq stateGas run)
+  exact ⟨value, size, by rw [out, s.result st], stor, logs⟩
+
 /-- Any successful actual pc-zero name or symbol call refines the source result. -/
 theorem getterString_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} (st : State)
     (s : StringGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -908,10 +919,8 @@ theorem getterString_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} (s
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       some post.output = getterResult st s.entry ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
-  obtain ⟨value, size, out, stor, logs⟩ :=
-    getterString_pc0_inv s selector (lift_sound cert_check codeEq fork run)
-  exact ⟨value, size, by rw [out, s.result st], stor, logs⟩
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
+  getterString_bytecode_refinesH st s codeEq fork.rules_stateGas_none selector run
 
 /-- Pc-zero liveness: name uses664 gas, symbol684, and both return the exact source ABI image. -/
 theorem getterString_bytecode_live {sevm : Sevm} {b : Devm} {G : Nat} (st : State)

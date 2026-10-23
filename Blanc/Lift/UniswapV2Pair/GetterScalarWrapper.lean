@@ -141,15 +141,23 @@ theorem getterScalar_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   | stored s => exact storedScalar_callee_exact s fork cost (by omega)
   | address s => exact addressScalar_callee_exact s fork cost room
 
+theorem getterScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
+    (s : ScalarGetter) (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
+    ∃ G', o = .returned (St (s.afterH sevm b) (s.value sevm b :: ρ :: R) M G') := by
+  cases s with
+  | constant s => exact constantScalar_callee_inv s run
+  | stored s => exact storedScalar_callee_invH s bal run
+  | address s => exact addressScalar_callee_invH s bal run
+
 theorem getterScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
     (s : ScalarGetter) (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
     ∃ G', o = .returned (St (s.after sevm b) (s.value sevm b :: ρ :: R) M G') := by
-  cases s with
-  | constant s => exact constantScalar_callee_inv s run
-  | stored s => exact storedScalar_callee_inv s fork run
-  | address s => exact addressScalar_callee_inv s fork run
+  rw [← s.afterH_of_eip2929 b fork.rules_access]
+  exact getterScalar_callee_invH s fork.rules_bal_none run
 
 theorem getterScalar_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} (s : ScalarGetter)
@@ -169,14 +177,13 @@ theorem getterScalar_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     rw [B256.and_comm]
     exact ff20_and_adr _
 
-theorem getterScalar_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+/-- The getter tail over an arbitrary successor base `b'`: the tail reads no storage. -/
+theorem getterScalar_tail_inv_base {fs : List SFunc} {sevm : Sevm} {b b' : Devm}
     {R : List B256} {M : Mem} {G : Nat} {o : Outcome} (s : ScalarGetter)
     (mem : PtrMem 128 96 M)
-    (run : SFunc.Run fs sevm
-      (St (s.after sevm b) (s.value sevm b :: R) M G) s.tailTree o) :
+    (run : SFunc.Run fs sevm (St b' (s.value sevm b :: R) M G) s.tailTree o) :
     ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
-      (∀ a, Devm.getStor d a = Devm.getStor (s.after sevm b) a) ∧
-      d.logs = (s.after sevm b).logs := by
+      (∀ a, Devm.getStor d a = Devm.getStor b' a) ∧ d.logs = b'.logs := by
   cases s with
   | constant s =>
     cases s with
@@ -188,6 +195,16 @@ theorem getterScalar_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     refine getterMasked_tail_inv .address ?_ mem run
     rw [B256.and_comm]
     exact ff20_and_adr _
+
+theorem getterScalar_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome} (s : ScalarGetter)
+    (mem : PtrMem 128 96 M)
+    (run : SFunc.Run fs sevm
+      (St (s.after sevm b) (s.value sevm b :: R) M G) s.tailTree o) :
+    ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor (s.after sevm b) a) ∧
+      d.logs = (s.after sevm b).logs :=
+  getterScalar_tail_inv_base s mem run
 
 theorem getterScalar_entry_exact {sevm : Sevm} {b : Devm}
     {M : Mem} {G c : Nat} {sel : B256} (s : ScalarGetter)
@@ -207,9 +224,9 @@ theorem getterScalar_entry_exact {sevm : Sevm} {b : Devm}
     (getterScalar_callee_exact s fork cost (by simp only [List.length_cons, List.length_nil]; decide)) ?_
   exact getterScalar_tail_exact s mem (by simp only [List.length_cons, List.length_nil]; decide)
 
-theorem getterScalar_entry_inv {sevm : Sevm} {b : Devm}
+theorem getterScalar_entry_invH {sevm : Sevm} {b : Devm}
     {M : Mem} {G : Nat} {sel : B256} {o : Outcome} (s : ScalarGetter)
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) s.entryTree o) :
     ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
@@ -220,11 +237,19 @@ theorem getterScalar_entry_inv {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call s.callee_lookup h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨_, eq⟩ := getterScalar_callee_inv s fork hc
+  · obtain ⟨_, eq⟩ := getterScalar_callee_invH s bal hc
     cases eq
-    obtain ⟨d, ho, hout, hs, hl⟩ := getterScalar_tail_inv s mem h.uncut
-    exact ⟨d, ho, hout, fun a => (hs a).trans (s.after_storage sevm b a), hl.trans (s.after_logs sevm b)⟩
-  · obtain ⟨_, eq⟩ := getterScalar_callee_inv s fork hc
+    obtain ⟨d, ho, hout, hs, hl⟩ := getterScalar_tail_inv_base s mem h.uncut
+    exact ⟨d, ho, hout, fun a => (hs a).trans (s.afterH_storage sevm b a), hl.trans (s.afterH_logs sevm b)⟩
+  · obtain ⟨_, eq⟩ := getterScalar_callee_invH s bal hc
     cases eq
+
+theorem getterScalar_entry_inv {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {sel : B256} {o : Outcome} (s : ScalarGetter)
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b [sel] M G) s.entryTree o) :
+    ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
+  getterScalar_entry_invH s fork.rules_bal_none mem run
 
 end Blanc.Lift.UniswapV2Pair

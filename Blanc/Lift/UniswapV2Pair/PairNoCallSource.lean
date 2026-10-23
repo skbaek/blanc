@@ -9,6 +9,21 @@ import Blanc.Lift.UniswapV2Pair.StaticViewSource
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
+theorem PairNoCallEntry.positionalConsumesH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (entry : PairNoCallEntry) (codeEq : sevm.code = code)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (selector : Blanc.Sevm.selector sevm = entry.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    {segment : SegmentResult} {frame : Frame}
+    (consumed : ExactConsumes segment .done
+      {status := .success post.output, frame := frame, remaining := .done, childReturns := []}) :
+    PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 segment .done
+      {status := .success post.output, frame := frame, remaining := .done, childReturns := []} := by
+  cases consumed with
+  | finished frame =>
+    exact .finished frame post.output (entry.root_noExecH codeEq stateGas selector run)
+
 /-- Add an actual-root annotation to the supplied finished source witness.
 The incoming segment, result frame and actual returned bytes are unchanged. -/
 theorem PairNoCallEntry.positionalConsumes {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -21,10 +36,8 @@ theorem PairNoCallEntry.positionalConsumes {sevm : Sevm} {b post : Devm} {G : Na
       {status := .success post.output, frame := frame, remaining := .done, childReturns := []}) :
     PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 segment .done
-      {status := .success post.output, frame := frame, remaining := .done, childReturns := []} := by
-  cases consumed with
-  | finished frame =>
-    exact .finished frame post.output (entry.root_noExec codeEq fork selector run)
+      {status := .success post.output, frame := frame, remaining := .done, childReturns := []} :=
+  entry.positionalConsumesH codeEq fork.rules_stateGas_none selector run consumed
 
 /-- Every existing view family maps to its actual no-call dispatcher entry. -/
 def StaticView.noCallEntry : StaticView → PairNoCallEntry
@@ -165,6 +178,39 @@ theorem initialize_bytecode_positional_consumes {K : WriterKey → Prop} {curren
   exact ⟨value, size, authorized, nonstatic, residual, result, consumed,
     PairNoCallEntry.«initialize».positionalConsumes codeEq fork selector run consumed⟩
 
+theorem staticView_source_positional_selectedH {K : WriterKey → Prop} {current : Checkpoint}
+    {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (valueRep : ctx.value = sevm.value)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (view : StaticView) (selector : Blanc.Sevm.selector sevm = view.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧
+      view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult current.state (view.entry sevm) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧
+      let frame := Frame.enter current ctx (view.entry sevm)
+      startImmediate current ctx (view.entry sevm) = some (.finished frame post.output) ∧
+      startTyped current ctx (view.entry sevm) = .finished frame post.output ∧
+      ExactConsumes (startTyped current ctx (view.entry sevm)) .done
+        { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
+      PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+        ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0
+        (startTyped current ctx (view.entry sevm)) .done
+        { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
+      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
+  obtain ⟨value, length, output, storage, logs, immediate, typed, consumed,
+      sameCurrent, sameCheckpoint, sameContext⟩ :=
+    staticView_source_handler_selectedH rep fresh representable valueRep codeEq stateGas bal view selector run
+  have selected : Blanc.Sevm.selector sevm = view.noCallEntry.selector :=
+    selector.trans view.noCallEntry_selector.symm
+  exact ⟨value, length, output, storage, logs, immediate, typed, consumed,
+    view.noCallEntry.positionalConsumesH codeEq stateGas selected run consumed,
+    sameCurrent, sameCheckpoint, sameContext⟩
+
 /-- All seventeen views retain the donor's exact incoming checkpoint/context,
 selected entry, actual output and finished source frame. -/
 theorem staticView_source_positional_selected {K : WriterKey → Prop} {current : Checkpoint}
@@ -189,14 +235,8 @@ theorem staticView_source_positional_selected {K : WriterKey → Prop} {current 
         ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0
         (startTyped current ctx (view.entry sevm)) .done
         { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
-      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
-  obtain ⟨value, length, output, storage, logs, immediate, typed, consumed,
-      sameCurrent, sameCheckpoint, sameContext⟩ :=
-    staticView_source_handler_selected rep fresh representable valueRep codeEq fork view selector run
-  have selected : Blanc.Sevm.selector sevm = view.noCallEntry.selector :=
-    selector.trans view.noCallEntry_selector.symm
-  exact ⟨value, length, output, storage, logs, immediate, typed, consumed,
-    view.noCallEntry.positionalConsumes codeEq fork selected run consumed,
-    sameCurrent, sameCheckpoint, sameContext⟩
+      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx :=
+  staticView_source_positional_selectedH rep fresh representable valueRep codeEq
+    fork.rules_stateGas_none fork.rules_bal_none view selector run
 
 end Blanc.Lift.UniswapV2Pair

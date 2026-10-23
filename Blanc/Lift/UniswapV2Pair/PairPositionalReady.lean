@@ -82,19 +82,25 @@ theorem pair_admitted_permit_supply {U : WriterKey → Prop}
     (PairEntryAt.permit selector) positional rfl output.symm (fun _ h => h) representation
 
 
-theorem pair_admitted_view_supply {U : WriterKey → Prop}
+/-- The seventeen views' admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_view_supplyH {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (view : StaticView) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = view.selector) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = view.selector) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good.viewsOwn
   obtain ⟨_, _, _, storage, _, _, _, consumed, _, frameCurrent, _, _⟩ :=
-    staticView_source_positional_selected (ctx := writerContext sevm invocation) rep fresh
-      representable rfl codeEq fork view selector run
+    staticView_source_positional_selectedH (ctx := writerContext sevm invocation) rep fresh
+      representable rfl codeEq stateGas bal view selector run
   refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep good.viewsOwn
-    (PairEntryAt.view view selector) (AdmittedSourceConsumes.of_done consumed (view.noCallEntry.root_noExec codeEq fork (by rw [StaticView.noCallEntry_selector]; exact selector) run)) rfl rfl (fun _ h => h) ?_
+    (PairEntryAt.view view selector) (AdmittedSourceConsumes.of_done consumed (view.noCallEntry.root_noExecH codeEq stateGas (by rw [StaticView.noCallEntry_selector]; exact selector) run)) rfl rfl (fun _ h => h) ?_
   rw [frameCurrent, storage sevm.currentTarget]
   exact rep.extend fresh
+
+theorem pair_admitted_view_supply {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) (view : StaticView) :
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = view.selector) :=
+  PairStepSupplyWithH.covered (pair_admitted_view_supplyH inj apart view)
 
 
 theorem pair_admitted_mint_supply {U : WriterKey → Prop}

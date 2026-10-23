@@ -108,20 +108,29 @@ theorem storedScalar_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   exact rx_ret
 
+theorem storedScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : StoredScalar)
+    (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
+    ∃ G', o = .returned (St (afterSloadH sevm b s.slot)
+      (b.getStorVal sevm.currentTarget s.slot :: ρ :: R) M G') := by
+  have h := run.cut
+  rw [s.callee_shape] at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
+  obtain ⟨g, hg⟩ := ric_ret h
+  exact ⟨g, Seg.done.inj hg⟩
+
 theorem storedScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : StoredScalar)
     (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
     ∃ G', o = .returned (St (afterSload sevm b s.slot)
       (b.getStorVal sevm.currentTarget s.slot :: ρ :: R) M G') := by
-  have h := run.cut
-  rw [s.callee_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
-  obtain ⟨g, hg⟩ := ric_ret h
-  exact ⟨g, Seg.done.inj hg⟩
+  rw [← afterSloadH_of_eip2929 fork.rules_access]
+  exact storedScalar_callee_invH s fork.rules_bal_none run
 
 inductive AddressScalar
   | factory | token0 | token1
@@ -163,20 +172,20 @@ theorem addressScalar_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   exact rx_ret
 
-theorem addressScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem addressScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : AddressScalar)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (afterSload sevm b s.slot)
+    ∃ G', o = .returned (St (afterSloadH sevm b s.slot)
       ((b.getStorVal sevm.currentTarget s.slot).toAdr.toB256 :: ρ :: R) M G') := by
   have h := run.cut
   rw [s.callee_shape] at h
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
-  change d = St (afterSload sevm b s.slot)
+  change d = St (afterSloadH sevm b s.slot)
     ((Bytes.toB256 (List.replicate 20 0xff) &&& b.getStorVal sevm.currentTarget s.slot) :: ρ :: R) M _ at hd
   rw [show Bytes.toB256 (List.replicate 20 0xff) = ~~~ addressMask from by decide,
     show ((~~~ addressMask) &&& b.getStorVal sevm.currentTarget s.slot) =
@@ -185,6 +194,15 @@ theorem addressScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
+
+theorem addressScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : AddressScalar)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
+    ∃ G', o = .returned (St (afterSload sevm b s.slot)
+      ((b.getStorVal sevm.currentTarget s.slot).toAdr.toB256 :: ρ :: R) M G') := by
+  rw [← afterSloadH_of_eip2929 fork.rules_access]
+  exact addressScalar_callee_invH s fork.rules_bal_none run
 
 inductive ScalarGetter
   | constant (s : ConstantScalar)
@@ -399,5 +417,33 @@ theorem ScalarGetter.after_logs (s : ScalarGetter) (sevm : Sevm) (b : Devm) :
   | constant _ => rfl
   | stored _ => exact afterSload_logs _ _ _
   | address _ => exact afterSload_logs _ _ _
+
+/-- The scalar getter's successor base under the frame's actual access schedule. -/
+def ScalarGetter.afterH (s : ScalarGetter) (sevm : Sevm) (b : Devm) : Devm :=
+  match s with
+  | .constant _ => b
+  | .stored s => afterSloadH sevm b s.slot
+  | .address s => afterSloadH sevm b s.slot
+
+theorem ScalarGetter.afterH_of_eip2929 (s : ScalarGetter) {sevm : Sevm} (b : Devm)
+    (access : sevm.benvStat.rules.access = .eip2929) : s.afterH sevm b = s.after sevm b := by
+  cases s with
+  | constant _ => rfl
+  | stored _ => exact afterSloadH_of_eip2929 access
+  | address _ => exact afterSloadH_of_eip2929 access
+
+theorem ScalarGetter.afterH_storage (s : ScalarGetter) (sevm : Sevm) (b : Devm) (a : Adr) :
+    Devm.getStor (s.afterH sevm b) a = Devm.getStor b a := by
+  cases s with
+  | constant _ => rfl
+  | stored _ => exact afterSloadH_getStor _ _ _ _
+  | address _ => exact afterSloadH_getStor _ _ _ _
+
+theorem ScalarGetter.afterH_logs (s : ScalarGetter) (sevm : Sevm) (b : Devm) :
+    (s.afterH sevm b).logs = b.logs := by
+  cases s with
+  | constant _ => rfl
+  | stored _ => exact afterSloadH_logs _ _ _
+  | address _ => exact afterSloadH_logs _ _ _
 
 end Blanc.Lift.UniswapV2Pair

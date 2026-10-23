@@ -403,7 +403,6 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.WriterEntries",
         "Lift.UniswapV2Pair.WriterStorage",
         "Lift.UniswapV2Pair.HistoricalCredits",
-        "Lift.UniswapV2Pair.HistGetterScalar",
         "Lift.UniswapV2Pair.WriterLockStorage",
         "Lift.UniswapV2Pair.ApproveSource",
         "Lift.UniswapV2Pair.TransferCore",

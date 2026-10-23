@@ -389,6 +389,32 @@ def PairStepSupplyWith
     PairStepOutcomeWith Consumes Auth U current invocation K
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
 
+/-- `PairStepSupplyWith` from the two rule facts the Pair's inversions read, `rules.stateGas = none`
+and `rules.bal = none`, in place of `CoveredFork`. Every historical fork of the Pair's lifetime
+(flat-access Muir Glacier through BPO2) satisfies both; `PairStepSupplyWithH.covered` recovers the
+modern supply. -/
+def PairStepSupplyWithH
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (selected : Sevm → Prop) : Prop :=
+  ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) {K : WriterKey → Prop},
+    sevm.code = code → b.getCode sevm.currentTarget = code →
+    sevm.benvStat.rules.stateGas = none → sevm.benvStat.rules.bal = none →
+    b.output = [] → sevm.data.length < 2 ^ 256 → selected sevm →
+    PairGood U ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
+    (∀ k, K k → U k) → WriterRep K (b.getStor sevm.currentTarget) current.state →
+    PairStepOutcomeWith Consumes Auth U current invocation K
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
+
+theorem PairStepSupplyWithH.covered
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
+    {selected : Sevm → Prop} (supply : PairStepSupplyWithH Consumes Auth U selected) :
+    PairStepSupplyWith Consumes Auth U selected := by
+  intro current invocation sevm b post G run K codeEq installed fork
+  exact supply current invocation run codeEq installed fork.rules_stateGas_none fork.rules_bal_none
+
 /-- One operation producer per family, all selecting the same outcome relation.
 The dispatcher below owns the selector inversion; this record supplies no alternative witness. -/
 structure PairSupplyRules

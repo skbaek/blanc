@@ -82,6 +82,59 @@ private theorem writerRep_singleMappingSlots {K : WriterKey → Prop} {st : Stat
       (List.mem_singleton.mpr rfl))).symm
 
 
+theorem StaticView.bytecode_refinesH {K : WriterKey → Prop} {sevm : Sevm}
+    {b post : Devm} {G : Nat} {st : State} (view : StaticView)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (view.keys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = view.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult st (view.entry sevm) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
+  cases view with
+  | scalar s =>
+    obtain ⟨value, size, result, storage, logs⟩ :=
+      getterScalar_bytecode_refinesH s codeEq stateGas bal selector (writerRep_scalarSlots s rep) run
+    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
+      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
+  | string s =>
+    obtain ⟨value, size, result, storage, logs⟩ :=
+      getterString_bytecode_refinesH st s codeEq stateGas selector run
+    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
+      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
+  | totalSupply =>
+    obtain ⟨value, size, result, storage, logs⟩ :=
+      totalSupply_bytecode_refinesH codeEq stateGas bal selector rep.fixed.1.symm run
+    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
+      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
+  | singleMapping s =>
+    have selected : Blanc.Sevm.selector sevm = s.selector := by
+      cases s <;> exact selector
+    have decoded : (StaticView.singleMapping s).entry sevm = s.entry (mappingOwner sevm) := by
+      cases s <;> rfl
+    rw [decoded]
+    obtain ⟨value, size, guard, result, storage, logs⟩ :=
+      singleMapping_bytecode_refinesH s codeEq stateGas bal selected
+        (writerRep_singleMappingSlots s rep fresh) run
+    exact ⟨value, (word_calldata_guards_iff (n := 32) representable (by decide)).mp
+      ⟨size, guard⟩, result, storage, logs⟩
+  | allowance =>
+    have slot := (rep.get_fresh
+      (fresh.1 (.allowance (mappingOwner sevm) (mappingSpender sevm))
+        (List.mem_singleton.mpr rfl))).symm
+    obtain ⟨value, size, guard, result, storage, logs⟩ :=
+      allowance_bytecode_refinesH codeEq stateGas bal selector slot run
+    exact ⟨value, (word_calldata_guards_iff (n := 64) representable (by decide)).mp
+      ⟨size, guard⟩, result, storage, logs⟩
+  | getReserves =>
+    obtain ⟨value, size, result, storage, logs⟩ :=
+      getReserves_bytecode_refinesH codeEq stateGas bal selector (writerRep_reserveSlots rep) run
+    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
+      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
+
 /-- The selected getter consumes only fixed slots and its actual trace-local mapping row. -/
 theorem StaticView.bytecode_refines {K : WriterKey → Prop} {sevm : Sevm}
     {b post : Devm} {G : Nat} {st : State} (view : StaticView)
@@ -93,48 +146,46 @@ theorem StaticView.bytecode_refines {K : WriterKey → Prop} {sevm : Sevm}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ view.argumentSize + 4 ≤ sevm.data.length ∧
       some post.output = getterResult st (view.entry sevm) ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
-  cases view with
-  | scalar s =>
-    obtain ⟨value, size, result, storage, logs⟩ :=
-      getterScalar_bytecode_refines s codeEq fork selector (writerRep_scalarSlots s rep) run
-    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
-      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
-  | string s =>
-    obtain ⟨value, size, result, storage, logs⟩ :=
-      getterString_bytecode_refines st s codeEq fork selector run
-    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
-      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
-  | totalSupply =>
-    obtain ⟨value, size, result, storage, logs⟩ :=
-      totalSupply_bytecode_refines codeEq fork selector rep.fixed.1.symm run
-    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
-      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
-  | singleMapping s =>
-    have selected : Blanc.Sevm.selector sevm = s.selector := by
-      cases s <;> exact selector
-    have decoded : (StaticView.singleMapping s).entry sevm = s.entry (mappingOwner sevm) := by
-      cases s <;> rfl
-    rw [decoded]
-    obtain ⟨value, size, guard, result, storage, logs⟩ :=
-      singleMapping_bytecode_refines s codeEq fork selected
-        (writerRep_singleMappingSlots s rep fresh) run
-    exact ⟨value, (word_calldata_guards_iff (n := 32) representable (by decide)).mp
-      ⟨size, guard⟩, result, storage, logs⟩
-  | allowance =>
-    have slot := (rep.get_fresh
-      (fresh.1 (.allowance (mappingOwner sevm) (mappingSpender sevm))
-        (List.mem_singleton.mpr rfl))).symm
-    obtain ⟨value, size, guard, result, storage, logs⟩ :=
-      allowance_bytecode_refines codeEq fork selector slot run
-    exact ⟨value, (word_calldata_guards_iff (n := 64) representable (by decide)).mp
-      ⟨size, guard⟩, result, storage, logs⟩
-  | getReserves =>
-    obtain ⟨value, size, result, storage, logs⟩ :=
-      getReserves_bytecode_refines codeEq fork selector (writerRep_reserveSlots rep) run
-    exact ⟨value, (word_calldata_guards_iff (n := 0) representable (by decide)).mp
-      ⟨size, B256.zero_le _⟩, result, storage, logs⟩
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
+  view.bytecode_refinesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
+theorem staticView_source_handler_selectedH {K : WriterKey → Prop} {current : Checkpoint}
+    {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (valueRep : ctx.value = sevm.value)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (view : StaticView) (selector : Blanc.Sevm.selector sevm = view.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧
+      view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult current.state (view.entry sevm) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧
+      let frame := Frame.enter current ctx (view.entry sevm)
+      startImmediate current ctx (view.entry sevm) = some (.finished frame post.output) ∧
+      startTyped current ctx (view.entry sevm) = .finished frame post.output ∧
+      ExactConsumes (startTyped current ctx (view.entry sevm)) .done
+        { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
+      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
+  have selectedFresh : WriterFreshKeys K (view.keys sevm) := by
+    rw [← view.keys_eq_decoded selector]
+    exact fresh
+  obtain ⟨value, length, result, storage, logs⟩ :=
+    view.bytecode_refinesH rep selectedFresh representable codeEq stateGas bal selector run
+  have contextValue : ctx.value = 0 := valueRep.trans value
+  have immediate : startImmediate current ctx (view.entry sevm) =
+      some (.finished (Frame.enter current ctx (view.entry sevm)) post.output) := by
+    simp only [startImmediate, contextValue, ne_eq, not_true_eq_false, ite_false,
+      ← result, Frame.finish]
+  have typed : startTyped current ctx (view.entry sevm) =
+      .finished (Frame.enter current ctx (view.entry sevm)) post.output := by
+    unfold startTyped
+    rw [immediate]
+  refine ⟨value, length, result, storage, logs, immediate, typed, ?_, rfl, rfl, rfl⟩
+  rw [typed]
+  exact ExactConsumes.finished (Frame.enter current ctx (view.entry sevm)) post.output
 
 /-- Actual successful bytecode for a selected view constructs a finished source view at the current checkpoint. -/
 theorem staticView_source_handler_selected {K : WriterKey → Prop} {current : Checkpoint}
@@ -155,24 +206,9 @@ theorem staticView_source_handler_selected {K : WriterKey → Prop} {current : C
       startTyped current ctx (view.entry sevm) = .finished frame post.output ∧
       ExactConsumes (startTyped current ctx (view.entry sevm)) .done
         { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
-      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
-  have selectedFresh : WriterFreshKeys K (view.keys sevm) := by
-    rw [← view.keys_eq_decoded selector]
-    exact fresh
-  obtain ⟨value, length, result, storage, logs⟩ :=
-    view.bytecode_refines rep selectedFresh representable codeEq fork selector run
-  have contextValue : ctx.value = 0 := valueRep.trans value
-  have immediate : startImmediate current ctx (view.entry sevm) =
-      some (.finished (Frame.enter current ctx (view.entry sevm)) post.output) := by
-    simp only [startImmediate, contextValue, ne_eq, not_true_eq_false, ite_false,
-      ← result, Frame.finish]
-  have typed : startTyped current ctx (view.entry sevm) =
-      .finished (Frame.enter current ctx (view.entry sevm)) post.output := by
-    unfold startTyped
-    rw [immediate]
-  refine ⟨value, length, result, storage, logs, immediate, typed, ?_, rfl, rfl, rfl⟩
-  rw [typed]
-  exact ExactConsumes.finished (Frame.enter current ctx (view.entry sevm)) post.output
+      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx :=
+  staticView_source_handler_selectedH rep fresh representable valueRep codeEq fork.rules_stateGas_none
+    fork.rules_bal_none view selector run
 
 /-- Actual successful static bytecode constructs a finished source view at the current checkpoint.
 The incoming freshness condition concerns only the selector's actual decoded mapping row. -/

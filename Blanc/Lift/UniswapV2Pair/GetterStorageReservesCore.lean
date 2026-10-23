@@ -41,11 +41,11 @@ theorem reserves_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_swap1 ?_
   exact rx_ret
 
-theorem reserves_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem reserves_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run fs sevm (St b (ρ :: R) M G) t_0d90_c56 o) :
-    ∃ G', o = .returned (St (afterSload sevm b 8)
+    ∃ G', o = .returned (St (afterSloadH sevm b 8)
       (reserveTimestampRead (b.getStorVal sevm.currentTarget 8) ::
        reserve1Read (b.getStorVal sevm.currentTarget 8) ::
        reserve0Read (b.getStorVal sevm.currentTarget 8) :: R) M G') := by
@@ -54,8 +54,8 @@ theorem reserves_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_sload fork hd
-  change d = St (afterSload sevm b 8) (b.getStorVal sevm.currentTarget 8 :: ρ :: R) M _ at hd
+  obtain ⟨_, hd⟩ := ri_sloadH bal hd
+  change d = St (afterSloadH sevm b 8) (b.getStorVal sevm.currentTarget 8 :: ρ :: R) M _ at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
@@ -88,5 +88,16 @@ theorem reserves_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     show Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] = reserveDiv224 from rfl] at eq
   refine ⟨g, ?_⟩
   simpa only [reserveTimestampRead, reserve1Read, reserve0Read, B256.and_comm] using eq
+
+theorem reserves_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) t_0d90_c56 o) :
+    ∃ G', o = .returned (St (afterSload sevm b 8)
+      (reserveTimestampRead (b.getStorVal sevm.currentTarget 8) ::
+       reserve1Read (b.getStorVal sevm.currentTarget 8) ::
+       reserve0Read (b.getStorVal sevm.currentTarget 8) :: R) M G') := by
+  rw [← afterSloadH_of_eip2929 fork.rules_access]
+  exact reserves_callee_invH fork.rules_bal_none run
 
 end Blanc.Lift.UniswapV2Pair

@@ -114,9 +114,9 @@ theorem singleMapping_entry_exact {sevm : Sevm} {b : Devm} {M : Mem}
   refine rx_branch_succ (by decide) ?_
   exact singleMapping_decoder_exact s fork mem cost
 
-theorem singleMapping_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem singleMapping_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel avail : B256} {o : Outcome} (s : SingleMappingGetter)
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x039b, sel] M G) s.decoder o) :
     ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (s.slot sevm)).toBytes ∧
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
@@ -134,16 +134,24 @@ theorem singleMapping_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call s.callee_lookup h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨_, eq⟩ := singleMapping_callee_inv s fork mem hc
+  · obtain ⟨_, eq⟩ := singleMapping_callee_invH s bal mem hc
     cases eq
     obtain ⟨d, ho, hout, hs, hl⟩ := getterWord_tail_inv (s.memory_ptr mem (mappingOwner sevm).toB256) h.uncut
-    exact ⟨d, ho, hout, fun a => (hs a).trans (afterSload_getStor _ _ _ _), hl.trans (afterSload_logs _ _ _)⟩
-  · obtain ⟨_, eq⟩ := singleMapping_callee_inv s fork mem hc
+    exact ⟨d, ho, hout, fun a => (hs a).trans (afterSloadH_getStor _ _ _ _), hl.trans (afterSloadH_logs _ _ _)⟩
+  · obtain ⟨_, eq⟩ := singleMapping_callee_invH s bal mem hc
     cases eq
 
-theorem singleMapping_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel : B256} {o : Outcome} (s : SingleMappingGetter)
+theorem singleMapping_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel avail : B256} {o : Outcome} (s : SingleMappingGetter)
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x039b, sel] M G) s.decoder o) :
+    ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (s.slot sevm)).toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
+  singleMapping_decoder_invH s fork.rules_bal_none mem run
+
+theorem singleMapping_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel : B256} {o : Outcome} (s : SingleMappingGetter)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) s.entryTree o) :
     (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (s.slot sevm)).toBytes ∧
@@ -178,8 +186,16 @@ theorem singleMapping_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
         simp only [B256.ltCheck, lt, ite_true]
       rw [flag] at nonzero
       exact nonzero (by decide)
-    exact ⟨guard, singleMapping_decoder_inv s fork mem h.uncut⟩
+    exact ⟨guard, singleMapping_decoder_invH s bal mem h.uncut⟩
 
+theorem singleMapping_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel : B256} {o : Outcome} (s : SingleMappingGetter)
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b [sel] M G) s.entryTree o) :
+    (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
+      ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (s.slot sevm)).toBytes ∧
+        (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
+  singleMapping_entry_invH s fork.rules_bal_none mem run
 
 def mappingSpender (sevm : Sevm) : Adr := (Sevm.dataWord sevm 36).toAdr
 
@@ -242,9 +258,9 @@ theorem allowance_entry_exact {sevm : Sevm} {b : Devm} {M : Mem}
   refine rx_branch_succ (by decide) ?_
   exact allowance_decoder_exact fork mem cost
 
-theorem allowance_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem allowance_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x039b, sel] M G) t_0656_c77 o) :
     ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (allowanceSlot sevm)).toBytes ∧
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
@@ -277,17 +293,25 @@ theorem allowance_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call (g := t_1dd8_c30) (by rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨_, eq⟩ := allowance_callee_inv fork mem hc
+  · obtain ⟨_, eq⟩ := allowance_callee_invH bal mem hc
     cases eq
     obtain ⟨d, ho, hout, hs, hl⟩ := getterWord_tail_inv
       (allowanceScratch2_ptr mem (mappingOwner sevm).toB256 (mappingSpender sevm).toB256) h.uncut
-    exact ⟨d, ho, hout, fun a => (hs a).trans (afterSload_getStor _ _ _ _), hl.trans (afterSload_logs _ _ _)⟩
-  · obtain ⟨_, eq⟩ := allowance_callee_inv fork mem hc
+    exact ⟨d, ho, hout, fun a => (hs a).trans (afterSloadH_getStor _ _ _ _), hl.trans (afterSloadH_logs _ _ _)⟩
+  · obtain ⟨_, eq⟩ := allowance_callee_invH bal mem hc
     cases eq
 
-theorem allowance_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel : B256} {o : Outcome}
+theorem allowance_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel avail : B256} {o : Outcome}
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x039b, sel] M G) t_0656_c77 o) :
+    ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (allowanceSlot sevm)).toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
+  allowance_decoder_invH fork.rules_bal_none mem run
+
+theorem allowance_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel : B256} {o : Outcome}
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_0640_c77 o) :
     (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (allowanceSlot sevm)).toBytes ∧
@@ -321,6 +345,15 @@ theorem allowance_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
         simp only [B256.ltCheck, lt, ite_true]
       rw [flag] at nonzero
       exact nonzero (by decide)
-    exact ⟨guard, allowance_decoder_inv fork mem h.uncut⟩
+    exact ⟨guard, allowance_decoder_invH bal mem h.uncut⟩
+
+theorem allowance_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {sel : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_0640_c77 o) :
+    (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
+      ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget (allowanceSlot sevm)).toBytes ∧
+        (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
+  allowance_entry_invH fork.rules_bal_none mem run
 
 end Blanc.Lift.UniswapV2Pair

@@ -17,8 +17,8 @@ theorem getterScalar_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
   exact getterScalar_dispatch_exact (h_shifts := fork.rules_shifts) s value size selector
     (getterScalar_entry_exact s fork rfl getterInitMemory_ptr)
 
-theorem getterScalar_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (s : ScalarGetter) (fork : CoveredFork sevm.benvStat.fork)
+theorem getterScalar_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (s : ScalarGetter) (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = s.selector)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
@@ -29,9 +29,18 @@ theorem getterScalar_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := getterScalar_selector_inv s selector run
-  obtain ⟨d, eq, out, stor, logs⟩ := getterScalar_entry_inv s fork getterInitMemory_ptr run
+  obtain ⟨d, eq, out, stor, logs⟩ := getterScalar_entry_invH s bal getterInitMemory_ptr run
   cases eq
   exact ⟨value, size, out, stor, logs⟩
+
+theorem getterScalar_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
+    (s : ScalarGetter) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = s.selector)
+    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      post.output = (s.value sevm b).toBytes ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
+  getterScalar_pc0_invH s fork.rules_bal_none selector run
 
 theorem getterScalar_bytecode_exact {sevm : Sevm} {b : Devm} {G : Nat}
     (s : ScalarGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -43,8 +52,9 @@ theorem getterScalar_bytecode_exact {sevm : Sevm} {b : Devm} {G : Nat}
         getterInitMemory (s.value sevm b) G))) :=
   lift_exact cert_check jumps_ok codeEq fork (getterScalar_pc0_exact s fork value size selector)
 
-theorem getterScalar_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (s : ScalarGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem getterScalar_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
+    (s : ScalarGetter) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = s.selector)
     (slots : s.SlotMatches st sevm b)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -52,9 +62,19 @@ theorem getterScalar_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {s
       some post.output = getterResult st s.entry ∧
       (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
   obtain ⟨value, size, out, stor, logs⟩ :=
-    getterScalar_pc0_inv s fork selector (lift_sound cert_check codeEq fork run)
+    getterScalar_pc0_invH s bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
   refine ⟨value, size, ?_, stor, logs⟩
   rw [s.source_value slots, out]
+
+theorem getterScalar_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
+    (s : ScalarGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = s.selector)
+    (slots : s.SlotMatches st sevm b)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      some post.output = getterResult st s.entry ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
+  getterScalar_bytecode_refinesH s codeEq fork.rules_stateGas_none fork.rules_bal_none selector slots run
 
 theorem getterScalar_bytecode_live {sevm : Sevm} {b : Devm} {G : Nat} {st : State}
     (s : ScalarGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)

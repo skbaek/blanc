@@ -1722,4 +1722,3 @@ import Blanc.Lift.HistStaticCallGuard
 import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
-import Blanc.Lift.UniswapV2Pair.HistGetterScalar
