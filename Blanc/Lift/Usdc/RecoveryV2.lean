@@ -33,7 +33,7 @@ theorem recoveryV2_consumes
     (space : p.toNat + 160 < 2 ^ 256)
     (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
     (continuations : κ.K.map Cont.f = caller :: K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (call : CallOccurrenceStep F .staticcall) (parent child : Devm)
       (gas : Nat) (adr : Adr) (N : Exec.Deriv) (next : Cursor),
       let input := digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes

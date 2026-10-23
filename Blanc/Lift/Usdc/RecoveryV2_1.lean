@@ -33,7 +33,7 @@ theorem recoveryV2_1_consumes
     (space : p.toNat + 160 < 2 ^ 256)
     (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
     (continuations : κ.K.map Cont.f = caller :: K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (call : CallOccurrenceStep F .staticcall) (parent child : Devm)
       (gas : Nat) (adr : Adr) (N : Exec.Deriv) (next : Cursor),
       let input := digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes
@@ -71,10 +71,10 @@ theorem recoveryV2_1_owner_comparison
     (ok : CursorOK ImplV2_1.code ImplV2_1.cert F κ)
     (tree : κ.f = ImplV2_1.t_421e_c71)
     (stack : F.devm.stack = adr.toB256 :: owner :: S)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     owner = adr.toB256 := by
   have source : ∃ outcome, SFunc.Run ImplV2_1.cert.prog F.sevm F.devm κ.f outcome := by
-    rcases ok.sourceRunReturn ImplV2_1.cert_check success fork with halted | returned
+    rcases ok.sourceRunReturnH ImplV2_1.cert_check success fork.stateGas with halted | returned
     · exact ⟨_, halted.mono StepIn.toRun⟩
     · obtain ⟨continuation, tail, d, actual, sameK, live, smaller, run, placed⟩ := returned
       exact ⟨_, run.mono StepIn.toRun⟩
@@ -114,7 +114,7 @@ theorem recoveryV2_1_consumes_owner
     (space : p.toNat + 160 < 2 ^ 256)
     (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
     (continuations : κ.K.map Cont.f = ImplV2_1.t_421e_c71 :: K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ecrecoverOutput (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) =
       owner.toBytes := by
   obtain ⟨call, parent, child, gas, adr, N, next, callPc, beforeSpan, spawned, process,

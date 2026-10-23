@@ -58,7 +58,7 @@ private theorem permit_root_nonpayable
     {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.value = 0 ∧ Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F
       ImplV2_1.t_0010_c0 F.devm [F.sevm.value]
       (Mem.empty.write 64 (128 : B256).toBytes) []) := by
@@ -67,21 +67,21 @@ private theorem permit_root_nonpayable
       F.devm [] Mem.empty [] :=
     ⟨F, Cursor.start ImplV2_1.cert, .refl _, rfl, rfl, placed, rfl,
       ⟨F.devm.gasLeft, St.self stack memory⟩, rfl⟩
-  obtain ⟨guard⟩ := first.line ImplV2_1.cert_check success fork permitPrologue
+  obtain ⟨guard⟩ := first.lineH ImplV2_1.cert_check success fork.stateGas permitPrologue
     permit_prologue_shape (by
       intro ni member xi same; subst ni
       simp only [permitPrologue, Blanc.Lift.SolcSignedQuery.prologue, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.prologue_line (d0 := 0x00) (d1 := 0x10))
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have nonzero : B256.eqCheck F.sevm.value 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨taken, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk (by rfl)).elim
     · exact taken
   have valueZero : F.sevm.value = 0 := eq_zero_of_iszero_ne_zero nonzero
-  exact ⟨valueZero, guard.branchSucc ImplV2_1.cert_check success fork nonzero⟩
+  exact ⟨valueZero, guard.branchSuccH ImplV2_1.cert_check success fork.stateGas nonzero⟩
 
 private abbrev permitSizeLine := SolcSignedQuery.sizeLine 0x03 0x36
 
@@ -89,19 +89,19 @@ private theorem permit_root_size
     {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.value = 0 ∧ 4 ≤ F.sevm.data.length.toB256.toNat ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F
         ImplV2_1.t_001a_c0 F.devm [] (Mem.empty.write 64 (128 : B256).toBytes) []) := by
   obtain ⟨valueZero, ⟨start⟩⟩ := permit_root_nonpayable pc code stack memory success fork
-  obtain ⟨opened⟩ := start.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork permitSizeLine rfl
+  obtain ⟨opened⟩ := start.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitSizeLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitSizeLine, Blanc.Lift.SolcSignedQuery.sizeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.size_line (d0 := 0x03) (d1 := 0x36))
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have condition : B256.ltCheck F.sevm.data.length.toB256 4 = 0 := by
     rcases rpw_branch actualRun with ⟨zero, _, _⟩ | ⟨_, _, rejected⟩
@@ -110,20 +110,20 @@ private theorem permit_root_size
   have bound := toNat_ge_of_ltCheck_eq_zero condition
   change 4 ≤ F.sevm.data.length.toB256.toNat at bound
   rw [condition] at guard
-  exact ⟨valueZero, bound, guard.branchZero ImplV2_1.cert_check success fork⟩
+  exact ⟨valueZero, bound, guard.branchZeroH ImplV2_1.cert_check success fork.stateGas⟩
 
 private theorem permit_root_dispatch
     {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (selector : Sevm.selector F.sevm = 0xd505accf)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.value = 0 ∧ 4 ≤ F.sevm.data.length.toB256.toNat ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F
         ImplV2_1.t_0b03_c109 F.devm [0xd505accf]
         (Mem.empty.write 64 (128 : B256).toBytes) []) := by
   obtain ⟨valueZero, sizeBound, ⟨start⟩⟩ := permit_root_size pc code stack memory success fork
-  obtain ⟨first⟩ := start.line ImplV2_1.cert_check success fork
+  obtain ⟨first⟩ := start.lineH ImplV2_1.cert_check success fork.stateGas
     [.push [0x00] (by decide), .reg .calldataload, .push [0xe0] (by decide), .reg .shr,
       .reg (.dup 0), .push [0x7f, 0x2e, 0xec, 0xc3] (by decide), .reg .gt,
       .push [0x01, 0xb2] (by decide)] rfl
@@ -152,8 +152,8 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c1⟩ := first.branchZero ImplV2_1.cert_check success fork
-  obtain ⟨guard0⟩ := c1.line ImplV2_1.cert_check success fork
+  obtain ⟨c1⟩ := first.branchZeroH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard0⟩ := c1.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xb2, 0x11, 0x8a, 0x8d] (by decide), .reg .gt,
       .push [0x00, 0xf9] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -170,8 +170,8 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c2⟩ := guard0.branchZero ImplV2_1.cert_check success fork
-  obtain ⟨guard1⟩ := c2.line ImplV2_1.cert_check success fork
+  obtain ⟨c2⟩ := guard0.branchZeroH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard1⟩ := c2.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xe3, 0xee, 0x16, 0x0e] (by decide), .reg .gt,
       .push [0x00, 0xa2] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -188,9 +188,9 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c3⟩ := guard1.branchSucc ImplV2_1.cert_check success fork (by decide : (1 : B256) ≠ 0)
-  obtain ⟨opened2⟩ := c3.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard2⟩ := opened2.line ImplV2_1.cert_check success fork
+  obtain ⟨c3⟩ := guard1.branchSuccH ImplV2_1.cert_check success fork.stateGas (by decide : (1 : B256) ≠ 0)
+  obtain ⟨opened2⟩ := c3.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard2⟩ := opened2.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xd6, 0x08, 0xea, 0x64] (by decide), .reg .gt,
       .push [0x00, 0xd3] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -207,9 +207,9 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c4⟩ := guard2.branchSucc ImplV2_1.cert_check success fork (by decide : (1 : B256) ≠ 0)
-  obtain ⟨opened3⟩ := c4.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard3⟩ := opened3.line ImplV2_1.cert_check success fork
+  obtain ⟨c4⟩ := guard2.branchSuccH ImplV2_1.cert_check success fork.stateGas (by decide : (1 : B256) ≠ 0)
+  obtain ⟨opened3⟩ := c4.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard3⟩ := opened3.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xb2, 0x11, 0x8a, 0x8d] (by decide), .reg .eq,
       .push [0x0a, 0xb8] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -226,8 +226,8 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c5⟩ := guard3.toZero ImplV2_1.cert_check success fork
-  obtain ⟨guard4⟩ := c5.line ImplV2_1.cert_check success fork
+  obtain ⟨c5⟩ := guard3.toZeroH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard4⟩ := c5.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xbd, 0x10, 0x24, 0x30] (by decide), .reg .eq,
       .push [0x0a, 0xfb] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -244,8 +244,8 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨c6⟩ := guard4.toZero ImplV2_1.cert_check success fork
-  obtain ⟨guard5⟩ := c6.line ImplV2_1.cert_check success fork
+  obtain ⟨c6⟩ := guard4.toZeroH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard5⟩ := c6.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg (.dup 0), .push [0xd5, 0x05, 0xac, 0xcf] (by decide), .reg .eq,
       .push [0x0b, 0x03] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -262,7 +262,7 @@ private theorem permit_root_dispatch
       obtain ⟨_, rfl⟩ := ri_push step
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨finish⟩ := guard5.toSucc ImplV2_1.cert_check success fork (by decide : (1 : B256) ≠ 0) (by rfl)
+  obtain ⟨finish⟩ := guard5.toSuccH ImplV2_1.cert_check success fork.stateGas (by decide : (1 : B256) ≠ 0) (by rfl)
   exact ⟨valueZero, sizeBound, ⟨finish⟩⟩
 
 private theorem permit_wrapper_guard
@@ -270,13 +270,13 @@ private theorem permit_wrapper_guard
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F
       ImplV2_1.t_0b03_c109 b [0xd505accf] M [])
     (sizeBound : 4 ≤ F.sevm.data.length.toB256.toNat)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     228 ≤ F.sevm.data.length.toB256.toNat ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F
         ImplV2_1.t_0b19_c109 b
         [F.sevm.data.length.toB256 - 4, 4, 0x452, 0xd505accf] M []) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
     [.push [0x04, 0x52] (by decide), .push [0x04] (by decide), .reg (.dup 0),
       .reg .calldatasize, .reg .sub, .push [0xe0] (by decide), .reg (.dup 1),
       .reg .lt, .reg .iszero, .push [0x0b, 0x19] (by decide)] rfl
@@ -308,8 +308,8 @@ private theorem permit_wrapper_guard
       cases line
       exact ⟨_, rfl⟩)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck (B256.ltCheck (F.sevm.data.length.toB256 - 4) 224) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
@@ -320,7 +320,7 @@ private theorem permit_wrapper_guard
   rw [B256.toNat_sub_eq_of_le _ _ (by
     rw [B256.le_iff_toNat_le_toNat]; exact sizeBound)] at bound
   change 224 ≤ F.sevm.data.length.toB256.toNat - 4 at bound
-  exact ⟨by omega, guard.branchSucc ImplV2_1.cert_check success fork taken⟩
+  exact ⟨by omega, guard.branchSuccH ImplV2_1.cert_check success fork.stateGas taken⟩
 
 private abbrev permitDecodeLine := SolcSignedQuery.decodeLine 0x30 0x92
 
@@ -329,7 +329,7 @@ private theorem permit_root_decoded
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (selector : Sevm.selector F.sevm = 0xd505accf)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.value = 0 ∧ 228 ≤ F.sevm.data.length.toB256.toNat ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F
         ImplV2_1.t_3092_c24 F.devm
@@ -341,36 +341,36 @@ private theorem permit_root_decoded
   obtain ⟨valueZero, sizeBound, ⟨wrapper⟩⟩ :=
     permit_root_dispatch pc code stack memory selector success fork
   obtain ⟨bound, ⟨accepted⟩⟩ := permit_wrapper_guard wrapper sizeBound success fork
-  obtain ⟨opened⟩ := accepted.dest ImplV2_1.cert_check success fork
-  obtain ⟨decoded⟩ := opened.line ImplV2_1.cert_check success fork permitDecodeLine rfl
+  obtain ⟨opened⟩ := accepted.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨decoded⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitDecodeLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitDecodeLine, Blanc.Lift.SolcSignedQuery.decodeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.decode_line (d0 := 0x30) (d1 := 0x92))
-  exact ⟨valueZero, bound, decoded.call ImplV2_1.cert_check success fork rfl⟩
+  exact ⟨valueZero, bound, decoded.callH ImplV2_1.cert_check success fork.stateGas rfl⟩
 
 private abbrev permitPauseLine := SolcSignedQuery.pauseLine 0x01 0x31 0x1c
 
 private theorem permit_pause_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {S : List B256} {K : List SFunc}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_3092_c24 b S M K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_311c_c24
-      (afterSload F.sevm b 1) S M K) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork permitPauseLine rfl
+      (afterSloadH F.sevm b 1) S M K) := by
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitPauseLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitPauseLine, Blanc.Lift.SolcSignedQuery.pauseLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.pause_line (slot := 0x01) (d0 := 0x31) (d1 := 0x1c)) fork)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck (255 &&& (b.getStorVal F.sevm.currentTarget 1 /
       (0x10000000000000000000000000000000000000000 : B256))) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk (by rfl)).elim
     · exact nonzero
-  exact guard.branchSucc ImplV2_1.cert_check success fork taken
+  exact guard.branchSuccH ImplV2_1.cert_check success fork.stateGas taken
 
 private abbrev permitBlacklistReadLine := SolcSignedQuery.blacklistReadLine 0x03
 
@@ -379,16 +379,16 @@ private theorem permit_owner_blacklist_guard {F : Exec.Deriv} {post b : Devm} {M
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_311c_c24 b
       (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M K)
     (ptr : PtrMem 128 96 M)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ b' M', b'.state = b.state ∧ PtrMem 128 96 M' ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_319d_c24 b'
         (owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M' K) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨read⟩ := opened.line ImplV2_1.cert_check success fork permitBlacklistReadLine rfl
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨read⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitBlacklistReadLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitBlacklistReadLine, Blanc.Lift.SolcSignedQuery.blacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.blacklist_read_line (base := 0x03)) ptr fork)
-  obtain ⟨guard⟩ := read.line ImplV2_1.cert_check success fork
+  obtain ⟨guard⟩ := read.lineH ImplV2_1.cert_check success fork.stateGas
     [.push [0x31, 0x9d] (by decide)] rfl
     (by intro ni member xi same; subst ni
         simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
@@ -398,17 +398,16 @@ private theorem permit_owner_blacklist_guard {F : Exec.Deriv} {post b : Devm} {M
         cases run
         exact ⟨_, rfl⟩)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck (255 &&& b.getStorVal F.sevm.currentTarget
       (mapSlot owner.toB256 3)) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk (by rfl)).elim
     · exact nonzero
-  refine ⟨_, _, ?_, ?_, guard.branchSucc ImplV2_1.cert_check success fork taken⟩
-  · unfold afterSload
-    split <;> rfl
+  refine ⟨_, _, ?_, ?_, guard.branchSuccH ImplV2_1.cert_check success fork.stateGas taken⟩
+  · exact afterSloadH_state _ _ _
   · exact (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 3 (.inl (by decide))
 
 private theorem permit_spender_blacklist_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
@@ -416,16 +415,16 @@ private theorem permit_spender_blacklist_guard {F : Exec.Deriv} {post b : Devm} 
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_319d_c24 b
       (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M K)
     (ptr : PtrMem 128 96 M)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ b' M', b'.state = b.state ∧ PtrMem 128 96 M' ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_321e_c24 b'
         (owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M' K) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨read⟩ := opened.line ImplV2_1.cert_check success fork permitBlacklistReadLine rfl
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨read⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitBlacklistReadLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitBlacklistReadLine, Blanc.Lift.SolcSignedQuery.blacklistReadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.blacklist_read_line (base := 0x03)) ptr fork)
-  obtain ⟨guard⟩ := read.line ImplV2_1.cert_check success fork
+  obtain ⟨guard⟩ := read.lineH ImplV2_1.cert_check success fork.stateGas
     [.push [0x32, 0x1e] (by decide)] rfl
     (by intro ni member xi same; subst ni
         simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
@@ -435,30 +434,29 @@ private theorem permit_spender_blacklist_guard {F : Exec.Deriv} {post b : Devm} 
         cases run
         exact ⟨_, rfl⟩)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck (255 &&& b.getStorVal F.sevm.currentTarget
       (mapSlot owner.toB256 3)) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk (by rfl)).elim
     · exact nonzero
-  refine ⟨_, _, ?_, ?_, guard.branchSucc ImplV2_1.cert_check success fork taken⟩
-  · unfold afterSload
-    split <;> rfl
+  refine ⟨_, _, ?_, ?_, guard.branchSuccH ImplV2_1.cert_check success fork.stateGas taken⟩
+  · exact afterSloadH_state _ _ _
   · exact (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 3 (.inl (by decide))
 
 private theorem permit_call71 {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v deadline value spender owner : B256} {S : List B256} {K : List SFunc}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_321e_c24 b
       (spender :: owner :: s :: r :: v :: deadline :: value :: spender :: owner :: S) M K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_410c_c71 b
       (s :: r :: v :: deadline :: value :: spender :: owner :: 0x322d ::
        spender :: owner :: s :: r :: v :: deadline :: value :: spender :: owner :: S)
       M (ImplV2_1.t_322d_c24 :: K)) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨args⟩ := opened.line ImplV2_1.cert_check success fork
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨args⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
     [.push [0x32, 0x2d] (by decide), .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
       .reg (.dup 9), .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
       .push [0x41, 0x0c] (by decide)] rfl
@@ -486,18 +484,18 @@ private theorem permit_call71 {F : Exec.Deriv} {post b : Devm} {M : Mem}
       obtain ⟨_, rfl⟩ := ri_push step
       cases run
       exact ⟨_, rfl⟩)
-  exact args.call ImplV2_1.cert_check success fork rfl
+  exact args.callH ImplV2_1.cert_check success fork.stateGas rfl
 
 private theorem permit_deadline_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v deadline : B256} {S : List B256} {K : List SFunc}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_410c_c71 b
       (s :: r :: v :: deadline :: S) M K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.benvStat.time.toNat ≤ deadline.toNat ∧
       Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_417b_c71 b
         (s :: r :: v :: deadline :: S) M K) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg .timestamp, .reg (.dup 4), .reg .lt, .reg .iszero,
       .push [0x41, 0x7b] (by decide)] rfl
     (by intro ni member xi same; subst ni
@@ -517,8 +515,8 @@ private theorem permit_deadline_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
       cases run
       exact ⟨_, rfl⟩)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck (B256.ltCheck deadline F.sevm.benvStat.time) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
@@ -526,13 +524,13 @@ private theorem permit_deadline_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
     · exact nonzero
   have zero := eq_zero_of_iszero_ne_zero taken
   exact ⟨toNat_ge_of_ltCheck_eq_zero zero,
-    guard.branchSucc ImplV2_1.cert_check success fork taken⟩
+    guard.branchSuccH ImplV2_1.cert_check success fork.stateGas taken⟩
 
 private theorem permit_root_417b {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (selector : Sevm.selector F.sevm = 0xd505accf)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     F.sevm.value = 0 ∧ 228 ≤ F.sevm.data.length.toB256.toNat ∧
     F.sevm.benvStat.time.toNat ≤ (Sevm.dataWord F.sevm 100).toNat ∧
     ∃ b M, b.state = F.devm.state ∧ PtrMem 128 96 M ∧
@@ -558,8 +556,7 @@ private theorem permit_root_417b {F : Exec.Deriv} {post : Devm}
   obtain ⟨deadlineBound, continued⟩ := permit_deadline_guard called success fork
   refine ⟨valueZero, sizeBound, deadlineBound, b2, M2, ?_, ptr2, continued⟩
   rw [state2, state1]
-  unfold afterSload
-  split <;> rfl
+  exact afterSloadH_state _ _ _
 
 private abbrev permitNonceLine := SolcSignedQuery.nonceLine 0x11
 
@@ -574,27 +571,27 @@ private theorem permit_call83 {F : Exec.Deriv} {post b : Devm} {M : Mem}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_417b_c71 b
       (s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M K)
     (ptr : PtrMem 128 96 M)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     let nonce := b.getStorVal F.sevm.currentTarget (nonceSlot owner)
-    let b' := afterSstore F.sevm (afterSload F.sevm b (nonceSlot owner)) (nonceSlot owner) (nonce + 1)
+    let b' := afterSstoreH F.sevm (afterSloadH F.sevm b (nonceSlot owner)) (nonceSlot owner) (nonce + 1)
     let M' := (M.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes
     Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_46b5_c83
-      (afterSload F.sevm b' 15)
+      (afterSloadH F.sevm b' 15)
       (128 :: s :: r :: v :: b'.getStorVal F.sevm.currentTarget 15 :: 0x421e :: owner.toB256 ::
        128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
       ((SolcSignedQuery.structMemory 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9) M' owner spender value nonce deadline) (ImplV2_1.t_421e_c71 :: K)) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨updated⟩ := opened.line ImplV2_1.cert_check success fork permitNonceLine rfl
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨updated⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitNonceLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitNonceLine, Blanc.Lift.SolcSignedQuery.nonceLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.nonce_line (base := 0x11)) ptr fork)
   have ptr' := (ptr.write 0 owner.toB256 (.inl (by decide))).write 32 17 (.inl (by decide))
   change PtrMem 128 96 ((M.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes) at ptr'
-  obtain ⟨head⟩ := updated.line ImplV2_1.cert_check success fork permitBufferHeadLine rfl
+  obtain ⟨head⟩ := updated.lineH ImplV2_1.cert_check success fork.stateGas permitBufferHeadLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitBufferHeadLine, Blanc.Lift.SolcSignedQuery.bufferHeadLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.buffer_head_line (tag := [0x6e, 0x71, 0xed, 0xae, 0x12, 0xb1, 0xb9, 0x7f, 0x4d, 0x1f, 0x60, 0x37, 0x0f, 0xef, 0x10, 0x10, 0x5f, 0xa2, 0xfa, 0xae, 0x01, 0x26, 0x11, 0x4a, 0x16, 0x9c, 0x64, 0x84, 0x5d, 0x61, 0x26, 0xc9]) (le := by decide)) ptr')
-  obtain ⟨body⟩ := head.line ImplV2_1.cert_check success fork permitBufferBodyLine rfl
+  obtain ⟨body⟩ := head.lineH ImplV2_1.cert_check success fork.stateGas permitBufferBodyLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitBufferBodyLine, Blanc.Lift.SolcSignedQuery.bufferBodyLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     SolcSignedQuery.buffer_body_line
@@ -606,11 +603,11 @@ private theorem permit_call83 {F : Exec.Deriv} {post b : Devm} {M : Mem}
         (b.getStorVal F.sevm.currentTarget (nonceSlot owner)) deadline) :=
     (((ptrHead.write 224 spender.toB256 (.inr (by decide))).write 256 value
       (.inr (by decide))).write 288 _ (.inr (by decide))).write 320 deadline (.inr (by decide))
-  obtain ⟨tail⟩ := body.line ImplV2_1.cert_check success fork permitBufferTailLine rfl
+  obtain ⟨tail⟩ := body.lineH ImplV2_1.cert_check success fork.stateGas permitBufferTailLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitBufferTailLine, Blanc.Lift.SolcSignedQuery.bufferTailLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.buffer_tail_line (slot := 0x0f) (r0 := 0x42) (r1 := 0x1e) (d0 := 0x46) (d1 := 0xb5)) ptrBody fork)
-  exact tail.call ImplV2_1.cert_check success fork rfl
+  exact tail.callH ImplV2_1.cert_check success fork.stateGas rfl
 
 private abbrev permitStructHashLine := SolcSignedQuery.structHashLine
 
@@ -626,31 +623,31 @@ private theorem permit_call89 {F : Exec.Deriv} {post b : Devm} {M : Mem}
       (128 :: s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S) M K)
     (ptr : PtrMem 352 352 M) (length : memWord M 128 = 192)
     (hashRead : (M.read 160 192).1.keccak = hash)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     let digest := ([0x19, 0x01] ++ domain.toBytes ++ hash.toBytes : Bytes).keccak
     Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_4944_c89 b
       (s :: r :: v :: digest :: 0x471c :: digest :: 0 :: 128 ::
        s :: r :: v :: domain :: 0x421e :: owner.toB256 :: S)
       (SolcSignedQuery.typedMemory M domain hash) (ImplV2_1.t_471c_c83 :: K)) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨hashed⟩ := opened.line ImplV2_1.cert_check success fork permitStructHashLine rfl
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨hashed⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitStructHashLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitStructHashLine, Blanc.Lift.SolcSignedQuery.structHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.struct_hash_line ptr length hashRead)
-  obtain ⟨words⟩ := hashed.line ImplV2_1.cert_check success fork permitTypedWordsLine rfl
+  obtain ⟨words⟩ := hashed.lineH ImplV2_1.cert_check success fork.stateGas permitTypedWordsLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitTypedWordsLine, Blanc.Lift.SolcSignedQuery.typedWordsLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.typed_words_line ptr)
   obtain ⟨ptrWords, ptrTyped, lengthTyped, bytesTyped⟩ := SolcSignedQuery.typed_memory_facts (domain := domain) (hash := hash) ptr
-  obtain ⟨sized⟩ := words.line ImplV2_1.cert_check success fork permitTypedLengthLine rfl
+  obtain ⟨sized⟩ := words.lineH ImplV2_1.cert_check success fork.stateGas permitTypedLengthLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitTypedLengthLine, Blanc.Lift.SolcSignedQuery.typedLengthLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.typed_length_line ptrWords)
-  obtain ⟨args⟩ := sized.line ImplV2_1.cert_check success fork permitTypedHashLine rfl
+  obtain ⟨args⟩ := sized.lineH ImplV2_1.cert_check success fork.stateGas permitTypedHashLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitTypedHashLine, Blanc.Lift.SolcSignedQuery.typedHashLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     ((SolcSignedQuery.typed_hash_line (r0 := 0x47) (r1 := 0x1c) (d0 := 0x49) (d1 := 0x44)) ptrTyped lengthTyped (congrArg Bytes.keccak bytesTyped))
-  exact args.call ImplV2_1.cert_check success fork rfl
+  exact args.callH ImplV2_1.cert_check success fork.stateGas rfl
 
 private abbrev permitLowSLine := SolcSignedQuery.lowSLine 0x49 0xbf
 
@@ -662,35 +659,35 @@ private theorem permit_signature_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v : B256} {S : List B256} {K : List SFunc}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_4944_c89 b
       (s :: r :: v :: S) M K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ flag, Nonempty (CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_49d7_c7 b
       (flag :: 0 :: s :: r :: v :: S) M K) := by
-  obtain ⟨opened⟩ := cut.dest ImplV2_1.cert_check success fork
-  obtain ⟨low⟩ := opened.line ImplV2_1.cert_check success fork permitLowSLine rfl
+  obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨low⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas permitLowSLine rfl
     (by intro ni member xi same; subst ni
         simp only [permitLowSLine, Blanc.Lift.SolcSignedQuery.lowSLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.lows_line (d0 := 0x49) (d1 := 0xbf))
   obtain ⟨gas, actualState⟩ := low.state
-  obtain ⟨outcome, actualRun⟩ := low.placed.sourceRun ImplV2_1.cert_check
-    (low.exn_eq.trans success) (by rw [low.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := low.placed.sourceRunH ImplV2_1.cert_check
+    (low.exn_eq.trans success) (by rw [low.sevm_eq]; exact fork.stateGas)
   rw [low.tree, actualState, low.sevm_eq] at actualRun
   have taken : B256.eqCheck (B256.gtCheck s
       (0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0 : B256)) 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk (by rfl)).elim
     · exact nonzero
-  obtain ⟨validS⟩ := low.branchSucc ImplV2_1.cert_check success fork taken
-  obtain ⟨openedV⟩ := validS.dest ImplV2_1.cert_check success fork
-  obtain ⟨v27⟩ := openedV.line ImplV2_1.cert_check success fork permitV27Line rfl
+  obtain ⟨validS⟩ := low.branchSuccH ImplV2_1.cert_check success fork.stateGas taken
+  obtain ⟨openedV⟩ := validS.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨v27⟩ := openedV.lineH ImplV2_1.cert_check success fork.stateGas permitV27Line rfl
     (by intro ni member xi same; subst ni
         simp only [permitV27Line, Blanc.Lift.SolcSignedQuery.v27Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (SolcSignedQuery.v27_line (d0 := 0x49) (d1 := 0xd7))
   by_cases takenV : B256.eqCheck (B256.eqCheck (B256.eqCheck 27 (255 &&& v)) 0) 0 ≠ 0
-  · exact ⟨_, v27.toSucc ImplV2_1.cert_check success fork takenV rfl⟩
+  · exact ⟨_, v27.toSuccH ImplV2_1.cert_check success fork.stateGas takenV rfl⟩
   · have zeroV := not_not.mp takenV
     rw [zeroV] at v27
-    obtain ⟨otherV⟩ := v27.toZero ImplV2_1.cert_check success fork
-    obtain ⟨v28⟩ := otherV.line ImplV2_1.cert_check success fork permitV28Line rfl
+    obtain ⟨otherV⟩ := v27.toZeroH ImplV2_1.cert_check success fork.stateGas
+    obtain ⟨v28⟩ := otherV.lineH ImplV2_1.cert_check success fork.stateGas permitV28Line rfl
       (by intro ni member xi same; subst ni
           simp only [permitV28Line, Blanc.Lift.SolcSignedQuery.v28Line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
       SolcSignedQuery.v28_line
@@ -700,12 +697,12 @@ private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     {s r v : B256} {S : List B256} {K : List SFunc}
     (cut : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_4944_c89 b
       (s :: r :: v :: S) M K)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ reached : CursorStateAt ImplV2_1.code ImplV2_1.cert F ImplV2_1.t_4a2d_c7 b
       (0 :: s :: r :: v :: S) M K, reached.node.pc = 0x4a2d := by
   obtain ⟨flag, ⟨before⟩⟩ := permit_signature_cut cut success fork
-  obtain ⟨opened⟩ := before.dest ImplV2_1.cert_check success fork
-  obtain ⟨guard⟩ := opened.line ImplV2_1.cert_check success fork
+  obtain ⟨opened⟩ := before.destH ImplV2_1.cert_check success fork.stateGas
+  obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
     [.reg .iszero, .push [0x4a, 0x2d] (by decide)] rfl
     (by intro ni member xi same; subst ni
         simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
@@ -718,8 +715,8 @@ private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
       cases run
       exact ⟨_, rfl⟩)
   obtain ⟨gas, actualState⟩ := guard.state
-  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRun ImplV2_1.cert_check
-    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+  obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
+    (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   rw [guard.tree, actualState, guard.sevm_eq] at actualRun
   have taken : B256.eqCheck flag 0 ≠ 0 := by
     rcases rpw_branch actualRun with ⟨_, _, rejected⟩ | ⟨nonzero, _, _⟩
@@ -727,8 +724,8 @@ private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     · exact nonzero
   have decoded := guard.placed.jumpiAt_of_branch guard.tree
   obtain ⟨N, next, edge, jumped, _, stateful, placed⟩ :=
-    cursor_jinst_forward ImplV2_1.cert_check guard.placed decoded
-      (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork)
+    cursor_jinst_forwardH ImplV2_1.cert_check guard.placed decoded
+      (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
   have actualStep : ConfStep (Ninst.RunWith (Cursor.DescOf guard.node)) ImplV2_1.cert.prog F.sevm
       ⟨St b (0x4a2d :: B256.eqCheck flag 0 :: 0 :: s :: r :: v :: S) M gas,
         .branch ImplV2_1.t_49dd_c7 ImplV2_1.t_4a2d_c7, K⟩
@@ -758,13 +755,13 @@ private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
     sameExn.trans guard.exn_eq, placed, shape.1, shape.2.2, shape.2.1⟩, actualPc⟩
 
 /-- A successful fresh V2_1 permit execution produces its actual query registers,
-free pointer and four real continuations. This is a local modern-fork producer;
-proxy/history entry and historical-fork delivery remain upstream obligations. -/
+free pointer and four real continuations. This is a local producer on
+any `NeutralFork`; proxy/history entry remains an upstream obligation. -/
 theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2_1.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (selector : Sevm.selector F.sevm = 0xd505accf)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (b : Devm) (M : Mem) (R : Exec.Deriv) (κ : Cursor),
       R.pc = 0x4a2d ∧ Exec.Deriv.ExecFreeUntil F R ∧ R.sevm = F.sevm ∧ R.exn = F.exn ∧
       CursorOK ImplV2_1.code ImplV2_1.cert R κ ∧ κ.f = ImplV2_1.t_4a2d_c7 ∧
@@ -776,7 +773,7 @@ theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
   let owner := (Sevm.dataWord F.sevm 4).toAdr
   let spender := (Sevm.dataWord F.sevm 36).toAdr
   let nonce := b0.getStorVal F.sevm.currentTarget (nonceSlot owner)
-  let b1 := afterSstore F.sevm (afterSload F.sevm b0 (nonceSlot owner)) (nonceSlot owner) (nonce + 1)
+  let b1 := afterSstoreH F.sevm (afterSloadH F.sevm b0 (nonceSlot owner)) (nonceSlot owner) (nonce + 1)
   let M1 := (M0.write 0 owner.toB256.toBytes).write 32 (17 : B256).toBytes
   have ptr1 : PtrMem 128 96 M1 :=
     (ptr0.write 0 owner.toB256 (.inl (by decide))).write 32 17 (.inl (by decide))
@@ -800,10 +797,9 @@ theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
   have originalStorage : Devm.getStor b0 F.sevm.currentTarget = Devm.getStor F.devm F.sevm.currentTarget := by
     unfold Devm.getStor Devm.getAcct
     rw [sameState]
-  have loadedState : (afterSload F.sevm b0 (nonceSlot owner)).state = b0.state := by
-    unfold afterSload
-    split <;> rfl
-  have loadedStorage : Devm.getStor (afterSload F.sevm b0 (nonceSlot owner)) F.sevm.currentTarget =
+  have loadedState : (afterSloadH F.sevm b0 (nonceSlot owner)).state = b0.state := by
+    exact afterSloadH_state _ _ _
+  have loadedStorage : Devm.getStor (afterSloadH F.sevm b0 (nonceSlot owner)) F.sevm.currentTarget =
       Devm.getStor F.devm F.sevm.currentTarget := by
     unfold Devm.getStor Devm.getAcct
     rw [loadedState, sameState]
@@ -813,7 +809,7 @@ theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
   have domainEq : b1.getStorVal F.sevm.currentTarget 15 = permitV2_1Domain F.sevm F.devm := by
     change (Devm.getStor b1 F.sevm.currentTarget).get 15 = _
     dsimp only [b1]
-    rw [afterSstore_getStor_self, loadedStorage, nonceEq]
+    rw [afterSstoreH_getStor_self, loadedStorage, nonceEq]
     rfl
   have digestEq :
       ([0x19, 0x01] ++ (b1.getStorVal F.sevm.currentTarget 15).toBytes ++
@@ -823,20 +819,19 @@ theorem permitV2_1_query_entry {F : Exec.Deriv} {post : Devm}
     rfl
   obtain ⟨gas, actualState⟩ := reached.state
   have stackEq := congrArg₂ (permitV2_1RecoveryStackWith F.sevm) digestEq domainEq
-  have reachedState : ∃ G, reached.node.devm = St (afterSload F.sevm b1 15)
+  have reachedState : ∃ G, reached.node.devm = St (afterSloadH F.sevm b1 15)
       (permitV2_1RecoveryStack F.sevm F.devm) Mt G :=
-    ⟨gas, actualState.trans (congrArg (fun S => St (afterSload F.sevm b1 15) S Mt gas) stackEq)⟩
-  refine ⟨afterSload F.sevm b1 15, Mt, reached.node, reached.cursor, actualPc,
+    ⟨gas, actualState.trans (congrArg (fun S => St (afterSloadH F.sevm b1 15) S Mt gas) stackEq)⟩
+  refine ⟨afterSloadH F.sevm b1 15, Mt, reached.node, reached.cursor, actualPc,
     reached.free, reached.sevm_eq, reached.exn_eq, reached.placed, reached.tree,
     reached.continuations, reachedState, ptrFinal, ?_⟩
-  have outerState : (afterSload F.sevm b1 15).state = b1.state := by
-    unfold afterSload
-    split <;> rfl
+  have outerState : (afterSloadH F.sevm b1 15).state = b1.state := by
+    exact afterSloadH_state _ _ _
   unfold Devm.getCode Devm.getAcct
   rw [outerState]
   change b1.getCode 1 = F.devm.getCode 1
   dsimp only [b1]
-  rw [afterSstore_getCode]
+  rw [afterSstoreH_getCode]
   unfold Devm.getCode Devm.getAcct
   rw [loadedState, sameState]
 
@@ -846,12 +841,12 @@ private theorem permit_owner_return {N : Exec.Deriv} {κ : Cursor} {post : Devm}
     (tree : κ.f = ImplV2_1.t_471c_c83)
     (stack : N.devm.stack = adr.toB256 :: digest :: 0 :: 128 :: s :: r :: v :: domain :: 0x421e :: owner :: S)
     (continuations : κ.K.map Cont.f = ImplV2_1.t_421e_c71 :: K)
-    (success : N.exn = .ok post) (fork : CoveredFork N.sevm.benvStat.fork) :
+    (success : N.exn = .ok post) (fork : NeutralFork N.sevm.benvStat.fork) :
     ∃ (Q : Exec.Deriv) (next : Cursor), Exec.Deriv.ExecFreeUntil N Q ∧
       CursorOK ImplV2_1.code ImplV2_1.cert Q next ∧ next.f = ImplV2_1.t_421e_c71 ∧
       Q.devm.stack = adr.toB256 :: owner :: S ∧ owner = adr.toB256 := by
   obtain ⟨Q, next, span, sameEnv, sameExn, finalPlaced, callerTree, _, returned⟩ :=
-    placed.quietReturn ImplV2_1.cert_check success fork
+    placed.quietReturnH ImplV2_1.cert_check success fork.stateGas
       (E := []) (by rfl) (by rfl) (by rw [tree]; rfl) (by rw [tree]; rfl) continuations
   rw [tree, St.self stack rfl] at returned
   obtain ⟨gas, state⟩ := SolcSignedQuery.recovery_epilogue returned
@@ -869,7 +864,7 @@ theorem permitV2_1_query_consumed {F : Exec.Deriv} {post : Devm}
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (selector : Sevm.selector F.sevm = 0xd505accf)
     (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (R : Exec.Deriv) (call : CallOccurrenceStep R .staticcall) (parent child : Devm)
       (gas : Nat) (Q : Exec.Deriv) (next : Cursor),
       let owner := (Sevm.dataWord F.sevm 4).toAdr

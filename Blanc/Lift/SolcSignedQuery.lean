@@ -6,6 +6,9 @@ import Blanc.Lift.InvWalkStep
 import Blanc.Lift.MapSlot
 import Blanc.Lift.RunPWalk
 import Blanc.Lift.WordImage
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistAccessFacts
+import Blanc.HistoricalFork
 
 /-! Shared inversions for Solidity signed-query source fragments.
 Concrete code, checked certificates and actual cursor routes remain with consumers. -/
@@ -245,15 +248,15 @@ def pauseLine (slot d0 d1 : UInt8) : List Ninst :=
    .reg .iszero, .push [d0, d1] (by simp only [List.length_cons, List.length_nil]; decide)]
 
 theorem pause_line {slot d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
-    {S : List B256} (fork : CoveredFork sevm.benvStat.fork)
+    {S : List B256} (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm (St b S M G) (pauseLine slot d0 d1) d) :
-    ∃ G', d = St (afterSload sevm b (Bytes.toB256 [slot]))
+    ∃ G', d = St (afterSloadH sevm b (Bytes.toB256 [slot]))
       ((Bytes.toB256 [d0, d1]) :: B256.eqCheck (255 &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [slot]) /
         (0x10000000000000000000000000000000000000000 : B256))) 0 :: S) M G' := by
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, rfl⟩ := ri_sloadH fork.bal step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -295,11 +298,11 @@ def mappedByteReadLine (depth : Fin 15) (base : UInt8) : List Ninst :=
 theorem mapped_byte_read_line {depth : Fin 15} {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {owner : Adr} {S : List B256}
     (source : S[depth.val]? = some owner.toB256)
-    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
+    (ptr : PtrMem 128 96 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm
       (St b S M G)
       (mappedByteReadLine depth base) d) :
-    ∃ G', d = St (afterSload sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+    ∃ G', d = St (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
       (B256.eqCheck (255 &&& b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))) 0 ::
         owner.toB256 :: S)
       ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
@@ -341,7 +344,7 @@ theorem mapped_byte_read_line {depth : Fin 15} {base : UInt8} {sevm : Sevm} {b d
     noGrowth] at state
   subst state
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, rfl⟩ := ri_sloadH fork.bal step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_dup (by simpa only [List.getElem?_cons_succ] using source) step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -378,11 +381,11 @@ def blacklistReadLine (base : UInt8) : List Ninst :=
 
 theorem blacklist_read_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {a0 a1 a2 a3 a4 a5 : B256} {owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
+    (ptr : PtrMem 128 96 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm
       (St b (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S) M G)
       (blacklistReadLine base) d) :
-    ∃ G', d = St (afterSload sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+    ∃ G', d = St (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
       (B256.eqCheck (255 &&& b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))) 0 ::
         owner.toB256 :: a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: owner.toB256 :: S)
       ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
@@ -419,12 +422,12 @@ def nonceLine (base : UInt8) : List Ninst :=
 
 theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 96 M) (fork : CoveredFork sevm.benvStat.fork)
+    (ptr : PtrMem 128 96 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm (St b
       (s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
       (nonceLine base) d) :
     let nonce := b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))
-    ∃ G', d = St (afterSstore sevm (afterSload sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+    ∃ G', d = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
       (mapSlot owner.toB256 (Bytes.toB256 [base])) (nonce + 1))
       (nonce :: 32 :: 64 :: owner.toB256 ::
         (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
@@ -480,7 +483,7 @@ theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_dup rfl step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, rfl⟩ := ri_sloadH fork.bal step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -492,7 +495,7 @@ theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_swap rfl step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sstore fork step
+  obtain ⟨_, rfl⟩ := ri_sstoreH fork.stateGas fork.bal step
   cases run
   exact ⟨_, rfl⟩
 
@@ -708,11 +711,11 @@ def bufferTailLine (slot r0 r1 d0 d1 : UInt8) : List Ninst :=
 
 theorem buffer_tail_line {slot r0 r1 d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
-    (ptr : PtrMem 128 352 M) (fork : CoveredFork sevm.benvStat.fork)
+    (ptr : PtrMem 128 352 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm (St b
       (192 :: 64 :: owner.toB256 :: 128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
       M G) (bufferTailLine slot r0 r1 d0 d1) d) :
-    ∃ G', d = St (afterSload sevm b (Bytes.toB256 [slot]))
+    ∃ G', d = St (afterSloadH sevm b (Bytes.toB256 [slot]))
       ((Bytes.toB256 [d0, d1]) :: 128 :: s :: r :: v :: b.getStorVal sevm.currentTarget (Bytes.toB256 [slot]) :: (Bytes.toB256 [r0, r1]) ::
        owner.toB256 :: 128 :: s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
       ((M.write 128 (192 : B256).toBytes).write 64 (352 : B256).toBytes) G' := by
@@ -756,7 +759,7 @@ theorem buffer_tail_line {slot r0 r1 d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, rfl⟩ := ri_sloadH fork.bal step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -1517,17 +1520,17 @@ theorem guardSucc {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {target flag : B256}
     (cut : CursorStateAt code c F (.branch f g) b (target :: flag :: S) M K)
     (checked : Cert.check code c = true) (dead : f.noOk = true)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     flag ≠ 0 ∧ Nonempty (CursorStateAt code c F g b S M K) := by
   obtain ⟨gas, actual⟩ := cut.state
-  obtain ⟨outcome, run⟩ := cut.placed.sourceRun checked (cut.exn_eq.trans success)
-    (by rw [cut.sevm_eq]; exact fork)
+  obtain ⟨outcome, run⟩ := cut.placed.sourceRunH checked (cut.exn_eq.trans success)
+    (by rw [cut.sevm_eq]; exact fork.stateGas)
   rw [cut.tree, actual, cut.sevm_eq] at run
   have nonzero : flag ≠ 0 := by
     rcases rpw_branch run with ⟨_, _, rejected⟩ | ⟨taken, _, _⟩
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk dead).elim
     · exact taken
-  exact ⟨nonzero, cut.branchSucc checked success fork nonzero⟩
+  exact ⟨nonzero, cut.branchSuccH checked success fork.stateGas nonzero⟩
 
 theorem selector_gt_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc}
@@ -1536,14 +1539,14 @@ theorem selector_gt_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b 
       ((compareLine .gt c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branch f g)) b (sel :: S) M K)
     (checked : Cert.check code c = true)
     (zero : B256.gtCheck (Bytes.toB256 [c0,c1,c2,c3]) sel = 0)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt code c F f b (sel :: S) M K) := by
-  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+  obtain ⟨tested⟩ := cut.lineH checked success fork.stateGas _ rfl
     (by intro ni member xi same; subst ni
         simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
     compare_gt_line
   rw [zero] at tested
-  exact tested.branchZero checked success fork
+  exact tested.branchZeroH checked success fork.stateGas
 
 theorem selector_gt_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc}
@@ -1552,13 +1555,13 @@ theorem selector_gt_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b 
       ((compareLine .gt c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branch f g)) b (sel :: S) M K)
     (checked : Cert.check code c = true)
     (nonzero : B256.gtCheck (Bytes.toB256 [c0,c1,c2,c3]) sel ≠ 0)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt code c F g b (sel :: S) M K) := by
-  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+  obtain ⟨tested⟩ := cut.lineH checked success fork.stateGas _ rfl
     (by intro ni member xi same; subst ni
         simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
     compare_gt_line
-  exact tested.branchSucc checked success fork nonzero
+  exact tested.branchSuccH checked success fork.stateGas nonzero
 
 theorem selector_eq_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f : SFunc} {k : Nat}
@@ -1567,14 +1570,14 @@ theorem selector_eq_zero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b 
       ((compareLine .eq c0 c1 c2 c3 d0 d1).foldr SFunc.next (.branchTo f k)) b (sel :: S) M K)
     (checked : Cert.check code c = true)
     (zero : B256.eqCheck (Bytes.toB256 [c0,c1,c2,c3]) sel = 0)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt code c F f b (sel :: S) M K) := by
-  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+  obtain ⟨tested⟩ := cut.lineH checked success fork.stateGas _ rfl
     (by intro ni member xi same; subst ni
         simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
     compare_eq_line
   rw [zero] at tested
-  exact tested.toZero checked success fork
+  exact tested.toZeroH checked success fork.stateGas
 
 theorem selector_eq_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {k : Nat}
@@ -1584,31 +1587,31 @@ theorem selector_eq_succ {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b 
     (checked : Cert.check code c = true)
     (nonzero : B256.eqCheck (Bytes.toB256 [c0,c1,c2,c3]) sel ≠ 0)
     (lookup : c.prog[k]? = some g)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     Nonempty (CursorStateAt code c F g b (sel :: S) M K) := by
-  obtain ⟨tested⟩ := cut.line checked success fork _ rfl
+  obtain ⟨tested⟩ := cut.lineH checked success fork.stateGas _ rfl
     (by intro ni member xi same; subst ni
         simp only [compareLine,List.mem_cons,List.not_mem_nil,reduceCtorEq,or_self] at member)
     compare_eq_line
-  exact tested.toSucc checked success fork nonzero lookup
+  exact tested.toSuccH checked success fork.stateGas nonzero lookup
 
 /-- A failed taken branch is excluded by the original success. -/
 theorem guardZero {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {target flag : B256}
     (cut : CursorStateAt code c F (.branch f g) b (target :: flag :: S) M K)
     (checked : Cert.check code c = true) (dead : g.noOk = true)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     flag = 0 ∧ Nonempty (CursorStateAt code c F f b S M K) := by
   obtain ⟨gas, actual⟩ := cut.state
-  obtain ⟨outcome, run⟩ := cut.placed.sourceRun checked (cut.exn_eq.trans success)
-    (by rw [cut.sevm_eq]; exact fork)
+  obtain ⟨outcome, run⟩ := cut.placed.sourceRunH checked (cut.exn_eq.trans success)
+    (by rw [cut.sevm_eq]; exact fork.stateGas)
   rw [cut.tree, actual, cut.sevm_eq] at run
   have zero : flag = 0 := by
     rcases rpw_branch run with ⟨taken, _, _⟩ | ⟨_, _, rejected⟩
     · exact taken
     · exact ((SFunc.runP_iff_runCutP_nil.mp rejected).false_of_noOk dead).elim
   rw [zero] at cut
-  exact ⟨zero, cut.branchZero checked success fork⟩
+  exact ⟨zero, cut.branchZeroH checked success fork.stateGas⟩
 
 /-- The actual first calldata word produces its selector prefix. -/
 def selectorLine : List Ninst :=
@@ -1905,11 +1908,11 @@ def sevenWordTailLine (slot r0 r1 d0 d1 : UInt8) : List Ninst :=
 theorem seven_word_tail_line {slot r0 r1 d0 d1 : UInt8}
     {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {nonce validBefore validAfter value s r v : B256} {owner spender : Adr} {S : List B256}
-    (ptr : PtrMem 128 384 M) (fork : CoveredFork sevm.benvStat.fork)
+    (ptr : PtrMem 128 384 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm (St b
       (224 :: owner.toB256 :: 128 :: 64 :: s :: r :: v :: nonce :: validBefore :: validAfter :: value :: spender.toB256 :: owner.toB256 :: S) M G)
       (sevenWordTailLine slot r0 r1 d0 d1) d) :
-    ∃ G', d = St (afterSload sevm b (Bytes.toB256 [slot]))
+    ∃ G', d = St (afterSloadH sevm b (Bytes.toB256 [slot]))
       (Bytes.toB256 [d0,d1] :: 128 :: s :: r :: v ::
         b.getStorVal sevm.currentTarget (Bytes.toB256 [slot]) :: Bytes.toB256 [r0,r1] ::
         owner.toB256 :: 128 :: s :: r :: v :: nonce :: validBefore :: validAfter :: value :: spender.toB256 :: owner.toB256 :: S)
@@ -1954,7 +1957,7 @@ theorem seven_word_tail_line {slot r0 r1 d0 d1 : UInt8}
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, rfl⟩ := ri_sloadH fork.bal step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_swap rfl step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
@@ -2064,13 +2067,13 @@ theorem guardSucc_pc {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : De
     {S : List B256} {M : Mem} {K : List SFunc} {f g : SFunc} {target flag : B256}
     (cut : CursorStateAt code c F (.branch f g) b (target :: flag :: S) M K)
     (checked : Cert.check code c = true) (dead : f.noOk = true)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     flag ≠ 0 ∧ ∃ reached : CursorStateAt code c F g b S M K, reached.node.pc = target.toNat := by
   obtain ⟨taken,_⟩ := guardSucc cut checked dead success fork
   obtain ⟨gas,actualState⟩ := cut.state
   have decoded := cut.placed.jumpiAt_of_branch cut.tree
-  obtain ⟨N,next,edge,jumped,_,stateful,placed⟩ := cursor_jinst_forward checked cut.placed decoded
-    (cut.exn_eq.trans success) (by rw [cut.sevm_eq]; exact fork)
+  obtain ⟨N,next,edge,jumped,_,stateful,placed⟩ := cursor_jinst_forwardH checked cut.placed decoded
+    (cut.exn_eq.trans success) (by rw [cut.sevm_eq]; exact fork.stateGas)
   have actualStep : ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog F.sevm
       ⟨St b (target :: flag :: S) M gas,.branch f g,K⟩
       ⟨N.devm,next.f,next.K.map Cont.f⟩ := by

@@ -3344,7 +3344,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `EcrecoverCall.entry` exposes its exact source calling convention through
   `ReturnLayout`; `ReturnChecks` records the four structural return checks.
   `EcrecoverCall.consumes` takes the actual code/certificate, source cursor,
-  entry registers, pointer, nondelegation and successful execution. It derives
+  entry registers, pointer, nondelegation, successful execution and a
+  `NeutralFork` (no state gas, no block access list: every `HistFork`). It derives
   the real query, native call and paid gas, canonical nonzero answer, original
   slot and return continuation. Each version must prove its exact source
   equality and structural checks against its own certificate. The call PC is
@@ -3357,7 +3358,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   derives its four-word input from the entry registers and memory writes,
   and connects the actual native invocation and nonzero canonical answer to
   the original checked caller's returned stack. Its entry, pointer,
-  nondelegation and existing fork-coverage premises remain local producer
+  nondelegation and `NeutralFork` premises remain local producer
   obligations. It does not enumerate flag-zero invocations or establish
   complete historical permit coverage.
   `Usdc.recoveryV2_consumes` in
@@ -3374,7 +3375,10 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   type hash and return tags are parameters where supported by the actual
   instruction sequence. `recovery_epilogue` derives the returned answer and
   owner stack from the compiler's shuffle. Consumers still prove exact source
-  equality and follow their own certificate and cursor route.
+  equality and follow their own certificate and cursor route. Every fork premise
+  here is `NeutralFork` (no state gas, no block access list), so the storage
+  lines state their successor over `afterSloadH`/`afterSstoreH` under the
+  frame's actual access schedule.
   `mapped_byte_read_line` takes the actual indexed stack equality and proves
   the mapping read for that depth; the original `blacklist_read_line` is its
   permit specialization. `wrapper_line`, `selector_line`, `compare_gt_line`
@@ -3433,7 +3437,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   in the conclusion. Fork coverage and address-1 nondelegation are explicit
   local premises. Historical transport, complete retained-query relevance
   and failed-call enumeration remain separate obligations.
-  `Usdc.old_owner_query_native` in
+  `Usdc.old_owner_query_nativeH` (on a `NeutralFork`; `old_owner_query_native` is its
+  `CoveredFork` corollary) in
   [`Blanc/Lift/Usdc/OldRecoveryRelevance.lean`](../Blanc/Lift/Usdc/OldRecoveryRelevance.lean)
   composes both version families at their original fresh execution root. It
   preserves the actual call node, recursive slot, step result and returned
@@ -3445,7 +3450,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   per-version `RowSep` in forward `RunP` protected-write observations. V1 has
   only caller/initializer exceptions; the signed versions replace the owner-word
   exception by `OldUsdcNativePairAnswer`, retaining the actual original-root
-  call, native message and Pair answer. This result predicate is not a universe
+  call, native message and Pair answer; `old_owner_pair_native` produces it on a
+  `NeutralFork`. This result predicate is not a universe
   of relevant queries. Local retention requires root commitment; complete
   historical scope, ancestor settlement and attribution of arbitrary retained
   SSTORE occurrences remain separate obligations.
@@ -5941,10 +5947,13 @@ contract-neutral.
   and `implV1_allowLocality_observed_noStateGas` take `stateGas = none` in
   place of `CoveredFork` with unchanged conclusions. For V2, V2_1 and V2_2 the
   `_selectorObserved_noStateGas` forms read the exception at the frame's
-  selector with the owner-word arm kept as calldata word 4; the native-answer
-  arm of `implV2_allowLocality_observed` still needs `CoveredFork`. The
-  `implV*_allowLocality_rawFrame` forms take `stateGas = none` from
-  `rawFrame_entryFacts` and keep success, code and `RowSep` as frame facts.
+  selector. V2 and V2_1 take a `NeutralFork`, a fresh entry and a non-delegated
+  address 1, and their owner arm is the native `OldUsdcNativePairAnswer`, as in
+  `implV2_allowLocality_observed`; V2_2's owner arm stays calldata word 4. The
+  `implV*_allowLocality_rawFrame` forms take `stateGas = none` and the fresh
+  entry from `rawFrame_entryFacts` and keep success, code and `RowSep` as frame
+  facts; V2 and V2_1 add `rules.bal = none` on the history's forks and address
+  1's code without a delegation designator.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
@@ -6446,7 +6455,15 @@ contract-neutral.
   [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
   [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
-  form there is the modern statement from `CoveredFork`;
+  form there is the modern statement from `CoveredFork`; on every fork,
+  `ecrecover_activeH` activates address 1 and
+  `ecrecover_output_of_processMessage_cleanH` (from `rules.stateGas = none`; its `_covered`
+  form is the modern statement) reads a clean address-1 child's output, while
+  `CallCodeH.direct_of_nodeleg`/`CallCodeH.of_nodeleg` resolve a non-delegated callee's code
+  under either delegation flag, in
+  [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean); the world facts
+  `afterSloadH_state` and `afterSstoreH_state`/`afterSstoreH_getCode` in
+  [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
