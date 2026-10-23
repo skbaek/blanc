@@ -2159,6 +2159,19 @@ a protected target executing arbitrary code.
   closure, historical contract/history invariants, and global candidate
   readiness. No recipe is registered: the reducible NoDel conclusion does not
   uniquely distinguish this route, so use this branch and the named theorem.
+- Producer of that `safe` certificate from an installed checked runtime:
+  [`Blanc/ExecutionNoDelProducer.lean`](../Blanc/ExecutionNoDelProducer.lean).
+  `Exec.safe_of_installedCert` takes `Cert.check C c`, `c.callOnly`,
+  `c.noSelfdestruct`, `¬ isValidDelegation C`, nonempty `C`, the actual
+  installed code `pre.getCode wa = C`, `stateGas = none`, and pc-zero entry of
+  `C` when the root owns `wa`'s storage; it proves the decoded SELFDESTRUCT
+  exclusion at every raw node owning `wa`'s storage, every outcome, no fork
+  premise. The cross-frame argument covers reentrant `CALL`/`STATICCALL` into
+  `wa`, foreign `DELEGATECALL`/`CALLCODE` (they keep the caller's account) and
+  `CREATE`/`CREATE2` (cannot enter an account with code).
+  `Exec.inv_noDel_of_installedCert` composes it with
+  `Exec.inv_noDel_of_raw_terminal_safe`. Message/inherited-deletion and
+  transaction-level closure remain separate.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -4360,6 +4373,9 @@ Use
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
   refund and the coinbase priority fee out of the transaction's own up-front
   debit, so neither credit needs a wrap-around side condition.
+  `ExecutionTrace.TransactionTrace.selected_settlement_sum_bounds` is the
+  selected-settlement analogue under only `stateGas = none`; the modern bound
+  is a thin specialization of the same shared credit arithmetic.
 - `ExecutionTrace.TransactionTrace.benvInv` moves a whole `ContractSpec.BenvInv`
   across one retained transaction.  Its balance-sum premise is explicit: a
   general `ContractSpec.Side` need not be `SumNof`.
@@ -5711,6 +5727,9 @@ contract-neutral.
   `ParentPrefix`. It covers every eventual frame outcome. This is local
   decoded-terminal exclusion, not account-deletion or contract preservation;
   child routing and inherited deletion safety require their own proofs.
+  `call_or_staticcall_of_parentPrefix_noStateGas` is the matching fork-free
+  spawn restriction: a same-frame prefix of a `Cert.callOnly` certificate
+  decodes only `CALL`/`STATICCALL`, every outcome.
 - For concrete WETH9 or Uniswap V2 Pair code that must exclude terminal
   `SELFDESTRUCT`, use
   [`Weth9/TerminalSafety.lean`](../Blanc/Lift/Weth9/TerminalSafety.lean) and
@@ -5721,6 +5740,10 @@ contract-neutral.
   The conclusion excludes decoded `Linst.At ... .selfdestruct` for every
   eventual frame outcome. It does not assert deletion safety or a contract
   invariant; child routing, admission and inherited deletions remain separate.
+  Each also supplies `cert_callOnly`, `code_not_delegation`,
+  `runtime_call_or_staticcall` (fork-free spawn restriction) and `exec_noDel`:
+  all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
+  where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in

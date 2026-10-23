@@ -1,6 +1,7 @@
 -- ExecutionTransactionEffects.lean : contract-invariant transaction facts.
 
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionSelectedTransactionStateTrace
 import Blanc.ExecutionTransactionStateTrace
 
 /-!
@@ -234,6 +235,131 @@ theorem foldl_destroyAccount_get_eq
       · intro tail htail
         exact hne tail (by simp only [List.mem_cons, htail, or_true])
 
+/-- Selected gas used cannot exceed the transaction reservation: under
+`stateGas = none` the settled charge is `max _ floor` with the validated
+floor below `tx.gas`. -/
+theorem TransactionTrace.selectedGasUsed_le_gas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (refundCounter : Nat) :
+    (trace.selectedGasSettlement refundCounter).gasUsed ≤ tx.gas := by
+  have floor := validateTransaction_calldataFloorGasCost_le_gas trace.validation
+  unfold TransactionTrace.selectedGasSettlement settleTransactionGas
+  rw [hsg]
+  dsimp only
+  exact max_le ((Nat.sub_le _ _).trans (Nat.sub_le _ _)) floor
+
+/-- Under `stateGas = none` the selected settlement leaves `tx.gas - gasUsed`. -/
+theorem TransactionTrace.selectedGasSettlement_gasLeft_eq
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (refundCounter : Nat) :
+    (trace.selectedGasSettlement refundCounter).gasLeft =
+      tx.gas - (trace.selectedGasSettlement refundCounter).gasUsed := by
+  unfold TransactionTrace.selectedGasSettlement settleTransactionGas
+  rw [hsg]
+
+/-- Selected refund in `gasUsed` form, matching the shared core's shape. -/
+theorem TransactionTrace.selectedRefundValue_eq
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (refundCounter : Nat) :
+    trace.selectedRefundValue refundCounter =
+      ((tx.gas - (trace.selectedGasSettlement refundCounter).gasUsed) *
+        trace.effectiveGasPrice).toB256 := by
+  unfold TransactionTrace.selectedRefundValue
+  rw [trace.selectedGasSettlement_gasLeft_eq hsg]
+
+/-- Shared credit arithmetic: with `used ≤ tx.gas`, the refund
+`((tx.gas - used) * price).toB256` and the tip
+`(used * (price - base)).toB256` are both funded by the checked up-front
+debit, under only a `stateGas = none` fact for the message's rules. -/
+private theorem TransactionTrace.settlement_sum_bounds_core
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (used : Nat)
+    (hused : used ≤ tx.gas)
+    (hmsg : trace.msg.benv.stat.rules.stateGas = none)
+    (baseSum : sum benv.state.bal < 2 ^ 256) :
+    sum trace.messageState.bal +
+        (((tx.gas - used) * trace.effectiveGasPrice).toB256).toNat < 2 ^ 256 ∧
+      sum (trace.messageState.addBal trace.sender
+          (((tx.gas - used) * trace.effectiveGasPrice).toB256)).bal +
+        ((used *
+          (trace.effectiveGasPrice - benv.stat.baseFeePerGas)).toB256).toNat <
+        2 ^ 256 := by
+  have feeLt : tx.gas * trace.effectiveGasPrice +
+      (if tx.isTypeThree = true then
+        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
+      else 0) < 2 ^ 256 := by
+    simpa only [BenvStat.rules, Nat.reducePow, Benv.beginTransaction] using
+      checkTransaction_upfront_lt_modulus trace.checked
+  have creditsLe :
+      (tx.gas - used) * trace.effectiveGasPrice +
+          used * (trace.effectiveGasPrice - benv.stat.baseFeePerGas) ≤
+        tx.gas * trace.effectiveGasPrice := by
+    apply le_trans (Nat.add_le_add_left
+      (Nat.mul_le_mul_left _
+        (Nat.sub_le trace.effectiveGasPrice benv.stat.baseFeePerGas)) _)
+    rw [← Nat.add_mul, Nat.sub_add_cancel hused]
+  have refundLe : (((tx.gas - used) * trace.effectiveGasPrice).toB256).toNat ≤
+      (tx.gas - used) * trace.effectiveGasPrice :=
+    toB256_toNat_le _
+  have tipLe : ((used *
+      (trace.effectiveGasPrice - benv.stat.baseFeePerGas)).toB256).toNat ≤
+      used * (trace.effectiveGasPrice - benv.stat.baseFeePerGas) :=
+    toB256_toNat_le _
+  have debitSum := State.balSum_subBal trace.debit
+  dsimp only [State.balSum, transactionBlobGasFee] at debitSum
+  rw [State.incrNonce_bal] at debitSum
+  rw [B256.toNat_toB256_of_lt feeLt] at debitSum
+  have messageSum := processMessageCall_sum_le hmsg trace.message.result
+  rw [prepareMessage_benv trace.prepared] at messageSum
+  change sum trace.messageState.bal ≤ sum trace.debitState.bal at messageSum
+  have refundBound :
+      sum trace.messageState.bal +
+        (((tx.gas - used) * trace.effectiveGasPrice).toB256).toNat < 2 ^ 256 := by
+    omega
+  refine ⟨refundBound, ?_⟩
+  have refundedSum :
+      sum (trace.messageState.addBal trace.sender
+          (((tx.gas - used) * trace.effectiveGasPrice).toB256)).bal =
+        sum trace.messageState.bal +
+          (((tx.gas - used) * trace.effectiveGasPrice).toB256).toNat :=
+    sum_addBal_eq _ _ _ refundBound
+  rw [refundedSum]
+  omega
+
+/-- The two selected settlement credits are funded by the transaction's own
+up-front debit under only `stateGas = none`. -/
+theorem TransactionTrace.selected_settlement_sum_bounds
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (refundCounter : Nat)
+    (baseSum : sum benv.state.bal < 2 ^ 256)
+    (hsg : benv.stat.rules.stateGas = none) :
+    sum trace.messageState.bal +
+        (trace.selectedRefundValue refundCounter).toNat < 2 ^ 256 ∧
+      sum (trace.selectedRefundedState refundCounter).bal +
+        (trace.selectedCoinbaseValue refundCounter).toNat < 2 ^ 256 := by
+  have hused := trace.selectedGasUsed_le_gas hsg refundCounter
+  have hmsg : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    simpa only [BenvStat.rules, Benv.beginTransaction] using hsg
+  have core := trace.settlement_sum_bounds_core
+    (trace.selectedGasSettlement refundCounter).gasUsed hused hmsg baseSum
+  have hrefund := trace.selectedRefundValue_eq hsg refundCounter
+  simpa only [TransactionTrace.selectedRefundedState,
+    TransactionTrace.selectedCoinbaseValue, hrefund] using core
+
 /-- The two settlement credits are funded by the transaction's own up-front
 debit, so neither can wrap the global balance sum.  Proving this from the
 checked debit rather than assuming it is what lets a coinbase equal to the
@@ -249,57 +375,17 @@ theorem TransactionTrace.settlement_sum_bounds
         (trace.refundValue refundCounter).toNat < 2 ^ 256 ∧
       sum (trace.refundedState refundCounter).bal +
         (trace.coinbaseValue refundCounter).toNat < 2 ^ 256 := by
-  have feeLt : tx.gas * trace.effectiveGasPrice +
-      (if tx.isTypeThree = true then
-        calculateDataFee benv.stat.rules.blob benv.stat.excessBlobGas tx
-      else 0) < 2 ^ 256 := by
-    simpa only [BenvStat.rules, Nat.reducePow, Benv.beginTransaction] using
-      checkTransaction_upfront_lt_modulus trace.checked
   have floor := validateTransaction_calldataFloorGasCost_le_gas trace.validation
   have usedLe : trace.chargedGas refundCounter ≤ tx.gas := by
     unfold TransactionTrace.chargedGas
     exact max_le (by omega) floor
-  have creditsLe :
-      (tx.gas - trace.chargedGas refundCounter) * trace.effectiveGasPrice +
-          trace.chargedGas refundCounter *
-            (trace.effectiveGasPrice - benv.stat.baseFeePerGas) ≤
-        tx.gas * trace.effectiveGasPrice := by
-    apply le_trans (Nat.add_le_add_left
-      (Nat.mul_le_mul_left _
-        (Nat.sub_le trace.effectiveGasPrice benv.stat.baseFeePerGas)) _)
-    rw [← Nat.add_mul, Nat.sub_add_cancel usedLe]
-  have refundLe : (trace.refundValue refundCounter).toNat ≤
-      (tx.gas - trace.chargedGas refundCounter) * trace.effectiveGasPrice := by
-    unfold TransactionTrace.refundValue
-    exact toB256_toNat_le _
-  have tipLe : (trace.coinbaseValue refundCounter).toNat ≤
-      trace.chargedGas refundCounter *
-        (trace.effectiveGasPrice - benv.stat.baseFeePerGas) := by
-    unfold TransactionTrace.coinbaseValue
-    exact toB256_toNat_le _
-  have debitSum := State.balSum_subBal trace.debit
-  dsimp only [State.balSum, transactionBlobGasFee] at debitSum
-  rw [State.incrNonce_bal] at debitSum
-  rw [B256.toNat_toB256_of_lt feeLt] at debitSum
-  have messageSum := processMessageCall_sum_le
-    (by
-      rw [prepareMessage_benv trace.prepared]
-      simpa only [BenvStat.rules, Benv.beginTransaction] using hfork.rules_stateGas_none)
-    trace.message.result
-  rw [prepareMessage_benv trace.prepared] at messageSum
-  change sum trace.messageState.bal ≤ sum trace.debitState.bal at messageSum
-  have refundBound :
-      sum trace.messageState.bal +
-        (trace.refundValue refundCounter).toNat < 2 ^ 256 := by
-    omega
-  refine ⟨refundBound, ?_⟩
-  have refundedSum :
-      sum (trace.refundedState refundCounter).bal =
-        sum trace.messageState.bal + (trace.refundValue refundCounter).toNat := by
-    unfold TransactionTrace.refundedState
-    exact sum_addBal_eq _ _ _ refundBound
-  rw [refundedSum]
-  omega
+  have hmsg : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    simpa only [BenvStat.rules, Benv.beginTransaction] using hfork.rules_stateGas_none
+  have core := trace.settlement_sum_bounds_core
+    (trace.chargedGas refundCounter) usedLe hmsg baseSum
+  simpa only [TransactionTrace.refundValue, TransactionTrace.refundedState,
+    TransactionTrace.coinbaseValue] using core
 
 end ExecutionTrace
 
