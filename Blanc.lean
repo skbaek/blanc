@@ -1769,3 +1769,10 @@ import Blanc.Lift.Usdc.OldInitializerV1Root
 import Blanc.Lift.Usdc.OldInitializerHistory
 import Blanc.Lift.Usdc.AllowLocalityHistory
 import Blanc.Lift.WriteSiteZero
+
+import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistStaticCall
+import Blanc.Lift.HistStaticCallGuard
+import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistCursorCalls
