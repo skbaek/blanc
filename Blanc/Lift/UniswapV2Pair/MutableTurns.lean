@@ -86,6 +86,31 @@ def PairFrameSupply (pair : Adr) (Rep : State → Stor → Prop) (Good : Exec.De
     PairFrameOutcome pair Rep Auth owned current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post
 
+/-- `PairFrameSupply` under the two historical rule facts of the frame
+(`rules.stateGas = none`, `rules.bal = none`) in place of `CoveredFork`. -/
+def PairFrameSupplyH (pair : Adr) (Rep : State → Stor → Prop) (Good : Exec.Deriv → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (owned : Event → Option Log) : Prop :=
+  ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    sevm.currentTarget = pair → sevm.code = code → b.getCode pair = code →
+    sevm.benvStat.rules.stateGas = none → sevm.benvStat.rules.bal = none →
+    b.output = [] → sevm.data.length < 2 ^ 256 →
+    Good ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
+    Rep current.state (b.getStor pair) →
+    PairFrameOutcome pair Rep Auth owned current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post
+
+/-- A frame outcome keeps its consumption, storage and logs under a weaker authentication
+of the same derivation. -/
+theorem PairFrameOutcome.mono {pair : Adr} {Rep : State → Stor → Prop}
+    {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
+    {current : Checkpoint} {invocation : List Nat} {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+    (weaken : ∀ entry nested, Auth D entry nested → Auth' D entry nested)
+    (outcome : PairFrameOutcome pair Rep Auth owned current invocation D sevm b post) :
+    PairFrameOutcome pair Rep Auth' owned current invocation D sevm b post := by
+  obtain ⟨entry, nested, child, added, L, auth, rest⟩ := outcome
+  exact ⟨entry, nested, child, added, L, weaken entry nested auth, rest⟩
+
 /-- What the fold derives from one committed run, at the incoming frame and turn. -/
 def MutableFoldResult (pair : Adr) (Rep : State → Stor → Prop)
     (Auth : Exec.Deriv → Entry → Transcript → Prop) (owned : Event → Option Log)
@@ -142,6 +167,50 @@ def PairFrameSupplyWith
     Rep current.state (b.getStor pair) →
     PairFrameOutcomeWith ChildProof pair Rep Auth owned current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post
+
+/-- `PairFrameSupplyWith` with the frame's block rules admitted by `Admits` in place of
+`CoveredFork`. `PairFrameSupplyWith` is the instance `Admits := fun s => CoveredFork s.fork`. -/
+def PairFrameSupplyWithOn (Admits : BenvStat → Prop)
+    (ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (pair : Adr) (Rep : State → Stor → Prop) (Good : Exec.Deriv → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (owned : Event → Option Log) : Prop :=
+  ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    sevm.currentTarget = pair → sevm.code = code → b.getCode pair = code →
+    Admits sevm.benvStat →
+    b.output = [] → sevm.data.length < 2 ^ 256 →
+    Good ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
+    Rep current.state (b.getStor pair) →
+    PairFrameOutcomeWith ChildProof pair Rep Auth owned current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post
+
+/-- `PairFrameSupplyWith` under the two historical rule facts of the frame
+(`rules.stateGas = none`, `rules.bal = none`) in place of `CoveredFork`. -/
+def PairFrameSupplyWithH
+    (ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (pair : Adr) (Rep : State → Stor → Prop) (Good : Exec.Deriv → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (owned : Event → Option Log) : Prop :=
+  ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    sevm.currentTarget = pair → sevm.code = code → b.getCode pair = code →
+    sevm.benvStat.rules.stateGas = none → sevm.benvStat.rules.bal = none →
+    b.output = [] → sevm.data.length < 2 ^ 256 →
+    Good ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
+    Rep current.state (b.getStor pair) →
+    PairFrameOutcomeWith ChildProof pair Rep Auth owned current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post
+
+/-- The historical supply is the instance of `PairFrameSupplyWithOn` admitting the two rule
+facts. -/
+theorem PairFrameSupplyWithH.on
+    {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
+    (supply : PairFrameSupplyWithH ChildProof pair Rep Good Auth owned) :
+    PairFrameSupplyWithOn (fun s => s.rules.stateGas = none ∧ s.rules.bal = none)
+      ChildProof pair Rep Good Auth owned := by
+  intro current invocation sevm b post G run target codeEq installed admits
+  exact supply current invocation run target codeEq installed admits.1 admits.2
 
 /-- Only the two introductions used by the original mutable traversal are abstracted. -/
 structure MutableTurnRules
@@ -214,13 +283,13 @@ theorem MutableFoldResultWith.exactTurns
   exact ⟨turns, c, added, L, rets, mapped, auth, rep, sourceLogs, rawLogs, images,
     fun tail result rest => consume [] tail result rest⟩
 
-/-- A selected Pair root is consumed whole by the supply. -/
-theorem mutable_selected_root_with {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
+/-- A selected Pair root is consumed whole by the supply, for any admitted block rules. -/
+theorem mutable_selected_root_withOn {Admits : BenvStat → Prop} {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
     {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
     {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
     {TurnProof : Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) →
       Transcript → TurnsResult → Prop}
-    (supply : PairFrameSupplyWith ChildProof pair Rep Good Auth owned)
+    (supply : PairFrameSupplyWithOn Admits ChildProof pair Rep Good Auth owned)
     (rules : MutableTurnRules ChildProof TurnProof)
     (sem : CodeSem) (image : sem.image = some code.toList)
     {frame : Frame} {request : Request} {turn : Nat} {path : List Nat} {counter pc : Nat}
@@ -233,7 +302,7 @@ theorem mutable_selected_root_with {pair : Adr} {Rep : State → Stor → Prop} 
     (entry : pre.stack = [] ∧ pre.memory = Mem.empty ∧ pre.output = [])
     (representable : sevm.data.length < 2 ^ 256)
     (time : frame.context.timestamp = sevm.benvStat.time)
-    (fork : CoveredFork sevm.benvStat.fork) (good : Good ⟨pc, sevm, pre, out, run⟩) :
+    (admits : Admits sevm.benvStat) (good : Good ⟨pc, sevm, pre, out, run⟩) :
     MutableFoldResultWith TurnProof pair Rep Auth owned frame request turn
       (Exec.targetLogEventsFrom pair path counter run committed) pre
       (Execution.committedPost out committed) := by
@@ -263,7 +332,7 @@ theorem mutable_selected_root_with {pair : Adr} {Rep : State → Stor → Prop} 
     obtain ⟨chosen, nested, child, added, L, auth, consumed, childRep, childLogs, rawLogs,
         images⟩ :=
       supply frame.current (frame.context.invocation ++ [request.site.ordinal, turn]) raw
-        target codeEq installedCode fork entry.2.2 representable (by rw [rawEq]; exact good) rep
+        target codeEq installedCode admits entry.2.2 representable (by rw [rawEq]; exact good) rep
     rw [rawEq] at auth consumed
     have context := childContext_writer (turn := turn) mutable (pairEq.trans target.symm) time
     let located : Exec.LocatedFrame := ⟨path, Exec.Frame.ofRun run committed⟩
@@ -285,6 +354,32 @@ theorem mutable_selected_root_with {pair : Adr} {Rep : State → Stor → Prop} 
         exact consumed
       rw [Exec.targetLogEventsFrom_target _ _ _ _ committed target]
       exact rules.invoke selected rest
+
+/-- A selected Pair root is consumed whole by the supply. -/
+theorem mutable_selected_root_with {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
+    {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {TurnProof : Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) →
+      Transcript → TurnsResult → Prop}
+    (supply : PairFrameSupplyWith ChildProof pair Rep Good Auth owned)
+    (rules : MutableTurnRules ChildProof TurnProof)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {frame : Frame} {request : Request} {turn : Nat} {path : List Nat} {counter pc : Nat}
+    {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (target : sevm.currentTarget = pair)
+    (pairEq : frame.context.pair = pair) (mutable : externalStatic frame request = false)
+    (installed : sem.At pair pc sevm pre)
+    (rep : Rep frame.current.state (pre.getStor pair))
+    (entry : pre.stack = [] ∧ pre.memory = Mem.empty ∧ pre.output = [])
+    (representable : sevm.data.length < 2 ^ 256)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (fork : CoveredFork sevm.benvStat.fork) (good : Good ⟨pc, sevm, pre, out, run⟩) :
+    MutableFoldResultWith TurnProof pair Rep Auth owned frame request turn
+      (Exec.targetLogEventsFrom pair path counter run committed) pre
+      (Execution.committedPost out committed) :=
+  mutable_selected_root_withOn (Admits := fun s => CoveredFork s.fork) supply rules sem image run
+    committed target pairEq mutable installed rep entry representable time fork good
 
 /-- A selected Pair root is consumed whole by the supply. -/
 theorem mutable_selected_root {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
@@ -310,17 +405,19 @@ theorem mutable_selected_root {pair : Adr} {Rep : State → Stor → Prop} {Good
     supply exactMutableTurnRules sem image run committed target
     pairEq mutable installed rep entry representable time fork good).exactTurns
 
-/-- The fold over the actual retained events of one committed run of a mutable call. -/
-theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Prop}
+/-- The fold over the actual retained events of one committed run of a mutable call, for any
+admitted block rules that rule out state gas. -/
+theorem mutable_retained_fold_inv_withOn {Admits : BenvStat → Prop} {pair : Adr} {Rep : State → Stor → Prop}
     {Good : Exec.Deriv → Prop} {Auth : Exec.Deriv → Entry → Transcript → Prop}
     {owned : Event → Option Log}
     {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
     {TurnProof : Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) →
       Transcript → TurnsResult → Prop}
-    (supply : PairFrameSupplyWith ChildProof pair Rep Good Auth owned)
+    (supply : PairFrameSupplyWithOn Admits ChildProof pair Rep Good Auth owned)
     (rules : MutableTurnRules ChildProof TurnProof)
     (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
     (sem : CodeSem) (image : sem.image = some code.toList)
+    (noStateGas : ∀ s, Admits s → s.rules.stateGas = none)
     {request : Request} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) :
     ∀ (committed : Execution.commits out = true) (frame : Frame) (turn counter : Nat)
@@ -329,7 +426,7 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
       sem.At pair pc sevm pre → Rep frame.current.state (pre.getStor pair) →
       (sevm.currentTarget = pair → pre.stack = [] ∧ pre.memory = Mem.empty ∧ pre.output = []) →
       sevm.data.length < 2 ^ 256 → frame.context.timestamp = sevm.benvStat.time →
-      CoveredFork sevm.benvStat.fork →
+      Admits sevm.benvStat →
       (∀ located ∈ Exec.retainedTargetFramesFromAt pair path counter run committed,
         Good (Exec.Frame.rootDeriv located.frame)) →
       MutableFoldResultWith TurnProof pair Rep Auth owned frame request turn
@@ -338,10 +435,10 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
   induction run with
   | @halt pc sevm pre out step =>
     intro committed frame turn counter path pairEq mutable installed rep entry representable
-      time fork good
+      time admits good
     by_cases target : sevm.currentTarget = pair
-    · exact mutable_selected_root_with supply rules sem image (.halt step) committed target pairEq mutable
-        installed rep (entry target) representable time fork
+    · exact mutable_selected_root_withOn supply rules sem image (.halt step) committed target pairEq mutable
+        installed rep (entry target) representable time admits
         (good ⟨path, Exec.Frame.ofRun (.halt step) committed⟩ (by
           rw [Exec.retainedTargetFramesFromAt_target _ _ _ _ committed target]
           exact List.mem_singleton_self _))
@@ -350,7 +447,7 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
       | ok post =>
         have hprot : State.Protected pre.state pair := State.Protected.of_image installed.1
         have storage := Blanc.Lift.Evm.step_halt_getStor_eq step pair hprot
-        have logs := Exec.committed_logs_at (.halt step) committed fork [] 0
+        have logs := Exec.committed_logs_at_noStateGas (.halt step) committed (noStateGas _ admits) rfl rfl [] 0
         simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, List.flatMap_nil,
           Exec.boundaryOwnLogs, Exec.stateBoundary, List.append_nil] at logs
         refine ⟨[], frame.current, [], [], [], ?_, ?_, ?_, (List.append_nil _).symm,
@@ -368,20 +465,20 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
             using rest
   | @cont pc sevm pre pc' inter out step next ih =>
     intro committed frame turn counter path pairEq mutable installed rep entry representable
-      time fork good
+      time admits good
     by_cases target : sevm.currentTarget = pair
-    · exact mutable_selected_root_with supply rules sem image (.cont step next) committed target pairEq
-        mutable installed rep (entry target) representable time fork
+    · exact mutable_selected_root_withOn supply rules sem image (.cont step next) committed target pairEq
+        mutable installed rep (entry target) representable time admits
         (good ⟨path, Exec.Frame.ofRun (.cont step next) committed⟩ (by
           rw [Exec.retainedTargetFramesFromAt_target _ _ _ _ committed target]
           exact List.mem_singleton_self _))
     · have nextInstalled := CodeSem.At.parentStep (.cont step next) next (.cont step next)
         installed target
-      have storage := Evm.step_cont_getStor_foreign fork step target
+      have storage := Evm.step_cont_getStor_foreign_noStateGas (noStateGas _ admits) step target
       have nextRep : Rep frame.current.state (inter.getStor pair) := by
         rw [storage]
         exact rep
-      have logs := Exec.cont_logs_eq fork step next committed
+      have logs := Exec.cont_logs_eq_noStateGas (noStateGas _ admits) rfl rfl step next committed
       have projection := Exec.retainedTargetFramesFromAt_cont pair path counter step next
         committed target
       have nextGood : ∀ located ∈ Exec.retainedTargetFramesFromAt pair path counter next
@@ -394,7 +491,7 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
         obtain ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, rawLogs, images,
             consume⟩ :=
           ih committed frame turn counter path pairEq mutable nextInstalled nextRep
-            (fun same => (target same).elim) representable time fork nextGood
+            (fun same => (target same).elim) representable time admits nextGood
         refine ⟨turns, c, added, L, rets, ?_, auth, finalRep, cLogs, ?_, images, consume⟩
         · simpa only [Option.toList_none, List.map_nil, List.nil_append] using events
         · rw [rawLogs, logs]
@@ -408,7 +505,7 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
         obtain ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, rawLogs, images,
             consume⟩ :=
           ih committed logged' (turn + 1) counter path pairEq mutable nextInstalled nextRep
-            (fun same => (target same).elim) representable time fork nextGood
+            (fun same => (target same).elim) representable time admits nextGood
         refine ⟨.inl log :: turns, c, pending :: added, log :: L, rets, ?_, ?_, finalRep, ?_,
           ?_, ?_, ?_⟩
         · simp only [List.map_cons, MutableTurn.event, events, Option.toList_some,
@@ -434,10 +531,10 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
     simp only [Execution.commits, Bool.false_eq_true] at committed
   | @doneOk pc sevm pre callee resume pc' result inter out step enter resumed next ih =>
     intro committed frame turn counter path pairEq mutable installed rep entry representable
-      time fork good
+      time admits good
     by_cases target : sevm.currentTarget = pair
-    · exact mutable_selected_root_with supply rules sem image (.doneOk step enter resumed next) committed
-        target pairEq mutable installed rep (entry target) representable time fork
+    · exact mutable_selected_root_withOn supply rules sem image (.doneOk step enter resumed next) committed
+        target pairEq mutable installed rep (entry target) representable time admits
         (good ⟨path, Exec.Frame.ofRun (.doneOk step enter resumed next) committed⟩ (by
           rw [Exec.retainedTargetFramesFromAt_target _ _ _ _ committed target]
           exact List.mem_singleton_self _))
@@ -448,13 +545,13 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
       have nextRep : Rep frame.current.state (inter.getStor pair) := by
         rw [storage]
         exact rep
-      have logs := Exec.doneOk_logs_eq fork step enter resumed next committed
+      have logs := Exec.doneOk_logs_eq_noStateGas (noStateGas _ admits) rfl rfl step enter resumed next committed
       have projection := Exec.retainedTargetFramesFromAt_doneOk pair path counter step enter
         resumed next committed target
       obtain ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, rawLogs, images,
           consume⟩ :=
         ih committed frame turn (counter + 1) path pairEq mutable nextInstalled nextRep
-          (fun same => (target same).elim) representable time fork
+          (fun same => (target same).elim) representable time admits
           (fun located member => good located (by rw [projection]; exact member))
       rw [Exec.targetLogEventsFrom_doneOk _ _ _ step enter resumed next committed target]
       refine ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, ?_, images, consume⟩
@@ -465,10 +562,10 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
   | @runOk pc sevm pre callee resume pc' childEvm raw inter out step enter child resumed next
       childIH nextIH =>
     intro committed frame turn counter path pairEq mutable installed rep entry representable
-      time fork good
+      time admits good
     by_cases target : sevm.currentTarget = pair
-    · exact mutable_selected_root_with supply rules sem image (.runOk step enter child resumed next)
-        committed target pairEq mutable installed rep (entry target) representable time fork
+    · exact mutable_selected_root_withOn supply rules sem image (.runOk step enter child resumed next)
+        committed target pairEq mutable installed rep (entry target) representable time admits
         (good ⟨path, Exec.Frame.ofRun (.runOk step enter child resumed next) committed⟩ (by
           rw [Exec.retainedTargetFramesFromAt_target _ _ _ _ committed target]
           exact List.mem_singleton_self _))
@@ -480,9 +577,9 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
           rw [← installed.1, empty, ByteArray.toList_empty]
         exact sem.ne_nil imageEmpty rfl
       obtain ⟨settledStorage, rolledStorage⟩ :=
-        Evm.step_run_getStor fork step enter child resumed nonempty
+        Evm.step_run_getStor_noStateGas (noStateGas _ admits) step enter child resumed nonempty
       obtain ⟨settledLogs, rolledLogs⟩ :=
-        Exec.runOk_logs_eq fork step enter child resumed next committed
+        Exec.runOk_logs_eq_noStateGas (noStateGas _ admits) rfl rfl step enter child resumed next committed
       have projection := Exec.retainedTargetFramesFromAt_runOk pair path counter step enter
         child resumed next committed target
       rw [Exec.targetLogEventsFrom_runOk _ _ _ step enter child resumed next committed target]
@@ -490,15 +587,16 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
       · rw [dite_eq_left settles]
         rw [dite_eq_left settles] at projection
         have childCommitted := Frame.raw_commits_of_settlementCommits settles
-        obtain ⟨childInstalled, childStorage, childEntry, childShort, childStat, childFork⟩ :=
-          CodeSem.At.spawnChild step enter installed target fork
+        obtain ⟨childInstalled, childStorage, childEntry, childShort, childStat⟩ :=
+          CodeSem.At.spawnChild_noStateGas step enter installed target (noStateGas _ admits)
         have childRep : Rep frame.current.state (childEvm.dyna.getStor pair) := by
           rw [childStorage]
           exact rep
         obtain ⟨turns1, c1, added1, L1, rets1, events1, auth1, rep1, cLogs1, rawLogs1, images1,
             consume1⟩ :=
           childIH childCommitted frame turn 0 (path ++ [counter]) pairEq mutable childInstalled
-            childRep (fun _ => childEntry) childShort (by rw [childStat]; exact time) childFork
+            childRep (fun _ => childEntry) childShort (by rw [childStat]; exact time)
+            (by rw [childStat]; exact admits)
             (fun located member => good located (by
               rw [projection]
               exact List.mem_append.mpr (Or.inl member)))
@@ -511,7 +609,7 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
         obtain ⟨turns2, c2, added2, L2, rets2, events2, auth2, rep2, cLogs2, rawLogs2, images2,
             consume2⟩ :=
           nextIH committed frame1 (turn + turns1.length) (counter + 1) path pairEq mutable
-            nextInstalled interRep (fun same => (target same).elim) representable time fork
+            nextInstalled interRep (fun same => (target same).elim) representable time admits
             (fun located member => good located (by
               rw [projection]
               exact List.mem_append.mpr (Or.inr member)))
@@ -542,10 +640,38 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
         obtain ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, rawLogs, images,
             consume⟩ :=
           nextIH committed frame turn (counter + 1) path pairEq mutable nextInstalled interRep
-            (fun same => (target same).elim) representable time fork
+            (fun same => (target same).elim) representable time admits
             (fun located member => good located (by rw [projection]; exact member))
         refine ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, ?_, images, consume⟩
         rw [rawLogs, rolledLogs settles]
+
+/-- The fold over the actual retained events of one committed run of a mutable call. -/
+theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Prop}
+    {Good : Exec.Deriv → Prop} {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    {owned : Event → Option Log}
+    {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {TurnProof : Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) →
+      Transcript → TurnsResult → Prop}
+    (supply : PairFrameSupplyWith ChildProof pair Rep Good Auth owned)
+    (rules : MutableTurnRules ChildProof TurnProof)
+    (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {request : Request} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    ∀ (committed : Execution.commits out = true) (frame : Frame) (turn counter : Nat)
+      (path : List Nat),
+      frame.context.pair = pair → externalStatic frame request = false →
+      sem.At pair pc sevm pre → Rep frame.current.state (pre.getStor pair) →
+      (sevm.currentTarget = pair → pre.stack = [] ∧ pre.memory = Mem.empty ∧ pre.output = []) →
+      sevm.data.length < 2 ^ 256 → frame.context.timestamp = sevm.benvStat.time →
+      CoveredFork sevm.benvStat.fork →
+      (∀ located ∈ Exec.retainedTargetFramesFromAt pair path counter run committed,
+        Good (Exec.Frame.rootDeriv located.frame)) →
+      MutableFoldResultWith TurnProof pair Rep Auth owned frame request turn
+        (Exec.targetLogEventsFrom pair path counter run committed) pre
+        (Execution.committedPost out committed) :=
+  mutable_retained_fold_inv_withOn (Admits := fun s => CoveredFork s.fork) supply rules repCongr
+    sem image (fun _ fork => fork.rules_stateGas_none) run
 
 /-- The fold over the actual retained events of one committed run of a mutable call. -/
 theorem mutable_retained_fold_inv {pair : Adr} {Rep : State → Stor → Prop}

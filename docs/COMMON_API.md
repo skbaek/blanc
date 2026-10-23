@@ -6911,6 +6911,20 @@ incoming representation and complete mutable event/turn queues.
 `AdmittedSourceConsumes.nextMutableCall` in `AdmittedMutableFold.lean`
 composes that same selected turn proof and its recursive admission.
 
+Under the historical rule facts (`rules.stateGas = none`, `rules.bal = none`)
+in place of `CoveredFork`: the fold is proved once over any admitted block
+rules that rule out state gas (`PairFrameSupplyWithOn`,
+`mutable_selected_root_withOn`, `mutable_retained_fold_inv_withOn`,
+`mutable_source_slot_turns_withOn`); the modern `_with` forms are its
+`CoveredFork` instance. The historical supplies are `PairFrameSupplyH` and
+`PairFrameSupplyWithH` (`PairFrameSupplyWithH.on`), with
+`PairFrameOutcome.mono` to weaken a frame's authentication; the slot fold is
+`admitted_source_slot_turnsH`. For locked children, `LockedAuthH` (the permit
+authenticated by `PermitRecoveryAuthH`; `LockedAuthH.toCovered` recovers
+`LockedAuth`), `lockedPairSupplyH`, `lockedPairAdmittedSupplyH` and
+`locked_admitted_mutable_source_slot_turnsH` in `LockedSupply.lean` and
+`MutablePositionalLockedSupply.lean`.
+
 For a retained factory fee observation, `PairFeeObservation.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
 binds the supplied original slot, complete physical reply, literal feeTo
