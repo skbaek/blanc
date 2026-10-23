@@ -2,13 +2,16 @@ import Blanc.LadderSem
 import Blanc.ExecutionStagedBodyTrace
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
+import Blanc.ExecutionHistoricalAdmission
 
 /-!
 # Exact balance credits in proof-of-work block rewards
 
 The reward budget is a natural-number sum before any conversion to EVM words.
 Beneficiaries may coincide. Every intermediate credit is justified by that same
-budget; a bound on the final wrapped balance would not suffice.
+budget; a bound on the final wrapped balance would not suffice. The same
+budget discharges the per-credit `RewardCreditsFunded` premise of the historical
+admitted-preservation theorems (`Blanc.ExecutionHistoricalAdmission`).
 -/
 
 namespace Blanc
@@ -78,16 +81,6 @@ theorem sum_payRewards_eq (pow : PowRules) (number : Nat) (coinbase : Adr)
   (payRewards_preserves_and_sum (P := fun _ => True)
     (fun _ _ _ _ _ => trivial) pow number coinbase ommers bound trivial).2
 
-/-- PoW rewards preserve a semantic contract invariant under the exact mint
-budget. This uses the contract's proved direct-credit law at every recipient. -/
-theorem ContractSpecSem.StateInv.payRewards {c : ContractSpecSem} {ca : Adr}
-    {pow : PowRules} {number : Nat} {coinbase : Adr} {ommers : List Header} {st : State}
-    (initial : c.StateInv ca st)
-    (bound : sum st.bal + ChainConfig.rewardTotal pow number ommers < 2 ^ 256) :
-    c.StateInv ca (Jaune.payRewards pow number coinbase ommers st) :=
-  (payRewards_preserves_and_sum (P := c.StateInv ca)
-    (fun _ _ _ h inv => inv.addBal h) pow number coinbase ommers bound initial).1
-
 /-- Reward credits preserve a protected account's storage even without a
 balance budget. Protection, rather than a historical no-deletion assertion,
 excludes normalization of a storage-only account. -/
@@ -141,6 +134,62 @@ theorem payRewards_balance_mono (pow : PowRules) (number : Nat)
       rfl
     rw [balance]
     exact before
+
+/-! ## Bridge to the historical per-credit reward premise -/
+
+/-- The ommer credits of `payRewards` are each funded, in fold order, by one
+opening natural-number bound on their total. -/
+theorem OmmerCreditsFunded.of_sum {pow : PowRules} {number : Nat} :
+    ∀ (ommers : List Header) {st : State},
+      sum st.bal + (ommers.map fun o => (8 + o.number - number) * pow.blockReward / 8).sum <
+        2 ^ 256 →
+      OmmerCreditsFunded pow number st ommers
+  | [], _, _ => trivial
+  | o :: os, st, bound => by
+      simp only [List.map_cons, List.sum_cons] at bound
+      generalize hrest : (os.map fun o => (8 + o.number - number) * pow.blockReward / 8).sum =
+        rest at bound
+      have value : (ExecutionTrace.stagedOmmerRewardValue pow number o).toNat =
+          (8 + o.number - number) * pow.blockReward / 8 :=
+        B256.toNat_toB256_of_lt (by omega)
+      have credit : sum st.bal + (ExecutionTrace.stagedOmmerRewardValue pow number o).toNat <
+          2 ^ 256 := by
+        rw [value]
+        omega
+      refine ⟨credit, OmmerCreditsFunded.of_sum os ?_⟩
+      rw [sum_addBal_eq _ _ _ credit, value, hrest]
+      omega
+
+/-- The exact reward budget `ChainConfig.rewardTotal` funds every `payRewards`
+credit (miner first, then each ommer in fold order) at the state it is applied
+to. Beneficiaries may coincide. -/
+theorem RewardCreditsFunded.of_rewardTotal {pow : PowRules} {number : Nat} {coinbase : Adr}
+    {ommers : List Header} {st : State}
+    (bound : sum st.bal + ChainConfig.rewardTotal pow number ommers < 2 ^ 256) :
+    RewardCreditsFunded pow number coinbase ommers st := by
+  unfold ChainConfig.rewardTotal at bound
+  generalize hrest : (ommers.map fun o => (8 + o.number - number) * pow.blockReward / 8).sum =
+    rest at bound
+  have value : (ExecutionTrace.stagedMinerRewardValue pow ommers).toNat =
+      pow.blockReward + ommers.length * (pow.blockReward / 32) :=
+    B256.toNat_toB256_of_lt (by omega)
+  have credit : sum st.bal + (ExecutionTrace.stagedMinerRewardValue pow ommers).toNat <
+      2 ^ 256 := by
+    rw [value]
+    omega
+  refine ⟨credit, OmmerCreditsFunded.of_sum ommers ?_⟩
+  rw [sum_addBal_eq _ _ _ credit, value, hrest]
+  omega
+
+/-- PoW rewards preserve a semantic contract invariant under the exact mint
+budget: the historical per-credit law `StateInv.payRewards` applied to the
+credits funded by `RewardCreditsFunded.of_rewardTotal`. -/
+theorem ContractSpecSem.StateInv.payRewards_of_rewardTotal {c : ContractSpecSem} {ca : Adr}
+    {pow : PowRules} {number : Nat} {coinbase : Adr} {ommers : List Header} {st : State}
+    (initial : c.StateInv ca st)
+    (bound : sum st.bal + ChainConfig.rewardTotal pow number ommers < 2 ^ 256) :
+    c.StateInv ca (Jaune.payRewards pow number coinbase ommers st) :=
+  ContractSpecSem.StateInv.payRewards (RewardCreditsFunded.of_rewardTotal bound) initial
 
 namespace ExecutionTrace
 
@@ -397,6 +446,38 @@ theorem ConfiguredBlockTraceIn.sum_post_le
     (fun _ _ _ _ _ => trivial) trivial).2
   rw [reward]
   exact Nat.add_le_add_right prior _
+
+/-- A staged body's request-endpoint reward budget discharges its per-credit
+reward premise. -/
+theorem StagedBodyTrace.rewardCreditsFunded_of_budget
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (budget : ∀ pow, benv.stat.rules.pow = some pow →
+      sum trace.requestState.bal + ChainConfig.rewardTotal pow benv.stat.number ommers < 2 ^ 256) :
+    trace.RewardCreditsFunded :=
+  fun pow enabled => Blanc.RewardCreditsFunded.of_rewardTotal (budget pow enabled)
+
+/-- A retained configured block funds its own reward credits: the budget comes
+from its reward-inclusive pre-block bound, through `request_reward_budget`. -/
+theorem ConfiguredBlockTraceIn.rewardCreditsFunded
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post)
+    (hsg : trace.fork.ruleSet.stateGas = none) :
+    trace.RewardCreditsFunded :=
+  trace.bodyTrace.rewardCreditsFunded_of_budget
+    (fun pow enabled => trace.request_reward_budget hsg pow enabled)
+
+/-- Every block of a retained history funds its reward credits; `stateGas = none`
+comes per block from `BodyStageCapabilities F`. -/
+theorem ConfiguredHistoryTraceIn.rewardCreditsFunded
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint : BlockChain} :
+    {future : BlockChain} → (history : ConfiguredHistoryTraceIn F cfg checkpoint future) →
+    BodyStageCapabilities F → history.RewardCreditsFunded
+  | _, .refl _ _ _, _ => trivial
+  | _, .step prior block, capabilities =>
+      ⟨prior.rewardCreditsFunded capabilities,
+        block.rewardCreditsFunded (capabilities.stateGas_none block.forkIn)⟩
 
 end ExecutionTrace
 

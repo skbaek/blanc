@@ -4638,8 +4638,16 @@ For proof-of-work reward credits, use
 natural total through a list of credits under its pre-credit sum bound.
 `payRewards_preserves_and_sum` specializes it to Jaune's actual miner and
 ommer credits; `sum_payRewards_eq` gives the exact `ChainConfig.rewardTotal`
-mint. `ContractSpecSem.StateInv.payRewards` transports an existing semantic
-invariant through that fold using its proved `addBal` law.
+mint. `RewardCreditsFunded.of_rewardTotal` (with `OmmerCreditsFunded.of_sum`)
+turns that natural budget into the historical per-credit premise
+`RewardCreditsFunded` of `Blanc/ExecutionHistoricalAdmission.lean`;
+`ContractSpecSem.StateInv.payRewards_of_rewardTotal` transports an existing
+semantic invariant through the fold under the budget, through that owner's
+`StateInv.payRewards`. `ExecutionTrace.StagedBodyTrace.rewardCreditsFunded_of_budget`,
+`ConfiguredBlockTraceIn.rewardCreditsFunded` (under `stateGas = none`) and
+`ConfiguredHistoryTraceIn.rewardCreditsFunded` (under `BodyStageCapabilities F`)
+discharge the `rewards` premise of the historical `stateInv_admitted_semIn`
+theorems from the retained reward-inclusive bound.
 `payRewards_getStor_of_protected` preserves a protected account's storage
 with no balance bound; `payRewards_balance_mono` additionally needs the exact
 reward budget. `ExecutionTrace.StagedBodyTrace.reward_preserves_and_sum`
