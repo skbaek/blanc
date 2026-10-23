@@ -5960,7 +5960,8 @@ contract-neutral.
   rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
   successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
   unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`/
-  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH` and the storage-walk
+  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH`,
+  `getStor_afterStoreH`/`getStor_afterStore_neH`/`logs_afterStoreH` and the storage-walk
   steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
   `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
   `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
@@ -5971,7 +5972,9 @@ contract-neutral.
   [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); invert a
   `STATICCALL` to an arbitrary callee from `rules.stateGas = none` alone with
   `ri_staticcall_boundedH`/`ri_staticcallH`/`rx_staticcallH` (answer `StaticAnsweredH`, code
-  resolution `CallCodeH` under the actual delegation flag), the step/run inversions
+  resolution `CallCodeH` under the actual delegation flag; on a covered fork
+  `CallCodeH_iff_of_covered`, `StaticAnsweredH_iff_of_covered` and
+  `CoveredFork.rules_delegationEnabled`), the step/run inversions
   `of_step_staticcall_val_with_depth_frame_causeH`/`of_run_staticcall_val_with_depth_causeH`,
   quiet steps with `Ninst.world_of_quietH`, static log preservation with
   `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
@@ -5981,7 +5984,8 @@ contract-neutral.
   inversions `of_step_call_val_with_depth_frameH`/`of_run_call_val_with_depth_frameH` and the
   caller-visible `ri_call_postH`, all in
   [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
-  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
+  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` and a static child's entry
+  (`Xinst.step_spawn_worldH`, `Evm.step_spawn_child_worldH`, `Evm.step_spawn_child_dataH`) in
   [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
   the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
   `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
