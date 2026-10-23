@@ -5488,6 +5488,17 @@ contract-neutral.
   and separation from the three fixed keys; the latter also requires the
   initial zero seed. They do not establish the historical name profile,
   seed, long-payload separation or arbitrary nonzero-word preservation.
+  When a caller continues after such a storage-string helper, use
+  [`Blanc/Lift/SolcStorageReturn.lean`](../Blanc/Lift/SolcStorageReturn.lean)
+  for what the helper returns: `legacyRunP_returned` gives the returned stack
+  and unchanged memory of a legacy clearing run, `payload_exit` reaches the
+  payload loop's exit tail with the same stack tail under `Keeps` memory, and
+  `runCutP_done` turns a finished cut run into an ordinary run. It also holds
+  fork-free `SLOAD`/`SSTORE` walk inversions with exact memory
+  (`ri_sload_any`, `ri_sstore_any`) and the branch/jumpdest rebuilders
+  `qdest`, `qbranch`, `qbranchTo` for strengthening a run in place.
+  [`Blanc/Lift/Usdc/OldInitializerV1Callee.lean`](../Blanc/Lift/Usdc/OldInitializerV1Callee.lean)
+  is the worked V1 consumer (`callee_obs`).
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

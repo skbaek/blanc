@@ -1567,6 +1567,7 @@ import Blanc.Lift.SolcStorageClear
 import Blanc.Lift.SolcStoragePayload
 import Blanc.Lift.SolcStringAllocation
 import Blanc.Lift.SolcAbiStringStaging
+import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.ShuffleSkip
@@ -1741,4 +1742,5 @@ import Blanc.Lift.Usdc.OldInitializerEffects
 import Blanc.Lift.Usdc.OldInitializerV1Clearing
 import Blanc.Lift.Usdc.OldInitializerV1Payload
 import Blanc.Lift.Usdc.OldInitializerV1Staging
+import Blanc.Lift.Usdc.OldInitializerV1Callee
 import Blanc.Lift.WriteSiteZero
