@@ -379,16 +379,33 @@ private def ExactClaim {fs : List SFunc} {sevm : Sevm}
     (RetIn a μ → jumpdestOk code ρ.toNat = true) →
     ExactResult code c sevm pc m a μ f ρ S base devm o
 
-theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- Historical form of the node-exactness claim: the fork premise is the
+actual `stateGas = none` rule fact instead of `CoveredFork`. -/
+private def ExactClaimNoStateGas {fs : List SFunc} {sevm : Sevm}
+    (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (hcode : sevm.code = code)
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    {devm : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunExact fs sevm devm f o) : Prop :=
+  ∀ (pc m : Nat) (a : List AVal) (ρ : B256) (S base : List B256) (μ : MemMap),
+    checkNodeM code c.entries ms b m pc a μ f = true →
+    jumpsOkNodeM code c.entries b f a μ = true →
+    devm.stack = S ++ base →
+    FrameMatches ρ a S →
+    MemMatches ρ μ devm.memory →
+    (RetIn a μ → jumpdestOk code ρ.toNat = true) →
+    ExactResult code c sevm pc m a μ f ρ S base devm o
+
+/-- Node exactness over a historical fork: needs only `stateGas = none`. -/
+theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
     (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hstateGas : sevm.benvStat.rules.stateGas = none)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunExact c.prog sevm devm f o) :
-    ExactClaim code c ms b hcode hfork run := by
+    ExactClaimNoStateGas code c ms b hcode hstateGas run := by
   refine SFunc.RunExact.rec
     (fs := c.prog) (sevm := sevm)
-    (motive := fun devm f o run => ExactClaim code c ms b hcode hfork run)
+    (motive := fun devm f o run => ExactClaimNoStateGas code c ms b hcode hstateGas run)
     (fun {devm devm' f g o} d hpop hrun ih => by
       intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
@@ -784,7 +801,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           · exact matches_some_map base
         have hmap := ninstTransfer_map (label a ρ) rfl htrans
         have happ := ninstTransfer_append (base.map some) hmap
-        have hout := ninstTransfer_run hfork hinput happ
+        have hout := ninstTransfer_run_noStateGas hstateGas hinput happ
           ⟨xl, hfilled, pc, hstep0⟩
         rw [mapM_readBack_label hread] at hout
         rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
@@ -796,7 +813,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           exact frameMatches_foldTop hframe hstack ⟨xl, hfilled, pc, hstep0⟩ hinter
             (matches_to_frame hfirst)
         obtain ⟨hframe', hmem'⟩ :=
-          step_mem_sound b hfork hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
+          step_mem_sound_noStateGas b hstateGas hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
         have hret0 : ∀ {a2 : List AVal}, RetIn (if b then memFold (memTop n0 a μ) a2 else a2)
             (if b then absMem n0 a μ else []) → (AVal.ret ∈ a2 → AVal.ret ∈ a) → RetIn a μ := by
           intro a2 h ha2
@@ -832,7 +849,7 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem hrunN
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hstateGas hframe hstack hmem hrunN
           (by rw [hstack']; rfl) hframe0
         have hjump' := hjump
         simp only [jumpsOkNodeM, absNinst] at hjump'
@@ -1432,6 +1449,16 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩)
     run
 
+/-- Modern compatibility wrapper: covered forks discharge `stateGas = none`. -/
+theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b)
+    (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {devm : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunExact c.prog sevm devm f o) :
+    ExactClaim code c ms b hcode hfork run :=
+  node_exactM_noStateGas hc hj hcode hfork.rules_stateGas_none run
+
 /-- The gas-exact converse from checked, jump-safe entries whose entry `0`
 starts the frame. -/
 theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
@@ -1461,15 +1488,43 @@ theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
   exact node_exactM hc hj hcode hfork hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
 
-/-- The top-level gas-exact converse. -/
-theorem lift_exact {code : ByteArray} {c : Cert}
-    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+/-- Historical form of `lift_exactM_core`: needs only `stateGas = none`. -/
+theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) := by
-  apply lift_exactM_core (Cert.checkedM_of_check hc) (Cert.jumpsOkM_of_jumpsOk hj) _
-    hcode hfork hrun
+  obtain ⟨e, f, cs, rfl, hepc, hef, hm0⟩ := hstart
+  rcases hrun with ⟨f0, hf0, hrf⟩
+  have hf0' : f0 = f := by simpa only [Cert.prog, List.map_cons, List.length_cons, List.length_map,
+    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero,
+    Option.some.injEq] using hf0.symm
+  subst f0
+  have hf := hc 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons, List.length_map,
+    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
+    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+    getElem?_pos, List.getElem_cons_zero])
+  have hentry := hj 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
+    List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+    List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
+    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+    getElem?_pos, List.getElem_cons_zero])
+  rw [hm0, hepc, hef] at hf
+  rw [hm0, hef] at hentry
+  exact node_exactM_noStateGas hc hj hcode hstateGas hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
+    (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
+
+/-- Historical form of `lift_exact`: needs only `stateGas = none`. -/
+theorem lift_exact_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) := by
+  apply lift_exactM_core_noStateGas (Cert.checkedM_of_check hc) (Cert.jumpsOkM_of_jumpsOk hj) _
+    hcode hstateGas hrun
   cases c with
   | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p cs =>
@@ -1478,6 +1533,15 @@ theorem lift_exact {code : ByteArray} {c : Cert}
       List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
     exact ⟨e, f, cs, rfl, by simpa only using hc.1.1, by simpa only using hc.1.2, by simp only [List.getD_eq_getElem?_getD,
       List.length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, Option.getD_none]⟩
+
+/-- The top-level gas-exact converse. -/
+theorem lift_exact {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) :=
+  lift_exact_noStateGas hc hj hcode hfork.rules_stateGas_none hrun
 
 /-- **The gas-exact converse, with a constant memory map.** -/
 theorem lift_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
