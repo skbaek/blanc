@@ -5966,7 +5966,17 @@ contract-neutral.
   frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
   `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
   `_covered` form recovers the modern statement, all in
-  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean);
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); invert a
+  `STATICCALL` to an arbitrary callee from `rules.stateGas = none` alone with
+  `ri_staticcall_boundedH`/`ri_staticcallH`/`rx_staticcallH` (answer `StaticAnsweredH`, code
+  resolution `CallCodeH` under the actual delegation flag), the step/run inversions
+  `of_step_staticcall_val_with_depth_frame_causeH`/`of_run_staticcall_val_with_depth_causeH`,
+  quiet steps with `Ninst.world_of_quietH`, static log preservation with
+  `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
+  committed post by `Execution.committedPost_of_okFact`), and the return-data bounds
+  `ReturnDataBound.staticcall_returnData_length_ltH`/`call_returnData_length_ltH`; the
+  `_covered`/`of_covered` forms recover the modern statements, all in
+  [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

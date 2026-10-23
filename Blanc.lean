@@ -1717,4 +1717,5 @@ import Blanc.ExecutionRewardCredits
 import Blanc.Lift.Weth9.HistoricalCredits
 import Blanc.Lift.UniswapV2Pair.HistoricalCredits
 import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistStaticCall
 import Blanc.Lift.UniswapV2Pair.HistGetterScalar
