@@ -246,21 +246,21 @@ theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
 /-- A child entered by an executable instruction opens on its parent's storage at every
 code-bearing account, at pc zero with an empty machine and output, under the parent's block
 environment, with short calldata. -/
-theorem Xinst.spawn_child_world {sevm : Sevm} {pre : Devm} {x : Xinst}
+theorem Xinst.spawn_child_world_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume} {child : Evm}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
     (entered : frame.enter = .run child) :
     (∀ ca, pre.getCode ca ≠ .empty → Devm.getStor child.dyna ca = Devm.getStor pre ca) ∧
       child.pc = 0 ∧
       (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty ∧ child.dyna.output = []) ∧
-      child.sta.benvStat = sevm.benvStat ∧ CoveredFork child.sta.benvStat.fork ∧
+      child.sta.benvStat = sevm.benvStat ∧
       child.sta.data.length < 2 ^ 256 := by
   have stat : child.sta.benvStat = sevm.benvStat :=
     (Jaune.Frame.enter_run_benvStat entered).trans (Xinst.step_spawn_benvStat spawn)
-  refine ⟨?_, Frame.enter_run_pc entered, ?_, stat, by rw [stat]; exact fork, ?_⟩
+  refine ⟨?_, Frame.enter_run_pc entered, ?_, stat, ?_⟩
   · intro ca nonempty
-    obtain ⟨storage, _⟩ := Xinst.step_spawn_world fork spawn nonempty
+    obtain ⟨storage, _⟩ := Xinst.step_spawn_world_noStateGas fork spawn nonempty
     obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv entered
     have protection : State.Protected frame.inner.benv.state ca := by
       right
@@ -274,13 +274,27 @@ theorem Xinst.spawn_child_world {sevm : Sevm} {pre : Devm} {x : Xinst}
     · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv entered
       rfl
   · rw [ExecutionTrace.Frame.enter_data_eq entered]
-    exact ExecutionTrace.Xinst.step_spawn_inner_data_length_lt fork.rules_stateGas_none spawn
+    exact ExecutionTrace.Xinst.step_spawn_inner_data_length_lt fork spawn
+
+theorem Xinst.spawn_child_world {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run child) :
+    (∀ ca, pre.getCode ca ≠ .empty → Devm.getStor child.dyna ca = Devm.getStor pre ca) ∧
+      child.pc = 0 ∧
+      (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty ∧ child.dyna.output = []) ∧
+      child.sta.benvStat = sevm.benvStat ∧ CoveredFork child.sta.benvStat.fork ∧
+      child.sta.data.length < 2 ^ 256 := by
+  obtain ⟨world, pc0, mach, stat, hdata⟩ :=
+    Xinst.spawn_child_world_noStateGas fork.rules_stateGas_none spawn entered
+  exact ⟨world, pc0, mach, stat, by rw [stat]; exact fork, hdata⟩
 
 /-- An entered child message leaves a code-bearing account's storage as the child's
 committed endpoint when it settles, and as before the call when it rolls back. -/
-theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
+theorem Xinst.spawn_run_getStor_noStateGas {sevm : Sevm} {pre inter : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
     (entered : frame.enter = .run childEvm)
     (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
@@ -292,9 +306,13 @@ theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
           (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
     (¬ Frame.settlementCommits frame raw = true → ∀ key,
       (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
-  obtain ⟨world, _, _, _, childFork, _⟩ := Xinst.spawn_child_world fork spawn entered
-  have replay := Xinst.storageReplay_some_of_body spawn (RunFrame.of_run entered) resumed
-    (fun committed => Exec.storageReplay_committedPost child committed childFork) fork
+  obtain ⟨world, _, _, statEq, _⟩ :=
+    Xinst.spawn_child_world_noStateGas fork spawn entered
+  have hsg_c : childEvm.sta.benvStat.rules.stateGas = none := by
+    rw [statEq]
+    exact fork
+  have replay := Xinst.storageReplay_some_of_body_noStateGas spawn (RunFrame.of_run entered) resumed
+    (fun committed => Exec.storageReplay_committedPost_noStateGas child committed hsg_c) fork
   have entry := world ca nonempty
   have codeNe : (pre.getCode ca).toList ≠ [] := by
     intro empty
@@ -308,14 +326,48 @@ theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
   refine ⟨?_, ?_⟩
   · intro settles key
     rw [ite_eq_left settles] at replay
-    have body := Exec.storageReplay_committedPost child
-      (Frame.raw_commits_of_settlementCommits settles) childFork
+    have body := Exec.storageReplay_committedPost_noStateGas child
+      (Frame.raw_commits_of_settlementCommits settles) hsg_c
     rw [replay.2 ca codeNe key, body.2 ca childCodeNe key, entry]
   · intro rolled key
     rw [ite_eq_right rolled] at replay
     simpa only [Exec.StorageWrite.replayCell, List.foldl_nil] using replay.2 ca codeNe key
 
+theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok inter)
+    {ca : Adr} (nonempty : pre.getCode ca ≠ .empty) :
+    (∀ settles : Frame.settlementCommits frame raw = true, ∀ key,
+      (Devm.getStor inter ca).get key =
+        (Devm.getStor (Execution.committedPost raw
+          (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
+    (¬ Frame.settlementCommits frame raw = true → ∀ key,
+      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) :=
+  Xinst.spawn_run_getStor_noStateGas fork.rules_stateGas_none spawn entered child
+    resumed nonempty
+
 /-- The same storage transport at a driver spawn. -/
+theorem Evm.step_run_getStor_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
+    (fork : sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok inter)
+    {ca : Adr} (nonempty : pre.getCode ca ≠ .empty) :
+    (∀ settles : Frame.settlementCommits frame raw = true, ∀ key,
+      (Devm.getStor inter ca).get key =
+        (Devm.getStor (Execution.committedPost raw
+          (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
+    (¬ Frame.settlementCommits frame raw = true → ∀ key,
+      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
+  rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+  exact Xinst.spawn_run_getStor_noStateGas fork spawn entered child resumed nonempty
+
 theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
     (fork : CoveredFork sevm.benvStat.fork)
@@ -329,9 +381,9 @@ theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
         (Devm.getStor (Execution.committedPost raw
           (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
     (¬ Frame.settlementCommits frame raw = true → ∀ key,
-      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
-  rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
-  exact Xinst.spawn_run_getStor fork spawn entered child resumed nonempty
+      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) :=
+  Evm.step_run_getStor_noStateGas fork.rules_stateGas_none step entered child resumed
+    nonempty
 
 /-- A CALL or STATICCALL child of any frame runs the installed image of `ca` when it
 executes at `ca`. -/
@@ -676,16 +728,23 @@ theorem Xinst.call_spawn_ofCall {sevm : Sevm} {pre : Devm} {x : Xinst}
     · exact ⟨_, (XStep.spawn.inj spawn).1.symm⟩
 
 /-- A child entered by an executable instruction starts with no logs. -/
-theorem Xinst.spawn_child_logs {sevm : Sevm} {pre : Devm} {x : Xinst}
+theorem Xinst.spawn_child_logs_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume} {child : Evm}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
     (entered : frame.enter = .run child) : child.dyna.logs = [] := by
   obtain ⟨benv, transfer, rfl⟩ := Jaune.Frame.enter_run_inv entered
   apply Lift.initDevm_logs
   change benv.stat.rules.stateGas = none
   rw [benvAfterTransfer_stat transfer, Xinst.step_spawn_benvStat spawn]
-  exact fork.rules_stateGas_none
+  exact fork
+
+theorem Xinst.spawn_child_logs {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run child) : child.dyna.logs = [] :=
+  Xinst.spawn_child_logs_noStateGas fork.rules_stateGas_none spawn entered
 
 /-- A CALL or STATICCALL step whose pushed success flag is nonzero committed its entered
 child. -/

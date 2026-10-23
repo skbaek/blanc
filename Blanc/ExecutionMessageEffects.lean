@@ -59,12 +59,12 @@ theorem GenericCall.step_done_getStor
 
 /-- An actual executable opcode that completes without spawning preserves every
 owner's storage. This does not include a childless message settlement. -/
-theorem Xinst.step_done_getStor
+theorem Xinst.step_done_getStor_noStateGas
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
     post.getStor owner = pre.getStor owner := by
-  rcases Xinst.step_shapeCovered sevm pre x fork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x fork with
     ⟨out, shape, frame⟩ | ⟨d, value, address, mi, ms, frame, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
       ii, isz, oi, osz, code, dp, frame, _, _, _, shape⟩
@@ -75,6 +75,13 @@ theorem Xinst.step_done_getStor
     exact (GenericCreate.step_done_getStor step owner).trans (frame.getStor owner).symm
   · rw [shape] at step
     exact (GenericCall.step_done_getStor step owner).trans (frame.getStor owner).symm
+
+theorem Xinst.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner :=
+  Xinst.step_done_getStor_noStateGas fork.rules_stateGas_none step owner
 
 
 

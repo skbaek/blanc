@@ -1028,7 +1028,7 @@ theorem GenericCreate.storageReplay_some_of_body
         simp only [retain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- Contract-neutral recursive executable-instruction transport. -/
-theorem Xinst.storageReplay_some_of_body
+theorem Xinst.storageReplay_some_of_body_noStateGas
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume}
     {pc : Nat} {childSevm : Sevm} {childPre : Devm}
@@ -1042,10 +1042,10 @@ theorem Xinst.storageReplay_some_of_body
     (body : ∀ committed : Execution.commits out = true,
       Exec.StorageReplay childPre
         (Execution.committedPost out committed) writes)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : sevm.benvStat.rules.stateGas = none) :
     Exec.StorageReplay pre post
       (if Frame.settlementCommits frame out = true then writes else []) := by
-  rcases Xinst.step_shapeCovered sevm pre x hfork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -1071,6 +1071,26 @@ theorem Xinst.storageReplay_some_of_body
     have replay := GenericCall.storageReplay_some_of_body run body
     simpa only [List.nil_append] using
       (Exec.StorageReplay.of_state_eq hprefix.state.symm).append replay
+
+theorem Xinst.storageReplay_some_of_body
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume}
+    {pc : Nat} {childSevm : Sevm} {childPre : Devm}
+    {out : Execution}
+    {result : Except (EvmError × State × AdrSet × Tra) Devm}
+    {writes : List Exec.StorageWrite}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (frameRun : RunFrame frame
+      (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) result)
+    (resumeRun : resume.run result = .ok post)
+    (body : ∀ committed : Execution.commits out = true,
+      Exec.StorageReplay childPre
+        (Execution.committedPost out committed) writes)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Exec.StorageReplay pre post
+      (if Frame.settlementCommits frame out = true then writes else []) :=
+  Xinst.storageReplay_some_of_body_noStateGas spawn frameRun resumeRun body
+    hfork.rules_stateGas_none
 
 /-- The storage owner is the executing frame's current target. -/
 def Exec.SuccessfulSstoreOccurrence.storageOwner
@@ -1287,11 +1307,10 @@ private theorem Exec.exists_lastRetainedSstore_of_replay
 
 /-- One successful nonterminal driver step has exactly the storage effect
 recognized by `successfulSstore?`: either one raw SSTORE event or none. -/
-private theorem Exec.storageReplay_cont_head
+private theorem Exec.storageReplay_cont_head_noStateGas
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (next : Exec pc' sevm post out)
-    (_hfork : CoveredFork sevm.benvStat.fork) :
+    (next : Exec pc' sevm post out) :
     Exec.StorageReplay pre post
       ([⟨pc, sevm, pre, out, Exec.cont step next⟩].filterMap
         Exec.Deriv.successfulSstore?) := by
@@ -1432,16 +1451,25 @@ private theorem Exec.storageReplay_cont_head
                   Exec.StorageReplay.of_code_stor (fun owner _ => Rinst.preserves_getCode rrun owner)
                     (fun owner _ => congrFun equal.symm owner)
 
+private theorem Exec.storageReplay_cont_head
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
+    (next : Exec pc' sevm post out)
+    (_hfork : CoveredFork sevm.benvStat.fork) :
+    Exec.StorageReplay pre post
+      ([⟨pc, sevm, pre, out, Exec.cont step next⟩].filterMap
+        Exec.Deriv.successfulSstore?) :=
+  Exec.storageReplay_cont_head_noStateGas step next
+
 /-- A childless successful executable spawn preserves the code and storage
 of each owner whose code is nonempty before the step. -/
-private theorem Exec.doneOk_storageReplay
+private theorem Exec.doneOk_storageReplay_noStateGas
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume}
     {settled : Except (EvmError × State × AdrSet × Tra) Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .done settled)
-    (resumeRun : resume.run settled = .ok post)
-    (_hfork : CoveredFork sevm.benvStat.fork) :
+    (resumeRun : resume.run settled = .ok post) :
     Exec.StorageReplay pre post [] := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have run : Xinst.Run sevm pre x .none (.ok post) := by
@@ -1452,6 +1480,17 @@ private theorem Exec.doneOk_storageReplay
     (Xinst.codePreserve_effectRec x (xl := .none) trivial run)
     (fun owner hcode => Xinst.none_getStor_eq run owner
       (State.Protected.of_code_ne_nil hcode))
+
+private theorem Exec.doneOk_storageReplay
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .done settled)
+    (resumeRun : resume.run settled = .ok post)
+    (_hfork : CoveredFork sevm.benvStat.fork) :
+    Exec.StorageReplay pre post [] :=
+  Exec.doneOk_storageReplay_noStateGas step enter resumeRun
 
 /-- A committing halted driver node is a successful last instruction and
 preserves the code and storage of each initially code-bearing owner. -/
@@ -1491,13 +1530,23 @@ private theorem Exec.halt_storageReplay
                   rw [jumpEq] at step
                   cases step
 
+/-- A spawned child inherits the parent's no-state-gas rule fact. -/
+lemma Evm.step_spawn_child_fork_noStateGas {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run child)
+    (hfork : sevm.benvStat.rules.stateGas = none) :
+    child.sta.benvStat.rules.stateGas = none := by
+  rw [Evm.step_spawn_child_benvStat hstep henter]
+  exact hfork
+
 /-- The committed persistent-storage endpoint is exactly chronological replay
 of the settlement-retained successful SSTORE events. -/
-theorem Exec.storageReplay_committedPost
+theorem Exec.storageReplay_committedPost_noStateGas
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : sevm.benvStat.rules.stateGas = none) :
     Exec.StorageReplay pre (Execution.committedPost out committed)
       (Exec.retainedStorageWrites run) := by
   induction run with
@@ -1508,7 +1557,7 @@ theorem Exec.storageReplay_committedPost
         Exec.retainedNodesOfCommits, hnone, List.filterMap_cons_none, List.filterMap_nil] using
         Exec.halt_storageReplay step committed
   | cont step next ih =>
-      have head := Exec.storageReplay_cont_head step next hfork
+      have head := Exec.storageReplay_cont_head_noStateGas step next
       have tail := ih committed hfork
       convert head.append tail using 1
       simp only [retainedStorageWrites, Exec.retainedNodes, committed, ↓reduceDIte,
@@ -1517,7 +1566,7 @@ theorem Exec.storageReplay_committedPost
   | doneErr step enter resume =>
       simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk step enter resume next ih =>
-      have head := Exec.doneOk_storageReplay step enter resume hfork
+      have head := Exec.doneOk_storageReplay_noStateGas step enter resume
       have tail := ih committed hfork
       have hnone : Exec.Deriv.successfulSstore?
           (⟨_, _, _, _, Exec.doneOk step enter resume next⟩ :
@@ -1529,8 +1578,8 @@ theorem Exec.storageReplay_committedPost
       simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk step enter child resume next childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
-      have hfork_c := Evm.step_spawn_child_fork step enter hfork
-      have throughChild := Xinst.storageReplay_some_of_body
+      have hfork_c := Evm.step_spawn_child_fork_noStateGas step enter hfork
+      have throughChild := Xinst.storageReplay_some_of_body_noStateGas
         spawn (RunFrame.of_run enter) resume
         (fun committed => childIH committed hfork_c) hfork
       have throughTail := nextIH committed hfork
@@ -1552,6 +1601,15 @@ theorem Exec.storageReplay_committedPost
           Exec.retainedNodes_runOk_of_not_settlementCommits _ _ _ _ _
             committed settles,
           List.filterMap_cons, List.nil_append, hnone]
+
+theorem Exec.storageReplay_committedPost
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Exec.StorageReplay pre (Execution.committedPost out committed)
+      (Exec.retainedStorageWrites run) :=
+  Exec.storageReplay_committedPost_noStateGas run committed hfork.rules_stateGas_none
 
 /-- Any committed persistent-storage change at an initially code-bearing owner
 has an exact last retained

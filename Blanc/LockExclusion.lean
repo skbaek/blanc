@@ -251,17 +251,17 @@ theorem Evm.step_spawn_enter_getStor
 
 /-- A child discarded by complete settlement preserves all parent storage,
 including raw cells at unprotected owners. -/
-theorem Evm.step_spawn_rollback_getStor
+theorem Evm.step_spawn_rollback_getStor_noStateGas
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume} {child : Evm} {raw : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .run child)
     (resumed : resume.run (frame.settle raw) = .ok post)
     (discarded : frame.settlementCommits raw ≠ true) :
     Devm.getStor post = Devm.getStor pre := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
-  rcases Xinst.step_shapeCovered sevm pre x hfork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x hfork with
     ⟨execution, shape, -⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -311,6 +311,18 @@ theorem Evm.step_spawn_rollback_getStor
       change post.state.getStor owner = pre.state.getStor owner
       rw [stateEq]
       exact (hprefix.getStor owner).symm
+
+theorem Evm.step_spawn_rollback_getStor
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm} {raw : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run child)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (discarded : frame.settlementCommits raw ≠ true) :
+    Devm.getStor post = Devm.getStor pre :=
+  Evm.step_spawn_rollback_getStor_noStateGas hfork.rules_stateGas_none step enter
+    resumed discarded
 
 /-- A successful regular instruction keeps every account nonce unchanged. -/
 theorem Rinst.get_nonce_eq_of_ok {pc : Nat} {sevm : Sevm} {pre post : Devm} {r : Rinst}
