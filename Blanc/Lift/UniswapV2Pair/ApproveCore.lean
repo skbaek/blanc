@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.WriterMemory
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.HistAccessWalk
 
 /-! The literal internal approval writer, retaining storage metadata and exact event memory. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -14,16 +15,48 @@ def approveCoreBase (sevm : Sevm) (b : Devm) (owner spender : Adr) (v : B256) : 
   (afterSstore sevm b (mapSlot spender.toB256 (mapSlot owner.toB256 2)) v).addLog
     ⟨sevm.currentTarget, [approvalTopic, owner.toB256, spender.toB256], v.toBytes⟩
 
+def approveCoreBaseH (sevm : Sevm) (b : Devm) (owner spender : Adr) (v : B256) : Devm :=
+  (afterSstoreH sevm b (mapSlot spender.toB256 (mapSlot owner.toB256 2)) v).addLog
+    ⟨sevm.currentTarget, [approvalTopic, owner.toB256, spender.toB256], v.toBytes⟩
+
+theorem approveCoreBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner spender : Adr) (v : B256) :
+    approveCoreBaseH sevm b owner spender v = approveCoreBase sevm b owner spender v := by
+  unfold approveCoreBaseH approveCoreBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def approveCorePost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner spender : Adr) (v : B256) (G : Nat) : Devm :=
   St (approveCoreBase sevm b owner spender v) R
     ((approveScratch M owner.toB256 spender.toB256).write 128 v.toBytes) G
+
+def approveCorePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner spender : Adr) (v : B256) (G : Nat) : Devm :=
+  St (approveCoreBaseH sevm b owner spender v) R
+    ((approveScratch M owner.toB256 spender.toB256).write 128 v.toBytes) G
+
+theorem approveCorePostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (owner spender : Adr) (v : B256) (G : Nat) :
+    approveCorePostH sevm b R M owner spender v G = approveCorePost sevm b R M owner spender v G := by
+  unfold approveCorePostH approveCorePost
+  simp only [approveCoreBaseH_of_covered fork]
 
 /-- The same post image with the event word at an arbitrary free pointer. -/
 def approveCorePostAt (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (p : B256)
     (owner spender : Adr) (v : B256) (G : Nat) : Devm :=
   St (approveCoreBase sevm b owner spender v) R
     ((approveScratch M owner.toB256 spender.toB256).write p.toNat v.toBytes) G
+
+def approveCorePostAtH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (p : B256)
+    (owner spender : Adr) (v : B256) (G : Nat) : Devm :=
+  St (approveCoreBaseH sevm b owner spender v) R
+    ((approveScratch M owner.toB256 spender.toB256).write p.toNat v.toBytes) G
+
+theorem approveCorePostAtH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (p : B256) (owner spender : Adr) (v : B256) (G : Nat) :
+    approveCorePostAtH sevm b R M p owner spender v G = approveCorePostAt sevm b R M p owner spender v G := by
+  unfold approveCorePostAtH approveCorePostAt
+  simp only [approveCoreBaseH_of_covered fork]
 
 theorem approveOwnerMemory_ptr_at {p : B256} {n : Nat} {M : Mem} (mem : PtrMem p n M)
     (owner : B256) : PtrMem p n (approveOwnerMemory M owner) := by
@@ -199,16 +232,15 @@ theorem approve64_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   exact approve64_exact_at fork mem (by rw [hp]; decide) (by rw [hp]; decide) cost (by omega)
     nonstatic room
 
-/-- Any completed run of the actual core at an arbitrary free pointer returns
-its full store, event and memory image. -/
-theorem approve64_inv_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem approve64_inv_atH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G n : Nat} {p : B256} {owner spender : Adr} {v ρ : B256}
     {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M) (high : 96 ≤ p.toNat)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem p n M) (high : 96 ≤ p.toNat)
     (run : SFunc.Run fs sevm (St b (v :: spender.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_259c_c64 o) :
     sevm.isStatic = false ∧
-      ∃ G', o = .returned (approveCorePostAt sevm b R M p owner spender v G') := by
+      ∃ G', o = .returned (approveCorePostAtH sevm b R M p owner spender v G') := by
   have ge := mem.ge
   have m1 := approveOwnerMemory_ptr_at mem owner.toB256
   have m3 := approveScratch_ptr_at mem owner.toB256 spender.toB256
@@ -316,8 +348,8 @@ theorem approve64_inv_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -371,6 +403,34 @@ theorem approve64_inv_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨G', hg⟩ := ric_ret h
   exact ⟨nonstatic, G', Seg.done.inj hg⟩
 
+/-- Any completed run of the actual core at an arbitrary free pointer returns
+its full store, event and memory image. -/
+theorem approve64_inv_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G n : Nat} {p : B256} {owner spender : Adr} {v ρ : B256}
+    {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M) (high : 96 ≤ p.toNat)
+    (run : SFunc.Run fs sevm (St b (v :: spender.toB256 :: owner.toB256 :: ρ :: R) M G)
+      t_259c_c64 o) :
+    sevm.isStatic = false ∧
+      ∃ G', o = .returned (approveCorePostAt sevm b R M p owner spender v G') := by
+  simpa only [approveCorePostAtH_of_covered fork] using
+    approve64_inv_atH fork.rules_stateGas_none fork.rules_bal_none mem high run
+
+
+theorem approve64_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {owner spender : Adr} {v ρ : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run fs sevm (St b (v :: spender.toB256 :: owner.toB256 :: ρ :: R) M G)
+      t_259c_c64 o) :
+    sevm.isStatic = false ∧ ∃ G', o = .returned (approveCorePostH sevm b R M owner spender v G') := by
+  have hp : (128 : B256).toNat = 128 := rfl
+  obtain ⟨nonstatic, G', eq⟩ := approve64_inv_atH stateGas bal mem (by rw [hp]; decide) run
+  refine ⟨nonstatic, G', ?_⟩
+  rw [eq]
+  unfold approveCorePostH approveCorePostAtH
+  rw [hp]
+
 /-- Any completed run of the actual core returns its full store, event and memory image. -/
 theorem approve64_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {owner spender : Adr} {v ρ : B256} {o : Outcome}
@@ -378,18 +438,26 @@ theorem approve64_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     (run : SFunc.Run fs sevm (St b (v :: spender.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_259c_c64 o) :
     sevm.isStatic = false ∧ ∃ G', o = .returned (approveCorePost sevm b R M owner spender v G') := by
-  have hp : (128 : B256).toNat = 128 := rfl
-  obtain ⟨nonstatic, G', eq⟩ := approve64_inv_at fork mem (by rw [hp]; decide) run
-  refine ⟨nonstatic, G', ?_⟩
-  rw [eq]
-  unfold approveCorePost approveCorePostAt
-  rw [hp]
+  simpa only [approveCorePostH_of_covered fork] using
+    approve64_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 def approve51Post (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (spender : Adr) (v : B256) (G : Nat) : Devm :=
   St (approveCoreBase sevm b sevm.caller spender v) (1 :: R)
     ((approveScratch M sevm.caller.toB256 spender.toB256).write 128 v.toBytes) G
+
+def approve51PostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (spender : Adr) (v : B256) (G : Nat) : Devm :=
+  St (approveCoreBaseH sevm b sevm.caller spender v) (1 :: R)
+    ((approveScratch M sevm.caller.toB256 spender.toB256).write 128 v.toBytes) G
+
+theorem approve51PostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (spender : Adr) (v : B256) (G : Nat) :
+    approve51PostH sevm b R M spender v G = approve51Post sevm b R M spender v G := by
+  unfold approve51PostH approve51Post
+  simp only [approveCoreBaseH_of_covered fork]
 
 /-- The real public implementation calls core64 with CALLER, then returns true. -/
 theorem approve51_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -419,11 +487,12 @@ theorem approve51_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
   exact checked_return_exact
 
-theorem approve51_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem approve51_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {spender : Adr} {v ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b (v :: spender.toB256 :: ρ :: R) M G) t_0de5_c51 o) :
-    sevm.isStatic = false ∧ ∃ G', o = .returned (approve51Post sevm b R M spender v G') := by
+    sevm.isStatic = false ∧ ∃ G', o = .returned (approve51PostH sevm b R M spender v G') := by
   have h := run.cut
   unfold t_0de5_c51 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -441,7 +510,7 @@ theorem approve51_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call (g := t_259c_c64) (by rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨nonstatic, _, eq⟩ := approve64_inv fork mem hc
+  · obtain ⟨nonstatic, _, eq⟩ := approve64_invH stateGas bal mem hc
     cases eq
     unfold t_0df2_c51 at h
     obtain ⟨_, h⟩ := ric_dest h
@@ -451,7 +520,16 @@ theorem approve51_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     obtain ⟨_, rfl⟩ := ri_push hd
     obtain ⟨G', eq⟩ := checked_return_inv h.uncut
     exact ⟨nonstatic, G', eq⟩
-  · obtain ⟨_, _, eq⟩ := approve64_inv fork mem hc
+  · obtain ⟨_, _, eq⟩ := approve64_invH stateGas bal mem hc
     cases eq
+
+theorem approve51_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {spender : Adr} {v ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm (St b (v :: spender.toB256 :: ρ :: R) M G) t_0de5_c51 o) :
+    sevm.isStatic = false ∧ ∃ G', o = .returned (approve51Post sevm b R M spender v G') := by
+  simpa only [approve51PostH_of_covered fork] using
+    approve51_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 end Blanc.Lift.UniswapV2Pair

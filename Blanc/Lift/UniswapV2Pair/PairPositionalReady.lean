@@ -7,64 +7,88 @@ import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-theorem pair_admitted_transfer_supply {U : WriterKey → Prop}
+/-- The transfer entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_transfer_supplyH {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have touched := good.transferOwn selector
-  obtain ⟨_, _, _, _, result, consumed, _⟩ := transfer_bytecode_positional_consumes
+  obtain ⟨_, _, _, _, result, consumed, _⟩ := transfer_bytecode_positional_consumesH
     (invocation := invocation) rep
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
-    representable codeEq fork selector run
+    representable codeEq stateGas bal selector run
   refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
-    (PairEntryAt.transfer selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transfer.root_noExec codeEq fork selector run)) rfl rfl (fun _ h => h) ?_
+    (PairEntryAt.transfer selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transfer.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
 
-
-theorem pair_admitted_approve_supply {U : WriterKey → Prop}
+theorem pair_admitted_transfer_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb) :=
+  PairStepSupplyWithH.covered (pair_admitted_transfer_supplyH inj apart)
+
+
+/-- The approve entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_approve_supplyH {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) :
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have touched := good.approveOwn selector
   obtain ⟨_, _, _, _, ⟨_, representation, _⟩, consumed, _⟩ :=
-    approve_bytecode_positional_consumes (invocation := invocation) rep
+    approve_bytecode_positional_consumesH (invocation := invocation) rep
       (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
-      representable codeEq fork selector run
+      representable codeEq stateGas bal selector run
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
-    (PairEntryAt.approve selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExec codeEq fork selector run)) rfl rfl (fun _ h => h) representation
+    (PairEntryAt.approve selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) representation
 
-
-theorem pair_admitted_transferFrom_supply {U : WriterKey → Prop}
+theorem pair_admitted_approve_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) :=
+  PairStepSupplyWithH.covered (pair_admitted_approve_supplyH inj apart)
+
+
+/-- The transferFrom entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_transferFrom_supplyH {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) :
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have touched := good.transferFromOwn selector
-  obtain ⟨_, _, _, _, result, consumed, _⟩ := transferFrom_bytecode_positional_consumes
+  obtain ⟨_, _, _, _, result, consumed, _⟩ := transferFrom_bytecode_positional_consumesH
     (invocation := invocation) rep
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched)
-    representable codeEq fork selector run
+    representable codeEq stateGas bal selector run
   refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
-    (PairEntryAt.transferFrom selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transferFrom.root_noExec codeEq fork selector run)) rfl rfl (fun _ h => h) ?_
+    (PairEntryAt.transferFrom selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transferFrom.root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
 
+theorem pair_admitted_transferFrom_supply {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) :
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd) :=
+  PairStepSupplyWithH.covered (pair_admitted_transferFrom_supplyH inj apart)
+
+
+/-- The initialize entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_initialize_supplyH {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) :
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
+    representable selector good sub rep
+  obtain ⟨_, _, _, _, _, result, consumed, _⟩ := initialize_bytecode_positional_consumesH
+    (invocation := invocation) rep representable freshOutput codeEq stateGas bal selector run
+  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
+    (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.initializeEntry selector)
+    (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.«initialize».root_noExecH codeEq stateGas selector run)) rfl rfl (fun _ h => Or.inl h) ?_
+  rw [result.sourceCurrent]
+  exact result.representation
 
 theorem pair_admitted_initialize_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
-    representable selector good sub rep
-  obtain ⟨_, _, _, _, _, result, consumed, _⟩ := initialize_bytecode_positional_consumes
-    (invocation := invocation) rep representable freshOutput codeEq fork selector run
-  refine pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
-    (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.initializeEntry selector)
-    (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.«initialize».root_noExec codeEq fork selector run)) rfl rfl (fun _ h => Or.inl h) ?_
-  rw [result.sourceCurrent]
-  exact result.representation
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) :=
+  PairStepSupplyWithH.covered (pair_admitted_initialize_supplyH inj apart)
 
 
 theorem pair_admitted_permit_supply {U : WriterKey → Prop}

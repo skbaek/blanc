@@ -104,6 +104,30 @@ theorem transfer_source_reads {K : WriterKey → Prop} {st : State} {sevm : Sevm
   exact (extended.balance_store (value := st.balanceOf sevm.caller - transferAmount sevm)
     ownerKey).selected (.balance (transferRecipient sevm)) recipientKey
 
+theorem transfer_source_readsH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm))) :
+    transferSourceWord sevm b sevm.caller = st.balanceOf sevm.caller ∧
+      transferCreditWordH sevm b =
+        Blanc.ledgerDebit st.balanceOf sevm.caller (transferAmount sevm) (transferRecipient sevm) := by
+  have extended := rep.extend fresh
+  have ownerKey : WriterExtend K (transferTouched sevm.caller (transferRecipient sevm))
+      (.balance sevm.caller) := .inr (List.mem_cons.mpr (.inl rfl))
+  have recipientKey : WriterExtend K (transferTouched sevm.caller (transferRecipient sevm))
+      (.balance (transferRecipient sevm)) :=
+    .inr (List.mem_cons.mpr (.inr (List.mem_singleton.mpr rfl)))
+  have source : transferSourceWord sevm b sevm.caller = st.balanceOf sevm.caller :=
+    extended.selected (.balance sevm.caller) ownerKey
+  refine ⟨source, ?_⟩
+  change ((transferDebitBaseH sevm (transferLoadedBaseH sevm b) sevm.caller
+    (transferDebitedWord sevm b)).getStor sevm.currentTarget).get
+    (transferBalanceSlot (transferRecipient sevm)) = _
+  rw [transferDebitBaseH, afterSstoreH_getStor_self, transferLoadedBaseH, afterSloadH_getStor]
+  unfold transferDebitedWord
+  rw [source]
+  exact (extended.balance_store (value := st.balanceOf sevm.caller - transferAmount sevm)
+    ownerKey).selected (.balance (transferRecipient sevm)) recipientKey
+
 def transferDecodedEntry (sevm : Sevm) : Entry :=
   .transfer (transferRecipient sevm) (transferAmount sevm)
 
@@ -199,6 +223,42 @@ theorem transferPublicPost_facts {sevm : Sevm} {b : Devm} {R : List B256} {M : M
     simp only [transferCoreBase, transferCreditBase, Devm.addLog_getStor,
       afterSstore_getStor_ne _ _ _ _ _ different.symm, afterSload_getStor, transferDebitBase]
 
+theorem transferPublicPost_factsH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} (mem : PtrMem 128 96 M) :
+    (transferPublicPostH sevm b R M G).output = encodeWords [1] ∧
+    (transferPublicPostH sevm b R M G).logs = b.logs ++
+      [transferRawLog sevm.currentTarget sevm.caller (transferRecipient sevm) (transferAmount sevm)] ∧
+    (transferPublicPostH sevm b R M G).getStor sevm.currentTarget =
+      ((b.getStor sevm.currentTarget).set (transferBalanceSlot sevm.caller)
+        (transferDebitedWord sevm b)).set (transferBalanceSlot (transferRecipient sevm))
+        (transferCreditWordH sevm b + transferAmount sevm) ∧
+    (∀ a, a ≠ sevm.currentTarget → (transferPublicPostH sevm b R M G).getStor a = b.getStor a) ∧
+    (transferPublicPostH sevm b R M G).gasLeft = G := by
+  unfold transferPublicPostH
+  have memory := transferCoreMemory_ptr (owner := sevm.caller)
+    (recipient := transferRecipient sevm) (amount := transferAmount sevm) mem
+  have facts := getterWordPost_facts
+    (b := transferCoreBaseH sevm b sevm.caller (transferRecipient sevm) (transferAmount sevm))
+    (R := R) (v := 1) (G := G) memory.wf
+  refine ⟨?_, ?_, ?_, ?_, facts.2.2.2⟩
+  · simpa only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil] using facts.1
+  · have creditLogs (base : Devm) (owner recipient : Adr) (amount credited : B256) :
+        (transferCreditBaseH sevm base owner recipient amount credited).logs = base.logs ++
+          [transferRawLog sevm.currentTarget owner recipient amount] := by
+      change (afterSstoreH sevm base (transferBalanceSlot recipient) credited).logs ++
+        [transferRawLog sevm.currentTarget owner recipient amount] = _
+      rw [afterSstoreH_logs]
+    rw [facts.2.2.1]
+    simp only [transferCoreBaseH, creditLogs, afterSloadH_logs, transferDebitBaseH, afterSstoreH_logs]
+  · rw [facts.2.1 sevm.currentTarget]
+    simp only [transferCoreBaseH, transferCreditBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_self, afterSloadH_getStor, transferDebitBaseH]
+    rfl
+  · intro a different
+    rw [facts.2.1 a]
+    simp only [transferCoreBaseH, transferCreditBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_ne _ _ _ _ _ different.symm, afterSloadH_getStor, transferDebitBaseH]
+
 theorem WriterRep.transfer_public_post {K : WriterKey → Prop} {st : State}
     {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -208,6 +268,21 @@ theorem WriterRep.transfer_public_post {K : WriterKey → Prop} {st : State}
       (transferSourceState st sevm.caller (transferRecipient sevm) (transferAmount sevm)) := by
   have reads := transfer_source_reads rep fresh
   have facts := transferPublicPost_facts (sevm := sevm) (b := b)
+    (R := [0xa9059cbb]) (G := G) getterInitMemory_ptr
+  rw [facts.2.2.1]
+  unfold transferDebitedWord
+  rw [reads.1, reads.2]
+  exact rep.transfer_store fresh
+
+theorem WriterRep.transfer_public_postH {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm))) :
+    WriterRep (WriterExtend K (transferTouched sevm.caller (transferRecipient sevm)))
+      ((transferPublicPostH sevm b [0xa9059cbb] getterInitMemory G).getStor sevm.currentTarget)
+      (transferSourceState st sevm.caller (transferRecipient sevm) (transferAmount sevm)) := by
+  have reads := transfer_source_readsH rep fresh
+  have facts := transferPublicPost_factsH (sevm := sevm) (b := b)
     (R := [0xa9059cbb]) (G := G) getterInitMemory_ptr
   rw [facts.2.2.1]
   unfold transferDebitedWord
@@ -233,6 +308,32 @@ theorem WriterRep.transfer_public_fixed {K : WriterKey → Prop} {st : State}
   change transferBalanceSlot sevm.caller ∉ writerFixedSlots at ownerOff
   change transferBalanceSlot (transferRecipient sevm) ∉ writerFixedSlots at recipientOff
   have facts := transferPublicPost_facts (sevm := sevm) (b := b)
+    (R := [0xa9059cbb]) (G := G) getterInitMemory_ptr
+  intro n fixed
+  rw [facts.2.2.1]
+  rw [Stor.get_set_ne _ (k := transferBalanceSlot (transferRecipient sevm)) (a := n)
+    (fun eq => recipientOff (eq.symm ▸ fixed))]
+  exact Stor.get_set_ne _ (k := transferBalanceSlot sevm.caller) (a := n)
+    (fun eq => ownerOff (eq.symm ▸ fixed)) _
+
+theorem WriterRep.transfer_public_fixedH {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm))) :
+    ∀ n, n ∈ writerFixedSlots →
+      ((transferPublicPostH sevm b [0xa9059cbb] getterInitMemory G).getStor sevm.currentTarget).get n =
+        (b.getStor sevm.currentTarget).get n := by
+  have extended := rep.extend fresh
+  have ownerKey : WriterExtend K (transferTouched sevm.caller (transferRecipient sevm))
+      (.balance sevm.caller) := .inr (List.mem_cons.mpr (.inl rfl))
+  have recipientKey : WriterExtend K (transferTouched sevm.caller (transferRecipient sevm))
+      (.balance (transferRecipient sevm)) :=
+    .inr (List.mem_cons.mpr (.inr (List.mem_singleton.mpr rfl)))
+  have ownerOff := extended.apart (.balance sevm.caller) ownerKey
+  have recipientOff := extended.apart (.balance (transferRecipient sevm)) recipientKey
+  change transferBalanceSlot sevm.caller ∉ writerFixedSlots at ownerOff
+  change transferBalanceSlot (transferRecipient sevm) ∉ writerFixedSlots at recipientOff
+  have facts := transferPublicPost_factsH (sevm := sevm) (b := b)
     (R := [0xa9059cbb]) (G := G) getterInitMemory_ptr
   intro n fixed
   rw [facts.2.2.1]
@@ -356,6 +457,78 @@ structure TransferSourceResult (K : WriterKey → Prop) (current : Checkpoint)
   zero : transferAmount sevm = 0 →
     transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm) = current.state
 
+structure TransferSourceResultH (K : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (sevm : Sevm) (b post : Devm) (residual : Nat) : Prop where
+  rawPost : post = transferPublicPostH sevm b [0xa9059cbb] getterInitMemory residual
+  representation : WriterRep (WriterExtend K (transferTouched sevm.caller (transferRecipient sevm)))
+    (post.getStor sevm.currentTarget)
+    (transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm))
+  accepted : startImmediate current (writerContext sevm invocation) (transferDecodedEntry sevm) =
+    some (.finished (transferSourceFrame current (writerContext sevm invocation)
+      (transferRecipient sevm) (transferAmount sevm)) (encodeWords [1]))
+  done : drive 2 (startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm)) .done =
+    transferSourceDone current (writerContext sevm invocation) (transferRecipient sevm) (transferAmount sevm)
+  context : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).context = writerContext sevm invocation
+  checkpoint : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).checkpoint = current
+  sourceLogs : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).current.logs = current.logs ++
+      [.owned (writerEntryOrigin (writerContext sevm invocation))
+        (.transfer sevm.caller (transferRecipient sevm) (transferAmount sevm))]
+  updates : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).current.updates = current.updates
+  sourceState : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).current.state =
+      transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm)
+  segment : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).segment = 0
+  afterCall : (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)).afterCall = none
+  output : post.output = encodeWords [1]
+  logs : post.logs = b.logs ++ [transferRawLog sevm.currentTarget sevm.caller
+    (transferRecipient sevm) (transferAmount sevm)]
+  storage : post.getStor sevm.currentTarget =
+    ((b.getStor sevm.currentTarget).set (transferBalanceSlot sevm.caller)
+      (transferDebitedWord sevm b)).set (transferBalanceSlot (transferRecipient sevm))
+      (transferCreditWordH sevm b + transferAmount sevm)
+  foreign : ∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a
+  gas : post.gasLeft = residual
+  fixed : ∀ n, n ∈ writerFixedSlots → (post.getStor sevm.currentTarget).get n =
+    (b.getStor sevm.currentTarget).get n
+  movement : Blanc.Transfer current.state.balanceOf sevm.caller (transferAmount sevm)
+    (transferRecipient sevm)
+    (transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm)).balanceOf
+  self : transferRecipient sevm = sevm.caller →
+    transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm) = current.state
+  zero : transferAmount sevm = 0 →
+    transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm) = current.state
+
+theorem TransferSourceResultH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (b post : Devm) (residual : Nat) :
+    TransferSourceResultH K current invocation sevm b post residual ↔ TransferSourceResult K current invocation sevm b post residual := by
+  constructor <;> intro h <;>
+    exact ⟨by simpa only [transferPublicPostH_of_covered fork] using h.rawPost,
+      h.representation,
+      h.accepted,
+      h.done,
+      h.context,
+      h.checkpoint,
+      h.sourceLogs,
+      h.updates,
+      h.sourceState,
+      h.segment,
+      h.afterCall,
+      h.output,
+      h.logs,
+      by simpa only [transferCreditWordH_of_covered fork] using h.storage,
+      h.foreign,
+      h.gas,
+      h.fixed,
+      h.movement,
+      h.self,
+      h.zero⟩
+
 theorem transfer_public_source_result {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -404,6 +577,72 @@ theorem transfer_public_source_result {K : WriterKey → Prop} {current : Checkp
     rw [zero]
     exact transferSourceState_zero _ _ _
 
+theorem transfer_public_source_resultH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm)))
+    (value : sevm.value = 0) (nonstatic : sevm.isStatic = false)
+    (cover : transferAmount sevm ≤ transferSourceWord sevm b sevm.caller)
+    (nowrap : transferCreditSafeH sevm b) :
+    TransferSourceResultH K current invocation sevm b
+      (transferPublicPostH sevm b [0xa9059cbb] getterInitMemory G) G := by
+  have reads := transfer_source_readsH rep fresh
+  have covered : transferAmount sevm ≤ current.state.balanceOf sevm.caller := by
+    rwa [reads.1] at cover
+  have safe : (Blanc.ledgerDebit current.state.balanceOf sevm.caller (transferAmount sevm)
+      (transferRecipient sevm)).toNat + (transferAmount sevm).toNat < 2 ^ 256 := by
+    unfold transferCreditSafeH at nowrap
+    rwa [reads.2] at nowrap
+  have sourceFacts := transferSourceFrame_prefix current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)
+  have facts := transferPublicPost_factsH (sevm := sevm) (b := b)
+    (R := [0xa9059cbb]) (G := G) getterInitMemory_ptr
+  refine {
+    rawPost := rfl
+    representation := rep.transfer_public_postH fresh
+    accepted := transfer_startImmediate_done value nonstatic covered safe
+    done := transfer_drive_done value nonstatic covered safe
+    context := sourceFacts.1
+    checkpoint := sourceFacts.2.1
+    sourceLogs := sourceFacts.2.2.1
+    updates := sourceFacts.2.2.2.1
+    sourceState := rfl
+    segment := sourceFacts.2.2.2.2.1
+    afterCall := sourceFacts.2.2.2.2.2
+    output := facts.1
+    logs := facts.2.1
+    storage := facts.2.2.1
+    foreign := facts.2.2.2.1
+    gas := facts.2.2.2.2
+    fixed := rep.transfer_public_fixedH fresh
+    movement := Blanc.ledgerDebit_credit_transfer covered
+    self := ?_
+    zero := ?_ }
+  · intro same
+    rw [same]
+    exact transferSourceState_self _ _ _
+  · intro zero
+    rw [zero]
+    exact transferSourceState_zero _ _ _
+
+
+theorem transfer_bytecode_refines_sourceH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferSourceResultH K current invocation sevm b post residual := by
+  obtain ⟨value, size, guard, cover, nonstatic, nowrap, residual, eq⟩ :=
+    transfer_bytecode_refines_rawH codeEq stateGas bal selector run
+  refine ⟨value, (approve_word_guards_iff representable).mp ⟨size, guard⟩,
+    nonstatic, residual, ?_⟩
+  rw [eq]
+  exact transfer_public_source_resultH rep fresh value nonstatic cover nowrap
 
 /-- Successful raw pc0 execution derives the existing handler's acceptance and finite result. -/
 theorem transfer_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
@@ -416,12 +655,9 @@ theorem transfer_bytecode_refines_source {K : WriterKey → Prop} {current : Che
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
       ∃ residual, TransferSourceResult K current invocation sevm b post residual := by
-  obtain ⟨value, size, guard, cover, nonstatic, nowrap, residual, eq⟩ :=
-    transfer_bytecode_refines_raw codeEq fork selector run
-  refine ⟨value, (approve_word_guards_iff representable).mp ⟨size, guard⟩,
-    nonstatic, residual, ?_⟩
-  rw [eq]
-  exact transfer_public_source_result rep fresh value nonstatic cover nowrap
+  simpa only [TransferSourceResultH_of_covered fork] using
+    transfer_bytecode_refines_sourceH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 /-- Actual handler acceptance yields the literal pc0 run with both incoming store sentries. -/
 theorem transfer_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpoint}
@@ -463,6 +699,36 @@ theorem transfer_source_bytecode_exact {K : WriterKey → Prop} {current : Check
     transfer_bytecode_live_raw codeEq fork value size selector guard debitSentry creditSentry nonstatic cover nowrap,
     frameEq, dataEq, transfer_public_source_result rep fresh value nonstatic cover nowrap⟩
 
+theorem transfer_bytecode_exact_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferSourceFrame current (writerContext sevm invocation)
+              (transferRecipient sevm) (transferAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result⟩ :=
+    transfer_bytecode_refines_sourceH rep fresh representable codeEq stateGas bal selector run
+  have typed : startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm) =
+      .finished (transferSourceFrame current (writerContext sevm invocation)
+        (transferRecipient sevm) (transferAmount sevm)) post.output := by
+    unfold startTyped
+    rw [result.accepted]
+    dsimp only []
+    rw [← result.output]
+  refine ⟨value, size, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)) post.output
+
 /-- Successful raw pc0 execution derives exact consumption for the typed transfer entry. -/
 theorem transfer_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -479,18 +745,8 @@ theorem transfer_bytecode_exact_consumes {K : WriterKey → Prop} {current : Che
             frame := transferSourceFrame current (writerContext sevm invocation)
               (transferRecipient sevm) (transferAmount sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, nonstatic, residual, result⟩ :=
-    transfer_bytecode_refines_source rep fresh representable codeEq fork selector run
-  have typed : startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm) =
-      .finished (transferSourceFrame current (writerContext sevm invocation)
-        (transferRecipient sevm) (transferAmount sevm)) post.output := by
-    unfold startTyped
-    rw [result.accepted]
-    dsimp only []
-    rw [← result.output]
-  refine ⟨value, size, nonstatic, residual, result, ?_⟩
-  rw [typed]
-  exact ExactConsumes.finished (transferSourceFrame current (writerContext sevm invocation)
-    (transferRecipient sevm) (transferAmount sevm)) post.output
+  simpa only [TransferSourceResultH_of_covered fork] using
+    transfer_bytecode_exact_consumesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 end Blanc.Lift.UniswapV2Pair

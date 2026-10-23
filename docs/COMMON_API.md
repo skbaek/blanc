@@ -5959,7 +5959,9 @@ contract-neutral.
   on a historical fork, where the access schedule may be flat (Istanbul, Muir Glacier)
   rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
   successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
-  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`; invert
+  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`/
+  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH` and the storage-walk
+  steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
   `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
   `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
   which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the

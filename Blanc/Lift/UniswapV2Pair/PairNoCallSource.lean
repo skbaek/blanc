@@ -71,6 +71,32 @@ theorem StaticView.noCallEntry_selector (view : StaticView) :
   | singleMapping s => cases s <;> rfl
   | totalSupply | allowance | getReserves => rfl
 
+theorem transfer_bytecode_positional_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferSourceFrame current (writerContext sevm invocation)
+              (transferRecipient sevm) (transferAmount sevm),
+            remaining := .done, childReturns := [] } ∧
+        PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 (startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferSourceFrame current (writerContext sevm invocation)
+              (transferRecipient sevm) (transferAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := transfer_bytecode_exact_consumesH rep fresh representable codeEq stateGas bal selector run
+  exact ⟨value, size, nonstatic, residual, result, consumed,
+    PairNoCallEntry.transfer.positionalConsumesH codeEq stateGas selector run consumed⟩
+
 /-- Preserve the existing successful source result and exact consumption witness,
 with an actual original-root call-free annotation of the same frame and bytes. -/
 theorem transfer_bytecode_positional_consumes {K : WriterKey → Prop} {current : Checkpoint}
@@ -94,9 +120,35 @@ theorem transfer_bytecode_positional_consumes {K : WriterKey → Prop} {current 
             frame := transferSourceFrame current (writerContext sevm invocation)
               (transferRecipient sevm) (transferAmount sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := transfer_bytecode_exact_consumes rep fresh representable codeEq fork selector run
+  simpa only [TransferSourceResultH_of_covered fork] using
+    transfer_bytecode_positional_consumesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
+
+theorem approve_bytecode_positional_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, ApproveSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := approveSourceFrame current (writerContext sevm invocation)
+              (approveSpender sevm) (approveAmount sevm),
+            remaining := .done, childReturns := [] } ∧
+        PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 (startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := approveSourceFrame current (writerContext sevm invocation)
+              (approveSpender sevm) (approveAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := approve_bytecode_exact_consumesH rep fresh representable codeEq stateGas bal selector run
   exact ⟨value, size, nonstatic, residual, result, consumed,
-    PairNoCallEntry.transfer.positionalConsumes codeEq fork selector run consumed⟩
+    PairNoCallEntry.approve.positionalConsumesH codeEq stateGas selector run consumed⟩
 
 /-- Preserve the existing successful source result and exact consumption witness,
 with an actual original-root call-free annotation of the same frame and bytes. -/
@@ -121,9 +173,35 @@ theorem approve_bytecode_positional_consumes {K : WriterKey → Prop} {current :
             frame := approveSourceFrame current (writerContext sevm invocation)
               (approveSpender sevm) (approveAmount sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := approve_bytecode_exact_consumes rep fresh representable codeEq fork selector run
+  simpa only [ApproveSourceResultH_of_covered fork] using
+    approve_bytecode_positional_consumesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
+
+theorem transferFrom_bytecode_positional_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferFromTouched (transferFromOwner sevm) sevm.caller (transferFromRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 100 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferFromSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (transferFromDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferFromSourceFrame current (writerContext sevm invocation)
+              (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm),
+            remaining := .done, childReturns := [] } ∧
+        PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 (startTyped current (writerContext sevm invocation) (transferFromDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferFromSourceFrame current (writerContext sevm invocation)
+              (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := transferFrom_bytecode_exact_consumesH rep fresh representable codeEq stateGas bal selector run
   exact ⟨value, size, nonstatic, residual, result, consumed,
-    PairNoCallEntry.approve.positionalConsumes codeEq fork selector run consumed⟩
+    PairNoCallEntry.transferFrom.positionalConsumesH codeEq stateGas selector run consumed⟩
 
 /-- Preserve the existing successful source result and exact consumption witness,
 with an actual original-root call-free annotation of the same frame and bytes. -/
@@ -148,9 +226,34 @@ theorem transferFrom_bytecode_positional_consumes {K : WriterKey → Prop} {curr
             frame := transferFromSourceFrame current (writerContext sevm invocation)
               (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, nonstatic, residual, result, consumed⟩ := transferFrom_bytecode_exact_consumes rep fresh representable codeEq fork selector run
-  exact ⟨value, size, nonstatic, residual, result, consumed,
-    PairNoCallEntry.transferFrom.positionalConsumes codeEq fork selector run consumed⟩
+  simpa only [TransferFromSourceResultH_of_covered fork] using
+    transferFrom_bytecode_positional_consumesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
+
+theorem initialize_bytecode_positional_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (representable : sevm.data.length < 2 ^ 256) (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.caller = current.state.factory ∧
+      sevm.isStatic = false ∧ ∃ residual, InitializeSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := initializeSourceFrame current (writerContext sevm invocation)
+              (initializeToken0 sevm) (initializeToken1 sevm),
+            remaining := .done, childReturns := [] } ∧
+        PositionalConsumes ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0 (startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := initializeSourceFrame current (writerContext sevm invocation)
+              (initializeToken0 sevm) (initializeToken1 sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, authorized, nonstatic, residual, result, consumed⟩ := initialize_bytecode_exact_consumesH rep representable freshOutput codeEq stateGas bal selector run
+  exact ⟨value, size, authorized, nonstatic, residual, result, consumed,
+    PairNoCallEntry.«initialize».positionalConsumesH codeEq stateGas selector run consumed⟩
 
 /-- Preserve the existing successful source result and exact consumption witness,
 with an actual original-root call-free annotation of the same frame and bytes. -/
@@ -174,9 +277,9 @@ theorem initialize_bytecode_positional_consumes {K : WriterKey → Prop} {curren
             frame := initializeSourceFrame current (writerContext sevm invocation)
               (initializeToken0 sevm) (initializeToken1 sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, authorized, nonstatic, residual, result, consumed⟩ := initialize_bytecode_exact_consumes rep representable freshOutput codeEq fork selector run
-  exact ⟨value, size, authorized, nonstatic, residual, result, consumed,
-    PairNoCallEntry.«initialize».positionalConsumes codeEq fork selector run consumed⟩
+  simpa only [InitializeSourceResultH_of_covered fork] using
+    initialize_bytecode_positional_consumesH rep representable freshOutput codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 theorem staticView_source_positional_selectedH {K : WriterKey → Prop} {current : Checkpoint}
     {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}

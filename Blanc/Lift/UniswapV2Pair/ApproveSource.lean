@@ -106,6 +106,20 @@ theorem WriterRep.approve_public_post {K : WriterKey → Prop} {st : State}
   rw [approveCoreBase, Devm.addLog_getStor, afterSstore_getStor_self]
   exact rep.approve_store fresh
 
+theorem WriterRep.approve_public_postH {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm))) :
+    WriterRep (WriterExtend K (approveTouched sevm.caller (approveSpender sevm)))
+      ((approvePublicPostH sevm b [0x095ea7b3] getterInitMemory G).getStor sevm.currentTarget)
+      (approveSourceState st sevm.caller (approveSpender sevm) (approveAmount sevm)) := by
+  change WriterRep (WriterExtend K (approveTouched sevm.caller (approveSpender sevm)))
+    ((approveCoreBaseH sevm b sevm.caller (approveSpender sevm) (approveAmount sevm)).getStor
+      sevm.currentTarget)
+    (approveSourceState st sevm.caller (approveSpender sevm) (approveAmount sevm))
+  rw [approveCoreBaseH, Devm.addLog_getStor, afterSstoreH_getStor_self]
+  exact rep.approve_store fresh
+
 
 /-- Project the checked post symbolically; never evaluate the concrete memory write chain. -/
 theorem approvePublicPost_facts {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -136,6 +150,35 @@ theorem approvePublicPost_facts {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   · intro a different
     rw [facts.2.1 a, approveCoreBase, Devm.addLog_getStor,
       afterSstore_getStor_ne _ _ _ _ _ different.symm]
+
+theorem approvePublicPost_factsH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} (mem : PtrMem 128 96 M) :
+    (approvePublicPostH sevm b R M G).output = encodeWords [1] ∧
+    (approvePublicPostH sevm b R M G).logs = b.logs ++
+      [approvalRawLog sevm.currentTarget sevm.caller (approveSpender sevm) (approveAmount sevm)] ∧
+    (approvePublicPostH sevm b R M G).getStor sevm.currentTarget =
+      (b.getStor sevm.currentTarget).set (approveSlot sevm) (approveAmount sevm) ∧
+    (∀ a, a ≠ sevm.currentTarget → (approvePublicPostH sevm b R M G).getStor a = b.getStor a) ∧
+    (approvePublicPostH sevm b R M G).gasLeft = G := by
+  unfold approvePublicPostH
+  have memory := getterWordMemory_ptr
+    (approveScratch_ptr mem sevm.caller.toB256 (approveSpender sevm).toB256)
+    (approveAmount sevm)
+  have facts := getterWordPost_facts
+    (b := approveCoreBaseH sevm b sevm.caller (approveSpender sevm) (approveAmount sevm))
+    (R := R) (v := 1) (G := G) memory.wf
+  refine ⟨?_, ?_, ?_, ?_, facts.2.2.2⟩
+  · simpa only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil] using facts.1
+  · rw [facts.2.2.1]
+    change (afterSstoreH sevm b (approveSlot sevm) (approveAmount sevm)).logs ++
+      [approvalRawLog sevm.currentTarget sevm.caller (approveSpender sevm) (approveAmount sevm)] = _
+    rw [afterSstoreH_logs]
+  · rw [facts.2.1 sevm.currentTarget, approveCoreBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_self]
+    rfl
+  · intro a different
+    rw [facts.2.1 a, approveCoreBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_ne _ _ _ _ _ different.symm]
 
 theorem approve_startImmediate_inv {current : Checkpoint} {ctx : Context}
     {spender : Adr} {amount : B256} {sourceFrame : Frame} {returndata : Bytes}
@@ -189,6 +232,41 @@ def ApproveSourceResult (K : WriterKey → Prop) (current : Checkpoint) (invocat
   (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
   post.gasLeft = residual
 
+def ApproveSourceResultH (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat)
+    (sevm : Sevm) (b post : Devm) (residual : Nat) : Prop :=
+  post = approvePublicPostH sevm b [0x095ea7b3] getterInitMemory residual ∧
+  WriterRep (WriterExtend K (approveTouched sevm.caller (approveSpender sevm)))
+    (post.getStor sevm.currentTarget)
+    (approveSourceState current.state sevm.caller (approveSpender sevm) (approveAmount sevm)) ∧
+  startImmediate current (writerContext sevm invocation) (approveDecodedEntry sevm) =
+    some (.finished (approveSourceFrame current (writerContext sevm invocation)
+      (approveSpender sevm) (approveAmount sevm)) (encodeWords [1])) ∧
+  drive 2 (startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm)) .done =
+    approveSourceDone current (writerContext sevm invocation) (approveSpender sevm) (approveAmount sevm) ∧
+  (approveSourceFrame current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)).context = writerContext sevm invocation ∧
+  (approveSourceFrame current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)).checkpoint = current ∧
+  (approveSourceFrame current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)).current.logs = current.logs ++
+      [.owned (writerEntryOrigin (writerContext sevm invocation))
+        (.approval sevm.caller (approveSpender sevm) (approveAmount sevm))] ∧
+  (approveSourceFrame current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)).current.updates = current.updates ∧
+  post.output = encodeWords [1] ∧
+  post.logs = b.logs ++ [approvalRawLog sevm.currentTarget sevm.caller
+    (approveSpender sevm) (approveAmount sevm)] ∧
+  post.getStor sevm.currentTarget =
+    (b.getStor sevm.currentTarget).set (approveSlot sevm) (approveAmount sevm) ∧
+  (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
+  post.gasLeft = residual
+
+theorem ApproveSourceResultH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (b post : Devm) (residual : Nat) :
+    ApproveSourceResultH K current invocation sevm b post residual = ApproveSourceResult K current invocation sevm b post residual := by
+  unfold ApproveSourceResultH ApproveSourceResult
+  simp only [approvePublicPostH_of_covered fork]
+
 theorem approve_public_source_result {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -204,6 +282,39 @@ theorem approve_public_source_result {K : WriterKey → Prop} {current : Checkpo
     approve_drive_done value nonstatic, sourceFacts.1, sourceFacts.2.1, sourceFacts.2.2.1,
     sourceFacts.2.2.2.1, facts⟩
 
+theorem approve_public_source_resultH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)))
+    (value : sevm.value = 0) (nonstatic : sevm.isStatic = false) :
+    ApproveSourceResultH K current invocation sevm b
+      (approvePublicPostH sevm b [0x095ea7b3] getterInitMemory G) G := by
+  have sourceFacts := approveSourceFrame_prefix current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)
+  have facts := approvePublicPost_factsH (sevm := sevm) (b := b)
+    (R := [0x095ea7b3]) (G := G) getterInitMemory_ptr
+  exact ⟨rfl, rep.approve_public_postH fresh, approve_startImmediate_done value nonstatic,
+    approve_drive_done value nonstatic, sourceFacts.1, sourceFacts.2.1, sourceFacts.2.2.1,
+    sourceFacts.2.2.2.1, facts⟩
+
+theorem approve_bytecode_refines_sourceH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, ApproveSourceResultH K current invocation sevm b post residual := by
+  obtain ⟨value, size, guard, nonstatic, residual, eq⟩ :=
+    approve_bytecode_refines_rawH codeEq stateGas bal selector run
+  refine ⟨value, (approve_word_guards_iff representable).mp ⟨size, guard⟩,
+    nonstatic, residual, ?_⟩
+  rw [eq]
+  exact approve_public_source_resultH rep fresh value nonstatic
+
 /-- Successful literal bytecode derives source acceptance; no source endpoint is a premise. -/
 theorem approve_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -215,12 +326,9 @@ theorem approve_bytecode_refines_source {K : WriterKey → Prop} {current : Chec
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
       ∃ residual, ApproveSourceResult K current invocation sevm b post residual := by
-  obtain ⟨value, size, guard, nonstatic, residual, eq⟩ :=
-    approve_bytecode_refines_raw codeEq fork selector run
-  refine ⟨value, (approve_word_guards_iff representable).mp ⟨size, guard⟩,
-    nonstatic, residual, ?_⟩
-  rw [eq]
-  exact approve_public_source_result rep fresh value nonstatic
+  simpa only [ApproveSourceResultH_of_covered fork] using
+    approve_bytecode_refines_sourceH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 /-- Existing handler acceptance yields exact raw gas with the actual selected-store sentry. -/
 theorem approve_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpoint}
@@ -250,6 +358,38 @@ theorem approve_source_bytecode_exact {K : WriterKey → Prop} {current : Checkp
     approve_bytecode_live_raw codeEq fork value size selector guard cost sentry nonstatic,
     frameEq, dataEq, approve_public_source_result rep fresh value nonstatic⟩
 
+theorem approve_bytecode_exact_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, ApproveSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := approveSourceFrame current (writerContext sevm invocation)
+              (approveSpender sevm) (approveAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result⟩ :=
+    approve_bytecode_refines_sourceH rep fresh representable codeEq stateGas bal selector run
+  have accepted := result.2.2.1
+  have output := result.2.2.2.2.2.2.2.2.1
+  have typed : startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm) =
+      .finished (approveSourceFrame current (writerContext sevm invocation)
+        (approveSpender sevm) (approveAmount sevm)) post.output := by
+    unfold startTyped
+    rw [accepted]
+    dsimp only []
+    rw [← output]
+  refine ⟨value, size, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (approveSourceFrame current (writerContext sevm invocation)
+    (approveSpender sevm) (approveAmount sevm)) post.output
+
 /-- Successful raw pc0 execution derives exact consumption for the typed approve entry. -/
 theorem approve_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -266,20 +406,8 @@ theorem approve_bytecode_exact_consumes {K : WriterKey → Prop} {current : Chec
             frame := approveSourceFrame current (writerContext sevm invocation)
               (approveSpender sevm) (approveAmount sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, size, nonstatic, residual, result⟩ :=
-    approve_bytecode_refines_source rep fresh representable codeEq fork selector run
-  have accepted := result.2.2.1
-  have output := result.2.2.2.2.2.2.2.2.1
-  have typed : startTyped current (writerContext sevm invocation) (approveDecodedEntry sevm) =
-      .finished (approveSourceFrame current (writerContext sevm invocation)
-        (approveSpender sevm) (approveAmount sevm)) post.output := by
-    unfold startTyped
-    rw [accepted]
-    dsimp only []
-    rw [← output]
-  refine ⟨value, size, nonstatic, residual, result, ?_⟩
-  rw [typed]
-  exact ExactConsumes.finished (approveSourceFrame current (writerContext sevm invocation)
-    (approveSpender sevm) (approveAmount sevm)) post.output
+  simpa only [ApproveSourceResultH_of_covered fork] using
+    approve_bytecode_exact_consumesH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 end Blanc.Lift.UniswapV2Pair

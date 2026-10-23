@@ -1,5 +1,6 @@
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.CodeSizeWalk
+import Blanc.Lift.WalkSteps
 import Blanc.ForwardStorageAccess
 
 /-!
@@ -12,7 +13,9 @@ successor under the actual access schedule and inverts the step from the two rul
 reads, `rules.bal = none` and the access schedule itself; no fork list is assumed.
 
 * `afterSloadH` — `afterSload` under EIP-2929, the base unchanged under flat access;
-  `afterSloadH_of_eip2929`, `afterSloadH_getStor`, `afterSloadH_logs`;
+  `afterSloadH_of_eip2929`, `afterSloadH_getStor`, `afterSloadH_logs`, `afterSloadH_output`,
+  `getStorVal_afterSloadH`, `getStorVal_afterStoreH`, and the storage-walk steps
+  `StorStep.sloadH`/`StorStep.sstoreH`;
 * `ri_sloadH` — `SLOAD`, inverted, under `rules.bal = none` only;
 * `afterSstoreH` — the `SSTORE` successor under the actual access schedule and refund regime
   (`sstoreRefundH`: legacy, flat net-metered `sstoreFlatRefundCounter`, or EIP-2929
@@ -177,6 +180,38 @@ theorem afterSloadH_setMach {sevm : Sevm} {base : Devm} {mach : Mach} {key : B25
   split
   · exact afterSload_setMach
   · rfl
+
+theorem afterSloadH_output (sevm : Sevm) (base : Devm) (key : B256) :
+    (afterSloadH sevm base key).output = base.output := by
+  unfold afterSloadH
+  split
+  · exact afterSload_output sevm base key
+  · rfl
+
+theorem getStorVal_afterSloadH {sevm : Sevm} {b : Devm} {k : B256} {a : Adr} {x : B256} :
+    (afterSloadH sevm b k).getStorVal a x = b.getStorVal a x := by
+  show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
+  rw [afterSloadH_getStor]
+
+theorem getStorVal_afterStoreH {sevm : Sevm} {b : Devm} {k v key : B256} :
+    (afterSstoreH sevm (afterSloadH sevm b k) k v).getStorVal sevm.currentTarget key =
+      ((Devm.getStor b sevm.currentTarget).set k v).get key := by
+  show (Devm.getStor _ _).get _ = _
+  rw [afterSstoreH_getStor_self, afterSloadH_getStor]
+
+/-- `StorStep.sload` under the actual access schedule. -/
+theorem StorStep.sloadH {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k : B256) : StorStep sevm b (afterSloadH sevm b' k) s :=
+  ⟨by rw [afterSloadH_getStor, h.self],
+   fun a ha => by rw [afterSloadH_getStor, h.other a ha],
+   by rw [afterSloadH_logs, h.logs]⟩
+
+/-- `StorStep.sstore` under the actual access schedule and refund regime. -/
+theorem StorStep.sstoreH {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)
+    (k v : B256) : StorStep sevm b (afterSstoreH sevm b' k v) (s.set k v) :=
+  ⟨by rw [afterSstoreH_getStor_self, h.self],
+   fun a ha => by rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
+   by rw [afterSstoreH_logs, h.logs]⟩
 
 /-! ## Account access (`EXTCODESIZE`) -/
 

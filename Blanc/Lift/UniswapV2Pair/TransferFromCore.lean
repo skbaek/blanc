@@ -12,6 +12,17 @@ def transferFromJoinPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
   St (transferCoreBase sevm b owner recipient amount) (1 :: R)
     (transferCoreMemory M owner recipient amount) G
 
+def transferFromJoinPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
+  St (transferCoreBaseH sevm b owner recipient amount) (1 :: R)
+    (transferCoreMemory M owner recipient amount) G
+
+theorem transferFromJoinPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount : B256) (G : Nat) :
+    transferFromJoinPostH sevm b R M owner recipient amount G = transferFromJoinPost sevm b R M owner recipient amount G := by
+  unfold transferFromJoinPostH transferFromJoinPost
+  simp only [transferCoreBaseH_of_covered fork]
+
 /-- Both allowance branches consume this literal join; no caller bypass is introduced. -/
 theorem transferFrom_join_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G sourceCost debitCost loadCost creditCost : Nat} {owner recipient : Adr} {amount τ ρ : B256}
@@ -63,15 +74,16 @@ theorem transferFrom_join_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   exact rx_ret
 
 
-theorem transferFrom_join_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transferFrom_join_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount τ ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_0ee8_c10 o) :
     amount ≤ transferSourceWord sevm b owner ∧ sevm.isStatic = false ∧
-      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot owner))
+      (transferRecipientWordH sevm (afterSloadH sevm b (transferBalanceSlot owner))
         owner recipient (transferSourceWord sevm b owner - amount)).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferFromJoinPost sevm b R M owner recipient amount residual) := by
+      ∃ residual, o = .returned (transferFromJoinPostH sevm b R M owner recipient amount residual) := by
   have h := run.cut
   unfold t_0ee8_c10 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -87,7 +99,7 @@ theorem transferFrom_join_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, call⟩ := ric_call (g := t_260b_c61) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
-  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_inv fork mem core
+  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
     unfold t_0ef3_c10 at tail
     obtain ⟨_, tail⟩ := ric_dest tail
@@ -109,17 +121,50 @@ theorem transferFrom_join_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     obtain ⟨_, rfl⟩ := ri_pop hd
     obtain ⟨residual, result⟩ := ric_ret tail
     exact ⟨cover, nonstatic, nowrap, residual, Seg.done.inj result⟩
-  · obtain ⟨_, _, _, _, eq⟩ := transfer61_inv fork mem core
+  · obtain ⟨_, _, _, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
+
+theorem transferFrom_join_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {owner recipient : Adr} {amount τ ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_0ee8_c10 o) :
+    amount ≤ transferSourceWord sevm b owner ∧ sevm.isStatic = false ∧
+      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot owner))
+        owner recipient (transferSourceWord sevm b owner - amount)).toNat + amount.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (transferFromJoinPost sevm b R M owner recipient amount residual) := by
+  simpa only [transferFromJoinPostH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    transferFrom_join_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 def transferFromStoreBase (sevm : Sevm) (b : Devm) (owner : Adr) (reduced : B256) : Devm :=
   afterSstore sevm b (transferFromAllowanceSlot owner sevm.caller) reduced
 
+def transferFromStoreBaseH (sevm : Sevm) (b : Devm) (owner : Adr) (reduced : B256) : Devm :=
+  afterSstoreH sevm b (transferFromAllowanceSlot owner sevm.caller) reduced
+
+theorem transferFromStoreBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner : Adr) (reduced : B256) :
+    transferFromStoreBaseH sevm b owner reduced = transferFromStoreBase sevm b owner reduced := by
+  unfold transferFromStoreBaseH transferFromStoreBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def transferFromStorePost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount reduced : B256) (G : Nat) : Devm :=
   transferFromJoinPost sevm (transferFromStoreBase sevm b owner reduced) R
     (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount G
+
+def transferFromStorePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount reduced : B256) (G : Nat) : Devm :=
+  transferFromJoinPostH sevm (transferFromStoreBaseH sevm b owner reduced) R
+    (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount G
+
+theorem transferFromStorePostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount reduced : B256) (G : Nat) :
+    transferFromStorePostH sevm b R M owner recipient amount reduced G = transferFromStorePost sevm b R M owner recipient amount reduced G := by
+  unfold transferFromStorePostH transferFromStorePost
+  simp only [transferFromJoinPostH_of_covered fork, transferFromStoreBaseH_of_covered fork]
 
 /-- The finite allowance store emits no event and precedes the sequential balance transfer. -/
 theorem transferFrom_store_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -218,19 +263,20 @@ theorem transferFrom_store_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : M
     debitSentry creditSentry nonstatic cover nowrap room
 
 
-theorem transferFrom_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transferFrom_store_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount reduced τ ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (reduced :: τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_0eb6_c48 o) :
-    amount ≤ transferSourceWord sevm (transferFromStoreBase sevm b owner reduced) owner ∧
+    amount ≤ transferSourceWord sevm (transferFromStoreBaseH sevm b owner reduced) owner ∧
       sevm.isStatic = false ∧
-      (transferRecipientWord sevm
-        (afterSload sevm (transferFromStoreBase sevm b owner reduced) (transferBalanceSlot owner))
-        owner recipient (transferSourceWord sevm (transferFromStoreBase sevm b owner reduced) owner - amount)).toNat +
+      (transferRecipientWordH sevm
+        (afterSloadH sevm (transferFromStoreBaseH sevm b owner reduced) (transferBalanceSlot owner))
+        owner recipient (transferSourceWord sevm (transferFromStoreBaseH sevm b owner reduced) owner - amount)).toNat +
           amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferFromStorePost sevm b R M owner recipient amount reduced residual) := by
+      ∃ residual, o = .returned (transferFromStorePostH sevm b R M owner recipient amount reduced residual) := by
   have m1 := approveOwnerMemory_ptr mem owner.toB256
   have m3 := approveScratch_ptr mem owner.toB256 sevm.caller.toB256
   dsimp only [approveScratch, approveOwnerMemory] at m1 m3
@@ -309,8 +355,25 @@ theorem transferFrom_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem
   rw [m3.read_self (by decide : 0 + 64 ≤ 96), read2] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
-  exact transferFrom_join_inv fork (approveScratch_ptr mem owner.toB256 sevm.caller.toB256) h.uncut
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
+  exact transferFrom_join_invH stateGas bal (approveScratch_ptr mem owner.toB256 sevm.caller.toB256) h.uncut
+
+theorem transferFrom_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {owner recipient : Adr} {amount reduced τ ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (reduced :: τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
+      t_0eb6_c48 o) :
+    amount ≤ transferSourceWord sevm (transferFromStoreBase sevm b owner reduced) owner ∧
+      sevm.isStatic = false ∧
+      (transferRecipientWord sevm
+        (afterSload sevm (transferFromStoreBase sevm b owner reduced) (transferBalanceSlot owner))
+        owner recipient (transferSourceWord sevm (transferFromStoreBase sevm b owner reduced) owner - amount)).toNat +
+          amount.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (transferFromStorePost sevm b R M owner recipient amount reduced residual) := by
+  simpa only [transferFromStoreBaseH_of_covered fork, transferFromStorePostH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    transferFrom_store_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 def transferFromAllowanceWord (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
@@ -319,11 +382,32 @@ def transferFromAllowanceWord (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
 def transferFromSecondBase (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
   afterSload sevm b (transferFromAllowanceSlot owner sevm.caller)
 
+def transferFromSecondBaseH (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
+  afterSloadH sevm b (transferFromAllowanceSlot owner sevm.caller)
+
+theorem transferFromSecondBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner : Adr) :
+    transferFromSecondBaseH sevm b owner = transferFromSecondBase sevm b owner := by
+  unfold transferFromSecondBaseH transferFromSecondBase
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 def transferFromFinitePost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
   transferFromStorePost sevm (transferFromSecondBase sevm b owner) R
     (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount
     (transferFromAllowanceWord sevm b owner - amount) G
+
+def transferFromFinitePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
+  transferFromStorePostH sevm (transferFromSecondBaseH sevm b owner) R
+    (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount
+    (transferFromAllowanceWord sevm b owner - amount) G
+
+theorem transferFromFinitePostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount : B256) (G : Nat) :
+    transferFromFinitePostH sevm b R M owner recipient amount G = transferFromFinitePost sevm b R M owner recipient amount G := by
+  unfold transferFromFinitePostH transferFromFinitePost
+  simp only [transferFromSecondBaseH_of_covered fork, transferFromStorePostH_of_covered fork]
 
 /-- The finite arm actually loads allowance again before checked subtraction and its store. -/
 theorem transferFrom_finite_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -433,20 +517,21 @@ theorem transferFrom_finite_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
   exact transferFrom_store_exact fork m3 allowanceEq allowanceSentry sourceEq debitEq loadEq creditEq
     debitSentry creditSentry nonstatic cover nowrap room
 
-theorem transferFrom_finite_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transferFrom_finite_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount τ ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_0e76_c48 o) :
     amount ≤ transferFromAllowanceWord sevm b owner ∧
-      amount ≤ transferSourceWord sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner ∧
+      amount ≤ transferSourceWord sevm (transferFromStoreBaseH sevm (transferFromSecondBaseH sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner ∧
       sevm.isStatic = false ∧
-      (transferRecipientWord sevm
-        (afterSload sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) (transferBalanceSlot owner))
-        owner recipient (transferSourceWord sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner - amount)).toNat +
+      (transferRecipientWordH sevm
+        (afterSloadH sevm (transferFromStoreBaseH sevm (transferFromSecondBaseH sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) (transferBalanceSlot owner))
+        owner recipient (transferSourceWord sevm (transferFromStoreBaseH sevm (transferFromSecondBaseH sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner - amount)).toNat +
           amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferFromFinitePost sevm b R M owner recipient amount residual) := by
+      ∃ residual, o = .returned (transferFromFinitePostH sevm b R M owner recipient amount residual) := by
   have m1 := approveOwnerMemory_ptr mem owner.toB256
   have m3 := approveScratch_ptr mem owner.toB256 sevm.caller.toB256
   dsimp only [approveScratch, approveOwnerMemory] at m1 m3
@@ -524,7 +609,7 @@ theorem transferFrom_finite_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   rw [m3.read_self (by decide : 0 + 64 ≤ 96), read2] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -541,15 +626,42 @@ theorem transferFrom_finite_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨allowanceCover, _, eq⟩ := sub59_inv checked
     cases eq
-    obtain ⟨cover, nonstatic, nowrap, residual, result⟩ := transferFrom_store_inv fork
+    obtain ⟨cover, nonstatic, nowrap, residual, result⟩ := transferFrom_store_invH stateGas bal
       (approveScratch_ptr mem owner.toB256 sevm.caller.toB256) tail.uncut
     exact ⟨allowanceCover, cover, nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
 
+theorem transferFrom_finite_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {owner recipient : Adr} {amount τ ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (τ :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
+      t_0e76_c48 o) :
+    amount ≤ transferFromAllowanceWord sevm b owner ∧
+      amount ≤ transferSourceWord sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner ∧
+      sevm.isStatic = false ∧
+      (transferRecipientWord sevm
+        (afterSload sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) (transferBalanceSlot owner))
+        owner recipient (transferSourceWord sevm (transferFromStoreBase sevm (transferFromSecondBase sevm b owner) owner (transferFromAllowanceWord sevm b owner - amount)) owner - amount)).toNat +
+          amount.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (transferFromFinitePost sevm b R M owner recipient amount residual) := by
+  simpa only [transferFromFinitePostH_of_covered fork, transferFromSecondBaseH_of_covered fork, transferFromStoreBaseH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    transferFrom_finite_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
 
 def transferFromFirstBase (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
   afterSload sevm b (transferFromAllowanceSlot owner sevm.caller)
+
+def transferFromFirstBaseH (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
+  afterSloadH sevm b (transferFromAllowanceSlot owner sevm.caller)
+
+theorem transferFromFirstBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner : Adr) :
+    transferFromFirstBaseH sevm b owner = transferFromFirstBase sevm b owner := by
+  unfold transferFromFirstBaseH transferFromFirstBase
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
 
 /-- The literal common prefix is consumed by both actual allowance continuations. -/
 theorem transferFrom_prefix_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -757,12 +869,47 @@ def TransferFrom48Result (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     ∃ residual, o = .returned (transferFromFinitePost sevm (transferFromFirstBase sevm b owner) R
       (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount residual))
 
-theorem transferFrom48_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+def TransferFrom48ResultH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount : B256) (o : Outcome) : Prop :=
+  (transferFromAllowanceWord sevm b owner = B256.max ∧
+    amount ≤ transferSourceWord sevm (transferFromFirstBaseH sevm b owner) owner ∧
+    sevm.isStatic = false ∧
+    (transferRecipientWordH sevm (afterSloadH sevm (transferFromFirstBaseH sevm b owner) (transferBalanceSlot owner))
+      owner recipient (transferSourceWord sevm (transferFromFirstBaseH sevm b owner) owner - amount)).toNat +
+        amount.toNat < 2 ^ 256 ∧
+    ∃ residual, o = .returned (transferFromJoinPostH sevm (transferFromFirstBaseH sevm b owner) R
+      (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount residual)) ∨
+  (transferFromAllowanceWord sevm b owner ≠ B256.max ∧
+    amount ≤ transferFromAllowanceWord sevm (transferFromFirstBaseH sevm b owner) owner ∧
+    amount ≤ transferSourceWord sevm
+      (transferFromStoreBaseH sevm (transferFromSecondBaseH sevm (transferFromFirstBaseH sevm b owner) owner)
+        owner (transferFromAllowanceWord sevm (transferFromFirstBaseH sevm b owner) owner - amount)) owner ∧
+    sevm.isStatic = false ∧
+    (transferRecipientWordH sevm
+      (afterSloadH sevm (transferFromStoreBaseH sevm
+        (transferFromSecondBaseH sevm (transferFromFirstBaseH sevm b owner) owner)
+        owner (transferFromAllowanceWord sevm (transferFromFirstBaseH sevm b owner) owner - amount))
+        (transferBalanceSlot owner)) owner recipient
+      (transferSourceWord sevm (transferFromStoreBaseH sevm
+        (transferFromSecondBaseH sevm (transferFromFirstBaseH sevm b owner) owner)
+        owner (transferFromAllowanceWord sevm (transferFromFirstBaseH sevm b owner) owner - amount)) owner - amount)).toNat +
+        amount.toNat < 2 ^ 256 ∧
+    ∃ residual, o = .returned (transferFromFinitePostH sevm (transferFromFirstBaseH sevm b owner) R
+      (approveScratch M owner.toB256 sevm.caller.toB256) owner recipient amount residual))
+
+theorem TransferFrom48ResultH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount : B256) (o : Outcome) :
+    TransferFrom48ResultH sevm b R M owner recipient amount o = TransferFrom48Result sevm b R M owner recipient amount o := by
+  unfold TransferFrom48ResultH TransferFrom48Result
+  simp only [transferFromFinitePostH_of_covered fork, transferFromFirstBaseH_of_covered fork, transferFromJoinPostH_of_covered fork, transferFromSecondBaseH_of_covered fork, transferFromStoreBaseH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
+theorem transferFrom48_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_0e1e_c48 o) :
-    TransferFrom48Result sevm b R M owner recipient amount o := by
+    TransferFrom48ResultH sevm b R M owner recipient amount o := by
   have m1 := approveOwnerMemory_ptr mem owner.toB256
   have m3 := approveScratch_ptr mem owner.toB256 sevm.caller.toB256
   dsimp only [approveScratch, approveOwnerMemory] at m1 m3
@@ -841,7 +988,7 @@ theorem transferFrom48_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rw [m3.read_self (by decide : 0 + 64 ≤ 96), read2] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -856,7 +1003,7 @@ theorem transferFrom48_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       have impossible : (1 : B256) = 0 := zero
       exact (by decide : (1 : B256) ≠ 0) impossible
     right
-    obtain ⟨allowed, cover, nonstatic, nowrap, residual, result⟩ := transferFrom_finite_inv fork
+    obtain ⟨allowed, cover, nonstatic, nowrap, residual, result⟩ := transferFrom_finite_invH stateGas bal
       (approveScratch_ptr mem owner.toB256 sevm.caller.toB256) finite.uncut
     exact ⟨different, allowed, cover, nonstatic, nowrap, residual, result⟩
   · have same : transferFromAllowanceWord sevm b owner = B256.max := by
@@ -864,8 +1011,18 @@ theorem transferFrom48_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       change B256.eqCheck B256.max (transferFromAllowanceWord sevm b owner) ≠ 0 at nonzero
       exact nonzero (ite_eq_right (Ne.symm different))
     left
-    obtain ⟨cover, nonstatic, nowrap, residual, result⟩ := transferFrom_join_inv fork
+    obtain ⟨cover, nonstatic, nowrap, residual, result⟩ := transferFrom_join_invH stateGas bal
       (approveScratch_ptr mem owner.toB256 sevm.caller.toB256) maximal.uncut
     exact ⟨same, cover, nonstatic, nowrap, residual, result⟩
+
+theorem transferFrom48_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {owner recipient : Adr} {amount ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_0e1e_c48 o) :
+    TransferFrom48Result sevm b R M owner recipient amount o := by
+  simpa only [TransferFrom48ResultH_of_covered fork] using
+    transferFrom48_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 end Blanc.Lift.UniswapV2Pair

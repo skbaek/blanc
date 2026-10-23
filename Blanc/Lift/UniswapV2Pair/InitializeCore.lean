@@ -1,6 +1,7 @@
 import Blanc.AddressSlotProofs
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.ExactWalkSolc
 
 /-! The literal repeated factory initializer and its two packed address writes. -/
@@ -8,16 +9,64 @@ namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
 def initializeLoaded0 (sevm : Sevm) (b : Devm) : Devm := afterSload sevm b 6
+
+def initializeLoaded0H (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm b 6
+
+theorem initializeLoaded0H_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) :
+    initializeLoaded0H sevm b = initializeLoaded0 sevm b := by
+  unfold initializeLoaded0H initializeLoaded0
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 def initializeWord0 (sevm : Sevm) (b : Devm) (token0 : Adr) : B256 :=
   addressSlotWriteWord (b.getStorVal sevm.currentTarget 6) token0.toB256
 def initializeStored0 (sevm : Sevm) (b : Devm) (token0 : Adr) : Devm :=
   afterSstore sevm (initializeLoaded0 sevm b) 6 (initializeWord0 sevm b token0)
+
+def initializeStored0H (sevm : Sevm) (b : Devm) (token0 : Adr) : Devm :=
+  afterSstoreH sevm (initializeLoaded0H sevm b) 6 (initializeWord0 sevm b token0)
+
+theorem initializeStored0H_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (token0 : Adr) :
+    initializeStored0H sevm b token0 = initializeStored0 sevm b token0 := by
+  unfold initializeStored0H initializeStored0
+  simp only [initializeLoaded0H_of_covered fork, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def initializeLoaded1 (sevm : Sevm) (b : Devm) (token0 : Adr) : Devm :=
   afterSload sevm (initializeStored0 sevm b token0) 7
+
+def initializeLoaded1H (sevm : Sevm) (b : Devm) (token0 : Adr) : Devm :=
+  afterSloadH sevm (initializeStored0H sevm b token0) 7
+
+theorem initializeLoaded1H_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (token0 : Adr) :
+    initializeLoaded1H sevm b token0 = initializeLoaded1 sevm b token0 := by
+  unfold initializeLoaded1H initializeLoaded1
+  simp only [initializeStored0H_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def initializeWord1 (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : B256 :=
   addressSlotWriteWord ((initializeStored0 sevm b token0).getStorVal sevm.currentTarget 7) token1.toB256
+
+def initializeWord1H (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : B256 :=
+  addressSlotWriteWord ((initializeStored0H sevm b token0).getStorVal sevm.currentTarget 7) token1.toB256
+
+theorem initializeWord1H_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (token0 token1 : Adr) :
+    initializeWord1H sevm b token0 token1 = initializeWord1 sevm b token0 token1 := by
+  unfold initializeWord1H initializeWord1
+  simp only [initializeStored0H_of_covered fork]
+
 def initializeWritesBase (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : Devm :=
   afterSstore sevm (initializeLoaded1 sevm b token0) 7 (initializeWord1 sevm b token0 token1)
+
+def initializeWritesBaseH (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : Devm :=
+  afterSstoreH sevm (initializeLoaded1H sevm b token0) 7 (initializeWord1H sevm b token0 token1)
+
+theorem initializeWritesBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (token0 token1 : Adr) :
+    initializeWritesBaseH sevm b token0 token1 = initializeWritesBase sevm b token0 token1 := by
+  unfold initializeWritesBaseH initializeWritesBase
+  simp only [initializeLoaded1H_of_covered fork, initializeWord1H_of_covered fork, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 /-- Exact execution of the actual two-write suffix, with both incoming store sentries. -/
 theorem initializeWrites_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -76,13 +125,13 @@ theorem initializeWrites_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_sstoreC fork costS1 (by omega) nonstatic ?_
   exact rx_ret
 
-/-- Any successful literal packed suffix derives nonstatic and its complete returned state. -/
-theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem initializeWrites_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0fb2_c45 o) :
     sevm.isStatic = false ∧ ∃ residual,
-      o = .returned (St (initializeWritesBase sevm b token0 token1) R M residual) := by
+      o = .returned (St (initializeWritesBaseH sevm b token0 token1) R M residual) := by
   have h := run.cut
   unfold t_0fb2_c45 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -91,7 +140,7 @@ theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
   rw [ff20_eq] at h
@@ -106,7 +155,7 @@ theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     addressSlotReadWord_toB256 token0] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
-  change SFunc.RunCut fs sevm [] (St (afterSload sevm b 6)
+  change SFunc.RunCut fs sevm [] (St (afterSloadH sevm b 6)
     (addressMask :: token0.toB256 :: b.getStorVal sevm.currentTarget 6 :: 6 :: token1.toB256 ::
       (~~~ addressMask) :: ρ :: R) M _) _ _ at h
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -125,14 +174,14 @@ theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   dsimp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   dsimp only [List.set] at h
@@ -151,23 +200,52 @@ theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   dsimp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_and hd
-  change SFunc.RunCut fs sevm [] (St (initializeLoaded1 sevm b token0)
-    (((initializeStored0 sevm b token0).getStorVal sevm.currentTarget 7 &&& addressMask) ::
+  change SFunc.RunCut fs sevm [] (St (initializeLoaded1H sevm b token0)
+    (((initializeStored0H sevm b token0).getStorVal sevm.currentTarget 7 &&& addressMask) ::
       token1.toB256 :: 7 :: ρ :: R) M _) _ _ at h
-  rw [B256.and_comm ((initializeStored0 sevm b token0).getStorVal sevm.currentTarget 7) addressMask] at h
+  rw [B256.and_comm ((initializeStored0H sevm b token0).getStorVal sevm.currentTarget 7) addressMask] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_or hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   dsimp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨residual, done⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj done⟩
 
+/-- Any successful literal packed suffix derives nonstatic and its complete returned state. -/
+theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0fb2_c45 o) :
+    sevm.isStatic = false ∧ ∃ residual,
+      o = .returned (St (initializeWritesBase sevm b token0 token1) R M residual) := by
+  simpa only [initializeWritesBaseH_of_covered fork] using
+    initializeWrites_invH fork.rules_stateGas_none fork.rules_bal_none run
+
+
 def initializeFactoryBase (sevm : Sevm) (b : Devm) : Devm := afterSload sevm b 5
+
+def initializeFactoryBaseH (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm b 5
+
+theorem initializeFactoryBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) :
+    initializeFactoryBaseH sevm b = initializeFactoryBase sevm b := by
+  unfold initializeFactoryBaseH initializeFactoryBase
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 def initializeCoreBase (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : Devm :=
   initializeWritesBase sevm (initializeFactoryBase sevm b) token0 token1
+
+def initializeCoreBaseH (sevm : Sevm) (b : Devm) (token0 token1 : Adr) : Devm :=
+  initializeWritesBaseH sevm (initializeFactoryBaseH sevm b) token0 token1
+
+theorem initializeCoreBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (token0 token1 : Adr) :
+    initializeCoreBaseH sevm b token0 token1 = initializeCoreBase sevm b token0 token1 := by
+  unfold initializeCoreBaseH initializeCoreBase
+  simp only [initializeFactoryBaseH_of_covered fork, initializeWritesBaseH_of_covered fork]
 
 /-- Actual factory comparison followed by the sequential selected storage charges. -/
 theorem initialize45_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -204,13 +282,13 @@ theorem initialize45_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_branch_succ (by decide : (1 : B256) ≠ 0) ?_
   exact initializeWrites_exact fork cost0 costS0 cost1 costS1 sentry0 sentry1 nonstatic room
 
-/-- Success derives the factory guard; arbitrary old token words and lock values are permitted. -/
-theorem initialize45_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem initialize45_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0f2c_c45 o) :
     sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, o = .returned (St (initializeCoreBase sevm b token0 token1) R M residual) := by
+      ∃ residual, o = .returned (St (initializeCoreBaseH sevm b token0 token1) R M residual) := by
   have h := run.cut
   unfold t_0f2c_c45 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -218,7 +296,7 @@ theorem initialize45_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, rfl⟩ := ri_push hd
   rw [show Bytes.toB256 [5] = (5 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_push hd
   rw [ff20_eq] at h
@@ -240,7 +318,18 @@ theorem initialize45_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
       exact nonzero (ite_eq_right different)
     have authorized : sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr := by
       simpa only [toAdr_toB256] using congrArg B256.toAdr same
-    obtain ⟨nonstatic, residual, done⟩ := initializeWrites_inv fork h.uncut
+    obtain ⟨nonstatic, residual, done⟩ := initializeWrites_invH stateGas bal h.uncut
     exact ⟨authorized, nonstatic, residual, done⟩
+
+/-- Success derives the factory guard; arbitrary old token words and lock values are permitted. -/
+theorem initialize45_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0f2c_c45 o) :
+    sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
+      ∃ residual, o = .returned (St (initializeCoreBase sevm b token0 token1) R M residual) := by
+  simpa only [initializeCoreBaseH_of_covered fork] using
+    initialize45_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 end Blanc.Lift.UniswapV2Pair
