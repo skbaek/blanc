@@ -118,6 +118,146 @@ theorem canonicalDeploymentStep_establishes_root
   · rw [← hstate]
     exact suffix.stable
 
+/-! ## Selected-fork configured deployment root -/
+
+/-- The exact official deployment witness at a successful transition under a
+supplied chain configuration. The configuration's lookup at the deployment
+block's own number and timestamp selects the covered fork whose rules execute
+the block. Every execution, receipt, code, storage, and Registry fact is
+reconstructed by the producer; the configured transition equation is its only
+premise about the named deployed chain. -/
+structure DeploymentRootAt
+    (cfg : ChainConfig) (base deployed : BlockChain) (ca : Adr) : Prop where
+  execution : ∃ (fork : Fork) (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+      (sender : Adr)
+      (ctx : PreparedDeploymentContextAt fork cfg.chainId base cb tx sender ca)
+      (post : State) (bout : BlockOutput),
+    CoveredFork fork ∧
+    cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork ∧
+    cfg.rulesAt cb.block.header.number cb.block.header.timestamp =
+      .ok (Fork.ruleSet fork) ∧
+    CanonicalDeploymentBase fork cfg.chainId base sender ca ∧
+    CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb txBytes tx
+      sender ca ∧
+    OfficialDeploymentTransactionResultAt fork cfg.chainId ca ctx post bout ∧
+    Nonempty (OfficialDeploymentSuffixResultAt fork cfg.chainId ca ctx post bout) ∧
+    stateTransitionUsing cfg base cb.block = .ok deployed ∧
+    stateTransitionAt fork base cb.block = .ok deployed ∧
+    applyBody (initBenv fork base cb.block.header)
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
+    post = deployed.state
+  configValid : cfg.Valid
+  target_ne_zero : ca ≠ 0
+  installed : some (deployed.state.getCode ca).toList =
+    Prog.compile (runtime officialParams)
+  pauseDuration : (deployed.state.getStor ca).get pauseDurationSlot =
+    officialConstructorArgs.initialPauseDuration
+  heartbeatInterval : (deployed.state.getStor ca).get heartbeatIntervalSlot =
+    officialConstructorArgs.initialHeartbeatInterval
+  emptyRegistry : RegistryWitness
+    (logicalStorageOfStor (deployed.state.getStor ca)) []
+  stable : RegistryStable officialParams ca deployed.state
+  deployed_validContext : deployed.ValidContext
+  deployed_chainId : cfg.chainId = deployed.chainId
+
+/-- A successful configured step over the strict official envelope, at the
+covered fork the configuration selects for the deployment block's own number
+and timestamp, establishes the selected-fork Lido deployment root. The
+schedule lookup and coverage are explicit; no execution, receipt, code,
+storage, or Registry fact is a premise. -/
+theorem canonicalDeploymentStepAt_establishes_root
+    (cfg : ChainConfig) (fork : Fork) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase fork cfg.chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb
+      txBytes tx sender ca)
+    (hfork : CoveredFork fork)
+    (hforkAt :
+      cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork)
+    (hstep : stateTransitionUsing cfg base cb.block = .ok deployed) :
+    DeploymentRootAt cfg base deployed ca := by
+  obtain ⟨ctx⟩ := prepareCanonicalDeploymentContextAt fork cfg.chainId base cb
+    tx sender ca hbase henv hfork
+  obtain ⟨post, bout, htx⟩ := canonicalDeploymentTransactionAt_succeeds fork
+    cfg.chainId base cb tx sender ca hbase henv ctx hfork
+  obtain ⟨suffix⟩ := canonicalDeploymentSuffixAt_succeeds fork cfg.chainId
+    base cb tx sender ca ctx post bout htx hfork
+  have happly : applyBody (initBenv fork base cb.block.header)
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
+    canonicalDeploymentApplyBodyAt_succeeds fork cfg.chainId base cb txBytes
+      tx sender ca henv hfork ctx post bout htx suffix
+  have hconfigValid : cfg.Valid := by
+    rw [ChainConfig.valid_iff]
+    unfold ChainConfig.forkAt at hforkAt
+    cases hv : cfg.validate with
+    | error e =>
+      rw [hv] at hforkAt
+      simp only [Except.mapError, bind, Except.bind] at hforkAt
+      cases hforkAt
+    | ok u => rfl
+  have hrulesAt : cfg.rulesAt cb.block.header.number cb.block.header.timestamp =
+      .ok (Fork.ruleSet fork) := by
+    unfold ChainConfig.rulesAt
+    rw [hforkAt]
+    exact hfork.cases
+      (motive := fun f =>
+        (do Except.mapError RulesLookupError.support (← (Except.ok f :
+          Except RulesLookupError Fork)).rules) = .ok (Fork.ruleSet f))
+      rfl rfl rfl rfl
+  have hwith : stateTransitionAt fork base cb.block = .ok deployed := by
+    have h := hstep
+    rw [stateTransitionUsing_eq_of_chainId_eq
+      (cfg := cfg) (ch := base) hbase.chainId_eq] at h
+    rw [hforkAt] at h
+    have hpowNone : (Fork.ruleSet fork).pow = none :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).pow = none) rfl rfl rfl rfl
+    simp only [Except.bind, Except.mapError] at h
+    rw [stateTransitionScheduledE_of_pow_none cfg fork base cb.block hpowNone] at h
+    exact h
+  have hstate : post = deployed.state := by
+    have hinvert := hwith
+    rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
+    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
+    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
+    dsimp only at hinvert
+    obtain ⟨⟨st, bout'⟩, hab, hinvert⟩ := Except.bind_eq_ok hinvert
+    rw [happly] at hab
+    obtain ⟨hst, hbout⟩ := Prod.mk.inj (Except.ok.inj hab)
+    subst st
+    subst bout'
+    dsimp only at hinvert
+    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
+    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
+    rw [← Except.ok.inj hinvert]
+  let checkedBase := CheckedBlockChain.ofValidContext hbase.validContext
+  have hwithChecked :
+      stateTransitionAt fork checkedBase.val cb.block = .ok deployed := by
+    change stateTransitionAt fork base cb.block = .ok deployed
+    exact hwith
+  have hcontext := BlockChain.validContext_of_transition
+    (cc := checkedBase) (cb := cb) hwithChecked
+  have hvalid : deployed.ValidContext := by
+    let checkedDeployed := CheckedBlockChain.ofEvidence deployed cb.block
+      hcontext.1 hcontext.2.1 hcontext.2.2.1 hcontext.2.2.2
+    exact checkedDeployed.validContext
+  have hchain : cfg.chainId = deployed.chainId :=
+    hbase.chainId_eq.trans (stateTransitionAt_preserves_chainId hwith).symm
+  refine ⟨?_, hconfigValid, hbase.target_ne_zero,
+    ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
+  · exact ⟨fork, cb, txBytes, tx, sender, ctx, post, bout, hfork, hforkAt,
+      hrulesAt, hbase, henv, htx, ⟨suffix⟩, hstep, hwith, happly, hstate⟩
+  · rw [← hstate]
+    exact htx.installed
+  · rw [← hstate]
+    exact htx.pauseDuration
+  · rw [← hstate]
+    exact htx.heartbeatInterval
+  · rw [← hstate]
+    exact htx.emptyRegistry
+  · rw [← hstate]
+    exact suffix.stable
+
 /-! ## Deployment-rooted configured histories -/
 
 /-- The deployed checkpoint itself is a configured reachable future. -/
