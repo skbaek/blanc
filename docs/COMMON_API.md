@@ -5981,6 +5981,20 @@ contract-neutral.
   [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
   steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
   [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
+  the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
+  `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
+  `cursor_branch_forwardH`, `cursor_next_call_occurrence_forwardH`, and the state cuts
+  `CursorStateAt.lineH`/`jumpH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/`callH`/
+  `retH`/`gotoH`) in
+  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean); source runs and
+  returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
+  (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
+  `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
+  (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
+  [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
+  and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
+  form there is the modern statement from `CoveredFork`;
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
