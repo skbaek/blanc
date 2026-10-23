@@ -1565,6 +1565,7 @@ import Blanc.Lift.RegionStor
 import Blanc.Lift.RunPWalk
 import Blanc.Lift.SolcStorageClear
 import Blanc.Lift.SolcStoragePayload
+import Blanc.Lift.SolcStringAllocation
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.ShuffleSkip

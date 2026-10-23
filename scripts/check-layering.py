@@ -336,6 +336,7 @@ SHARED += [
     "Lift.RunPWalk",
     "Lift.SolcStorageClear",
     "Lift.SolcStoragePayload",
+    "Lift.SolcStringAllocation",
     "Lift.SelectorRoute",
     "Lift.SettledFramePositions",
     "Lift.ShuffleSkip",

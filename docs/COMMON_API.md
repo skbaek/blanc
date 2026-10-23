@@ -5442,6 +5442,15 @@ contract-neutral.
   original `StepIn R` relation and outcome. They require no memory bounds,
   nonwrapping arithmetic or initial zero seed; whole-initializer coverage
   and historical execution remain separate obligations.
+  For a string allocation that stores a length header then copies bytes,
+  use [`Blanc/Lift/SolcStringAllocation.lean`](../Blanc/Lift/SolcStringAllocation.lean).
+  It derives the actual copy-window bound, preserved header and unwrapped
+  rounded next pointer from the actual header/copy memory equations and
+  poststate memory potential. The empty-copy case uses the header store's
+  size bound. Earlier recorded words below the header survive without a
+  memory-well-formedness premise. The consumer must still derive the actual
+  wrapper stacks, intermediate memory equality and initial potential; this
+  facility does not assert a complete ABI decoder or historical execution.
   For the source-shaped memory-to-storage payload loop, use
   [`Blanc/Lift/SolcStoragePayload.lean`](../Blanc/Lift/SolcStoragePayload.lean).
   `runP_enriched` retains the actual step relation, entry state and outcome,
