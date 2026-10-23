@@ -5959,7 +5959,13 @@ contract-neutral.
   on a historical fork, where the access schedule may be flat (Istanbul, Muir Glacier)
   rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
   successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
-  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`, in
+  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`; invert
+  `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
+  `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
+  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the
+  frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
+  `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
+  `_covered` form recovers the modern statement, all in
   [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
