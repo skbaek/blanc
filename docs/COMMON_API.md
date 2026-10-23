@@ -6308,8 +6308,14 @@ contract-neutral.
   derives the implementation-slot write, admin-slot write using the actual
   caller, returned runtime window, and preservation of every other account's
   storage. Its internal-callee inversions consume actual successful runs and
-  work without a fork restriction. Bytecode lifting, code installation and
-  historical execution remain separate obligations.
+  work without a fork restriction. `ProxyCreation.constructor_message_zero` in
+  [`Blanc/Lift/Usdc/ProxyCreation/Settlement.lean`](../Blanc/Lift/Usdc/ProxyCreation/Settlement.lean)
+  composes the actual zero-value CREATE entry, the source constructor run at
+  that same entry and raw result, and successful touch/code-charge settlement.
+  A row distinct from both literal slots is zero in the installed result,
+  including the empty-account deletion branch of code installation. Actual
+  bytecode-to-source lifting, historical occurrence and transaction settlement
+  remain separate obligations; the local source run is an explicit premise.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry

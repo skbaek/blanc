@@ -1424,6 +1424,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxyCreation.ConstantsCheck",
         "Lift.Usdc.ProxyCreation.Prefix",
         "Lift.Usdc.ProxyCreation.Effects",
+        "Lift.Usdc.ProxyCreation.Settlement",
         "Lift.Usdc.ProxyForward",
         "Lift.Usdc.ProxyHalt",
         "Lift.Usdc.ProxyOk",
