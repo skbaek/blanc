@@ -1323,7 +1323,11 @@ and constructor families cover every modelled wrapper layer:
   `TransactionTrace`, `exists_transactionTrace`, and
   `TransactionTrace.exists_finalStateForm` retain the whole transaction.
   `transactionTenv` follows the selected rules' coinbase-warming flag;
-  the final-state form's covered-fork premise supplies refund quotient 5
+  `TransactionTrace.exists_selectedFinalStateForm` is the selected inversion
+  beside `exists_finalStateForm`: it runs under the actual
+  `stateGas = none` antecedent, routes the gas/refund/coinbase expressions
+  through the semantic `settleTransactionGas`, and keeps the touched sweep
+  symbolic. The older form's covered-fork premise supplies refund quotient 5
   and the absence of a touched-account sweep.
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
