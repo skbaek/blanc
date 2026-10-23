@@ -5996,6 +5996,47 @@ contract-neutral.
   `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
   (`ric_branchTo`), internal calls (`ric_call`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  on a historical fork, where the access schedule may be flat (Istanbul, Muir Glacier)
+  rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
+  successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
+  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`/
+  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH` and the storage-walk
+  steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
+  `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
+  `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
+  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the
+  frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
+  `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
+  `_covered` form recovers the modern statement, all in
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); invert a
+  `STATICCALL` to an arbitrary callee from `rules.stateGas = none` alone with
+  `ri_staticcall_boundedH`/`ri_staticcallH`/`rx_staticcallH` (answer `StaticAnsweredH`, code
+  resolution `CallCodeH` under the actual delegation flag), the step/run inversions
+  `of_step_staticcall_val_with_depth_frame_causeH`/`of_run_staticcall_val_with_depth_causeH`,
+  quiet steps with `Ninst.world_of_quietH`, static log preservation with
+  `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
+  committed post by `Execution.committedPost_of_okFact`), and the return-data bounds
+  `ReturnDataBound.staticcall_returnData_length_ltH`/`call_returnData_length_ltH`; the
+  `_covered`/`of_covered` forms recover the modern statements; the value-carrying `CALL`
+  inversions `of_step_call_val_with_depth_frameH`/`of_run_call_val_with_depth_frameH` and the
+  caller-visible `ri_call_postH`, all in
+  [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
+  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
+  [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
+  the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
+  `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
+  `cursor_branch_forwardH`, `cursor_next_call_occurrence_forwardH`, and the state cuts
+  `CursorStateAt.lineH`/`jumpH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/`callH`/
+  `retH`/`gotoH`) in
+  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean); source runs and
+  returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
+  (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
+  `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
+  (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
+  [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
+  and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
+  form there is the modern statement from `CoveredFork`;
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

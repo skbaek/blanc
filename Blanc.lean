@@ -1717,3 +1717,10 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 import Blanc.Lift.UniswapV2Pair.SkimForwardKept
 import Blanc.Lift.Usdc.HistoryEnd
 import Blanc.Lift.Usdc.HistoryEndFoot
+
+import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistStaticCall
+import Blanc.Lift.HistStaticCallGuard
+import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistCursorCalls
