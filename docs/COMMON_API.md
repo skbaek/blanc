@@ -1578,6 +1578,11 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
 - [`Blanc/ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean)
   for transaction refund, coinbase, deletion, and
   `TransactionStateChronology` boundaries;
+- [`Blanc/ExecutionSelectedTransactionStateTrace.lean`](../Blanc/ExecutionSelectedTransactionStateTrace.lean)
+  for the selected transaction refund, coinbase, deletion, and touched-sweep
+  `SelectedTransactionStateChronology` boundaries under
+  `stateGas = none` (selected gas/refund/tip via semantic
+  `settleTransactionGas`; sweep suffix empty when the rules do not sweep);
 - [`Blanc/ExecutionBodyStateTrace.lean`](../Blanc/ExecutionBodyStateTrace.lean)
   for system messages, transaction lists, direct withdrawals, requests, and
   `AppliedBodyStateChronology`;

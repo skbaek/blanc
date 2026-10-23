@@ -29,6 +29,7 @@ import Blanc.ExecutionPath
 import Blanc.ExecutionPathLocator
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
+import Blanc.ExecutionSelectedTransactionStateTrace
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
