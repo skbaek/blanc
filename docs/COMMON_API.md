@@ -2134,6 +2134,22 @@ a protected target executing arbitrary code.
   reliable single goal-head recipe distinguishing these premise-specific NoDel
   routes; use this branch and the named step declaration. The existing
   `xinst-step-shape` recipe selects only the decomposition donor.
+- Raw-certificate no-deletion over the driver tree:
+  [`Blanc/ExecutionDeletionSafety.lean`](../Blanc/ExecutionDeletionSafety.lean).
+  `Exec.inv_noDel_of_raw_terminal_safe` concludes `Execution.NoDel` for a
+  complete `Exec` run from the input `Devm.NoDel`, `stateGas = none`, and a
+  decoded terminal exclusion at every actual reached node in the executing
+  storage context (`node.sevm.currentTarget = wa → ¬ Linst.At ... .selfdestruct`
+  over `Exec.rawNodes`). The certificate is indexed by the selected run's own
+  reached nodes, never by retained or committed nodes; the six-constructor
+  induction builds the child `Xlot.InvNoDel` obligation instead of assuming a
+  recursive oracle. It needs no fresh-entry, successful-outcome, modern
+  `CoveredFork`, actual/world code equality, or new opcode-availability premise.
+  The concrete protected-runtime or routing producer of the `safe` certificate
+  is a mandatory separate obligation, as are message/inherited-deletion
+  closure, historical contract/history invariants, and global candidate
+  readiness. No recipe is registered: the reducible NoDel conclusion does not
+  uniquely distinguish this route, so use this branch and the named theorem.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the

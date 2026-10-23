@@ -64,6 +64,7 @@ import Blanc.ExecutionWarmth
 import Blanc.ExecutionErrorKeep
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
+import Blanc.ExecutionDeletionSafety
 import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionReachable
