@@ -39,7 +39,12 @@ jobs:
     # cancelled the job, and a toolchain/mathlib/Jaune bump is fully cold.
     # Raised to 180 by user decision lean-4-35-blanc-ci-timeout-180; no gate
     # was removed, and warm runs are unaffected.
-    timeout-minutes: 180
+    # Raised to 300 by user decision blanc-ci-cold-timeout-300-20261024: the
+    # first run after the Jaune historical-forks pin (main a5d274f0, run
+    # 39997414303) built for ~2 h 44 min cold and was cancelled at 180 inside
+    # the union axiom walk. The explicit cache save after the heavy build steps
+    # below keeps a cold run from repeating when a later step fails.
+    timeout-minutes: 300
 
     steps:
       - uses: actions/checkout@v6
@@ -140,6 +145,17 @@ jobs:
       # certificate covers every Blanc/** module, so build them explicitly too.
       - name: Build the write-site checker tops
         run: lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality
+      # lean-action saves .lake only when the whole job succeeds, so a cold
+      # build lost to a later failure or timeout was rebuilt from scratch by
+      # the next run. Save it here, after the heavy build steps (the authoring
+      # leaf below is small, and certification must follow it directly), under
+      # lean-action's own key scheme so the next run restores it; lean-action's
+      # end-of-job save then finds the key present and skips.
+      - name: Save the built .lake cache
+        uses: actions/cache/save@v4
+        with:
+          path: ./.lake
+          key: lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ github.sha }}
       # The proof-recipe authoring leaf (which imports its generated registry)
       # is deliberately unreachable from Blanc.lean, so the default build never
       # produces their oleans, but scripts/check.sh --no-build elaborates
