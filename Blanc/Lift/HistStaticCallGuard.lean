@@ -9,9 +9,9 @@ import Blanc.ExecutionEntryAccounting
 steps from `rules.stateGas = none` alone, through `ri_staticcall_boundedH`/`rx_staticcallH`;
 `staticCallGuard_invPH_covered` recovers the modern conclusion.
 
-A static child's entry under the same rule fact: `Xinst.step_spawn_worldH`,
-`Evm.step_spawn_child_worldH` (the child opens on the parent's world) and
-`Evm.step_spawn_child_dataH` (short calldata, and the parent's rule facts in the child).
+A static child's entry under the two rule facts: `Evm.step_spawn_child_dataH` (short calldata,
+and the parent's rule facts in the child); the child's opening world is
+`Evm.step_spawn_child_world_noStateGas`.
 
 Nothing here mentions a contract.
 -/
@@ -134,77 +134,6 @@ namespace Blanc
 
 open Jaune
 
-/-- `Xinst.step_spawn_world` from `rules.stateGas = none`: the ordinary-lane shape
-(`Xinst.step_shapeNoStateGas`) in place of the covered-fork shape. -/
-theorem Xinst.step_spawn_worldH {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {f : Frame} {rsm : Resume} (hsg : sevm.benvStat.rules.stateGas = none)
-    (hs : Xinst.step sevm devm x = .spawn f rsm) {a : Adr} (ha : devm.getCode a ≠ .empty) :
-    f.inner.benv.state.getStor a = devm.state.getStor a ∧
-      f.inner.benv.state.bal = devm.state.bal := by
-  rcases Xinst.step_shapeNoStateGas sevm devm x hsg with ⟨ex, hsh, -⟩ |
-    ⟨d, e, na, mi, ms, hf, hsh⟩ |
-    ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
-      hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
-  · cases hs
-  · have hcode := (genericCreate.step_spawn_frame hs)
-    have creatorNonce := UInt64.add_one_ne_zero_of_ne_max
-      (genericCreate_step_spawn_nonce_ne_max hs)
-    simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-      assertDynamic, Pure.pure, Except.pure] at hs
-    repeat' split at hs
-    all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
-    all_goals obtain ⟨rfl, -⟩ := hs
-    have hna : na ≠ a := by
-      rintro rfl
-      exact ha ((hf.getCode na).trans hcode.2.2)
-    refine ⟨?_, ?_⟩
-    · simp only [Frame.ofCreate]
-      dsimp only [createMsg, processCreateMessage.msg, Msg.withBenv, Benv.setStor,
-        addCreatedAccount, Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
-      rw [State.incrNonce_get_stor, ite_eq_right (fun empty => hna empty.1),
-        State.setStor_get_stor_ne hna, addAccessedAddress_state]
-      show ((((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData []).state.incrNonce
-        sevm.currentTarget).get a).stor = _
-      rw [State.incrNonce_get_stor, ite_eq_right (fun empty => creatorNonce empty.2.2.1)]
-      exact congrArg (fun w : Jaune.State => (w.get a).stor) hf.state.symm
-    · simp only [Frame.ofCreate]
-      rw [Jaune.processCreateMessage_msg_bal_eq]
-      show (addAccessedAddress _ na).state.bal = _
-      rw [addAccessedAddress_state]
-      show (((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData []).state.incrNonce
-        sevm.currentTarget).bal = _
-      rw [State.incrNonce_bal]
-      exact congrArg Jaune.State.bal hf.state.symm
-  · simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
-      Except.pure] at hs
-    repeat' split at hs
-    all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hs
-    all_goals obtain ⟨rfl, -⟩ := hs
-    all_goals exact ⟨(hf.getStor a).symm, congrArg Jaune.State.bal hf.state.symm⟩
-
-/-- `Evm.step_spawn_child_world` from `rules.stateGas = none`. -/
-theorem Evm.step_spawn_child_worldH {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc') (he : f.enter = .run cevm)
-    {a : Adr} (ha : devm.getCode a ≠ .empty) :
-    cevm.dyna.state.getStor a = devm.state.getStor a ∧
-      sum cevm.dyna.state.bal ≤ sum devm.state.bal := by
-  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
-  obtain ⟨hstor, hbal⟩ := Xinst.step_spawn_worldH hsg hx ha
-  obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv he
-  have protection : State.Protected f.inner.benv.state a := by
-    right
-    intro codeEmpty
-    exact ha ((Xinst.step_spawn_getCode hx a).symm.trans
-      (ByteArray.eq_empty_of_size_eq_zero codeEmpty))
-  refine ⟨(benvAfterTransfer_ok_getStor transfer a (Or.inr protection)).trans hstor, ?_⟩
-  have h := Msg.benvAfterTransfer_balance_effect (out := .ok benv) transfer
-  change State.balSum benv.state ≤ State.balSum f.inner.benv.state at h
-  change sum benv.state.bal ≤ _
-  rw [← hbal]
-  exact h
-
 /-- `ExecutionTrace.Evm.step_spawn_child_data` from the two historical rule facts: an entered
 child has short calldata and the parent's rule facts. -/
 theorem Evm.step_spawn_child_dataH {pc : Nat} {sevm : Sevm} {pre : Devm}
@@ -217,10 +146,7 @@ theorem Evm.step_spawn_child_dataH {pc : Nat} {sevm : Sevm} {pre : Devm}
   obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
   have hstat : cevm.sta.benvStat = sevm.benvStat := by
     rw [Frame.enter_run_benvStat henter, Xinst.step_spawn_benvStat hx]
-  refine ⟨?_, ?_⟩
-  · rw [ExecutionTrace.Frame.enter_data_eq henter]
-    exact ExecutionTrace.Xinst.step_spawn_inner_data_length_lt hsg hx
-  · rw [hstat]
-    exact ⟨hsg, hbal⟩
+  obtain ⟨short, childStateGas⟩ := ExecutionTrace.Evm.step_spawn_child_data_noStateGas hsg hs henter
+  exact ⟨short, childStateGas, by rw [hstat]; exact hbal⟩
 
 end Blanc

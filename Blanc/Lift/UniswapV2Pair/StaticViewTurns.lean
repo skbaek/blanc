@@ -405,7 +405,7 @@ theorem staticView_child_environmentH {K : WriterKey → Prop} {frame : Frame}
           (by rw [target]; exact sem.not_delegation installed.1)
       exact ⟨(congrArg (fun bytes : ByteArray => some bytes.toList) codeEq).trans
         installed.1, pcZero⟩
-  have storageEq := (Evm.step_spawn_child_worldH stateGas step enter nonempty).1
+  have storageEq := (Evm.step_spawn_child_world_noStateGas stateGas step enter nonempty).1
   change child.dyna.getStor frame.context.pair = pre.getStor frame.context.pair at storageEq
   have childRep : WriterRep K (child.dyna.getStor frame.context.pair) frame.current.state := by
     rw [storageEq]

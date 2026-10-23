@@ -6052,7 +6052,7 @@ contract-neutral.
   caller-visible `ri_call_postH`, all in
   [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
   steps `staticCallGuard_invPH`/`staticCallGuard_exactH` and a static child's entry
-  (`Xinst.step_spawn_worldH`, `Evm.step_spawn_child_worldH`, `Evm.step_spawn_child_dataH`) in
+  (`Evm.step_spawn_child_dataH`; its opening world is `Evm.step_spawn_child_world_noStateGas`) in
   [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
   the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
   `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,

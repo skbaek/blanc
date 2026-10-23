@@ -67,7 +67,7 @@ theorem sync_static_slot_turns_invH {K : WriterKey → Prop} {frame : Frame}
           exact actualCode same (by rw [target]; exact nonempty)
             (by rw [target]; exact sem.not_delegation installed)
       exact ⟨(congrArg (fun bytes : ByteArray => some bytes.toList) childCode).trans installed, pcZero⟩
-  have storageEq := (Evm.step_spawn_child_worldH stateGas step enter nonempty).1
+  have storageEq := (Evm.step_spawn_child_world_noStateGas stateGas step enter nonempty).1
   change childEvm.dyna.getStor frame.context.pair =
     occurrence.node.devm.getStor frame.context.pair at storageEq
   have childRep : WriterRep K (childEvm.dyna.getStor frame.context.pair) frame.current.state := by
