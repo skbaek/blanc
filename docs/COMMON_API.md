@@ -6192,7 +6192,13 @@ contract-neutral.
   same-frame node at a checked cursor reached by `StepIn` steps of that frame
   (entry facts from `rawFrame_entryFacts`), and
   `exists_retainedSstore_frame_reach` adds that cursor, for any certified code
-  of the frame, to the attribution of `exists_retainedSstore_frame`.
+  of the frame, to the attribution of `exists_retainedSstore_frame`;
+  `exists_retainedSstore_frame_sstoreCursor` adds that the cursor's tree there is
+  the checked `SSTORE` next node, with the write's key and value on top of the
+  node's stack. A cursor-placed node decoding any instruction other than `PC`
+  sits at that instruction's checked `next` node (`CursorOK.tree_of_ninst`,
+  `CursorOK.tree_of_sstore`; `CursorOK.tree_of_exec` is the external case) in
+  [`Blanc/Lift/CursorTreeNinst.lean`](../Blanc/Lift/CursorTreeNinst.lean).
 - To preserve the original child-root predicate on a supplied actual call
   slot, use
   [`Blanc/Lift/CursorOccurrenceRoots.lean`](../Blanc/Lift/CursorOccurrenceRoots.lean).
