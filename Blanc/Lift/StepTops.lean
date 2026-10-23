@@ -84,7 +84,7 @@ theorem run_keccak256_top (run : Ninst.Run sevm d (.reg .keccak256) d')
     (hs : d.stack = x :: y :: rest) :
     d'.stack = Bytes.keccak (d.memory.data.sliceD x.toNat y.toNat 0) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at run
   obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok run
   obtain ⟨⟨n, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
   obtain ⟨d3, h3, h4⟩ := Except.bind_eq_ok e2

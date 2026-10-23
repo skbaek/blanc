@@ -1464,7 +1464,7 @@ lemma of_run_keccak256_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.kec
     ∃ x y, Stack.Diff [x, y] [(s.memory.read x.toNat y.toNat).1.keccak]
       s.stack s'.stack ∧ s'.memory = s.memory.extend x.toNat y.toNat := by
   rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
   rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
   rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
