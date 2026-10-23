@@ -46,11 +46,10 @@ private theorem validation_cost_none {rules : ForkRules} {tx : Tx} {sender : Adr
         exact finish validation
 
 /-- Preparation allocates exactly the transaction gas left after intrinsic cost. -/
-theorem TransactionTrace.msg_gas
+theorem TransactionTrace.msg_gas_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
-    (trace : TransactionTrace benv bout tx index state bout')
-    (_fork : CoveredFork benv.stat.fork) :
+    (trace : TransactionTrace benv bout tx index state bout') :
     trace.msg.gas = tx.gas - trace.intrinsicGas := by
   have prepared := trace.prepared
   unfold prepareMessage at prepared
@@ -59,33 +58,60 @@ theorem TransactionTrace.msg_gas
     simp only [receiver] at prepared
     exact (congrArg Msg.gas (Except.ok.inj prepared)).symm
 
+theorem TransactionTrace.msg_gas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (_fork : CoveredFork benv.stat.fork) :
+    trace.msg.gas = tx.gas - trace.intrinsicGas :=
+  trace.msg_gas_noStateGas
+
 /-- Covered-fork validation retains the intrinsic base charge and reservation bounds. -/
+theorem TransactionTrace.intrinsicGas_bounds_noStateGas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (fork : benv.stat.rules.stateGas = none)
+    (hbase : benv.stat.rules.gas.txBase = 21000) :
+    21000 ≤ trace.intrinsicGas ∧ trace.intrinsicGas ≤ tx.gas ∧
+      trace.calldataFloorGasCost ≤ tx.gas := by
+  obtain ⟨cost, bound⟩ := validation_cost_none fork trace.validation
+  have base : benv.stat.rules.gas.txBase ≤
+      (calculateIntrinsicCost benv.stat.rules tx trace.validationSender).1 := by
+    simp only [calculateIntrinsicCost]
+    omega
+  rw [cost] at base
+  rw [hbase] at base
+  exact ⟨base, Nat.le_trans (Nat.le_max_left _ _) bound,
+    Nat.le_trans (Nat.le_max_right _ _) bound⟩
+
 theorem TransactionTrace.intrinsicGas_bounds
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (fork : CoveredFork benv.stat.fork) :
     21000 ≤ trace.intrinsicGas ∧ trace.intrinsicGas ≤ tx.gas ∧
-      trace.calldataFloorGasCost ≤ tx.gas := by
-  obtain ⟨cost, bound⟩ := validation_cost_none fork.rules_stateGas_none trace.validation
-  have base : benv.stat.rules.gas.txBase ≤
-      (calculateIntrinsicCost benv.stat.rules tx trace.validationSender).1 := by
-    simp only [calculateIntrinsicCost]
-    omega
-  rw [cost] at base
-  rw [fork.rules_txBase] at base
-  exact ⟨base, Nat.le_trans (Nat.le_max_left _ _) bound,
-    Nat.le_trans (Nat.le_max_right _ _) bound⟩
+      trace.calldataFloorGasCost ≤ tx.gas :=
+  trace.intrinsicGas_bounds_noStateGas fork.rules_stateGas_none fork.rules_txBase
 
 /-- The intrinsic charge pays for the extra root in a retained frame-count budget. -/
+theorem TransactionTrace.msg_gas_succ_le_noStateGas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (fork : benv.stat.rules.stateGas = none)
+    (hbase : benv.stat.rules.gas.txBase = 21000) :
+    trace.msg.gas + 1 ≤ tx.gas := by
+  rw [trace.msg_gas_noStateGas]
+  have bounds := trace.intrinsicGas_bounds_noStateGas fork hbase
+  omega
+
 theorem TransactionTrace.msg_gas_succ_le
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
-    (fork : CoveredFork benv.stat.fork) : trace.msg.gas + 1 ≤ tx.gas := by
-  rw [trace.msg_gas fork]
-  have bounds := trace.intrinsicGas_bounds fork
-  omega
+    (fork : CoveredFork benv.stat.fork) : trace.msg.gas + 1 ≤ tx.gas :=
+  trace.msg_gas_succ_le_noStateGas fork.rules_stateGas_none fork.rules_txBase
 
 /-- Actual transaction counters use the very message outcome and refund retained by the trace. -/
 theorem TransactionTrace.exists_gasSettlement
@@ -139,11 +165,11 @@ theorem TransactionTrace.chargedGas_le
   omega
 
 /-- Checked reservation fits the remaining allowance, retaining the incoming counter. -/
-theorem TransactionTrace.gas_le_remaining
+theorem TransactionTrace.gas_le_remaining_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
-    (fork : CoveredFork benv.stat.fork) :
+    (fork : benv.stat.rules.stateGas = none) :
     tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed := by
   have checked := trace.checked
   simp only [checkTransaction] at checked
@@ -151,7 +177,7 @@ theorem TransactionTrace.gas_le_remaining
   rw [Except.mapError_eq_ok_iff] at limits
   simp only [checkTransactionGasLimits] at limits
   have stateGas : benv.beginTransaction.stat.rules.stateGas = none :=
-    fork.rules_stateGas_none
+    fork
   rw [stateGas] at limits
   change (if tx.gas > benv.stat.blockGasLimit - bout.blockGasUsed then _ else _) =
     Except.ok _ at limits
@@ -159,6 +185,14 @@ theorem TransactionTrace.gas_le_remaining
   · rw [ite_eq_left exceeds] at limits
     cases limits
   · exact Nat.le_of_not_lt exceeds
+
+theorem TransactionTrace.gas_le_remaining
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (fork : CoveredFork benv.stat.fork) :
+    tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed :=
+  trace.gas_le_remaining_noStateGas fork.rules_stateGas_none
 
 /-- Successful settlement never decreases actual block gas consumption. -/
 theorem TransactionTrace.blockGasUsed_mono

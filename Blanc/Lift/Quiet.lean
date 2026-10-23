@@ -461,13 +461,15 @@ lemma delegation {gas : GasSchedule} {devm x : Devm} {adr : Adr} {dp : Bool} {na
 
 end ShapeLogs
 
-/-- **Every executable instruction on a covered fork has a log-list shape.** -/
-lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+/-- **Every executable instruction has a log-list shape,** given the rule facts
+the step unfolding needs: no state gas, and the delegation/access values,
+each cased explicitly rather than assumed modern. -/
+lemma Xinst.step_shapeLogs_noStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
+    {b : Bool} {a : AccessSchedule}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hdel : sevm.benvStat.rules.delegationEnabled = b)
+    (hacc : sevm.benvStat.rules.access = a) :
     Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) := by
-  have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   cases x with
   | create =>
     simp only [Xinst.step, hsg]
@@ -487,68 +489,266 @@ lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
       exact ShapeLogs.create (Or.inr trivial) h5
     · exact ShapeLogs.error rfl
   | call =>
-    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-    refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-    refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-    refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-    dsimp only
-    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress d7 callee) callee with ⟨dpv, na, cd, dagc, d8⟩
-    have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 callee) h7 hdel
-    refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-    refine ShapeLogs.assert h9 ?_
-    split
-    · exact ShapeLogs.shortfall h9
-    · exact ShapeLogs.call h9
+    cases b with
+    | true =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            (addAccessedAddress d7 callee) callee with ⟨dpv, na, cd, dagc, d8⟩
+        have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 callee) h7 hdel
+        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
+        refine ShapeLogs.assert h9 ?_
+        split
+        · exact ShapeLogs.shortfall h9
+        · exact ShapeLogs.call h9
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            d7 callee with ⟨dpv, na, cd, dagc, d8⟩
+        have h8 := ShapeLogs.delegation (x := d7) h7 hdel
+        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
+        refine ShapeLogs.assert h9 ?_
+        split
+        · exact ShapeLogs.shortfall h9
+        · exact ShapeLogs.call h9
+    | false =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ (addAccessedAddress d7 callee)) fun d9 h9 => ?_
+        refine ShapeLogs.assert h9 ?_
+        split
+        · exact ShapeLogs.shortfall h9
+        · exact ShapeLogs.call h9
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun callee d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d9 h9 => ?_
+        refine ShapeLogs.assert h9 ?_
+        split
+        · exact ShapeLogs.shortfall h9
+        · exact ShapeLogs.call h9
   | callcode =>
-    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-    refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-    refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-    refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
-    dsimp only
-    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress d7 cadr) cadr with ⟨dpv, na, cd, dagc, d8⟩
-    have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 cadr) h7 hdel
-    refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
-    split
-    · exact ShapeLogs.shortfall' h9
-    · exact ShapeLogs.call h9
+    cases b with
+    | true =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            (addAccessedAddress d7 cadr) cadr with ⟨dpv, na, cd, dagc, d8⟩
+        have h8 := ShapeLogs.delegation (x := addAccessedAddress d7 cadr) h7 hdel
+        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
+        split
+        · exact ShapeLogs.shortfall' h9
+        · exact ShapeLogs.call h9
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            d7 cadr with ⟨dpv, na, cd, dagc, d8⟩
+        have h8 := ShapeLogs.delegation (x := d7) h7 hdel
+        refine ShapeLogs.bindE h8 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
+        split
+        · exact ShapeLogs.shortfall' h9
+        · exact ShapeLogs.call h9
+    | false =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ (addAccessedAddress d7 cadr)) fun d9 h9 => ?_
+        split
+        · exact ShapeLogs.shortfall' h9
+        · exact ShapeLogs.call h9
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.pop d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        refine ShapeLogs.bind h6 (LogsWalk.popToNat d6) fun _ d7 h7 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d9 h9 => ?_
+        split
+        · exact ShapeLogs.shortfall' h9
+        · exact ShapeLogs.call h9
   | delegatecall =>
-    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-    refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-    refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-    dsimp only
-    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress d6 cadr) cadr with ⟨dpv, na, cd, dagc, d7⟩
-    have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 cadr) h6 hdel
-    refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
-    exact ShapeLogs.call h8
+    cases b with
+    | true =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            (addAccessedAddress d6 cadr) cadr with ⟨dpv, na, cd, dagc, d7⟩
+        have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 cadr) h6 hdel
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            d6 cadr with ⟨dpv, na, cd, dagc, d8⟩
+        have h7 := ShapeLogs.delegation (x := d6) h6 hdel
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d8) fun d9 h9 => ?_
+        exact ShapeLogs.call h9
+    | false =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ (addAccessedAddress d6 cadr)) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun cadr d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ d6) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
   | staticcall =>
-    simp only [Xinst.step, hsg, hfork.rules_access, ForkRules.accessDelegation_enabled hdeleg]
-    refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
-    refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
-    refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
-    refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
-    refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
-    refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
-    dsimp only
-    rcases hdel : sevm.benvStat.rules.gas.accessDelegation
-        (addAccessedAddress d6 tgt) tgt with ⟨dpv, na, cd, dagc, d7⟩
-    have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 tgt) h6 hdel
-    refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
-    exact ShapeLogs.call h8
+    cases b with
+    | true =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            (addAccessedAddress d6 tgt) tgt with ⟨dpv, na, cd, dagc, d7⟩
+        have h7 := ShapeLogs.delegation (x := addAccessedAddress d6 tgt) h6 hdel
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_enabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        rcases hdel : sevm.benvStat.rules.gas.accessDelegation
+            d6 tgt with ⟨dpv, na, cd, dagc, d7⟩
+        have h7 := ShapeLogs.delegation (x := d6) h6 hdel
+        refine ShapeLogs.bindE h7 (LogsWalk.chargeGas _ d7) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+    | false =>
+      cases a with
+      | eip2929 =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ (addAccessedAddress d6 tgt)) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+      | flat g =>
+        simp only [Xinst.step, hsg, hacc, ForkRules.accessDelegation_disabled hdel]
+        refine ShapeLogs.bind rfl (LogsWalk.pop devm) fun _ d1 h1 => ?_
+        refine ShapeLogs.bind h1 (LogsWalk.popToAdr d1) fun tgt d2 h2 => ?_
+        refine ShapeLogs.bind h2 (LogsWalk.popToNat d2) fun _ d3 h3 => ?_
+        refine ShapeLogs.bind h3 (LogsWalk.popToNat d3) fun _ d4 h4 => ?_
+        refine ShapeLogs.bind h4 (LogsWalk.popToNat d4) fun _ d5 h5 => ?_
+        refine ShapeLogs.bind h5 (LogsWalk.popToNat d5) fun _ d6 h6 => ?_
+        dsimp only
+        refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ d6) fun d8 h8 => ?_
+        exact ShapeLogs.call h8
+
+/-- **Every executable instruction on a covered fork has a log-list shape.** -/
+lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) :=
+  Xinst.step_shapeLogs_noStateGas sevm devm x hfork.rules_stateGas_none
+    (hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
+      rfl rfl rfl rfl)
+    hfork.rules_access
 
 /-! ## Log lists across a message frame -/
 
