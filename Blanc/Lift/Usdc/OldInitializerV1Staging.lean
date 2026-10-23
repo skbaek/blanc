@@ -217,4 +217,14 @@ theorem wrapper_strengthen
   · exact .inr ⟨D, callee, rest⟩
   · exact .inl ⟨D, callee, hout⟩
 
+/-- The actual terminal continuation `t_0584_c60 = dest; stop` only halts. -/
+theorem t_0584_halts {Q : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {d : Devm}
+    {o : Outcome} (run : SFunc.RunP Q ImplV1.cert.prog sevm d ImplV1.t_0584_c60 o) :
+    ∃ D, o = .halted D := by
+  unfold ImplV1.t_0584_c60 at run
+  cases run with
+  | dest _ k =>
+    cases k with
+    | last _ => exact ⟨_, rfl⟩
+
 end Blanc.Lift.Usdc.OldInitializerV1Staging
