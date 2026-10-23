@@ -1380,6 +1380,13 @@ conditions. These constructors retain the actual skipped or called stage and
 the successful wrapper's endpoints; state-gas absence alone does not imply
 that a request pass is enabled.
 
+State replay over a retained staged body lives in
+[`Blanc/ExecutionStagedBodyStateTrace.lean`](../Blanc/ExecutionStagedBodyStateTrace.lean).
+`StagedBodyStateChronology` keeps only the selected transaction-list
+chronology and its `stateReplay` runs beacon, history, selected transactions,
+withdrawals, requests, then rewards under `stateGas = none` alone. The
+bout-only block-access-list check contributes no boundary.
+
 For an actually covered fork, `AppliedBodyTrace.toStaged` embeds the supplied
 modern body and `StagedBodyTrace.toModern` recovers the modern carrier. The
 embedding's `toStaged_transactions`, `toStaged_beacon`, `toStaged_history` and
@@ -1586,6 +1593,12 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
 - [`Blanc/ExecutionBodyStateTrace.lean`](../Blanc/ExecutionBodyStateTrace.lean)
   for system messages, transaction lists, direct withdrawals, requests, and
   `AppliedBodyStateChronology`;
+- [`Blanc/ExecutionStagedBodyStateTrace.lean`](../Blanc/ExecutionStagedBodyStateTrace.lean)
+  for the staged-body chronology under `stateGas = none`:
+  `StagedBodyStateChronology` retains only the selected transaction-list
+  chronology and replays beacon, history, selected transactions, withdrawals,
+  requests, then rewards in `applyBody` order (withdrawals gated by the header
+  switch, rewards empty under `pow = none`);
 - [`Blanc/ExecutionHistoryStateTrace.lean`](../Blanc/ExecutionHistoryStateTrace.lean)
   for `ConfiguredBlockStateChronology` and
   `ConfiguredHistoryStateChronology` across schedule-parametric histories.
