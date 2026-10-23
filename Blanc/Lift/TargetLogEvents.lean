@@ -5,6 +5,7 @@ import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionNoninterference
 import Blanc.Lift.Sound
+import Blanc.Lift.HistStaticCall
 
 /-!
 # Retained target frames interleaved with actual foreign LOGs
@@ -808,6 +809,33 @@ theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
     · exact Or.inl ⟨nameEq, dpEq⟩
     · exact Or.inr dpEq
 
+/-- `Xinst.staticcall_none_precompile` from `rules.stateGas = none` alone, under the frame's
+actual delegation flag (`CallCodeH`). -/
+theorem Xinst.staticcall_none_precompileH {sevm : Sevm} {s sf : Devm}
+    {g t ii is oi os : B256} {xs : List B256}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (operands : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (run : Xinst.Run sevm s .staticcall .none (.ok sf))
+    (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
+    sevm.benvStat.rules.isPrecomp t.toAdr := by
+  have stepRun : Ninst.StepRun 0 sevm s Ninst.staticcall .none (.ok sf) := by
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+    exact run
+  rcases of_step_staticcall_val_with_depth_frame_causeH operands
+      (show Xlot.Filled .none from trivial) stepRun stateGas with
+    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
+      _, process, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · apply callMsg_none_precompile (process := process)
+    unfold CallCodeH at routing
+    split at routing
+    · rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
+      · exact Or.inl ⟨nameEq, dpEq⟩
+      · exact Or.inr dpEq
+    · exact Or.inl ⟨routing.1, routing.2.2⟩
+
 /-- A successful STATICCALL with a nonzero flag and no interpreted child ran
 an enabled precompile at its target. The inversion preserves the supplied empty slot. -/
 theorem Xinst.staticcall_none_precompile {sevm : Sevm} {s sf : Devm}
@@ -816,20 +844,7 @@ theorem Xinst.staticcall_none_precompile {sevm : Sevm} {s sf : Devm}
     (operands : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (run : Xinst.Run sevm s .staticcall .none (.ok sf))
     (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
-    sevm.benvStat.rules.isPrecomp t.toAdr := by
-  have stepRun : Ninst.StepRun 0 sevm s Ninst.staticcall .none (.ok sf) := by
-    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
-    exact run
-  rcases of_step_staticcall_val_with_depth_frame_cause operands
-      (show Xlot.Filled .none from trivial) stepRun fork with
-    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
-      _, process, _⟩
-  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
-    rw [flagStack] at failed
-    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
-  · apply callMsg_none_precompile (process := process)
-    rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
-    · exact Or.inl ⟨nameEq, dpEq⟩
-    · exact Or.inr dpEq
+    sevm.benvStat.rules.isPrecomp t.toAdr :=
+  Xinst.staticcall_none_precompileH fork.rules_stateGas_none operands run flag
 
 end Blanc

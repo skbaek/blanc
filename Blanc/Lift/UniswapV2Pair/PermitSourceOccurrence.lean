@@ -50,13 +50,56 @@ theorem PermitCallOccurrence.sourceCall {K : WriterKey → Prop}
     partition := settled.partition
   }, rfl, rfl⟩
 
-/-- The exact same source result consumes the original recovery occurrence and
-then the actual returned frame's closed suffix. -/
-theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {K : WriterKey → Prop}
+theorem PermitCallOccurrenceH.sourceCall {K : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (settled : PermitRecoverySettlement actual)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (source : PermitSourceResult K current invocation root.sevm b post
+    (actual : PermitCallOccurrenceH root b) (settled : PermitRecoverySettlementH actual)
+    (source : PermitSourceResultH K current invocation root.sevm b post
+      actual.call.returned.devm actual.out settled.entered post.gasLeft) :
+    ∃ observed : SourceCallAt root (permitPublicSuspended current invocation root.sevm)
+        (permitPublicRequest current root.sevm) (permitExternalResult actual.out settled.entered) 0,
+      observed.call = actual.call ∧ observed.paths = settled.paths := by
+  have calldata := source.2.2.2.1
+  have target := source.2.2.2.2.1
+  refine ⟨{
+    call := actual.call
+    message := settled.message
+    resume := Resume.call settled.parent 450 32
+    nextPc := actual.call.occurrence.node.pc + 1
+    child := settled.child
+    outputOffset := 450
+    outputSize := 32
+    parent := settled.parent
+    spawned := settled.spawned
+    target := by rw [settled.messageEq]; exact congrArg some target.symm
+    caller := by rw [settled.messageEq]; rfl
+    value := by rw [settled.messageEq]; rfl
+    calldata := by rw [settled.messageEq]; exact calldata.symm
+    static := by
+      rw [settled.messageEq]
+      simp only [callMsg, externalStatic, permitPublicRequest, permitRequest, requestFor,
+        BEq.rfl, Bool.or_true, Bool.true_or]
+    response := settled.process
+    resumeEq := rfl
+    resumed := settled.resumed
+    replyAt := by
+      apply SourceReplyAt.recovery (by rfl)
+      · rw [settled.clean]; rfl
+      · exact settled.output.symm
+      · exact actual.recovered_image.symm
+    guarded := by intro impossible; cases impossible
+    unguardedEntry := by intro _; exact settled.enteredEq
+    paths := settled.paths
+    queue := settled.queue
+    childFrames := settled.childFrames
+    partition := settled.partition
+  }, rfl, rfl⟩
+
+theorem PermitCallOccurrenceH.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {K : WriterKey → Prop}
+    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (actual : PermitCallOccurrenceH root b) (settled : PermitRecoverySettlementH actual)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
+    (source : PermitSourceResultH K current invocation root.sevm b post
       actual.call.returned.devm actual.out settled.entered post.gasLeft)
     {views : List StaticViewTurn} (mapped : views.map Prod.fst = settled.paths)
     (authentic : ∀ picked ∈ views,
@@ -73,7 +116,7 @@ theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → T
         (staticViewChildReturns (permitPublicSuspended current invocation root.sevm)
           (permitPublicRequest current root.sevm) 0 views)) := by
   obtain ⟨observed, sameCall, samePaths⟩ := actual.sourceCall settled source
-  obtain ⟨recovered, signer, nonstatic, _⟩ := actual.post_image success fork
+  obtain ⟨recovered, signer, nonstatic, _⟩ := actual.post_image success stateGas bal
   have noCode : settled.entered = false → views = [] := by
     intro missing
     have slot : actual.call.occurrence.slot = .none := by
@@ -106,7 +149,7 @@ theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → T
       .done (permitSourceDone current (writerContext root.sevm invocation)
         (permitOwner root.sevm) (permitSpender root.sevm) (permitValue root.sevm)
         (permitDeadline root.sevm) (permitV root.sevm) (permitR root.sevm) (permitS root.sevm)) :=
-    .finished _ [] (actual.noExecSuffix fork)
+    .finished _ [] (actual.noExecSuffix stateGas)
   rw [← resumed] at terminal
   have consumed := AdmittedSourceConsumes.nextCall (start := root)
     (continuation := .permitRecovery (permitOwner root.sevm) (permitSpender root.sevm)
@@ -121,6 +164,78 @@ theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → T
   simpa only [permitPublicDone, permitSourceDone, List.append_nil,
     permitPublicSuspended, permitPublicRequest] using consumed
 
+/-- The exact same source result consumes the original recovery occurrence and
+then the actual returned frame's closed suffix. -/
+theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {K : WriterKey → Prop}
+    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (actual : PermitCallOccurrence root b) (settled : PermitRecoverySettlement actual)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (source : PermitSourceResult K current invocation root.sevm b post
+      actual.call.returned.devm actual.out settled.entered post.gasLeft)
+    {views : List StaticViewTurn} (mapped : views.map Prod.fst = settled.paths)
+    (authentic : ∀ picked ∈ views,
+      picked.Authentic (permitPublicSuspended current invocation root.sevm))
+    (during : ExactTurns (permitPublicSuspended current invocation root.sevm)
+      (permitPublicRequest current root.sevm) 0 (staticViewTranscript views .done)
+      {complete := true, frame := permitPublicSuspended current invocation root.sevm,
+        childReturns := staticViewChildReturns (permitPublicSuspended current invocation root.sevm)
+          (permitPublicRequest current root.sevm) 0 views}) :
+    AdmittedSourceConsumes Auth root root 0
+      (startTyped current (writerContext root.sevm invocation) (permitDecodedEntry root.sevm))
+      (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
+      (permitPublicDone current invocation root.sevm
+        (staticViewChildReturns (permitPublicSuspended current invocation root.sevm)
+          (permitPublicRequest current root.sevm) 0 views)) :=
+  PermitCallOccurrenceH.admittedConsumes (actual.toH fork) (settled.toH fork) success
+    fork.rules_stateGas_none fork.rules_bal_none
+    (by rw [PermitSourceResultH_of_covered fork]; exact source) mapped authentic during
+
+
+
+theorem permit_bytecode_admitted_consumesH {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      sevm.benvStat.time ≤ permitDeadline sevm ∧
+      ∃ (actual : PermitCallOccurrenceH ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
+        (settled : PermitRecoverySettlementH actual) (views : List StaticViewTurn),
+        PermitSourceResultH K current invocation sevm b post actual.call.returned.devm
+          actual.out settled.entered post.gasLeft ∧
+        PermitRecoveryAuthH ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          actual.out settled.entered views ∧
+        AdmittedSourceConsumes Auth ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0
+          (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+          (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
+          (permitPublicDone current invocation sevm
+            (staticViewChildReturns (permitPublicSuspended current invocation sevm)
+              (permitPublicRequest current sevm) 0 views)) ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+          (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
+          (permitPublicDone current invocation sevm
+            (staticViewChildReturns (permitPublicSuspended current invocation sevm)
+              (permitPublicRequest current sevm) 0 views)) ∧
+        views.map Prod.fst = settled.paths ∧
+        (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) := by
+  obtain ⟨paid, length, nonstatic, timely, actual, settled, views, source, mapped,
+    authentic, during⟩ := permit_bytecode_actual_turnsH (invocation := invocation)
+      inj apart sub sem image rep touched installed representable codeEq stateGas bal selector
+        freshOutput run good
+  have annotated := actual.admittedConsumes (Auth := Auth) settled rfl stateGas bal source mapped authentic during
+  exact ⟨paid, length, nonstatic, timely, actual, settled, views, source,
+    ⟨b, G, actual, settled, rfl, rfl, rfl, rfl, mapped⟩,
+    annotated, annotated.positional.forget, mapped, authentic⟩
 
 /-- Original raw-success premises produce one recovery witness, its source
 result, positional transcript, and exact erasure of that same transcript. -/
@@ -159,14 +274,14 @@ theorem permit_bytecode_admitted_consumes {Auth : Exec.Deriv → Entry → Trans
               (permitPublicRequest current sevm) 0 views)) ∧
         views.map Prod.fst = settled.paths ∧
         (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) := by
-  obtain ⟨paid, length, nonstatic, timely, actual, settled, views, source, mapped,
-    authentic, during⟩ := permit_bytecode_actual_turns (invocation := invocation)
-      inj apart sub sem image rep touched installed representable codeEq fork selector
-        freshOutput run good
-  have annotated := actual.admittedConsumes (Auth := Auth) settled rfl fork source mapped authentic during
-  exact ⟨paid, length, nonstatic, timely, actual, settled, views, source,
-    ⟨b, G, actual, settled, rfl, rfl, rfl, rfl, mapped⟩,
-    annotated, annotated.positional.forget, mapped, authentic⟩
+  obtain ⟨paid, length, nonstatic, timely, actual, settled, views, source, auth, admitted, exact,
+    mapped, authentic⟩ := permit_bytecode_admitted_consumesH inj apart sub sem image rep touched
+      installed representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector
+      freshOutput run good
+  exact ⟨paid, length, nonstatic, timely, actual.toCovered fork, settled.toCovered fork, views,
+    (PermitSourceResultH_of_covered fork) ▸ source, auth.toCovered fork, admitted, exact, mapped,
+    authentic⟩
+
 
 
 end Blanc.Lift.UniswapV2Pair

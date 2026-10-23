@@ -14,10 +14,29 @@ def permitNonceSlot (owner : Adr) : B256 := mapSlot owner.toB256 4
 def permitNonceRead (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
   (afterSload sevm b 3).getStorVal sevm.currentTarget (permitNonceSlot owner)
 
+def permitNonceReadH (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
+  (afterSloadH sevm b 3).getStorVal sevm.currentTarget (permitNonceSlot owner)
+
+theorem permitNonceReadH_of_covered {sevm : Sevm} {b : Devm} {owner : Adr}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitNonceReadH sevm b owner = permitNonceRead sevm b owner := by
+  unfold permitNonceReadH permitNonceRead
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 /-- Domain read, nonce read, then the wrapped postincrement store. -/
 def permitNonceWorld (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
   afterSstore sevm (afterSload sevm (afterSload sevm b 3) (permitNonceSlot owner))
     (permitNonceSlot owner) (permitNonceRead sevm b owner + 1)
+
+def permitNonceWorldH (sevm : Sevm) (b : Devm) (owner : Adr) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm (afterSloadH sevm b 3) (permitNonceSlot owner))
+    (permitNonceSlot owner) (permitNonceReadH sevm b owner + 1)
+
+theorem permitNonceWorldH_of_covered {sevm : Sevm} {b : Devm} {owner : Adr}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitNonceWorldH sevm b owner = permitNonceWorld sevm b owner := by
+  unfold permitNonceWorldH permitNonceWorld
+  simp only [permitNonceReadH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 def permitNonceMemory (M : Mem) (owner : Adr) : Mem :=
   (M.write 0 owner.toB256.toBytes).write 32 (4 : B256).toBytes
@@ -66,19 +85,20 @@ theorem permitNonceMemory_slot (M : Mem) (owner : Adr) :
   rw [Nat.zero_add] at read
   exact congrArg Bytes.keccak read
 
-theorem permitNonceLine_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
+theorem permitNonceLine_invH {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
     {G : Nat} {s r vw dl val spw : B256} {owner : Adr}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : Line.Run sevm (St b (s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) M G)
       permitNonceLine d) :
-    sevm.isStatic = false ∧ ∃ G', d = St (permitNonceWorld sevm b owner)
-      (permitNonceRead sevm b owner :: 1 :: 64 :: 32 :: 0 :: owner.toB256 :: ~~~ addressMask ::
+    sevm.isStatic = false ∧ ∃ G', d = St (permitNonceWorldH sevm b owner)
+      (permitNonceReadH sevm b owner :: 1 :: 64 :: 32 :: 0 :: owner.toB256 :: ~~~ addressMask ::
         b.getStorVal sevm.currentTarget 3 ::
         s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) (permitNonceMemory M owner) G' := by
   have m1 := permitNonceMemory_ptr mem owner
   dsimp only [permitNonceLine] at run
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
@@ -107,7 +127,7 @@ theorem permitNonceLine_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
     m1.read_self (by decide : 0 + 64 ≤ 96)] at hd
   subst d
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
@@ -115,10 +135,23 @@ theorem permitNonceLine_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
-  have nonstatic := ri_sstore_nonstatic fork hs
-  obtain ⟨G', rfl⟩ := ri_sstore fork hs
+  have nonstatic := ri_sstore_nonstaticH stateGas hs
+  obtain ⟨G', rfl⟩ := ri_sstoreH stateGas bal hs
   cases run
   exact ⟨nonstatic, G', rfl⟩
+
+theorem permitNonceLine_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {s r vw dl val spw : B256} {owner : Adr}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : Line.Run sevm (St b (s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) M G)
+      permitNonceLine d) :
+    sevm.isStatic = false ∧ ∃ G', d = St (permitNonceWorld sevm b owner)
+      (permitNonceRead sevm b owner :: 1 :: 64 :: 32 :: 0 :: owner.toB256 :: ~~~ addressMask ::
+        b.getStorVal sevm.currentTarget 3 ::
+        s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) (permitNonceMemory M owner) G' := by
+  simpa only [permitNonceReadH_of_covered fork, permitNonceWorldH_of_covered fork] using
+    permitNonceLine_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 /-- One hundred fourteen fixed gas besides the three selected storage charges. -/
 theorem permitNonceLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : List B256}

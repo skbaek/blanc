@@ -1718,7 +1718,8 @@ For a successful nonzero-flag call with the actual recursive slot `.none`, use
 `Xinst.call_none_precompile` (seven operands) or `Xinst.staticcall_none_precompile`
 (six operands). They identify an enabled precompile at the original target;
 the STATICCALL form preserves the supplied slot through
-`of_step_staticcall_val_with_depth_frame_cause`. An empty retained view queue
+`of_step_staticcall_val_with_depth_frame_cause`; `Xinst.staticcall_none_precompileH` is the
+STATICCALL form from `rules.stateGas = none` alone. An empty retained view queue
 alone does not identify this route, since interpreted code can also retain no views.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
@@ -5965,7 +5966,8 @@ contract-neutral.
   steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
   `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
   `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
-  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the
+  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`); both successors
+  keep account code (`afterSloadH_getCode`, `afterSstoreH_getCode`); get the
   frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
   `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
   `_covered` form recovers the modern statement, all in

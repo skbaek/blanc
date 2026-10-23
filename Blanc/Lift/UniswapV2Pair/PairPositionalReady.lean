@@ -91,19 +91,26 @@ theorem pair_admitted_initialize_supply {U : WriterKey → Prop}
   PairStepSupplyWithH.covered (pair_admitted_initialize_supplyH inj apart)
 
 
-theorem pair_admitted_permit_supply {U : WriterKey → Prop}
+/-- The permit entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_permit_supplyH {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have touched := good.permitOwn selector
   obtain ⟨_, _, _, _, actual, settled, views, result, _, positional, _, _, _⟩ :=
-    permit_bytecode_admitted_consumes (Auth := LockedAuth) (invocation := invocation) inj apart sub sem image rep touched
-      (by rw [installed]; exact image.symm) representable codeEq fork selector freshOutput run good.views
+    permit_bytecode_admitted_consumesH (Auth := LockedAuth) (invocation := invocation) inj apart sub sem image rep touched
+      (by rw [installed]; exact image.symm) representable codeEq stateGas bal selector freshOutput run good.views
   obtain ⟨_, representation, _, _, _, _, _, _, _, _, output, _⟩ := result
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
     (PairEntryAt.permit selector) positional rfl output.symm (fun _ h => h) representation
+
+theorem pair_admitted_permit_supply {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
+    (image : sem.image = some code.toList) :
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf) :=
+  PairStepSupplyWithH.covered (pair_admitted_permit_supplyH inj apart sem image)
 
 
 /-- The seventeen views' admitted supply from the historical rule facts alone. -/

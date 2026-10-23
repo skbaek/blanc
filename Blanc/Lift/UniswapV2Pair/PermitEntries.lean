@@ -1,3 +1,4 @@
+import Blanc.Lift.HistStaticCall
 import Blanc.Lift.UniswapV2Pair.PermitWalk
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.UniswapV2Pair.WriterEntries
@@ -54,16 +55,15 @@ theorem permitReplyMemory_word {C : Mem} {img : Bytes} (wf : Mem.Wf C) (reads : 
 def permitFinalMemory (F : Mem) (owner spender : Adr) (value : B256) : Mem :=
   (approveScratch F owner.toB256 spender.toB256).write (482 : B256).toNat value.toBytes
 
-/-- After the successful reply: the actual signer guard, the approval core at
-pointer 482, and the nine-word unwind back to the caller. -/
-theorem permitSigner_inv {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G : Nat}
+theorem permitSigner_invH {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G : Nat}
     {digest s r vw dl val ρ : B256} {owner spender : Adr} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 482 640 F)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 482 640 F)
     (run : SFunc.Run cert.prog sevm (St d (0 :: 610 :: 1 :: 0 :: digest :: s :: r :: vw :: dl ::
       val :: spender.toB256 :: owner.toB256 :: ρ :: R) F G) t_1cdc_c29 o) :
     (Bytes.toB256 (F.read 450 32).1).toAdr ≠ 0 ∧
       (Bytes.toB256 (F.read 450 32).1).toAdr = owner ∧ sevm.isStatic = false ∧
-      ∃ G', o = .returned (St (approveCoreBase sevm d owner spender val) R
+      ∃ G', o = .returned (St (approveCoreBaseH sevm d owner spender val) R
         (permitFinalMemory F owner spender val) G') := by
   have read0 : Bytes.toB256 (F.read 64 32).1 = 482 := mem.word
   have same0 : (F.read 64 32).2 = F := mem.read_self (by decide)
@@ -136,7 +136,7 @@ theorem permitSigner_inv {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G :
     obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
     obtain ⟨_, h⟩ := ric_call (g := t_259c_c64) (by rfl) h
     rcases h with ⟨D, hc, h⟩ | ⟨D, hc, _⟩
-    · obtain ⟨nonstatic, _, eq⟩ := approve64_inv_at fork mem (by decide) hc
+    · obtain ⟨nonstatic, _, eq⟩ := approve64_inv_atH stateGas bal mem (by decide) hc
       cases eq
       unfold t_1dcd_c15 at h
       obtain ⟨_, h⟩ := ric_dest h
@@ -151,7 +151,7 @@ theorem permitSigner_inv {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G :
       obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
       obtain ⟨G', hg⟩ := ric_ret h
       exact ⟨recoveredNonzero, signer, nonstatic, G', Seg.done.inj hg⟩
-    · obtain ⟨_, _, eq⟩ := approve64_inv_at fork mem (by decide) hc
+    · obtain ⟨_, _, eq⟩ := approve64_inv_atH stateGas bal mem (by decide) hc
       cases eq
   · unfold t_1d57_c15 at h
     obtain ⟨_, h⟩ := ric_dest h
@@ -160,11 +160,37 @@ theorem permitSigner_inv {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G :
     · exact (bad.false_of_noOk (by decide)).elim
     · exact (nonzero (eq_zero_of_iszero_ne_zero rejected)).elim
 
+/-- After the successful reply: the actual signer guard, the approval core at
+pointer 482, and the nine-word unwind back to the caller. -/
+theorem permitSigner_inv {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G : Nat}
+    {digest s r vw dl val ρ : B256} {owner spender : Adr} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 482 640 F)
+    (run : SFunc.Run cert.prog sevm (St d (0 :: 610 :: 1 :: 0 :: digest :: s :: r :: vw :: dl ::
+      val :: spender.toB256 :: owner.toB256 :: ρ :: R) F G) t_1cdc_c29 o) :
+    (Bytes.toB256 (F.read 450 32).1).toAdr ≠ 0 ∧
+      (Bytes.toB256 (F.read 450 32).1).toAdr = owner ∧ sevm.isStatic = false ∧
+      ∃ G', o = .returned (St (approveCoreBase sevm d owner spender val) R
+        (permitFinalMemory F owner spender val) G') := by
+  simpa only [approveCoreBaseH_of_covered fork] using
+    permitSigner_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
 /-- The old nonce's digest, over the domain word read at slot 3. -/
 def permitCallDigest (sevm : Sevm) (b : Devm) (owner spender : Adr) (value deadline : B256) :
     B256 :=
   permitDigestOf (b.getStorVal sevm.currentTarget 3)
     (permitInner owner spender value (permitNonceRead sevm b owner) deadline)
+
+def permitCallDigestH (sevm : Sevm) (b : Devm) (owner spender : Adr) (value deadline : B256) :
+    B256 :=
+  permitDigestOf (b.getStorVal sevm.currentTarget 3)
+    (permitInner owner spender value (permitNonceReadH sevm b owner) deadline)
+
+theorem permitCallDigestH_of_covered {sevm : Sevm} {b : Devm} {owner spender : Adr} {value deadline : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitCallDigestH sevm b owner spender value deadline = permitCallDigest sevm b owner spender value deadline := by
+  unfold permitCallDigestH permitCallDigest
+  simp only [permitNonceReadH_of_covered fork]
 
 /-- Memory at the recovery call: scratch slot hash, struct, packed digest and request. -/
 def permitCallMemory (sevm : Sevm) (b : Devm) (M : Mem) (owner spender : Adr)
@@ -174,10 +200,34 @@ def permitCallMemory (sevm : Sevm) (b : Devm) (M : Mem) (owner spender : Adr)
     (permitInner owner spender value (permitNonceRead sevm b owner) deadline))
     (permitCallDigest sevm b owner spender value deadline) v r s
 
+def permitCallMemoryH (sevm : Sevm) (b : Devm) (M : Mem) (owner spender : Adr)
+    (value deadline : B256) (v : UInt8) (r s : B256) : Mem :=
+  permitRequestMemory (permitDigestMemory (permitStructMemory (permitNonceMemory M owner) owner
+    spender value (permitNonceReadH sevm b owner) deadline) (b.getStorVal sevm.currentTarget 3)
+    (permitInner owner spender value (permitNonceReadH sevm b owner) deadline))
+    (permitCallDigestH sevm b owner spender value deadline) v r s
+
+theorem permitCallMemoryH_of_covered {sevm : Sevm} {b : Devm} {M : Mem} {owner spender : Adr} {value deadline : B256} {v : UInt8} {r s : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitCallMemoryH sevm b M owner spender value deadline v r s = permitCallMemory sevm b M owner spender value deadline v r s := by
+  unfold permitCallMemoryH permitCallMemory
+  simp only [permitCallDigestH_of_covered fork, permitNonceReadH_of_covered fork]
+
 def permitCallStack (sevm : Sevm) (b : Devm) (owner spender : Adr) (value deadline : B256)
     (v : UInt8) (r s ρ : B256) (R : List B256) : List B256 :=
   610 :: 1 :: 0 :: permitCallDigest sevm b owner spender value deadline :: s :: r :: v.toB256 ::
     deadline :: value :: spender.toB256 :: owner.toB256 :: ρ :: R
+
+def permitCallStackH (sevm : Sevm) (b : Devm) (owner spender : Adr) (value deadline : B256)
+    (v : UInt8) (r s ρ : B256) (R : List B256) : List B256 :=
+  610 :: 1 :: 0 :: permitCallDigestH sevm b owner spender value deadline :: s :: r :: v.toB256 ::
+    deadline :: value :: spender.toB256 :: owner.toB256 :: ρ :: R
+
+theorem permitCallStackH_of_covered {sevm : Sevm} {b : Devm} {owner spender : Adr} {value deadline : B256} {v : UInt8} {r s ρ : B256} {R : List B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitCallStackH sevm b owner spender value deadline v r s ρ R = permitCallStack sevm b owner spender value deadline v r s ρ R := by
+  unfold permitCallStackH permitCallStack
+  simp only [permitCallDigestH_of_covered fork]
 
 theorem permitCallMemory_facts {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes}
     (mem : PtrMem 128 96 M) (reads : Mem.Reads M img) (owner spender : Adr)
@@ -205,6 +255,131 @@ theorem permitCallMemory_facts {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes}
     permitReplyMemory_word mC.wf rC mC _ v r s out⟩
   unfold permitCallMemory
   rw [rD.read, permitRequestImage_window]
+
+theorem permitCallMemory_factsH {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes}
+    (mem : PtrMem 128 96 M) (reads : Mem.Reads M img) (owner spender : Adr)
+    (value deadline : B256) (v : UInt8) (r s : B256) :
+    PtrMem 482 640 (permitCallMemoryH sevm b M owner spender value deadline v r s) ∧
+    ((permitCallMemoryH sevm b M owner spender value deadline v r s).read 482 128).1 =
+      ExternalOperation.encode
+        (.recover (permitCallDigestH sevm b owner spender value deadline) v r s) ∧
+    (∀ out, Bytes.toB256 ((permitReplyMemory
+      (permitCallMemoryH sevm b M owner spender value deadline v r s) out).read 450 32).1 =
+        permitRecoveredWord out) := by
+  have mA := permitNonceMemory_ptr mem owner
+  have wA := (mem.wf.write 0 owner.toB256.toBytes).write 32 (4 : B256).toBytes
+  have rA := (reads.write mem.wf 0 owner.toB256.toBytes).write
+    (mem.wf.write 0 owner.toB256.toBytes) 32 (4 : B256).toBytes
+  have mB := permitStructMemory_ptr mA owner spender value (permitNonceReadH sevm b owner) deadline
+  have rB := permitStructMemory_reads wA rA owner spender value (permitNonceReadH sevm b owner) deadline
+  have mC := permitDigestMemory_ptr mB (b.getStorVal sevm.currentTarget 3)
+    (permitInner owner spender value (permitNonceReadH sevm b owner) deadline)
+  have rC := permitDigestMemory_reads mB.wf rB (b.getStorVal sevm.currentTarget 3)
+    (permitInner owner spender value (permitNonceReadH sevm b owner) deadline)
+  have rD := permitRequestMemory_reads mC.wf rC (permitCallDigestH sevm b owner spender value deadline)
+    v r s
+  refine ⟨permitRequestMemory_ptr mC _ v r s, ?_, fun out =>
+    permitReplyMemory_word mC.wf rC mC _ v r s out⟩
+  unfold permitCallMemoryH
+  rw [rD.read, permitRequestImage_window]
+
+theorem permitBody_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {img : Bytes}
+    {G : Nat} {s r deadline value ρ : B256} {v : UInt8} {owner spender : Adr} {o : Outcome}
+    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
+      P s before n after → Ninst.Run s before n after)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M) (reads : Mem.Reads M img)
+    (run : SFunc.RunP P cert.prog sevm (St b (s :: r :: v.toB256 :: deadline :: value ::
+      spender.toB256 :: owner.toB256 :: ρ :: R) M G) t_1b0c_c29 o) :
+    sevm.isStatic = false ∧ sevm.benvStat.time ≤ deadline ∧
+      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
+        P sevm (St (permitNonceWorldH sevm b owner)
+          (gw :: 1 :: 482 :: 128 :: 450 :: 32 ::
+            permitCallStackH sevm b owner spender value deadline v r s ρ R)
+          (permitCallMemoryH sevm b M owner spender value deadline v r s) callGas)
+          (.exec .staticcall) d ∧
+        StaticCallPost (permitNonceWorldH sevm b owner) d
+          (permitCallStackH sevm b owner spender value deadline v r s ρ R)
+          (permitCallMemoryH sevm b M owner spender value deadline v r s) 482 128 450 32 1 out ∧
+        out.length < 2 ^ 256 ∧
+        StaticAnsweredH sevm (permitNonceWorldH sevm b owner) (1 : B256).toAdr
+          (ExternalOperation.encode
+            (.recover (permitCallDigestH sevm b owner spender value deadline) v r s)) out ∧
+        (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = owner ∧
+        o = .returned (St (approveCoreBaseH sevm d owner spender value) R
+          (permitFinalMemory (permitReplyMemory
+            (permitCallMemoryH sevm b M owner spender value deadline v r s) out)
+            owner spender value) G') := by
+  obtain ⟨memD, request, reply⟩ := permitCallMemory_factsH (sevm := sevm) (b := b) mem reads
+    owner spender value deadline v r s
+  have mA := permitNonceMemory_ptr mem owner
+  have wA := (mem.wf.write 0 owner.toB256.toBytes).write 32 (4 : B256).toBytes
+  have rA := (reads.write mem.wf 0 owner.toB256.toBytes).write
+    (mem.wf.write 0 owner.toB256.toBytes) 32 (4 : B256).toBytes
+  have mB := permitStructMemory_ptr mA owner spender value (permitNonceReadH sevm b owner) deadline
+  have rB := permitStructMemory_reads wA rA owner spender value (permitNonceReadH sevm b owner) deadline
+  have mC := permitDigestMemory_ptr mB (b.getStorVal sevm.currentTarget 3)
+    (permitInner owner spender value (permitNonceReadH sevm b owner) deadline)
+  have h := SFunc.runP_iff_runCutP_nil.mp run
+  unfold t_1b0c_c29 at h
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_timestamp (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨timely, _, h⟩
+  · exact (bad.false_of_noOk (by decide)).elim
+  have timely : sevm.benvStat.time ≤ deadline := by
+    have flag := eq_zero_of_iszero_ne_zero timely
+    by_contra late
+    have one : B256.ltCheck deadline sevm.benvStat.time = 1 := by
+      simp only [B256.ltCheck, lt_of_not_ge late, ite_true]
+    rw [one] at flag
+    exact (by decide : (1 : B256) ≠ 0) flag
+  unfold t_1b7b_c29 at h
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitNonceLine h
+  obtain ⟨nonstatic, _, state⟩ := permitNonceLine_invH stateGas bal mem line
+  rw [state] at h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitStructLine h
+  obtain ⟨_, state⟩ := permitStructLine_inv mA rA line
+  rw [state] at h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitDigestLine h
+  obtain ⟨_, state⟩ := permitDigestLine_inv mB rB line
+  rw [state] at h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitRequestLine h
+  obtain ⟨_, state⟩ := permitRequestLine_inv mC line
+  rw [state] at h
+  obtain ⟨d', hd, h⟩ := ric_nextP h
+  obtain ⟨gw, callGas, rfl⟩ := ri_gas (project hd)
+  obtain ⟨d, hcall, h⟩ := ric_nextP h
+  obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_boundedH stateGas (project hcall)
+  rw [post.eq_St] at h
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
+  · exact (bad.false_of_noOk (by decide)).elim
+  have one : flag = 1 := by
+    rcases post.flag with zero | one
+    · rw [zero, show B256.eqCheck (B256.eqCheck (0 : B256) 0) 0 = 0 from by decide] at accepted
+      exact (accepted rfl).elim
+    · exact one
+  subst flag
+  rw [show B256.eqCheck (1 : B256) 0 = 0 from by decide] at h
+  obtain ⟨recovered, signer, _, G', eq⟩ := permitSigner_invH stateGas bal
+    (F := permitReplyMemory (permitCallMemoryH sevm b M owner spender value deadline v r s) out)
+    (permitReplyMemory_ptr memD out) ((SFunc.runP_iff_runCutP_nil.mpr h).mono project)
+  rw [reply out] at recovered signer
+  refine ⟨nonstatic, timely, gw, callGas, d, out, G', hcall, post, bound, ?_, recovered, signer, eq⟩
+  have answer := answered rfl
+  change StaticAnsweredH sevm (permitNonceWorldH sevm b owner) (1 : B256).toAdr
+    ((permitCallMemoryH sevm b M owner spender value deadline v r s).read 482 128).1 out at answer
+  rw [request] at answer
+  exact answer
 
 /-- Successful internal permit, over any instruction relation projecting to steps: deadline
 and static guards, the actual recovery call (a `P` step of the same run) with its observed reply, the signer guard on the copied word, and the exact approval post. -/
@@ -235,75 +410,9 @@ theorem permitBody_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : 
           (permitFinalMemory (permitReplyMemory
             (permitCallMemory sevm b M owner spender value deadline v r s) out)
             owner spender value) G') := by
-  obtain ⟨memD, request, reply⟩ := permitCallMemory_facts (sevm := sevm) (b := b) mem reads
-    owner spender value deadline v r s
-  have mA := permitNonceMemory_ptr mem owner
-  have wA := (mem.wf.write 0 owner.toB256.toBytes).write 32 (4 : B256).toBytes
-  have rA := (reads.write mem.wf 0 owner.toB256.toBytes).write
-    (mem.wf.write 0 owner.toB256.toBytes) 32 (4 : B256).toBytes
-  have mB := permitStructMemory_ptr mA owner spender value (permitNonceRead sevm b owner) deadline
-  have rB := permitStructMemory_reads wA rA owner spender value (permitNonceRead sevm b owner) deadline
-  have mC := permitDigestMemory_ptr mB (b.getStorVal sevm.currentTarget 3)
-    (permitInner owner spender value (permitNonceRead sevm b owner) deadline)
-  have h := SFunc.runP_iff_runCutP_nil.mp run
-  unfold t_1b0c_c29 at h
-  obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_timestamp (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨timely, _, h⟩
-  · exact (bad.false_of_noOk (by decide)).elim
-  have timely : sevm.benvStat.time ≤ deadline := by
-    have flag := eq_zero_of_iszero_ne_zero timely
-    by_contra late
-    have one : B256.ltCheck deadline sevm.benvStat.time = 1 := by
-      simp only [B256.ltCheck, lt_of_not_ge late, ite_true]
-    rw [one] at flag
-    exact (by decide : (1 : B256) ≠ 0) flag
-  unfold t_1b7b_c29 at h
-  obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitNonceLine h
-  obtain ⟨nonstatic, _, state⟩ := permitNonceLine_inv fork mem line
-  rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitStructLine h
-  obtain ⟨_, state⟩ := permitStructLine_inv mA rA line
-  rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitDigestLine h
-  obtain ⟨_, state⟩ := permitDigestLine_inv mB rB line
-  rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitRequestLine h
-  obtain ⟨_, state⟩ := permitRequestLine_inv mC line
-  rw [state] at h
-  obtain ⟨d', hd, h⟩ := ric_nextP h
-  obtain ⟨gw, callGas, rfl⟩ := ri_gas (project hd)
-  obtain ⟨d, hcall, h⟩ := ric_nextP h
-  obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_bounded fork (project hcall)
-  rw [post.eq_St] at h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
-  · exact (bad.false_of_noOk (by decide)).elim
-  have one : flag = 1 := by
-    rcases post.flag with zero | one
-    · rw [zero, show B256.eqCheck (B256.eqCheck (0 : B256) 0) 0 = 0 from by decide] at accepted
-      exact (accepted rfl).elim
-    · exact one
-  subst flag
-  rw [show B256.eqCheck (1 : B256) 0 = 0 from by decide] at h
-  obtain ⟨recovered, signer, _, G', eq⟩ := permitSigner_inv fork
-    (F := permitReplyMemory (permitCallMemory sevm b M owner spender value deadline v r s) out)
-    (permitReplyMemory_ptr memD out) ((SFunc.runP_iff_runCutP_nil.mpr h).mono project)
-  rw [reply out] at recovered signer
-  refine ⟨nonstatic, timely, gw, callGas, d, out, G', hcall, post, bound, ?_, recovered, signer, eq⟩
-  have answer := answered rfl
-  change StaticAnswered sevm (permitNonceWorld sevm b owner) (1 : B256).toAdr
-    ((permitCallMemory sevm b M owner spender value deadline v r s).read 482 128).1 out at answer
-  rw [request] at answer
-  exact answer
+  simpa only [approveCoreBaseH_of_covered fork, permitCallDigestH_of_covered fork, permitCallMemoryH_of_covered fork, permitCallStackH_of_covered fork, permitNonceWorldH_of_covered fork, StaticAnsweredH_iff_of_covered fork] using
+    permitBody_invPH project fork.rules_stateGas_none fork.rules_bal_none mem reads run
+
 
 def permitOwner (sevm : Sevm) : Adr := (Sevm.dataWord sevm 4).toAdr
 def permitSpender (sevm : Sevm) : Adr := (Sevm.dataWord sevm 36).toAdr
@@ -318,19 +427,60 @@ def permitPublicCallMemory (sevm : Sevm) (b : Devm) : Mem :=
   permitCallMemory sevm b getterInitMemory (permitOwner sevm) (permitSpender sevm)
     (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)
 
+def permitPublicCallMemoryH (sevm : Sevm) (b : Devm) : Mem :=
+  permitCallMemoryH sevm b getterInitMemory (permitOwner sevm) (permitSpender sevm)
+    (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)
+
+theorem permitPublicCallMemoryH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitPublicCallMemoryH sevm b = permitPublicCallMemory sevm b := by
+  unfold permitPublicCallMemoryH permitPublicCallMemory
+  simp only [permitCallMemoryH_of_covered fork]
+
 def permitPublicDigest (sevm : Sevm) (b : Devm) : B256 :=
   permitCallDigest sevm b (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
     (permitDeadline sevm)
 
+def permitPublicDigestH (sevm : Sevm) (b : Devm) : B256 :=
+  permitCallDigestH sevm b (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+    (permitDeadline sevm)
+
+theorem permitPublicDigestH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitPublicDigestH sevm b = permitPublicDigest sevm b := by
+  unfold permitPublicDigestH permitPublicDigest
+  simp only [permitCallDigestH_of_covered fork]
+
 def permitPublicCallStack (sevm : Sevm) (b : Devm) (sel : B256) : List B256 :=
   permitCallStack sevm b (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
     (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm) 0x0257 [sel]
+
+def permitPublicCallStackH (sevm : Sevm) (b : Devm) (sel : B256) : List B256 :=
+  permitCallStackH sevm b (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+    (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm) 0x0257 [sel]
+
+theorem permitPublicCallStackH_of_covered {sevm : Sevm} {b : Devm} {sel : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitPublicCallStackH sevm b sel = permitPublicCallStack sevm b sel := by
+  unfold permitPublicCallStackH permitPublicCallStack
+  simp only [permitCallStackH_of_covered fork]
 
 /-- The halted permit frame: approval core over the call's world, STOP with no output bytes. -/
 def permitPublicPost (sevm : Sevm) (b d : Devm) (out : Bytes) (sel : B256) (G : Nat) : Devm :=
   St (approveCoreBase sevm d (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) [sel]
     (permitFinalMemory (permitReplyMemory (permitPublicCallMemory sevm b) out)
       (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) G
+
+def permitPublicPostH (sevm : Sevm) (b d : Devm) (out : Bytes) (sel : B256) (G : Nat) : Devm :=
+  St (approveCoreBaseH sevm d (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) [sel]
+    (permitFinalMemory (permitReplyMemory (permitPublicCallMemoryH sevm b) out)
+      (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) G
+
+theorem permitPublicPostH_of_covered {sevm : Sevm} {b d : Devm} {out : Bytes} {sel : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    permitPublicPostH sevm b d out sel G = permitPublicPost sevm b d out sel G := by
+  unfold permitPublicPostH permitPublicPost
+  simp only [approveCoreBaseH_of_covered fork, permitPublicCallMemoryH_of_covered fork]
 
 /-- The permit raw-success facts at one call occurrence, shared by the entry and pc0 inverses. -/
 def PermitRawCall (sevm : Sevm) (b : Devm) (sel : B256) (gw : B256) (callGas : Nat) (d : Devm)
@@ -360,17 +510,37 @@ def PermitRawCallP (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm)
         (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
     (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm
 
-theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+def PermitRawCallPH (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (b : Devm) (sel : B256)
+    (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) : Prop :=
+  P sevm (St (permitNonceWorldH sevm b (permitOwner sevm))
+      (gw :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStackH sevm b sel)
+      (permitPublicCallMemoryH sevm b) callGas) (.exec .staticcall) d ∧
+    StaticCallPost (permitNonceWorldH sevm b (permitOwner sevm)) d
+      (permitPublicCallStackH sevm b sel) (permitPublicCallMemoryH sevm b) 482 128 450 32 1 out ∧
+    out.length < 2 ^ 256 ∧
+    StaticAnsweredH sevm (permitNonceWorldH sevm b (permitOwner sevm)) (1 : B256).toAdr
+      (ExternalOperation.encode
+        (.recover (permitPublicDigestH sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
+    (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm
+
+theorem PermitRawCallPH_of_covered {sevm : Sevm} {P : Sevm → Devm → Ninst → Devm → Prop} {b : Devm} {sel : B256} {gw : B256} {callGas : Nat} {d : Devm} {out : Bytes}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    PermitRawCallPH P sevm b sel gw callGas d out = PermitRawCallP P sevm b sel gw callGas d out := by
+  unfold PermitRawCallPH PermitRawCallP
+  simp only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork, permitPublicDigestH_of_covered fork, StaticAnsweredH_iff_of_covered fork]
+
+theorem permitEntry_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
     {G : Nat} {sel : B256} {o : Outcome}
     (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
       P s before n after → Ninst.Run s before n after)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunP P cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
     (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
       sevm.benvStat.time ≤ permitDeadline sevm ∧
       ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCallP P sevm b sel gw callGas d out ∧
-        o = .halted (permitPublicPost sevm b d out sel G') := by
+        PermitRawCallPH P sevm b sel gw callGas d out ∧
+        o = .halted (permitPublicPostH sevm b d out sel G') := by
   have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_05e2_c76 at h
   obtain ⟨_, h⟩ := ric_destP h
@@ -444,14 +614,14 @@ theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm :
   | callHalt _ lookup pop hc =>
     rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup
     cases lookup
-    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, eq⟩ := permitBody_invP project (R := [sel])
-      fork getterInitMemory_ptr (Mem.reads_data getterInitMemory) ((St.of_pop1 pop).2 ▸ hc)
+    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, eq⟩ := permitBody_invPH project (R := [sel])
+      stateGas bal getterInitMemory_ptr (Mem.reads_data getterInitMemory) ((St.of_pop1 pop).2 ▸ hc)
     cases eq
   | callRet _ lookup pop hc h =>
     rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup
     cases lookup
     obtain ⟨nonstatic, timely, gw, callGas, d, out, G', call, post, bound, answered,
-      recovered, signer, eq⟩ := permitBody_invP project (R := [sel]) fork getterInitMemory_ptr
+      recovered, signer, eq⟩ := permitBody_invPH project (R := [sel]) stateGas bal getterInitMemory_ptr
         (Mem.reads_data getterInitMemory) ((St.of_pop1 pop).2 ▸ hc)
     cases eq
     unfold t_0257_c76 at h
@@ -461,6 +631,21 @@ theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm :
       exact ⟨guard, nonstatic, timely, gw, callGas, d, out, residual,
         ⟨call, post, bound, answered, recovered, signer⟩,
         congrArg Outcome.halted (Except.ok.inj hr).symm⟩
+
+theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+    {G : Nat} {sel : B256} {o : Outcome}
+    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
+      P s before n after → Ninst.Run s before n after)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunP P cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
+    (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
+      sevm.benvStat.time ≤ permitDeadline sevm ∧
+      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
+        PermitRawCallP P sevm b sel gw callGas d out ∧
+        o = .halted (permitPublicPost sevm b d out sel G') := by
+  simpa only [PermitRawCallPH_of_covered fork, permitPublicPostH_of_covered fork] using
+    permitEntry_invPH project fork.rules_stateGas_none fork.rules_bal_none run
+
 
 theorem permit_selector_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
     {M : Mem} {G : Nat} {o : Outcome}
