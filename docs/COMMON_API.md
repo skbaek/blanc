@@ -3825,6 +3825,22 @@ consumer needs canonical interpreter ingress as one conjunct:
   callers derive this premise from `trace.prepared` and the actual fresh
   message constructor; raw/create state-only transports keep their existing
   signatures.
+- Historical (fork-domain) counterpart:
+  [`Blanc/ExecutionHistoricalAdmission.lean`](../Blanc/ExecutionHistoricalAdmission.lean).
+  `ContractSpecSem`/`ContractSpec.SoundAdmittedIn F` and `PreservesAdmittedIn F`
+  replace each `CoveredFork` frame position by a selected domain `F`
+  (`PreservesAdmitted.toIn` is the `CoveredFork` instance, `PreservesAdmittedIn.mono`
+  restricts). `ProcessMessageTrace`/`ProcessCreateMessageTrace`/`MessageCallTrace.stateInv_admitted_semIn`,
+  `TransactionTrace`/`ApplyTransactionsTrace.benvInv_admitted_semIn` and the
+  `ContractSpec` forms `…_admittedIn` split `hfork` into `F fork` (routing)
+  and `stateGas = none` (settlement); deletion exclusion of `ca` comes from an
+  installed checked runtime (`InstalledCert C`, `c.sem.image = some C.toList`)
+  via `MessageCallTrace.accountsToDelete_ne_of_installedCert`, and the touched
+  sweep from `StateInv.sweepTouchedAccounts` (never erases nonempty code; no
+  sweep-off assumption). Also `stateGas = none` output twins
+  `processMessageCall_{createCollision,createRun,callRun}_out_noStateGas` and
+  `StateInv.getCode_eq_of_image`. No historical frame ladder: producing
+  `PreservesAdmittedIn F` for a concrete runtime is a separate obligation.
 
 - To derive structural admission directly from an independently checked predicate
   over the actual raw entries, use `ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames`
