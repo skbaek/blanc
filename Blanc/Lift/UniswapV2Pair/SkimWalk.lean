@@ -103,18 +103,17 @@ theorem skimWrapper_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       cases hk
       exact ⟨_, (St.of_pop1 pop).2 ▸ k⟩
 
-/-- Entry34 reads the lock slot and selects the actual unlocked arm. -/
-theorem skimLock_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem skimLock_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm [] (St b R M G) t_18de_c34 seg) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
-      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St (afterSload sevm b 12) R M gas)
+      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St (afterSloadH sevm b 12) R M gas)
         t_194f_c34 seg := by
   unfold t_18de_c34 at run
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_eq (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
@@ -127,6 +126,17 @@ theorem skimLock_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       · simp only [B256.eqCheck, eq, ite_false] at accepted
         exact False.elim (accepted rfl)
     exact ⟨unlocked, gas, body⟩
+
+/-- Entry34 reads the lock slot and selects the actual unlocked arm. -/
+theorem skimLock_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm [] (St b R M G) t_18de_c34 seg) :
+    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St (afterSload sevm b 12) R M gas)
+        t_194f_c34 seg := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    skimLock_invH fork.rules_bal_none run
 
 /-- The 112-bit reserve mask pushed by the literal cache code. -/
 def skimReserveMask : B256 :=

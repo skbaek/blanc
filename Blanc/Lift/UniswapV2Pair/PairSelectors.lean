@@ -316,15 +316,21 @@ theorem pair_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outc
         next hit =>
           exact pairSelector_of_hit hit (by decide)
 
-/-- Every successful raw run at the Pair code carries a published selector. -/
-theorem pair_bytecode_selector_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem pair_bytecode_selector_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Blanc.Sevm.selector sevm ∈ pairSelectors := by
-  obtain ⟨f, entry, run⟩ := lift_sound cert_check codeEq fork run
+  obtain ⟨f, entry, run⟩ := lift_sound_noStateGas cert_check codeEq stateGas run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨_, _, _, run⟩ := getter_guards_inv run
   exact pair_selector_inv run
+
+/-- Every successful raw run at the Pair code carries a published selector. -/
+theorem pair_bytecode_selector_inv {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    Blanc.Sevm.selector sevm ∈ pairSelectors :=
+  pair_bytecode_selector_invH codeEq fork.rules_stateGas_none run
 
 end Blanc.Lift.UniswapV2Pair

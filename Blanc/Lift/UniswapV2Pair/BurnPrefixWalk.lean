@@ -10,24 +10,22 @@ import Blanc.Lift.InvWalkProvenance
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Burn's literal lock test creates both output temporaries and reads the entry
-lock before any write. The successful arm retains the original relation. -/
-theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem burnLockGuard_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {toWord extρ : B256} {seg : Seg}
     (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
       SFunc.RunCutP P cert.prog sevm C
-        (St (afterSload sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
+        (St (afterSloadH sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
   have h := run
   unfold t_13f5_c37 at h
   obtain ⟨_, h⟩ := ric_destP h
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sload fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sloadH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_eq (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
@@ -40,6 +38,20 @@ theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       · simp only [B256.eqCheck, eq, ite_false] at accepted
         exact (accepted rfl).elim
     exact ⟨unlocked, gas, tail⟩
+
+/-- Burn's literal lock test creates both output temporaries and reads the entry
+lock before any write. The successful arm retains the original relation. -/
+theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
+    {toWord extρ : B256} {seg : Seg}
+    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
+    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
+      SFunc.RunCutP P cert.prog sevm C
+        (St (afterSload sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    burnLockGuard_invH project fork.rules_bal_none run
 
 def burnLockedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 12) 12 0
