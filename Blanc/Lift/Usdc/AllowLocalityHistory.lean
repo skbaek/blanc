@@ -143,7 +143,7 @@ private theorem selV2T_root_hist (sevm : Sevm) :
 /-- The V2-family selector table read at the frame root: caller exceptions
 with the Pair as caller, owner-word exceptions with calldata word 4 the Pair,
 or initializers. -/
-private theorem allowedFrame_selV2T {t : SelTable} (hsel : t.selT = selV2T) {pair : Adr}
+theorem allowedFrame_selV2T {t : SelTable} (hsel : t.selT = selV2T) {pair : Adr}
     {sevm : Sevm} (allowed : AllowedFrame t pair (WriteSite.Env.root sevm)) :
     (Sevm.selector sevm ∈ t.callers ∧ sevm.caller = pair) ∨
       Sevm.selector sevm ∈ t.inits ∨

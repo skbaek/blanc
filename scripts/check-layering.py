@@ -186,7 +186,8 @@ SHARED += ["Lift.MemPotential", "Lift.FreePtr", "Lift.SymTransfer", "Lift.FreePt
            "Lift.HistoryGas", "Lift.StepMemory", "Lift.FreePtrMem",
            "Lift.CopyLoopKeep", "Lift.NodeRet", "Lift.FreePtrSoundStep", "Lift.FreePtrSound",
            "Lift.MemWrites", "Lift.StepTops", "Lift.WriteSiteStep", "Lift.WriteSiteJoin",
-           "Lift.WriteSiteSound", "Lift.WriteSiteRows", "Lift.WriteSiteZero"]
+           "Lift.WriteSiteSound", "Lift.WriteSiteRows", "Lift.WriteSiteZero",
+           "Lift.WriteSiteReach", "Lift.WriteSiteReachHistory"]
 # The shared symbol-interval reading of the bound checkers (ns-h1b): imports
 # nothing but core Lean, so it is contract-neutral.
 SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", "Lift.SilentCallP"]
@@ -1382,6 +1383,7 @@ CONTRACTS = {
         "Lift.Usdc.AllowLocalityInit",
         "Lift.Usdc.AllowLocalityV2_2",
         "Lift.Usdc.AllowLocalityHistory",
+        "Lift.Usdc.AllowLocalitySstore",
         "Lift.Usdc.InitializerClearing",
         "Lift.Usdc.OldInitializerEffects",
         "Lift.Usdc.OldInitializerV1Clearing",

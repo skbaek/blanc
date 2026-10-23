@@ -1769,6 +1769,9 @@ import Blanc.Lift.Usdc.OldInitializerV1Callee
 import Blanc.Lift.Usdc.OldInitializerV1Root
 import Blanc.Lift.Usdc.OldInitializerHistory
 import Blanc.Lift.Usdc.AllowLocalityHistory
+import Blanc.Lift.WriteSiteReach
+import Blanc.Lift.WriteSiteReachHistory
+import Blanc.Lift.Usdc.AllowLocalitySstore
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk

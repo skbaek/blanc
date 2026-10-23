@@ -5730,6 +5730,21 @@ contract-neutral.
   preserves its `StepIn` relation. Historical membership supplies the
   capability through `HistFork.stateGas_none`. Old modern statements remain
   wrappers; no additional outcome or storage-survival premise is introduced.
+- For the write-site observation at one `SSTORE` of a synthetic prefix (any outcome, any
+  stopping point), use [`Blanc/Lift/WriteSiteReach.lean`](../Blanc/Lift/WriteSiteReach.lean):
+  `WriteSite.ws_reach_noStateGas` (a `Reach` from entry `0` of an accepted write-site
+  certificate to a configuration whose tree is `next (.reg .sstore) g` meets a root site,
+  `WsObs (wsRoot ann) (Env.root sevm)`, on `stateGas = none`) and
+  `WriteSite.ws_reach_start_noStateGas` (the same from `(Cursor.start c).conf pre`, the
+  cursor reach's start). The invariant is `WriteSite.WsConf` (per level `WsLevel`, pending
+  continuations `WsCont`), preserved by `WriteSite.wsConf_step` with `ws_run`'s step lemmas;
+  `WriteSite.wstep_sstore_obs` is the pre-state-only observation of an accepted `SSTORE`.
+  `SProg.RunP.point` turns any run transformer (e.g. a locality law proved by
+  `SProg.RunP.mono`) into a step transformer. At a history frame,
+  [`Blanc/Lift/WriteSiteReachHistory.lean`](../Blanc/Lift/WriteSiteReachHistory.lean):
+  `ConfiguredHistoryTraceIn.exists_retainedSstore_frame_wsObs` adds, to the attribution of
+  `exists_retainedSstore_frame_sstoreCursor`, the `WsObs` at the write's node for every
+  certified code and accepted write-site annotation of the attributing frame.
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   (the capability forms `call_run_writesAt_noStateGas`,
