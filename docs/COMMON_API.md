@@ -5975,8 +5975,12 @@ contract-neutral.
   `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
   committed post by `Execution.committedPost_of_okFact`), and the return-data bounds
   `ReturnDataBound.staticcall_returnData_length_ltH`/`call_returnData_length_ltH`; the
-  `_covered`/`of_covered` forms recover the modern statements, all in
-  [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean);
+  `_covered`/`of_covered` forms recover the modern statements; the value-carrying `CALL`
+  inversions `of_step_call_val_with_depth_frameH`/`of_run_call_val_with_depth_frameH` and the
+  caller-visible `ri_call_postH`, all in
+  [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
+  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
+  [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
