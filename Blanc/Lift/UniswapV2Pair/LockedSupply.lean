@@ -90,6 +90,110 @@ private theorem locked_extend {U K : WriterKey → Prop} {keys : List WriterKey}
     ∀ k, WriterExtend K keys k → U k := by
   exact Blanc.SlotFootprint.extendBy_subset sub good
 
+section OutcomesH
+
+variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
+  {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+  {K : WriterKey → Prop}
+  (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+  (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+  (bal : sevm.benvStat.rules.bal = none)
+  (representable : sevm.data.length < 2 ^ 256) (sub : ∀ k, K k → U k)
+  (wrep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+  (locked : current.state.unlocked = 0)
+include inj apart run codeEq stateGas bal representable sub wrep locked
+
+private theorem locked_transfer_outcomeH (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, result, consumed⟩ := transfer_bytecode_exact_consumesH
+    (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inl ⟨selector, rfl, rfl⟩, consumed, ?_, result.sourceLogs,
+    result.logs, rfl⟩
+  refine ⟨_, locked_extend sub good, ?_, ?_⟩
+  · rw [result.sourceState]
+    exact result.representation
+  · rw [result.sourceState]
+    exact locked
+
+private theorem locked_approve_outcomeH (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, ⟨_, representation, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩,
+      consumed⟩ := approve_bytecode_exact_consumesH (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inr (Or.inl ⟨selector, rfl, rfl⟩), consumed, ?_, sourceLogs,
+    rawLogs, rfl⟩
+  exact ⟨_, locked_extend sub good, representation, locked⟩
+
+private theorem locked_transferFrom_outcomeH (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
+    (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
+      (transferFromRecipient sevm), U k) :
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, result, consumed⟩ := transferFrom_bytecode_exact_consumesH
+    (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)), consumed, ?_,
+    result.sourceLogs, result.logs, rfl⟩
+  refine ⟨_, locked_extend sub good, ?_, ?_⟩
+  · rw [result.sourceState]
+    exact result.representation
+  · rw [result.sourceState]
+    unfold transferFromSourceState transferFromAllowanceState
+    split
+    · exact locked
+    · exact locked
+
+omit inj apart in
+private theorem locked_initialize_outcomeH (freshOutput : b.output = [])
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumesH
+    (invocation := invocation) wrep representable freshOutput codeEq stateGas bal selector run
+  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))), consumed,
+    ?_, ?_, ?_, rfl⟩
+  · refine ⟨K, sub, ?_, ?_⟩
+    · rw [result.sourceCurrent]
+      exact result.representation
+    · rw [result.sourceCurrent]
+      exact locked
+  · rw [result.sourceCurrent, List.append_nil]
+  · rw [result.logs, List.append_nil]
+
+private theorem locked_view_outcomeH (view : StaticView)
+    (selector : Blanc.Sevm.selector sevm = view.selector)
+    (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
+  obtain ⟨_, _, _, storage, logs, _, _, consumed, frameCurrent, _, _⟩ :=
+    staticView_source_handler_selectedH (ctx := writerContext sevm invocation) wrep fresh
+      representable rfl codeEq stateGas bal view selector run
+  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+    ⟨view, selector, rfl, rfl⟩)))), consumed, ?_, ?_, ?_, rfl⟩
+  · refine ⟨_, locked_extend sub good, ?_, ?_⟩
+    · rw [frameCurrent, storage sevm.currentTarget]
+      exact wrep.extend fresh
+    · rw [frameCurrent]
+      exact locked
+  · rw [frameCurrent, List.append_nil]
+  · rw [logs, List.append_nil]
+
+end OutcomesH
+
 section Outcomes
 
 variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
@@ -106,70 +210,35 @@ private theorem locked_transfer_outcome (selector : Blanc.Sevm.selector sevm = 0
     (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
     PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transfer_bytecode_exact_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inl ⟨selector, rfl, rfl⟩, consumed, ?_, result.sourceLogs,
-    result.logs, rfl⟩
-  refine ⟨_, locked_extend sub good, ?_, ?_⟩
-  · rw [result.sourceState]
-    exact result.representation
-  · rw [result.sourceState]
-    exact locked
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  locked_transfer_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 private theorem locked_approve_outcome (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
     PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, ⟨_, representation, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩,
-      consumed⟩ := approve_bytecode_exact_consumes (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inr (Or.inl ⟨selector, rfl, rfl⟩), consumed, ?_, sourceLogs,
-    rawLogs, rfl⟩
-  exact ⟨_, locked_extend sub good, representation, locked⟩
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  locked_approve_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 private theorem locked_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
     (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
       (transferFromRecipient sevm), U k) :
     PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transferFrom_bytecode_exact_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)), consumed, ?_,
-    result.sourceLogs, result.logs, rfl⟩
-  refine ⟨_, locked_extend sub good, ?_, ?_⟩
-  · rw [result.sourceState]
-    exact result.representation
-  · rw [result.sourceState]
-    unfold transferFromSourceState transferFromAllowanceState
-    split
-    · exact locked
-    · exact locked
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  locked_transferFrom_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 omit inj apart in
 private theorem locked_initialize_outcome (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
     PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumes
-    (invocation := invocation) wrep representable freshOutput codeEq fork selector run
-  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))), consumed,
-    ?_, ?_, ?_, rfl⟩
-  · refine ⟨K, sub, ?_, ?_⟩
-    · rw [result.sourceCurrent]
-      exact result.representation
-    · rw [result.sourceCurrent]
-      exact locked
-  · rw [result.sourceCurrent, List.append_nil]
-  · rw [result.logs, List.append_nil]
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  locked_initialize_outcomeH run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked freshOutput selector
 
 private theorem locked_permit_outcome (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : b.getCode sevm.currentTarget = code) (freshOutput : b.output = [])
@@ -201,20 +270,9 @@ private theorem locked_view_outcome (view : StaticView)
     (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
     PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
-  obtain ⟨_, _, _, storage, logs, _, _, consumed, frameCurrent, _, _⟩ :=
-    staticView_source_handler_selected (ctx := writerContext sevm invocation) wrep fresh
-      representable rfl codeEq fork view selector run
-  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
-    ⟨view, selector, rfl, rfl⟩)))), consumed, ?_, ?_, ?_, rfl⟩
-  · refine ⟨_, locked_extend sub good, ?_, ?_⟩
-    · rw [frameCurrent, storage sevm.currentTarget]
-      exact wrep.extend fresh
-    · rw [frameCurrent]
-      exact locked
-  · rw [frameCurrent, List.append_nil]
-  · rw [logs, List.append_nil]
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  locked_view_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked view selector good
 
 end Outcomes
 

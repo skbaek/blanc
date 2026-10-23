@@ -13,6 +13,112 @@ private theorem positional_locked_extend {U K : WriterKey → Prop} {keys : List
     ∀ k, WriterExtend K keys k → U k := by
   exact Blanc.SlotFootprint.extendBy_subset sub good
 
+section OutcomesH
+
+variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
+  {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+  {K : WriterKey → Prop}
+  (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+  (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+  (bal : sevm.benvStat.rules.bal = none)
+  (representable : sevm.data.length < 2 ^ 256) (sub : ∀ k, K k → U k)
+  (wrep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+  (locked : current.state.unlocked = 0)
+include inj apart run codeEq stateGas bal representable sub wrep locked
+
+private theorem positional_locked_transfer_outcomeH (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
+    PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, result, consumed, annotated⟩ := transfer_bytecode_positional_consumesH
+    (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inl ⟨selector, rfl, rfl⟩, ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transfer.root_noExecH codeEq stateGas selector run), fun _ => rfl⟩, ?_, result.sourceLogs,
+    result.logs, rfl⟩
+  refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
+  · rw [result.sourceState]
+    exact result.representation
+  · rw [result.sourceState]
+    exact locked
+
+private theorem positional_locked_approve_outcomeH (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
+    PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, ⟨_, representation, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩,
+      consumed, annotated⟩ := approve_bytecode_positional_consumesH (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inr (Or.inl ⟨selector, rfl, rfl⟩), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExecH codeEq stateGas selector run), fun _ => rfl⟩, ?_, sourceLogs,
+    rawLogs, rfl⟩
+  exact ⟨_, positional_locked_extend sub good, representation, locked⟩
+
+private theorem positional_locked_transferFrom_outcomeH (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
+    (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
+      (transferFromRecipient sevm), U k) :
+    PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, result, consumed, annotated⟩ := transferFrom_bytecode_positional_consumesH
+    (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
+    selector run
+  refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transferFrom.root_noExecH codeEq stateGas selector run), fun _ => rfl⟩, ?_,
+    result.sourceLogs, result.logs, rfl⟩
+  refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
+  · rw [result.sourceState]
+    exact result.representation
+  · rw [result.sourceState]
+    unfold transferFromSourceState transferFromAllowanceState
+    split
+    · exact locked
+    · exact locked
+
+omit inj apart in
+private theorem positional_locked_initialize_outcomeH (freshOutput : b.output = [])
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
+    PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  obtain ⟨_, _, _, _, _, result, consumed, annotated⟩ := initialize_bytecode_positional_consumesH
+    (invocation := invocation) wrep representable freshOutput codeEq stateGas bal selector run
+  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.«initialize».root_noExecH codeEq stateGas selector run), fun _ => rfl⟩,
+    ?_, ?_, ?_, rfl⟩
+  · refine ⟨K, sub, ?_, ?_⟩
+    · rw [result.sourceCurrent]
+      exact result.representation
+    · rw [result.sourceCurrent]
+      exact locked
+  · rw [result.sourceCurrent, List.append_nil]
+  · rw [result.logs, List.append_nil]
+
+private theorem positional_locked_view_outcomeH (view : StaticView)
+    (selector : Blanc.Sevm.selector sevm = view.selector)
+    (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
+    PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
+      (lockedOwnedRaw sevm.currentTarget) current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
+  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
+  obtain ⟨_, _, _, storage, logs, _, _, consumed, annotated, frameCurrent, _, _⟩ :=
+    staticView_source_positional_selectedH (ctx := writerContext sevm invocation) wrep fresh
+      representable rfl codeEq stateGas bal view selector run
+  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+    ⟨view, selector, rfl, rfl⟩)))), ⟨AdmittedSourceConsumes.of_done consumed
+      (view.noCallEntry.root_noExecH codeEq stateGas
+        (by rw [StaticView.noCallEntry_selector]; exact selector) run), fun _ => rfl⟩, ?_, ?_, ?_, rfl⟩
+  · refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
+    · rw [frameCurrent, storage sevm.currentTarget]
+      exact wrep.extend fresh
+    · rw [frameCurrent]
+      exact locked
+  · rw [frameCurrent, List.append_nil]
+  · rw [logs, List.append_nil]
+
+end OutcomesH
+
 section Outcomes
 
 variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
@@ -29,70 +135,35 @@ private theorem positional_locked_transfer_outcome (selector : Blanc.Sevm.select
     (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
     PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed, annotated⟩ := transfer_bytecode_positional_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inl ⟨selector, rfl, rfl⟩, ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transfer.root_noExec codeEq fork selector run), fun _ => rfl⟩, ?_, result.sourceLogs,
-    result.logs, rfl⟩
-  refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
-  · rw [result.sourceState]
-    exact result.representation
-  · rw [result.sourceState]
-    exact locked
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  positional_locked_transfer_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 private theorem positional_locked_approve_outcome (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
     PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, ⟨_, representation, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩,
-      consumed, annotated⟩ := approve_bytecode_positional_consumes (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inr (Or.inl ⟨selector, rfl, rfl⟩), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExec codeEq fork selector run), fun _ => rfl⟩, ?_, sourceLogs,
-    rawLogs, rfl⟩
-  exact ⟨_, positional_locked_extend sub good, representation, locked⟩
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  positional_locked_approve_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 private theorem positional_locked_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
     (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
       (transferFromRecipient sevm), U k) :
     PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed, annotated⟩ := transferFrom_bytecode_positional_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.transferFrom.root_noExec codeEq fork selector run), fun _ => rfl⟩, ?_,
-    result.sourceLogs, result.logs, rfl⟩
-  refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
-  · rw [result.sourceState]
-    exact result.representation
-  · rw [result.sourceState]
-    unfold transferFromSourceState transferFromAllowanceState
-    split
-    · exact locked
-    · exact locked
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  positional_locked_transferFrom_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked selector good
 
 omit inj apart in
 private theorem positional_locked_initialize_outcome (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
     PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, _, result, consumed, annotated⟩ := initialize_bytecode_positional_consumes
-    (invocation := invocation) wrep representable freshOutput codeEq fork selector run
-  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))), ⟨AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.«initialize».root_noExec codeEq fork selector run), fun _ => rfl⟩,
-    ?_, ?_, ?_, rfl⟩
-  · refine ⟨K, sub, ?_, ?_⟩
-    · rw [result.sourceCurrent]
-      exact result.representation
-    · rw [result.sourceCurrent]
-      exact locked
-  · rw [result.sourceCurrent, List.append_nil]
-  · rw [result.logs, List.append_nil]
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  positional_locked_initialize_outcomeH run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked freshOutput selector
 
 private theorem positional_locked_permit_outcome (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : b.getCode sevm.currentTarget = code) (freshOutput : b.output = [])
@@ -128,22 +199,9 @@ private theorem positional_locked_view_outcome (view : StaticView)
     (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
     PairFrameOutcomeWith (AdmittedChildConsumes LockedAuth) sevm.currentTarget (LockedRep U) LockedAuth
       (lockedOwnedRaw sevm.currentTarget) current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
-  obtain ⟨_, _, _, storage, logs, _, _, consumed, annotated, frameCurrent, _, _⟩ :=
-    staticView_source_positional_selected (ctx := writerContext sevm invocation) wrep fresh
-      representable rfl codeEq fork view selector run
-  refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
-    ⟨view, selector, rfl, rfl⟩)))), ⟨AdmittedSourceConsumes.of_done consumed
-      (view.noCallEntry.root_noExec codeEq fork
-        (by rw [StaticView.noCallEntry_selector]; exact selector) run), fun _ => rfl⟩, ?_, ?_, ?_, rfl⟩
-  · refine ⟨_, positional_locked_extend sub good, ?_, ?_⟩
-    · rw [frameCurrent, storage sevm.currentTarget]
-      exact wrep.extend fresh
-    · rw [frameCurrent]
-      exact locked
-  · rw [frameCurrent, List.append_nil]
-  · rw [logs, List.append_nil]
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post :=
+  positional_locked_view_outcomeH inj apart run codeEq fork.rules_stateGas_none fork.rules_bal_none
+    representable sub wrep locked view selector good
 
 end Outcomes
 
