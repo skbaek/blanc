@@ -2225,6 +2225,28 @@ a protected target executing arbitrary code.
   `wa` is never targeted; block-level `createdAccounts` is empty at
   `initBenv`. Also `payRewards_getCode` and the shared
   `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
+  Every `…_of_installedCert` above is a wrapper over the safe-parametric chain
+  below, via its trace's `safeRawFrames_of_installedCert` bridge.
+- Safe-parametric no-deletion and code survival across configured In-histories:
+  [`Blanc/ExecutionNoDelSafeHistory.lean`](../Blanc/ExecutionNoDelSafeHistory.lean).
+  `ExecutionTrace.SafeRawFrames wa trace.rawFrames` says every node of every
+  listed frame's own execution (`Exec.rawNodes` of each `Exec.Deriv` in the
+  trace's own `rawFrames` enumeration) excludes decoded SELFDESTRUCT in the
+  executing storage context `wa`. The `…_of_safe` chain
+  (`RunFrame.invNoDel_of_safe`, `ProcessMessage` /
+  `ProcessCreateMessage.inv_noDel_of_safe`, the retained-trace
+  `ProcessMessageTrace` / `ProcessCreateMessageTrace.inv_noDel_of_safe`,
+  `MessageCallTrace.noDel_of_safe`, `TransactionTrace.noDel_of_safe`, system /
+  request stages, `StagedBodyTrace.noDel_of_safe`,
+  `ConfiguredBlockTraceIn.noDel_of_safe`,
+  `ConfiguredHistoryTraceIn.noDel_of_safe`) concludes what the installed-cert
+  version concludes (`…NoDelScheduled wa`, `getCode wa = C`) from that premise
+  plus the code facts the proofs actually use (`C.toList ≠ []`,
+  `¬ isValidDelegation C`); raw levels take an explicit retained run with its
+  slot equation instead. `Exec.safeNodes_of_installedCert` turns the
+  installed-cert producer into per-frame safety (`Exec.rawNodes` of a listed
+  frame sit inside the whole run's `Exec.rawNodes`). No recipe is registered:
+  use this branch and the named theorem.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the

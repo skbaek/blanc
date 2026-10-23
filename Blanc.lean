@@ -69,6 +69,7 @@ import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
 import Blanc.ExecutionDeletionSafety
 import Blanc.ExecutionNoDelProducer
+import Blanc.ExecutionNoDelSafeHistory
 import Blanc.ExecutionNoDelTransaction
 import Blanc.ExecutionNoDelHistory
 import Blanc.ExecutionHistoricalAdmission
