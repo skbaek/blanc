@@ -5956,6 +5956,11 @@ contract-neutral.
   `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
   (`ric_branchTo`), internal calls (`ric_call`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  on a historical fork, where the access schedule may be flat (Istanbul, Muir Glacier)
+  rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
+  successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
+  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`, in
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
