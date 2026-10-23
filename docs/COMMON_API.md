@@ -1599,6 +1599,12 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
   chronology and replays beacon, history, selected transactions, withdrawals,
   requests, then rewards in `applyBody` order (withdrawals gated by the header
   switch, rewards empty under `pow = none`);
+- [`Blanc/ExecutionHistoryInStateTrace.lean`](../Blanc/ExecutionHistoryInStateTrace.lean)
+  for the In-block / In-history chronology: `ConfiguredBlockStateChronologyIn`
+  holds the D1 staged-body chronology with an `initBenv` preparation event and
+  derives `post` via `postEq`; `ConfiguredHistoryStateChronologyIn` follows
+  refl/step. Per-block `stateGas = none` is discharged from the history's own
+  `BodyStageCapabilities`, with the reward-suffix rule carried from D1;
 - [`Blanc/ExecutionHistoryStateTrace.lean`](../Blanc/ExecutionHistoryStateTrace.lean)
   for `ConfiguredBlockStateChronology` and
   `ConfiguredHistoryStateChronology` across schedule-parametric histories.
@@ -2185,6 +2191,24 @@ a protected target executing arbitrary code.
   `Exec.inv_noDel_of_installedCert` composes it with
   `Exec.inv_noDel_of_raw_terminal_safe`. Message/inherited-deletion and
   transaction-level closure remain separate.
+- Message and selected-transaction closure of that producer:
+  [`Blanc/ExecutionNoDelTransaction.lean`](../Blanc/ExecutionNoDelTransaction.lean).
+  `RunFrame.invNoDel_of_installedCert` produces the slot `Xlot.InvNoDel`
+  obligation, so the fork-neutral `ProcessMessage.inv_noDel` /
+  `ProcessCreateMessage.inv_noDel` give `ProcessMessage.inv_noDel_of_installedCert`
+  / `ProcessCreateMessage.inv_noDel_of_installedCert` (every outcome, error
+  payloads and rollback snapshots) and the executable
+  `processMessage_preserves_noDel_of_installedCert` /
+  `processCreateMessage_preserves_noDel_of_installedCert`, with no fork
+  premise. `ExecutionTrace.MessageCallTrace.noDel_of_installedCert` covers the
+  settled wrapper (collision, CREATE at coded `wa` excluded, EIP-7702
+  authorization and code resolution); `ExecutionTrace.TransactionTrace.noDel_of_installedCert`
+  gives `wa ∉ messageOut.accountsToDelete` and `wa`'s code `C` after the
+  message and in the final state under `stateGas = none` (the deletion fold
+  and touched sweep keep it). Generic helpers: `Xlot.invGetCode_of_filled`
+  (fork-free slot code preservation) and
+  `sweepTouchedAccounts_getCode_of_nonempty` (the sweep never erases an
+  account with nonempty code). It needs `wa ∉ benv.createdAccounts`.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -5757,6 +5781,8 @@ contract-neutral.
   `runtime_call_or_staticcall` (fork-free spawn restriction) and `exec_noDel`:
   all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
   where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
+  `code_toList_ne_nil` and `transaction_noDel` (one selected transaction under
+  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in

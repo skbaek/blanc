@@ -1,6 +1,7 @@
 import Blanc.Lift.Weth9.Check
 import Blanc.Lift.CallRestriction
 import Blanc.ExecutionNoDelProducer
+import Blanc.ExecutionNoDelTransaction
 
 /-!
 # Terminal safety of the checked WETH9 runtime
@@ -59,5 +60,27 @@ theorem exec_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execu
     (initial : Devm.NoDel wa pre) : Execution.NoDel wa out :=
   Exec.inv_noDel_of_installedCert Blanc.Lift.Weth9.cert_check cert_callOnly cert_noSelfdestruct
     code_not_delegation run hsg installed root initial
+
+/-- The checked WETH9 runtime is nonempty. -/
+theorem code_toList_ne_nil : Blanc.Lift.Weth9.code.toList ≠ [] := by
+  intro h
+  have hsize : Blanc.Lift.Weth9.code.size = 0 := by
+    rw [ByteArray.size_eq_length_toList, h, List.length_nil]
+  exact absurd hsize (by decide +kernel)
+
+/-- **One selected transaction keeps an account holding the checked WETH9 runtime.** Under
+`stateGas = none` and no fork premise, when `wa` holds the runtime at transaction entry and was not
+created in the block, the transaction never schedules `wa` for deletion and `wa` still holds the
+runtime after the message and in the final state. -/
+theorem transaction_noDel {wa : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {index : Nat} {state : State} {bout' : BlockOutput}
+    (trace : ExecutionTrace.TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = Blanc.Lift.Weth9.code)
+    (notCreated : wa ∉ benv.createdAccounts) :
+    wa ∉ trace.messageOut.accountsToDelete ∧ trace.messageState.getCode wa = Blanc.Lift.Weth9.code ∧
+      state.getCode wa = Blanc.Lift.Weth9.code :=
+  trace.noDel_of_installedCert Blanc.Lift.Weth9.cert_check cert_callOnly cert_noSelfdestruct
+    code_not_delegation code_toList_ne_nil hsg installed notCreated
 
 end Blanc.Lift.Weth9
