@@ -3966,9 +3966,15 @@ consumer needs canonical interpreter ingress as one conjunct:
   the `stateGas = none` twins (`TransactionTrace.msg_gas_noStateGas`,
   `gas_le_remaining_noStateGas`, the `rawFrames_gasMeasure_le_noStateGas`
   family, `header_gasLimit_lt_of_transition`, the modern statements unchanged
-  as wrappers). Bounds needing a numerical rule value (`txBase` for the strict
-  `rawFrames_gas_lt` chain, `dataNonZero` for the calldata chain) are not
-  derivable from the capabilities and are not covered here.
+  as wrappers). Bounds needing a numerical rule value arrive as explicit
+  fork-class hypotheses instead: `ConfiguredHistoryTraceIn.calldata_bound` /
+  `frameAdmitted_calldata` (and staged/block forms) take
+  `hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero`, and the strict
+  `rawFrames_gas_lt` chain (`TransactionTrace.msg_gas_succ_le_noStateGas`,
+  `intrinsicGas_bounds_noStateGas`, staged/block forms) takes
+  `hbase : ∀ f, F f → (Fork.ruleSet f).gas.txBase = 21000`; the `_hist`
+  corollaries discharge both for `HistFork` (`HistFork.dataNonZero_ge`,
+  `HistFork.txBase_eq`, each proved by `cases f <;> decide`).
 - To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
   to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
   a history are closed under descent, `RawFramesClosed`, layer by layer from

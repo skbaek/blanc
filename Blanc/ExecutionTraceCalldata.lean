@@ -318,21 +318,29 @@ theorem messageCallExecutionMessage_benvStat (msg : Msg) :
 charges at least one token per byte at `4` gas per token, and the transaction
 gas fits under the block gas limit, which header validation keeps below
 `2 ^ 63`.  The Osaka-and-later `2 ^ 24` transaction cap is not needed. -/
+theorem TransactionTrace.data_length_lt_noStateGas {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (hnz : 16 ≤ benv.stat.rules.txr.dataNonZero)
+    (hgas : tx.gas ≤ benv.stat.blockGasLimit)
+    (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
+    tx.data.length < 2 ^ 256 := by
+  have hmul4 : tx.data.length * 4 ≤ tx.gas :=
+    tx_data_length_mul4_le_gas hsg hnz trace.validation
+  have hbig : (2 : Nat) ^ 63 < 2 ^ 256 := by decide
+  omega
+
 theorem TransactionTrace.data_length_lt {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hfork : CoveredFork benv.stat.fork)
     (hgas : tx.gas ≤ benv.stat.blockGasLimit)
     (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
-    tx.data.length < 2 ^ 256 := by
-  have hsg : benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hmul4 : tx.data.length * 4 ≤ tx.gas :=
-    tx_data_length_mul4_le_gas hsg
-      (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
-        (by decide) (by decide) (by decide) (by decide))
-      trace.validation
-  have hbig : (2 : Nat) ^ 63 < 2 ^ 256 := by decide
-  omega
+    tx.data.length < 2 ^ 256 :=
+  trace.data_length_lt_noStateGas hfork.rules_stateGas_none
+    (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+      (by decide) (by decide) (by decide) (by decide)) hgas hlim
 
 /-- A system message carries exactly the data it was built with. -/
 theorem systemTransactionMessage_data {benv : Benv} {target : Adr} {data : Bytes} :
@@ -566,11 +574,11 @@ theorem Evm.step_spawn_child_data {pc : Nat} {sevm : Sevm} {pre : Devm}
     Evm.step_spawn_child_data_noStateGas hfork.rules_stateGas_none hs henter
   exact ⟨hchild, Evm.step_spawn_child_fork hs henter hfork⟩
 
-/-- Every entered frame of a covered-fork execution has short calldata. -/
-theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
+/-- Every entered frame of an execution running without state gas has short calldata. -/
+theorem Exec.rawFrameRoots_data_bound_noStateGas {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out)
     (hroot : sevm.data.length < 2 ^ 256)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : sevm.benvStat.rules.stateGas = none) :
     ∀ root ∈ Exec.rawFrameRoots run, root.sevm.data.length < 2 ^ 256 := by
   revert hroot hfork
   induction run with
@@ -602,7 +610,7 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
         or_true])
   | runErr hstep henter child hresume ih =>
       intro hroot hfork root member
-      obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data hfork hstep henter
+      obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data_noStateGas hfork hstep henter
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | rfl | member
       · exact hroot
@@ -611,7 +619,7 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
         or_true])
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro hroot hfork root member
-      obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data hfork hstep henter
+      obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data_noStateGas hfork hstep henter
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
         List.mem_append] at member
       rcases member with rfl | rfl | member | member
@@ -622,16 +630,24 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
       · exact ihNext hroot hfork root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
         or_true])
 
+/-- Every entered frame of a covered-fork execution has short calldata. -/
+theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out)
+    (hroot : sevm.data.length < 2 ^ 256)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    ∀ root ∈ Exec.rawFrameRoots run, root.sevm.data.length < 2 ^ 256 :=
+  Exec.rawFrameRoots_data_bound_noStateGas run hroot hfork.rules_stateGas_none
+
 /-! ## From retained slots to whole histories -/
 
 /-- A retained slot whose frame message has short calldata enters only
 short-calldata frames. -/
-theorem RetainedXlot.rawFrames_data_bound
+theorem RetainedXlot.rawFrames_data_bound_noStateGas
     {frame : Frame} {slot : Xlot}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)
     (hdata : frame.inner.data.length < 2 ^ 256)
-    (hfork : CoveredFork frame.inner.benv.stat.fork) :
+    (hfork : frame.inner.benv.stat.rules.stateGas = Option.none) :
     ∀ root ∈ retained.rawFrames, root.sevm.data.length < 2 ^ 256 := by
   cases retained with
   | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
@@ -648,31 +664,60 @@ theorem RetainedXlot.rawFrames_data_bound
       have hroot : sevm.data.length < 2 ^ 256 := by
         rw [hdata']
         exact hdata
-      have hfork' : CoveredFork sevm.benvStat.fork := by
+      have hfork' : sevm.benvStat.rules.stateGas = Option.none := by
         rw [hstat']
         exact hfork
-      exact Exec.rawFrameRoots_data_bound run hroot hfork'
+      exact Exec.rawFrameRoots_data_bound_noStateGas run hroot hfork'
+
+theorem RetainedXlot.rawFrames_data_bound
+    {frame : Frame} {slot : Xlot}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)
+    (hdata : frame.inner.data.length < 2 ^ 256)
+    (hfork : CoveredFork frame.inner.benv.stat.fork) :
+    ∀ root ∈ retained.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  RetainedXlot.rawFrames_data_bound_noStateGas retained hrun hdata
+    hfork.rules_stateGas_none
 
 /-- Call execution preserves the bound. -/
+theorem ProcessMessageTrace.rawFrames_data_bound_noStateGas {msg : Msg}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessMessageTrace msg out)
+    (hmsg : msg.data.length < 2 ^ 256)
+    (hfork : msg.benv.stat.rules.stateGas = none) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  RetainedXlot.rawFrames_data_bound_noStateGas trace.retained trace.run hmsg hfork
+
 theorem ProcessMessageTrace.rawFrames_data_bound {msg : Msg}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessMessageTrace msg out)
     (hmsg : msg.data.length < 2 ^ 256) (hfork : CoveredFork msg.benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
-  RetainedXlot.rawFrames_data_bound trace.retained trace.run hmsg hfork
+  ProcessMessageTrace.rawFrames_data_bound_noStateGas trace hmsg
+    hfork.rules_stateGas_none
 
 /-- Create execution preserves the bound. -/
+theorem ProcessCreateMessageTrace.rawFrames_data_bound_noStateGas {msg : Msg}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out)
+    (hmsg : msg.data.length < 2 ^ 256)
+    (hfork : msg.benv.stat.rules.stateGas = none) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  RetainedXlot.rawFrames_data_bound_noStateGas trace.retained trace.run hmsg hfork
+
 theorem ProcessCreateMessageTrace.rawFrames_data_bound {msg : Msg}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (trace : ProcessCreateMessageTrace msg out)
     (hmsg : msg.data.length < 2 ^ 256) (hfork : CoveredFork msg.benv.stat.fork) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
-  RetainedXlot.rawFrames_data_bound trace.retained trace.run hmsg hfork
+  ProcessCreateMessageTrace.rawFrames_data_bound_noStateGas trace hmsg
+    hfork.rules_stateGas_none
 
 /-- A settled message call preserves the bound. -/
-theorem MessageCallTrace.rawFrames_data_bound {msg : Msg} {state : State}
+theorem MessageCallTrace.rawFrames_data_bound_noStateGas {msg : Msg} {state : State}
     {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
-    (hmsg : msg.data.length < 2 ^ 256) (hfork : CoveredFork msg.benv.stat.fork) :
+    (hmsg : msg.data.length < 2 ^ 256)
+    (hfork : msg.benv.stat.rules.stateGas = none) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
   cases trace with
   | createCollision _ _ _ =>
@@ -681,7 +726,7 @@ theorem MessageCallTrace.rawFrames_data_bound {msg : Msg} {state : State}
   | createRun _ _ _ _ core _ =>
       intro root hmem
       simp only [MessageCallTrace.rawFrames] at hmem
-      exact ProcessCreateMessageTrace.rawFrames_data_bound core hmsg hfork
+      exact ProcessCreateMessageTrace.rawFrames_data_bound_noStateGas core hmsg hfork
         root hmem
   | callRun _ delegated refund hdel execMsg hexec _ _ core _ =>
       intro root hmem
@@ -691,11 +736,18 @@ theorem MessageCallTrace.rawFrames_data_bound {msg : Msg} {state : State}
       have hexec_data : execMsg.data.length < 2 ^ 256 := by
         rw [hexec, messageCallExecutionMessage_data, hdel_data]
         exact hmsg
-      have hexec_fork : CoveredFork execMsg.benv.stat.fork := by
+      have hexec_fork : execMsg.benv.stat.rules.stateGas = none := by
         rw [hexec, messageCallExecutionMessage_benvStat, hdel_stat]
         exact hfork
-      exact ProcessMessageTrace.rawFrames_data_bound core hexec_data hexec_fork
+      exact ProcessMessageTrace.rawFrames_data_bound_noStateGas core hexec_data hexec_fork
         root hmem
+
+theorem MessageCallTrace.rawFrames_data_bound {msg : Msg} {state : State}
+    {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
+    (hmsg : msg.data.length < 2 ^ 256) (hfork : CoveredFork msg.benv.stat.fork) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  MessageCallTrace.rawFrames_data_bound_noStateGas trace hmsg
+    hfork.rules_stateGas_none
 
 /-- `prepareMessage` copies `tx.data` (calls) or `[]` (creates). -/
 theorem prepareMessage_data {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -712,105 +764,149 @@ theorem prepareMessage_data {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     exact Or.inl rfl
 
 /-- A transaction's retained frames all have short calldata. -/
+theorem TransactionTrace.rawFrames_data_bound_noStateGas {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (hnz : 16 ≤ benv.stat.rules.txr.dataNonZero)
+    (hgas : tx.gas ≤ benv.stat.blockGasLimit)
+    (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
+  have htx := TransactionTrace.data_length_lt_noStateGas trace hsg hnz hgas hlim
+  have hmsg : trace.msg.data.length < 2 ^ 256 := by
+    rcases prepareMessage_data trace.prepared with h | h
+    · rw [h]; exact htx
+    · rw [h]; decide
+  have hfork_msg : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    simpa only [BenvStat.rules, Benv.beginTransaction] using hsg
+  intro root hmem
+  simp only [TransactionTrace.rawFrames] at hmem
+  exact MessageCallTrace.rawFrames_data_bound_noStateGas trace.message hmsg hfork_msg
+    root hmem
+
 theorem TransactionTrace.rawFrames_data_bound {benv : Benv} {bout : BlockOutput}
     {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hfork : CoveredFork benv.stat.fork)
     (hgas : tx.gas ≤ benv.stat.blockGasLimit)
     (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
-    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
-  have htx := TransactionTrace.data_length_lt trace hfork hgas hlim
-  have hmsg : trace.msg.data.length < 2 ^ 256 := by
-    rcases prepareMessage_data trace.prepared with h | h
-    · rw [h]; exact htx
-    · rw [h]; decide
-  have hfork_msg : CoveredFork trace.msg.benv.stat.fork := by
-    rw [prepareMessage_benv trace.prepared]
-    simpa only [Benv.beginTransaction] using hfork
-  intro root hmem
-  simp only [TransactionTrace.rawFrames] at hmem
-  exact MessageCallTrace.rawFrames_data_bound trace.message hmsg hfork_msg
-    root hmem
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  trace.rawFrames_data_bound_noStateGas hfork.rules_stateGas_none
+    (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+      (by decide) (by decide) (by decide) (by decide)) hgas hlim
 
 /-- A system message's retained frames all have short calldata. -/
-theorem SystemMessageTrace.rawFrames_data_bound {benv : Benv} {target : Adr}
+theorem SystemMessageTrace.rawFrames_data_bound_noStateGas {benv : Benv} {target : Adr}
     {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (hdata : data.length < 2 ^ 256)
-    (hfork : CoveredFork benv.stat.fork) :
+    (hfork : benv.stat.rules.stateGas = none) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
   intro root hmem
   simp only [SystemMessageTrace.rawFrames] at hmem
   have hmsg : (systemTransactionMessage benv target data).data.length < 2 ^ 256 := by
     rw [systemTransactionMessage_data]
     exact hdata
-  have hfork' : CoveredFork
-      (systemTransactionMessage benv target data).benv.stat.fork := hfork
-  exact MessageCallTrace.rawFrames_data_bound trace.message hmsg hfork'
+  have hfork' :
+      (systemTransactionMessage benv target data).benv.stat.rules.stateGas
+        = none := hfork
+  exact MessageCallTrace.rawFrames_data_bound_noStateGas trace.message hmsg hfork'
     root hmem
+
+theorem SystemMessageTrace.rawFrames_data_bound {benv : Benv} {target : Adr}
+    {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (hdata : data.length < 2 ^ 256)
+    (hfork : CoveredFork benv.stat.fork) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  SystemMessageTrace.rawFrames_data_bound_noStateGas trace hdata
+    hfork.rules_stateGas_none
 
 /-- A transaction fold preserves the bound; each head's gas fits by its own
 check, and `withState` preserves fork and gas limit definitionally. -/
+theorem ApplyTransactionsTrace.rawFrames_data_bound_noStateGas
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hfork : benv.stat.rules.stateGas = none)
+    (hnz : 16 ≤ benv.stat.rules.txr.dataNonZero)
+    (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
+  revert trace hfork hnz hlim
+  induction txs generalizing benv bout finalBenv finalBout with
+  | nil =>
+      intro trace hfork hnz hlim root hmem
+      cases trace with
+      | nil _ _ =>
+        simp only [rawFrames, List.not_mem_nil] at hmem
+  | cons head txs ih =>
+      intro trace hfork hnz hlim root hmem
+      cases trace with
+      | cons headTrace tailTrace =>
+        rename_i index tx txState txBout
+        simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at hmem
+        rcases hmem with hmem | hmem
+        · have hsg_bt : (benv.beginTransaction).stat.rules.stateGas = none :=
+            hfork
+          have hgas : tx.gas ≤ benv.stat.blockGasLimit :=
+            tx_gas_le_blockGasLimit_of_checked (benv := benv.beginTransaction)
+              hsg_bt headTrace.checked
+          exact TransactionTrace.rawFrames_data_bound_noStateGas headTrace hfork hnz hgas
+            hlim root hmem
+        · exact ih tailTrace hfork hnz hlim root hmem
+
 theorem ApplyTransactionsTrace.rawFrames_data_bound
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (hfork : CoveredFork benv.stat.fork)
     (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
-    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
-  revert trace hfork hlim
-  induction txs generalizing benv bout finalBenv finalBout with
-  | nil =>
-      intro trace hfork hlim root hmem
-      cases trace with
-      | nil _ _ =>
-        simp only [rawFrames, List.not_mem_nil] at hmem
-  | cons head txs ih =>
-      intro trace hfork hlim root hmem
-      cases trace with
-      | cons headTrace tailTrace =>
-        rename_i index tx txState txBout
-        simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at hmem
-        rcases hmem with hmem | hmem
-        · have hsg : benv.stat.rules.stateGas = none :=
-            hfork.rules_stateGas_none
-          have hsg_bt : (benv.beginTransaction).stat.rules.stateGas = none :=
-            hsg
-          have hgas : tx.gas ≤ benv.stat.blockGasLimit :=
-            tx_gas_le_blockGasLimit_of_checked (benv := benv.beginTransaction)
-              hsg_bt headTrace.checked
-          exact TransactionTrace.rawFrames_data_bound headTrace hfork hgas
-            hlim root hmem
-        · exact ih tailTrace hfork hlim root hmem
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  trace.rawFrames_data_bound_noStateGas hfork.rules_stateGas_none
+    (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+      (by decide) (by decide) (by decide) (by decide)) hlim
 
 /-- A block body's retained frames all have short calldata. -/
+theorem AppliedBodyTrace.rawFrames_data_bound_noStateGas {benv : Benv}
+    {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : benv.stat.rules.stateGas = none)
+    (hnz : 16 ≤ benv.stat.rules.txr.dataNonZero)
+    (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
+  intro root hmem
+  simp only [AppliedBodyTrace.rawFrames, List.mem_append] at hmem
+  rcases hmem with ((hmem | hmem) | hmem) | hmem
+  · exact SystemMessageTrace.rawFrames_data_bound_noStateGas trace.beacon
+      (systemData_length_lt (Or.inr ⟨_, rfl⟩)) hfork root hmem
+  · exact SystemMessageTrace.rawFrames_data_bound_noStateGas trace.history
+      (systemData_length_lt (Or.inr ⟨_, rfl⟩)) hfork root hmem
+  · exact ApplyTransactionsTrace.rawFrames_data_bound_noStateGas trace.transactions
+      hfork hnz hlim root hmem
+  · simp only [RequestsTrace.rawFrames, List.mem_append] at hmem
+    have hst_tx := ApplyTransactionsTrace.stat_eq trace.transactions
+    have hfork_req : trace.transactionBenv.stat.rules.stateGas = none := by
+      rw [hst_tx]
+      exact hfork
+    rcases hmem with hmem | hmem
+    · exact SystemMessageTrace.rawFrames_data_bound_noStateGas trace.requests.withdrawal
+        (systemData_length_lt (Or.inl rfl)) hfork_req root hmem
+    · exact SystemMessageTrace.rawFrames_data_bound_noStateGas
+        trace.requests.consolidation
+        (systemData_length_lt (Or.inl rfl)) hfork_req root hmem
+
 theorem AppliedBodyTrace.rawFrames_data_bound {benv : Benv}
     {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs ommers wds state bout)
     (hfork : CoveredFork benv.stat.fork)
     (hlim : benv.stat.blockGasLimit < 2 ^ 63) :
-    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 := by
-  intro root hmem
-  simp only [AppliedBodyTrace.rawFrames, List.mem_append] at hmem
-  rcases hmem with ((hmem | hmem) | hmem) | hmem
-  · exact SystemMessageTrace.rawFrames_data_bound trace.beacon
-      (systemData_length_lt (Or.inr ⟨_, rfl⟩)) hfork root hmem
-  · exact SystemMessageTrace.rawFrames_data_bound trace.history
-      (systemData_length_lt (Or.inr ⟨_, rfl⟩)) hfork root hmem
-  · exact ApplyTransactionsTrace.rawFrames_data_bound trace.transactions
-      hfork hlim root hmem
-  · simp only [RequestsTrace.rawFrames, List.mem_append] at hmem
-    have hst_tx := ApplyTransactionsTrace.stat_eq trace.transactions
-    have hfork_req : CoveredFork trace.transactionBenv.stat.fork := by
-      rw [hst_tx]
-      exact hfork
-    rcases hmem with hmem | hmem
-    · exact SystemMessageTrace.rawFrames_data_bound trace.requests.withdrawal
-        (systemData_length_lt (Or.inl rfl)) hfork_req root hmem
-    · exact SystemMessageTrace.rawFrames_data_bound
-        trace.requests.consolidation
-        (systemData_length_lt (Or.inl rfl)) hfork_req root hmem
+    ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
+  trace.rawFrames_data_bound_noStateGas hfork.rules_stateGas_none
+    (hfork.cases (motive := fun f => 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+      (by decide) (by decide) (by decide) (by decide)) hlim
 
 /-- A configured block's retained frames all have short calldata: the gas
 limit comes from header validation, the fork from the block itself. -/
