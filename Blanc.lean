@@ -89,6 +89,7 @@ import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionSenderOccurrences
 import Blanc.ExecutionDelegationEligibility
 import Blanc.ExecutionSystemDelegation
+import Blanc.ExecutionHistoryDelegationEligibility
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
 import Blanc.ExecutionStagedFrames
@@ -1686,6 +1687,7 @@ import Blanc.Lift.Usdc.ProxyCreation.ConstantsCheck
 import Blanc.Lift.Usdc.ProxyCreation.Prefix
 import Blanc.Lift.Usdc.ProxyCreation.Effects
 import Blanc.Lift.Usdc.ProxyCreation.Settlement
+import Blanc.Lift.Usdc.ProxyCreation.HistoryFrame
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt
 import Blanc.Lift.Usdc.ProxyOk

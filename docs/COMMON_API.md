@@ -4798,6 +4798,17 @@ premise. The carrier retains the actual code refresh and refund conversion.
 `excluded_of_all` converts the older all-tuples exclusion only in the sound
 direction; eligible exclusion does not imply that stronger premise.
 
+Along a selected-domain history, use
+[`Blanc/ExecutionHistoryDelegationEligibility.lean`](../Blanc/ExecutionHistoryDelegationEligibility.lean).
+`MessageCallTrace.NoEligibleAuthorityAt` asks it of every delegation phase of
+an actual call arm (create arms have no phase);
+`ApplyTransactionsTrace.NoEligibleAuthorityAt` and
+`ConfiguredHistoryTraceIn.NoEligibleAuthorityAt` fold it over exactly the
+actual transactions of every block. `MessageCallTrace.delegated_getCode`
+reads it back as code preservation in the delegated message;
+`noEligibleAuthorityAt_of_disabled` discharges it where the message's rules
+disable delegation.
+
 For canonical system messages, use
 [`Blanc/ExecutionSystemDelegation.lean`](../Blanc/ExecutionSystemDelegation.lean).
 `systemTransactionMessage_auths_nil` derives the empty list from Jaune's own
@@ -6880,6 +6891,13 @@ contract-neutral.
   nonempty-code, nonce, fork or desired-state premise is required. Actual
   bytecode-to-source lifting, historical occurrence and transaction settlement
   remain separate obligations; the local source run is an explicit premise.
+  At a raw frame of a `ConfiguredHistoryTraceIn`,
+  [`Blanc/Lift/Usdc/ProxyCreation/HistoryFrame.lean`](../Blanc/Lift/Usdc/ProxyCreation/HistoryFrame.lean)
+  derives that source run from the frame (`constructor_run_of_exec` over
+  `lift_sound_noStateGas`, entry facts from `rawFrame_entryFacts`):
+  `constructor_effects_rawFrame` and `constructor_row_preserved_rawFrame`
+  need only success and the registered creation code. Installation by
+  `processCreateMessage` is not part of them.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry
