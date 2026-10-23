@@ -5442,6 +5442,18 @@ contract-neutral.
   original `StepIn R` relation and outcome. They require no memory bounds,
   nonwrapping arithmetic or initial zero seed; whole-initializer coverage
   and historical execution remain separate obligations.
+  For the source-shaped memory-to-storage payload loop, use
+  [`Blanc/Lift/SolcStoragePayload.lean`](../Blanc/Lift/SolcStoragePayload.lean).
+  `runP_enriched` retains the actual step relation, entry state and outcome,
+  classifying stores as zero or an indexed modular payload key. Its count is
+  `(end.toNat - initialCursor + 31) / 32`, using the actual endpoint word.
+  Inputs include the actual head table equation, a proved exit certificate
+  and a `ReadWindow` law for executed memory loads. `readWindow_potStep`
+  supplies that law from existing poststate memory potential; `body_case`
+  derives the actual store and back-edge stack without a fork-specific
+  storage-update law. Keys remain modular. Initial potential, concrete
+  wrapper staging, whole-root coverage and protected-key separation must
+  still be established by the consumer; none follows from this local loop.
   The concrete V2 consumer in
   [`Blanc/Lift/Usdc/OldInitializerEffects.lean`](../Blanc/Lift/Usdc/OldInitializerEffects.lean)
   derives `implV2_initializeV2_observed` from successful fresh execution and
