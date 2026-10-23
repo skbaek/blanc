@@ -45,80 +45,6 @@ structure DeploymentRoot
   deployed_validContext : deployed.ValidContext
   deployed_chainId : chainId = deployed.chainId
 
-/-- A successful configured Prague-only step over the strict official
-envelope establishes the Lido deployment root. -/
-theorem canonicalDeploymentStep_establishes_root
-    (chainId : UInt64) (base deployed : BlockChain)
-    (cb : CanonicalBlock) (txBytes : Bytes)
-    (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
-    (henv : CanonicalOfficialDeploymentBlock chainId base cb
-      txBytes tx sender ca)
-    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
-      base cb.block = .ok deployed) :
-    DeploymentRoot chainId base deployed ca := by
-  obtain ⟨ctx⟩ :=
-    prepareCanonicalDeploymentContext chainId base cb tx sender ca hbase henv
-  obtain ⟨post, bout, htx⟩ :=
-    canonicalDeploymentTransaction_succeeds chainId base cb tx sender ca
-      hbase henv ctx
-  obtain ⟨suffix⟩ :=
-    canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
-      ctx post bout htx
-  have happly : applyBody (initBenv .prague base cb.block.header)
-      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
-    canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
-      henv ctx post bout htx suffix
-  have hwith : stateTransitionAt .prague base cb.block = .ok deployed := by
-    have h := hstep
-    rw [stateTransitionUsing_eq_of_chainId_eq
-      (cfg := ChainConfig.pragueOnly chainId) (ch := base)
-      (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simp only [Except.bind, Except.mapError, ChainConfig.pragueOnly_forkAt] at h
-    rw [stateTransitionScheduledE_of_pow_none _ .prague base cb.block rfl] at h
-    exact h
-  have hstate : post = deployed.state := by
-    have hinvert := hwith
-    rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
-    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
-    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
-    dsimp only at hinvert
-    obtain ⟨⟨st, bout'⟩, hab, hinvert⟩ := Except.bind_eq_ok hinvert
-    rw [happly] at hab
-    obtain ⟨hst, hbout⟩ := Prod.mk.inj (Except.ok.inj hab)
-    subst st
-    subst bout'
-    dsimp only at hinvert
-    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
-    rw [← Except.ok.inj hinvert]
-  let checkedBase := CheckedBlockChain.ofValidContext hbase.validContext
-  have hwithChecked :
-      stateTransitionAt .prague checkedBase.val cb.block = .ok deployed := by
-    change stateTransitionAt .prague base cb.block = .ok deployed
-    exact hwith
-  have hcontext := BlockChain.validContext_of_transition
-    (cc := checkedBase) (cb := cb) hwithChecked
-  have hvalid : deployed.ValidContext := by
-    let checkedDeployed := CheckedBlockChain.ofEvidence deployed cb.block
-      hcontext.1 hcontext.2.1 hcontext.2.2.1 hcontext.2.2.2
-    exact checkedDeployed.validContext
-  have hchain : chainId = deployed.chainId :=
-    hbase.chainId_eq.trans (stateTransitionAt_preserves_chainId hwith).symm
-  refine ⟨?_, hbase.target_ne_zero, hbase.target_not_precompile,
-    ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
-  · exact ⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,
-      ⟨suffix⟩, hstep, happly, hstate⟩
-  · rw [← hstate]
-    exact htx.installed
-  · rw [← hstate]
-    exact htx.pauseDuration
-  · rw [← hstate]
-    exact htx.heartbeatInterval
-  · rw [← hstate]
-    exact htx.emptyRegistry
-  · rw [← hstate]
-    exact suffix.stable
-
 /-! ## Selected-fork configured deployment root -/
 
 /-- The exact official deployment witness at a successful transition under a
@@ -149,6 +75,10 @@ structure DeploymentRootAt
     post = deployed.state
   configValid : cfg.Valid
   target_ne_zero : ca ≠ 0
+  target_not_precompile : ∀ {tip rules},
+    deployed.blocks.getLast? = some tip →
+    cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules →
+    ¬ rules.isPrecomp ca
   installed : some (deployed.state.getCode ca).toList =
     Prog.compile (runtime officialParams)
   pauseDuration : (deployed.state.getStor ca).get pauseDurationSlot =
@@ -244,7 +174,16 @@ theorem canonicalDeploymentStepAt_establishes_root
     exact checkedDeployed.validContext
   have hchain : cfg.chainId = deployed.chainId :=
     hbase.chainId_eq.trans (stateTransitionAt_preserves_chainId hwith).symm
-  refine ⟨?_, hconfigValid, hbase.target_ne_zero,
+  have hnotPrecomp : ∀ {tip rules}, deployed.blocks.getLast? = some tip →
+      cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules →
+      ¬ rules.isPrecomp ca := by
+    intro tip rules htip hrules
+    obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
+    obtain rfl := Option.some.inj (hnew.symm.trans htip)
+    rw [hrulesAt] at hrules
+    obtain rfl := Except.ok.inj hrules
+    exact hbase.target_not_precompile
+  refine ⟨?_, hconfigValid, hbase.target_ne_zero, hnotPrecomp,
     ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
   · exact ⟨fork, cb, txBytes, tx, sender, ctx, post, bout, hfork, hforkAt,
       hrulesAt, hbase, henv, htx, ⟨suffix⟩, hstep, hwith, happly, hstate⟩
@@ -258,6 +197,54 @@ theorem canonicalDeploymentStepAt_establishes_root
     exact htx.emptyRegistry
   · rw [← hstate]
     exact suffix.stable
+
+/-- A successful configured Prague-only step over the strict official
+envelope establishes the Lido deployment root. Fixed Prague compatibility
+specialization: the post-state facts, validity and chain id are read off the
+selected-fork root at the Prague-only schedule, and the Prague execution
+witness is tied to that root's deployed state. -/
+theorem canonicalDeploymentStep_establishes_root
+    (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    DeploymentRoot chainId base deployed ca := by
+  have hroot := canonicalDeploymentStepAt_establishes_root
+    (ChainConfig.pragueOnly chainId) .prague base deployed cb txBytes tx
+    sender ca hbase henv.toAt CoveredFork.prague
+    (ChainConfig.pragueOnly_forkAt chainId _ _) hstep
+  obtain ⟨ctx⟩ :=
+    prepareCanonicalDeploymentContext chainId base cb tx sender ca hbase henv
+  obtain ⟨post, bout, htx⟩ :=
+    canonicalDeploymentTransaction_succeeds chainId base cb tx sender ca
+      hbase henv ctx
+  obtain ⟨suffix⟩ :=
+    canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
+      ctx post bout htx
+  have happly : applyBody (initBenv .prague base cb.block.header)
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
+    canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
+      henv ctx post bout htx suffix
+  have hstate : post = deployed.state := by
+    obtain ⟨fork', cb', _, _, _, _, post', bout', _, hforkAt', _, _, _, _, _,
+      hstep', _, happly', hstate'⟩ := hroot.execution
+    obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
+    obtain ⟨_, _, _, _, hnew'⟩ := stateTransitionUsing_reachedStep hstep'
+    have hblock : cb'.block = cb.block := Option.some.inj (hnew'.symm.trans hnew)
+    rw [ChainConfig.pragueOnly_forkAt] at hforkAt'
+    obtain rfl := (Except.ok.inj hforkAt').symm
+    rw [hblock, happly] at happly'
+    obtain ⟨hpost, -⟩ := Prod.mk.inj (Except.ok.inj happly')
+    rw [hpost, hstate']
+  exact ⟨⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,
+      ⟨suffix⟩, hstep, happly, hstate⟩,
+    hroot.target_ne_zero, hbase.target_not_precompile, hroot.installed,
+    hroot.pauseDuration, hroot.heartbeatInterval, hroot.emptyRegistry,
+    hroot.stable, hroot.deployed_validContext, hroot.deployed_chainId⟩
 
 /-! ## Deployment-rooted configured histories -/
 
