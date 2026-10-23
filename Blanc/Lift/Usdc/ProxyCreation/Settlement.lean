@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.ProxyCreation.Effects
+import Blanc.Lift.Usdc.ProxyCreation.RuntimeWindow
 import Blanc.DeploymentTouch
 
 /-!
@@ -92,5 +93,123 @@ theorem constructor_message_zero
   · simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
       Std.TreeMap.getD_emptyc]
   · exact hcharged
+
+/-- One constructor-to-CREATE installed-code composition at the actual entry:
+the actual transfer, the actual execution of the actual entry machine to the
+actual raw result, and the actual touch/charge settlement install a result
+whose target carries the registered proxy runtime and the exact whole target
+storage. -/
+theorem constructor_message_effects
+    {msg : Msg} {benv : Benv} {raw charged : Devm}
+    (hcode : msg.code = code)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = none)
+    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (hexec : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw)
+    (herror : raw.error = none)
+    (hcharge : processCreateMessage.chargeCodeGas msg.benv.stat.rules
+      (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget raw) = .ok charged)
+    (hrun : SFunc.Run cert.prog
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna
+      t_0000_c0 (.halted raw)) :
+    ∃ installed, processCreateMessage msg = .ok installed ∧
+      installed.getCode msg.currentTarget = Proxy.code ∧
+      installed.getStor msg.currentTarget =
+        (Stor.empty.set implSlot initialImplementation).set adminSlot
+          msg.caller.toB256 := by
+  have hsevm_code :
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.code = code :=
+    hcode
+  have hzero : (processCreateMessage.msg msg).value = 0 := hvalue
+  have hrunSt : SFunc.Run cert.prog
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+      (St (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna [] Mem.empty
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna.gasLeft)
+      t_0000_c0 (.halted raw) := hrun
+  have hbenv_stor : benv.state.getStor msg.currentTarget = Stor.empty := by
+    have hkeep :=
+      benvAfterTransfer_ok_getStor htransfer msg.currentTarget (Or.inl hzero)
+    rw [hkeep]
+    exact processCreateMessage_msg_getStor_currentTarget msg
+  obtain ⟨hstor, houtput, -⟩ := constructor_effects_of_run hsevm_code hrunSt
+  have hraw_stor : raw.getStor msg.currentTarget =
+      (Stor.empty.set implSlot initialImplementation).set adminSlot
+        msg.caller.toB256 := by
+    have h : raw.getStor msg.currentTarget =
+        (((benv.state.getStor msg.currentTarget).set implSlot
+          initialImplementation).set adminSlot msg.caller.toB256) := hstor
+    rw [hbenv_stor] at h
+    exact h
+  have hraw_out : raw.output = Proxy.code.toList := by
+    rw [houtput]
+    exact runtime_window
+  have hcharged_stor : charged.getStor msg.currentTarget =
+      raw.getStor msg.currentTarget := by
+    have hstate := chargeCodeGas_state_ok hcharge
+    have hg : Devm.getStor charged msg.currentTarget =
+        Devm.getStor (Devm.recordTouch msg.benv.stat.rules true
+          msg.currentTarget raw) msg.currentTarget := by
+      show charged.state.getStor msg.currentTarget =
+        (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
+          raw).state.getStor msg.currentTarget
+      rw [hstate]
+    rw [hg]
+    show Devm.getStor (Devm.recordTouch msg.benv.stat.rules true
+      msg.currentTarget raw) msg.currentTarget =
+      Devm.getStor raw msg.currentTarget
+    show (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
+      raw).state.getStor msg.currentTarget =
+      raw.state.getStor msg.currentTarget
+    rw [Devm.recordTouch_state]
+  have hcharged_out : charged.output = raw.output := by
+    have hmach := processCreateMessage.chargeCodeGas_ok_eq_setMach hcharge
+    rw [hmach]
+    show (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
+      raw).output = raw.output
+    exact Devm.recordTouch_output _ _ _ _
+  have hout_len : charged.output.length = 2186 := by
+    rw [hcharged_out, houtput]
+    exact List.length_sliceD _ _ _ _
+  have hcode_eq : (⟨⟨charged.output⟩⟩ : ByteArray) = Proxy.code := by
+    apply ByteArray.ext
+    rw [← Array.toList_inj]
+    have e1 : ({data := { toList := charged.output } } : ByteArray).data.toList =
+        charged.output := rfl
+    have e2 : Proxy.code.data.toList = Proxy.code.toList :=
+      ByteArray.toList_eq_toList_data.symm
+    rw [e1, e2, hcharged_out, hraw_out]
+  have hnotEmpty : ¬ ({charged.state.get msg.currentTarget with code :=
+      ⟨⟨charged.output⟩⟩} : Acct).Empty := by
+    intro hempty
+    have hsize : (⟨⟨charged.output⟩⟩ : ByteArray).size = 0 := hempty.1
+    have hsize_eq : (⟨⟨charged.output⟩⟩ : ByteArray).size =
+      charged.output.length := rfl
+    rw [hsize_eq, hout_len] at hsize
+    exact (by decide : 2186 ≠ 0) hsize
+  have hinstalled_code : (charged.setCode msg.currentTarget
+      ⟨⟨charged.output⟩⟩).getCode msg.currentTarget = Proxy.code := by
+    have hget : (charged.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).state.getCode msg.currentTarget =
+        ⟨⟨charged.output⟩⟩ := by
+      show (charged.state.setCode msg.currentTarget
+        ⟨⟨charged.output⟩⟩).getCode msg.currentTarget = ⟨⟨charged.output⟩⟩
+      simp only [State.setCode, State.getCode, State.setAccount_get_self,
+        Acct.clearIfEmpty_code]
+    rw [Devm.getCode_state, hget]
+    exact hcode_eq
+  have hinstalled_stor : (charged.setCode msg.currentTarget
+      ⟨⟨charged.output⟩⟩).getStor msg.currentTarget =
+      (Stor.empty.set implSlot initialImplementation).set adminSlot
+        msg.caller.toB256 := by
+    simp only [Devm.setCode_getStor]
+    split
+    · next h => exact absurd h.2 hnotEmpty
+    · next _ => exact hcharged_stor.trans hraw_stor
+  have hsettle : processCreateMessage msg =
+      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) :=
+    processCreateMessage_ok_touch_of_exec_and_charge msg htransfer hcodeAddress
+      hexec herror hcharge
+  exact ⟨_, hsettle, hinstalled_code, hinstalled_stor⟩
 
 end Blanc.Lift.Usdc.ProxyCreation

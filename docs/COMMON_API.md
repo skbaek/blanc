@@ -6313,7 +6313,13 @@ contract-neutral.
   composes the actual zero-value CREATE entry, the source constructor run at
   that same entry and raw result, and successful touch/code-charge settlement.
   A row distinct from both literal slots is zero in the installed result,
-  including the empty-account deletion branch of code installation. Actual
+  including the empty-account deletion branch of code installation.
+  `ProxyCreation.constructor_message_effects` uses the same actual entry,
+  source run, raw result and successful charging to derive the installed
+  registered proxy runtime and the entire target storage: empty storage with
+  the initial implementation and actual caller admin written. Runtime length
+  rules out account deletion and preserves those administrative words; no new
+  nonempty-code, nonce, fork or desired-state premise is required. Actual
   bytecode-to-source lifting, historical occurrence and transaction settlement
   remain separate obligations; the local source run is an explicit premise.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
