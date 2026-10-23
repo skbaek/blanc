@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.Check
 import Blanc.Lift.CallRestriction
+import Blanc.ExecutionNoDelProducer
 
 /-!
 # Terminal safety of the checked Uniswap V2 Pair runtime
@@ -27,5 +28,36 @@ theorem runtime_not_selfdestruct {F node : Exec.Deriv} (hpc : F.pc = 0)
     (code := Blanc.Lift.UniswapV2Pair.code) (c := Blanc.Lift.UniswapV2Pair.cert)
     Blanc.Lift.UniswapV2Pair.cert_check Blanc.Lift.UniswapV2Pair.cert_noSelfdestruct
     hpc hcode hstateGas hprefix
+
+/-- Every function of the actual Uniswap V2 Pair certificate spawns only by `CALL`/`STATICCALL`. -/
+theorem cert_callOnly : Blanc.Lift.UniswapV2Pair.cert.callOnly = true := by
+  decide +kernel
+
+/-- The checked Uniswap V2 Pair runtime is no EIP-7702 delegation designator. -/
+theorem code_not_delegation : ¬ isValidDelegation Blanc.Lift.UniswapV2Pair.code := by
+  decide +kernel
+
+/-- Every same-frame prefix of the checked Uniswap V2 Pair runtime spawns only by `CALL` or
+`STATICCALL`, regardless of the frame's eventual outcome and with no fork premise. -/
+theorem runtime_call_or_staticcall {F node : Exec.Deriv} (hpc : F.pc = 0)
+    (hcode : F.sevm.code = Blanc.Lift.UniswapV2Pair.code) (hstateGas : F.sevm.benvStat.rules.stateGas = none)
+    (hprefix : Exec.Deriv.ParentPrefix F node) {x : Xinst}
+    (hat : Ninst.At node.sevm.code node.pc (.exec x)) :
+    x = .call ∨ x = .staticcall :=
+  call_or_staticcall_of_parentPrefix_noStateGas
+    (code := Blanc.Lift.UniswapV2Pair.code) (c := Blanc.Lift.UniswapV2Pair.cert)
+    Blanc.Lift.UniswapV2Pair.cert_check cert_callOnly hpc hcode hstateGas hprefix hat
+
+/-- **All-outcome no-deletion of an account holding the checked Uniswap V2 Pair runtime.** Under
+state-gas absence and no fork premise, a complete execution keeps `Devm.NoDel wa` when `wa`'s
+installed code is the checked runtime and the root, if it owns `wa`'s storage, enters that runtime
+at pc `0`. Reentrant and foreign frames are covered by `Exec.inv_noDel_of_installedCert`. -/
+theorem exec_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hsg : sevm.benvStat.rules.stateGas = none)
+    (installed : pre.getCode wa = Blanc.Lift.UniswapV2Pair.code)
+    (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = Blanc.Lift.UniswapV2Pair.code)
+    (initial : Devm.NoDel wa pre) : Execution.NoDel wa out :=
+  Exec.inv_noDel_of_installedCert Blanc.Lift.UniswapV2Pair.cert_check cert_callOnly cert_noSelfdestruct
+    code_not_delegation run hsg installed root initial
 
 end Blanc.Lift.UniswapV2Pair

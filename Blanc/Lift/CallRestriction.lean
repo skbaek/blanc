@@ -272,5 +272,17 @@ theorem not_selfdestruct_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert
   obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas hc hpc hcode hfork hprefix
   exact ok.not_selfdestruct (Cursor.noSelfdestruct_of_reach checked reachable)
 
+/-- Every same-frame prefix of certified bytes whose certificate has no `CREATE2` or
+`DELEGATECALL` node spawns only by `CALL` or `STATICCALL`, for every eventual frame outcome and
+with selected state-gas absence in place of a covered fork. -/
+theorem call_or_staticcall_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (callOnly : c.callOnly = true)
+    {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
+    (hfork : F.sevm.benvStat.rules.stateGas = none) (hprefix : Exec.Deriv.ParentPrefix F n)
+    {x : Xinst} (hat : Ninst.At n.sevm.code n.pc (.exec x)) :
+    x = .call ∨ x = .staticcall := by
+  obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas hc hpc hcode hfork hprefix
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach callOnly reachable) hat
+
 
 end Blanc.Lift
