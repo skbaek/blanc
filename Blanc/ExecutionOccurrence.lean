@@ -1615,6 +1615,27 @@ theorem Exec.storageReplay_committedPost
 has an exact last retained
 successful SSTORE witness at the same owner and raw key, recording the final
 word.  Later no-op writes are included and therefore supersede earlier writes. -/
+theorem Exec.exists_lastRetainedSstore_of_getStor_ne_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    {owner : Adr} {key : B256}
+    (hcode : (pre.getCode owner).toList ≠ [])
+    (changed :
+      (Devm.getStor pre owner).get key ≠
+        (Devm.getStor (Execution.committedPost out committed) owner).get key) :
+    ∃ write : Exec.SuccessfulSstoreOccurrence
+        (⟨pc, sevm, pre, out, run⟩ : Exec.Deriv),
+      write.Retained ∧
+      write.storageOwner = owner ∧
+      write.key = key ∧
+      write.value =
+        (Devm.getStor (Execution.committedPost out committed) owner).get key ∧
+      write.IsLastRetained := by
+  exact Exec.exists_lastRetainedSstore_of_replay
+    ((Exec.storageReplay_committedPost_noStateGas run committed hsg).2 owner hcode key) changed
+
 theorem Exec.exists_lastRetainedSstore_of_getStor_ne
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
@@ -1632,9 +1653,9 @@ theorem Exec.exists_lastRetainedSstore_of_getStor_ne
       write.key = key ∧
       write.value =
         (Devm.getStor (Execution.committedPost out committed) owner).get key ∧
-      write.IsLastRetained := by
-  exact Exec.exists_lastRetainedSstore_of_replay
-    ((Exec.storageReplay_committedPost run committed hfork).2 owner hcode key) changed
+      write.IsLastRetained :=
+  Exec.exists_lastRetainedSstore_of_getStor_ne_noStateGas run committed
+    hfork.rules_stateGas_none hcode changed
 
 /-- A same-frame prefix endpoint is a recursive descendant of its start. -/
 private theorem Exec.Deriv.ParentPrefix.le
