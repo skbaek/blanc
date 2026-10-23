@@ -21,7 +21,8 @@ flag:
   `Xinst.logs_of_okH`, `Exec.logs_eq_of_static_okH`, `Exec.logs_committedPost_eq_of_staticH`)
   and `Ninst.world_of_quietH`;
 * `ReturnDataBound.staticcall_returnData_length_ltH` / `call_returnData_length_ltH`;
-* `StaticAnsweredH` (`StaticAnsweredH.of_covered`), `ri_staticcallH`, `ri_staticcall_boundedH`,
+* `CoveredFork.rules_delegationEnabled` and `CallCodeH_iff_of_covered`;
+* `StaticAnsweredH` (`StaticAnsweredH.of_covered`, `StaticAnsweredH_iff_of_covered`), `ri_staticcallH`, `ri_staticcall_boundedH`,
   `rx_staticcallH`, and `ri_staticcall_boundedH_covered` recovering the modern statement;
 * the value-carrying `CALL` inversions `of_step_call_val_with_depth_frameH` (with
   `_covered`), `of_run_call_val_with_depth_frameH`, and `ri_call_postH`.
@@ -49,6 +50,22 @@ theorem CallCodeH_enabled {s : Devm} {t na : Adr} {code : ByteArray} {dp : Bool}
         (∃ d, getDelegatedCodeAddress (s.getCode t) = some d ∧ na = d ∧ code = s.getCode d ∧
           dp = true)) := by
   simp only [CallCodeH, ↓reduceIte]
+
+/-- Every covered fork enables EIP-7702 delegation. -/
+theorem CoveredFork.rules_delegationEnabled {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.delegationEnabled = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
+
+/-- On a covered fork, `CallCodeH` at the frame's delegation flag is the modern disjunction. -/
+theorem CallCodeH_iff_of_covered {sevm : Sevm} {s : Devm} {t na : Adr} {code : ByteArray}
+    {dp : Bool} (hfork : CoveredFork sevm.benvStat.fork) :
+    CallCodeH sevm.benvStat.rules.delegationEnabled s t na code dp ↔
+      ((getDelegatedCodeAddress (s.getCode t) = none ∧ na = t ∧ code = s.getCode t ∧
+          dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode t) = some d ∧ na = d ∧ code = s.getCode d ∧
+          dp = true)) := by
+  rw [hfork.rules_delegationEnabled]
+  exact CallCodeH_enabled
 
 /-- Why a value-carrying `STATICCALL` returned its failure flag, under the actual delegation
 flag (`StatcallFailureCause` with `CallCodeH`). -/
@@ -1428,6 +1445,13 @@ theorem StaticAnsweredH.of_covered {sevm : Sevm} {b : Devm} {t : Adr} {input out
   obtain ⟨parent, child, xl, dp, na, code, gas, h1, h2, h3⟩ := h
   rw [hdeleg, CallCodeH_enabled] at h2
   exact ⟨parent, child, xl, dp, na, code, gas, h1, h2, h3⟩
+
+/-- On a covered fork, `StaticAnsweredH` and the modern `StaticAnswered` coincide. -/
+theorem StaticAnsweredH_iff_of_covered {sevm : Sevm} {b : Devm} {t : Adr} {input out : Bytes}
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    StaticAnsweredH sevm b t input out ↔ StaticAnswered sevm b t input out := by
+  unfold StaticAnsweredH StaticAnswered
+  simp only [CallCodeH_iff_of_covered hfork]
 
 /-- `ReturnDataBound.staticcall_returnData_length_lt` under `rules.stateGas = none`. -/
 theorem ReturnDataBound.staticcall_returnData_length_ltH {sevm : Sevm} {pre post : Devm}

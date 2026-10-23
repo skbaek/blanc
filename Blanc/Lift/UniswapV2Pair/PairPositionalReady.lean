@@ -142,19 +142,26 @@ theorem pair_admitted_mint_supply {U : WriterKey → Prop}
     rfl result.output.symm result.grown result.storage
 
 
-theorem pair_admitted_sync_supply {U : WriterKey → Prop}
+/-- The Sync entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_sync_supplyH {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
     representable selector good sub rep
   have inside := writerExtend_universe sub good.sync
-  obtain ⟨_, _, result, _, representation, _, _, output⟩ := sync_bytecode_exact_consumes
-    invocation rep sem image (by rw [installed]; exact image.symm) freshOutput codeEq fork
+  obtain ⟨_, _, result, _, representation, _, _, output⟩ := sync_bytecode_exact_consumesH
+    invocation rep sem image (by rw [installed]; exact image.symm) freshOutput codeEq stateGas bal
     selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
     (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.sync selector)
     (result.admittedConsumes (Auth := LockedAuth)) rfl output.symm (fun _ h => Or.inl h) representation
+
+theorem pair_admitted_sync_supply {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
+    (image : sem.image = some code.toList) :
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9) :=
+  PairStepSupplyWithH.covered (pair_admitted_sync_supplyH inj apart sem image)
 
 
 /-- Ready rules retain recursive admission on the same selected source result. -/

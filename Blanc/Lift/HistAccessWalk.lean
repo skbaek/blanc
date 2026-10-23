@@ -14,7 +14,8 @@ reads, `rules.bal = none` and the access schedule itself; no fork list is assume
 
 * `afterSloadH` — `afterSload` under EIP-2929, the base unchanged under flat access;
   `afterSloadH_of_eip2929`, `afterSloadH_getStor`, `afterSloadH_logs`, `afterSloadH_output`,
-  `getStorVal_afterSloadH`, `getStorVal_afterStoreH`, and the storage-walk steps
+  `getStorVal_afterSloadH`, `getStorVal_afterStoreH`, `getStor_afterStoreH`,
+  `getStor_afterStore_neH`, `logs_afterStoreH`, and the storage-walk steps
   `StorStep.sloadH`/`StorStep.sstoreH`;
 * `ri_sloadH` — `SLOAD`, inverted, under `rules.bal = none` only;
 * `afterSstoreH` — the `SSTORE` successor under the actual access schedule and refund regime
@@ -198,6 +199,20 @@ theorem getStorVal_afterStoreH {sevm : Sevm} {b : Devm} {k v key : B256} :
       ((Devm.getStor b sevm.currentTarget).set k v).get key := by
   show (Devm.getStor _ _).get _ = _
   rw [afterSstoreH_getStor_self, afterSloadH_getStor]
+
+theorem getStor_afterStoreH {sevm : Sevm} {b : Devm} {k v : B256} :
+    Devm.getStor (afterSstoreH sevm (afterSloadH sevm b k) k v) sevm.currentTarget =
+      (Devm.getStor b sevm.currentTarget).set k v := by
+  rw [afterSstoreH_getStor_self, afterSloadH_getStor]
+
+theorem getStor_afterStore_neH {sevm : Sevm} {b : Devm} {k v : B256} {a : Adr}
+    (ha : a ≠ sevm.currentTarget) :
+    Devm.getStor (afterSstoreH sevm (afterSloadH sevm b k) k v) a = Devm.getStor b a := by
+  rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSloadH_getStor]
+
+theorem logs_afterStoreH {sevm : Sevm} {b : Devm} {k v : B256} :
+    (afterSstoreH sevm (afterSloadH sevm b k) k v).logs = b.logs := by
+  rw [afterSstoreH_logs, afterSloadH_logs]
 
 /-- `StorStep.sload` under the actual access schedule. -/
 theorem StorStep.sloadH {sevm : Sevm} {b b' : Devm} {s : Stor} (h : StorStep sevm b b' s)

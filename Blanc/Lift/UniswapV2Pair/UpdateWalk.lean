@@ -210,15 +210,13 @@ theorem update_header_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     apply rx_iszero rfl (by simp only [List.length_cons]; omega)
     exact body
 
-/-- Successful header bytes derive the actual current timestamp and oracle
-prefix, preserving the SLOAD metadata and arbitrary cached reserves. -/
-theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem update_header_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm (St b (r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
       t_2377_c19 o) :
     ∃ G', SFunc.Run cert.prog sevm
-      (St (afterSload sevm b 8)
+      (St (afterSloadH sevm b 8)
         (updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time r0 ::
          updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time ::
          updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G')
@@ -227,7 +225,7 @@ theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   unfold t_2377_c19 at h
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_timestamp hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
@@ -241,7 +239,7 @@ theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   have lastWord : reserveMask32 &&& (b.getStorVal sevm.currentTarget 8 / reserveDiv224) =
       reserveTimestampRead (b.getStorVal sevm.currentTarget 8) := B256.and_comm _ _
   change SFunc.RunCut cert.prog sevm []
-    (St (afterSload sevm b 8)
+    (St (afterSloadH sevm b 8)
       ((reserveMask32 &&& (b.getStorVal sevm.currentTarget 8 / reserveDiv224)) :: reserveMask32 ::
        updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [lastWord] at h
@@ -282,7 +280,7 @@ theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     have flag : updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time = 1 := by
       simp only [updateElapsedZeroWord, elapsedZero, B256.eqCheck, ite_true]
     change SFunc.RunCut cert.prog sevm []
-      (St (afterSload sevm b 8)
+      (St (afterSloadH sevm b 8)
         (B256.eqCheck (updateElapsedZeroWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time) 0 ::
          updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time ::
          updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M g)
@@ -290,6 +288,23 @@ theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     rw [flag] at h
     simp only [updateOraclePrefixWord, elapsedZero, ite_true]
     exact ⟨g, h.uncut⟩
+
+/-- Successful header bytes derive the actual current timestamp and oracle
+prefix, preserving the SLOAD metadata and arbitrary cached reserves. -/
+theorem update_header_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2377_c19 o) :
+    ∃ G', SFunc.Run cert.prog sevm
+      (St (afterSload sevm b 8)
+        (updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time r0 ::
+         updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time ::
+         updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G')
+      t_23c7_c20 o := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    update_header_invH fork.rules_bal_none run
+
 
 /-- The actual cached reserve1 short circuit at entry20. -/
 def updateOracleReserveFlagWord (prefixFlag reserve1 : B256) : B256 :=
@@ -543,6 +558,16 @@ def updateAccumulatorPost (sevm : Sevm) (b : Devm) (key price elapsed : B256) : 
   afterSstore sevm (afterSload sevm b key) key
     (updateAccumulatorWord (b.getStorVal sevm.currentTarget key) price elapsed)
 
+def updateAccumulatorPostH (sevm : Sevm) (b : Devm) (key price elapsed : B256) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b key) key
+    (updateAccumulatorWord (b.getStorVal sevm.currentTarget key) price elapsed)
+
+theorem updateAccumulatorPostH_of_covered {sevm : Sevm} {b : Devm} {key price elapsed : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateAccumulatorPostH sevm b key price elapsed = updateAccumulatorPost sevm b key price elapsed := by
+  unfold updateAccumulatorPostH updateAccumulatorPost
+  simp only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 /-- Actual slot9 SLOAD/SSTORE followed by the second UQ price calls. The
 individual SSTORE sentry and both actual mutable charges remain explicit. -/
 theorem update_accumulator0_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -610,16 +635,15 @@ theorem update_accumulator0_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
     (by simp only [List.length_cons]; omega))
   exact body
 
-/-- Successful slot9 bytes derive non-static execution, the actual modular
-accumulator write, and the second cached price from its real UQ calls. -/
-theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem update_accumulator0_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm
       (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
       t_2425_c21 o) :
     sevm.isStatic = false ∧ r1 &&& reserveMask112 ≠ 0 ∧ ∃ G', SFunc.Run cert.prog sevm
-      (St (updateAccumulatorPost sevm b 9 price dt)
+      (St (updateAccumulatorPostH sevm b 9 price dt)
         (updatePriceWord r1 r0 :: (dt &&& reserveMask32) :: dt :: ts ::
           r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2465_c21 o := by
   have h := run.cut
@@ -627,18 +651,18 @@ theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
   change SFunc.RunCut cert.prog sevm []
-    (St (afterSload sevm b 9)
+    (St (afterSloadH sevm b 9)
       ((uqMask224 &&& price) :: 9 :: b.getStorVal sevm.currentTarget 9 ::
         (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [B256.and_comm uqMask224 price] at h
-  clear * - h fork
+  clear * - h stateGas bal
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -646,10 +670,10 @@ theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   change SFunc.RunCut cert.prog sevm []
-    (St (updateAccumulatorPost sevm b 9 price dt)
+    (St (updateAccumulatorPostH sevm b 9 price dt)
       (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   clear * - h nonstatic
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
@@ -670,7 +694,7 @@ theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
     obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
     obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
     change SFunc.RunCut cert.prog sevm []
-      (St (updateAccumulatorPost sevm b 9 price dt)
+      (St (updateAccumulatorPostH sevm b 9 price dt)
         ((uqMask224 &&& uqEncodeWord r0) :: r1 :: 0x2465 :: (dt &&& reserveMask32) ::
           dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
     rw [B256.and_comm uqMask224 (uqEncodeWord r0)] at h
@@ -688,6 +712,22 @@ theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
       cases eq
   · obtain ⟨_, eq⟩ := uq_encode_inv callee
     cases eq
+
+/-- Successful slot9 bytes derive non-static execution, the actual modular
+accumulator write, and the second cached price from its real UQ calls. -/
+theorem update_accumulator0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2425_c21 o) :
+    sevm.isStatic = false ∧ r1 &&& reserveMask112 ≠ 0 ∧ ∃ G', SFunc.Run cert.prog sevm
+      (St (updateAccumulatorPost sevm b 9 price dt)
+        (updatePriceWord r1 r0 :: (dt &&& reserveMask32) :: dt :: ts ::
+          r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2465_c21 o := by
+  simpa only [updateAccumulatorPostH_of_covered fork] using
+    update_accumulator0_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 /-- The actual second accumulator reaches the sole packed-reserve write path,
 with its own selected storage charges and SSTORE sentry. -/
@@ -727,6 +767,44 @@ theorem update_accumulator1_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
   apply rx_sstoreC fork storeCharge sentry static
   exact body
 
+theorem update_accumulator1_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {price dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run cert.prog sevm
+      (St b (price :: (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G)
+      t_2465_c21 o) :
+    sevm.isStatic = false ∧ ∃ G', SFunc.Run cert.prog sevm
+      (St (updateAccumulatorPostH sevm b 10 price dt)
+        (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2492_c22 o := by
+  have h := run.cut
+  unfold t_2465_c21 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  change SFunc.RunCut cert.prog sevm []
+    (St (afterSloadH sevm b 10)
+      ((uqMask224 &&& price) :: 10 :: b.getStorVal sevm.currentTarget 10 ::
+        (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
+  rw [B256.and_comm uqMask224 price] at h
+  clear * - h stateGas bal
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨g, rfl⟩ := ri_sstoreH stateGas bal hd
+  exact ⟨nonstatic, g, h.uncut⟩
+
 /-- The actual slot10 inverse recovers its modular accumulator update and
 non-static frame before the packed-reserve write. -/
 theorem update_accumulator1_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -738,33 +816,9 @@ theorem update_accumulator1_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
     sevm.isStatic = false ∧ ∃ G', SFunc.Run cert.prog sevm
       (St (updateAccumulatorPost sevm b 10 price dt)
         (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2492_c22 o := by
-  have h := run.cut
-  unfold t_2465_c21 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  change SFunc.RunCut cert.prog sevm []
-    (St (afterSload sevm b 10)
-      ((uqMask224 &&& price) :: 10 :: b.getStorVal sevm.currentTarget 10 ::
-        (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
-  rw [B256.and_comm uqMask224 price] at h
-  clear * - h fork
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨g, rfl⟩ := ri_sstore fork hd
-  exact ⟨nonstatic, g, h.uncut⟩
+  simpa only [updateAccumulatorPostH_of_covered fork] using
+    update_accumulator1_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 
 /-- Actual oracle condition uses caller-cached reserves and current slot8 time. -/
@@ -782,22 +836,130 @@ def updateOracleWorld (sevm : Sevm) (b : Devm) (old0 old1 : B256) : Devm :=
       10 (updatePriceWord old1 old0) elapsed
   else start
 
+def updateOracleWorldH (sevm : Sevm) (b : Devm) (old0 old1 : B256) : Devm :=
+  let elapsed := updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time
+  let start := afterSloadH sevm b 8
+  if updateOracleActive sevm b old0 old1 then
+    updateAccumulatorPostH sevm
+      (updateAccumulatorPostH sevm start 9 (updatePriceWord old0 old1) elapsed)
+      10 (updatePriceWord old1 old0) elapsed
+  else start
+
+theorem updateOracleWorldH_of_covered {sevm : Sevm} {b : Devm} {old0 old1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateOracleWorldH sevm b old0 old1 = updateOracleWorld sevm b old0 old1 := by
+  unfold updateOracleWorldH updateOracleWorld
+  simp only [updateAccumulatorPostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def updateFinalPackedWord (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) : B256 :=
   updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
     balance0 balance1 (updateTimestampWord sevm.benvStat.time)
+
+def updateFinalPackedWordH (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) : B256 :=
+  updatePackedWord ((updateOracleWorldH sevm b old0 old1).getStorVal sevm.currentTarget 8)
+    balance0 balance1 (updateTimestampWord sevm.benvStat.time)
+
+theorem updateFinalPackedWordH_of_covered {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateFinalPackedWordH sevm b old0 old1 balance0 balance1 = updateFinalPackedWord sevm b old0 old1 balance0 balance1 := by
+  unfold updateFinalPackedWordH updateFinalPackedWord
+  simp only [updateOracleWorldH_of_covered fork]
 
 def updateWorld (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) : Devm :=
   updateSyncPost sevm (updatePackedPost sevm (updateOracleWorld sevm b old0 old1)
     balance0 balance1 (updateTimestampWord sevm.benvStat.time))
     (updateFinalPackedWord sevm b old0 old1 balance0 balance1)
 
+def updateWorldH (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) : Devm :=
+  updateSyncPost sevm (updatePackedPostH sevm (updateOracleWorldH sevm b old0 old1)
+    balance0 balance1 (updateTimestampWord sevm.benvStat.time))
+    (updateFinalPackedWordH sevm b old0 old1 balance0 balance1)
+
+theorem updateWorldH_of_covered {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateWorldH sevm b old0 old1 balance0 balance1 = updateWorld sevm b old0 old1 balance0 balance1 := by
+  unfold updateWorldH updateWorld
+  simp only [updateFinalPackedWordH_of_covered fork, updateOracleWorldH_of_covered fork, updatePackedPostH_of_covered fork]
+
 def updateMemory (sevm : Sevm) (b : Devm) (M : Mem) (old0 old1 balance0 balance1 : B256) : Mem :=
   updateSyncMemory M (updateFinalPackedWord sevm b old0 old1 balance0 balance1)
+
+def updateMemoryH (sevm : Sevm) (b : Devm) (M : Mem) (old0 old1 balance0 balance1 : B256) : Mem :=
+  updateSyncMemory M (updateFinalPackedWordH sevm b old0 old1 balance0 balance1)
+
+theorem updateMemoryH_of_covered {sevm : Sevm} {b : Devm} {M : Mem} {old0 old1 balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateMemoryH sevm b M old0 old1 balance0 balance1 = updateMemory sevm b M old0 old1 balance0 balance1 := by
+  unfold updateMemoryH updateMemory
+  simp only [updateFinalPackedWordH_of_covered fork]
 
 /-- Shared update memory at its actual incoming free-memory pointer. -/
 def updateMemoryAt (sevm : Sevm) (b : Devm) (M : Mem) (p : B256)
     (old0 old1 balance0 balance1 : B256) : Mem :=
   updateSyncMemoryAt M p (updateFinalPackedWord sevm b old0 old1 balance0 balance1)
+
+def updateMemoryAtH (sevm : Sevm) (b : Devm) (M : Mem) (p : B256)
+    (old0 old1 balance0 balance1 : B256) : Mem :=
+  updateSyncMemoryAt M p (updateFinalPackedWordH sevm b old0 old1 balance0 balance1)
+
+theorem updateMemoryAtH_of_covered {sevm : Sevm} {b : Devm} {M : Mem} {p : B256} {old0 old1 balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updateMemoryAtH sevm b M p old0 old1 balance0 balance1 = updateMemoryAt sevm b M p old0 old1 balance0 balance1 := by
+  unfold updateMemoryAtH updateMemoryAt
+  simp only [updateFinalPackedWordH_of_covered fork]
+
+theorem update_inv_atH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {p old0 old1 balance0 balance1 tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
+    (run : SFunc.Run cert.prog sevm
+      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
+    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
+      ∃ G', o = .returned (St (updateWorldH sevm b old0 old1 balance0 balance1)
+        R (updateMemoryAtH sevm b M p old0 old1 balance0 balance1) G') := by
+  obtain ⟨bound0, bound1, _, h⟩ := update_guards_inv run
+  obtain ⟨_, h⟩ := update_header_invH bal h
+  obtain ⟨_, h⟩ := update_oracle_reserve_inv h
+  obtain ⟨_, h⟩ := update_oracle_route_inv h
+  rw [update_oracle_flag_source] at h
+  clear * - h stateGas bal mem low high bound0 bound1
+  by_cases active : updateOracleActive sevm b old0 old1
+  · change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
+      old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0 at active
+    rw [ite_eq_left active, ite_eq_right (by decide : (1 : B256) ≠ 0)] at h
+    obtain ⟨_, _, h⟩ := update_price0_inv h
+    obtain ⟨_, _, _, h⟩ := update_accumulator0_invH stateGas bal h
+    obtain ⟨_, _, h⟩ := update_accumulator1_invH stateGas bal h
+    obtain ⟨nonstatic, _, h⟩ := update_packed_store_invH stateGas bal h
+    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
+    refine ⟨bound0, bound1, nonstatic, g, ?_⟩
+    have oracleEq : updateOracleWorldH sevm b old0 old1 =
+        updateAccumulatorPostH sevm
+          (updateAccumulatorPostH sevm (afterSloadH sevm b 8) 9 (updatePriceWord old0 old1)
+            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time))
+          10 (updatePriceWord old1 old0)
+            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time) := by
+      unfold updateOracleWorldH
+      exact ite_eq_left active
+    change o = .returned (St (updateSyncPost sevm
+      (updatePackedPostH sevm (updateOracleWorldH sevm b old0 old1) balance0 balance1
+        (updateTimestampWord sevm.benvStat.time))
+      (updatePackedWord ((updateOracleWorldH sevm b old0 old1).getStorVal sevm.currentTarget 8)
+        balance0 balance1 (updateTimestampWord sevm.benvStat.time))) R
+      (updateSyncMemoryAt M p
+        (updatePackedWord ((updateOracleWorldH sevm b old0 old1).getStorVal sevm.currentTarget 8)
+          balance0 balance1 (updateTimestampWord sevm.benvStat.time))) g)
+    rw [oracleEq]
+    exact eq
+  · change ¬ (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
+      old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0) at active
+    simp only [active, ite_false, ite_true] at h
+    obtain ⟨nonstatic, _, h⟩ := update_packed_store_invH stateGas bal h
+    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
+    refine ⟨bound0, bound1, nonstatic, g, ?_⟩
+    simpa only [updateWorldH, updateMemoryAtH, updateFinalPackedWordH, updateOracleWorldH,
+      updateOracleActive, active, ite_false] using eq
 
 /-- One actual shared update inverse, deriving acceptance and mutability from
 successful bytes, with the complete metadata, log, memory and caller tail. -/
@@ -810,49 +972,21 @@ theorem update_inv_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
       ∃ G', o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1)
         R (updateMemoryAt sevm b M p old0 old1 balance0 balance1) G') := by
-  obtain ⟨bound0, bound1, _, h⟩ := update_guards_inv run
-  obtain ⟨_, h⟩ := update_header_inv fork h
-  obtain ⟨_, h⟩ := update_oracle_reserve_inv h
-  obtain ⟨_, h⟩ := update_oracle_route_inv h
-  rw [update_oracle_flag_source] at h
-  clear * - h fork mem low high bound0 bound1
-  by_cases active : updateOracleActive sevm b old0 old1
-  · change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
-      old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0 at active
-    rw [ite_eq_left active, ite_eq_right (by decide : (1 : B256) ≠ 0)] at h
-    obtain ⟨_, _, h⟩ := update_price0_inv h
-    obtain ⟨_, _, _, h⟩ := update_accumulator0_inv fork h
-    obtain ⟨_, _, h⟩ := update_accumulator1_inv fork h
-    obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
-    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
-    refine ⟨bound0, bound1, nonstatic, g, ?_⟩
-    have oracleEq : updateOracleWorld sevm b old0 old1 =
-        updateAccumulatorPost sevm
-          (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
-            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time))
-          10 (updatePriceWord old1 old0)
-            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time) := by
-      unfold updateOracleWorld
-      exact ite_eq_left active
-    change o = .returned (St (updateSyncPost sevm
-      (updatePackedPost sevm (updateOracleWorld sevm b old0 old1) balance0 balance1
-        (updateTimestampWord sevm.benvStat.time))
-      (updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
-        balance0 balance1 (updateTimestampWord sevm.benvStat.time))) R
-      (updateSyncMemoryAt M p
-        (updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
-          balance0 balance1 (updateTimestampWord sevm.benvStat.time))) g)
-    rw [oracleEq]
-    exact eq
-  · change ¬ (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
-      old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0) at active
-    simp only [active, ite_false, ite_true] at h
-    obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
-    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
-    refine ⟨bound0, bound1, nonstatic, g, ?_⟩
-    simpa only [updateWorld, updateMemoryAt, updateFinalPackedWord, updateOracleWorld,
-      updateOracleActive, active, ite_false] using eq
+  simpa only [updateMemoryAtH_of_covered fork, updateWorldH_of_covered fork] using
+    update_inv_atH fork.rules_stateGas_none fork.rules_bal_none mem low high run
 
+
+
+theorem update_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {old0 old1 balance0 balance1 tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 n M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
+    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
+      ∃ G', o = .returned (St (updateWorldH sevm b old0 old1 balance0 balance1)
+        R (updateMemoryH sevm b M old0 old1 balance0 balance1) G') := by
+  exact update_inv_atH stateGas bal mem (by decide) (by decide) run
 
 /-- One actual shared update inverse, deriving acceptance and mutability from
 successful bytes, with the complete metadata, log, memory and caller tail. -/
@@ -864,7 +998,9 @@ theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
       ∃ G', o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1)
         R (updateMemory sevm b M old0 old1 balance0 balance1) G') := by
-  exact update_inv_at fork mem (by decide) (by decide) run
+  simpa only [updateMemoryH_of_covered fork, updateWorldH_of_covered fork] using
+    update_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 /-- Exact actual Sync suffix gas, including its two symbolic memory charges. -/

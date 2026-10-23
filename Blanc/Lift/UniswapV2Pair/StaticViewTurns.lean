@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistStaticCallGuard
 import Blanc.Lift.UniswapV2Pair.StaticViewSource
 import Blanc.Lift.SegmentedHistory
 import Blanc.ExecutionEntryAccounting
@@ -9,6 +11,44 @@ import Blanc.Lift.TargetLogEvents
 namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
+
+theorem staticView_turn_invH {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn : Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) frame.current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (static : sevm.isStatic = true)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    ∃ view : StaticView,
+      Blanc.Sevm.selector sevm = view.selector ∧
+      view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult frame.current.state (view.entry sevm) ∧
+      WriterRep (WriterExtend K (staticViewDecodedKeys sevm))
+        (post.getStor sevm.currentTarget) frame.current.state ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧
+      (∀ (tail : Transcript) (out : TurnsResult),
+        ExactTurns frame request (turn + 1) tail out →
+        ExactTurns frame request turn
+          (.invoke sevm.caller sevm.value sevm.isStatic (view.entry sevm) .done tail)
+          { out with childReturns :=
+              [{ context := childContext frame request turn sevm.caller sevm.value sevm.isStatic,
+                 entry := view.entry sevm, status := .success post.output }] ++ out.childReturns }) := by
+  let ctx := childContext frame request turn sevm.caller sevm.value sevm.isStatic
+  obtain ⟨_, view, selector, length, result, storage, logs,
+    _, _, consumed, _, _, _⟩ :=
+    staticView_source_handler_invH rep fresh representable (ctx := ctx) rfl
+      codeEq stateGas bal static run
+  have extended : WriterRep (WriterExtend K (staticViewDecodedKeys sevm))
+      (post.getStor sevm.currentTarget) frame.current.state := by
+    rw [storage sevm.currentTarget]
+    exact rep.extend fresh
+  refine ⟨view, selector, length, result, extended, storage, logs, ?_⟩
+  intro tail out rest
+  have invoked := ExactTurns.invoke (frame := frame) (request := request)
+    (turn := turn) consumed rest
+  exact invoked
 
 /-- A successful raw static view supplies one exact source invocation and extends only
 its decoded finite footprint. Its actual sender, value, static flag and return bytes are retained. -/
@@ -33,21 +73,61 @@ theorem staticView_turn_inv {K : WriterKey → Prop} {frame : Frame}
           (.invoke sevm.caller sevm.value sevm.isStatic (view.entry sevm) .done tail)
           { out with childReturns :=
               [{ context := childContext frame request turn sevm.caller sevm.value sevm.isStatic,
-                 entry := view.entry sevm, status := .success post.output }] ++ out.childReturns }) := by
-  let ctx := childContext frame request turn sevm.caller sevm.value sevm.isStatic
-  obtain ⟨_, view, selector, length, result, storage, logs,
-    _, _, consumed, _, _, _⟩ :=
-    staticView_source_handler_inv rep fresh representable (ctx := ctx) rfl
-      codeEq fork static run
-  have extended : WriterRep (WriterExtend K (staticViewDecodedKeys sevm))
-      (post.getStor sevm.currentTarget) frame.current.state := by
-    rw [storage sevm.currentTarget]
-    exact rep.extend fresh
-  refine ⟨view, selector, length, result, extended, storage, logs, ?_⟩
-  intro tail out rest
-  have invoked := ExactTurns.invoke (frame := frame) (request := request)
-    (turn := turn) consumed rest
-  exact invoked
+                 entry := view.entry sevm, status := .success post.output }] ++ out.childReturns }) :=
+  staticView_turn_invH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none static run
+
+
+theorem staticView_target_turns_invH {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn : Nat} {path : List Nat}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) frame.current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (pair : frame.context.pair = sevm.currentTarget)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (static : sevm.isStatic = true)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    ∃ view : StaticView,
+      Blanc.Sevm.selector sevm = view.selector ∧
+      view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult frame.current.state (view.entry sevm) ∧
+      WriterRep (WriterExtend K (staticViewDecodedKeys sevm))
+        (post.getStor sevm.currentTarget) frame.current.state ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧
+      (∀ committed : Execution.commits (.ok post) = true,
+        Exec.retainedTargetTurnsAt sevm.currentTarget path run =
+          [.inr ⟨path, Exec.Frame.ofRun run committed⟩]) ∧
+      childContext frame request turn sevm.caller sevm.value sevm.isStatic =
+        { pair := sevm.currentTarget, sender := sevm.caller, value := sevm.value,
+          timestamp := sevm.benvStat.time, isStatic := true,
+          invocation := frame.context.invocation ++ [request.site.ordinal, turn] } ∧
+      (∀ (tail : Transcript) (result : TurnsResult),
+        ExactTurns frame request (turn + 1) tail result →
+        ExactTurns frame request turn
+          (.invoke sevm.caller sevm.value sevm.isStatic (view.entry sevm) .done tail)
+          { result with childReturns :=
+              [{ context := childContext frame request turn sevm.caller sevm.value sevm.isStatic,
+                 entry := view.entry sevm, status := .success post.output }] ++ result.childReturns }) ∧
+      ExactTurns frame request turn
+        (.invoke sevm.caller sevm.value sevm.isStatic (view.entry sevm) .done .done)
+        { complete := true, frame := frame,
+          childReturns :=
+            [{ context := childContext frame request turn sevm.caller sevm.value sevm.isStatic,
+               entry := view.entry sevm, status := .success post.output }] } := by
+  obtain ⟨view, selector, length, result, extended, storage, logs, consume⟩ :=
+    staticView_turn_invH (request := request) (turn := turn)
+      rep fresh representable codeEq stateGas bal static run
+  refine ⟨view, selector, length, result, extended, storage, logs, ?_, ?_, consume, ?_⟩
+  · intro committed
+    rw [Exec.retainedTargetTurnsAt_eq_map_prefix,
+      Exec.retainedTargetTurns_target_stop sevm.currentTarget run committed rfl]
+    simp only [List.map_cons, List.map_nil, Exec.RetainedTargetTurn.rebase,
+      List.append_nil]
+  · simp only [childContext, pair, time, static, Bool.or_true]
+  · exact consume .done { complete := true, frame := frame, childReturns := [] }
+      (ExactTurns.done frame request (turn + 1))
 
 /-- A committing target-root view supplies the entire selected queue at its
 original entering path. The source tail is constructed from the actual
@@ -89,19 +169,9 @@ theorem staticView_target_turns_inv {K : WriterKey → Prop} {frame : Frame}
         { complete := true, frame := frame,
           childReturns :=
             [{ context := childContext frame request turn sevm.caller sevm.value sevm.isStatic,
-               entry := view.entry sevm, status := .success post.output }] } := by
-  obtain ⟨view, selector, length, result, extended, storage, logs, consume⟩ :=
-    staticView_turn_inv (request := request) (turn := turn)
-      rep fresh representable codeEq fork static run
-  refine ⟨view, selector, length, result, extended, storage, logs, ?_, ?_, consume, ?_⟩
-  · intro committed
-    rw [Exec.retainedTargetTurnsAt_eq_map_prefix,
-      Exec.retainedTargetTurns_target_stop sevm.currentTarget run committed rfl]
-    simp only [List.map_cons, List.map_nil, Exec.RetainedTargetTurn.rebase,
-      List.append_nil]
-  · simp only [childContext, pair, time, static, Bool.or_true]
-  · exact consume .done { complete := true, frame := frame, childReturns := [] }
-      (ExactTurns.done frame request (turn + 1))
+               entry := view.entry sevm, status := .success post.output }] } :=
+  staticView_target_turns_invH rep fresh representable pair time codeEq fork.rules_stateGas_none fork.rules_bal_none static run
+
 
 /-- One actual retained frame paired with its derived static getter. -/
 abbrev StaticViewTurn := Exec.LocatedFrame × StaticView
@@ -139,9 +209,7 @@ def StaticViewTurn.Authentic (frame : Frame) (picked : StaticViewTurn) : Prop :=
   some (Execution.committedPost picked.1.frame.out picked.1.frame.committed).output =
     getterResult frame.current.state (picked.2.entry picked.1.frame.sevm)
 
-/-- Actual target selection derives its complete singleton fold and a
-continuation that can compose with later retained frames at the same checkpoint. -/
-theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
+theorem staticView_target_fold_invH {K : WriterKey → Prop} {frame : Frame}
     {request : Request} {turn : Nat} {path : List Nat} {counter pc : Nat}
     {sevm : Sevm} {pre : Devm} {out : Execution}
     (sem : CodeSem) (image : sem.image = some code.toList)
@@ -153,7 +221,8 @@ theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
     (entry : pre.stack = [] ∧ pre.memory = Mem.empty)
     (representable : sevm.data.length < 2 ^ 256)
     (time : frame.context.timestamp = sevm.benvStat.time)
-    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
     ∃ picked : StaticViewTurn,
       Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed =
         [picked.1] ∧ picked.Authentic frame ∧
@@ -181,9 +250,9 @@ theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
       rw [target]
       exact rep
     obtain ⟨view, selector, length, returned, _, _, _, _, _, consume, _⟩ :=
-      staticView_target_turns_inv (frame := frame) (request := request)
+      staticView_target_turns_invH (frame := frame) (request := request)
         (turn := turn) (path := path) currentRep fresh representable target.symm
-          time codeEq fork static raw
+          time codeEq stateGas bal static raw
     let located : Exec.LocatedFrame := ⟨path, Exec.Frame.ofRun run committed⟩
     refine ⟨(located, view), ?_, ?_, ?_⟩
     · exact Exec.retainedTargetFramesFromAt_target _ _ _ run committed target
@@ -192,6 +261,32 @@ theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
       simpa only [staticViewTranscript, staticViewChildReturns, Execution.committedPost,
         List.cons_append, List.nil_append, located, Exec.Frame.ofRun] using
         consume tail result rest
+
+/-- Actual target selection derives its complete singleton fold and a
+continuation that can compose with later retained frames at the same checkpoint. -/
+theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn : Nat} {path : List Nat} {counter pc : Nat}
+    {sevm : Sevm} {pre : Devm} {out : Execution}
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (target : sevm.currentTarget = frame.context.pair)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (entry : pre.stack = [] ∧ pre.memory = Mem.empty)
+    (representable : sevm.data.length < 2 ^ 256)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    ∃ picked : StaticViewTurn,
+      Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed =
+        [picked.1] ∧ picked.Authentic frame ∧
+      ∀ (tail : Transcript) (result : TurnsResult),
+        ExactTurns frame request (turn + 1) tail result →
+        ExactTurns frame request turn (staticViewTranscript [picked] tail)
+          { result with childReturns :=
+              staticViewChildReturns frame request turn [picked] ++ result.childReturns } :=
+  staticView_target_fold_invH sem image run committed installed target rep fresh entry representable time static fork.rules_stateGas_none fork.rules_bal_none
+
 
 theorem staticViewTranscript_append (left right : List StaticViewTurn) (tail : Transcript) :
     staticViewTranscript (left ++ right) tail =
@@ -216,9 +311,7 @@ theorem staticViewChildReturns_append (frame : Frame) (request : Request)
     have counterEq : turn + 1 + left.length = turn + (left.length + 1) := by omega
     rw [counterEq]
 
-/-- A committing static parent edge transports the SAME finite source
-representation and installed image to its actual foreign continuation. -/
-theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
+theorem staticView_parent_repH {K : WriterKey → Prop} {frame : Frame}
     {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {out : Execution}
     (sem : CodeSem) (run : Exec pc sevm pre out) (next : Exec pc' sevm inter out)
     (committed : Execution.commits out = true)
@@ -227,7 +320,7 @@ theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
     (installed : sem.At frame.context.pair pc sevm pre)
     (foreign : sevm.currentTarget ≠ frame.context.pair)
     (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
-    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none) :
     sem.At frame.context.pair pc' sevm inter ∧
       WriterRep K (inter.getStor frame.context.pair) frame.current.state := by
   have nonempty : (pre.getCode frame.context.pair).toList ≠ [] := by
@@ -243,10 +336,10 @@ theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
     State.Protected.of_code_ne_nil hinter
   have hpre : (out.committedPost committed).getStor frame.context.pair =
       pre.getStor frame.context.pair :=
-    Exec.getStor_committedPost_eq_of_static_protected run static committed fork _ hprot_pre
+    Exec.getStor_committedPost_eq_of_static_protected_noStateGas run static committed stateGas _ hprot_pre
   have hinter_eq : (out.committedPost committed).getStor frame.context.pair =
       inter.getStor frame.context.pair :=
-    Exec.getStor_committedPost_eq_of_static_protected next static committed fork _ hprot_inter
+    Exec.getStor_committedPost_eq_of_static_protected_noStateGas next static committed stateGas _ hprot_inter
   have storageEq : inter.getStor frame.context.pair = pre.getStor frame.context.pair :=
     hinter_eq.symm.trans hpre
   refine ⟨⟨?_, fun target => (foreign target).elim⟩, ?_⟩
@@ -255,9 +348,24 @@ theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
   · rw [storageEq]
     exact rep
 
-/-- The supplied interpreted spawn opens on the same finite Pair representation
-and authentic installed image. All entry and environment facts are raw equations. -/
-theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
+/-- A committing static parent edge transports the SAME finite source
+representation and installed image to its actual foreign continuation. -/
+theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
+    {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {out : Execution}
+    (sem : CodeSem) (run : Exec pc sevm pre out) (next : Exec pc' sevm inter out)
+    (committed : Execution.commits out = true)
+    (edge : Exec.Deriv.ParentStep ⟨pc', sevm, inter, out, next⟩
+      ⟨pc, sevm, pre, out, run⟩)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (foreign : sevm.currentTarget ≠ frame.context.pair)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    sem.At frame.context.pair pc' sevm inter ∧
+      WriterRep K (inter.getStor frame.context.pair) frame.current.state :=
+  staticView_parent_repH sem run next committed edge installed foreign rep static fork.rules_stateGas_none
+
+
+theorem staticView_child_environmentH {K : WriterKey → Prop} {frame : Frame}
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {callee : Jaune.Frame} {resume : Resume} {child : Evm}
     (sem : CodeSem)
@@ -267,13 +375,15 @@ theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
     (foreign : sevm.currentTarget ≠ frame.context.pair)
     (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
     (time : frame.context.timestamp = sevm.benvStat.time)
-    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
     sem.At frame.context.pair child.pc child.sta child.dyna ∧
       WriterRep K (child.dyna.getStor frame.context.pair) frame.current.state ∧
       (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty) ∧
       child.sta.data.length < 2 ^ 256 ∧
       frame.context.timestamp = child.sta.benvStat.time ∧
-      child.sta.isStatic = true ∧ CoveredFork child.sta.benvStat.fork := by
+      child.sta.isStatic = true ∧
+      (child.sta.benvStat.rules.stateGas = none ∧ child.sta.benvStat.rules.bal = none) := by
   have nonempty : pre.getCode frame.context.pair ≠ .empty := by
     intro empty
     have imageEmpty : sem.image = some [] := by
@@ -295,12 +405,12 @@ theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
           (by rw [target]; exact sem.not_delegation installed.1)
       exact ⟨(congrArg (fun bytes : ByteArray => some bytes.toList) codeEq).trans
         installed.1, pcZero⟩
-  have storageEq := (Blanc.Evm.step_spawn_child_world fork step enter nonempty).1
+  have storageEq := (Evm.step_spawn_child_worldH stateGas step enter nonempty).1
   change child.dyna.getStor frame.context.pair = pre.getStor frame.context.pair at storageEq
   have childRep : WriterRep K (child.dyna.getStor frame.context.pair) frame.current.state := by
     rw [storageEq]
     exact rep
-  obtain ⟨short, childFork⟩ := Blanc.ExecutionTrace.Evm.step_spawn_child_data fork step enter
+  obtain ⟨short, childFork⟩ := Evm.step_spawn_child_dataH stateGas bal step enter
   have childStatic := Blanc.Evm.step_run_isStatic step enter static
   obtain ⟨x, _, spawn, _⟩ := Evm.step_spawn_inv step
   have statEq : child.sta.benvStat = sevm.benvStat :=
@@ -310,6 +420,71 @@ theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
     exact ⟨rfl, rfl⟩
   · rw [statEq]
     exact time
+
+/-- The supplied interpreted spawn opens on the same finite Pair representation
+and authentic installed image. All entry and environment facts are raw equations. -/
+theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
+    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {callee : Jaune.Frame} {resume : Resume} {child : Evm}
+    (sem : CodeSem)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn callee resume pc')
+    (enter : callee.enter = .run child)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (foreign : sevm.currentTarget ≠ frame.context.pair)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    sem.At frame.context.pair child.pc child.sta child.dyna ∧
+      WriterRep K (child.dyna.getStor frame.context.pair) frame.current.state ∧
+      (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty) ∧
+      child.sta.data.length < 2 ^ 256 ∧
+      frame.context.timestamp = child.sta.benvStat.time ∧
+      child.sta.isStatic = true ∧ CoveredFork child.sta.benvStat.fork := by
+  obtain ⟨h1, h2, h3, h4, h5, h6, -⟩ := staticView_child_environmentH sem step enter installed
+    foreign rep time static fork.rules_stateGas_none fork.rules_bal_none
+  obtain ⟨x, _, spawn, _⟩ := Evm.step_spawn_inv step
+  refine ⟨h1, h2, h3, h4, h5, h6, ?_⟩
+  rw [(Jaune.Frame.enter_run_benvStat enter).trans (Xinst.step_spawn_benvStat spawn)]
+  exact fork
+
+
+theorem staticView_selected_root_foldH {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn counter pc : Nat} {path : List Nat}
+    {sevm : Sevm} {pre : Devm} {out : Execution}
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (target : sevm.currentTarget = frame.context.pair)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (fresh : ∀ located ∈ Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed,
+      WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm))
+    (entry : pre.stack = [] ∧ pre.memory = Mem.empty)
+    (representable : sevm.data.length < 2 ^ 256)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
+    ∃ views : List StaticViewTurn,
+      views.map Prod.fst = Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed ∧
+      (∀ picked ∈ views, picked.Authentic frame) ∧
+      (∀ (tail : Transcript) (result : TurnsResult),
+        ExactTurns frame request (turn + views.length) tail result →
+        ExactTurns frame request turn (staticViewTranscript views tail)
+          { result with childReturns := staticViewChildReturns frame request turn views ++ result.childReturns }) := by
+  have rootFresh : WriterFreshKeys K (staticViewDecodedKeys sevm) := by
+    apply fresh ⟨path, Exec.Frame.ofRun run committed⟩
+    rw [Exec.retainedTargetFramesFromAt_target _ _ _ run committed target]
+    exact List.mem_cons_self
+  obtain ⟨picked, projection, authentic, consume⟩ :=
+    staticView_target_fold_invH (turn := turn) sem image run committed installed target
+      rep rootFresh entry representable time static stateGas bal
+  refine ⟨[picked], ?_, ?_, ?_⟩
+  · simpa only [List.map_cons, List.map_nil] using projection.symm
+  · intro picked' member
+    have same := List.mem_singleton.mp member
+    subst picked'
+    exact authentic
+  · intro tail result rest
+    exact consume tail result rest
 
 /-- The actual selected root supplies the same list-shaped continuation used
 by the foreign structural cases; its finite footprint is the actual decoder. -/
@@ -333,22 +508,129 @@ theorem staticView_selected_root_fold {K : WriterKey → Prop} {frame : Frame}
       (∀ (tail : Transcript) (result : TurnsResult),
         ExactTurns frame request (turn + views.length) tail result →
         ExactTurns frame request turn (staticViewTranscript views tail)
+          { result with childReturns := staticViewChildReturns frame request turn views ++ result.childReturns }) :=
+  staticView_selected_root_foldH sem image run committed installed target rep fresh entry representable time static fork.rules_stateGas_none fork.rules_bal_none
+
+
+theorem staticView_retained_fold_invH {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn counter pc : Nat} {path : List Nat}
+    {sevm : Sevm} {pre : Devm} {out : Execution}
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (fresh : ∀ located ∈ Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed,
+      WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm))
+    (entry : sevm.currentTarget = frame.context.pair → pre.stack = [] ∧ pre.memory = Mem.empty)
+    (representable : sevm.data.length < 2 ^ 256)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
+    ∃ views : List StaticViewTurn,
+      views.map Prod.fst = Exec.retainedTargetFramesFromAt frame.context.pair path counter run committed ∧
+      (∀ picked ∈ views, picked.Authentic frame) ∧
+      (∀ (tail : Transcript) (result : TurnsResult),
+        ExactTurns frame request (turn + views.length) tail result →
+        ExactTurns frame request turn (staticViewTranscript views tail)
           { result with childReturns := staticViewChildReturns frame request turn views ++ result.childReturns }) := by
-  have rootFresh : WriterFreshKeys K (staticViewDecodedKeys sevm) := by
-    apply fresh ⟨path, Exec.Frame.ofRun run committed⟩
-    rw [Exec.retainedTargetFramesFromAt_target _ _ _ run committed target]
-    exact List.mem_cons_self
-  obtain ⟨picked, projection, authentic, consume⟩ :=
-    staticView_target_fold_inv (turn := turn) sem image run committed installed target
-      rep rootFresh entry representable time static fork
-  refine ⟨[picked], ?_, ?_, ?_⟩
-  · simpa only [List.map_cons, List.map_nil] using projection.symm
-  · intro picked' member
-    have same := List.mem_singleton.mp member
-    subst picked'
-    exact authentic
-  · intro tail result rest
-    exact consume tail result rest
+  revert committed installed rep fresh entry representable time static stateGas bal
+  induction run generalizing path counter turn with
+  | @halt pc sevm pre out step =>
+    intro committed installed rep fresh entry representable time static stateGas bal
+    by_cases target : sevm.currentTarget = frame.context.pair
+    · exact staticView_selected_root_foldH sem image (.halt step) committed installed target
+        rep fresh (entry target) representable time static stateGas bal
+    · refine ⟨[], ?_, ?_, ?_⟩
+      · exact (Exec.retainedTargetFramesFromAt_halt _ _ _ step committed target).symm
+      · intro picked member
+        simp only [List.not_mem_nil] at member
+      · intro tail result rest
+        simpa only [List.length_nil, Nat.add_zero, staticViewTranscript,
+          staticViewChildReturns, List.nil_append] using rest
+  | @cont pc sevm pre pc' inter out step next ih =>
+    intro committed installed rep fresh entry representable time static stateGas bal
+    by_cases target : sevm.currentTarget = frame.context.pair
+    · exact staticView_selected_root_foldH sem image (.cont step next) committed installed target
+        rep fresh (entry target) representable time static stateGas bal
+    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_repH sem (.cont step next) next
+        committed (.cont step next) installed target rep static stateGas
+      have projection := Exec.retainedTargetFramesFromAt_cont frame.context.pair path counter
+        step next committed target
+      obtain ⟨views, mapped, authentic, consume⟩ := ih (path := path) (counter := counter)
+        (turn := turn) committed nextInstalled nextRep
+        (fun located member => fresh located (by rw [projection]; exact member))
+        (fun same => (target same).elim) representable time static stateGas bal
+      exact ⟨views, mapped.trans projection.symm, authentic, consume⟩
+  | doneErr step enter resumed =>
+    intro committed
+    simp only [Execution.commits, Bool.false_eq_true] at committed
+  | @doneOk pc sevm pre callee resume pc' result inter out step enter resumed next ih =>
+    intro committed installed rep fresh entry representable time static stateGas bal
+    by_cases target : sevm.currentTarget = frame.context.pair
+    · exact staticView_selected_root_foldH sem image (.doneOk step enter resumed next) committed
+        installed target rep fresh (entry target) representable time static stateGas bal
+    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_repH sem (.doneOk step enter resumed next)
+        next committed (.doneOk step enter resumed next) installed target rep static stateGas
+      have projection := Exec.retainedTargetFramesFromAt_doneOk frame.context.pair path counter
+        step enter resumed next committed target
+      obtain ⟨views, mapped, authentic, consume⟩ := ih (path := path) (counter := counter + 1)
+        (turn := turn) committed nextInstalled nextRep
+        (fun located member => fresh located (by rw [projection]; exact member))
+        (fun same => (target same).elim) representable time static stateGas bal
+      exact ⟨views, mapped.trans projection.symm, authentic, consume⟩
+  | runErr step enter child resumed childIH =>
+    intro committed
+    simp only [Execution.commits, Bool.false_eq_true] at committed
+  | @runOk pc sevm pre callee resume pc' childEvm raw inter out step enter child resumed next childIH nextIH =>
+    intro committed installed rep fresh entry representable time static stateGas bal
+    by_cases target : sevm.currentTarget = frame.context.pair
+    · exact staticView_selected_root_foldH sem image (.runOk step enter child resumed next) committed
+        installed target rep fresh (entry target) representable time static stateGas bal
+    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_repH sem (.runOk step enter child resumed next)
+        next committed (.runOk step enter child resumed next) installed target rep static stateGas
+      have projection := Exec.retainedTargetFramesFromAt_runOk frame.context.pair path counter
+        step enter child resumed next committed target
+      by_cases settles : Jaune.Frame.settlementCommits callee raw = true
+      · have retained : Execution.commits raw = true := Jaune.Frame.raw_commits_of_settlementCommits settles
+        obtain ⟨childInstalled, childRep, childEntry, childShort, childTime, childStatic, childFork⟩ :=
+          staticView_child_environmentH sem step enter installed target rep time static stateGas bal
+        obtain ⟨childViews, childMapped, childAuthentic, childConsume⟩ :=
+          childIH (path := path ++ [counter]) (counter := 0) (turn := turn)
+            retained childInstalled childRep
+            (fun located member => fresh located (by
+              rw [projection, dite_eq_left settles]
+              exact List.mem_append.mpr (Or.inl member)))
+            (fun _ => childEntry) childShort childTime childStatic childFork.1 childFork.2
+        obtain ⟨nextViews, nextMapped, nextAuthentic, nextConsume⟩ :=
+          nextIH (path := path) (counter := counter + 1) (turn := turn + childViews.length)
+            committed nextInstalled nextRep
+            (fun located member => fresh located (by
+              rw [projection, dite_eq_left settles]
+              exact List.mem_append.mpr (Or.inr member)))
+            (fun same => (target same).elim) representable time static stateGas bal
+        refine ⟨childViews ++ nextViews, ?_, ?_, ?_⟩
+        · rw [List.map_append, childMapped, nextMapped, projection, dite_eq_left settles]
+        · intro picked member
+          rcases List.mem_append.mp member with left | right
+          · exact childAuthentic picked left
+          · exact nextAuthentic picked right
+        · intro tail result rest
+          have shifted : ExactTurns frame request ((turn + childViews.length) + nextViews.length) tail result := by
+            simpa only [List.length_append, Nat.add_assoc] using rest
+          have afterNext := nextConsume tail result shifted
+          have afterChild := childConsume (staticViewTranscript nextViews tail)
+            { result with childReturns :=
+                staticViewChildReturns frame request (turn + childViews.length) nextViews ++ result.childReturns } afterNext
+          simpa only [staticViewTranscript_append, staticViewChildReturns_append, List.append_assoc] using afterChild
+      · have suffix : Exec.retainedTargetFramesFromAt frame.context.pair path counter
+            (.runOk step enter child resumed next) committed =
+            Exec.retainedTargetFramesFromAt frame.context.pair path (counter + 1) next committed := by
+          simpa only [dite_eq_right settles, List.nil_append] using projection
+        obtain ⟨views, mapped, authentic, consume⟩ := nextIH (path := path) (counter := counter + 1)
+          (turn := turn) committed nextInstalled nextRep
+          (fun located member => fresh located (by rw [suffix]; exact member))
+          (fun same => (target same).elim) representable time static stateGas bal
+        exact ⟨views, mapped.trans suffix.symm, authentic, consume⟩
 
 /-- Every retained static Pair view in the supplied execution contributes one
 authentic source invocation in the existing traversal's exact order. -/
@@ -371,105 +653,49 @@ theorem staticView_retained_fold_inv {K : WriterKey → Prop} {frame : Frame}
       (∀ (tail : Transcript) (result : TurnsResult),
         ExactTurns frame request (turn + views.length) tail result →
         ExactTurns frame request turn (staticViewTranscript views tail)
-          { result with childReturns := staticViewChildReturns frame request turn views ++ result.childReturns }) := by
-  revert committed installed rep fresh entry representable time static fork
-  induction run generalizing path counter turn with
-  | @halt pc sevm pre out step =>
-    intro committed installed rep fresh entry representable time static fork
-    by_cases target : sevm.currentTarget = frame.context.pair
-    · exact staticView_selected_root_fold sem image (.halt step) committed installed target
-        rep fresh (entry target) representable time static fork
-    · refine ⟨[], ?_, ?_, ?_⟩
-      · exact (Exec.retainedTargetFramesFromAt_halt _ _ _ step committed target).symm
-      · intro picked member
-        simp only [List.not_mem_nil] at member
-      · intro tail result rest
-        simpa only [List.length_nil, Nat.add_zero, staticViewTranscript,
-          staticViewChildReturns, List.nil_append] using rest
-  | @cont pc sevm pre pc' inter out step next ih =>
-    intro committed installed rep fresh entry representable time static fork
-    by_cases target : sevm.currentTarget = frame.context.pair
-    · exact staticView_selected_root_fold sem image (.cont step next) committed installed target
-        rep fresh (entry target) representable time static fork
-    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_rep sem (.cont step next) next
-        committed (.cont step next) installed target rep static fork
-      have projection := Exec.retainedTargetFramesFromAt_cont frame.context.pair path counter
-        step next committed target
-      obtain ⟨views, mapped, authentic, consume⟩ := ih (path := path) (counter := counter)
-        (turn := turn) committed nextInstalled nextRep
-        (fun located member => fresh located (by rw [projection]; exact member))
-        (fun same => (target same).elim) representable time static fork
-      exact ⟨views, mapped.trans projection.symm, authentic, consume⟩
-  | doneErr step enter resumed =>
-    intro committed
-    simp only [Execution.commits, Bool.false_eq_true] at committed
-  | @doneOk pc sevm pre callee resume pc' result inter out step enter resumed next ih =>
-    intro committed installed rep fresh entry representable time static fork
-    by_cases target : sevm.currentTarget = frame.context.pair
-    · exact staticView_selected_root_fold sem image (.doneOk step enter resumed next) committed
-        installed target rep fresh (entry target) representable time static fork
-    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_rep sem (.doneOk step enter resumed next)
-        next committed (.doneOk step enter resumed next) installed target rep static fork
-      have projection := Exec.retainedTargetFramesFromAt_doneOk frame.context.pair path counter
-        step enter resumed next committed target
-      obtain ⟨views, mapped, authentic, consume⟩ := ih (path := path) (counter := counter + 1)
-        (turn := turn) committed nextInstalled nextRep
-        (fun located member => fresh located (by rw [projection]; exact member))
-        (fun same => (target same).elim) representable time static fork
-      exact ⟨views, mapped.trans projection.symm, authentic, consume⟩
-  | runErr step enter child resumed childIH =>
-    intro committed
-    simp only [Execution.commits, Bool.false_eq_true] at committed
-  | @runOk pc sevm pre callee resume pc' childEvm raw inter out step enter child resumed next childIH nextIH =>
-    intro committed installed rep fresh entry representable time static fork
-    by_cases target : sevm.currentTarget = frame.context.pair
-    · exact staticView_selected_root_fold sem image (.runOk step enter child resumed next) committed
-        installed target rep fresh (entry target) representable time static fork
-    · obtain ⟨nextInstalled, nextRep⟩ := staticView_parent_rep sem (.runOk step enter child resumed next)
-        next committed (.runOk step enter child resumed next) installed target rep static fork
-      have projection := Exec.retainedTargetFramesFromAt_runOk frame.context.pair path counter
-        step enter child resumed next committed target
-      by_cases settles : Jaune.Frame.settlementCommits callee raw = true
-      · have retained : Execution.commits raw = true := Jaune.Frame.raw_commits_of_settlementCommits settles
-        obtain ⟨childInstalled, childRep, childEntry, childShort, childTime, childStatic, childFork⟩ :=
-          staticView_child_environment sem step enter installed target rep time static fork
-        obtain ⟨childViews, childMapped, childAuthentic, childConsume⟩ :=
-          childIH (path := path ++ [counter]) (counter := 0) (turn := turn)
-            retained childInstalled childRep
-            (fun located member => fresh located (by
-              rw [projection, dite_eq_left settles]
-              exact List.mem_append.mpr (Or.inl member)))
-            (fun _ => childEntry) childShort childTime childStatic childFork
-        obtain ⟨nextViews, nextMapped, nextAuthentic, nextConsume⟩ :=
-          nextIH (path := path) (counter := counter + 1) (turn := turn + childViews.length)
-            committed nextInstalled nextRep
-            (fun located member => fresh located (by
-              rw [projection, dite_eq_left settles]
-              exact List.mem_append.mpr (Or.inr member)))
-            (fun same => (target same).elim) representable time static fork
-        refine ⟨childViews ++ nextViews, ?_, ?_, ?_⟩
-        · rw [List.map_append, childMapped, nextMapped, projection, dite_eq_left settles]
-        · intro picked member
-          rcases List.mem_append.mp member with left | right
-          · exact childAuthentic picked left
-          · exact nextAuthentic picked right
-        · intro tail result rest
-          have shifted : ExactTurns frame request ((turn + childViews.length) + nextViews.length) tail result := by
-            simpa only [List.length_append, Nat.add_assoc] using rest
-          have afterNext := nextConsume tail result shifted
-          have afterChild := childConsume (staticViewTranscript nextViews tail)
-            { result with childReturns :=
-                staticViewChildReturns frame request (turn + childViews.length) nextViews ++ result.childReturns } afterNext
-          simpa only [staticViewTranscript_append, staticViewChildReturns_append, List.append_assoc] using afterChild
-      · have suffix : Exec.retainedTargetFramesFromAt frame.context.pair path counter
-            (.runOk step enter child resumed next) committed =
-            Exec.retainedTargetFramesFromAt frame.context.pair path (counter + 1) next committed := by
-          simpa only [dite_eq_right settles, List.nil_append] using projection
-        obtain ⟨views, mapped, authentic, consume⟩ := nextIH (path := path) (counter := counter + 1)
-          (turn := turn) committed nextInstalled nextRep
-          (fun located member => fresh located (by rw [suffix]; exact member))
-          (fun same => (target same).elim) representable time static fork
-        exact ⟨views, mapped.trans suffix.symm, authentic, consume⟩
+          { result with childReturns := staticViewChildReturns frame request turn views ++ result.childReturns }) :=
+  staticView_retained_fold_invH sem image run committed installed rep fresh entry representable time static fork.rules_stateGas_none fork.rules_bal_none
+
+
+theorem staticView_raw_retained_turns_invH {K : WriterKey → Prop} {frame : Frame}
+    {request : Request} {turn pc : Nat} {path : List Nat}
+    {sevm : Sevm} {pre : Devm} {out : Execution}
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (run : Exec pc sevm pre out)
+    (installed : sem.At frame.context.pair pc sevm pre)
+    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
+    (fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair path run).filterMap Sum.getRight?,
+      WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm))
+    (entry : sevm.currentTarget = frame.context.pair → pre.stack = [] ∧ pre.memory = Mem.empty)
+    (representable : sevm.data.length < 2 ^ 256)
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (static : sevm.isStatic = true) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
+    ∃ views : List StaticViewTurn,
+      views.map Prod.fst =
+        (Exec.retainedTargetTurnsAt frame.context.pair path run).filterMap Sum.getRight? ∧
+      (∀ picked ∈ views, picked.Authentic frame) ∧
+      ExactTurns frame request turn (staticViewTranscript views .done)
+        { complete := true, frame := frame,
+          childReturns := staticViewChildReturns frame request turn views } := by
+  by_cases committed : Execution.commits out = true
+  · have bridge := Exec.retainedTargetTurnsAt_filterMap_eq frame.context.pair path run committed
+    obtain ⟨views, mapped, authentic, consume⟩ :=
+      staticView_retained_fold_invH (turn := turn) (counter := 0) sem image run committed
+        installed rep (fun located member => fresh located (by rw [bridge]; exact member))
+        entry representable time static stateGas bal
+    refine ⟨views, mapped.trans bridge.symm, authentic, ?_⟩
+    have finished := consume .done
+      { complete := true, frame := frame, childReturns := [] }
+      (ExactTurns.done frame request (turn + views.length))
+    simpa only [List.append_nil] using finished
+  · have empty :
+        (Exec.retainedTargetTurnsAt frame.context.pair path run).filterMap Sum.getRight? = [] := by
+      simp only [Exec.retainedTargetTurnsAt, dite_eq_right committed, List.filterMap_nil]
+    refine ⟨[], empty.symm, ?_, ?_⟩
+    · intro picked member
+      simp only [List.not_mem_nil] at member
+    · exact ExactTurns.done frame request turn
 
 /-- The supplied raw run determines its entire selected static queue and an
 internally finished source consumption. A noncommitting root retains no subtree. -/
@@ -492,25 +718,9 @@ theorem staticView_raw_retained_turns_inv {K : WriterKey → Prop} {frame : Fram
       (∀ picked ∈ views, picked.Authentic frame) ∧
       ExactTurns frame request turn (staticViewTranscript views .done)
         { complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request turn views } := by
-  by_cases committed : Execution.commits out = true
-  · have bridge := Exec.retainedTargetTurnsAt_filterMap_eq frame.context.pair path run committed
-    obtain ⟨views, mapped, authentic, consume⟩ :=
-      staticView_retained_fold_inv (turn := turn) (counter := 0) sem image run committed
-        installed rep (fun located member => fresh located (by rw [bridge]; exact member))
-        entry representable time static fork
-    refine ⟨views, mapped.trans bridge.symm, authentic, ?_⟩
-    have finished := consume .done
-      { complete := true, frame := frame, childReturns := [] }
-      (ExactTurns.done frame request (turn + views.length))
-    simpa only [List.append_nil] using finished
-  · have empty :
-        (Exec.retainedTargetTurnsAt frame.context.pair path run).filterMap Sum.getRight? = [] := by
-      simp only [Exec.retainedTargetTurnsAt, dite_eq_right committed, List.filterMap_nil]
-    refine ⟨[], empty.symm, ?_, ?_⟩
-    · intro picked member
-      simp only [List.not_mem_nil] at member
-    · exact ExactTurns.done frame request turn
+          childReturns := staticViewChildReturns frame request turn views } :=
+  staticView_raw_retained_turns_invH sem image run installed rep fresh entry representable time static fork.rules_stateGas_none fork.rules_bal_none
+
 
 /-- A static queue and its source consumption, indexed by the same primitive
 call. This local packet does not assert an original parent-prefix occurrence. -/

@@ -10,6 +10,24 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
+theorem syncUnlock_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run cert.prog sevm (St b (tag :: R) M G) t_1fd4_c31 o) :
+    sevm.isStatic = false ∧ ∃ gas,
+      o = .returned (St (afterSstoreH sevm b 12 1) R M gas) := by
+  have h := run.cut
+  unfold t_1fd4_c31 at h
+  obtain ⟨_, h⟩ := ric_dest h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h
+  have mutable := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
+  obtain ⟨gas, result⟩ := ric_ret h
+  exact ⟨mutable, gas, Seg.done.inj result⟩
+
 /-- The actual post-update continuation performs the lock-slot write and
 returns the caller tail, retaining the selected store metadata. -/
 theorem syncUnlock_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -18,16 +36,9 @@ theorem syncUnlock_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (run : SFunc.Run cert.prog sevm (St b (tag :: R) M G) t_1fd4_c31 o) :
     sevm.isStatic = false ∧ ∃ gas,
       o = .returned (St (afterSstore sevm b 12 1) R M gas) := by
-  have h := run.cut
-  unfold t_1fd4_c31 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  have mutable := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
-  obtain ⟨gas, result⟩ := ric_ret h
-  exact ⟨mutable, gas, Seg.done.inj result⟩
+  simpa only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
+    syncUnlock_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 /-- The same literal unlock suffix has seven local gas before its selected
 store and eight gas for the return jump. -/
@@ -46,6 +57,34 @@ theorem syncUnlock_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   apply rx_sstore fork sentry static
   exact rx_ret
 
+theorem syncReserveLoad_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {balance0 balance1 tag : B256} {o : Outcome}
+    (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.Run cert.prog sevm
+      (St b (balance1 :: balance0 :: 0x1fd4 :: tag :: R) M G)
+      SyncBalanceSite.second.afterDecodeTree o) :
+    ∃ gas, SFunc.Run cert.prog sevm
+      (St (afterSloadH sevm b 8)
+        (0x22e0 :: reserve1Read (b.getStorVal sevm.currentTarget 8) ::
+          reserve0Read (b.getStorVal sevm.currentTarget 8) ::
+          balance1 :: balance0 :: 0x1fd4 :: tag :: R) M gas)
+      (.callNext 60 t_1fd4_c31) o := by
+  have h := run.cut
+  change SFunc.RunCut _ _ [] _ (.next (.push [8] _) _) _ at h
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨gas, rfl⟩ := ri_push hd
+  exact ⟨gas, h.uncut⟩
+
 /-- The slot-8 extraction is reached after the second answer was decoded.
 The cached update operands are exactly this current selected word. -/
 theorem syncReserveLoad_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -60,21 +99,9 @@ theorem syncReserveLoad_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
           reserve0Read (b.getStorVal sevm.currentTarget 8) ::
           balance1 :: balance0 :: 0x1fd4 :: tag :: R) M gas)
       (.callNext 60 t_1fd4_c31) o := by
-  have h := run.cut
-  change SFunc.RunCut _ _ [] _ (.next (.push [8] _) _) _ at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨gas, rfl⟩ := ri_push hd
-  exact ⟨gas, h.uncut⟩
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    syncReserveLoad_invH fork.rules_bal_none run
+
 
 /-- The actual post-decoder reserve extraction and internal call use 43 local
 gas besides the selected slot-8 read and the supplied shared-update run. -/
@@ -116,14 +143,68 @@ def syncUpdatedWorld (sevm : Sevm) (b : Devm) (balance0 balance1 : B256) : Devm 
     (reserve0Read (b.getStorVal sevm.currentTarget 8))
     (reserve1Read (b.getStorVal sevm.currentTarget 8)) balance0 balance1
 
+def syncUpdatedWorldH (sevm : Sevm) (b : Devm) (balance0 balance1 : B256) : Devm :=
+  updateWorldH sevm (afterSloadH sevm b 8)
+    (reserve0Read (b.getStorVal sevm.currentTarget 8))
+    (reserve1Read (b.getStorVal sevm.currentTarget 8)) balance0 balance1
+
+theorem syncUpdatedWorldH_of_covered {sevm : Sevm} {b : Devm} {balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncUpdatedWorldH sevm b balance0 balance1 = syncUpdatedWorld sevm b balance0 balance1 := by
+  unfold syncUpdatedWorldH syncUpdatedWorld
+  simp only [updateWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def syncResultWorld (sevm : Sevm) (b : Devm) (balance0 balance1 : B256) : Devm :=
   afterSstore sevm (syncUpdatedWorld sevm b balance0 balance1) 12 1
+
+def syncResultWorldH (sevm : Sevm) (b : Devm) (balance0 balance1 : B256) : Devm :=
+  afterSstoreH sevm (syncUpdatedWorldH sevm b balance0 balance1) 12 1
+
+theorem syncResultWorldH_of_covered {sevm : Sevm} {b : Devm} {balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncResultWorldH sevm b balance0 balance1 = syncResultWorld sevm b balance0 balance1 := by
+  unfold syncResultWorldH syncResultWorld
+  simp only [syncUpdatedWorldH_of_covered fork, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 def syncResultMemory (sevm : Sevm) (b : Devm) (M : Mem)
     (balance0 balance1 : B256) : Mem :=
   updateMemory sevm (afterSload sevm b 8) M
     (reserve0Read (b.getStorVal sevm.currentTarget 8))
     (reserve1Read (b.getStorVal sevm.currentTarget 8)) balance0 balance1
+
+def syncResultMemoryH (sevm : Sevm) (b : Devm) (M : Mem)
+    (balance0 balance1 : B256) : Mem :=
+  updateMemoryH sevm (afterSloadH sevm b 8) M
+    (reserve0Read (b.getStorVal sevm.currentTarget 8))
+    (reserve1Read (b.getStorVal sevm.currentTarget 8)) balance0 balance1
+
+theorem syncResultMemoryH_of_covered {sevm : Sevm} {b : Devm} {M : Mem} {balance0 balance1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncResultMemoryH sevm b M balance0 balance1 = syncResultMemory sevm b M balance0 balance1 := by
+  unfold syncResultMemoryH syncResultMemory
+  simp only [updateMemoryH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
+theorem syncUpdateUnlock_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {balance0 balance1 tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 n M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (balance1 :: balance0 :: 0x1fd4 :: tag :: R) M G)
+      SyncBalanceSite.second.afterDecodeTree o) :
+    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
+      ∃ gas, o = .returned (St (syncResultWorldH sevm b balance0 balance1) R
+        (syncResultMemoryH sevm b M balance0 balance1) gas) := by
+  obtain ⟨_, loadRun⟩ := syncReserveLoad_invH bal run
+  obtain ⟨_, returning | halted⟩ := ric_call (g := t_22e0_c60) rfl loadRun.cut
+  · obtain ⟨d, callee, continuation⟩ := returning
+    obtain ⟨bound0, bound1, static, gas, result⟩ := update_invH stateGas bal mem callee
+    have state := Outcome.returned.inj result
+    subst d
+    obtain ⟨_, finalGas, final⟩ := syncUnlock_invH stateGas bal continuation.uncut
+    exact ⟨bound0, bound1, static, finalGas, final⟩
+  · obtain ⟨d, callee, _⟩ := halted
+    obtain ⟨_, _, _, _, impossible⟩ := update_invH stateGas bal mem callee
+    cases impossible
 
 /-- Successful bytes after the second decoder perform the actual shared update
 and unlock, deriving both balance guards and preserving the exact caller tail. -/
@@ -136,17 +217,9 @@ theorem syncUpdateUnlock_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
       ∃ gas, o = .returned (St (syncResultWorld sevm b balance0 balance1) R
         (syncResultMemory sevm b M balance0 balance1) gas) := by
-  obtain ⟨_, loadRun⟩ := syncReserveLoad_inv fork run
-  obtain ⟨_, returning | halted⟩ := ric_call (g := t_22e0_c60) rfl loadRun.cut
-  · obtain ⟨d, callee, continuation⟩ := returning
-    obtain ⟨bound0, bound1, static, gas, result⟩ := update_inv fork mem callee
-    have state := Outcome.returned.inj result
-    subst d
-    obtain ⟨_, finalGas, final⟩ := syncUnlock_inv fork continuation.uncut
-    exact ⟨bound0, bound1, static, finalGas, final⟩
-  · obtain ⟨d, callee, _⟩ := halted
-    obtain ⟨_, _, _, _, impossible⟩ := update_inv fork mem callee
-    cases impossible
+  simpa only [syncResultMemoryH_of_covered fork, syncResultWorldH_of_covered fork] using
+    syncUpdateUnlock_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 /-- Compose the supplied actual shared-update run with the literal caller
 load and unlock. The primitive store sentry remains a separate obligation. -/
@@ -194,6 +267,15 @@ theorem syncResultWorld_selected {sevm : Sevm} {b : Devm} {balance0 balance1 key
   rw [afterSstore_getStor_self, Stor.get_set_ne _ (Ne.symm other)]
   rfl
 
+theorem syncResultWorld_selectedH {sevm : Sevm} {b : Devm} {balance0 balance1 key : B256}
+    (other : key ≠ 12) :
+    (syncResultWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget key =
+      (syncUpdatedWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget key := by
+  unfold syncResultWorldH
+  change (Devm.getStor _ _).get key = _
+  rw [afterSstoreH_getStor_self, Stor.get_set_ne _ (Ne.symm other)]
+  rfl
+
 /-- With the selected entry fields transported to the point after both calls,
 the concrete update-and-unlock world carries the source update and Sync event. -/
 theorem syncUpdateSource_result {st : State} {ctx : Context} {sevm : Sevm} {b : Devm}
@@ -234,6 +316,44 @@ theorem syncUpdateSource_result {st : State} {ctx : Context} {sevm : Sevm} {b : 
   · rw [syncResultWorld, afterSstore_logs]
     simpa only [syncUpdatedWorld, afterSload_logs] using logs
 
+theorem syncUpdateSource_resultH {st : State} {ctx : Context} {sevm : Sevm} {b : Devm}
+    {balance0 balance1 : B256}
+    (slots : ReserveSlotMatches st sevm b)
+    (cum0 : b.getStorVal sevm.currentTarget 9 = st.price0CumulativeLast)
+    (cum1 : b.getStorVal sevm.currentTarget 10 = st.price1CumulativeLast)
+    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
+    (bound0 : balance0.toNat < 2 ^ 112) (bound1 : balance1.toNat < 2 ^ 112) :
+    ∃ post event oracle,
+      st.update ctx balance0 balance1 st.reserve0.val st.reserve1.val = .ok (post, event, oracle) ∧
+      ReserveSlotMatches { post with unlocked := 1 } sevm (syncResultWorldH sevm b balance0 balance1) ∧
+      (syncResultWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
+      (syncResultWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
+      (syncResultWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget 12 = 1 ∧
+      event = .sync balance0.toNat balance1.toNat ∧
+      (syncResultWorldH sevm b balance0 balance1).logs =
+        b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] := by
+  obtain ⟨cached0, cached1⟩ := syncCachedReserves_source slots
+  have loadedSlots : ReserveSlotMatches st sevm (afterSloadH sevm b 8) := by
+    simpa only [ReserveSlotMatches, getStorVal_afterSloadH] using slots
+  obtain ⟨post, event, oracle, source, reserves, price0, price1, sync, logs⟩ :=
+    update_source_resultH loadedSlots (by rw [getStorVal_afterSloadH]; exact cum0)
+      (by rw [getStorVal_afterSloadH]; exact cum1) time pair
+      (by rw [cached0]; exact st.reserve0.isLt) (by rw [cached1]; exact st.reserve1.isLt)
+      bound0 bound1
+  rw [cached0, cached1] at source
+  refine ⟨post, event, oracle, source, ?_, ?_, ?_, ?_, sync, ?_⟩
+  · simpa only [ReserveSlotMatches, syncResultWorld_selectedH (by decide : (8 : B256) ≠ 12),
+      syncUpdatedWorldH] using reserves
+  · rw [syncResultWorld_selectedH (by decide : (9 : B256) ≠ 12)]
+    exact price0
+  · rw [syncResultWorld_selectedH (by decide : (10 : B256) ≠ 12)]
+    exact price1
+  · unfold syncResultWorldH
+    change (Devm.getStor _ _).get 12 = _
+    rw [afterSstoreH_getStor_self, Stor.get_set_self]
+  · rw [syncResultWorldH, afterSstoreH_logs]
+    simpa only [syncUpdatedWorldH, afterSloadH_logs] using logs
+
 /-- The literal code-size suffix after the forty-one preceding steps of each
 balance request. The fallback is unused by both certificate projections. -/
 def SyncBalanceSite.codeGuardTree (site : SyncBalanceSite) : SFunc :=
@@ -260,16 +380,16 @@ private theorem syncCodeGuard_shape (site : SyncBalanceSite) :
 def syncCodeGuardLine : List Ninst :=
   [.reg .extcodesize, .reg .iszero, .reg (.dup 0), .reg .iszero]
 
-theorem syncCodeGuardLine_inv {sevm : Sevm} {b d : Devm}
+theorem syncCodeGuardLine_invH {sevm : Sevm} {b d : Devm}
     {S : List B256} {M : Mem} {G : Nat} {token : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Line.Run sevm (St b (token :: S) M G) syncCodeGuardLine d) :
-    ∃ gas, d = St (temporalAccountAccessBase b token.toAdr)
+    ∃ gas, d = St (accountAccessH sevm b token.toAdr)
       (B256.eqCheck (B256.eqCheck (b.getCode token.toAdr).size.toB256 0) 0 ::
         B256.eqCheck (b.getCode token.toAdr).size.toB256 0 :: S) M gas := by
   dsimp only [syncCodeGuardLine] at run
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_extcodesize fork hs
+  obtain ⟨_, rfl⟩ := ri_extcodesizeH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_iszero hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
@@ -279,16 +399,25 @@ theorem syncCodeGuardLine_inv {sevm : Sevm} {b d : Devm}
   cases run
   exact ⟨_, rfl⟩
 
-/-- Successful passage through either actual code guard derives a nonzero
-code-size word and preserves the same derivation predicate into the call. -/
-theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem syncCodeGuardLine_inv {sevm : Sevm} {b d : Devm}
+    {S : List B256} {M : Mem} {G : Nat} {token : B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : Line.Run sevm (St b (token :: S) M G) syncCodeGuardLine d) :
+    ∃ gas, d = St (temporalAccountAccessBase b token.toAdr)
+      (B256.eqCheck (B256.eqCheck (b.getCode token.toAdr).size.toB256 0) 0 ::
+        B256.eqCheck (b.getCode token.toAdr).size.toB256 0 :: S) M gas := by
+  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
+    syncCodeGuardLine_invH fork.rules_bal_none run
+
+
+theorem syncCodeGuard_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {S : List B256} {C : List Nat} {M : Mem} {G : Nat} {token : B256} {seg : Seg}
-    (site : SyncBalanceSite) (fork : CoveredFork sevm.benvStat.fork)
+    (site : SyncBalanceSite) (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
       (St b (token :: S) M G) site.codeGuardTree seg) :
     (b.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
       SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St (temporalAccountAccessBase b token.toAdr) (0 :: S) M gas)
+        (St (accountAccessH sevm b token.toAdr) (0 :: S) M gas)
         site.callTree seg := by
   rw [syncCodeGuard_shape] at run
   have destinationLength : site.codeDestination.length ≤ 32 := by cases site <;> decide
@@ -302,7 +431,7 @@ theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (tail := .next (.push site.codeDestination destinationLength)
       (.branch site.codeFailureTree site.callTree)) (seg := seg)
     (fun step => StepIn.toRun step) syncCodeGuardLine run
-  obtain ⟨_, state⟩ := syncCodeGuardLine_inv fork line
+  obtain ⟨_, state⟩ := syncCodeGuardLine_invH bal line
   rw [state] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
@@ -316,6 +445,21 @@ theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       exact (by decide : (1 : B256) ≠ 0) zero
     refine ⟨nonzero, gas, ?_⟩
     simpa only [zero] using tailRun
+
+/-- Successful passage through either actual code guard derives a nonzero
+code-size word and preserves the same derivation predicate into the call. -/
+theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {S : List B256} {C : List Nat} {M : Mem} {G : Nat} {token : B256} {seg : Seg}
+    (site : SyncBalanceSite) (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (token :: S) M G) site.codeGuardTree seg) :
+    (b.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (temporalAccountAccessBase b token.toAdr) (0 :: S) M gas)
+        site.callTree seg := by
+  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
+    syncCodeGuard_invH site fork.rules_bal_none run
+
 
 /-- The literal guard charges its selected account access and twenty-two
 local gas before entering the actual balance call destination. -/
@@ -385,11 +529,11 @@ def syncSecondRequestLine : List Ninst := [
   .reg (.dup 6),
   .reg (.dup 0)]
 
-theorem syncSecondRequestLine_inv {sevm : Sevm} {b d : Devm}
+theorem syncSecondRequestLine_invH {sevm : Sevm} {b d : Devm}
     {S : List B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : Line.Run sevm (St b S M G) syncSecondRequestLine d) :
-    ∃ gas, d = St (afterSload sevm b 7)
+    ∃ gas, d = St (afterSloadH sevm b 7)
       ((b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
        (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
        128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
@@ -406,7 +550,7 @@ theorem syncSecondRequestLine_inv {sevm : Sevm} {b d : Devm}
   simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
   dsimp only [syncSecondRequestLine] at run
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨d, hs, run⟩ := Line.of_run_cons run
@@ -460,6 +604,45 @@ theorem syncSecondRequestLine_inv {sevm : Sevm} {b d : Devm}
   cases run
   exact ⟨gas, rfl⟩
 
+theorem syncSecondRequestLine_inv {sevm : Sevm} {b d : Devm}
+    {S : List B256} {M : Mem} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : Line.Run sevm (St b S M G) syncSecondRequestLine d) :
+    ∃ gas, d = St (afterSload sevm b 7)
+      ((b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+       (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+       128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+       (b.getStorVal sevm.currentTarget 7).toAdr.toB256 :: S)
+      (balanceRequestMemory M sevm.currentTarget) gas := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    syncSecondRequestLine_invH fork.rules_bal_none mem run
+
+
+theorem syncSecondRequest_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
+    {balance0 tag : B256} {seg : Seg}
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (balance0 :: 0x1fd4 :: tag :: R) M G)
+      SyncBalanceSite.first.afterDecodeTree seg) :
+    ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St (afterSloadH sevm b 7)
+        ((b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+         (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+         128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+         (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+         balance0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) gas)
+      SyncBalanceSite.second.codeGuardTree seg := by
+  change SFunc.RunCutP (StepIn D) cert.prog sevm C
+    (St b (balance0 :: 0x1fd4 :: tag :: R) M G)
+    (syncSecondRequestLine.foldr SFunc.next SyncBalanceSite.second.codeGuardTree) seg at run
+  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
+    (fun step => StepIn.toRun step) syncSecondRequestLine run
+  obtain ⟨gas, state⟩ := syncSecondRequestLine_invH bal mem line
+  rw [state] at tail
+  exact ⟨gas, tail⟩
+
 theorem syncSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {balance0 tag : B256} {seg : Seg}
@@ -476,14 +659,9 @@ theorem syncSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
          balance0 :: 0x1fd4 :: tag :: R)
         (balanceRequestMemory M sevm.currentTarget) gas)
       SyncBalanceSite.second.codeGuardTree seg := by
-  change SFunc.RunCutP (StepIn D) cert.prog sevm C
-    (St b (balance0 :: 0x1fd4 :: tag :: R) M G)
-    (syncSecondRequestLine.foldr SFunc.next SyncBalanceSite.second.codeGuardTree) seg at run
-  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
-    (fun step => StepIn.toRun step) syncSecondRequestLine run
-  obtain ⟨gas, state⟩ := syncSecondRequestLine_inv fork mem line
-  rw [state] at tail
-  exact ⟨gas, tail⟩
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    syncSecondRequest_invH fork.rules_bal_none mem run
+
 
 
 /-- Thirty-eight fixed-charge instructions cost113 gas, in addition to the
@@ -563,6 +741,104 @@ theorem syncSecondRequest_exact {sevm : Sevm} {b : Devm}
   exact body
 
 
+theorem syncBalancePair_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
+    {token0 tag : B256} {seg : Seg}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
+    (wf : Mem.Wf M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (token0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+        0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) G)
+      SyncBalanceSite.first.codeGuardTree seg) :
+    ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
+      (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 : Nat),
+      let w0 := accountAccessH sevm b token0.toAdr
+      let M0 := balanceReplyMemory M sevm.currentTarget out0
+      let balance0 := Bytes.toB256 (out0.take 32)
+      let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
+      let u1 := afterSloadH sevm d0 7
+      let w1 := accountAccessH sevm u1 token1.toAdr
+      (b.getCode token0.toAdr).size.toB256 ≠ 0 ∧
+      StepIn D sevm
+        (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
+      StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
+      32 ≤ out0.length ∧ out0.length < 2^256 ∧
+      StaticAnsweredH sevm w0 token0.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St d0 (balance0 :: 0x1fd4 :: tag :: R) M0 decodedGas0)
+        SyncBalanceSite.first.afterDecodeTree seg ∧
+      (u1.getCode token1.toAdr).size.toB256 ≠ 0 ∧
+      StepIn D sevm
+        (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
+      StaticCallPost w1 d1 (164 :: 0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
+      32 ≤ out1.length ∧ out1.length < 2^256 ∧
+      StaticAnsweredH sevm w1 token1.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
+      (∀ a, Devm.getStor d0 a = Devm.getStor b a) ∧
+      (∀ a, Devm.getStor d1 a = Devm.getStor b a) ∧
+      d1.logs = b.logs ∧ d1.output = b.output ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St d1 (Bytes.toB256 (out1.take 32) :: balance0 :: 0x1fd4 :: tag :: R)
+          (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
+        SyncBalanceSite.second.afterDecodeTree seg := by
+  obtain ⟨code0, guardGas0, firstCall⟩ := syncCodeGuard_invH .first bal run
+  obtain ⟨gw0, callGas0, d0, out0, decodedGas0, call0, post0, long0, bound0, answered0, decoded0⟩ :=
+    balanceRead_invH .first stateGas mem wf firstCall
+  have reply0 := balanceReplyMemory_ptr out0 mem
+  obtain ⟨guardGas1, secondGuard⟩ := syncSecondRequest_invH bal reply0 decoded0
+  obtain ⟨code1, guardGas1', secondCall⟩ := syncCodeGuard_invH .second bal secondGuard
+  have request1 : PtrMem 128 192
+      (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget) :=
+    balanceRequestMemory_ptr reply0 sevm.currentTarget
+  obtain ⟨gw1, callGas1, d1, out1, decodedGas1, call1, post1, long1, bound1, answered1, decoded1⟩ :=
+    balanceRead_invH .second stateGas request1 reply0.wf secondCall
+  have stor0 : ∀ a, Devm.getStor d0 a = Devm.getStor b a := by
+    intro a
+    refine (post0.stor a).trans ?_
+    exact accountAccessH_getStor _ _ _ _
+  have stor1 : ∀ a, Devm.getStor d1 a = Devm.getStor b a := by
+    intro a
+    refine (post1.stor a).trans ?_
+    have warm : Devm.getStor
+        (accountAccessH sevm (afterSloadH sevm d0 7)
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr) a =
+        Devm.getStor (afterSloadH sevm d0 7) a := by
+      exact accountAccessH_getStor _ _ _ _
+    rw [warm, afterSloadH_getStor, stor0 a]
+  have logs0 : d0.logs = b.logs := by
+    refine post0.logs.trans ?_
+    exact accountAccessH_logs _ _ _
+  have logs1 : d1.logs = b.logs := by
+    refine post1.logs.trans ?_
+    have warm : (accountAccessH sevm (afterSloadH sevm d0 7)
+        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).logs =
+        (afterSloadH sevm d0 7).logs := by
+      exact accountAccessH_logs _ _ _
+    rw [warm, afterSloadH_logs, logs0]
+  have output0 : d0.output = b.output := by
+    refine (post0.output rfl).trans ?_
+    exact accountAccessH_output _ _ _
+  have output1 : d1.output = b.output := by
+    refine (post1.output rfl).trans ?_
+    have warm : (accountAccessH sevm (afterSloadH sevm d0 7)
+        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).output =
+        (afterSloadH sevm d0 7).output := by
+      exact accountAccessH_output _ _ _
+    rw [warm, afterSloadH_output, output0]
+  exact ⟨gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1, decodedGas1,
+    code0, call0, post0, long0, bound0, answered0, decoded0, code1, call1, post1,
+    long1, bound1, answered1, stor0, stor1, logs1, output1, decoded1⟩
+
 /-- The two observations come from the actual first call, its decoded world,
 the intervening slot-7/request walk, and the actual second call in that order. -/
 theorem syncBalancePair_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -614,59 +890,9 @@ theorem syncBalancePair_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         (St d1 (Bytes.toB256 (out1.take 32) :: balance0 :: 0x1fd4 :: tag :: R)
           (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
         SyncBalanceSite.second.afterDecodeTree seg := by
-  obtain ⟨code0, guardGas0, firstCall⟩ := syncCodeGuard_inv .first fork run
-  obtain ⟨gw0, callGas0, d0, out0, decodedGas0, call0, post0, long0, bound0, answered0, decoded0⟩ :=
-    balanceRead_inv .first fork mem wf firstCall
-  have reply0 := balanceReplyMemory_ptr out0 mem
-  obtain ⟨guardGas1, secondGuard⟩ := syncSecondRequest_inv fork reply0 decoded0
-  obtain ⟨code1, guardGas1', secondCall⟩ := syncCodeGuard_inv .second fork secondGuard
-  have request1 : PtrMem 128 192
-      (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget) :=
-    balanceRequestMemory_ptr reply0 sevm.currentTarget
-  obtain ⟨gw1, callGas1, d1, out1, decodedGas1, call1, post1, long1, bound1, answered1, decoded1⟩ :=
-    balanceRead_inv .second fork request1 reply0.wf secondCall
-  have stor0 : ∀ a, Devm.getStor d0 a = Devm.getStor b a := by
-    intro a
-    refine (post0.stor a).trans ?_
-    unfold temporalAccountAccessBase
-    split <;> rfl
-  have stor1 : ∀ a, Devm.getStor d1 a = Devm.getStor b a := by
-    intro a
-    refine (post1.stor a).trans ?_
-    have warm : Devm.getStor
-        (temporalAccountAccessBase (afterSload sevm d0 7)
-          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr) a =
-        Devm.getStor (afterSload sevm d0 7) a := by
-      unfold temporalAccountAccessBase
-      split <;> rfl
-    rw [warm, afterSload_getStor, stor0 a]
-  have logs0 : d0.logs = b.logs := by
-    refine post0.logs.trans ?_
-    unfold temporalAccountAccessBase
-    split <;> rfl
-  have logs1 : d1.logs = b.logs := by
-    refine post1.logs.trans ?_
-    have warm : (temporalAccountAccessBase (afterSload sevm d0 7)
-        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).logs =
-        (afterSload sevm d0 7).logs := by
-      unfold temporalAccountAccessBase
-      split <;> rfl
-    rw [warm, afterSload_logs, logs0]
-  have output0 : d0.output = b.output := by
-    refine (post0.output rfl).trans ?_
-    unfold temporalAccountAccessBase
-    split <;> rfl
-  have output1 : d1.output = b.output := by
-    refine (post1.output rfl).trans ?_
-    have warm : (temporalAccountAccessBase (afterSload sevm d0 7)
-        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).output =
-        (afterSload sevm d0 7).output := by
-      unfold temporalAccountAccessBase
-      split <;> rfl
-    rw [warm, afterSload_output, output0]
-  exact ⟨gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1, decodedGas1,
-    code0, call0, post0, long0, bound0, answered0, decoded0, code1, call1, post1,
-    long1, bound1, answered1, stor0, stor1, logs1, output1, decoded1⟩
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access, StaticAnsweredH_iff_of_covered fork] using
+    syncBalancePair_invH fork.rules_stateGas_none fork.rules_bal_none mem wf run
+
 
 
 /-- Exact two-call composition. External premises are the two actual primitive
@@ -773,16 +999,17 @@ def syncFirstRequestLine : List Ninst := [.push [0x00] (by decide),
   .reg (.dup 6),
   .reg (.dup 0)]
 
-theorem syncFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
+theorem syncFirstRequestLine_invH {sevm : Sevm} {b final : Devm}
     {R : List B256} {M : Mem} {G : Nat} {tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : Line.Run sevm (St b (tag :: R) M G) syncFirstRequestLine final) :
     sevm.isStatic = false ∧ ∃ gas,
-      final = St (afterSload sevm (afterSstore sevm b 12 0) 6)
-        (((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
-         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+      final = St (afterSloadH sevm (afterSstoreH sevm b 12 0) 6)
+        (((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         ((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         ((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
          0x1fd4 :: tag :: R)
         (balanceRequestMemory M sevm.currentTarget) gas := by
   have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
@@ -798,10 +1025,10 @@ theorem syncFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
-  have mutable := ri_sstore_nonstatic fork hs
-  obtain ⟨_, rfl⟩ := ri_sstore fork hs
+  have mutable := ri_sstore_nonstaticH stateGas hs
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨d, hs, run⟩ := Line.of_run_cons run
@@ -854,6 +1081,48 @@ theorem syncFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
   cases run
   exact ⟨mutable, gas, rfl⟩
 
+theorem syncFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : Line.Run sevm (St b (tag :: R) M G) syncFirstRequestLine final) :
+    sevm.isStatic = false ∧ ∃ gas,
+      final = St (afterSload sevm (afterSstore sevm b 12 0) 6)
+        (((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) gas := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
+    syncFirstRequestLine_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
+theorem syncFirstRequest_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {tag : B256} {seg : Seg}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (tag :: R) M G) t_1e66_c31 seg) :
+    sevm.isStatic = false ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (afterSloadH sevm (afterSstoreH sevm b 12 0) 6)
+          (((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+           ((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+           128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+           ((afterSstoreH sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+           0x1fd4 :: tag :: R)
+          (balanceRequestMemory M sevm.currentTarget) gas)
+        SyncBalanceSite.first.codeGuardTree seg := by
+  unfold t_1e66_c31 at run
+  obtain ⟨entryGas, cut⟩ := ric_destP run
+  change SFunc.RunCutP (StepIn D) cert.prog sevm C (St b (tag :: R) M entryGas)
+    (syncFirstRequestLine.foldr SFunc.next SyncBalanceSite.first.codeGuardTree) seg at cut
+  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
+    (fun step => StepIn.toRun step) syncFirstRequestLine cut
+  obtain ⟨mutable, gas, state⟩ := syncFirstRequestLine_invH stateGas bal mem line
+  rw [state] at tail
+  exact ⟨mutable, gas, tail⟩
+
 /-- The literal first request locks slot12, loads token0, and installs the
 actual overlapping request before its code guard. The same derivation and
 continuation are retained through every primitive step. -/
@@ -872,15 +1141,9 @@ theorem syncFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
            0x1fd4 :: tag :: R)
           (balanceRequestMemory M sevm.currentTarget) gas)
         SyncBalanceSite.first.codeGuardTree seg := by
-  unfold t_1e66_c31 at run
-  obtain ⟨entryGas, cut⟩ := ric_destP run
-  change SFunc.RunCutP (StepIn D) cert.prog sevm C (St b (tag :: R) M entryGas)
-    (syncFirstRequestLine.foldr SFunc.next SyncBalanceSite.first.codeGuardTree) seg at cut
-  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
-    (fun step => StepIn.toRun step) syncFirstRequestLine cut
-  obtain ⟨mutable, gas, state⟩ := syncFirstRequestLine_inv fork mem line
-  rw [state] at tail
-  exact ⟨mutable, gas, tail⟩
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
+    syncFirstRequest_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 
@@ -968,20 +1231,18 @@ theorem syncFirstRequest_exact {sevm : Sevm} {b : Devm}
   exact body
 
 
-/-- Successful entry into the lock-protected callee reads slot12 and selects
-the actual unlocked arm, retaining that read's warming metadata. -/
-theorem syncLockGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem syncLockGuard_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {tag : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
       (St b (tag :: R) M G) t_1df5_c31 seg) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
       SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St (afterSload sevm b 12) (tag :: R) M gas) t_1e66_c31 seg := by
+        (St (afterSloadH sevm b 12) (tag :: R) M gas) t_1e66_c31 seg := by
   unfold t_1df5_c31 at run
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_eq (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
@@ -994,6 +1255,20 @@ theorem syncLockGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       · simp only [B256.eqCheck, eq, ite_false] at accepted
         exact False.elim (accepted rfl)
     exact ⟨unlocked, gas, body⟩
+
+/-- Successful entry into the lock-protected callee reads slot12 and selects
+the actual unlocked arm, retaining that read's warming metadata. -/
+theorem syncLockGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {tag : B256} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (tag :: R) M G) t_1df5_c31 seg) :
+    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (afterSload sevm b 12) (tag :: R) M gas) t_1e66_c31 seg := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    syncLockGuard_invH fork.rules_bal_none run
+
 
 /-- The lock guard has23 local gas in addition to its selected slot12 read. -/
 theorem syncLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
@@ -1019,11 +1294,117 @@ theorem syncLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
 def syncLockedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 12) 12 0
 
+def syncLockedWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b 12) 12 0
+
+theorem syncLockedWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncLockedWorldH sevm b = syncLockedWorld sevm b := by
+  unfold syncLockedWorldH syncLockedWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def syncFirstWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm (syncLockedWorld sevm b) 6
 
+def syncFirstWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm (syncLockedWorldH sevm b) 6
+
+theorem syncFirstWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncFirstWorldH sevm b = syncFirstWorld sevm b := by
+  unfold syncFirstWorldH syncFirstWorld
+  simp only [syncLockedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def syncFirstToken (sevm : Sevm) (b : Devm) : B256 :=
   ((syncLockedWorld sevm b).getStorVal sevm.currentTarget 6).toAdr.toB256
+
+def syncFirstTokenH (sevm : Sevm) (b : Devm) : B256 :=
+  ((syncLockedWorldH sevm b).getStorVal sevm.currentTarget 6).toAdr.toB256
+
+theorem syncFirstTokenH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    syncFirstTokenH sevm b = syncFirstToken sevm b := by
+  unfold syncFirstTokenH syncFirstToken
+  simp only [syncLockedWorldH_of_covered fork]
+
+theorem syncCallee_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {tag : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b (tag :: R) M G) t_1df5_c31 o) :
+    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
+    ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
+      (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 finalGas : Nat),
+      let u0 := syncFirstWorldH sevm b
+      let token0 := syncFirstTokenH sevm b
+      let w0 := accountAccessH sevm u0 token0.toAdr
+      let M0 := balanceReplyMemory M sevm.currentTarget out0
+      let balance0 := Bytes.toB256 (out0.take 32)
+      let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
+      let u1 := afterSloadH sevm d0 7
+      let w1 := accountAccessH sevm u1 token1.toAdr
+      (u0.getCode token0.toAdr).size.toB256 ≠ 0 ∧
+      StepIn D sevm
+        (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
+      StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
+      32 ≤ out0.length ∧ out0.length < 2^256 ∧
+      StaticAnsweredH sevm w0 token0.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm []
+        (St d0 (balance0 :: 0x1fd4 :: tag :: R) M0 decodedGas0)
+        SyncBalanceSite.first.afterDecodeTree (.done o) ∧
+      (u1.getCode token1.toAdr).size.toB256 ≠ 0 ∧
+      StepIn D sevm
+        (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
+      StaticCallPost w1 d1 (164 :: 0x70a08231 :: token1 :: balance0 :: 0x1fd4 :: tag :: R)
+        (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
+      32 ≤ out1.length ∧ out1.length < 2^256 ∧
+      StaticAnsweredH sevm w1 token1.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
+      (∀ a, Devm.getStor d0 a = Devm.getStor u0 a) ∧
+      (∀ a, Devm.getStor d1 a = Devm.getStor u0 a) ∧
+      d1.logs = b.logs ∧ d1.output = b.output ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm []
+        (St d1 (Bytes.toB256 (out1.take 32) :: balance0 :: 0x1fd4 :: tag :: R)
+          (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
+        SyncBalanceSite.second.afterDecodeTree (.done o) ∧
+      balance0.toNat < 2 ^ 112 ∧ (Bytes.toB256 (out1.take 32)).toNat < 2 ^ 112 ∧
+      o = .returned (St (syncResultWorldH sevm d1 balance0 (Bytes.toB256 (out1.take 32))) R
+        (syncResultMemoryH sevm d1 (balanceReplyMemory M0 sevm.currentTarget out1)
+          balance0 (Bytes.toB256 (out1.take 32))) finalGas) := by
+  obtain ⟨unlocked, _, request⟩ := syncLockGuard_invH bal (SFunc.runP_iff_runCutP_nil.mp run)
+  obtain ⟨mutable, _, firstGuard⟩ := syncFirstRequest_invH stateGas bal mem request
+  have requestMem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  obtain ⟨gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1, decodedGas1,
+    code0, call0, post0, long0, bound0, answered0, decoded0, code1, call1, post1,
+    long1, bound1, answered1, stor0, stor1, logs1, output1, decoded1⟩ :=
+    syncBalancePair_invH stateGas bal requestMem mem.wf firstGuard
+  have reply0 := balanceReplyMemory_ptr out0 requestMem
+  have request1 : PtrMem 128 192
+      (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget) :=
+    balanceRequestMemory_ptr reply0 sevm.currentTarget
+  have reply1 := balanceReplyMemory_ptr out1 request1
+  have decodedRun : SFunc.Run cert.prog sevm
+      (St d1 (Bytes.toB256 (out1.take 32) :: Bytes.toB256 (out0.take 32) :: 0x1fd4 :: tag :: R)
+        (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget out1)
+        decodedGas1) SyncBalanceSite.second.afterDecodeTree o :=
+    (SFunc.runP_iff_runCutP_nil.mpr decoded1).mono StepIn.toRun
+  obtain ⟨balanceBound0, balanceBound1, _, finalGas, result⟩ :=
+    syncUpdateUnlock_invH stateGas bal reply1 decodedRun
+  have logs : d1.logs = b.logs := by
+    rw [logs1, afterSloadH_logs, afterSstoreH_logs, afterSloadH_logs]
+  have output : d1.output = b.output := by
+    rw [output1, afterSloadH_output, afterSstoreH_output, afterSloadH_output]
+  exact ⟨unlocked, mutable, gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1,
+    d1, out1, decodedGas1, finalGas, code0, call0, post0, long0, bound0, answered0,
+    decoded0, code1, call1, post1, long1, bound1, answered1, stor0, stor1, logs,
+    output, decoded1, balanceBound0, balanceBound1, result⟩
 
 /-- The complete successful sync callee derives its lock and balance guards
 from actual bytes. Both call witnesses, full answers and decoded continuation
@@ -1077,42 +1458,15 @@ theorem syncCallee_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       o = .returned (St (syncResultWorld sevm d1 balance0 (Bytes.toB256 (out1.take 32))) R
         (syncResultMemory sevm d1 (balanceReplyMemory M0 sevm.currentTarget out1)
           balance0 (Bytes.toB256 (out1.take 32))) finalGas) := by
-  obtain ⟨unlocked, _, request⟩ := syncLockGuard_inv fork (SFunc.runP_iff_runCutP_nil.mp run)
-  obtain ⟨mutable, _, firstGuard⟩ := syncFirstRequest_inv fork mem request
-  have requestMem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
-    balanceRequestMemory_ptr mem sevm.currentTarget
-  obtain ⟨gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1, decodedGas1,
-    code0, call0, post0, long0, bound0, answered0, decoded0, code1, call1, post1,
-    long1, bound1, answered1, stor0, stor1, logs1, output1, decoded1⟩ :=
-    syncBalancePair_inv fork requestMem mem.wf firstGuard
-  have reply0 := balanceReplyMemory_ptr out0 requestMem
-  have request1 : PtrMem 128 192
-      (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget) :=
-    balanceRequestMemory_ptr reply0 sevm.currentTarget
-  have reply1 := balanceReplyMemory_ptr out1 request1
-  have decodedRun : SFunc.Run cert.prog sevm
-      (St d1 (Bytes.toB256 (out1.take 32) :: Bytes.toB256 (out0.take 32) :: 0x1fd4 :: tag :: R)
-        (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget out1)
-        decodedGas1) SyncBalanceSite.second.afterDecodeTree o :=
-    (SFunc.runP_iff_runCutP_nil.mpr decoded1).mono StepIn.toRun
-  obtain ⟨balanceBound0, balanceBound1, _, finalGas, result⟩ :=
-    syncUpdateUnlock_inv fork reply1 decodedRun
-  have logs : d1.logs = b.logs := by
-    rw [logs1, afterSload_logs, afterSstore_logs, afterSload_logs]
-  have output : d1.output = b.output := by
-    rw [output1, afterSload_output, afterSstore_output, afterSload_output]
-  exact ⟨unlocked, mutable, gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1,
-    d1, out1, decodedGas1, finalGas, code0, call0, post0, long0, bound0, answered0,
-    decoded0, code1, call1, post1, long1, bound1, answered1, stor0, stor1, logs,
-    output, decoded1, balanceBound0, balanceBound1, result⟩
+  simpa only [syncFirstTokenH_of_covered fork, syncFirstWorldH_of_covered fork, syncResultMemoryH_of_covered fork, syncResultWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access, StaticAnsweredH_iff_of_covered fork] using
+    syncCallee_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
-/-- The public sync wrapper enters the actual callee with its return tag and
-then executes the literal STOP suffix. The same derivation predicate remains
-on the callee, including both nested static calls. -/
-theorem syncEntry_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+
+theorem syncEntry_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.RunP (StepIn D) cert.prog sevm (St b R M G) t_067b_c78 o) :
     ∃ calleeGas d finalGas,
       SFunc.RunP (StepIn D) cert.prog sevm
@@ -1129,7 +1483,7 @@ theorem syncEntry_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     cases lookup
     have calleeRun := (St.of_pop1 pop).2 ▸ callee
     obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-      _, _, _, _, _, _, _, _, result⟩ := syncCallee_inv fork mem calleeRun
+      _, _, _, _, _, _, _, _, result⟩ := syncCallee_invH stateGas bal mem calleeRun
     cases result
   | callRet dd lookup pop callee tail =>
     rw [show cert.prog[31]? = some t_1df5_c31 from rfl] at lookup
@@ -1143,6 +1497,20 @@ theorem syncEntry_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     | last stop =>
       have eq := Except.ok.inj stop
       exact ⟨_, _, gas, calleeRun, congrArg Outcome.halted eq.symm⟩
+
+/-- The public sync wrapper enters the actual callee with its return tag and
+then executes the literal STOP suffix. The same derivation predicate remains
+on the callee, including both nested static calls. -/
+theorem syncEntry_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b R M G) t_067b_c78 o) :
+    ∃ calleeGas d finalGas,
+      SFunc.RunP (StepIn D) cert.prog sevm
+        (St b (0x0257 :: R) M calleeGas) t_1df5_c31 (.returned d) ∧
+      o = .halted (St d d.stack d.memory finalGas) :=
+  syncEntry_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 
 /-- Exact gas before the first callee call, including the actual lock read,
@@ -1471,10 +1839,9 @@ theorem syncGuards_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         simp only [B256.ltCheck, not_lt.mpr size, ite_false]
       exact (nonzero zero).elim
 
-/-- The real pc-zero sync run reaches its callee through the public guards,
-selector and wrapper, retaining the same raw derivation for both child calls. -/
-theorem syncPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem syncPc0_invH {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : SProg.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
@@ -1487,8 +1854,22 @@ theorem syncPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
   cases entry
   obtain ⟨value, size, _, run⟩ := syncGuards_inv run
   obtain ⟨_, run⟩ := syncSelector_inv selector run
-  obtain ⟨calleeGas, d, finalGas, callee, result⟩ := syncEntry_inv fork getterInitMemory_ptr run
+  obtain ⟨calleeGas, d, finalGas, callee, result⟩ := syncEntry_invH stateGas bal getterInitMemory_ptr run
   exact ⟨value, size, calleeGas, d, finalGas, callee, Outcome.halted.inj result⟩
+
+/-- The real pc-zero sync run reaches its callee through the public guards,
+selector and wrapper, retaining the same raw derivation for both child calls. -/
+theorem syncPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : SProg.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) post) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ calleeGas d finalGas,
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St b [0x0257, 0xfff6cae9] getterInitMemory calleeGas) t_1df5_c31 (.returned d) ∧
+        post = St d d.stack d.memory finalGas :=
+  syncPc0_invH fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 
 /-- The actual sync selector dispatcher costs166 gas after the public guards. -/
@@ -1650,6 +2031,19 @@ theorem syncPc0_exact {sevm : Sevm} {b d0 d1 : Devm}
 
 
 
+theorem sync_raw_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ calleeGas d finalGas,
+        SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
+          cert.prog sevm (St b [0x0257, 0xfff6cae9] getterInitMemory calleeGas)
+          t_1df5_c31 (.returned d) ∧
+        post = St d d.stack d.memory finalGas := by
+  exact syncPc0_invH stateGas bal selector (lift_sound_in_noStateGas cert_check codeEq stateGas run)
+
 /-- The certified raw pc0 execution supplies the very same derivation to the
 public guards, selector, wrapper and callee. No call provenance is erased. -/
 theorem sync_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -1661,8 +2055,9 @@ theorem sync_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
         SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
           cert.prog sevm (St b [0x0257, 0xfff6cae9] getterInitMemory calleeGas)
           t_1df5_c31 (.returned d) ∧
-        post = St d d.stack d.memory finalGas := by
-  exact syncPc0_inv fork selector (lift_sound_in cert_check codeEq fork run)
+        post = St d d.stack d.memory finalGas :=
+  sync_raw_invH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 
 

@@ -132,6 +132,56 @@ theorem WriterRep.mint_update {K : WriterKey → Prop} {st post : State} {ctx : 
   · intro k outside
     cases k <;> exact rep.logicalZero _ outside
 
+theorem WriterRep.mint_updateH {K : WriterKey → Prop} {st post : State} {ctx : Context}
+    {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256} {event : Event} {oracle : OracleUpdate}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
+    (oldBound0 : old0.toNat < 2 ^ 112) (oldBound1 : old1.toNat < 2 ^ 112)
+    (accepted : st.update ctx balance0 balance1 old0.toNat old1.toNat = .ok (post, event, oracle)) :
+    WriterRep K ((updateWorldH sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget) post := by
+  have slots : ReserveSlotMatches st sevm b := ⟨rep.fixed.2.2.2.2.2.1,
+    rep.fixed.2.2.2.2.2.2.1, rep.fixed.2.2.2.2.2.2.2.1⟩
+  have cum0 := rep.fixed.2.2.2.2.2.2.2.2.1
+  have cum1 := rep.fixed.2.2.2.2.2.2.2.2.2.1
+  have correspondence := update_source_result_of_okH slots cum0 cum1 time pair oldBound0 oldBound1 accepted
+  obtain ⟨bound0,bound1⟩ := update_source_guards accepted
+  unfold State.update at accepted
+  rw [dite_eq_left bound0, dite_eq_left bound1] at accepted
+  cases accepted
+  have unchanged (k : B256) (off : k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10) :
+      ((updateWorldH sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget).get k =
+        (b.getStor sevm.currentTarget).get k := updateWorld_storage_frameH (.inr off)
+  refine ⟨rep.finite, ?_, ?_, rep.inj, rep.apart, ?_, ?_⟩
+  · dsimp only [WriterFixedMatches]
+    rw [unchanged 0 ⟨by decide,by decide,by decide⟩,
+      unchanged 3 ⟨by decide,by decide,by decide⟩,
+      unchanged 5 ⟨by decide,by decide,by decide⟩,
+      unchanged 6 ⟨by decide,by decide,by decide⟩,
+      unchanged 7 ⟨by decide,by decide,by decide⟩,
+      unchanged 11 ⟨by decide,by decide,by decide⟩,
+      unchanged 12 ⟨by decide,by decide,by decide⟩]
+    exact ⟨rep.fixed.1,rep.fixed.2.1,rep.fixed.2.2.1,rep.fixed.2.2.2.1,
+      rep.fixed.2.2.2.2.1,correspondence.1.1,correspondence.1.2.1,
+      correspondence.1.2.2,correspondence.2.1,correspondence.2.2.1,
+      rep.fixed.2.2.2.2.2.2.2.2.2.2.1,rep.fixed.2.2.2.2.2.2.2.2.2.2.2⟩
+  · intro k nonzero
+    by_cases hit : k = 8 ∨ k = 9 ∨ k = 10
+    · rcases hit with h | h | h
+      · subst k; exact .inl (by decide)
+      · subst k; exact .inl (by decide)
+      · subst k; exact .inl (by decide)
+    · have off : k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10 :=
+        ⟨fun h => hit (.inl h), fun h => hit (.inr (.inl h)), fun h => hit (.inr (.inr h))⟩
+      rw [unchanged k off] at nonzero
+      exact rep.support k nonzero
+  · intro k tracked
+    have off (n : B256) (fixed : n ∈ writerFixedSlots) : k.slot ≠ n :=
+      fun h => rep.apart k tracked (h.symm ▸ fixed)
+    rw [unchanged k.slot ⟨off 8 (by decide),off 9 (by decide),off 10 (by decide)⟩]
+    cases k <;> exact rep.selected _ tracked
+  · intro k outside
+    cases k <;> exact rep.logicalZero _ outside
+
 
 
 def mintLastSourceState (st : State) : State :=
