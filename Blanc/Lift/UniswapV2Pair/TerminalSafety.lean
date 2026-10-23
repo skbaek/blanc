@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.Check
 import Blanc.Lift.CallRestriction
 import Blanc.ExecutionNoDelProducer
 import Blanc.ExecutionNoDelTransaction
+import Blanc.ExecutionNoDelHistory
 
 /-!
 # Terminal safety of the checked Uniswap V2 Pair runtime
@@ -82,5 +83,22 @@ theorem transaction_noDel {wa : Adr} {benv : Benv} {bout : BlockOutput} {tx : Tx
       state.getCode wa = Blanc.Lift.UniswapV2Pair.code :=
   trace.noDel_of_installedCert Blanc.Lift.UniswapV2Pair.cert_check cert_callOnly cert_noSelfdestruct
     code_not_delegation code_toList_ne_nil hsg installed notCreated
+
+/-- The checked Uniswap V2 Pair runtime meets every fact the installed-runtime producer consumes. -/
+theorem installedCert : InstalledCert Blanc.Lift.UniswapV2Pair.code :=
+  ⟨⟨_, Blanc.Lift.UniswapV2Pair.cert_check, cert_callOnly, cert_noSelfdestruct⟩, code_not_delegation,
+    code_toList_ne_nil⟩
+
+/-- **A configured history keeps an account holding the checked Uniswap V2 Pair runtime.** If the
+checkpoint holds the runtime at `wa`, every later state holds it, and no selected transaction
+along the history schedules `wa` for deletion; per-block `stateGas = none` comes from the
+history's own capability evidence, with no fork or targeting premise. -/
+theorem history_noDel {wa : Adr} {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain}
+    (history : ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : ExecutionTrace.BodyStageCapabilities F)
+    (installed : checkpoint.state.getCode wa = Blanc.Lift.UniswapV2Pair.code) :
+    history.NoDelScheduled wa ∧ future.state.getCode wa = Blanc.Lift.UniswapV2Pair.code :=
+  history.noDel_of_installedCert installedCert capabilities installed
 
 end Blanc.Lift.UniswapV2Pair

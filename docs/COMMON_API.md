@@ -2209,6 +2209,20 @@ a protected target executing arbitrary code.
   (fork-free slot code preservation) and
   `sweepTouchedAccounts_getCode_of_nonempty` (the sweep never erases an
   account with nonempty code). It needs `wa ∉ benv.createdAccounts`.
+- History closure of that producer:
+  [`Blanc/ExecutionNoDelHistory.lean`](../Blanc/ExecutionNoDelHistory.lean).
+  `InstalledCert C` bundles the actual runtime facts (certificate check,
+  `callOnly`, `noSelfdestruct`, no designator, nonempty). Stage lemmas
+  `SystemMessageTrace`/`RequestsTrace.noDel_of_installedCert` (system calls,
+  including a system target equal to `wa`), `Beacon`/`History`/`RequestStageTrace.code_of_installedCert`,
+  `ApplyTransactionsTrace.noDel_of_installedCert`, `StagedBodyTrace.noDel_of_installedCert`,
+  `ConfiguredBlockTraceIn.noDel_of_installedCert` and
+  `ConfiguredHistoryTraceIn.noDel_of_installedCert` carry `getCode wa = C` from
+  the checkpoint to every later state and prove the recursive
+  `…NoDelScheduled wa` (no selected transaction schedules `wa` for deletion),
+  under `stateGas = none` from `BodyStageCapabilities F`, no fork or targeting
+  premise; block-level `createdAccounts` is empty at `initBenv`. Also
+  `payRewards_getCode`.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -5782,7 +5796,8 @@ contract-neutral.
   all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
   where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
   `code_toList_ne_nil` and `transaction_noDel` (one selected transaction under
-  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow.
+  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow,
+  with `installedCert` and `history_noDel` for a configured In-history.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in
