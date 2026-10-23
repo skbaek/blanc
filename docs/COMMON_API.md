@@ -4123,6 +4123,26 @@ consumer needs canonical interpreter ingress as one conjunct:
   every canonical system code; hoisted from the Beacon deposit contract, whose
   `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
   (curve-3pool-stableswap-v1).
+- To discharge the same per-frame gas/entry premises over a selected-domain
+  (`In`) carrier instead of a modern one: with `BodyStageCapabilities F`,
+  `ConfiguredHistoryTraceIn.rootEntryIn` (`root.pc = 0 ∧ F root.sevm.benvStat.fork`),
+  `ConfiguredHistoryTraceIn.gas_bound` (`< 2 ^ 64`),
+  `ConfiguredHistoryTraceIn.frameAdmitted_gas` and `ConfiguredHistoryTraceIn.rawFrame_gas`
+  ([`Blanc/ExecutionStagedFrameEnv.lean`](../Blanc/ExecutionStagedFrameEnv.lean)).
+  The entry chain is predicate-parametric (`RootEntryIn F`, every transport
+  rewrites a `benvStat` equality, no rule fact needed); the gas chain runs on
+  the `stateGas = none` twins (`TransactionTrace.msg_gas_noStateGas`,
+  `gas_le_remaining_noStateGas`, the `rawFrames_gasMeasure_le_noStateGas`
+  family, `header_gasLimit_lt_of_transition`, the modern statements unchanged
+  as wrappers). Bounds needing a numerical rule value arrive as explicit
+  fork-class hypotheses instead: `ConfiguredHistoryTraceIn.calldata_bound` /
+  `frameAdmitted_calldata` (and staged/block forms) take
+  `hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero`, and the strict
+  `rawFrames_gas_lt` chain (`TransactionTrace.msg_gas_succ_le_noStateGas`,
+  `intrinsicGas_bounds_noStateGas`, staged/block forms) takes
+  `hbase : ∀ f, F f → (Fork.ruleSet f).gas.txBase = 21000`; the `_hist`
+  corollaries discharge both for `HistFork` (`HistFork.dataNonZero_ge`,
+  `HistFork.txBase_eq`, each proved by `cases f <;> decide`).
 - To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
   to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
   a history are closed under descent, `RawFramesClosed`, layer by layer from

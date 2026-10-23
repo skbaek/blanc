@@ -59,12 +59,12 @@ theorem GenericCall.step_done_getStor
 
 /-- An actual executable opcode that completes without spawning preserves every
 owner's storage. This does not include a childless message settlement. -/
-theorem Xinst.step_done_getStor
+theorem Xinst.step_done_getStor_noStateGas
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
     post.getStor owner = pre.getStor owner := by
-  rcases Xinst.step_shapeCovered sevm pre x fork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x fork with
     ⟨out, shape, frame⟩ | ⟨d, value, address, mi, ms, frame, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
       ii, isz, oi, osz, code, dp, frame, _, _, _, shape⟩
@@ -75,6 +75,13 @@ theorem Xinst.step_done_getStor
     exact (GenericCreate.step_done_getStor step owner).trans (frame.getStor owner).symm
   · rw [shape] at step
     exact (GenericCall.step_done_getStor step owner).trans (frame.getStor owner).symm
+
+theorem Xinst.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner :=
+  Xinst.step_done_getStor_noStateGas fork.rules_stateGas_none step owner
 
 
 
@@ -310,27 +317,35 @@ theorem GenericCall.nonce_ne_zero_of_body
         exact ProcessMessage.nonce_ne_zero_of_body process body owner nonce
 
 /-- Covered executable instructions preserve inherited nonzero nonces. -/
+theorem Xinst.nonce_ne_zero_of_body_noStateGas
+    {sevm : Sevm} {pre post : Devm} {x : Xinst} {slot : Xlot}
+    (run : Xinst.Run sevm pre x slot (.ok post))
+    (hsg : sevm.benvStat.rules.stateGas = none) (body : Xlot.NonceNonzero slot)
+    (owner : Adr) (nonce : (pre.state.get owner).nonce ≠ 0) :
+    (post.state.get owner).nonce ≠ 0 := by
+  unfold Xinst.Run at run
+  rcases Xinst.step_shapeNoStateGas sevm pre x hsg with
+    ⟨execution, shape, hprefix⟩ |
+    ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
+    rw [shape] at run
+  · obtain ⟨_, equal⟩ := run
+    rw [← equal] at hprefix
+    have stateEq : pre.state = post.state := hprefix.state
+    rwa [← stateEq]
+  · apply GenericCreate.nonce_ne_zero_of_body run body owner
+    rwa [← hprefix.state]
+  · apply GenericCall.nonce_ne_zero_of_body run body owner
+    rwa [← hprefix.state]
+
 theorem Xinst.nonce_ne_zero_of_body
     {sevm : Sevm} {pre post : Devm} {x : Xinst} {slot : Xlot}
     (run : Xinst.Run sevm pre x slot (.ok post))
     (fork : CoveredFork sevm.benvStat.fork) (body : Xlot.NonceNonzero slot)
     (owner : Adr) (nonce : (pre.state.get owner).nonce ≠ 0) :
-    (post.state.get owner).nonce ≠ 0 := by
-  unfold Xinst.Run at run
-  rcases Xinst.step_shapeCovered sevm pre x fork with
-    ⟨execution, shape, frame⟩ |
-    ⟨d, endowment, newAddress, mi, ms, frame, shape⟩ |
-    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
-      ii, isz, oi, osz, code, disablePrecompiles, frame, _, _, _, shape⟩ <;>
-    rw [shape] at run
-  · obtain ⟨_, equal⟩ := run
-    rw [← equal] at frame
-    have stateEq : pre.state = post.state := frame.state
-    rwa [← stateEq]
-  · apply GenericCreate.nonce_ne_zero_of_body run body owner
-    rwa [← frame.state]
-  · apply GenericCall.nonce_ne_zero_of_body run body owner
-    rwa [← frame.state]
+    (post.state.get owner).nonce ≠ 0 :=
+  Xinst.nonce_ne_zero_of_body_noStateGas run fork.rules_stateGas_none body owner nonce
 
 namespace ExecutionTrace
 
@@ -860,14 +875,13 @@ theorem messageCreateCollision_false_target_unprotected
     simpa only [ByteArray.isEmpty, beq_iff_eq] using collision.2
 
 /-- A successful create-collision wrapper leaves the world state unchanged. -/
-theorem processMessageCall_createCollision_state_eq
+theorem processMessageCall_createCollision_state_eq_noStateGas
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = true)
     (result : processMessageCall msg = .ok ⟨state, out⟩)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = msg.benv.state := by
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
   unfold processMessageCall.create at result
@@ -876,16 +890,25 @@ theorem processMessageCall_createCollision_state_eq
   simp only [collision, ↓reduceIte, pure] at result
   exact (Prod.mk.inj (Except.ok.inj result)).1.symm
 
+theorem processMessageCall_createCollision_state_eq
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (target : msg.target.isNone = true)
+    (collision : messageCreateCollision msg = true)
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    state = msg.benv.state :=
+  processMessageCall_createCollision_state_eq_noStateGas target collision result
+    hfork.rules_stateGas_none
+
 /-- A successful create wrapper returns the settled CREATE core state. -/
-theorem processMessageCall_createRun_state_eq
+theorem processMessageCall_createRun_state_eq_noStateGas
     {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
     (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = false)
     (core : processCreateMessage msg = .ok evm)
     (result : processMessageCall msg = .ok ⟨state, out⟩)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = evm.state := by
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
   unfold processMessageCall.create at result
@@ -905,8 +928,19 @@ theorem processMessageCall_createRun_state_eq
     exact (Prod.mk.inj (Except.ok.inj output)).1.symm
   · exact (Prod.mk.inj (Except.ok.inj tail)).1.symm
 
+theorem processMessageCall_createRun_state_eq
+    {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
+    (target : msg.target.isNone = true)
+    (collision : messageCreateCollision msg = false)
+    (core : processCreateMessage msg = .ok evm)
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    state = evm.state :=
+  processMessageCall_createRun_state_eq_noStateGas target collision core result
+    hfork.rules_stateGas_none
+
 /-- A successful call wrapper returns the settled raw-message core state. -/
-theorem processMessageCall_callRun_state_eq
+theorem processMessageCall_callRun_state_eq_noStateGas
     {msg delegated execMsg : Msg} {refund : Nat}
     {evm : Devm} {state : State} {out : MsgCallOutput}
     (target : msg.target.isNone = false)
@@ -914,9 +948,8 @@ theorem processMessageCall_callRun_state_eq
     (execMsgEq : execMsg = messageCallExecutionMessage delegated)
     (core : processMessage execMsg = .ok evm)
     (result : processMessageCall msg = .ok ⟨state, out⟩)
-    (hfork : CoveredFork msg.benv.stat.fork) :
+    (hsg : msg.benv.stat.rules.stateGas = none) :
     state = evm.state := by
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at result
   simp only [target, Bool.false_eq_true, ↓reduceIte] at result
   unfold processMessageCall.call at result
@@ -934,6 +967,19 @@ theorem processMessageCall_callRun_state_eq
   · rcases Except.bind_eq_ok tail with ⟨refundActual, _refund, output⟩
     exact (Prod.mk.inj (Except.ok.inj output)).1.symm
   · exact (Prod.mk.inj (Except.ok.inj tail)).1.symm
+
+theorem processMessageCall_callRun_state_eq
+    {msg delegated execMsg : Msg} {refund : Nat}
+    {evm : Devm} {state : State} {out : MsgCallOutput}
+    (target : msg.target.isNone = false)
+    (delegation : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
+    (execMsgEq : execMsg = messageCallExecutionMessage delegated)
+    (core : processMessage execMsg = .ok evm)
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hfork : CoveredFork msg.benv.stat.fork) :
+    state = evm.state :=
+  processMessageCall_callRun_state_eq_noStateGas target delegation execMsgEq core result
+    hfork.rules_stateGas_none
 
 end ExecutionTrace
 

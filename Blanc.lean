@@ -92,6 +92,7 @@ import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
 import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionStagedAdmission
+import Blanc.ExecutionStagedFrameEnv
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry

@@ -166,23 +166,31 @@ theorem MessageCallTrace.rawFrames_gasMeasure_le
 
 /-- A transaction's frames start at or below the block gas limit: the grant is the transaction's
 gas less the intrinsic charge, and `checkTransaction` fits that gas in the block's allowance. -/
+theorem TransactionTrace.rawFrames_gasMeasure_le_noStateGas
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : benv.stat.rules.stateGas = none) :
+    ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ benv.stat.blockGasLimit := by
+  intro root member
+  have h := trace.message.rawFrames_gasMeasure_le root member
+  have hmsg := trace.msg_gas_noStateGas
+  have hroom := trace.gas_le_remaining_noStateGas hfork
+  omega
+
 theorem TransactionTrace.rawFrames_gasMeasure_le
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hfork : CoveredFork benv.stat.fork) :
-    ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ benv.stat.blockGasLimit := by
-  intro root member
-  have h := trace.message.rawFrames_gasMeasure_le root member
-  have hmsg := trace.msg_gas hfork
-  have hroom := trace.gas_le_remaining hfork
-  omega
+    ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ benv.stat.blockGasLimit :=
+  trace.rawFrames_gasMeasure_le_noStateGas hfork.rules_stateGas_none
 
-theorem ApplyTransactionsTrace.rawFrames_gasMeasure_le
+theorem ApplyTransactionsTrace.rawFrames_gasMeasure_le_noStateGas
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (hfork : CoveredFork benv.stat.fork) :
+    (hfork : benv.stat.rules.stateGas = none) :
     ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ benv.stat.blockGasLimit := by
   induction trace with
   | nil => intro root member; simp only [rawFrames, List.not_mem_nil] at member
@@ -190,8 +198,16 @@ theorem ApplyTransactionsTrace.rawFrames_gasMeasure_le
       intro root member
       simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at member
       rcases member with member | member
-      · exact head.rawFrames_gasMeasure_le hfork root member
+      · exact head.rawFrames_gasMeasure_le_noStateGas hfork root member
       · exact ih hfork root member
+
+theorem ApplyTransactionsTrace.rawFrames_gasMeasure_le
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hfork : CoveredFork benv.stat.fork) :
+    ∀ root ∈ trace.rawFrames, root.devm.gasMeasure ≤ benv.stat.blockGasLimit :=
+  trace.rawFrames_gasMeasure_le_noStateGas hfork.rules_stateGas_none
 
 /-- A system message's frames start at or below the constant system grant. -/
 theorem SystemMessageTrace.rawFrames_gasMeasure_le
@@ -211,11 +227,11 @@ theorem RequestsTrace.rawFrames_gasMeasure_le
   · exact trace.consolidation.rawFrames_gasMeasure_le root member
 
 /-- Every frame of a body starts below one word of gas once the block gas limit does. -/
-theorem AppliedBodyTrace.rawFrames_gasMeasure_lt
+theorem AppliedBodyTrace.rawFrames_gasMeasure_lt_noStateGas
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
     {state : State} {bout : BlockOutput}
     (trace : AppliedBodyTrace benv txs ommers wds state bout)
-    (hfork : CoveredFork benv.stat.fork) (hlimit : benv.stat.blockGasLimit < 2 ^ 256) :
+    (hfork : benv.stat.rules.stateGas = none) (hlimit : benv.stat.blockGasLimit < 2 ^ 256) :
     ∀ root ∈ trace.rawFrames, root.devm.gasMeasure < 2 ^ 256 := by
   intro root member
   simp only [AppliedBodyTrace.rawFrames, List.mem_append] at member
@@ -226,12 +242,20 @@ theorem AppliedBodyTrace.rawFrames_gasMeasure_lt
   · have h := trace.history.rawFrames_gasMeasure_le root member
     simp only [systemTransactionGas] at h
     omega
-  · have h := trace.transactions.rawFrames_gasMeasure_le hfork root member
+  · have h := trace.transactions.rawFrames_gasMeasure_le_noStateGas hfork root member
     change root.devm.gasMeasure ≤ benv.stat.blockGasLimit at h
     omega
   · have h := trace.requests.rawFrames_gasMeasure_le root member
     simp only [systemTransactionGas] at h
     omega
+
+theorem AppliedBodyTrace.rawFrames_gasMeasure_lt
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout)
+    (hfork : CoveredFork benv.stat.fork) (hlimit : benv.stat.blockGasLimit < 2 ^ 256) :
+    ∀ root ∈ trace.rawFrames, root.devm.gasMeasure < 2 ^ 256 :=
+  trace.rawFrames_gasMeasure_lt_noStateGas hfork.rules_stateGas_none hlimit
 
 /-- The header gas limit of a transitioned block is below `2 ^ 63`, so every frame of the block
 starts below one word of gas. -/
