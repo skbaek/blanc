@@ -72,6 +72,7 @@ import Blanc.ExecutionNoDelProducer
 import Blanc.ExecutionNoDelTransaction
 import Blanc.ExecutionNoDelHistory
 import Blanc.ExecutionHistoricalAdmission
+import Blanc.ExecutionHistoricalLadder
 import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionReachable

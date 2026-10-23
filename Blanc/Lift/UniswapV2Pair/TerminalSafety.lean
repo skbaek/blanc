@@ -63,11 +63,8 @@ theorem exec_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execu
     code_not_delegation run hsg installed root initial
 
 /-- The checked Uniswap V2 Pair runtime is nonempty. -/
-theorem code_toList_ne_nil : Blanc.Lift.UniswapV2Pair.code.toList ≠ [] := by
-  intro h
-  have hsize : Blanc.Lift.UniswapV2Pair.code.size = 0 := by
-    rw [ByteArray.size_eq_length_toList, h, List.length_nil]
-  exact absurd hsize (by decide +kernel)
+theorem code_toList_ne_nil : Blanc.Lift.UniswapV2Pair.code.toList ≠ [] :=
+  toList_ne_nil_of_size_ne_zero (by decide +kernel)
 
 /-- **One selected transaction keeps an account holding the checked Uniswap V2 Pair runtime.** Under
 `stateGas = none` and no fork premise, when `wa` holds the runtime at transaction entry and was not
@@ -90,9 +87,10 @@ theorem installedCert : InstalledCert Blanc.Lift.UniswapV2Pair.code :=
     code_toList_ne_nil⟩
 
 /-- **A configured history keeps an account holding the checked Uniswap V2 Pair runtime.** If the
-checkpoint holds the runtime at `wa`, every later state holds it, and no selected transaction
-along the history schedules `wa` for deletion; per-block `stateGas = none` comes from the
-history's own capability evidence, with no fork or targeting premise. -/
+checkpoint holds the runtime at `wa`, the history's endpoint state holds it (by induction, so
+does every checkpoint of its spine), and no selected transaction along the history schedules `wa`
+for deletion. No `CoveredFork`; per-block `stateGas = none` from `BodyStageCapabilities F`; no
+premise that `wa` is never targeted. -/
 theorem history_noDel {wa : Adr} {F : Fork → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (history : ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)

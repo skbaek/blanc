@@ -9,7 +9,8 @@ import Blanc.ExecutionTraceCodeAt
 runtime `C` (`InstalledCert C`: a certificate check, `callOnly`, `noSelfdestruct`, no EIP-7702
 designator, nonempty) through one selected transaction under `stateGas = none`. This module
 threads that fact through every stage of a block body in `applyBody` order and along a
-configured In-history, with no fork premise and no premise that `wa` is never targeted:
+configured In-history, with no `CoveredFork` (per-block `stateGas = none` comes from
+`BodyStageCapabilities F`) and no premise that `wa` is never targeted:
 
 * system messages (beacon roots, history storage, the two checked request calls) are ordinary
   message calls to their fixed system targets, with empty inherited deletions; a system target
@@ -18,14 +19,21 @@ configured In-history, with no fork premise and no premise that `wa` is never ta
   along a body (`Benv.withState`) and empty at `initBenv`, so `wa` is never block-created;
 * withdrawals and proof-of-work rewards only credit balances.
 
-`ConfiguredHistoryTraceIn.code_of_installedCert` is the target: the checkpoint's code `C` at
-`wa` is the code at `wa` in every later state of the history, and no selected transaction along
-it schedules `wa` for deletion (`ConfiguredHistoryTraceIn.NoDelScheduled`).
+`ConfiguredHistoryTraceIn.noDel_of_installedCert` is the target: the checkpoint's code `C` at
+`wa` is the code at `wa` in the endpoint state of the history (by induction, at every checkpoint
+of its spine), and no selected transaction along it schedules `wa` for deletion
+(`ConfiguredHistoryTraceIn.NoDelScheduled`).
 -/
 
 namespace Blanc
 
 open Jaune
+
+/-- A byte array of nonzero size has a nonempty byte list. -/
+theorem toList_ne_nil_of_size_ne_zero {C : ByteArray} (h : C.size ≠ 0) : C.toList ≠ [] := by
+  intro hnil
+  apply h
+  rw [ByteArray.size_eq_length_toList, hnil, List.length_nil]
 
 /-- The actual facts about an installed runtime `C` that the no-deletion producer consumes. -/
 structure InstalledCert (C : ByteArray) : Prop where
@@ -214,10 +222,10 @@ def ConfiguredHistoryTraceIn.NoDelScheduled {F : Fork → Prop} {cfg : ChainConf
   | _, .step prior block => prior.NoDelScheduled wa ∧ block.NoDelScheduled wa
 
 /-- **Code survival and no-deletion along a configured history.** If the checkpoint holds an
-installed checked runtime `C` at `wa`, every later state of a retained In-history holds `C` at
-`wa`, and no selected transaction along it schedules `wa` for deletion. Per-block
-`stateGas = none` comes from `BodyStageCapabilities F`; no `CoveredFork`, no premise that `wa`
-is never targeted. -/
+installed checked runtime `C` at `wa`, the endpoint state of a retained In-history holds `C` at
+`wa` (by induction, so does every checkpoint of its spine), and no selected transaction along it
+schedules `wa` for deletion. No `CoveredFork`; per-block `stateGas = none` from
+`BodyStageCapabilities F`; no premise that `wa` is never targeted. -/
 theorem ConfiguredHistoryTraceIn.noDel_of_installedCert (K : InstalledCert C)
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)

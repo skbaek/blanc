@@ -2218,11 +2218,13 @@ a protected target executing arbitrary code.
   `ApplyTransactionsTrace.noDel_of_installedCert`, `StagedBodyTrace.noDel_of_installedCert`,
   `ConfiguredBlockTraceIn.noDel_of_installedCert` and
   `ConfiguredHistoryTraceIn.noDel_of_installedCert` carry `getCode wa = C` from
-  the checkpoint to every later state and prove the recursive
-  `…NoDelScheduled wa` (no selected transaction schedules `wa` for deletion),
-  under `stateGas = none` from `BodyStageCapabilities F`, no fork or targeting
-  premise; block-level `createdAccounts` is empty at `initBenv`. Also
-  `payRewards_getCode`.
+  the checkpoint to the history's endpoint state (by induction, every
+  checkpoint of its spine) and prove the recursive `…NoDelScheduled wa` (no
+  selected transaction schedules `wa` for deletion). No `CoveredFork`;
+  per-block `stateGas = none` from `BodyStageCapabilities F`; no premise that
+  `wa` is never targeted; block-level `createdAccounts` is empty at
+  `initBenv`. Also `payRewards_getCode` and the shared
+  `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -3839,8 +3841,33 @@ consumer needs canonical interpreter ingress as one conjunct:
   sweep from `StateInv.sweepTouchedAccounts` (never erases nonempty code; no
   sweep-off assumption). Also `stateGas = none` output twins
   `processMessageCall_{createCollision,createRun,callRun}_out_noStateGas` and
-  `StateInv.getCode_eq_of_image`. No historical frame ladder: producing
-  `PreservesAdmittedIn F` for a concrete runtime is a separate obligation.
+  `StateInv.getCode_eq_of_image`. The historical frame ladder that produces
+  `PreservesAdmittedIn F` from `SoundAdmittedIn F` is the next bullet.
+  The same owner carries the body and history: `SystemMessageTrace`/`RequestsTrace`/
+  `Beacon`/`History`/`RequestStageTrace.stateInv_and_sum_le_admitted_semIn`
+  (skipped stages are the identity), `StagedBodyTrace.stateInv_admitted_semIn`
+  (D1 stage order; withdrawals via `benvInv_processWithdrawalsState_sem`;
+  rewards via `StateInv.payRewards`, one `StateInv.addBal` per credit),
+  `ConfiguredBlockTraceIn`/`ConfiguredHistoryTraceIn.stateInv_admitted_semIn`
+  (per-block `F`/`stateGas = none` from `forkIn` + `BodyStageCapabilities F`,
+  withdrawal funding from the retained `bound`, post via `postEq`) and the
+  `ContractSpec` forms `…_admittedIn`. Reward funding is the explicit premise
+  `RewardCreditsFunded` / `OmmerCreditsFunded` (lifted as
+  `StagedBodyTrace`/`ConfiguredBlockTraceIn`/`ConfiguredHistoryTraceIn.RewardCreditsFunded`),
+  which the Mac-owned reward budget discharges; no reward arithmetic is
+  proved there. Also `ApplyTransactionsTrace.sum_le_noStateGas`.
+- Historical frame ladder:
+  [`Blanc/ExecutionHistoricalLadder.lean`](../Blanc/ExecutionHistoricalLadder.lean).
+  `ContractSpecSem.preserves_lift_admitted_semIn F hF` and
+  `ContractSpecSem`/`ContractSpec.preserves_inv_admittedIn F hF` turn
+  `SoundAdmittedIn F` into `PreservesAdmittedIn F` for any domain with
+  `hF : ∀ {f}, F f → f.ruleSet.stateGas = none`; `…_histFork` instantiate
+  `HistFork` (`HistFork.stateGas_none`), and `preserves_inv_admitted_viaIn`
+  recovers the modern theorem at `CoveredFork`. Step twins
+  `Xinst.{none,some}_preserves_precond_noStateGas` and
+  `Linst.inv_postcond_noStateGas` take only `stateGas = none` (selfdestruct reads
+  the fork's actual access, beneficiary-credit and deletion rules);
+  `Xinst.Run.some_child_forkIn` transports any `F` to an entered child.
 
 - To derive structural admission directly from an independently checked predicate
   over the actual raw entries, use `ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames`

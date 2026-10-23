@@ -1,6 +1,8 @@
 import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionNoDelHistory
 import Blanc.ExecutionSelectedTransactionStateTrace
+import Blanc.ExecutionBodyAdmission
+import Blanc.ExecutionStagedAdmission
 
 /-!
 # Historical admitted preservation through messages and one selected transaction
@@ -23,9 +25,15 @@ frame and settles NoDel through the modern `processMessageCall_accountsToDelete_
   (proved exclusion) and the touched sweep (`StateInv.sweepTouchedAccounts`: the sweep never erases
   an account with nonempty code), with no sweep-off assumption.
 
-The historical frame ladder (`preserves_lift_admitted_semIn`) is not provided: the modern ladder's
-step lemmas (`Xinst.step_shapeCovered`, `Linst.inv_postcond`) are `CoveredFork`-bound; producing
-`PreservesAdmittedIn` for a concrete historical runtime is a separate obligation.
+* The staged body (D1 stage order: beacon, history, selected transactions, withdrawals, requests,
+  `payRewards` credits), the configured In-block and the In-history carry the invariant with
+  per-block `F`/`stateGas = none` from `forkIn` and `BodyStageCapabilities F`, withdrawal funding
+  from the retained reward-inclusive bound, and reward funding as the explicit Mac-owned premise
+  `RewardCreditsFunded` (no reward arithmetic here). Admission is the staged/In raw-entry
+  `FrameAdmitted` of `ExecutionStagedAdmission`.
+
+The historical frame ladder producing `PreservesAdmittedIn F` from a contract's own-frame
+`SoundAdmittedIn F` obligation lives in `Blanc/ExecutionHistoricalLadder.lean`.
 -/
 
 namespace Blanc
@@ -669,6 +677,351 @@ theorem ApplyTransactionsTrace.benvInv_admittedIn {F : Fork → Prop} {C : ByteA
   benvInv_ofSem (trace.benvInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) hF hsg admitted sumNof
     (benvInv_toSem inv) K image)
+
+end ExecutionTrace
+
+/-! ## Proof-of-work reward funding (Mac-owned premise shape) -/
+
+/-- Each ommer credit of `payRewards`, in fold order, is funded at the state it is applied to. -/
+def OmmerCreditsFunded (pow : PowRules) (number : Nat) : State → List Header → Prop
+  | _, [] => True
+  | s, ommer :: ommers =>
+      sum s.bal + (ExecutionTrace.stagedOmmerRewardValue pow number ommer).toNat < 2 ^ 256 ∧
+        OmmerCreditsFunded pow number
+          (s.addBal ommer.coinbase (ExecutionTrace.stagedOmmerRewardValue pow number ommer)) ommers
+
+/-- Every `payRewards` credit (the miner credit, then each ommer credit in fold order) is funded
+at the state it is applied to. This is the premise shape that the Mac-owned reward budget
+(`request_budget` / `request_reward_budget` / `reward_preserves_and_sum`, source `7a82f5b8`)
+discharges from the retained reward-inclusive block bound; no reward arithmetic is proved here. -/
+def RewardCreditsFunded (pow : PowRules) (number : Nat) (coinbase : Adr)
+    (ommers : List Header) (st : State) : Prop :=
+  sum st.bal + (ExecutionTrace.stagedMinerRewardValue pow ommers).toNat < 2 ^ 256 ∧
+    OmmerCreditsFunded pow number
+      (st.addBal coinbase (ExecutionTrace.stagedMinerRewardValue pow ommers)) ommers
+
+namespace ContractSpecSem
+
+variable {c : ContractSpecSem}
+
+/-- Funded `payRewards` credits preserve the invariant, one `StateInv.addBal` per credit in fold
+order. -/
+theorem StateInv.payRewards {ca : Adr} {pow : PowRules} {number : Nat} {coinbase : Adr}
+    {ommers : List Header} {st : State}
+    (funded : RewardCreditsFunded pow number coinbase ommers st) (h : c.StateInv ca st) :
+    c.StateInv ca (Jaune.payRewards pow number coinbase ommers st) := by
+  have fold : ∀ (os : List Header) (s : State), OmmerCreditsFunded pow number s os →
+      c.StateInv ca s →
+      c.StateInv ca (os.foldl (fun acc ommer => acc.addBal ommer.coinbase
+        (ExecutionTrace.stagedOmmerRewardValue pow number ommer)) s) := by
+    intro os
+    induction os with
+    | nil => intro s _ hs; exact hs
+    | cons o os ih =>
+        intro s hfund hs
+        exact ih _ hfund.2 (StateInv.addBal hfund.1 hs)
+  exact fold ommers _ funded.2 (StateInv.addBal funded.1 h)
+
+end ContractSpecSem
+
+namespace ExecutionTrace
+
+open ContractSpecSem
+
+variable {c : ContractSpecSem}
+
+/-! ## Body stages -/
+
+/-- `stateGas = none` twin of `ApplyTransactionsTrace.sum_le`. -/
+theorem ApplyTransactionsTrace.sum_le_noStateGas
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hsg : benv.stat.rules.stateGas = none) :
+    sum finalBenv.state.bal ≤ sum benv.state.bal := by
+  induction trace with
+  | nil => exact le_rfl
+  | cons head tail ih =>
+      exact le_trans (ih (by simpa only [Benv.withState] using hsg))
+        (by simpa only [Benv.withState] using processTransaction_sum_le head.result hsg)
+
+theorem SystemMessageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {benv : Benv} {target : Adr} {data : Bytes}
+    {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
+  have msgInv : c.MsgInv ca (systemTransactionMessage benv target data) :=
+    systemTransactionMessage_msgInv_sem inv.state inv.ca
+  have msgSg : (systemTransactionMessage benv target data).benv.stat.rules.stateGas = none := by
+    simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hsg
+  have stateInv := trace.message.stateInv_admitted_semIn preserves
+    (by simpa only [systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hF)
+    msgSg admitted msgInv AdrSet.not_mem_empty K image
+  have sumLe := processMessageCall_sum_le msgSg trace.message.result
+  refine ⟨stateInv.1, ?_⟩
+  simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+    sumLe
+
+theorem RequestsTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {benv : Benv} {bout : BlockOutput}
+    {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
+  have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_semIn
+    preserves hF hsg admitted.withdrawal inv K image
+  have withdrawalInv : c.BenvInv ca (benv.withState trace.withdrawalState) :=
+    ⟨withdrawal.1, by simpa only [Benv.withState] using inv.ca⟩
+  have consolidation := trace.consolidation.stateInv_and_sum_le_admitted_semIn
+    (benv := benv.withState trace.withdrawalState) preserves
+    (by simpa only [Benv.withState] using hF) (by simpa only [Benv.withState] using hsg)
+    admitted.consolidation withdrawalInv K image
+  rw [trace.state_eq_consolidationState]
+  exact ⟨consolidation.1, le_trans consolidation.2 withdrawal.2⟩
+
+/-- A beacon stage: skipped is the identity, called is the retained system message. -/
+theorem BeaconStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state bal)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
+  cases trace with
+  | skipped => exact ⟨inv.state, le_rfl⟩
+  | called _ _ message _ _ =>
+      exact message.stateInv_and_sum_le_admitted_semIn preserves hF hsg admitted inv K image
+
+/-- A history-storage stage: skipped is the identity, called is the retained system message. -/
+theorem HistoryStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State}
+    {bal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state bal)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
+  cases trace with
+  | skipped => exact ⟨inv.state, le_rfl⟩
+  | called _ _ _ _ message _ _ =>
+      exact message.stateInv_and_sum_le_admitted_semIn preserves hF hsg admitted inv K image
+
+/-- A request stage: skipped is the identity, called is the two retained checked calls. -/
+theorem RequestStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State}
+    {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
+  cases trace with
+  | skipped => exact ⟨inv.state, le_rfl⟩
+  | called _ requests _ =>
+      exact requests.stateInv_and_sum_le_admitted_semIn preserves hF hsg admitted inv K image
+
+/-- The reward-funding premise of one staged body, at its actual request-stage state. -/
+def StagedBodyTrace.RewardCreditsFunded
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout) : Prop :=
+  ∀ pow, benv.stat.rules.pow = some pow →
+    Blanc.RewardCreditsFunded pow benv.stat.number benv.stat.coinbase ommers trace.requestState
+
+/-- **Historical staged-body preservation**, in D1 stage order: beacon, history, the selected
+transaction list, withdrawals (fork-free donor), requests, then `payRewards` credits. Withdrawal
+funding comes from the body bound; reward funding is the explicit Mac-owned premise. -/
+theorem StagedBodyTrace.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (rewards : trace.RewardCreditsFunded)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca state := by
+  have beacon := trace.beacon.stateInv_and_sum_le_admitted_semIn
+    preserves hF hsg admitted.beacon inv K image
+  have beaconInv : c.BenvInv ca (benv.withState trace.beaconState) :=
+    ⟨beacon.1, by simpa only [Benv.withState] using inv.ca⟩
+  have history := trace.history.stateInv_and_sum_le_admitted_semIn
+    preserves (by simpa only [Benv.withState] using hF)
+    (by simpa only [Benv.withState] using hsg) admitted.history beaconInv K image
+  have historyInv : c.BenvInv ca
+      ((benv.withState trace.beaconState).withState trace.historyState) :=
+    ⟨history.1, by simpa only [Benv.withState] using beaconInv.ca⟩
+  have historyLe : sum trace.historyState.bal ≤ sum benv.state.bal :=
+    le_trans (by simpa only [Benv.withState] using history.2) beacon.2
+  have transactionsInv : c.BenvInv ca trace.transactionBenv :=
+    trace.transactions.benvInv_admitted_semIn preserves
+      (by simpa only [Benv.withState] using hF) (by simpa only [Benv.withState] using hsg)
+      admitted.transactions (by change sum trace.historyState.bal < 2 ^ 256; omega)
+      historyInv K image
+  have transactionLe : sum trace.transactionBenv.state.bal ≤ sum benv.state.bal :=
+    le_trans (trace.transactions.sum_le_noStateGas (by simpa only [Benv.withState] using hsg))
+      historyLe
+  have txStat : trace.transactionBenv.stat = benv.stat := trace.transactions.stat_eq
+  have withdrawalInv : c.BenvInv ca (trace.transactionBenv.withState trace.withdrawalState) := by
+    have run := trace.withdrawalsRun
+    cases enabled : benv.stat.rules.header.withdrawalsRoot with
+    | false =>
+        rw [(trace.withdrawals_disabled enabled).1]
+        exact ⟨transactionsInv.state, by simpa only [Benv.withState] using transactionsInv.ca⟩
+    | true =>
+        simp only [withdrawalsPass, processWithdrawals, enabled, ↓reduceIte] at run
+        rw [← (Prod.mk.inj run).1]
+        exact benvInv_processWithdrawalsState_sem transactionsInv (by omega)
+  have requests := trace.requests.stateInv_and_sum_le_admitted_semIn preserves
+    (by change F trace.transactionBenv.stat.fork; rw [txStat]; exact hF)
+    (by change trace.transactionBenv.stat.rules.stateGas = none; rw [txStat]; exact hsg)
+    admitted.requests withdrawalInv K image
+  rw [trace.finalState_eq]
+  have rewardEq := trace.rewardState_eq
+  cases hpow : benv.stat.rules.pow with
+  | none =>
+      rw [hpow] at rewardEq
+      rw [rewardEq]
+      exact requests.1
+  | some pow =>
+      rw [hpow] at rewardEq
+      rw [rewardEq]
+      exact StateInv.payRewards (rewards pow hpow) requests.1
+
+/-! ## Configured In-blocks and In-histories -/
+
+/-- The reward-funding premise of one retained configured block. -/
+def ConfiguredBlockTraceIn.RewardCreditsFunded {F : Fork → Prop} {cfg : ChainConfig}
+    {pre post : BlockChain} (trace : ConfiguredBlockTraceIn F cfg pre post) : Prop :=
+  trace.bodyTrace.RewardCreditsFunded
+
+/-- **Historical configured-block preservation**: per-block domain membership and
+`stateGas = none` from `forkIn` and `BodyStageCapabilities F`, withdrawal funding from the retained
+reward-inclusive bound, reward funding from the Mac-owned premise, post state via `postEq`. -/
+theorem ConfiguredBlockTraceIn.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : trace.FrameAdmitted ca entry)
+    (rewards : trace.RewardCreditsFunded)
+    (inv : c.StateInv ca pre.state)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca post.state := by
+  have hstate := trace.bodyTrace.stateInv_admitted_semIn preserves trace.forkIn
+    (capabilities.stateGas_none trace.forkIn) admitted trace.withdrawalsBound rewards
+    ⟨inv, AdrSet.not_mem_empty⟩ K image
+  rw [trace.postEq]
+  exact hstate
+
+/-- The reward-funding premise at every block of a retained history. -/
+def ConfiguredHistoryTraceIn.RewardCreditsFunded {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint : BlockChain} :
+    {future : BlockChain} → ConfiguredHistoryTraceIn F cfg checkpoint future → Prop
+  | _, .refl _ _ _ => True
+  | _, .step prior block => prior.RewardCreditsFunded ∧ block.RewardCreditsFunded
+
+/-- **Historical configured-history preservation** by refl/step induction. -/
+theorem ConfiguredHistoryTraceIn.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : history.FrameAdmitted ca entry)
+    (rewards : history.RewardCreditsFunded)
+    (inv : c.StateInv ca checkpoint.state)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    c.StateInv ca future.state := by
+  induction history with
+  | refl => exact inv
+  | step prior block ih =>
+      exact block.stateInv_admitted_semIn preserves capabilities admitted.2 rewards.2
+        (ih admitted.1 rewards.1) K image
+
+end ExecutionTrace
+
+namespace ExecutionTrace
+
+open ContractSpec
+
+variable {c : ContractSpec}
+
+/-- `ContractSpec` form of `StagedBodyTrace.stateInv_admitted_semIn`. -/
+theorem StagedBodyTrace.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
+    (admitted : trace.FrameAdmitted ca entry)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (rewards : trace.RewardCreditsFunded)
+    (inv : c.BenvInv ca benv)
+    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    c.StateInv ca state :=
+  stateInv_ofSem (trace.stateInv_admitted_semIn (c := c.toSem)
+    (preservesAdmittedIn_toSem c ca entry preserves) hF hsg admitted bound rewards
+    (benvInv_toSem inv) K image)
+
+/-- `ContractSpec` form of `ConfiguredBlockTraceIn.stateInv_admitted_semIn`. -/
+theorem ConfiguredBlockTraceIn.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : trace.FrameAdmitted ca entry)
+    (rewards : trace.RewardCreditsFunded)
+    (inv : c.StateInv ca pre.state)
+    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    c.StateInv ca post.state :=
+  stateInv_ofSem (trace.stateInv_admitted_semIn (c := c.toSem)
+    (preservesAdmittedIn_toSem c ca entry preserves) capabilities admitted rewards
+    (stateInv_toSem inv) K image)
+
+/-- `ContractSpec` form of `ConfiguredHistoryTraceIn.stateInv_admitted_semIn`. -/
+theorem ConfiguredHistoryTraceIn.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray}
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : history.FrameAdmitted ca entry)
+    (rewards : history.RewardCreditsFunded)
+    (inv : c.StateInv ca checkpoint.state)
+    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    c.StateInv ca future.state :=
+  stateInv_ofSem (history.stateInv_admitted_semIn (c := c.toSem)
+    (preservesAdmittedIn_toSem c ca entry preserves) capabilities admitted rewards
+    (stateInv_toSem inv) K image)
 
 end ExecutionTrace
 
