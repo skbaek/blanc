@@ -1,3 +1,4 @@
+import Blanc.HistoricalFork
 import Blanc.ExecutionStagedBodyTrace
 import Blanc.Ladder
 
@@ -293,6 +294,37 @@ theorem BodyStageCapabilities.covered : BodyStageCapabilities CoveredFork := {
   stateGas_none := fun {_fork} h => h.stateGas_none
   requests_covered := fun {_fork} h _ => h
 }
+
+/-- The historical domain derives its extraction capabilities from the
+selected fork records; no programme assumption supplies them. -/
+theorem BodyStageCapabilities.historical : BodyStageCapabilities HistFork := {
+  stateGas_none := fun {_fork} h => h.stateGas_none
+  requests_covered := fun {_fork} h => h.requests_covered
+}
+
+/-- Retain an actual successful mainnet block in the historical domain.
+Its reward-inclusive no-wrap bound remains explicit. -/
+theorem exists_mainnetConfiguredBlockTrace_of_transition
+    {pre post : BlockChain} {block : Block}
+    (bound : sum pre.state.bal + wdsum block.wds +
+      mainnetChainConfig.rewardAt block < 2 ^ 256)
+    (h : stateTransitionUsing mainnetChainConfig pre block = .ok post) :
+    Nonempty (ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) :=
+  exists_configuredBlockTraceIn_of_transition bound h
+    (fun {_fork} lookup => mainnet_histFork lookup)
+    BodyStageCapabilities.historical
+
+/-- Retain a successful mainnet history using the existing explicit
+prefix reward budget. ReachUsing alone does not establish that budget. -/
+theorem exists_mainnetConfiguredHistoryTrace_of_reachUsing
+    {checkpoint future : BlockChain}
+    (h : BlockChain.ReachUsing mainnetChainConfig checkpoint future)
+    (budget : ConfiguredRewardBudget mainnetChainConfig checkpoint) :
+    Nonempty (ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :=
+  exists_configuredHistoryTraceIn_of_reachUsing h
+    (fun {_pre _post _block} _prior _bound _transition {_fork} lookup =>
+      mainnet_histFork lookup)
+    BodyStageCapabilities.historical budget
 
 /-- The actual selected modern fork pays no proof-of-work reward. -/
 theorem ConfiguredBlockTrace.rewardAt_eq_zero

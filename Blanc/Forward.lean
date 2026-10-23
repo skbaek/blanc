@@ -661,6 +661,7 @@ lemma Rinst.runCore_keccak256_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
           (devm.memory.read i.toNat sz.toNat).2,
           devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
             + devm.extCost [⟨i.toNat, sz.toNat⟩]), devm.stateGas⟩) := by
+  rw [Rinst.runCore_keccak256_eq_reference]
   show (devm.popToNat >>= fun p => p.2.popToNat >>= fun q =>
     chargeGas (gKeccak256 + gasKeccak256Word * ceilDiv q.1 32
       + q.2.extCost [⟨p.1, q.1⟩]) q.2 >>= fun d =>

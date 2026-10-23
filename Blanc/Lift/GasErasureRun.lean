@@ -102,7 +102,7 @@ private theorem run_keccak {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     (h1 : Rinst.run ⟨pc1, e, a⟩ .keccak256 = .ok a')
     (h2 : Rinst.run ⟨pc2, e, b⟩ .keccak256 = .ok b')
     (h : Devm.EqModGas a b) : Devm.EqModGas a' b' := by
-  simp only [Rinst.run, Rinst.runCore] at h1 h2
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at h1 h2
   rcases Except.bind_eq_ok h1 with ⟨⟨i1, a1⟩, hp1, h1⟩
   rcases Except.bind_eq_ok h2 with ⟨⟨i2, b1⟩, hp2, h2⟩
   rcases Except.bind_eq_ok h1 with ⟨⟨n1, a2⟩, hq1, h1⟩

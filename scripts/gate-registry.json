@@ -3690,7 +3690,7 @@
      {
       "id": "drip-jaune-runner",
       "path": ".lake/packages/jaune",
-      "pin": "3c28a5ef8fe062c8ca9685bfd234f1890883b7c5"
+      "pin": "ff22ec809b7431cc839738150495339ba3f3b6ca"
      }
     ],
     "lean_entries": [

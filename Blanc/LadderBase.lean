@@ -1220,6 +1220,22 @@ lemma GasSchedule.accessDelegation_memory {gas : GasSchedule} {devm : Devm} {adr
   dsimp only [GasSchedule.accessDelegation]
   cases getDelegatedCodeAddress (devm.state.getCode adr) <;> rfl
 
+/-- Fork-gated delegation preserves the operand stack in both availability branches. -/
+lemma ForkRules.accessDelegation_stack {rules : ForkRules} {devm : Devm} {adr : Adr} :
+    (rules.accessDelegation devm adr).2.2.2.2.stack = devm.stack := by
+  unfold Jaune.ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_stack
+  · rfl
+
+/-- Fork-gated delegation preserves memory in both availability branches. -/
+lemma ForkRules.accessDelegation_memory {rules : ForkRules} {devm : Devm} {adr : Adr} :
+    (rules.accessDelegation devm adr).2.2.2.2.memory = devm.memory := by
+  unfold Jaune.ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_memory
+  · rfl
+
 lemma GasSchedule.accessDelegation_transientStorage {gas : GasSchedule} {devm : Devm} {adr : Adr} :
     (gas.accessDelegation devm adr).2.2.2.2.transientStorage
       = devm.transientStorage := by
@@ -1448,7 +1464,7 @@ lemma of_run_keccak256_val {e : Sevm} {s s' : Devm} (h : Ninst.Run e s Ninst.kec
     ∃ x y, Stack.Diff [x, y] [(s.memory.read x.toNat y.toNat).1.keccak]
       s.stack s'.stack ∧ s'.memory = s.memory.extend x.toNat y.toNat := by
   rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at run
   rcases Except.bind_eq_ok run with ⟨⟨mi, s₁⟩, h1, run₁⟩
   rcases Except.bind_eq_ok run₁ with ⟨⟨sz, s₂⟩, h2, run₂⟩
   rcases Except.bind_eq_ok run₂ with ⟨s₃, h3, run₃⟩
@@ -4681,14 +4697,16 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
         · exact AdrSet.not_mem_empty
         · exact hnd5.atd))
 
-lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
+/-- An actual ordinary-lane execution step preserves NoDel, provided the
+selected child slot preserves it from its own input. -/
+lemma Xinst.inv_noDel_noStateGas {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
     {xl : Xlot} {exn : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (inv : Xlot.InvNoDel wa xl)
     (h : Xinst.Run sevm s x xl exn)
     (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn := by
   unfold Xinst.Run at h
-  rcases Xinst.step_shapeCovered sevm s x hfork with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shapeNoStateGas sevm s x hsg with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hs⟩ <;> rw [hs] at h
@@ -4698,9 +4716,21 @@ lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
   · exact GenericCall.inv_noDel inv h (Devm.NoDel.of_instructionFrame hf hnd)
 
 
-lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {n : Ninst} {xl : Xlot} {exn : Execution}
+/-- Modern compatibility specialization of the capability-level Xinst step. -/
+lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
+    {xl : Xlot} {exn : Execution}
     (hfork : CoveredFork sevm.benvStat.fork)
+    (inv : Xlot.InvNoDel wa xl)
+    (h : Xinst.Run sevm s x xl exn)
+    (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn :=
+  Xinst.inv_noDel_noStateGas hfork.rules_stateGas_none inv h hnd
+
+
+/-- A decoded ordinary-lane instruction preserves NoDel with its actual
+recursive child-slot obligation explicit, including error outcomes. -/
+lemma Ninst.inv_noDel_noStateGas {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {n : Ninst} {xl : Xlot} {exn : Execution}
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (inv : Xlot.InvNoDel wa xl)
     (run : Ninst.StepRun pc sevm devm n xl exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
@@ -4723,7 +4753,7 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
         exact Devm.NoDel.of_eqs (Rinst.inv_delSets h_run) (Rinst.preserves_getCode h_run wa).symm h
   | exec xinst =>
     simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at run
-    exact Xinst.inv_noDel_gen (x := xinst) hfork inv run h
+    exact Xinst.inv_noDel_noStateGas (x := xinst) hsg inv run h
   | dupn imm =>
       have h0 : xl = .none := by
         simp only [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at run
@@ -4748,6 +4778,15 @@ lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
       have frame := Ninst.exchange_instructionFrame_effectRec
         (xl := .none) trivial run
       exact Execution.NoDel.of_instructionFrame frame h
+
+/-- Modern compatibility specialization of the capability-level Ninst step. -/
+lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {n : Ninst} {xl : Xlot} {exn : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (inv : Xlot.InvNoDel wa xl)
+    (run : Ninst.StepRun pc sevm devm n xl exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn :=
+  Ninst.inv_noDel_noStateGas hfork.rules_stateGas_none inv run h
 
 -- The composite relation carried through `Exec.effect` for the NoDel invariant.
 def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=

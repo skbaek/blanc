@@ -64,7 +64,7 @@ theorem ri_keccak {i sz : B256} {d : Devm}
     (h : Ninst.Run sevm (St b (i :: sz :: S) M G) (.reg .keccak256) d) :
     ∃ G', d = St b ((M.read i.toNat sz.toNat).1.keccak :: S) (M.read i.toNat sz.toNat).2 G' := by
   rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at run
   rw [show (St b (i :: sz :: S) M G).popToNat = .ok (i.toNat, St b (sz :: S) M G) from rfl] at run
   simp only [Except.bind_ok] at run
   rw [show (St b (sz :: S) M G).popToNat = .ok (sz.toNat, St b S M G) from rfl] at run

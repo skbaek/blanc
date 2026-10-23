@@ -29,6 +29,8 @@ import Blanc.ExecutionPath
 import Blanc.ExecutionPathLocator
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
+import Blanc.ExecutionSelectedTransactionStateTrace
+import Blanc.ExecutionStagedBodyStateTrace
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
@@ -36,6 +38,7 @@ import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryStateTrace
+import Blanc.ExecutionHistoryInStateTrace
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionFrameTime
@@ -64,6 +67,12 @@ import Blanc.ExecutionWarmth
 import Blanc.ExecutionErrorKeep
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
+import Blanc.ExecutionDeletionSafety
+import Blanc.ExecutionNoDelProducer
+import Blanc.ExecutionNoDelTransaction
+import Blanc.ExecutionNoDelHistory
+import Blanc.ExecutionHistoricalAdmission
+import Blanc.ExecutionHistoricalLadder
 import Blanc.ExecutionTraceCodeAt
 import Blanc.ExecutionTraceSystem
 import Blanc.ExecutionReachable
@@ -76,6 +85,8 @@ import Blanc.ExecutionTraceFrameEnv
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionStagedFrames
+import Blanc.ExecutionStagedAdmission
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
@@ -440,6 +451,7 @@ import Blanc.DripStackSafetyCertificate
 
 -- The deployed solc WETH9, lifted from its runtime bytes (solc-bytecode-v1).
 import Blanc.Lift.Weth9.Solvency
+import Blanc.Lift.Weth9.TerminalSafety
 import Blanc.Lift.Weth9.FootHistory
 import Blanc.Lift.Weth9.FootPrefix
 import Blanc.Lift.Weth9.Model
@@ -1074,6 +1086,7 @@ import Blanc.Lift.UniswapV2Pair.PairPositionalBurn
 import Blanc.Lift.UniswapV2Pair.PairPositionalSwap
 import Blanc.Lift.UniswapV2Pair.PairPositionalSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.TerminalSafety
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 import Blanc.Lift.UniswapV2Pair.PairHistoryLive

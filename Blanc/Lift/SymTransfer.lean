@@ -153,8 +153,8 @@ theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : 
 /-- **Symbols through a transfer.**  A successful instruction whose transfer
 the checker accepted leaves, above the untouched `rest`, words carrying the
 transferred symbols — the one fresh result under a one-point update. -/
-theorem transfer_val {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
-    {kv' : List Nat} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem transfer_val_noStateGas {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
+    {kv' : List Nat} {rest : List B256} (hfork : sevm.benvStat.rules.stateGas = none)
     (hout : ninstTransfer i (indexPattern kv.length) = some out)
     (hlen : kv.length ≤ 1024) (hcount : out.count none ≤ 1)
     (hkv' : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv')
@@ -169,11 +169,22 @@ theorem transfer_val {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
   have h2 := ninstTransfer_append (rest.map some) h1
   have hin : AbstractStackSafety.Matches (S.map some ++ rest.map some) d.stack := by
     rw [hstack]; exact matches_append (matches_some_map S) (matches_some_map rest)
-  have h3 := ninstTransfer_run hfork hin h2 run
+  have h3 := ninstTransfer_run_noStateGas hfork hin h2 run
   obtain ⟨S', s2, hsp, hM, hrest⟩ := matches_split h3
   rw [matches_some_map_eq hrest] at hsp
   obtain ⟨w, hw⟩ := transfer_combine hS hr hkv' hM hcount
   exact ⟨S', w, hsp, hw⟩
+
+theorem transfer_val {sevm : Sevm} {d d' : Devm} {i : Ninst} {out : Pattern}
+    {kv' : List Nat} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hout : ninstTransfer i (indexPattern kv.length) = some out)
+    (hlen : kv.length ≤ 1024) (hcount : out.count none ≤ 1)
+    (hkv' : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv')
+    (hr : r ∉ kv) (hS : List.Forall₂ (fun s w => ρ s = w) kv S)
+    (hstack : d.stack = S ++ rest) (run : Ninst.Run sevm d i d') :
+    ∃ S' w, d'.stack = S' ++ rest ∧
+      List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S' :=
+  transfer_val_noStateGas hfork.rules_stateGas_none hout hlen hcount hkv' hr hS hstack run
 
 end Transfer
 

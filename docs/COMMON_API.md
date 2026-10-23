@@ -103,6 +103,16 @@ registry has identified the likely vocabulary.
   reads. `settleMsg_withFork` requires coverage of both saved messages as
   well as the destination. These are covered-fork transports, with no claim
   of equality across arbitrary historical forks.
+- Historical extraction uses the separate `HistFork` / `histForks` domain in
+  [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean): exactly Byzantium through
+  BPO2, including synthetic Constantinople and excluding Amsterdam.
+  `HistFork.stateGas_none`, `bal_none`, and `neutral` supply the two
+  `NeutralFork` projections. `HistFork.requests_covered` derives existing
+  `CoveredFork` coverage only when the selected fork enables requests;
+  `CoveredFork.histFork` embeds modern coverage. `mainnet_histFork` applies to
+  an actual successful lookup at both number and timestamp, without asserting
+  a selection below the schedule's floor. These facts retain historical runs;
+  they supply no opcode, gas-price, settlement, invariant or reward-free law.
 - Build a configured block *forward* from proof-produced evidence about its
   parts (a reachable history, a counterexample, a liveness witness): go to
   [T7](#t7-i-must-construct-a-configured-block-forward-from-its-parts).
@@ -1313,7 +1323,11 @@ and constructor families cover every modelled wrapper layer:
   `TransactionTrace`, `exists_transactionTrace`, and
   `TransactionTrace.exists_finalStateForm` retain the whole transaction.
   `transactionTenv` follows the selected rules' coinbase-warming flag;
-  the final-state form's covered-fork premise supplies refund quotient 5
+  `TransactionTrace.exists_selectedFinalStateForm` is the selected inversion
+  beside `exists_finalStateForm`: it runs under the actual
+  `stateGas = none` antecedent, routes the gas/refund/coinbase expressions
+  through the semantic `settleTransactionGas`, and keeps the touched sweep
+  symbolic. The older form's covered-fork premise supplies refund quotient 5
   and the absence of a touched-account sweep.
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
@@ -1366,6 +1380,13 @@ conditions. These constructors retain the actual skipped or called stage and
 the successful wrapper's endpoints; state-gas absence alone does not imply
 that a request pass is enabled.
 
+State replay over a retained staged body lives in
+[`Blanc/ExecutionStagedBodyStateTrace.lean`](../Blanc/ExecutionStagedBodyStateTrace.lean).
+`StagedBodyStateChronology` keeps only the selected transaction-list
+chronology and its `stateReplay` runs beacon, history, selected transactions,
+withdrawals, requests, then rewards under `stateGas = none` alone. The
+bout-only block-access-list check contributes no boundary.
+
 For an actually covered fork, `AppliedBodyTrace.toStaged` embeds the supplied
 modern body and `StagedBodyTrace.toModern` recovers the modern carrier. The
 embedding's `toStaged_transactions`, `toStaged_beacon`, `toStaged_history` and
@@ -1373,9 +1394,44 @@ embedding's `toStaged_transactions`, `toStaged_beacon`, `toStaged_history` and
 data; `StagedBodyTrace.toModern_preserves` retains all four components on the
 return path. These adapters use the supplied witnesses. They neither select a
 fresh execution trace nor infer modern coverage from historical membership.
-Descendant-frame enumeration, historical balance and contract-invariant
-transport remain separate obligations. These carriers do not widen
+For raw or settlement-retained frames of supplied optional stages and
+selected-domain block/history spines, import
+[`Blanc/ExecutionStagedFrames.lean`](../Blanc/ExecutionStagedFrames.lean).
+`BeaconStageTrace`, `HistoryStageTrace`, `RequestStageTrace`, `StagedBodyTrace`,
+`ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn` each expose `rawFrames`
+and `settledFrames`. Skipped stages enumerate nothing; called requests keep
+withdrawal before consolidation, bodies keep beacon/history/transactions/requests,
+and histories append prior blocks before the next block. Withdrawals, rewards
+and BAL finishing contribute no interpreter frames. The optional stages'
+`rawFrames_of_disabled` / `settledFrames_of_disabled` retain their actual
+disabled guard; each family's `mem_rawFrames_of_mem_settledFrames` transports
+committed membership to its raw root using the existing full message/CREATE
+settlement filters. Modern `toStaged`, `toModern` and `toIn` projection
+equalities retain the supplied execution evidence with the adapters' existing
+coverage premises. None of these supplied-carrier projections needs historical
+capabilities, no-deletion or a reward budget. Raw lists include rolled-back
+entries; these results prove neither occurrence uniqueness nor world-state
+chronology, target survival or contract preservation. Historical balance and
+contract-invariant transport remain separate obligations. These carriers do not widen
 `CoveredFork` or change modern `AppliedBodyTrace`.
+
+For entry admission on those same six supplied carrier families, import
+[`Blanc/ExecutionStagedAdmission.lean`](../Blanc/ExecutionStagedAdmission.lean).
+Each family's `FrameAdmitted` is equivalent, through
+`frameAdmitted_iff_rawFrames`, to the entry predicate at every actual raw root
+whose current target is the selected address. Optional skipped stages are
+vacuous; bodies preserve beacon/history/transactions/requests order, and the
+configured history predicate follows its supplied block spine. Failed and
+rolled-back raw entries remain included.
+`rawFrames_entered` transports an `EnteredCondition` to every raw root;
+`frameAdmitted_entered` specializes that guarantee to admission.
+`freshFrameAdmitted` supplies empty stack and memory, and `FrameAdmitted.and`
+combines independent entry predicates on the same supplied trace.
+These structural results require no historical-domain membership, coverage,
+state-gas absence, code-routing certificate, deletion safety or reward budget.
+They supply no world-state invariant, account survival or historical contract
+preservation; those producers remain separate. Existing modern admission and
+preservation APIs retain their existing meanings and coverage premises.
 
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
@@ -1529,9 +1585,26 @@ chronology witness is needed, and a terminal `stateReplay` theorem:
 - [`Blanc/ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean)
   for transaction refund, coinbase, deletion, and
   `TransactionStateChronology` boundaries;
+- [`Blanc/ExecutionSelectedTransactionStateTrace.lean`](../Blanc/ExecutionSelectedTransactionStateTrace.lean)
+  for the selected transaction refund, coinbase, deletion, and touched-sweep
+  `SelectedTransactionStateChronology` boundaries under
+  `stateGas = none` (selected gas/refund/tip via semantic
+  `settleTransactionGas`; sweep suffix empty when the rules do not sweep);
 - [`Blanc/ExecutionBodyStateTrace.lean`](../Blanc/ExecutionBodyStateTrace.lean)
   for system messages, transaction lists, direct withdrawals, requests, and
   `AppliedBodyStateChronology`;
+- [`Blanc/ExecutionStagedBodyStateTrace.lean`](../Blanc/ExecutionStagedBodyStateTrace.lean)
+  for the staged-body chronology under `stateGas = none`:
+  `StagedBodyStateChronology` retains only the selected transaction-list
+  chronology and replays beacon, history, selected transactions, withdrawals,
+  requests, then rewards in `applyBody` order (withdrawals gated by the header
+  switch, rewards empty under `pow = none`);
+- [`Blanc/ExecutionHistoryInStateTrace.lean`](../Blanc/ExecutionHistoryInStateTrace.lean)
+  for the In-block / In-history chronology: `ConfiguredBlockStateChronologyIn`
+  holds the D1 staged-body chronology with an `initBenv` preparation event and
+  derives `post` via `postEq`; `ConfiguredHistoryStateChronologyIn` follows
+  refl/step. Per-block `stateGas = none` is discharged from the history's own
+  `BodyStageCapabilities`, with the reward-suffix rule carried from D1;
 - [`Blanc/ExecutionHistoryStateTrace.lean`](../Blanc/ExecutionHistoryStateTrace.lean)
   for `ConfiguredBlockStateChronology` and
   `ConfiguredHistoryStateChronology` across schedule-parametric histories.
@@ -1835,7 +1908,12 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `processCreateMessage.chargeCodeGas_instructionFrame` covers code-deposit
   charging on both outcomes, including optional EF rejection and state-gas
   charges. `ForkRules.accessDelegation_instructionFrame` covers the activated
-  facade, including disabled delegation. The coarse frame preserves state,
+  facade, including disabled delegation. For exact operand-stack and memory
+  projections, use `ForkRules.accessDelegation_stack` and
+  `ForkRules.accessDelegation_memory` in
+  [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean). Both cover enabled and
+  disabled delegation without a modern-fork premise. Their equality conclusions
+  have no reliable registered single goal-head trigger. The coarse frame preserves state,
   deletion and created-account sets, transient storage, and storage-write
   annotations; it leaves touched-account metadata unobserved. Exact
   `Pop`/`Burn` and Mach-only frames retain touched-account equality.
@@ -1845,6 +1923,39 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   These operation-specific relations occur inside the shared outcome carrier;
   no existing registered single goal-head trigger distinguishes them, so use
   this branch and the exact operation declaration before unfolding its walk.
+- For successful calls under `rules.stateGas = none`, use
+  `CallEffects.call_run_effects` for seven-operand `CALL` and
+  `CallEffects.call6_run_effects` for six-operand `DELEGATECALL` or `STATICCALL`
+  in [`Blanc/Lift/CallEffects.lean`](../Blanc/Lift/CallEffects.lean). They give
+  the exact one-word stack result and bounded output-window memory write,
+  handling flat and EIP-2929 access, enabled or disabled delegation, balance
+  and depth failure, and child failure as well as success. The same owner
+  provides `CallEffects.genericCall_stack`, `CallEffects.genericCall_memory`,
+  and the `CallEffects.Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons` and
+  `withStack_pop`/`withStack_popToNat`/`withStack_popToAdr` operand helpers.
+  These observations prove no settlement or gas equality; their
+  conjunction/equality goals have no reliable registered single goal-head
+  trigger.
+- `Xinst.step_shapeNoStateGas` in
+  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) gives the
+  `Xinst.ShapeCovered` done/create/call decomposition from the actual
+  `rules.stateGas = none` capability, including disabled CREATE2's error arm.
+  Its existing `Xinst.step_shapeCovered` wrapper keeps the modern interface.
+  The `xinst-step-shape` recipe applies only to this ordinary-lane shape goal;
+  it proves no opcode availability, successful run, gas equality or child commitment.
+  For capability transport into an actual entered child, use
+  `Xinst.Run.some_child_benvStat` or `Evm.step_spawn_child_benvStat` in the same
+  owner: each gives exact parent/child block-environment equality without a
+  fork-domain premise. Existing modern child-fork facts wrap these equalities.
+  Their equality conclusions have no additional reliable single-head trigger.
+- For successful checked stack transfer, use `ninstTransfer_run_noStateGas`
+  in [`Blanc/Lift/Transfer.lean`](../Blanc/Lift/Transfer.lean). It requires only
+  `rules.stateGas = none`, handles both access schedules and delegation
+  settings, and derives opcode availability from actual success where needed.
+  `run_balance_stack` in the same module gives BALANCE's exact account-read
+  stack result under either access schedule. The original `ninstTransfer_run`
+  retains its modern statement. These stack observations have no reliable
+  registered single goal-head trigger.
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
   `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
@@ -2019,6 +2130,16 @@ The `Linst.selfdestruct_preserves_noDel`, `Linst.run_noDel` and
 existing coded account can schedule itself for deletion. These helpers do not
 assert a historical-uniform NoDel invariant.
 
+For a weaker actual step condition,
+`Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign` in
+`Blanc/CommonProofs.lean` accepts the modern creation restriction **or**
+`sevm.currentTarget ≠ wa`. SELFDESTRUCT schedules its executing storage target,
+not its beneficiary. `Linst.run_noDel_of_safe` handles an actual terminal run
+when that target is foreign or the decoded terminal is not SELFDESTRUCT.
+Both preserve `Execution.NoDel`, including live error payloads, from the input
+`Devm.NoDel`; they do not require a successful outcome or establish safety of
+a protected target executing arbitrary code.
+
 ### I2. The property concerns a complete execution or child frames
 
 - `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
@@ -2028,6 +2149,82 @@ assert a historical-uniform NoDel invariant.
   traversal APIs remain available. `Linst.noDelCode_effectFork` and
   `Exec.inv_noDel` in `Blanc/LadderBase.lean` consume this interface without
   assuming historical-uniform no-deletion behavior.
+- `Xinst.inv_noDel_noStateGas` and `Ninst.inv_noDel_noStateGas` in
+  `Blanc/LadderBase.lean` preserve NoDel through actual instruction steps under
+  `sevm.benvStat.rules.stateGas = none`. Their explicit `Xlot.InvNoDel` premise
+  is the selected child's recursive preservation obligation; it must be proved
+  for that child, not supplied as an environment or endpoint survival axiom.
+  The original `Xinst.inv_noDel_gen` and `Ninst.inv_noDel_gen` remain modern
+  compatibility wrappers. The core uses the actual ordinary done/create/call
+  shape, retaining unavailable-opcode errors and actual inherited/collision
+  guards. These are step facts, not historical `Exec.inv_noDel`, raw-tree
+  routing, whole-message safety or contract/history preservation. There is no
+  reliable single goal-head recipe distinguishing these premise-specific NoDel
+  routes; use this branch and the named step declaration. The existing
+  `xinst-step-shape` recipe selects only the decomposition donor.
+- Raw-certificate no-deletion over the driver tree:
+  [`Blanc/ExecutionDeletionSafety.lean`](../Blanc/ExecutionDeletionSafety.lean).
+  `Exec.inv_noDel_of_raw_terminal_safe` concludes `Execution.NoDel` for a
+  complete `Exec` run from the input `Devm.NoDel`, `stateGas = none`, and a
+  decoded terminal exclusion at every actual reached node in the executing
+  storage context (`node.sevm.currentTarget = wa → ¬ Linst.At ... .selfdestruct`
+  over `Exec.rawNodes`). The certificate is indexed by the selected run's own
+  reached nodes, never by retained or committed nodes; the six-constructor
+  induction builds the child `Xlot.InvNoDel` obligation instead of assuming a
+  recursive oracle. It needs no fresh-entry, successful-outcome, modern
+  `CoveredFork`, actual/world code equality, or new opcode-availability premise.
+  The concrete protected-runtime or routing producer of the `safe` certificate
+  is a mandatory separate obligation, as are message/inherited-deletion
+  closure, historical contract/history invariants, and global candidate
+  readiness. No recipe is registered: the reducible NoDel conclusion does not
+  uniquely distinguish this route, so use this branch and the named theorem.
+- Producer of that `safe` certificate from an installed checked runtime:
+  [`Blanc/ExecutionNoDelProducer.lean`](../Blanc/ExecutionNoDelProducer.lean).
+  `Exec.safe_of_installedCert` takes `Cert.check C c`, `c.callOnly`,
+  `c.noSelfdestruct`, `¬ isValidDelegation C`, nonempty `C`, the actual
+  installed code `pre.getCode wa = C`, `stateGas = none`, and pc-zero entry of
+  `C` when the root owns `wa`'s storage; it proves the decoded SELFDESTRUCT
+  exclusion at every raw node owning `wa`'s storage, every outcome, no fork
+  premise. The cross-frame argument covers reentrant `CALL`/`STATICCALL` into
+  `wa`, foreign `DELEGATECALL`/`CALLCODE` (they keep the caller's account) and
+  `CREATE`/`CREATE2` (cannot enter an account with code).
+  `Exec.inv_noDel_of_installedCert` composes it with
+  `Exec.inv_noDel_of_raw_terminal_safe`. Message/inherited-deletion and
+  transaction-level closure remain separate.
+- Message and selected-transaction closure of that producer:
+  [`Blanc/ExecutionNoDelTransaction.lean`](../Blanc/ExecutionNoDelTransaction.lean).
+  `RunFrame.invNoDel_of_installedCert` produces the slot `Xlot.InvNoDel`
+  obligation, so the fork-neutral `ProcessMessage.inv_noDel` /
+  `ProcessCreateMessage.inv_noDel` give `ProcessMessage.inv_noDel_of_installedCert`
+  / `ProcessCreateMessage.inv_noDel_of_installedCert` (every outcome, error
+  payloads and rollback snapshots) and the executable
+  `processMessage_preserves_noDel_of_installedCert` /
+  `processCreateMessage_preserves_noDel_of_installedCert`, with no fork
+  premise. `ExecutionTrace.MessageCallTrace.noDel_of_installedCert` covers the
+  settled wrapper (collision, CREATE at coded `wa` excluded, EIP-7702
+  authorization and code resolution); `ExecutionTrace.TransactionTrace.noDel_of_installedCert`
+  gives `wa ∉ messageOut.accountsToDelete` and `wa`'s code `C` after the
+  message and in the final state under `stateGas = none` (the deletion fold
+  and touched sweep keep it). Generic helpers: `Xlot.invGetCode_of_filled`
+  (fork-free slot code preservation) and
+  `sweepTouchedAccounts_getCode_of_nonempty` (the sweep never erases an
+  account with nonempty code). It needs `wa ∉ benv.createdAccounts`.
+- History closure of that producer:
+  [`Blanc/ExecutionNoDelHistory.lean`](../Blanc/ExecutionNoDelHistory.lean).
+  `InstalledCert C` bundles the actual runtime facts (certificate check,
+  `callOnly`, `noSelfdestruct`, no designator, nonempty). Stage lemmas
+  `SystemMessageTrace`/`RequestsTrace.noDel_of_installedCert` (system calls,
+  including a system target equal to `wa`), `Beacon`/`History`/`RequestStageTrace.code_of_installedCert`,
+  `ApplyTransactionsTrace.noDel_of_installedCert`, `StagedBodyTrace.noDel_of_installedCert`,
+  `ConfiguredBlockTraceIn.noDel_of_installedCert` and
+  `ConfiguredHistoryTraceIn.noDel_of_installedCert` carry `getCode wa = C` from
+  the checkpoint to the history's endpoint state (by induction, every
+  checkpoint of its spine) and prove the recursive `…NoDelScheduled wa` (no
+  selected transaction schedules `wa` for deletion). No `CoveredFork`;
+  per-block `stateGas = none` from `BodyStageCapabilities F`; no premise that
+  `wa` is never targeted; block-level `createdAccounts` is empty at
+  `initBenv`. Also `payRewards_getCode` and the shared
+  `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -2134,6 +2331,18 @@ assert a historical-uniform NoDel invariant.
   `Msg.getStor_eq_of_safeTransfer` gives global storage equality for disabled
   transfer, zero value, or self-transfer at a protected account. These facts
   say nothing about transient storage, logs, balances or gas.
+  For an actual historical or modern run whose selected rules satisfy
+  `sevm.benvStat.rules.stateGas = none`, use
+  `Exec.getStor_committedPost_eq_of_static_noStateGas`,
+  `Exec.storageView_committedPost_eq_of_static_noStateGas`,
+  `Exec.getStor_committedPost_eq_of_static_protected_noStateGas`, and
+  `Exec.protected_committedPost_of_static_noStateGas` with the same static,
+  committed and protected-target-or-empty-code premises as their modern
+  wrappers. `Ninst.staticcall_getStor_eq_noStateGas` and
+  `Ninst.staticcall_inv_getStor_noStateGas` derive readiness from actual
+  STATICCALL routing, including flat/EIP-2929 access and disabled/enabled
+  delegation. These equality conclusions do not identify a unique proof
+  route by goal head; select the theorem with its actual-run premises here.
 - Representation-exact storage silence of static execution:
   [`Blanc/StaticCallStorage.lean`](../Blanc/StaticCallStorage.lean).  Use it
   when the boundary is the `Stor` tree itself (a replay carrier that meets at
@@ -2143,6 +2352,11 @@ assert a historical-uniform NoDel invariant.
   `Ninst.staticcall_inv_getStor_exact` exposes the same equality for one
   successful `STATICCALL` on a fork named by `CoveredFork` (Prague, Osaka,
   BPO1 and BPO2; Amsterdam is excluded), with no new caller premise.
+  Its capability-level counterpart is
+  `Ninst.staticcall_inv_getStor_exact_noStateGas`: it needs only the selected
+  rules' state-gas absence and the actual successful STATICCALL. It inherits
+  the same raw-storage equality without supplying opcode availability,
+  child commitment, gas equality or any other modern fork capability.
   For a recursive source walk at one covered `Sevm`, use
   `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
   `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use
@@ -3613,6 +3827,47 @@ consumer needs canonical interpreter ingress as one conjunct:
   callers derive this premise from `trace.prepared` and the actual fresh
   message constructor; raw/create state-only transports keep their existing
   signatures.
+- Historical (fork-domain) counterpart:
+  [`Blanc/ExecutionHistoricalAdmission.lean`](../Blanc/ExecutionHistoricalAdmission.lean).
+  `ContractSpecSem`/`ContractSpec.SoundAdmittedIn F` and `PreservesAdmittedIn F`
+  replace each `CoveredFork` frame position by a selected domain `F`
+  (`PreservesAdmitted.toIn` is the `CoveredFork` instance, `PreservesAdmittedIn.mono`
+  restricts). `ProcessMessageTrace`/`ProcessCreateMessageTrace`/`MessageCallTrace.stateInv_admitted_semIn`,
+  `TransactionTrace`/`ApplyTransactionsTrace.benvInv_admitted_semIn` and the
+  `ContractSpec` forms `…_admittedIn` split `hfork` into `F fork` (routing)
+  and `stateGas = none` (settlement); deletion exclusion of `ca` comes from an
+  installed checked runtime (`InstalledCert C`, `c.sem.image = some C.toList`)
+  via `MessageCallTrace.accountsToDelete_ne_of_installedCert`, and the touched
+  sweep from `StateInv.sweepTouchedAccounts` (never erases nonempty code; no
+  sweep-off assumption). Also `stateGas = none` output twins
+  `processMessageCall_{createCollision,createRun,callRun}_out_noStateGas` and
+  `StateInv.getCode_eq_of_image`. The historical frame ladder that produces
+  `PreservesAdmittedIn F` from `SoundAdmittedIn F` is the next bullet.
+  The same owner carries the body and history: `SystemMessageTrace`/`RequestsTrace`/
+  `Beacon`/`History`/`RequestStageTrace.stateInv_and_sum_le_admitted_semIn`
+  (skipped stages are the identity), `StagedBodyTrace.stateInv_admitted_semIn`
+  (D1 stage order; withdrawals via `benvInv_processWithdrawalsState_sem`;
+  rewards via `StateInv.payRewards`, one `StateInv.addBal` per credit),
+  `ConfiguredBlockTraceIn`/`ConfiguredHistoryTraceIn.stateInv_admitted_semIn`
+  (per-block `F`/`stateGas = none` from `forkIn` + `BodyStageCapabilities F`,
+  withdrawal funding from the retained `bound`, post via `postEq`) and the
+  `ContractSpec` forms `…_admittedIn`. Reward funding is the explicit premise
+  `RewardCreditsFunded` / `OmmerCreditsFunded` (lifted as
+  `StagedBodyTrace`/`ConfiguredBlockTraceIn`/`ConfiguredHistoryTraceIn.RewardCreditsFunded`),
+  which the Mac-owned reward budget discharges; no reward arithmetic is
+  proved there. Also `ApplyTransactionsTrace.sum_le_noStateGas`.
+- Historical frame ladder:
+  [`Blanc/ExecutionHistoricalLadder.lean`](../Blanc/ExecutionHistoricalLadder.lean).
+  `ContractSpecSem.preserves_lift_admitted_semIn F hF` and
+  `ContractSpecSem`/`ContractSpec.preserves_inv_admittedIn F hF` turn
+  `SoundAdmittedIn F` into `PreservesAdmittedIn F` for any domain with
+  `hF : ∀ {f}, F f → f.ruleSet.stateGas = none`; `…_histFork` instantiate
+  `HistFork` (`HistFork.stateGas_none`), and `preserves_inv_admitted_viaIn`
+  recovers the modern theorem at `CoveredFork`. Step twins
+  `Xinst.{none,some}_preserves_precond_noStateGas` and
+  `Linst.inv_postcond_noStateGas` take only `stateGas = none` (selfdestruct reads
+  the fork's actual access, beneficiary-credit and deletion rules);
+  `Xinst.Run.some_child_forkIn` transports any `F` to an entered child.
 
 - To derive structural admission directly from an independently checked predicate
   over the actual raw entries, use `ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames`
@@ -4212,6 +4467,9 @@ Use
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
   refund and the coinbase priority fee out of the transaction's own up-front
   debit, so neither credit needs a wrap-around side condition.
+  `ExecutionTrace.TransactionTrace.selected_settlement_sum_bounds` is the
+  selected-settlement analogue under only `stateGas = none`; the modern bound
+  is a thin specialization of the same shared credit arithmetic.
 - `ExecutionTrace.TransactionTrace.benvInv` moves a whole `ContractSpec.BenvInv`
   across one retained transaction.  Its balance-sum premise is explicit: a
   general `ContractSpec.Side` need not be `SumNof`.
@@ -4498,6 +4756,14 @@ exposes only the selected fork and the successful scheduled transition, for
 inverting header validation or the appended block through Jaune's
 `stateTransitionCoreE_*` facts. The modern carrier adds its own
 `CoveredFork` evidence and unconditional modern body trace.
+
+For the accepted historical domain, `BodyStageCapabilities.historical`
+derives both extraction capabilities from `HistFork` membership.
+`exists_mainnetConfiguredBlockTrace_of_transition` retains an actual mainnet
+transition with its explicit reward-inclusive bound;
+`exists_mainnetConfiguredHistoryTrace_of_reachUsing` retains a mainnet history
+with the existing explicit `ConfiguredRewardBudget`. Neither wrapper infers
+that budget from reachability or asserts historical contract preservation.
 
 For a selected historical domain `F`, use `ConfiguredBlockTraceIn F` and
 `ConfiguredHistoryTraceIn F` in the same owner. They retain the selected fork,
@@ -5088,6 +5354,16 @@ contract-neutral.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
+  For an actual successful execution with selected `rules.stateGas = none`,
+  use `lift_sound_inM_noStateGas` / `lift_sound_in_noStateGas` to retain
+  `StepIn`, or `lift_soundM_noStateGas` / `lift_sound_noStateGas` for the
+  ordinary lifted run. `NodeClaim0NoStateGas`, `NodeClaimNoStateGas`, and
+  `node_soundM_noStateGas` own the capability-level recursion; the original
+  modern `NodeClaim0`/`NodeClaim` definitions and theorem statements retain
+  their meaning. The `lift-node-no-state-gas` recipe matches only the two
+  direct capability carriers; a general `SProg.Run` or `RunP` goal does not
+  select this route from other constructive program proofs. These successful
+  execution theorems assert neither opcode availability nor no-deletion.
 - For one lifted step's effect on memory, use
   [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
   forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
@@ -5127,6 +5403,12 @@ contract-neutral.
   inductions `bndOfG_sound`/`bnd2G_sound`; each checker's `bndOf_sound`/
   `bnd2_sound` keeps its statement, discharging one per-fact bridge over its
   own `Fact` type.
+  For selected state-gas absence, `SymTransfer.transfer_val_noStateGas` in
+  the same shared owner carries symbols through the actual successful
+  instruction using the generic stack-transfer theorem. It retains the
+  frame-size, one-fresh-result and index-map hypotheses; the original modern
+  `transfer_val` statement remains a wrapper. Its existential result requires
+  these joint transfer/run premises, so discovery remains in this registry.
 - For the free-pointer checker's soundness, use
   [`Blanc/Lift/FreePtrSound.lean`](../Blanc/Lift/FreePtrSound.lean) and
   [`Blanc/Lift/FreePtrSoundStep.lean`](../Blanc/Lift/FreePtrSoundStep.lean):
@@ -5143,6 +5425,14 @@ contract-neutral.
   `refine_sound`, `popped_sound`, `compat_sound`, `param_sat`, `init_sat`, `retOk_sound`,
   `resume_sound` and `callNext_obs` (joins, calls and returns); `map_of_zip_prefix` (an
   annotation's entry words name a prefix of the incoming ones).
+  For a selected rule set with `stateGas = none`,
+  `WriteSite.memEff_sound_noStateGas`,
+  `WriteSite.getStor_of_writesStor_noStateGas` and
+  `WriteSite.wstep_sound_noStateGas` keep the same actual instruction/run,
+  frame, valuation, stack bound and accepted-step premises. The single proof
+  tree uses common call-write effects, raw storage keeping and symbolic
+  transfer; the modern statements remain wrappers. These routes require the
+  checker/run premises; a bare memory or storage equality does not select them.
   Write-site refinement keeps comparison chains through three live-symbol closures and
   applies one learning round after `FreePtr.refineFacts`; `refine_sound` reuses
   `learn1_sound`, `zeros_sound` and `ones_sound` for that additional round without changing
@@ -5156,13 +5446,30 @@ contract-neutral.
   `RetObs.of_callee` and `tail_entry`), `Term.eval_argFree` (an entry-word-free term reads the
   same in every environment of a frame), and `SFunc.RunP.mono_at` (a run under a step relation
   implied at the run's own frame).
+  The capability forms `WriteSite.wstep_keeps_noStateGas`,
+  `WriteSite.ws_run_noStateGas`, `WriteSite.wsRun_sound_noStateGas` and
+  `WriteSite.lift_sound_ws_noStateGas` require selected `stateGas = none`
+  instead of modern coverage. They retain the original accepted certificate,
+  frame/run and summary premises, with the same `WsStep`/`RetObs` meanings;
+  the byte-facing endpoint still takes an actual successful frame and
+  preserves its `StepIn` relation. Historical membership supplies the
+  capability through `HistFork.stateGas_none`. Old modern statements remain
+  wrappers; no additional outcome or storage-survival premise is introduced.
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
+  (the capability forms `call_run_writesAt_noStateGas`,
+  `delegatecall_run_writesAt_noStateGas` and `staticcall_run_writesAt_noStateGas`
+  use the common actual-rule CallEffects owner; modern statements remain wrappers)
   and the `*_run_writesAt` lemmas for `MSTORE8`, the five copies and the output windows of
   `CALL`/`DELEGATECALL`/`STATICCALL` (every outcome, including a failed call).
 - For the stack top after one lifted step of an environment or hashing instruction, use
   [`Blanc/Lift/StepTops.lean`](../Blanc/Lift/StepTops.lean): `run_{caller,address,not,shl,exp,
   calldataload,keccak256,sload}_top`, `Ninst.Run.getStor_of_storKeep` and `getStor_push`.
+  `Ninst.Run.getStor_of_storKeep_noStateGas` takes only selected state-gas
+  absence plus the same regular-non-SSTORE-or-actual-STATICCALL premise.
+  Its STATICCALL arm uses the shared capability-level raw-storage theorem;
+  the original modern statement remains a wrapper. A storage equality alone
+  does not select this route without the actual instruction/run premises.
 - For the return-data buffer across one lifted step, use
   [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
   `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
@@ -5213,6 +5520,13 @@ contract-neutral.
   in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
   (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
   map across `GAS` and constant-window `STATICCALL`).
+  The state-gas-capability forms are `staticcall_run_memory_noStateGas`,
+  `absMem_sound_noStateGas` and `step_mem_sound_noStateGas`. They preserve
+  the same bounded output-window and memory-map invariants using actual
+  selected access/delegation rules. Existing covered theorem statements
+  forward to these cores. Select these routes from the actual instruction
+  and memory-map premises; a general equality or memory-preservation goal
+  alone does not distinguish them from writes, extension or pure steps.
 - Every execution prefix to a certificate node (all outcomes, no success
   premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
   (checked node, pc, stack segments matched per pending function), the
@@ -5223,6 +5537,21 @@ contract-neutral.
   `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
   `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+  With only selected state-gas absence, use
+  `Cursor.absNinst_run_stack_noStateGas`, `cursor_stepS_noStateGas`,
+  `cursor_step_noStateGas`, `cursor_of_parentPrefix_noStateGas` and
+  `reach_of_parentPrefix_noStateGas` in the same module. They retain the
+  exact actual same-frame edge/prefix, cursor invariant and child provenance,
+  cover every frame outcome, and add no success premise. Original modern
+  statements forward to these cores; no cursor/checker carrier changed.
+  Their existential step/reach conclusions require the joint certificate and
+  actual-edge/prefix premises, so select the route here rather than matching
+  an arbitrary existential or reachability goal.
+  `CursorOK.tree_of_last` places an actual decoded terminal instruction
+  at the cursor's checked `.last` node. It uses only `CursorOK` and
+  `Linst.At`, with no fork or successful-outcome premise. This is terminal
+  decoding, not a claim that the certificate excludes `SELFDESTRUCT`;
+  `Cert.callOnly` continues to permit every terminal instruction.
 - To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
   certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
   `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):
@@ -5505,6 +5834,42 @@ contract-neutral.
   `Xinst.notDelegatecall` with `CursorOK.exec_spawn_undelegated` is the restriction the
   `OwnSpawns` producers use: a cursor whose `ExecsSatisfy Xinst.notDelegatecall` decodes only
   `CALL`, `STATICCALL` or `CREATE2`.
+  The same owner separately defines `SFunc.lastsSatisfy` and
+  `Cursor.LastsSatisfy` for terminal families, with `SStep.lastsSatisfy` and
+  `Cursor.lastsSatisfy_of_reachable` propagating a certificate-wide check.
+  `SFunc.noSelfdestruct` / `Cert.noSelfdestruct` specialize this walk to
+  reject terminal `SELFDESTRUCT`; `Cursor.noSelfdestruct_of_reach` retains
+  that checked restriction at active and suspended trees. This terminal
+  check is separate from `Cert.callOnly`, which still permits every halt.
+  `CursorOK.lastsSatisfy` applies that restriction to actual `Linst.At`
+  decoding through the shared `CursorOK.tree_of_last` donor;
+  `CursorOK.not_selfdestruct` gives the terminal exclusion. For a whole
+  same-frame chain use `not_selfdestruct_of_parentPrefix_noStateGas` with
+  `Cert.check`, the actual certificate's `noSelfdestruct` check, pc-zero
+  entry, installed-code equality, selected state-gas absence and the actual
+  `ParentPrefix`. It covers every eventual frame outcome. This is local
+  decoded-terminal exclusion, not account-deletion or contract preservation;
+  child routing and inherited deletion safety require their own proofs.
+  `call_or_staticcall_of_parentPrefix_noStateGas` is the matching fork-free
+  spawn restriction: a same-frame prefix of a `Cert.callOnly` certificate
+  decodes only `CALL`/`STATICCALL`, every outcome.
+- For concrete WETH9 or Uniswap V2 Pair code that must exclude terminal
+  `SELFDESTRUCT`, use
+  [`Weth9/TerminalSafety.lean`](../Blanc/Lift/Weth9/TerminalSafety.lean) and
+  [`UniswapV2Pair/TerminalSafety.lean`](../Blanc/Lift/UniswapV2Pair/TerminalSafety.lean).
+  Each namespace supplies `cert_noSelfdestruct` for its actual checked runtime
+  certificate and `runtime_not_selfdestruct` for an actual same-frame prefix
+  from pc-zero entry of its installed code with selected state-gas absence.
+  The conclusion excludes decoded `Linst.At ... .selfdestruct` for every
+  eventual frame outcome. It does not assert deletion safety or a contract
+  invariant; child routing, admission and inherited deletions remain separate.
+  Each also supplies `cert_callOnly`, `code_not_delegation`,
+  `runtime_call_or_staticcall` (fork-free spawn restriction) and `exec_noDel`:
+  all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
+  where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
+  `code_toList_ne_nil` and `transaction_noDel` (one selected transaction under
+  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow,
+  with `installedCert` and `history_noDel` for a configured In-history.
 - A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
   the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
   producer annotations from `scripts/lift/lift.py --lock-spec`) in

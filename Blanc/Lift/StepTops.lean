@@ -84,7 +84,7 @@ theorem run_keccak256_top (run : Ninst.Run sevm d (.reg .keccak256) d')
     (hs : d.stack = x :: y :: rest) :
     d'.stack = Bytes.keccak (d.memory.data.sliceD x.toNat y.toNat 0) :: rest := by
   rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
+  simp only [Rinst.run, Rinst.runCore_keccak256_eq_reference] at run
   obtain ⟨⟨i, d1⟩, h1, e1⟩ := Except.bind_eq_ok run
   obtain ⟨⟨n, d2⟩, h2, e2⟩ := Except.bind_eq_ok e1
   obtain ⟨d3, h3, h4⟩ := Except.bind_eq_ok e2
@@ -134,13 +134,18 @@ theorem run_sload_top (run : Ninst.Run sevm d (.reg .sload) d') (hs : d.stack = 
 
 /-- **A step that is neither `SSTORE` nor a call or creation other than `STATICCALL` keeps the
 executing account's storage** (and every other account's).  `PUSH` is `Ninst.Run.getStor_push`. -/
-theorem Ninst.Run.getStor_of_storKeep {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
+theorem Ninst.Run.getStor_of_storKeep_noStateGas {n : Ninst} (hfork : sevm.benvStat.rules.stateGas = none)
     (hn : (∃ r, n = .reg r ∧ r ≠ .sstore) ∨ n = .exec .staticcall)
     (run : Ninst.Run sevm d n d') : Devm.getStor d' = Devm.getStor d := by
   rcases hn with ⟨r, rfl, hr⟩ | rfl
   · rcases of_run_reg run with ⟨pc, rrun⟩
     exact (Rinst.preserves_stor hr rrun).symm
-  · exact (Ninst.staticcall_inv_getStor_exact hfork run).symm
+  · exact (Ninst.staticcall_inv_getStor_exact_noStateGas hfork run).symm
+
+theorem Ninst.Run.getStor_of_storKeep {n : Ninst} (hfork : CoveredFork sevm.benvStat.fork)
+    (hn : (∃ r, n = .reg r ∧ r ≠ .sstore) ∨ n = .exec .staticcall)
+    (run : Ninst.Run sevm d n d') : Devm.getStor d' = Devm.getStor d :=
+  Ninst.Run.getStor_of_storKeep_noStateGas hfork.rules_stateGas_none hn run
 
 theorem Ninst.Run.getStor_push {bs : Bytes} {fits : bs.length ≤ 32}
     (run : Ninst.Run sevm d (.push bs fits) d') : Devm.getStor d' = Devm.getStor d := by

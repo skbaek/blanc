@@ -220,10 +220,11 @@ private theorem resume_writesAt {μ : Mem} {parent : Devm} {oi os : Nat} {r : Ex
   · exact ⟨_, by rw [Resume.call_memory h, hpar]⟩
 
 /-- `CALL` writes only its output window, at its sixth operand. -/
-theorem call_run_writesAt {oi : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .call) post)
+theorem call_run_writesAt_noStateGas {oi : B256}
+    (hfork : sevm.benvStat.rules.stateGas = none) (run : Ninst.Run sevm pre (.exec .call) post)
     (hs : pre.stack[5]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat := by
+  have actualRun := run
   rcases run with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
@@ -255,75 +256,24 @@ theorem call_run_writesAt {oi : B256}
   have e4 := f4.stack
   have e5 := f5.stack
   have e6 := f6.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1 e2 e3 e4 e5 e6
-  have estack : pre.stack = gas1 :: x2 :: value3 :: x4 :: x5 :: x6 :: s6.stack := by
-    rw [e1, e2, e3, e4, e5, e6]
+  have e7 := f7.stack
+  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1 e2 e3 e4 e5 e6 e7
+  have fullStack : pre.stack = gas1 :: x2 :: value3 :: x4 :: x5 :: x6 :: x7 :: s7.stack := by
+    rw [e1, e2, e3, e4, e5, e6, e7]
   have hoi : oi = x6 := by
-    rw [estack] at hs
+    rw [fullStack] at hs
     simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hs
     exact hs.symm
-  subst hoi hk6
-  have hm7 : pre.memory = s7.memory :=
-    f1.memory.trans (f2.memory.trans (f3.memory.trans (f4.memory.trans
-      (f5.memory.trans (f6.memory.trans f7.memory)))))
-  simp only [hfork.rules_access, ForkRules.accessDelegation_enabled
-    (show sevm.benvStat.rules.delegationEnabled = true from
-      hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl)]
-    at h_run
-  rw [hfork.rules_stateGas_none] at h_run
-  split at h_run
-  · rename_i _ heq
-    cases heq
-    split at h_run
-    · cases XStep.run_ofExcept_error h_run
-    · rename_i s10 eq10
-      rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-          (addAccessedAddress s7 callee2) callee2 with
-        ⟨dp, na, code0, dagc, s9⟩
-      simp only [hp11] at eq10 h_run
-      have hm9 : s9.memory = s7.memory := by
-        have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
-        dsimp only at h
-        rw [← h, GasSchedule.accessDelegation_memory]
-        rfl
-      have hm10 : s10.memory = pre.memory :=
-        (Devm.burn_of_chargeGas eq10).memory.symm.trans (hm9.trans hm7.symm)
-      have hext : (s10.memExtends [(n4, n5), (oi.toNat, n7)]).memory =
-          pre.memory.extends [(n4, n5), (oi.toNat, n7)] := by
-        show s10.memory.extends _ = _
-        rw [hm10]
-      split at h_run
-      · cases XStep.run_ofExcept_error h_run
-      · split at h_run
-        · rcases eq12 : Devm.push 0 (s10.memExtends [(n4, n5), (oi.toNat, n7)]) with
-              _ | s12 <;> simp only [eq12] at h_run
-          · cases XStep.run_ofExcept_error h_run
-          · have h_ex := Except.ok.inj h_run.2
-            subst h_ex
-            show Mem.WritesAt pre.memory s12.memory oi.toNat
-            rw [← (Devm.push_of_push eq12).memory, hext]
-            exact Mem.WritesAt.extends _ _ _
-        · simp only [genericCall.step] at h_run
-          split at h_run
-          · simp only [Bind.bind, Except.bind] at h_run
-            split at h_run
-            · cases XStep.run_ofExcept_error h_run
-            · rename_i s12 hpush
-              have h_ex := Except.ok.inj h_run.2
-              subst h_ex
-              rw [← (Devm.push_of_push hpush).memory]
-              show Mem.WritesAt pre.memory (s10.memExtends [(n4, n5), (oi.toNat, n7)]).memory _
-              rw [hext]
-              exact Mem.WritesAt.extends _ _ _
-          · simp only [XStep.Run] at h_run
-            rcases h_run with ⟨r, -, h_split⟩
-            have hext' : ((s10.memExtends [(n4, n5), (oi.toNat, n7)]).withReturnData []).memory =
-                pre.memory.extends [(n4, n5), (oi.toNat, n7)] := hext
-            obtain ⟨ys, hys⟩ := resume_writesAt hext' h_split.symm
-            rw [hys]
-            exact Mem.WritesAt.extends_write _ _ _ _
-  · rename_i heq
-    cases heq
+  subst oi
+  obtain ⟨ys, -, hm⟩ := (CallEffects.call_run_effects hfork fullStack actualRun).2
+  rw [hm]
+  exact Mem.WritesAt.extends_write _ _ _ _
+
+theorem call_run_writesAt {oi : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .call) post)
+    (hs : pre.stack[5]? = some oi) :
+    Mem.WritesAt pre.memory post.memory oi.toNat :=
+  call_run_writesAt_noStateGas hfork.rules_stateGas_none run hs
 
 /-- `genericCall.step` from a parent whose memory is `μ` leaves `μ` with the output window
 written (or untouched, when no frame opens). -/
@@ -333,30 +283,17 @@ private theorem genericCall_writesAt {sevm : Sevm} {d post : Devm} {μ : Mem} {x
     (h : XStep.Run (genericCall.step sevm d gas value caller target codeAddress tv st ii is oi os
       code dp) xl (.ok post)) :
     ∃ ys, post.memory = μ.write oi ys := by
-  simp only [genericCall.step] at h
-  split at h
-  · simp only [XStep.ofExcept, Bind.bind, Except.bind] at h
-    split at h
-    · cases XStep.run_ofExcept_error h
-    · rename_i s12 hm
-      split at hm
-      · cases hm
-      · rename_i s13 hpush
-        cases hm
-        have h_ex := Except.ok.inj h.2
-        subst h_ex
-        exact ⟨[], by rw [← (Devm.push_of_push hpush).memory, ← hd]; rfl⟩
-  · simp only [XStep.Run] at h
-    rcases h with ⟨r, -, h_split⟩
-    have hpar : (d.withReturnData []).memory = μ := hd
-    exact resume_writesAt hpar h_split.symm
+  obtain ⟨ys, -, hm⟩ := CallEffects.genericCall_memory h
+  exact ⟨ys, by simpa only [hd] using hm⟩
 
 /-- `DELEGATECALL` and `STATICCALL` write only their output window, at their fifth operand. -/
-private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .staticcall)
+private theorem call6_run_writesAt_noStateGas {x : Xinst} (hx : x = .delegatecall ∨ x = .staticcall)
     {oi : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec x) post)
+    (hfork : sevm.benvStat.rules.stateGas = none) (run : Ninst.Run sevm pre (.exec x) post)
     (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat := by
+  have actualRun := run
+  have actualHop := hx
   rcases hx with rfl | rfl
   all_goals
     rcases run with ⟨xl, h_fill, pc, h_run⟩
@@ -386,60 +323,51 @@ private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .
     have e4 := f4.stack
     have e5 := f5.stack
     have e6 := f6.stack
-    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1 e2 e4 e5 e6
-    have estack : pre.stack = gas1 :: x2 :: x4 :: x5 :: x6 :: s6.stack := by
-      rw [e1, e2, e4, e5, e6]
+    have e7 := f7.stack
+    simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at e1 e2 e4 e5 e6 e7
+    have fullStack : pre.stack = gas1 :: x2 :: x4 :: x5 :: x6 :: x7 :: s7.stack := by
+      rw [e1, e2, e4, e5, e6, e7]
     have hoi : oi = x6 := by
-      rw [estack] at hs
+      rw [fullStack] at hs
       simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hs
       exact hs.symm
-    subst hoi hk6
-    have hm7 : pre.memory = s7.memory :=
-      f1.memory.trans (f2.memory.trans (f4.memory.trans
-        (f5.memory.trans (f6.memory.trans f7.memory))))
-    simp only [hfork.rules_access, ForkRules.accessDelegation_enabled
-      (show sevm.benvStat.rules.delegationEnabled = true from
-        hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl)]
-      at h_run
-    rw [hfork.rules_stateGas_none] at h_run
-    split at h_run
-    · rename_i _ heq
-      cases heq
-      split at h_run
-      · cases XStep.run_ofExcept_error h_run
-      · rename_i s10 eq10
-        rcases hp11 : sevm.benvStat.rules.gas.accessDelegation
-            (addAccessedAddress s7 callee2) callee2 with
-          ⟨dp, na, code0, dagc, s9⟩
-        simp only [hp11] at eq10 h_run
-        have hm9 : s9.memory = s7.memory := by
-          have h := congrArg (fun q => (q.2.2.2.2 : Devm).memory) hp11
-          dsimp only at h
-          rw [← h, GasSchedule.accessDelegation_memory]
-          rfl
-        have hext : (s10.memExtends [(n4, n5), (oi.toNat, n7)]).memory =
-            pre.memory.extends [(n4, n5), (oi.toNat, n7)] := by
-          show s10.memory.extends _ = _
-          rw [(Devm.burn_of_chargeGas eq10).memory.symm.trans (hm9.trans hm7.symm)]
-        obtain ⟨ys, hys⟩ := genericCall_writesAt hext h_run
-        rw [hys]
-        exact Mem.WritesAt.extends_write _ _ _ _
-    · rename_i heq
-      cases heq
+    subst oi
+    obtain ⟨ys, -, hm⟩ := (CallEffects.call6_run_effects actualHop hfork fullStack actualRun).2
+    rw [hm]
+    exact Mem.WritesAt.extends_write _ _ _ _
+
+private theorem call6_run_writesAt {x : Xinst} (hx : x = .delegatecall ∨ x = .staticcall)
+    {oi : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec x) post)
+    (hs : pre.stack[4]? = some oi) :
+    Mem.WritesAt pre.memory post.memory oi.toNat :=
+  call6_run_writesAt_noStateGas hx hfork.rules_stateGas_none run hs
 
 /-- `DELEGATECALL` writes only its output window, at its fifth operand. -/
+theorem delegatecall_run_writesAt_noStateGas {oi : B256}
+    (hfork : sevm.benvStat.rules.stateGas = none) (run : Ninst.Run sevm pre (.exec .delegatecall) post)
+    (hs : pre.stack[4]? = some oi) :
+    Mem.WritesAt pre.memory post.memory oi.toNat :=
+  call6_run_writesAt_noStateGas (.inl rfl) hfork run hs
+
 theorem delegatecall_run_writesAt {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .delegatecall) post)
     (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat :=
-  call6_run_writesAt (.inl rfl) hfork run hs
+  delegatecall_run_writesAt_noStateGas hfork.rules_stateGas_none run hs
 
 /-- `STATICCALL` writes only its output window, at its fifth operand. -/
+theorem staticcall_run_writesAt_noStateGas {oi : B256}
+    (hfork : sevm.benvStat.rules.stateGas = none) (run : Ninst.Run sevm pre (.exec .staticcall) post)
+    (hs : pre.stack[4]? = some oi) :
+    Mem.WritesAt pre.memory post.memory oi.toNat :=
+  call6_run_writesAt_noStateGas (.inr rfl) hfork run hs
+
 theorem staticcall_run_writesAt {oi : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (run : Ninst.Run sevm pre (.exec .staticcall) post)
     (hs : pre.stack[4]? = some oi) :
     Mem.WritesAt pre.memory post.memory oi.toNat :=
-  call6_run_writesAt (.inr rfl) hfork run hs
+  staticcall_run_writesAt_noStateGas hfork.rules_stateGas_none run hs
 
 end Calls
 

@@ -385,7 +385,9 @@ theorem Rinst.runCore_accGrow (pc : Nat) (sevm : Sevm) (devm : Devm) (r : Rinst)
     (hsg : sevm.benvStat.rules.stateGas = none) :
     Except.OkOn (Devm.AccGrow devm) (Rinst.runCore pc devm sevm r) := by
   have h : Devm.AccGrow devm devm := Devm.AccGrow.rfl
-  cases r <;> simp only [Rinst.runCore, hsg]
+  cases r
+  case keccak256 => simp only [Rinst.runCore_keccak256_eq_reference]; acc_walk devm
+  all_goals simp only [Rinst.runCore, hsg]
   case balance => exact Rinst.balance_okOn _ _
   all_goals acc_walk devm
 

@@ -659,7 +659,7 @@ STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision
 # When ``.lake/packages/jaune`` is materialized at that exact rev, every name is
 # additionally resolved against the pinned source. See ``validate_jaune_dispatch``
 # for what that verification does and does not establish.
-JAUNE_DISPATCH_PIN = "3c28a5ef8fe062c8ca9685bfd234f1890883b7c5"
+JAUNE_DISPATCH_PIN = "ff22ec809b7431cc839738150495339ba3f3b6ca"
 JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.State.subBal",
     "Jaune.Sevm",
@@ -732,6 +732,11 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 # The set is pinned by name rather than counted so that losing a witness and
 # gaining an unrelated one cannot cancel out.
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
+    "goal-head:Blanc.Lift.NodeClaimNoStateGas",
+    "goal-head:Blanc.Lift.NodeClaim0NoStateGas",
+    "goal-head:Blanc.Xinst.ShapeCovered",
+    "goal-head:HistFork",
+    "goal-head:NeutralFork",
     "goal-head:Devm.EqModGas",
     "goal-head:Lift.StaticWordChild",
     "goal-shape:machine-state-debit",
