@@ -823,6 +823,17 @@ For every *raw* frame, rolled back or not, [`Blanc/ExecutionRawFramesCodeImage.l
 image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the `*.stateInv_admitted_sem`
 message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
 (`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
+For the In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
+`ConfiguredHistoryTraceIn`), [`Blanc/ExecutionInCodeImage.lean`](../Blanc/ExecutionInCodeImage.lean):
+`…rawFrames_codeImageIn` per wrapper (and `_of_installedIn` for staged bodies,
+In-blocks and In-histories) carries the image through the In-rungs
+(`*.stateInv_admitted_semIn`, with the installed certificate and image
+identification the In-rungs demand; message and transaction levels are
+fork-free and reused). `ConfiguredHistoryTraceIn.settled_codeImageIn` follows
+through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bridge
+In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
+forest `settledFrames_parentIn`. No recipe is registered: use this branch and
+the named theorem.
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its

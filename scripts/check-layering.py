@@ -317,6 +317,7 @@ SHARED += [
     "ExecutionOwnerFamilyPositional",
     "ExecutionRawFramesCodeImage",
     "ExecutionSettledCodeImage",
+    "ExecutionInCodeImage",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",

@@ -1554,6 +1554,7 @@ import Blanc.ExecutionOwnerFamily
 import Blanc.ExecutionOwnerFamilyPositional
 import Blanc.ExecutionRawFramesCodeImage
 import Blanc.ExecutionSettledCodeImage
+import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
 import Blanc.Lift.CheckChain
