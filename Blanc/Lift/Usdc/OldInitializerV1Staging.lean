@@ -104,6 +104,120 @@ private theorem e164 : (32 : B256) + 132 = 164 := by decide
 private theorem e196 : (32 : B256) + 164 = 196 := by decide
 private theorem e228 : (32 : B256) + 196 = 228 := by decide
 
+/-- **Actual V1 wrapper staging, with its rebuild.** Every `PotStep P` run of
+the actual wrapper reaches the actual `callNext 16` node (tag `0x16b0` pushed
+over the call-16 stack) with the derived three-allocation memory and
+`Staged3` facts, and the whole state-silent prefix `Lifts`: a strengthened
+run of the call node rebuilds a strengthened run of `t_0410_c60` with the same
+pre-state and outcome. Same premises as `wrapper_strengthen`. -/
+theorem wrapper_stage
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {cv : B256} {R : List B256} {M0 : Mem} {G0 : Nat}
+    {p1 : B256} {out : Outcome}
+    (hfp : memWord M0 64 = p1)
+    (hp96 : 96 ≤ p1.toNat)
+    (run : SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm
+      (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 out) :
+    ∃ (p2 p3 : B256) (M3 : Mem) (G2 : Nat),
+      M3 = allocMem (allocMem (allocMem M0 p1 (lenAt sevm head1) (payloadAt sevm head1))
+        p2 (lenAt sevm head2) (payloadAt sevm head2)) p3 (lenAt sevm head3)
+        (payloadAt sevm head3) ∧
+      Staged3 M0 M3 p1 p2 p3 (nextWord p3 (lenAt sevm head3))
+        (lenAt sevm head1) (lenAt sevm head2) (lenAt sevm head3) ∧
+      let S_call := [mask20 &&& Sevm.dataWord sevm 228, mask20 &&& Sevm.dataWord sevm 196,
+        mask20 &&& Sevm.dataWord sevm 164, mask20 &&& Sevm.dataWord sevm 132,
+        mask8 &&& Sevm.dataWord sevm 100, p3, p2, p1, retTag] ++ R
+      Lifts (FreePtr.PotStep P) ImplV1.cert.prog sevm (St b (cv :: R) M0 G0) ImplV1.t_0410_c60
+        (St b (Bytes.toB256 [0x16, 0xb0] :: S_call) M3 G2) (.callNext 16 ImplV1.t_0584_c60) ∧
+      SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm
+        (St b (Bytes.toB256 [0x16, 0xb0] :: S_call) M3 G2) (.callNext 16 ImplV1.t_0584_c60) out := by
+  subst hfp
+  have L : Lifts (FreePtr.PotStep P) ImplV1.cert.prog sevm (St b (cv :: R) M0 G0)
+      ImplV1.t_0410_c60 (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 := Lifts.refl
+  rw [t_0410_shape] at run L
+  obtain ⟨_, L, run⟩ := ldest L run
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_calldatasize (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_sub (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  rw [lit4, lit584] at run L
+  -- First string.
+  obtain ⟨_, -, run, L2⟩ := strFrag_lift erase run
+  replace L := L.trans L2
+  obtain ⟨_, run, L2⟩ := rotFrag_lift erase run
+  replace L := L.trans L2
+  rw [e36] at run L
+  -- Second string.
+  obtain ⟨_, -, run, L2⟩ := strFrag_lift erase run
+  replace L := L.trans L2
+  rw [t_04a4_shape] at run L
+  obtain ⟨_, run, L2⟩ := rotFrag_lift erase run
+  replace L := L.trans L2
+  rw [e68] at run L
+  -- Third string.
+  obtain ⟨_, hpost, run, L2⟩ := strFrag_lift erase run
+  replace L := L.trans L2
+  obtain ⟨_, run, L2⟩ := rotFrag_lift erase run
+  replace L := L.trans L2
+  rw [e100] at run L
+  -- Five masked static heads.
+  obtain ⟨_, run, L2⟩ := staticFrag_lift erase run
+  replace L := L.trans L2
+  rw [e132] at run L
+  obtain ⟨_, run, L2⟩ := staticFrag_lift erase run
+  replace L := L.trans L2
+  rw [e164] at run L
+  obtain ⟨_, run, L2⟩ := staticFrag_lift erase run
+  replace L := L.trans L2
+  rw [e196] at run L
+  obtain ⟨_, run, L2⟩ := staticFrag_lift erase run
+  replace L := L.trans L2
+  rw [e228] at run L
+  obtain ⟨_, run, L2⟩ := staticFrag_lift erase run
+  replace L := L.trans L2
+  -- Cleanup and the internal call.
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  exact ⟨_, _, _, _, rfl, stage3 hp96 (sliceD_length _ _ _) (sliceD_length _ _ _)
+    (sliceD_length _ _ _) rfl rfl hpost, L, run⟩
+
 /-- **Actual V1 wrapper staging into the real `call16`.** Any `PotStep P`
 run of the actual wrapper `t_0410_c60` (entry stack: callvalue word over
 the dispatcher residual `R`), from memory whose free pointer is `p1 ≥ 96`,
@@ -140,79 +254,9 @@ theorem wrapper_strengthen
             (St b S_call M3 G3) ImplV1.t_16b0_c16 (.returned Dr) ∧
           SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm Dr
             ImplV1.t_0584_c60 out)) := by
-  subst hfp
-  rw [t_0410_shape] at run
-  obtain ⟨_, run⟩ := rpw_dest run
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_calldatasize (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_sub (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  rw [lit4, lit584] at run
-  -- First string.
-  obtain ⟨_, -, run⟩ := strFrag_runP erase run
-  obtain ⟨_, run⟩ := rotFrag_runP erase run
-  rw [e36] at run
-  -- Second string.
-  obtain ⟨_, -, run⟩ := strFrag_runP erase run
-  rw [t_04a4_shape] at run
-  obtain ⟨_, run⟩ := rotFrag_runP erase run
-  rw [e68] at run
-  -- Third string.
-  obtain ⟨_, hpost, run⟩ := strFrag_runP erase run
-  obtain ⟨_, run⟩ := rotFrag_runP erase run
-  rw [e100] at run
-  -- Five masked static heads.
-  obtain ⟨_, run⟩ := staticFrag_runP erase run
-  rw [e132] at run
-  obtain ⟨_, run⟩ := staticFrag_runP erase run
-  rw [e164] at run
-  obtain ⟨_, run⟩ := staticFrag_runP erase run
-  rw [e196] at run
-  obtain ⟨_, run⟩ := staticFrag_runP erase run
-  rw [e228] at run
-  obtain ⟨_, run⟩ := staticFrag_runP erase run
-  -- Cleanup and the internal call.
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
+  obtain ⟨p2, p3, M3, G2, hM, hS, L, run⟩ := wrapper_stage erase hfp hp96 run
   obtain ⟨G3, hcall⟩ := rpw_call entry16 run
-  refine ⟨_, _, _, G3, rfl, stage3 hp96 (sliceD_length _ _ _) (sliceD_length _ _ _)
-    (sliceD_length _ _ _) rfl rfl hpost, ?_⟩
+  refine ⟨p2, p3, M3, G3, hM, hS, ?_⟩
   rcases hcall with ⟨D, callee, rest⟩ | ⟨D, callee, hout⟩
   · exact .inr ⟨D, callee, rest⟩
   · exact .inl ⟨D, callee, hout⟩

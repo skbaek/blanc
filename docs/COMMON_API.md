@@ -5462,8 +5462,13 @@ contract-neutral.
   (`strFrag_runP`, `rotFrag_runP`, `staticFrag_runP`) over an abstract stack
   tail, memory and continuation, so a wrapper with several decodes composes
   them instead of unfolding one long walk; prove the wrapper's code equals
-  their composition by `rfl`. `Blanc/Lift/Usdc/OldInitializerV1Staging.lean`
-  (`wrapper_strengthen`) is the worked three-string example.
+  their composition by `rfl`. Their `_lift` forms (`strFrag_lift`,
+  `rotFrag_lift`, `staticFrag_lift`) also return `Lifts`, the rebuild of the
+  state-silent prefix under any stronger step relation (`lstep`, `ldest`,
+  `Lifts.trans`). `Blanc/Lift/Usdc/OldInitializerV1Staging.lean`
+  (`wrapper_strengthen`, `wrapper_stage`) is the worked three-string example
+  and `Blanc/Lift/Usdc/OldInitializerV1Callee.lean` (`initialize_observed`)
+  uses the rebuild to classify the whole wrapper run.
   For the source-shaped memory-to-storage payload loop, use
   [`Blanc/Lift/SolcStoragePayload.lean`](../Blanc/Lift/SolcStoragePayload.lean).
   `runP_enriched` retains the actual step relation, entry state and outcome,

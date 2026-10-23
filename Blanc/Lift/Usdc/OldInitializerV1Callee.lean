@@ -899,4 +899,75 @@ theorem callee_obs
     fun b M3 G _ run => ?_
   exact t_1800_obs erase run
 
+/-- The terminal continuation `t_0584_c60 = dest; stop` has no instruction
+step, so every run of it is observed. -/
+theorem t_0584_obs {Q : Sevm → Devm → Ninst → Devm → Prop} {d : Devm} {o : Outcome}
+    (run : SFunc.RunP P ImplV1.cert.prog sevm d ImplV1.t_0584_c60 o) :
+    SFunc.RunP Q ImplV1.cert.prog sevm d ImplV1.t_0584_c60 o := by
+  unfold ImplV1.t_0584_c60 at run ⊢
+  cases run with
+  | dest burn run =>
+    cases run with
+    | last h => exact .dest burn (.last h)
+
+/-- **Whole V1 `initialize` same-run write classifier (milestone B).** Every
+`PotStep P` run of the actual inherited `initialize` entry `t_0410_c60`
+(selector `0x3357162b`; entry stack: callvalue word over the dispatcher
+residual `R`), from memory whose free pointer is `p1 ≥ 96`, is the same run
+(same `P`, pre-state and outcome) with every store classified by
+`V1InitializerWriteClass`: fixed slot `0/1/2/4/5/6/7/8`, literal zero, or a
+bounded modular payload key `keccak(slot) + i` (`i < (L + 31) / 32`) of an
+actual long decoded string at slot `4`/`5`/`7` with `L` its actual decoded
+length; and no external instruction executes. The only premises are the
+wrapper-entry free-pointer seams. -/
+theorem initialize_observed
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {cv p1 : B256} {R : List B256} {M0 : Mem} {G0 : Nat} {out : Outcome}
+    (hfp : memWord M0 64 = p1) (hp96 : 96 ≤ p1.toNat)
+    (run : SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm
+      (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 out) :
+    SFunc.RunP (Obs (FreePtr.PotStep P) sevm) ImplV1.cert.prog sevm
+      (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 out := by
+  obtain ⟨p2, p3, M3, G2, -, hS, rest⟩ := wrapper_stage erase hfp hp96 run
+  dsimp only at rest
+  obtain ⟨L, run⟩ := rest
+  refine L _ (fun w hs => ⟨w, silentClass hs, silentNoExec hs⟩) out ?_
+  have n1 := hS.next1
+  have n2 := hS.next2
+  have o12 := hS.ord12
+  have o23 := hS.ord23
+  have o34 := hS.ord34
+  have b4 := hS.below4
+  have f2 := hS.fit2
+  have f3 := hS.fit3
+  have callee := fun {G} {o} (r : SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm
+      (St b ([mask20 &&& Sevm.dataWord sevm 228, mask20 &&& Sevm.dataWord sevm 196,
+        mask20 &&& Sevm.dataWord sevm 164, mask20 &&& Sevm.dataWord sevm 132,
+        mask8 &&& Sevm.dataWord sevm 100, p3, p2, p1, retTag] ++ R) M3 G)
+      ImplV1.t_16b0_c16 o) =>
+    callee_obs erase hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega) (by omega) (by omega)
+      (by omega) (by omega) (by omega) r
+  cases run with
+  | callHalt d0 get pop r =>
+    rw [show ImplV1.cert.prog[16]? = some ImplV1.t_16b0_c16 from rfl] at get
+    cases get
+    rw [(St.of_pop1 pop).2] at r pop
+    exact .callHalt d0 rfl pop (callee r)
+  | callRet d0 get pop r rest =>
+    rw [show ImplV1.cert.prog[16]? = some ImplV1.t_16b0_c16 from rfl] at get
+    cases get
+    rw [(St.of_pop1 pop).2] at r pop
+    exact .callRet d0 rfl pop (callee r) (t_0584_obs rest)
+
+/-- The requested write classifier, projected from the same actual run. -/
+theorem initialize_writeClass
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {cv p1 : B256} {R : List B256} {M0 : Mem} {G0 : Nat} {out : Outcome}
+    (hfp : memWord M0 64 = p1) (hp96 : 96 ≤ p1.toNat)
+    (run : SFunc.RunP (FreePtr.PotStep P) ImplV1.cert.prog sevm
+      (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 out) :
+    SFunc.RunP (fun s d n d' => FreePtr.PotStep P s d n d' ∧ V1InitializerWriteClass sevm d n)
+      ImplV1.cert.prog sevm (St b (cv :: R) M0 G0) ImplV1.t_0410_c60 out :=
+  SFunc.RunP.mono (fun h => ⟨h.1, h.2.1⟩) (initialize_observed erase hfp hp96 run)
+
 end Blanc.Lift.Usdc.OldInitializerV1Callee

@@ -28,7 +28,10 @@ allocation; the cursor rotation after it; one masked static head), and
 `strFrag_runP`, `rotFrag_runP`, `staticFrag_runP` invert a `PotStep` run
 through each of them over an *abstract* stack tail, memory and continuation.
 A wrapper with several decodes therefore never unfolds one long walk with
-nested memory writes: it composes these lemmas. Arithmetic is the `B256`
+nested memory writes: it composes these lemmas. The `_lift` forms also return
+`Lifts`: the state-silent prefix rebuilds under any stronger step relation,
+so a consumer that strengthens the continuation (for example with store
+observations) strengthens the whole wrapper run without walking it again. Arithmetic is the `B256`
 word arithmetic of the code; no calldata validation, gas, profile, endpoint
 or hash premise is introduced. No `Mem.Wf` premise anywhere.
 -/
@@ -240,6 +243,48 @@ def staticFrag (xs : Bytes) (le : xs.length ≤ 32) (k : SFunc) : SFunc :=
   .next (.reg .add) <| .next (.reg (.swap 0)) <| .next (.reg (.swap 2)) <|
   .next (.reg (.swap 1)) <| .next (.reg (.swap 0)) k
 
+/-! ### Rebuilding through state-silent prefixes -/
+
+/-- From `d` running `f`, the run reached `d'` running `k` through state-silent
+`P` steps: every step relation `Q` that accepts those steps turns a `Q`-run of
+`k` from `d'` into a `Q`-run of `f` from `d` with the same outcome. Inversions
+that return it let a consumer strengthen the whole run once it has
+strengthened the continuation. -/
+def Lifts (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List SFunc) (sevm : Sevm)
+    (d : Devm) (f : SFunc) (d' : Devm) (k : SFunc) : Prop :=
+  ∀ Q : Sevm → Devm → Ninst → Devm → Prop,
+    (∀ {s x n x'}, P s x n x' → n.stateSilent = true → Q s x n x') →
+    ∀ o, SFunc.RunP Q fs sevm d' k o → SFunc.RunP Q fs sevm d f o
+
+theorem Lifts.refl {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {d : Devm} {f : SFunc} : Lifts P fs sevm d f d f := fun _ _ _ h => h
+
+theorem Lifts.trans {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {d d' d'' : Devm} {f g h : SFunc} (h1 : Lifts P fs sevm d f d' g)
+    (h2 : Lifts P fs sevm d' g d'' h) : Lifts P fs sevm d f d'' h :=
+  fun Q hQ o r => h1 Q hQ o (h2 Q hQ o r)
+
+/-- One state-silent step of a `Lifts` walk. -/
+theorem lstep {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {d0 d : Devm} {f0 f : SFunc} {n : Ninst} {o : Outcome}
+    (L : Lifts P fs sevm d0 f0 d (.next n f)) (run : SFunc.RunP P fs sevm d (.next n f) o)
+    (hs : n.stateSilent = true) :
+    ∃ d', P sevm d n d' ∧ Lifts P fs sevm d0 f0 d' f ∧ SFunc.RunP P fs sevm d' f o := by
+  cases run with
+  | next w run => exact ⟨_, w, L.trans fun Q hQ o r => .next (hQ w hs) r, run⟩
+
+/-- A jumpdest of a `Lifts` walk over the walk state. -/
+theorem ldest {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+    {d0 : Devm} {f0 f : SFunc} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    (L : Lifts P fs sevm d0 f0 (St b S M G) (.dest f))
+    (run : SFunc.RunP P fs sevm (St b S M G) (.dest f) o) :
+    ∃ G', Lifts P fs sevm d0 f0 (St b S M G') f ∧ SFunc.RunP P fs sevm (St b S M G') f o := by
+  cases run with
+  | dest burn run =>
+    have e := St.of_burn burn
+    rw [e] at run burn
+    exact ⟨_, L.trans fun Q _ o r => .dest burn r, run⟩
+
 variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
   {T : List B256} {M : Mem} {G : Nat} {k : SFunc} {out : Outcome}
 
@@ -275,6 +320,203 @@ private theorem code_mem (M : Mem) (L : B256) (ys : Bytes) :
 continuation. The allocation happens at the free pointer read at `64`; the
 post memory is `allocMem`; its size bound is the actual post-`Pot` of the
 payload copy. -/
+theorem strFrag_lift (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {h base E : B256}
+    (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G)
+      (strFrag k) out) :
+    ∃ G' : Nat,
+      (allocMem M (memWord M 64) (Sevm.dataWord sevm (base + Sevm.dataWord sevm h))
+        (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
+          (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)).size < 2 ^ 160 ∧
+      SFunc.RunP (FreePtr.PotStep P) fs sevm
+        (St b ((32 + (base + Sevm.dataWord sevm h)) :: memWord M 64 :: (32 + h) :: base ::
+          E :: T)
+          (allocMem M (memWord M 64) (Sevm.dataWord sevm (base + Sevm.dataWord sevm h))
+            (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
+              (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)) G')
+        k out ∧
+      Lifts (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G) (strFrag k)
+        (St b ((32 + (base + Sevm.dataWord sevm h)) :: memWord M 64 :: (32 + h) :: base ::
+            E :: T)
+            (allocMem M (memWord M 64) (Sevm.dataWord sevm (base + Sevm.dataWord sevm h))
+              (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
+                (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)) G') k := by
+  have L : Lifts (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G) (strFrag k)
+      (St b (h :: base :: E :: T) M G) (strFrag k) := Lifts.refl
+  unfold strFrag at run
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_div (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_mul (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_mload (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_mstore (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_mstore (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, wc, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_calldatacopy (erase wc.1)
+  have hpot := FreePtr.Pot.size_lt wc.2.2
+  clear wc
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  rw [code_mem] at run hpot L
+  rw [lit20] at run hpot L
+  exact ⟨_, hpot, run, L⟩
+
 theorem strFrag_runP (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {h base E : B256}
     (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G)
@@ -290,253 +532,108 @@ theorem strFrag_runP (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
             (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
               (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)) G')
         k out := by
-  unfold strFrag at run
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_div (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_mul (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_mload (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_mstore (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_mstore (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, wc, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_calldatacopy (erase wc.1)
-  have hpot := FreePtr.Pot.size_lt wc.2.2
-  clear wc
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  rw [code_mem] at run hpot
-  rw [lit20] at run hpot
-  exact ⟨_, hpot, run⟩
+  obtain ⟨G', hpot, run, -⟩ := strFrag_lift erase run
+  exact ⟨G', hpot, run⟩
 
 /-- The cursor rotation, inverted: the dropped source pointer is gone and
 the decoded value `v` sits under the decoder triple. -/
+theorem rotFrag_lift (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {x v h base E : B256}
+    (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (x :: v :: h :: base :: E :: T) M G)
+      (rotFrag k) out) :
+    ∃ G' : Nat, SFunc.RunP (FreePtr.PotStep P) fs sevm
+      (St b (h :: base :: E :: v :: T) M G') k out ∧
+      Lifts (FreePtr.PotStep P) fs sevm (St b (x :: v :: h :: base :: E :: T) M G) (rotFrag k)
+        (St b (h :: base :: E :: v :: T) M G') k := by
+  have L : Lifts (FreePtr.PotStep P) fs sevm (St b (x :: v :: h :: base :: E :: T) M G)
+      (rotFrag k) (St b (x :: v :: h :: base :: E :: T) M G) (rotFrag k) := Lifts.refl
+  unfold rotFrag at run
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  exact ⟨_, run, L⟩
+
 theorem rotFrag_runP (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {x v h base E : B256}
     (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (x :: v :: h :: base :: E :: T) M G)
       (rotFrag k) out) :
     ∃ G' : Nat, SFunc.RunP (FreePtr.PotStep P) fs sevm
       (St b (h :: base :: E :: v :: T) M G') k out := by
-  unfold rotFrag at run
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  exact ⟨_, run⟩
+  obtain ⟨G', run, -⟩ := rotFrag_lift erase run
+  exact ⟨G', run⟩
 
 /-- One masked static head decode, inverted: the masked word
 `m &&& dataWord h` (with `m` the pushed constant) sits under the decoder
 triple and the cursor advances by `32`. -/
+theorem staticFrag_lift (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {xs : Bytes} {le : xs.length ≤ 32} {h base E : B256}
+    (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G)
+      (staticFrag xs le k) out) :
+    ∃ G' : Nat, SFunc.RunP (FreePtr.PotStep P) fs sevm
+      (St b ((32 + h) :: base :: E :: (xs.toB256 &&& Sevm.dataWord sevm h) :: T) M G') k out ∧
+      Lifts (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G) (staticFrag xs le k)
+        (St b ((32 + h) :: base :: E :: (xs.toB256 &&& Sevm.dataWord sevm h) :: T) M G') k := by
+  have L : Lifts (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G)
+      (staticFrag xs le k) (St b (h :: base :: E :: T) M G) (staticFrag xs le k) := Lifts.refl
+  unfold staticFrag at run
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_and (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  obtain ⟨d, w, L, run⟩ := lstep L run rfl
+  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
+  clear w
+  rw [lit20] at run L
+  exact ⟨_, run, L⟩
+
 theorem staticFrag_runP (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {xs : Bytes} {le : xs.length ≤ 32} {h base E : B256}
     (run : SFunc.RunP (FreePtr.PotStep P) fs sevm (St b (h :: base :: E :: T) M G)
       (staticFrag xs le k) out) :
     ∃ G' : Nat, SFunc.RunP (FreePtr.PotStep P) fs sevm
       (St b ((32 + h) :: base :: E :: (xs.toB256 &&& Sevm.dataWord sevm h) :: T) M G') k out := by
-  unfold staticFrag at run
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_dup rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_calldataload (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_and (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_push (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_add (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  obtain ⟨d, w, run⟩ := rpw_next run
-  obtain ⟨G, rfl⟩ := ri_swap rfl (erase w.1)
-  clear w
-  rw [lit20] at run
-  exact ⟨_, run⟩
+  obtain ⟨G', run, -⟩ := staticFrag_lift erase run
+  exact ⟨G', run⟩
 
 end Blanc.Lift.SolcAbiStringStaging
