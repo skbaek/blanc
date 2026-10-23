@@ -834,6 +834,18 @@ through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bri
 In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
 forest `settledFrames_parentIn`. No recipe is registered: use this branch and
 the named theorem.
+For installed code at settled frames of an In-history on a historical fork
+(where `CoveredFork` cannot hold),
+[`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
+`OwnCodeAtIn F ca C` (installed at start, pc `0`, selected domain `F`, no
+state gas, runs `C` at `ca`); per-level `…settledRoots_ownCodeIn` concluding
+it at every settled root with no cover premise (roots need no spawn
+classification); `OwnSpawnsIn` (fork-free spawn contract: state-gas absence
+in place of coverage) with `Exec.descendantFrames_ownCodeIn` (child `F`/gas
+via `step_spawn_child_benvStat`; create2 arm split on `op.create2`); and
+per-level `…settledFrames_ownCodeIn` ending in
+`ConfiguredHistoryTraceIn.settled_ownCodeIn` at every settled frame, no
+cover premise. No recipe is registered: use this branch and the named theorem.
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its

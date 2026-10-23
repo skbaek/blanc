@@ -31,11 +31,17 @@ through the settled-to-raw bridge (`mem_rawFrames_of_mem_settledFrames`);
 `settledFrames_contigIn` and `settledFrames_parentIn` follow from the
 In-`settledFrames_eq` bridges through the shared `rootFrames_forest`.
 
-Not delivered here: `settled_ownCode` and the ladder-based
-`settledFrames_parent_of_codeAddress` need an accounting-ladder runner over
-In-histories (the runners only cover `ConfiguredHistoryTrace`) and
-fork-domain spawn control (the spawn analysis concludes `CoveredFork`);
-neither exists in the In layer.
+Historical own code lives in `Blanc/ExecutionInOwnCode.lean`: `OwnCodeAtIn`
+with the selected domain `F` and state-gas absence in place of coverage,
+`…settledRoots_ownCodeIn` concluding it at every settled root with no cover
+premise (roots need no spawn classification), and
+`ConfiguredHistoryTraceIn.settled_ownCodeIn` concluding it at every settled
+frame via `OwnSpawnsIn` (the fork-free spawn contract) and
+`Exec.descendantFrames_ownCodeIn` (whose create2 arm splits on the actual
+`op.create2` rules fact).  Not delivered anywhere: the ladder-based
+`settledFrames_parent_of_codeAddress` needs an accounting-ladder runner over
+In-histories (the runners only cover `ConfiguredHistoryTrace`); it does not
+exist in the In layer.
 -/
 
 namespace Blanc
