@@ -4,20 +4,20 @@
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
  "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
  "pins": 969,
- "entries": 18657,
+ "entries": 18999,
  "kinds": {
-  "block": 610,
-  "boundary": 667,
-  "ctor": 933,
-  "def": 13120,
-  "inductive": 613,
+  "block": 622,
+  "boundary": 686,
+  "ctor": 970,
+  "def": 13360,
+  "inductive": 625,
   "pin": 969,
-  "rec": 131,
-  "theorem": 2583
+  "rec": 136,
+  "theorem": 2600
  },
  "hashed_constants": {
-  "blanc": 14561,
-  "jaune": 2800,
+  "blanc": 14559,
+  "jaune": 3113,
   "local": 19
  },
  "boundary_identities": {
@@ -26,6 +26,6 @@
   "mathlib": "mathlib@56a005855ea17e0b0958f73ec801ae140b0a1679"
  },
  "fully_hashed_provenance": {
-  "jaune": "jaune@05696652e319fae23dd77fc4fa531e740b12628a"
+  "jaune": "jaune@ff22ec809b7431cc839738150495339ba3f3b6ca"
  }
 }
