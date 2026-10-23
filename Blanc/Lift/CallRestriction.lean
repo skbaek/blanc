@@ -156,4 +156,133 @@ theorem CursorOK.exec_spawn_undelegated {code : ByteArray} {c : Cert} {n : Exec.
   · have h := ok.execsSatisfy hnd hat
     simp only [Xinst.notDelegatecall, Bool.false_eq_true] at h
 
+/-- Check a terminal instruction family throughout a synthetic tree.
+Internal function references are checked by the certificate-wide premise. -/
+def SFunc.lastsSatisfy (allowed : Linst → Bool) : SFunc → Bool
+  | .last l => allowed l
+  | .next _ f | .dest f | .branchTo f _ | .callNext _ f | .pcAt _ f =>
+      f.lastsSatisfy allowed
+  | .branch f g => f.lastsSatisfy allowed && g.lastsSatisfy allowed
+  | _ => true
+
+/-- The terminal restriction holds at the active cursor and pending returns. -/
+def Cursor.LastsSatisfy (allowed : Linst → Bool) (cursor : Cursor) : Prop :=
+  cursor.f.lastsSatisfy allowed = true ∧
+    ∀ k ∈ cursor.K, k.f.lastsSatisfy allowed = true
+
+theorem SStep.lastsSatisfy {c : Cert} {allowed : Linst → Bool}
+    (checked : ∀ f ∈ c.prog, f.lastsSatisfy allowed = true)
+    {before after : Cursor} (step : SStep c before after)
+    (holds : before.LastsSatisfy allowed) : after.LastsSatisfy allowed := by
+  cases step with
+  | next | dest | toZero | pcAt => exact holds
+  | zero =>
+      simp only [Cursor.LastsSatisfy, SFunc.lastsSatisfy, Bool.and_eq_true] at holds
+      exact ⟨holds.1.1, holds.2⟩
+  | succ =>
+      simp only [Cursor.LastsSatisfy, SFunc.lastsSatisfy, Bool.and_eq_true] at holds
+      exact ⟨holds.1.2, holds.2⟩
+  | toSucc _ lookup | jump _ lookup =>
+      exact ⟨checked _ (List.mem_of_getElem? lookup), holds.2⟩
+  | call cont _ lookup eqf =>
+      refine ⟨checked _ (List.mem_of_getElem? lookup), ?_⟩
+      intro k member
+      rcases List.mem_cons.mp member with rfl | member
+      · rw [eqf]
+        exact holds.1
+      · exact holds.2 k member
+  | ret =>
+      exact ⟨holds.2 _ List.mem_cons_self,
+        fun k member => holds.2 k (List.mem_cons_of_mem _ member)⟩
+
+theorem Cursor.start_lastsSatisfy {c : Cert} {allowed : Linst → Bool}
+    (checked : ∀ f ∈ c.prog, f.lastsSatisfy allowed = true) :
+    (Cursor.start c).LastsSatisfy allowed := by
+  cases c with
+  | nil => exact ⟨rfl, by simp only [start, List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
+  | cons entry rest =>
+      exact ⟨checked entry.2 (by simp only [Cert.prog, List.map_cons, List.mem_cons, List.mem_map,
+        Prod.exists, exists_eq_right, true_or]), by simp only [start, List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true]⟩
+
+theorem Cursor.lastsSatisfy_of_reachable {c : Cert} {allowed : Linst → Bool}
+    (checked : ∀ f ∈ c.prog, f.lastsSatisfy allowed = true)
+    {cursor : Cursor}
+    (reachable : Relation.ReflTransGen (SStep c) (Cursor.start c) cursor) :
+    cursor.LastsSatisfy allowed := by
+  induction reachable with
+  | refl => exact Cursor.start_lastsSatisfy checked
+  | tail _ step ih => exact step.lastsSatisfy checked ih
+
+/-- Terminal families excluding SELFDESTRUCT, independently of selected fork. -/
+def Linst.notSelfdestruct : Linst → Bool
+  | .selfdestruct => false
+  | _ => true
+
+/-- This tree has no SELFDESTRUCT terminal at an instruction start. -/
+def SFunc.noSelfdestruct (f : SFunc) : Bool := f.lastsSatisfy Linst.notSelfdestruct
+
+/-- Every function in the certificate excludes SELFDESTRUCT terminals. -/
+def Cert.noSelfdestruct (c : Cert) : Bool := c.all fun p => p.2.noSelfdestruct
+
+/-- Active and suspended trees exclude SELFDESTRUCT terminals. -/
+def Cursor.NoSelfdestruct (cursor : Cursor) : Prop :=
+  cursor.LastsSatisfy Linst.notSelfdestruct
+
+theorem Cert.noSelfdestruct_prog {c : Cert} (checked : c.noSelfdestruct = true) :
+    ∀ f ∈ c.prog, f.lastsSatisfy Linst.notSelfdestruct = true := by
+  intro f member
+  simp only [Cert.prog, List.mem_map] at member
+  obtain ⟨p, hp, rfl⟩ := member
+  simp only [Cert.noSelfdestruct, List.all_eq_true] at checked
+  exact checked p hp
+
+theorem Cursor.noSelfdestruct_of_reach {c : Cert} (checked : c.noSelfdestruct = true)
+    {cursor : Cursor}
+    (reachable : Relation.ReflTransGen (SStep c) (Cursor.start c) cursor) :
+    cursor.NoSelfdestruct :=
+  Cursor.lastsSatisfy_of_reachable (Cert.noSelfdestruct_prog checked) reachable
+
+
+/-- An actual decoded terminal satisfies the checked cursor's restriction. -/
+theorem CursorOK.lastsSatisfy {code : ByteArray} {c : Cert} {node : Exec.Deriv}
+    {cursor : Cursor} (ok : CursorOK code c node cursor)
+    {allowed : Linst → Bool} (holds : cursor.LastsSatisfy allowed)
+    {l : Linst} (hat : Linst.At node.sevm.code node.pc l) : allowed l = true := by
+  have checked := holds.1
+  rw [ok.tree_of_last hat] at checked
+  exact checked
+
+/-- A cursor checked without SELFDESTRUCT cannot decode that terminal. -/
+theorem CursorOK.not_selfdestruct {code : ByteArray} {c : Cert} {node : Exec.Deriv}
+    {cursor : Cursor} (ok : CursorOK code c node cursor)
+    (checked : cursor.NoSelfdestruct) :
+    ¬ Linst.At node.sevm.code node.pc .selfdestruct := by
+  intro hat
+  have excluded := ok.lastsSatisfy checked hat
+  simp only [Linst.notSelfdestruct, Bool.false_eq_true] at excluded
+
+/-- Every same-frame prefix of certified bytes without SELFDESTRUCT terminals
+excludes that decoded instruction, for every eventual frame outcome. -/
+theorem not_selfdestruct_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (checked : c.noSelfdestruct = true)
+    {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
+    (hfork : F.sevm.benvStat.rules.stateGas = none) (hprefix : Exec.Deriv.ParentPrefix F n) :
+    ¬ Linst.At n.sevm.code n.pc .selfdestruct := by
+  obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas hc hpc hcode hfork hprefix
+  exact ok.not_selfdestruct (Cursor.noSelfdestruct_of_reach checked reachable)
+
+/-- Every same-frame prefix of certified bytes whose certificate has no `CREATE2` or
+`DELEGATECALL` node spawns only by `CALL` or `STATICCALL`, for every eventual frame outcome and
+with selected state-gas absence in place of a covered fork. -/
+theorem call_or_staticcall_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (callOnly : c.callOnly = true)
+    {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
+    (hfork : F.sevm.benvStat.rules.stateGas = none) (hprefix : Exec.Deriv.ParentPrefix F n)
+    {x : Xinst} (hat : Ninst.At n.sevm.code n.pc (.exec x)) :
+    x = .call ∨ x = .staticcall := by
+  obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas hc hpc hcode hfork hprefix
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach callOnly reachable) hat
+
+
 end Blanc.Lift

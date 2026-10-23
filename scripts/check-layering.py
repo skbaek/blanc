@@ -118,7 +118,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
+SHARED = ["Basic", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
@@ -129,9 +129,9 @@ SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtif
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "RevertCause", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
-          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "RequestsOutput", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact", "ExecutionHistoryExtension",
-          "ExecutionHistoryStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
+          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "ExecutionStagedBodyStateTrace", "RequestsOutput", "ExecutionMessageStateTrace",
+          "ExecutionTransactionStateTrace", "ExecutionSelectedTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact", "ExecutionHistoryExtension",
+          "ExecutionHistoryStateTrace", "ExecutionHistoryInStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
           "ReachableExecFree", "ReachableExecFreeControl", "TransientSettlement", "SourceAttainment",
           "TransientInvariance", "PinnedPauseTarget"]
 # Newly extracted common modules live in a separate additive row so concurrent
@@ -156,13 +156,13 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticcallObservation", "StaticcallOperands", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
 SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
-           "Lift.Basic", "Lift.Check", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
+           "Lift.Basic", "Lift.Check", "Lift.CallEffects", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
            "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent",
            "Lift.Hoare", "Lift.BookedSpec", "Lift.BookedSupportSpec"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
@@ -366,6 +366,7 @@ CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
         "Lift.UniswapV2Pair.Check",
+        "Lift.UniswapV2Pair.TerminalSafety",
         "Lift.UniswapV2Pair.CheckPart0",
         "Lift.UniswapV2Pair.CheckPart1",
         "Lift.UniswapV2Pair.CheckPart2",
@@ -1164,7 +1165,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.LiveApprove", "Lift.Weth9.LiveDeposit", "Lift.Weth9.LiveTransfer", "Lift.Weth9.LiveWithdraw", "Lift.Weth9.LiveWriters", "Lift.Weth9.LiveModel", "Lift.Weth9.LiveHistory", "Lift.Weth9.LiveTx", "Lift.Weth9.PrefixTx", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.FootPrefix", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.DeployInit", "Lift.Weth9.Creation.Walk"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.TerminalSafety", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.LiveApprove", "Lift.Weth9.LiveDeposit", "Lift.Weth9.LiveTransfer", "Lift.Weth9.LiveWithdraw", "Lift.Weth9.LiveWriters", "Lift.Weth9.LiveModel", "Lift.Weth9.LiveHistory", "Lift.Weth9.LiveTx", "Lift.Weth9.PrefixTx", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.FootPrefix", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.DeployInit", "Lift.Weth9.Creation.Walk"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

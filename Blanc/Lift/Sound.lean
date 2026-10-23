@@ -856,6 +856,21 @@ def NodeClaim0 (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
         SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.returned devm') ∧
         devm'.stack = S' ++ base ∧ S'.length = m)
 
+/-- The state-gas-capability recursion invariant; the modern carrier remains unchanged. -/
+def NodeClaim0NoStateGas (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
+    (R pk : Exec.Deriv) : Prop :=
+  ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
+  pk.sevm.benvStat.rules.stateGas = none →
+  ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256) (μ : MemMap),
+    checkNodeM code c.entries ms b m pk.pc a μ f = true →
+    pk.devm.stack = S ++ base → FrameMatches ρ a S → MemMatches ρ μ pk.devm.memory →
+    SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.halted post) ∨
+    (RetIn a μ ∧
+      ∃ (devm' : Devm) (S' : List B256) (exc' : Exec ρ.toNat pk.sevm devm' (.ok post)),
+        Exec.Deriv.lt ⟨ρ.toNat, pk.sevm, devm', .ok post, exc'⟩ pk ∧
+        SFunc.RunP (StepIn R) c.prog pk.sevm pk.devm f (.returned devm') ∧
+        devm'.stack = S' ++ base ∧ S'.length = m)
+
 /-- `NodeClaim0`, for a derivation whose raw frame descendants are raw frame
 roots of the root derivation `R`: each lifted step is then a `StepIn R`. -/
 def NodeClaim (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
@@ -863,12 +878,18 @@ def NodeClaim (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
   (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
     NodeClaim0 code c ms b R pk
 
-theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- The state-gas-capability recursion invariant; the modern carrier remains unchanged. -/
+def NodeClaimNoStateGas (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool)
+    (R pk : Exec.Deriv) : Prop :=
+  (∀ r ∈ Exec.rawFrameDescendants pk.exc, r ∈ Exec.rawFrameRoots R.exc) →
+    NodeClaim0NoStateGas code c ms b R pk
+
+theorem node_soundM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
-    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c ms b R pk := by
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaimNoStateGas code c ms b R pk := by
   apply Exec.Deriv.strongRec
   intro pk ih hsub
-  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0 code c ms b R q :=
+  replace ih : ∀ q, Exec.Deriv.lt q pk → NodeClaim0NoStateGas code c ms b R q :=
     fun q hq => ih q hq (fun r hr => hsub r (desc_sub_of_lt hq r hr))
   intro post hpost hcode hfork m a f ρ S base μ hcheck hstack hframe hmem
   rcases pk with ⟨pc, sevm, devm, exn, exc⟩
@@ -1147,7 +1168,7 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
           · exact matches_some_map base
         have hmap := ninstTransfer_map (label a ρ) rfl htrans
         have happ := ninstTransfer_append (base.map some) hmap
-        have hout := ninstTransfer_run hfork hinput happ run
+        have hout := ninstTransfer_run_noStateGas hfork hinput happ run
         rw [mapM_readBack_label hread] at hout
         rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
         have hbelow' : below = base := matches_some_map_eq hbelow
@@ -1156,7 +1177,7 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 : FrameMatches ρ a' S' := by
           rw [hfold]
           exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run hinter hframe0
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hfork hframe hstack hmem run hinter hframe0
         have hrun := ih
           ⟨pc + n.size, sevm, inter, .ok post, exc'⟩
           (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m _ f ρ S' base _
@@ -1228,7 +1249,7 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hfork hframe hstack hmem run
           (by rw [hstack']; rfl) hframe0
         have hrun := ih ⟨pc + (Ninst.push bs fits).size, sevm, inter,
             .ok post, exc'⟩ (Exec.Deriv.lt_of_prec prec) post rfl hcode hfork m
@@ -1637,13 +1658,19 @@ theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
       have hstep := Evm.step_invOp (devm := devm) hnone
       cases Exec.halt_inv exc hstep
 
+theorem node_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b)
+    (R : Exec.Deriv) : ∀ pk : Exec.Deriv, NodeClaim code c ms b R pk := by
+  intro pk hsub post hpost hcode hfork
+  exact node_soundM_noStateGas hc R pk hsub post hpost hcode hfork.rules_stateGas_none
+
 /-- The lifting theorem inside the derivation, from checked entries whose entry
 `0` starts the frame. -/
-theorem lift_sound_inM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+theorem lift_sound_inM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hck : Cert.CheckedM code c ms b)
     (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
   obtain ⟨e, f, c', rfl, hepc, hef, hm0⟩ := hstart
   have hf := hck 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
@@ -1654,7 +1681,7 @@ theorem lift_sound_inM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Boo
   have hf0 : checkNodeM code (Cert.entries ((e, f) :: c')) ms b e.rets 0 [] [] f = true := by
     rw [hm0, hepc, hef] at hf
     exact hf
-  have hrun := node_soundM hck ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
+  have hrun := node_soundM_noStateGas hck ⟨0, sevm, pre, .ok post, exc⟩ ⟨0, sevm, pre, .ok post, exc⟩
     (fun r hr => List.mem_cons_of_mem _ hr)
     post rfl hcode hfork e.rets [] f 0 [] pre.stack [] hf0 (by simp only [List.nil_append])
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _)
@@ -1665,17 +1692,25 @@ theorem lift_sound_inM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Boo
     | inl run => exact run
     | inr run => exact absurd run.1 retIn_nil_nil
 
+theorem lift_sound_inM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hck : Cert.CheckedM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post :=
+  lift_sound_inM_noStateGas hck hstart hcode hfork.rules_stateGas_none exc
+
 /-- **The lifting theorem, inside the derivation.**  A successful execution of
 certified bytes from pc `0` is a run of the certified program whose every
 instruction step is a `StepIn` of that execution: a child derivation carried by
 a step (a `CALL`'s callee frame) has all its raw frame roots among the
 execution's own.  (The top-level frame is empty, so the initial operand stack
 is the untouched base of the recursion invariant.) -/
-theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+theorem lift_sound_in_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post := by
-  apply lift_sound_inM (Cert.checkedM_of_check hc) _ hcode hfork exc
+  apply lift_sound_inM_noStateGas (Cert.checkedM_of_check hc) _ hcode hfork exc
   cases c with
   | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p c =>
@@ -1685,23 +1720,35 @@ theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = tr
     exact ⟨e, f, c, rfl, by simpa only using hc.1.1, by simpa only using hc.1.2, by simp only [List.getD_eq_getElem?_getD,
       List.length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, Option.getD_none]⟩
 
+theorem lift_sound_in {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (StepIn ⟨0, sevm, pre, .ok post, exc⟩) c.prog sevm pre post :=
+  lift_sound_in_noStateGas hc hcode hfork.rules_stateGas_none exc
+
 /-- **The lifting theorem.**  A successful execution of certified bytes from
 pc `0` is a run of the certified program: `lift_sound_in`, forgetting where
 each step's child derivation sits. -/
+theorem lift_sound_noStateGas {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.Run c.prog sevm pre post :=
+  (lift_sound_in_noStateGas hc hcode hfork exc).mono StepIn.toRun
+
 theorem lift_sound {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post :=
-  (lift_sound_in hc hcode hfork exc).mono StepIn.toRun
+  lift_sound_noStateGas hc hcode hfork.rules_stateGas_none exc
 
 /-- **The lifting theorem, with a constant memory map.**  As `lift_sound`, for a
 certificate accepted by `Cert.checkM`. -/
-theorem lift_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+theorem lift_soundM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.checkM code c ms b = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    (hfork : sevm.benvStat.rules.stateGas = none) (exc : Exec 0 sevm pre (.ok post)) :
     SProg.Run c.prog sevm pre post := by
-  refine (lift_sound_inM (Cert.checkedM_of_checkM hc) ?_ hcode hfork exc).mono StepIn.toRun
+  refine (lift_sound_inM_noStateGas (Cert.checkedM_of_checkM hc) ?_ hcode hfork exc).mono StepIn.toRun
   cases c with
   | nil => simp only [Cert.checkM, List.getD_eq_getElem?_getD, Bool.false_and,
     Bool.false_eq_true] at hc
@@ -1709,5 +1756,12 @@ theorem lift_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     rcases p with ⟨e, f⟩
     simp only [Cert.checkM, Bool.and_eq_true, beq_iff_eq, List.isEmpty_iff] at hc
     exact ⟨e, f, c, rfl, hc.1.1.1, hc.1.1.2, hc.1.2⟩
+
+theorem lift_soundM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.checkM code c ms b = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.Run c.prog sevm pre post :=
+  lift_soundM_noStateGas hc hcode hfork.rules_stateGas_none exc
 
 end Blanc.Lift

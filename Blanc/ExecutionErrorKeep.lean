@@ -337,7 +337,9 @@ theorem Rinst.runCore_errKeep (pc : Nat) (sevm : Sevm) (devm : Devm) (r : Rinst)
     (hsg : sevm.benvStat.rules.stateGas = none) :
     Except.OkOn (Devm.ErrKeep devm) (Rinst.runCore pc devm sevm r) := by
   have h : Devm.ErrKeep devm devm := Devm.ErrKeep.rfl
-  cases r <;> simp only [Rinst.runCore, hsg]
+  cases r
+  case keccak256 => simp only [Rinst.runCore_keccak256_eq_reference]; err_walk devm
+  all_goals simp only [Rinst.runCore, hsg]
   case balance => exact Rinst.balance_errKeep _ _
   all_goals err_walk devm
 

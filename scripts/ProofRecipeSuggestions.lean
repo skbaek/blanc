@@ -11,6 +11,8 @@ import Blanc.LinearDispatchCorrectness
 import Blanc.SymbolicProgram
 import Blanc.ExecutionStateTrace
 import Blanc.ExecutionTrace
+import Blanc.ExecutionStagedFrames
+import Blanc.ExecutionStagedAdmission
 import Blanc.CompiledShape
 import Blanc.CreationArtifact
 import Blanc.TaggedStorage
@@ -970,6 +972,60 @@ example {msg : Msg} {state : State} {out : MsgCallOutput}
   blanc_suggest
   exact trace
 
+-- StageA retained carrier: BeaconStageTrace
+example {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal)) :
+    Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: HistoryStageTrace
+example {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal)) :
+    Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: RequestStageTrace
+example {rules : ForkRules} {benv : Benv} {bout bout' : BlockOutput} {state : State}
+    (trace : Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout')) :
+    Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout') := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: StagedBodyTrace
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout)) :
+    Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: ConfiguredBlockTraceIn
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post)) :
+    Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
+-- StageA retained carrier: ConfiguredHistoryTraceIn
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)) :
+    Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future) := by
+  expect_recipe_trigger "goal-shape:retained-wrapper-trace"
+  expect_recipe_offered "retained-wrapper-trace"
+  blanc_suggest
+  exact trace
+
 -- EXPECT: retained-state-replay
 example {Origin : Type} {pre post : State}
     {events : List (StateTransition Origin)}
@@ -1221,6 +1277,116 @@ example {ca : Adr} {entry : Sevm → Devm → Prop} {pc : Nat} {sevm : Sevm}
   blanc_suggest
   exact h
 
+
+-- Supplied staged/history admission through the existing production route.
+-- EXPECT: trace-local-frame-admission
+example {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : ExecutionTrace.BeaconStageTrace rules benv state bal)
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {bal : BalBuilder}
+    (trace : ExecutionTrace.HistoryStageTrace rules benv inputBal state bal)
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {rules : ForkRules} {benv : Benv} {bout bout' : BlockOutput} {state : State}
+    (trace : ExecutionTrace.RequestStageTrace rules benv bout state bout')
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout)
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post)
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- EXPECT: trace-local-frame-admission
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)
+    {ca : Adr} {entry : Sevm → Devm → Prop}
+    (h : trace.FrameAdmitted ca entry) : trace.FrameAdmitted ca entry := by
+  expect_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_recipe_offered "trace-local-frame-admission"
+  blanc_suggest
+  exact h
+
+-- Bare BeaconStageTrace has no frame-admission goal.
+example {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal)) :
+    Nonempty (ExecutionTrace.BeaconStageTrace rules benv state bal) := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
+-- Bare HistoryStageTrace has no frame-admission goal.
+example {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {bal : BalBuilder}
+    (trace : Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal)) :
+    Nonempty (ExecutionTrace.HistoryStageTrace rules benv inputBal state bal) := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
+-- Bare RequestStageTrace has no frame-admission goal.
+example {rules : ForkRules} {benv : Benv} {bout bout' : BlockOutput} {state : State}
+    (trace : Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout')) :
+    Nonempty (ExecutionTrace.RequestStageTrace rules benv bout state bout') := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
+-- Bare StagedBodyTrace has no frame-admission goal.
+example {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout)) :
+    Nonempty (ExecutionTrace.StagedBodyTrace benv txs ommers wds state bout) := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
+-- Bare ConfiguredBlockTraceIn has no frame-admission goal.
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post)) :
+    Nonempty (ExecutionTrace.ConfiguredBlockTraceIn F cfg pre post) := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
+-- Bare ConfiguredHistoryTraceIn has no frame-admission goal.
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future)) :
+    Nonempty (ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future) := by
+  expect_no_recipe_trigger "goal-shape:trace-local-frame-admission"
+  expect_no_recipe_offered "trace-local-frame-admission"
+  exact trace
+
 -- EXPECT: upgrade-migration-refinement
 example {σ : Type} {arch : UpgradeArchitecture σ} {v1 v2 : σ → Prop}
     (h : MigrationSound arch v1 v2) :
@@ -1431,5 +1597,90 @@ example (layout : Lift.EcrecoverCall.ReturnLayout) : Lift.EcrecoverCall.ReturnLa
 example : True := by
   expect_no_recipe_offered "ecrecover-return-layout"
   trivial
+
+-- EXPECT: historical-fork-domain
+example {number timestamp : Nat} {fork : Fork}
+    (lookup : mainnetChainConfig.forkAt number timestamp = .ok fork) :
+    HistFork fork := by
+  expect_recipe_trigger "goal-head:HistFork"
+  expect_recipe_offered "historical-fork-domain"
+  blanc_suggest
+  exact mainnet_histFork lookup
+
+-- EXPECT: historical-fork-domain
+example {fork : Fork} (historical : HistFork fork) : NeutralFork fork := by
+  expect_recipe_trigger "goal-head:NeutralFork"
+  expect_recipe_offered "historical-fork-domain"
+  blanc_suggest
+  exact historical.neutral
+
+-- Expanded membership has no direct historical predicate head.
+example {fork : Fork} (historical : HistFork fork) : fork ∈ histForks := by
+  expect_no_recipe_trigger "goal-head:HistFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact historical
+
+-- An expanded conjunction is not the NeutralFork structure head.
+example {fork : Fork} (historical : HistFork fork) :
+    fork.ruleSet.stateGas = none ∧ fork.ruleSet.bal = none := by
+  expect_no_recipe_trigger "goal-head:NeutralFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact ⟨historical.stateGas_none, historical.bal_none⟩
+
+-- Modern coverage is a separate proposition.
+example {fork : Fork} (covered : CoveredFork fork) : CoveredFork fork := by
+  expect_no_recipe_trigger "goal-head:HistFork"
+  expect_no_recipe_trigger "goal-head:NeutralFork"
+  expect_no_recipe_offered "historical-fork-domain"
+  exact covered
+
+-- EXPECT: xinst-step-shape
+-- These assertions exercise only the production suggestion matcher; the
+-- closing theorem owns the execution-shape property.
+example (sevm : Sevm) (pre : Devm) (op : Xinst)
+    (ordinary : sevm.benvStat.rules.stateGas = none) :
+    Xinst.ShapeCovered sevm pre (Xinst.step sevm pre op) := by
+  expect_recipe_trigger "goal-head:Blanc.Xinst.ShapeCovered"
+  expect_recipe_offered "xinst-step-shape"
+  blanc_suggest
+  exact Xinst.step_shapeNoStateGas sevm pre op ordinary
+
+-- The general shape carrier is a nearby, distinct goal and must not offer
+-- an ordinary-lane recipe merely because it mentions the same instruction.
+example (sevm : Sevm) (pre : Devm) (op : Xinst)
+    (shape : Xinst.Shape sevm pre (Xinst.step sevm pre op)) :
+    Xinst.Shape sevm pre (Xinst.step sevm pre op) := by
+  expect_no_recipe_trigger "goal-head:Blanc.Xinst.ShapeCovered"
+  expect_no_recipe_offered "xinst-step-shape"
+  exact shape
+
+-- EXPECT: lift-node-no-state-gas
+-- Matcher controls only; the named theorem proves the lifting property.
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (checked : Lift.Cert.CheckedM code c ms b) (root node : Exec.Deriv) :
+    Lift.NodeClaimNoStateGas code c ms b root node := by
+  expect_recipe_trigger "goal-head:Blanc.Lift.NodeClaimNoStateGas"
+  expect_recipe_offered "lift-node-no-state-gas"
+  blanc_suggest
+  exact Lift.node_soundM_noStateGas checked root node
+
+-- EXPECT: lift-node-no-state-gas
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (checked : Lift.Cert.CheckedM code c ms b) (root node : Exec.Deriv)
+    (included : ∀ r ∈ Exec.rawFrameDescendants node.exc, r ∈ Exec.rawFrameRoots root.exc) :
+    Lift.NodeClaim0NoStateGas code c ms b root node := by
+  expect_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
+  expect_recipe_offered "lift-node-no-state-gas"
+  blanc_suggest
+  exact Lift.node_soundM_noStateGas checked root node included
+
+-- The original modern carrier is distinct, even with identical certificate arguments.
+example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
+    (root node : Exec.Deriv) (modern : Lift.NodeClaim code c ms b root node) :
+    Lift.NodeClaim code c ms b root node := by
+  expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaimNoStateGas"
+  expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
+  expect_no_recipe_offered "lift-node-no-state-gas"
+  exact modern
 
 end Blanc

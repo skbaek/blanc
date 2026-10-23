@@ -171,15 +171,15 @@ theorem Msg.getStor_eq_of_safeTransfer {msg : Msg} {entry : Benv}
       · rw [of_benvAfterTransfer_no enabled transfer]
 
 /-- Static CALL transfers zero; CALLCODE transfers only to its current target. -/
-private theorem Xinst.step_spawn_static_transfer {sevm : Sevm} {pre : Devm} {x : Xinst}
+private theorem Xinst.step_spawn_static_transfer_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre x = .spawn f r)
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true) :
     f.inner.shouldTransferValue = false ∨ f.inner.value = 0 ∨
       (f.inner.caller = sevm.currentTarget ∧
         f.inner.currentTarget = sevm.currentTarget) := by
   cases x <;>
-    simp only [Xinst.step, fork.rules_stateGas_none, Bind.bind, Except.bind,
+    simp only [Xinst.step, fork, Bind.bind, Except.bind,
       Except.assert, Pure.pure, Except.pure] at spawn <;>
     repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
@@ -191,6 +191,15 @@ private theorem Xinst.step_spawn_static_transfer {sevm : Sevm} {pre : Devm} {x :
       simp_all only [Frame.ofCall, callMsg, Bool.not_true,
         Bool.false_eq_true, false_or, true_or, or_true, and_self, true_and, and_true,
         Bool.true_eq_false, ↓reduceIte, reduceCtorEq, not_true_eq_false]
+
+private theorem Xinst.step_spawn_static_transfer {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre x = .spawn f r)
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    f.inner.shouldTransferValue = false ∨ f.inner.value = 0 ∨
+      (f.inner.caller = sevm.currentTarget ∧
+        f.inner.currentTarget = sevm.currentTarget) :=
+  Xinst.step_spawn_static_transfer_noStateGas spawn fork.rules_stateGas_none static
 
 private theorem GasSchedule.accessDelegation_protected_or_code_empty (gas : GasSchedule) (d : Devm) (target : Adr) :
     State.Protected d.state target ∨ (gas.accessDelegation d target).2.2.1.size = 0 := by
@@ -205,17 +214,25 @@ private theorem GasSchedule.accessDelegation_protected_or_code_empty (gas : GasS
     rw [GasSchedule.accessDelegation_of_not_delegation hnd]
     exact hc
 
+private theorem ForkRules.accessDelegation_protected_or_code_empty
+    (rules : ForkRules) (d : Devm) (target : Adr) :
+    State.Protected d.state target ∨ (rules.accessDelegation d target).2.2.1.size = 0 := by
+  unfold Jaune.ForkRules.accessDelegation
+  split
+  · exact GasSchedule.accessDelegation_protected_or_code_empty rules.gas d target
+  · by_cases hp : State.Protected d.state target
+    · exact Or.inl hp
+    · right
+      exact not_not.mp (fun hn => hp (Or.inr hn))
+
 /-- Actual STATICCALL routing protects a nonempty interpreted target. -/
-private theorem Xinst.step_staticcall_spawn_ready {sevm : Sevm} {pre : Devm}
+private theorem Xinst.step_staticcall_spawn_ready_noStateGas {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
-    (fork : CoveredFork sevm.benvStat.fork) :
+    (hstateGas : sevm.benvStat.rules.stateGas = none) :
     State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0 := by
-  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
-    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
-  simp only [Xinst.step, fork.rules_stateGas_none, fork.rules_access, ForkRules.accessDelegation,
-    hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
-  repeat' split at spawn
+  simp only [Xinst.step, hstateGas, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
+  iterate 7 (all_goals try split at spawn)
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
 
   all_goals
@@ -225,8 +242,15 @@ private theorem Xinst.step_staticcall_spawn_ready {sevm : Sevm} {pre : Devm}
     simp only [Frame.ofCall, callMsg]
     change State.Protected d.state _ ∨ _
     rw [← frame.1]
-    rw [GasSchedule.accessDelegation_state]
-    exact GasSchedule.accessDelegation_protected_or_code_empty _ _ _
+    rw [← (ForkRules.accessDelegation_instructionFrame _ _ _).state]
+    exact ForkRules.accessDelegation_protected_or_code_empty _ _ _
+
+private theorem Xinst.step_staticcall_spawn_ready {sevm : Sevm} {pre : Devm}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
+    (fork : CoveredFork sevm.benvStat.fork) :
+    State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0 :=
+  Xinst.step_staticcall_spawn_ready_noStateGas spawn fork.rules_stateGas_none
 
 private theorem GenericCall.none_state_transfer {sevm : Sevm} {devm inter : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
@@ -272,15 +296,15 @@ private theorem GenericCall.none_state_transfer {sevm : Sevm} {devm inter : Devm
         · rw [state, Devm.recordTouch_state, state_of_executePrecomp_ok handled clean]
           rfl
       · cases impossible
-private theorem Xinst.none_state_transfer_static {sevm : Sevm} {pre post : Devm} {x : Xinst}
+private theorem Xinst.none_state_transfer_static_noStateGas {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (run : Xinst.Run sevm pre x .none (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true) :
     post.state = pre.state ∨ ∃ f r entry,
       Xinst.step sevm pre x = .spawn f r ∧
       f.inner.benv.state = pre.state ∧
       f.inner.benvAfterTransfer = .ok entry ∧ post.state = entry.state := by
   unfold Xinst.Run at run
-  rcases Xinst.step_shapeCovered sevm pre x fork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x fork with
     ⟨ex, shape, hprefix⟩ |
     ⟨d, value, target, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, ca, stv, isSt, ii, isz, oi, osz,
@@ -301,30 +325,46 @@ private theorem Xinst.none_state_transfer_static {sevm : Sevm} {pre post : Devm}
       obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
       change d.state = pre.state
       exact hprefix.state.symm
-private theorem Xinst.none_protected_of_static {sevm : Sevm} {pre post : Devm} {x : Xinst}
+
+private theorem Xinst.none_state_transfer_static {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (run : Xinst.Run sevm pre x .none (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    post.state = pre.state ∨ ∃ f r entry,
+      Xinst.step sevm pre x = .spawn f r ∧
+      f.inner.benv.state = pre.state ∧
+      f.inner.benvAfterTransfer = .ok entry ∧ post.state = entry.state :=
+  Xinst.none_state_transfer_static_noStateGas run fork.rules_stateGas_none static
+private theorem Xinst.none_protected_of_static_noStateGas {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (run : Xinst.Run sevm pre x .none (.ok post))
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true)
     (owner : Adr) (hp : State.Protected pre.state owner) :
     State.Protected post.state owner := by
-  rcases Xinst.none_state_transfer_static run fork static with eq |
+  rcases Xinst.none_state_transfer_static_noStateGas run fork static with eq |
     ⟨f, r, entry, spawn, state, transfer, eq⟩
   · rw [eq]; exact hp
   · rw [eq]
     exact Msg.protected_of_benvAfterTransfer transfer owner (state ▸ hp)
 
-private theorem Xinst.none_getStor_eq_of_static_protectedTarget
-    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+private theorem Xinst.none_protected_of_static {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (run : Xinst.Run sevm pre x .none (.ok post))
     (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+    (owner : Adr) (hp : State.Protected pre.state owner) :
+    State.Protected post.state owner :=
+  Xinst.none_protected_of_static_noStateGas run fork.rules_stateGas_none static owner hp
+
+private theorem Xinst.none_getStor_eq_of_static_protectedTarget_noStateGas
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (run : Xinst.Run sevm pre x .none (.ok post))
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true)
     (hp : State.Protected pre.state sevm.currentTarget) :
     Devm.getStor post = Devm.getStor pre := by
-  rcases Xinst.none_state_transfer_static run fork static with eq |
+  rcases Xinst.none_state_transfer_static_noStateGas run fork static with eq |
     ⟨f, r, entry, spawn, state, transfer, eq⟩
   · funext owner; change post.state.getStor owner = _; rw [eq]; rfl
   · have safe : f.inner.shouldTransferValue = false ∨ f.inner.value = 0 ∨
         (f.inner.caller = f.inner.currentTarget ∧
           State.Protected f.inner.benv.state f.inner.caller) := by
-      rcases Xinst.step_spawn_static_transfer spawn fork static with off | zero | ⟨caller, target⟩
+      rcases Xinst.step_spawn_static_transfer_noStateGas spawn fork static with off | zero | ⟨caller, target⟩
       · exact Or.inl off
       · exact Or.inr (Or.inl zero)
       · exact Or.inr (Or.inr ⟨caller.trans target.symm, by rw [state, caller]; exact hp⟩)
@@ -333,6 +373,13 @@ private theorem Xinst.none_getStor_eq_of_static_protectedTarget
     rw [eq, Msg.getStor_eq_of_safeTransfer transfer safe, state]
     rfl
 
+private theorem Xinst.none_getStor_eq_of_static_protectedTarget
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (run : Xinst.Run sevm pre x .none (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+    (hp : State.Protected pre.state sevm.currentTarget) :
+    Devm.getStor post = Devm.getStor pre :=
+  Xinst.none_getStor_eq_of_static_protectedTarget_noStateGas run fork.rules_stateGas_none static hp
 /-- Protection and raw storage compose together; all-owner equality additionally
 requires protection of the interpreter target. -/
 private structure StaticStorageFrame (target : Adr) (pre post : State) : Prop where
@@ -352,19 +399,25 @@ private theorem StaticStorageFrame.trans {target : Adr} {pre mid post : State}
     fun owner hp => (b.getStor owner (a.protects owner hp)).trans (a.getStor owner hp),
     fun hp => (b.getStor_all (a.protects target hp)).trans (a.getStor_all hp)⟩
 
+private theorem Xinst.none_staticStorageFrame_noStateGas {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (run : Xinst.Run sevm pre x .none (.ok post))
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true) :
+    StaticStorageFrame sevm.currentTarget pre.state post.state := by
+  exact ⟨Xinst.none_protected_of_static_noStateGas run fork static, Xinst.none_getStor_eq run,
+    Xinst.none_getStor_eq_of_static_protectedTarget_noStateGas run fork static⟩
+
 private theorem Xinst.none_staticStorageFrame {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (run : Xinst.Run sevm pre x .none (.ok post))
     (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
-    StaticStorageFrame sevm.currentTarget pre.state post.state := by
-  exact ⟨Xinst.none_protected_of_static run fork static, Xinst.none_getStor_eq run,
-    Xinst.none_getStor_eq_of_static_protectedTarget run fork static⟩
+    StaticStorageFrame sevm.currentTarget pre.state post.state :=
+  Xinst.none_staticStorageFrame_noStateGas run fork.rules_stateGas_none static
 
-private theorem Ninst.none_staticStorageFrame {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+private theorem Ninst.none_staticStorageFrame_noStateGas {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true) :
     StaticStorageFrame sevm.currentTarget pre.state post.state := by
   cases n with
-  | exec x => exact Xinst.none_staticStorageFrame (XStep.run_toStep.mp run) fork static
+  | exec x => exact Xinst.none_staticStorageFrame_noStateGas (XStep.run_toStep.mp run) fork static
   | push bytes bound =>
       exact StaticStorageFrame.of_eq
         (Ninst.push_instructionFrame_effectRec (hxs := bound) (xl := .none) trivial run).state.symm
@@ -395,13 +448,19 @@ private theorem Ninst.none_staticStorageFrame {pc : Nat} {sevm : Sevm} {pre post
         rw [regularRun] at frame
         exact StaticStorageFrame.of_eq frame.state.symm
 
-private theorem Linst.static_state_eq {sevm : Sevm} {pre post : Devm} {l : Linst}
-    (run : Linst.run sevm pre l = .ok post)
+private theorem Ninst.none_staticStorageFrame {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    StaticStorageFrame sevm.currentTarget pre.state post.state :=
+  Ninst.none_staticStorageFrame_noStateGas run fork.rules_stateGas_none static
+
+private theorem Linst.static_state_eq_noStateGas {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (run : Linst.run sevm pre l = .ok post)
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true) :
     post.state = pre.state := by
   by_cases self : l = .selfdestruct
   · subst l
-    simp only [Linst.run, fork.rules_stateGas_none] at run
+    simp only [Linst.run, fork] at run
     rcases Except.bind_eq_ok run with ⟨_, _, run₁⟩
     rcases Except.bind_eq_ok run₁ with ⟨_, _, run₂⟩
     rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
@@ -413,6 +472,12 @@ private theorem Linst.static_state_eq {sevm : Sevm} {pre post : Devm} {l : Linst
   · have frame := Linst.run_instructionFrame sevm pre l self
     rw [run] at frame
     exact frame.state.symm
+
+private theorem Linst.static_state_eq {sevm : Sevm} {pre post : Devm} {l : Linst}
+    (run : Linst.run sevm pre l = .ok post)
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true) :
+    post.state = pre.state :=
+  Linst.static_state_eq_noStateGas run fork.rules_stateGas_none static
 
 private theorem Exec.committedPost_state_eq_of_emptyCode {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (empty : sevm.code.size = 0)
@@ -428,10 +493,10 @@ private theorem Exec.committedPost_state_eq_of_emptyCode {pc : Nat} {sevm : Sevm
   | runErr actual _ _ _ => rw [step] at actual; cases actual
   | runOk actual _ _ _ _ => rw [step] at actual; cases actual
 
-private theorem staticStep_cont_frame
+private theorem staticStep_cont_frame_noStateGas
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (fork : sevm.benvStat.rules.stateGas = none) :
     StaticStorageFrame sevm.currentTarget pre.state post.state := by
   cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
   | none =>
@@ -469,13 +534,20 @@ private theorem staticStep_cont_frame
             unfold Ninst.StepRun
             rw [nstep]
             exact ⟨rfl, rfl⟩
-          exact Ninst.none_staticStorageFrame nrun fork static
+          exact Ninst.none_staticStorageFrame_noStateGas nrun fork static
 
-private theorem staticHalt_frame
+private theorem staticStep_cont_frame
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
+    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    StaticStorageFrame sevm.currentTarget pre.state post.state :=
+  staticStep_cont_frame_noStateGas step static fork.rules_stateGas_none
+
+private theorem staticHalt_frame_noStateGas
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
     (committed : Execution.commits out = true)
-    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (fork : sevm.benvStat.rules.stateGas = none) :
     StaticStorageFrame sevm.currentTarget pre.state (Execution.committedPost out committed).state := by
   cases out with
   | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
@@ -496,16 +568,24 @@ private theorem staticHalt_frame
                 rw [jumpEq] at step <;> cases step
           | last last =>
               rw [Evm.step_last decoded] at step
-              exact StaticStorageFrame.of_eq (Linst.static_state_eq (Step.halt.inj step) fork static)
+              exact StaticStorageFrame.of_eq (Linst.static_state_eq_noStateGas (Step.halt.inj step) fork static)
+
+private theorem staticHalt_frame
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
+    (committed : Execution.commits out = true)
+    (static : sevm.isStatic = true) (fork : CoveredFork sevm.benvStat.fork) :
+    StaticStorageFrame sevm.currentTarget pre.state (Execution.committedPost out committed).state :=
+  staticHalt_frame_noStateGas step committed static fork.rules_stateGas_none
 
 
-private theorem Xinst.step_spawn_static_ready {sevm : Sevm} {pre : Devm} {x : Xinst}
+private theorem Xinst.step_spawn_static_ready_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre x = .spawn f r)
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true)
     (hp : State.Protected pre.state sevm.currentTarget) :
     State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0 := by
-  rcases Xinst.step_shapeCovered sevm pre x fork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x fork with
     ⟨ex, shape, hprefix⟩ |
     ⟨d, value, target, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, ca, stv, isSt, ii, isz, oi, osz,
@@ -529,6 +609,14 @@ private theorem Xinst.step_spawn_static_ready {sevm : Sevm} {pre : Devm} {x : Xi
         rw [realized noDelegation]
         exact empty
 
+private theorem Xinst.step_spawn_static_ready {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre x = .spawn f r)
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+    (hp : State.Protected pre.state sevm.currentTarget) :
+    State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0 :=
+  Xinst.step_spawn_static_ready_noStateGas spawn fork.rules_stateGas_none static hp
+
 private theorem Frame.enter_run_static_ready {f : Jaune.Frame} {cevm : Evm}
     (enter : f.enter = .run cevm)
     (ready : State.Protected f.inner.benv.state f.inner.currentTarget ∨ f.inner.code.size = 0) :
@@ -539,19 +627,22 @@ private theorem Frame.enter_run_static_ready {f : Jaune.Frame} {cevm : Evm}
     exact Msg.protected_of_benvAfterTransfer transfer _ hp
   · exact Or.inr empty
 
-private theorem Xinst.step_staticcall_spawn_value_zero {sevm : Sevm} {pre : Devm}
+private theorem Xinst.step_staticcall_spawn_value_zero_noStateGas {sevm : Sevm} {pre : Devm}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
-    (fork : CoveredFork sevm.benvStat.fork) : f.inner.value = 0 := by
-  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
-    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
-  simp only [Xinst.step, fork.rules_stateGas_none, fork.rules_access, ForkRules.accessDelegation,
-    hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
-  repeat' split at spawn
+    (fork : sevm.benvStat.rules.stateGas = none) : f.inner.value = 0 := by
+  simp only [Xinst.step, fork, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
+  iterate 7 (all_goals try split at spawn)
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
   all_goals
     obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
     rfl
+
+private theorem Xinst.step_staticcall_spawn_value_zero {sevm : Sevm} {pre : Devm}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre .staticcall = .spawn f r)
+    (fork : CoveredFork sevm.benvStat.fork) : f.inner.value = 0 :=
+  Xinst.step_staticcall_spawn_value_zero_noStateGas spawn fork.rules_stateGas_none
 
 private theorem processMessage_static_frame
     {msg : Msg} {post parent : Devm}
@@ -611,13 +702,13 @@ private theorem processMessage_static_frame
     have rollback := (ProcessMessage.rollback_of_error process postError).1
     exact StaticStorageFrame.of_eq (rollback.trans parentState.symm)
 
-private theorem xinstSome_static_frame
+private theorem xinstSome_static_frame_noStateGas
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume}
     {cevm : Evm} {out : Execution}
     {result : Except (EvmError × State × AdrSet × Tra) Devm}
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (childStatic : frame.inner.isStatic = true)
     (frameRun : RunFrame frame (.some ⟨cevm, out⟩) result)
     (resumeRun : resume.run result = .ok post)
@@ -633,7 +724,7 @@ private theorem xinstSome_static_frame
       ∀ committed : Execution.commits out = true,
       Devm.getStor (Execution.committedPost out committed) = Devm.getStor cevm.dyna) :
     StaticStorageFrame sevm.currentTarget pre.state post.state := by
-  rcases Xinst.step_shapeCovered sevm pre x hfork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -672,12 +763,36 @@ private theorem xinstSome_static_frame
       rw [childState]
       exact (StaticStorageFrame.of_eq hprefix.state.symm).trans settledFrame
 
-private theorem Xinst.step_spawn_static_benv_state {sevm : Sevm} {pre : Devm} {x : Xinst}
+private theorem xinstSome_static_frame
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume}
+    {cevm : Evm} {out : Execution}
+    {result : Except (EvmError × State × AdrSet × Tra) Devm}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (childStatic : frame.inner.isStatic = true)
+    (frameRun : RunFrame frame (.some ⟨cevm, out⟩) result)
+    (resumeRun : resume.run result = .ok post)
+    (safe : State.Protected pre.state sevm.currentTarget →
+      frame.inner.shouldTransferValue = false ∨ frame.inner.value = 0 ∨
+        (frame.inner.caller = frame.inner.currentTarget ∧ State.Protected frame.inner.benv.state frame.inner.caller))
+    (ready : State.Protected pre.state sevm.currentTarget →
+      State.Protected frame.inner.benv.state frame.inner.currentTarget ∨ frame.inner.code.size = 0)
+    (body : ∀ committed : Execution.commits out = true,
+      StaticStorageFrame cevm.sta.currentTarget cevm.dyna.state
+        (Execution.committedPost out committed).state)
+    (emptyBody : cevm.sta.code.size = 0 →
+      ∀ committed : Execution.commits out = true,
+      Devm.getStor (Execution.committedPost out committed) = Devm.getStor cevm.dyna) :
+    StaticStorageFrame sevm.currentTarget pre.state post.state :=
+  xinstSome_static_frame_noStateGas spawn hfork.rules_stateGas_none childStatic frameRun resumeRun safe ready body emptyBody
+
+private theorem Xinst.step_spawn_static_benv_state_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre x = .spawn f r)
-    (fork : CoveredFork sevm.benvStat.fork) (childStatic : f.inner.isStatic = true) :
+    (fork : sevm.benvStat.rules.stateGas = none) (childStatic : f.inner.isStatic = true) :
     f.inner.benv.state = pre.state := by
-  rcases Xinst.step_shapeCovered sevm pre x fork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x fork with
     ⟨ex, shape, hprefix⟩ |
     ⟨d, value, target, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, ca, stv, isSt, ii, isz, oi, osz,
@@ -689,29 +804,45 @@ private theorem Xinst.step_spawn_static_benv_state {sevm : Sevm} {pre : Devm} {x
   · obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
     exact hprefix.state.symm
 
+private theorem Xinst.step_spawn_static_benv_state {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre x = .spawn f r)
+    (fork : CoveredFork sevm.benvStat.fork) (childStatic : f.inner.isStatic = true) :
+    f.inner.benv.state = pre.state :=
+  Xinst.step_spawn_static_benv_state_noStateGas spawn fork.rules_stateGas_none childStatic
+
+private theorem Xinst.step_spawn_static_safeTransfer_noStateGas {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {f : Jaune.Frame} {r : Resume}
+    (spawn : Xinst.step sevm pre x = .spawn f r)
+    (fork : sevm.benvStat.rules.stateGas = none) (static : sevm.isStatic = true)
+    (hp : State.Protected pre.state sevm.currentTarget) :
+    f.inner.shouldTransferValue = false ∨ f.inner.value = 0 ∨
+      (f.inner.caller = f.inner.currentTarget ∧ State.Protected f.inner.benv.state f.inner.caller) := by
+  rcases Xinst.step_spawn_static_transfer_noStateGas spawn fork static with off | zero | ⟨caller, target⟩
+  · exact Or.inl off
+  · exact Or.inr (Or.inl zero)
+  · exact Or.inr (Or.inr ⟨caller.trans target.symm, by
+      rw [Xinst.step_spawn_static_benv_state_noStateGas spawn fork
+        (Xinst.step_spawn_isStatic spawn static), caller]
+      exact hp⟩)
+
 private theorem Xinst.step_spawn_static_safeTransfer {sevm : Sevm} {pre : Devm} {x : Xinst}
     {f : Jaune.Frame} {r : Resume}
     (spawn : Xinst.step sevm pre x = .spawn f r)
     (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
     (hp : State.Protected pre.state sevm.currentTarget) :
     f.inner.shouldTransferValue = false ∨ f.inner.value = 0 ∨
-      (f.inner.caller = f.inner.currentTarget ∧ State.Protected f.inner.benv.state f.inner.caller) := by
-  rcases Xinst.step_spawn_static_transfer spawn fork static with off | zero | ⟨caller, target⟩
-  · exact Or.inl off
-  · exact Or.inr (Or.inl zero)
-  · exact Or.inr (Or.inr ⟨caller.trans target.symm, by
-      rw [Xinst.step_spawn_static_benv_state spawn fork
-        (Xinst.step_spawn_isStatic spawn static), caller]
-      exact hp⟩)
+      (f.inner.caller = f.inner.currentTarget ∧ State.Protected f.inner.benv.state f.inner.caller) :=
+  Xinst.step_spawn_static_safeTransfer_noStateGas spawn fork.rules_stateGas_none static hp
 
-private theorem Exec.staticStorageFrame_committedPost {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+private theorem Exec.staticStorageFrame_committedPost_noStateGas {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork) :
+    (committed : Execution.commits out = true) (fork : sevm.benvStat.rules.stateGas = none) :
     StaticStorageFrame sevm.currentTarget pre.state (Execution.committedPost out committed).state := by
   induction run with
-  | halt step => exact staticHalt_frame step committed static fork
+  | halt step => exact staticHalt_frame_noStateGas step committed static fork
   | cont step _ ih =>
-      exact (staticStep_cont_frame step static fork).trans (ih static committed fork)
+      exact (staticStep_cont_frame_noStateGas step static fork).trans (ih static committed fork)
   | doneErr _ _ _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | @doneOk _ nodeSevm nodePre _ _ _ _ nodePost _ step enter resumeRun _ ih =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
@@ -719,20 +850,27 @@ private theorem Exec.staticStorageFrame_committedPost {pc : Nat} {sevm : Sevm} {
         unfold Xinst.Run XStep.Run
         rw [spawn]
         exact ⟨_, RunFrame.of_done enter, resumeRun.symm⟩
-      exact (Xinst.none_staticStorageFrame xrun fork static).trans (ih static committed fork)
+      exact (Xinst.none_staticStorageFrame_noStateGas xrun fork static).trans (ih static committed fork)
   | runErr _ _ _ _ _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk step enter child resumeRun _ childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have childStatic := Evm.step_run_isStatic step enter static
-      have childFork := Evm.step_spawn_child_fork step enter fork
-      exact (xinstSome_static_frame spawn fork (Evm.step_spawn_isStatic step static)
+      have childFork := fork
+      rw [← Evm.step_spawn_child_benvStat step enter] at childFork
+      exact (xinstSome_static_frame_noStateGas spawn fork (Evm.step_spawn_isStatic step static)
         (RunFrame.of_run enter) resumeRun
-        (Xinst.step_spawn_static_safeTransfer spawn fork static)
-        (Xinst.step_spawn_static_ready spawn fork static)
+        (Xinst.step_spawn_static_safeTransfer_noStateGas spawn fork static)
+        (Xinst.step_spawn_static_ready_noStateGas spawn fork static)
         (fun childCommitted => childIH childStatic childCommitted childFork)
         (fun empty childCommitted => congrArg State.getStor
           (Exec.committedPost_state_eq_of_emptyCode child empty childCommitted))).trans
         (nextIH static committed fork)
+
+private theorem Exec.staticStorageFrame_committedPost {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork) :
+    StaticStorageFrame sevm.currentTarget pre.state (Execution.committedPost out committed).state :=
+  Exec.staticStorageFrame_committedPost_noStateGas run static committed fork.rules_stateGas_none
 
 private theorem processMessage_getStor_of_body
     {msg : Msg} {post parent : Devm}
@@ -777,13 +915,13 @@ private theorem processMessage_getStor_of_body
     change post.state.getStor owner = parent.state.getStor owner
     rw [rollback, parentState]
 
-private theorem xinstSome_getStor
+private theorem xinstSome_getStor_noStateGas
     {sevm : Sevm} {pre post : Devm} {x : Xinst}
     {frame : Jaune.Frame} {resume : Resume}
     {cevm : Evm} {out : Execution}
     {result : Except (EvmError × State × AdrSet × Tra) Devm}
     (spawn : Xinst.step sevm pre x = .spawn frame resume)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (childStatic : frame.inner.isStatic = true)
     (frameRun : RunFrame frame (.some ⟨cevm, out⟩) result)
     (resumeRun : resume.run result = .ok post)
@@ -793,7 +931,7 @@ private theorem xinstSome_getStor
       Devm.getStor (Execution.committedPost out committed) =
         Devm.getStor cevm.dyna) :
     Devm.getStor post = Devm.getStor pre := by
-  rcases Xinst.step_shapeCovered sevm pre x hfork with
+  rcases Xinst.step_shapeNoStateGas sevm pre x hfork with
     ⟨execution, shape, hprefix⟩ |
     ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
     ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -828,16 +966,31 @@ private theorem xinstSome_getStor
       rw [childState]
       exact (congrFun settledEq owner).trans (hprefix.getStor owner).symm
 
-private theorem Xinst.staticcall_none_getStor_eq {sevm : Sevm} {pre post : Devm}
+private theorem xinstSome_getStor
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume}
+    {cevm : Evm} {out : Execution}
+    {result : Except (EvmError × State × AdrSet × Tra) Devm}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (childStatic : frame.inner.isStatic = true)
+    (frameRun : RunFrame frame (.some ⟨cevm, out⟩) result)
+    (resumeRun : resume.run result = .ok post)
+    (safe : frame.inner.shouldTransferValue = false ∨ frame.inner.value = 0 ∨
+      (frame.inner.caller = frame.inner.currentTarget ∧ State.Protected frame.inner.benv.state frame.inner.caller))
+    (body : ∀ committed : Execution.commits out = true,
+      Devm.getStor (Execution.committedPost out committed) =
+        Devm.getStor cevm.dyna) :
+    Devm.getStor post = Devm.getStor pre :=
+  xinstSome_getStor_noStateGas spawn hfork.rules_stateGas_none childStatic frameRun resumeRun safe body
+
+private theorem Xinst.staticcall_none_getStor_eq_noStateGas {sevm : Sevm} {pre post : Devm}
     (run : Xinst.Run sevm pre .staticcall .none (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork) :
+    (fork : sevm.benvStat.rules.stateGas = none) :
     Devm.getStor post = Devm.getStor pre := by
-  have hdel : sevm.benvStat.rules.delegationEnabled = true :=
-    fork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
-  simp only [Xinst.Run, Xinst.step, fork.rules_stateGas_none, fork.rules_access,
-    ForkRules.accessDelegation, hdel, ↓reduceIte, Bind.bind, Except.bind, Pure.pure,
+  simp only [Xinst.Run, Xinst.step, fork, Bind.bind, Except.bind, Pure.pure,
     Except.pure] at run
-  repeat' split at run
+  iterate 7 (all_goals try split at run)
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   all_goals first
     | cases run.2
@@ -856,22 +1009,26 @@ private theorem Xinst.staticcall_none_getStor_eq {sevm : Sevm} {pre post : Devm}
       have frame₆ := Devm.popToNat_instructionFrame a₅.2
       rw [h₆] at frame₆
       have back : d.state = pre.state := by
-        rw [← chargedFrame.1, GasSchedule.accessDelegation_state, addAccessedAddress_state,
-          ← frame₆.state, ← frame₅.state, ← frame₄.state, ← frame₃.state,
-          ← frame₂.state, ← frame₁.state]
+        rw [← chargedFrame.1, ← (ForkRules.accessDelegation_instructionFrame _ _ _).state]
+        have prefixState := frame₁.state.trans (frame₂.state.trans
+          (frame₃.state.trans (frame₄.state.trans (frame₅.state.trans frame₆.state))))
+        cases sevm.benvStat.rules.access <;>
+          simpa only [addAccessedAddress_state] using prefixState.symm
+      let dAccess : Devm := match sevm.benvStat.rules.access with
+        | .eip2929 => addAccessedAddress a₆.2 a₂.1
+        | .flat _ => a₆.2
+      let delegated := sevm.benvStat.rules.accessDelegation dAccess a₂.1
+      let accessCost := match sevm.benvStat.rules.access with
+        | .eip2929 => sevm.benvStat.rules.gas.accessCost a₂.1 a₆.2.accessedAddresses
+        | .flat g => g.call
       have genericRun : GenericCall sevm (d.memExtends [(a₃.1, a₄.1), (a₅.1, a₆.1)])
-        (calculateMsgCallGas 0 a₁.1.toNat
-          (sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress a₆.2 a₂.1) a₂.1).2.2.2.2.gasLeft
-          (a₆.2.extCost [(a₃.1, a₄.1), (a₅.1, a₆.1)])
-          (sevm.benvStat.rules.gas.accessCost a₂.1 a₆.2.accessedAddresses +
-            (sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress a₆.2 a₂.1) a₂.1).2.2.2.1)).2
-        0 sevm.currentTarget a₂.1
-        (sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress a₆.2 a₂.1) a₂.1).2.1
-        true true a₃.1 a₄.1 a₅.1 a₆.1
-        (sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress a₆.2 a₂.1) a₂.1).2.2.1
-        (sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress a₆.2 a₂.1) a₂.1).1
-        .none (.ok post) := by
-        simpa only [GenericCall, XStep.Run, reduceCtorEq] using run
+          (calculateMsgCallGas 0 a₁.1.toNat delegated.2.2.2.2.gasLeft
+            (a₆.2.extCost [(a₃.1, a₄.1), (a₅.1, a₆.1)])
+            (accessCost + delegated.2.2.2.1)).2
+          0 sevm.currentTarget a₂.1 delegated.2.1 true true a₃.1 a₄.1 a₅.1 a₆.1
+          delegated.2.2.1 delegated.1 .none (.ok post) := by
+        cases haccess : sevm.benvStat.rules.access <;>
+          simpa only [GenericCall, XStep.Run, reduceCtorEq, delegated, dAccess, accessCost, haccess] using run
       rcases GenericCall.none_state_transfer genericRun with eq | ⟨f, r, entry, spawn, transfer, eq⟩
       · funext owner
         change post.state.getStor owner = _
@@ -888,40 +1045,67 @@ private theorem Xinst.staticcall_none_getStor_eq {sevm : Sevm} {pre post : Devm}
         rw [back]
         rfl
 
+private theorem Xinst.staticcall_none_getStor_eq {sevm : Sevm} {pre post : Devm}
+    (run : Xinst.Run sevm pre .staticcall .none (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork) :
+    Devm.getStor post = Devm.getStor pre :=
+  Xinst.staticcall_none_getStor_eq_noStateGas run fork.rules_stateGas_none
+
 /-- Static execution preserves raw storage at every structurally protected owner. -/
+theorem Exec.getStor_committedPost_eq_of_static_protected_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (committed : Execution.commits out = true) (fork : sevm.benvStat.rules.stateGas = none)
+    (owner : Adr) (hp : State.Protected pre.state owner) :
+    Devm.getStor (Execution.committedPost out committed) owner = Devm.getStor pre owner :=
+  (Exec.staticStorageFrame_committedPost_noStateGas run static committed fork).getStor owner hp
+
 theorem Exec.getStor_committedPost_eq_of_static_protected
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
     (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork)
     (owner : Adr) (hp : State.Protected pre.state owner) :
     Devm.getStor (Execution.committedPost out committed) owner = Devm.getStor pre owner :=
-  (Exec.staticStorageFrame_committedPost run static committed fork).getStor owner hp
-
+  Exec.getStor_committedPost_eq_of_static_protected_noStateGas run static committed fork.rules_stateGas_none owner hp
 /-- Static execution transports structural protection through every committed frame. -/
+theorem Exec.protected_committedPost_of_static_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (committed : Execution.commits out = true) (fork : sevm.benvStat.rules.stateGas = none)
+    (owner : Adr) (hp : State.Protected pre.state owner) :
+    State.Protected (Execution.committedPost out committed).state owner :=
+  (Exec.staticStorageFrame_committedPost_noStateGas run static committed fork).protects owner hp
+
 theorem Exec.protected_committedPost_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
     (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork)
     (owner : Adr) (hp : State.Protected pre.state owner) :
     State.Protected (Execution.committedPost out committed).state owner :=
-  (Exec.staticStorageFrame_committedPost run static committed fork).protects owner hp
-
+  Exec.protected_committedPost_of_static_noStateGas run static committed fork.rules_stateGas_none owner hp
 /-- Static execution preserves all raw storage when its target is protected
 or its interpreter code is empty. Arbitrary mismatched static roots need this premise. -/
+theorem Exec.getStor_committedPost_eq_of_static_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
+    (committed : Execution.commits out = true) (fork : sevm.benvStat.rules.stateGas = none)
+    (ready : State.Protected pre.state sevm.currentTarget ∨ sevm.code.size = 0) :
+    Devm.getStor (Execution.committedPost out committed) = Devm.getStor pre := by
+  rcases ready with protectedTarget | empty
+  · exact (Exec.staticStorageFrame_committedPost_noStateGas run static committed fork).getStor_all protectedTarget
+  · exact congrArg State.getStor (Exec.committedPost_state_eq_of_emptyCode run empty committed)
+
 theorem Exec.getStor_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
     (committed : Execution.commits out = true) (fork : CoveredFork sevm.benvStat.fork)
     (ready : State.Protected pre.state sevm.currentTarget ∨ sevm.code.size = 0) :
-    Devm.getStor (Execution.committedPost out committed) = Devm.getStor pre := by
-  rcases ready with protectedTarget | empty
-  · exact (Exec.staticStorageFrame_committedPost run static committed fork).getStor_all protectedTarget
-  · exact congrArg State.getStor (Exec.committedPost_state_eq_of_emptyCode run empty committed)
-
+    Devm.getStor (Execution.committedPost out committed) = Devm.getStor pre :=
+  Exec.getStor_committedPost_eq_of_static_noStateGas run static committed fork.rules_stateGas_none ready
 /-- Shared raw-storage boundary for actual STATICCALL on a covered fork. -/
-theorem Ninst.staticcall_getStor_eq
+theorem Ninst.staticcall_getStor_eq_noStateGas
     {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (run : Ninst.Run sevm pre Ninst.staticcall post) :
     Devm.getStor pre = Devm.getStor post := by
   rcases run with ⟨slot, filled, pc, stepRun⟩
@@ -929,7 +1113,7 @@ theorem Ninst.staticcall_getStor_eq
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep,
       Xinst.Run] using stepRun
   cases slot with
-  | none => exact (Xinst.staticcall_none_getStor_eq xrun hfork).symm
+  | none => exact (Xinst.staticcall_none_getStor_eq_noStateGas xrun hfork).symm
   | some child =>
       rcases child with ⟨cevm, out⟩
       rcases filled with ⟨childRun⟩
@@ -937,38 +1121,61 @@ theorem Ninst.staticcall_getStor_eq
       have childStatic : cevm.sta.isStatic = true :=
         (Frame.enter_run_isStatic enter).trans
           (Xinst.step_staticcall_spawn_isStatic spawn)
-      have childFork : CoveredFork cevm.sta.benvStat.fork :=
-        Xinst.Run.some_child_fork xrun hfork
-      exact (xinstSome_getStor spawn hfork
+      have childFork : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [Xinst.Run.some_child_benvStat xrun]
+        exact hfork
+      exact (xinstSome_getStor_noStateGas spawn hfork
         (Xinst.step_staticcall_spawn_isStatic spawn)
         (RunFrame.of_run enter) resumed.symm
-        (Or.inr (Or.inl (Xinst.step_staticcall_spawn_value_zero spawn hfork)))
-        (fun committed => Exec.getStor_committedPost_eq_of_static childRun
+        (Or.inr (Or.inl (Xinst.step_staticcall_spawn_value_zero_noStateGas spawn hfork)))
+        (fun committed => Exec.getStor_committedPost_eq_of_static_noStateGas childRun
           childStatic committed childFork
-          (Frame.enter_run_static_ready enter (Xinst.step_staticcall_spawn_ready spawn hfork)))).symm
+          (Frame.enter_run_static_ready enter (Xinst.step_staticcall_spawn_ready_noStateGas spawn hfork)))).symm
+
+theorem Ninst.staticcall_getStor_eq
+    {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Ninst.Run sevm pre Ninst.staticcall post) :
+    Devm.getStor pre = Devm.getStor post :=
+  Ninst.staticcall_getStor_eq_noStateGas hfork.rules_stateGas_none run
 
 /-- A committing static execution preserves storage observations under the
 same readiness premise as the raw-storage theorem. -/
+theorem Exec.storageView_committedPost_eq_of_static_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hstatic : sevm.isStatic = true)
+    (committed : Execution.commits out = true)
+    (hfork : sevm.benvStat.rules.stateGas = none)
+    (ready : State.Protected pre.state sevm.currentTarget ∨ sevm.code.size = 0) :
+    Devm.storageView (Execution.committedPost out committed) = Devm.storageView pre := by
+  have equal := Exec.getStor_committedPost_eq_of_static_noStateGas run hstatic committed hfork ready
+  funext owner key
+  exact congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
+
 theorem Exec.storageView_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (hstatic : sevm.isStatic = true)
     (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork)
     (ready : State.Protected pre.state sevm.currentTarget ∨ sevm.code.size = 0) :
-    Devm.storageView (Execution.committedPost out committed) = Devm.storageView pre := by
-  have equal := Exec.getStor_committedPost_eq_of_static run hstatic committed hfork ready
+    Devm.storageView (Execution.committedPost out committed) = Devm.storageView pre :=
+  Exec.storageView_committedPost_eq_of_static_noStateGas run hstatic committed hfork.rules_stateGas_none ready
+/-- Every successful actual STATICCALL preserves persistent storage,
+including interpreted children and synchronous precompiles. -/
+theorem Ninst.staticcall_inv_getStor_noStateGas
+    {sevm : Sevm} {pre post : Devm}
+    (hfork : sevm.benvStat.rules.stateGas = none)
+    (run : Ninst.Run sevm pre Ninst.staticcall post) :
+    Devm.storageView pre = Devm.storageView post := by
+  have equal := Ninst.staticcall_getStor_eq_noStateGas hfork run
   funext owner key
   exact congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
 
-/-- Every successful actual STATICCALL preserves persistent storage,
-including interpreted children and synchronous precompiles. -/
 theorem Ninst.staticcall_inv_getStor
     {sevm : Sevm} {pre post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.Run sevm pre Ninst.staticcall post) :
-    Devm.storageView pre = Devm.storageView post := by
-  have equal := Ninst.staticcall_getStor_eq hfork run
-  funext owner key
-  exact congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
+    Devm.storageView pre = Devm.storageView post :=
+  Ninst.staticcall_inv_getStor_noStateGas hfork.rules_stateGas_none run
 
 end Blanc

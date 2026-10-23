@@ -1,6 +1,7 @@
 -- ProofRecipeTactic.lean : leaf-only access to generated proof-recipe advice.
 
 import Blanc.Tactics
+import Blanc.HistoricalFork
 import Blanc.ProofRecipesGenerated
 
 namespace Blanc
@@ -49,6 +50,16 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
                     payload.getAppArgs.size == 3))
           | _ => return false
       | _ => return false
+  | "goal-head:Blanc.Lift.NodeClaimNoStateGas" =>
+      return head == some `Blanc.Lift.NodeClaimNoStateGas
+  | "goal-head:Blanc.Lift.NodeClaim0NoStateGas" =>
+      return head == some `Blanc.Lift.NodeClaim0NoStateGas
+  | "goal-head:Blanc.Xinst.ShapeCovered" =>
+      return head == some `Blanc.Xinst.ShapeCovered
+  | "goal-head:HistFork" =>
+      return head == some `Blanc.HistFork
+  | "goal-head:NeutralFork" =>
+      return head == some `Blanc.NeutralFork
   | "goal-shape:extcodesize-compiled-step" =>
       -- One exact compiled-instruction shape and one named definition lookup.
       -- Do not normalize the goal or inspect unrelated operands.

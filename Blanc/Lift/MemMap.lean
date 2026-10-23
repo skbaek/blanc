@@ -1,4 +1,5 @@
 import Blanc.Lift.CheckMem
+import Blanc.Lift.CallEffects
 import Blanc.LadderSem
 import Blanc.ExecutionFrames
 
@@ -522,29 +523,26 @@ theorem calldatacopy_run_memory {sevm : Sevm} {pre post : Devm} {d src z : B256}
 
 /-- `STATICCALL` changes memory only inside its output window: it expands
 memory over both windows and writes at most `os` bytes of the reply at `oi`
-(on a covered fork, whether the child ran or not). -/
+(in the no-state-gas lane, whether the child ran or not). -/
+theorem staticcall_run_memory_noStateGas {sevm : Sevm} {pre post : Devm} {g t ii is oi os : B256}
+    {rest : List B256} (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (run : Ninst.Run sevm pre (.exec .staticcall) post)
+    (hs : pre.stack = g :: t :: ii :: is :: oi :: os :: rest) :
+    Mem.AgreeOutside pre.memory post.memory oi.toNat (oi.toNat + os.toNat) := by
+  obtain ⟨ys, hlen, hmem⟩ :=
+    (CallEffects.call6_run_effects (Or.inr rfl) hstateGas hs run).2
+  rw [hmem]
+  refine (Mem.extends_agree _ _ _ _).trans
+    ((Mem.write_agree _ _ _).mono (Nat.le_refl _) ?_)
+  omega
+
+/-- Modern compatibility statement for the STATICCALL output-window observation. -/
 theorem staticcall_run_memory {sevm : Sevm} {pre post : Devm} {g t ii is oi os : B256}
     {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.Run sevm pre (.exec .staticcall) post)
     (hs : pre.stack = g :: t :: ii :: is :: oi :: os :: rest) :
-    Mem.AgreeOutside pre.memory post.memory oi.toNat (oi.toNat + os.toNat) := by
-  have hp : (g :: t :: ii :: is :: oi :: os :: rest) <<+ pre.stack :=
-    ⟨[], by simp only [Split, hs, List.append_nil]⟩
-  have hwrite : ∀ out : Bytes,
-      Mem.AgreeOutside pre.memory
-        ((pre.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
-          oi.toNat (out.take os.toNat)) oi.toNat (oi.toNat + os.toNat) := by
-    intro out
-    refine (Mem.extends_agree _ _ _ _).trans ((Mem.write_agree _ _ _).mono (Nat.le_refl _) ?_)
-    simp only [List.length_take]
-    omega
-  rcases of_run_staticcall_val_with_depth hp run hfork with
-    ⟨_, _, out, _, hmem⟩ | ⟨parent, child, _, _, _, _, _, _, _, _, hpm, _, _, _, _, _, _, _,
-      hmem, _⟩
-  · rw [hmem]
-    exact hwrite out
-  · rw [hmem, hpm]
-    exact hwrite child.output
+    Mem.AgreeOutside pre.memory post.memory oi.toNat (oi.toNat + os.toNat) :=
+  staticcall_run_memory_noStateGas hfork.rules_stateGas_none run hs
 
 /-- `MLOAD` pushes the word at its operand. -/
 theorem mload_run_stack {sevm : Sevm} {pre post : Devm} {o : B256} {rest : List B256}
@@ -586,8 +584,8 @@ theorem mem_of_lookup_eq_some {mem : MemMap} {o : Nat} {v : AVal}
       have h' : mem.lookup o = some v := by simpa only [List.lookup, hb] using h
       exact List.mem_cons_of_mem _ (ih h')
 
-theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
-    {mem : MemMap} {ρ : B256} {S base : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem absMem_sound_noStateGas {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
+    {mem : MemMap} {ρ : B256} {S base : List B256} (hstateGas : sevm.benvStat.rules.stateGas = none)
     (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ mem pre.memory) (run : Ninst.Run sevm pre n post) :
     MemMatches ρ (absMem n a mem) post.memory := by
@@ -609,12 +607,20 @@ theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
     simp only [AVal.Matches] at h4 h5
     subst h4 h5
     exact MemMatches.agree
-      (staticcall_run_memory hfork run (by simpa only [List.cons_append] using hstack)) hm
+      (staticcall_run_memory_noStateGas hstateGas run (by simpa only [List.cons_append] using hstack)) hm
   · split
     · rename_i hk
       obtain ⟨hd, hsz⟩ := ninstMemKeeps_run hk run
       exact MemMatches.of_data_eq hd hsz hm
     · exact memMatches_nil _ _
+
+/-- Preserve the existing modern memory-map statement. -/
+theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
+    {mem : MemMap} {ρ : B256} {S base : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hm : MemMatches ρ mem pre.memory) (run : Ninst.Run sevm pre n post) :
+    MemMatches ρ (absMem n a mem) post.memory :=
+  absMem_sound_noStateGas hfork.rules_stateGas_none hframe hstack hm run
 
 theorem memTop_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
     {mem : MemMap} {ρ : B256} {S base : List B256} {v : AVal}
@@ -634,9 +640,9 @@ theorem memTop_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
 /-- One checked instruction step keeps both invariants: the frame refined by a
 recorded `MLOAD` result still describes the stack, and the transferred map
 still describes memory. -/
-theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
+theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
     {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hstateGas : sevm.benvStat.rules.stateGas = none) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
     (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
     FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
@@ -644,7 +650,7 @@ theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
   cases b with
   | false => exact ⟨h', memMatches_nil _ _⟩
   | true =>
-    refine ⟨?_, absMem_sound hfork hframe hstack hm run⟩
+    refine ⟨?_, absMem_sound_noStateGas hstateGas hframe hstack hm run⟩
     simp only [ite_true]
     cases ht : memTop n a μ with
     | none => cases a' <;> exact h'
@@ -658,6 +664,16 @@ theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
         simp only [List.cons_append, List.cons.injEq] at this
         rw [this.1]
         exact hv
+
+/-- Preserve the existing modern memory-map statement. -/
+theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
+    (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
+    FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
+      MemMatches ρ (if b then absMem n a μ else []) post.memory :=
+  step_mem_sound_noStateGas b hfork.rules_stateGas_none hframe hstack hm run hpost h'
 
 /-- A goto's declared map is recorded identically by the current one. -/
 theorem MemMatches.of_memCompat {ρ : B256} {cur decl : MemMap} {μ : Mem}

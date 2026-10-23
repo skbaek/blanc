@@ -372,7 +372,19 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName
           `Blanc.ExecutionTrace.ConfiguredBlockTrace.FrameAdmitted target ||
         proofRecipeContainsName
-          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target
+          `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted target ||
+        proofRecipeContainsName
+          `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted target
   | "goal-shape:raw-sstore-free-compiled-path" =>
       return proofRecipeContainsName
           `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||
@@ -397,7 +409,13 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ExecutionTrace.RequestsTrace target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.AppliedBodyTrace target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredBlockTrace target ||
-        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTrace target
+        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.BeaconStageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.HistoryStageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.RequestStageTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.StagedBodyTrace target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredBlockTraceIn target ||
+        proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn target
   | "goal-head:StateReplay" => return head == some `Blanc.StateReplay
   | "goal-head:ReturnsWord" => return head == some `Blanc.ReturnsWord
   | "goal-head:MigrationSound" => return head == some `Blanc.MigrationSound

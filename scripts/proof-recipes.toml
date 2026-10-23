@@ -818,8 +818,8 @@ review_date = "2026-08-29"
 id = "retained-wrapper-trace"
 status = "active"
 triggers = ["goal-shape:retained-wrapper-trace"]
-preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state. For a successful message call, transaction, transaction fold or unchecked system transaction with the actual selected rules satisfying `stateGas = none`, use `exists_messageCallTrace_of_stateGas_none`, `exists_transactionTrace_of_stateGas_none`, `exists_applyTransactionsTrace_of_stateGas_none` or `exists_systemMessageTrace_of_stateGas_none`, respectively. The original CoveredFork entry points remain compatibility wrappers. For a retained canonical system message, `SystemMessageTrace.delegation_empty` identifies its skipped authorization wrapper; `systemTransactionMessage_auths_nil` and `systemTransactionMessage_delegation_eq` expose the canonical empty list and exact wrapper equation."
-boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay. The empty system-authorization result does not exclude system VM child calls, recovery checks or storage effects. The explicit state-gas premise supports execution extraction only: it does not provide modern refund, touched-account, no-deletion, request-enablement or reward-free conclusions."
+preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state. For a successful message call, transaction, transaction fold or unchecked system transaction with the actual selected rules satisfying `stateGas = none`, use `exists_messageCallTrace_of_stateGas_none`, `exists_transactionTrace_of_stateGas_none`, `exists_applyTransactionsTrace_of_stateGas_none` or `exists_systemMessageTrace_of_stateGas_none`, respectively. The original CoveredFork entry points remain compatibility wrappers. For a retained canonical system message, `SystemMessageTrace.delegation_empty` identifies its skipped authorization wrapper; `systemTransactionMessage_auths_nil` and `systemTransactionMessage_delegation_eq` expose the canonical empty list and exact wrapper equation. For supplied optional beacon/history/request stages, use BeaconStageTrace, HistoryStageTrace and RequestStageTrace; StagedBodyTrace and ConfiguredBlockTraceIn/ConfiguredHistoryTraceIn retain exact selected-fork stages. Use ExecutionStagedFrames rawFrames or settledFrames at the required traversal boundary, disabled-stage nil lemmas and mem_rawFrames_of_mem_settledFrames to transport only membership. The modern toStaged/toModern/toIn projection equalities reuse the supplied traces. Historical body extraction uses exists_stagedBodyTrace and conditional request coverage; configured In extraction retains its explicit reward-inclusive budget."
+boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay. The empty system-authorization result does not exclude system VM child calls, recovery checks or storage effects. The explicit state-gas premise supports execution extraction only: it does not provide modern refund, touched-account, no-deletion, request-enablement or reward-free conclusions. Optional stages contribute no frames when skipped. Raw traversal includes rolled-back entries; settled traversal retains the full message and CREATE settlement tests. List order and committed-to-raw membership do not prove occurrence uniqueness, state chronology, target survival or historical contract preservation."
 owner_module = "Blanc/ExecutionTrace.lean"
 canonical_example = "Blanc/ExecutionTrace.lean:ExecutionTrace.exists_messageCallTrace"
 symbols = [
@@ -866,6 +866,57 @@ symbols = [
   "declaration:ExecutionTrace.exists_transactionTrace_of_stateGas_none",
   "declaration:ExecutionTrace.exists_applyTransactionsTrace_of_stateGas_none",
   "declaration:ExecutionTrace.exists_systemMessageTrace_of_stateGas_none",
+  "module:Blanc/ExecutionStagedBodyTrace.lean",
+  "module:Blanc/ExecutionStagedFrames.lean",
+  "module:Blanc/ExecutionTraceSettledOrigin.lean",
+  "declaration:ExecutionTrace.BeaconStageTrace",
+  "declaration:ExecutionTrace.HistoryStageTrace",
+  "declaration:ExecutionTrace.RequestStageTrace",
+  "declaration:ExecutionTrace.StagedBodyTrace",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn",
+  "declaration:ExecutionTrace.exists_beaconStageTrace",
+  "declaration:ExecutionTrace.exists_historyStageTrace",
+  "declaration:ExecutionTrace.exists_requestStageTrace",
+  "declaration:ExecutionTrace.exists_stagedBodyTrace",
+  "declaration:ExecutionTrace.exists_configuredBlockTraceIn_of_transition",
+  "declaration:ExecutionTrace.exists_configuredHistoryTraceIn_of_reachUsing",
+  "declaration:ExecutionTrace.BeaconStageTrace.rawFrames",
+  "declaration:ExecutionTrace.BeaconStageTrace.settledFrames",
+  "declaration:ExecutionTrace.BeaconStageTrace.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.HistoryStageTrace.rawFrames",
+  "declaration:ExecutionTrace.HistoryStageTrace.settledFrames",
+  "declaration:ExecutionTrace.HistoryStageTrace.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.RequestStageTrace.rawFrames",
+  "declaration:ExecutionTrace.RequestStageTrace.settledFrames",
+  "declaration:ExecutionTrace.RequestStageTrace.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.StagedBodyTrace.rawFrames",
+  "declaration:ExecutionTrace.StagedBodyTrace.settledFrames",
+  "declaration:ExecutionTrace.StagedBodyTrace.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn.rawFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn.settledFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.rawFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.settledFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.mem_rawFrames_of_mem_settledFrames",
+  "declaration:ExecutionTrace.BeaconStageTrace.rawFrames_of_disabled",
+  "declaration:ExecutionTrace.BeaconStageTrace.settledFrames_of_disabled",
+  "declaration:ExecutionTrace.HistoryStageTrace.rawFrames_of_disabled",
+  "declaration:ExecutionTrace.HistoryStageTrace.settledFrames_of_disabled",
+  "declaration:ExecutionTrace.RequestStageTrace.rawFrames_of_disabled",
+  "declaration:ExecutionTrace.RequestStageTrace.settledFrames_of_disabled",
+  "declaration:ExecutionTrace.AppliedBodyTrace.toStaged_rawFrames",
+  "declaration:ExecutionTrace.AppliedBodyTrace.toStaged_settledFrames",
+  "declaration:ExecutionTrace.StagedBodyTrace.toModern_rawFrames",
+  "declaration:ExecutionTrace.StagedBodyTrace.toModern_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTrace.toIn_rawFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTrace.toIn_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn.toModern_rawFrames",
+  "declaration:ExecutionTrace.ConfiguredBlockTraceIn.toModern_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTrace.toIn_rawFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTrace.toIn_settledFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.toModern_rawFrames",
+  "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.toModern_settledFrames",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
@@ -874,11 +925,48 @@ review_date = "2026-08-30"
 id = "trace-local-frame-admission"
 status = "active"
 triggers = ["goal-shape:trace-local-frame-admission"]
-preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. For an arbitrary normal-transaction cut after the actual opening system calls, extract `ApplyTransactionsTrace.splitPrefix`, derive admission on `AppliedBodyTrace.transactionPrefixFrames`, and apply `AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem`; `PrefixSplit.next_result` exposes the actual next transaction. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`."
-boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports."
+preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. For an arbitrary normal-transaction cut after the actual opening system calls, extract `ApplyTransactionsTrace.splitPrefix`, derive admission on `AppliedBodyTrace.transactionPrefixFrames`, and apply `AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem`; `PrefixSplit.next_result` exposes the actual next transaction. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`. For supplied optional beacon/history/request stages, StagedBodyTrace and ConfiguredBlockTraceIn/ConfiguredHistoryTraceIn, use ExecutionStagedAdmission FrameAdmitted and frameAdmitted_iff_rawFrames for all raw entries, rawFrames_entered/frameAdmitted_entered for genuine frame initialization, and freshFrameAdmitted/FrameAdmitted.and for independent entry conditions."
+boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports. Supplied staged/In admission is structural only: it has no coverage, state-gas, deletion or budget premise and supplies no historical StateInv transport. The modern preservation theorems retain their coverage premises."
 owner_module = "Blanc/ExecutionAdmission.lean"
 canonical_example = "Blanc/ExecutionHistoryAdmission.lean:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted"
 symbols = [
+  "module:Blanc/ExecutionStagedAdmission.lean",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.BeaconStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.HistoryStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.RequestStageTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.StagedBodyTrace.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted.and",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.frameAdmitted_iff_rawFrames",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.rawFrames_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.frameAdmitted_entered",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.freshFrameAdmitted",
+  "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted.and",
   "module:Blanc/ExecutionFrames.lean",
   "module:Blanc/ExecutionFrameEntry.lean",
   "module:Blanc/ExecutionAdmission.lean",
@@ -1346,6 +1434,74 @@ symbols = [
   "declaration:Blanc.Lift.EcrecoverCall.entry",
   "declaration:Blanc.Lift.EcrecoverCall.ReturnChecks",
   "declaration:Blanc.Lift.EcrecoverCall.consumes",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-23"
+
+[[recipe]]
+id = "historical-fork-domain"
+status = "active"
+triggers = ["goal-head:HistFork", "goal-head:NeutralFork"]
+preferred_path = "Use mainnet_histFork on an actual successful two-coordinate mainnet schedule lookup, or CoveredFork.histFork on existing modern coverage, to establish HistFork membership. Use HistFork.neutral, stateGas_none or bal_none for only the neutral rule facts, and HistFork.requests_covered for request-enabled modern coverage. ExecutionTrace.BodyStageCapabilities.historical derives the existing extraction capabilities. The mainnet configured block/history extraction wrappers retain actual execution and the explicit reward-inclusive block or prefix budget."
+boundary = "Advice matches only a direct HistFork or NeutralFork goal head, without unfolding aliases or expanded membership/conjunctions. HistFork is the exact16-fork non-Amsterdam domain; modern CoveredFork is unchanged. Neutrality does not establish opcode availability, gas schedules, settlement identities, no-deletion, system-pass enablement, contract preservation or a reward-free body. Successful reachability does not establish ConfiguredRewardBudget."
+owner_module = "Blanc/HistoricalFork.lean"
+canonical_example = "Blanc/HistoricalFork.lean:mainnet_histFork"
+symbols = [
+  "module:Blanc/HistoricalFork.lean",
+  "module:Blanc/ExecutionHistory.lean",
+  "declaration:Blanc.NeutralFork",
+  "declaration:Blanc.histForks",
+  "declaration:Blanc.HistFork",
+  "declaration:Blanc.HistFork.stateGas_none",
+  "declaration:Blanc.HistFork.bal_none",
+  "declaration:Blanc.HistFork.neutral",
+  "declaration:Blanc.HistFork.requests_covered",
+  "declaration:Blanc.CoveredFork.histFork",
+  "declaration:Blanc.HistFork.not_amsterdam",
+  "declaration:Blanc.mainnet_histFork",
+  "declaration:Blanc.ExecutionTrace.BodyStageCapabilities.historical",
+  "declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredBlockTrace_of_transition",
+  "declaration:Blanc.ExecutionTrace.exists_mainnetConfiguredHistoryTrace_of_reachUsing",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-22"
+
+[[recipe]]
+id = "xinst-step-shape"
+status = "active"
+triggers = ["goal-head:Blanc.Xinst.ShapeCovered"]
+preferred_path = "For the shape of an actual `Xinst.step sevm devm x` under `sevm.benvStat.rules.stateGas = none`, apply `Xinst.step_shapeNoStateGas`. The done/create/call decomposition retains the actual disabled-CREATE2 error arm and actual access/delegation rules. The existing `Xinst.step_shapeCovered` supplies the modern compatibility interface. When crossing an entered child, transport selected capabilities with the exact environment equality from `Xinst.Run.some_child_benvStat` or `Evm.step_spawn_child_benvStat`."
+boundary = "This selects the ordinary no-state-gas lane. It proves no opcode availability, successful execution, gas equality or child commitment. For a state-gas lane use the general `Xinst.step_shape`, whose additional creation/call arms remain explicit. Child-environment equality alone proves no child state or storage preservation."
+owner_module = "Blanc/CommonProofs.lean"
+canonical_example = "Blanc/CommonProofs.lean:Xinst.step_shapeNoStateGas"
+symbols = [
+  "module:Blanc/CommonProofs.lean",
+  "declaration:Blanc.Xinst.ShapeCovered",
+  "declaration:Blanc.Xinst.step_shapeNoStateGas",
+  "declaration:Blanc.Xinst.step_shapeCovered",
+  "declaration:Blanc.Xinst.Run.some_child_benvStat",
+  "declaration:Blanc.Evm.step_spawn_child_benvStat",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-23"
+
+[[recipe]]
+id = "lift-node-no-state-gas"
+status = "active"
+triggers = ["goal-head:Blanc.Lift.NodeClaimNoStateGas", "goal-head:Blanc.Lift.NodeClaim0NoStateGas"]
+preferred_path = "Apply node_soundM_noStateGas with the actual Cert.CheckedM proof and root derivation. For NodeClaim0NoStateGas, additionally provide the actual raw-frame-descendant inclusion required by NodeClaimNoStateGas. The public lift_sound_inM_noStateGas/lift_sound_in_noStateGas and lift_soundM_noStateGas/lift_sound_noStateGas package the resulting successful entry lift."
+boundary = "Matches only these two direct capability-level recursion carriers, without unfolding aliases, forall goals, or the original modern NodeClaim0/NodeClaim carriers. The checked certificate, actual derivation, selected stateGas-none capability and successful node outcome remain explicit. This proves no opcode availability, liveness, gas equality, rollback commitment or no-deletion; outcome-independent prefixes use the separate cursor theorems."
+owner_module = "Blanc/Lift/Sound.lean"
+canonical_example = "Blanc/Lift/Sound.lean:node_soundM_noStateGas"
+symbols = [
+  "module:Blanc/Lift/Sound.lean",
+  "declaration:Blanc.Lift.NodeClaim0NoStateGas",
+  "declaration:Blanc.Lift.NodeClaimNoStateGas",
+  "declaration:Blanc.Lift.node_soundM_noStateGas",
+  "declaration:Blanc.Lift.lift_sound_inM_noStateGas",
+  "declaration:Blanc.Lift.lift_sound_in_noStateGas",
+  "declaration:Blanc.Lift.lift_soundM_noStateGas",
+  "declaration:Blanc.Lift.lift_sound_noStateGas",
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-23"

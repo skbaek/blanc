@@ -139,7 +139,7 @@ jobs:
       # consumes them; scripts/AxiomCheck.lean imports them, and the build
       # certificate covers every Blanc/** module, so build them explicitly too.
       - name: Build the write-site checker tops
-        run: lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality
+        run: lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality
       # The proof-recipe authoring leaf (which imports its generated registry)
       # is deliberately unreachable from Blanc.lean, so the default build never
       # produces their oleans, but scripts/check.sh --no-build elaborates
