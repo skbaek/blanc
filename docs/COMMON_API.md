@@ -5912,6 +5912,18 @@ contract-neutral.
   `implV2_initializeV2_observed_rawFrame` and their `_short_zero_rawFrame`
   forms) leaves only success, the running implementation code and the
   selector. Raw frames include delegated children.
+  The allowance-locality laws have the same historical form in
+  [`Blanc/Lift/Usdc/AllowLocalityHistory.lean`](../Blanc/Lift/Usdc/AllowLocalityHistory.lean):
+  `implV1Run_ws_noStateGas`, `implV2Run_ws_noStateGas`,
+  `implV2_1Run_ws_noStateGas` and `implRun_ws_noStateGas` instantiate
+  `lift_sound_ws_noStateGas`; `implV1/V2/V2_1/V2_2_allowLocality_noStateGas`
+  and `implV1_allowLocality_observed_noStateGas` take `stateGas = none` in
+  place of `CoveredFork` with unchanged conclusions. For V2, V2_1 and V2_2 the
+  `_selectorObserved_noStateGas` forms read the exception at the frame's
+  selector with the owner-word arm kept as calldata word 4; the native-answer
+  arm of `implV2_allowLocality_observed` still needs `CoveredFork`. The
+  `implV*_allowLocality_rawFrame` forms take `stateGas = none` from
+  `rawFrame_entryFacts` and keep success, code and `RowSep` as frame facts.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
