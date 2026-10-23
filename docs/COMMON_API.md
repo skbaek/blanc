@@ -5912,6 +5912,16 @@ contract-neutral.
   `implV2_initializeV2_observed_rawFrame` and their `_short_zero_rawFrame`
   forms) leaves only success, the running implementation code and the
   selector. Raw frames include delegated children.
+  [`Blanc/ExecutionStagedSstoreAttribution.lean`](../Blanc/ExecutionStagedSstoreAttribution.lean)
+  `ConfiguredHistoryTraceIn.rawFrames_closed` (with the stage and staged-body
+  forms) closes the raw frames under descent, and
+  `ConfiguredHistoryTraceIn.exists_retainedSstore_frame` attributes a cell
+  changed by a committing raw frame's own derivation, at an owner with code at
+  its entry, to the last retained successful `SSTORE` of that cell: the write
+  lies on the same-frame prefix of a committed frame of that derivation, which
+  is a raw frame of the history executing at the owner. It is per raw frame;
+  relating checkpoint and endpoint storage across transaction settlement is
+  not part of it.
   The allowance-locality laws have the same historical form in
   [`Blanc/Lift/Usdc/AllowLocalityHistory.lean`](../Blanc/Lift/Usdc/AllowLocalityHistory.lean):
   `implV1Run_ws_noStateGas`, `implV2Run_ws_noStateGas`,
@@ -6153,6 +6163,16 @@ contract-neutral.
   reuse the canonical witnesses definitionally and retain their ordered
   `ExecFreeUntil` gaps. This joint path/cursor/tree seam is discovered here;
   its existential result does not provide a reliable recipe trigger.
+  On `stateGas = none` (historical forks) use
+  [`Blanc/Lift/CursorOccurrenceNoStateGas.lean`](../Blanc/Lift/CursorOccurrenceNoStateGas.lean):
+  `cursor_next_forward_noStateGas` and
+  `cursor_next_call_occurrence_forward_noStateGas` take `stateGas = none` in
+  place of `CoveredFork`. At a raw frame of a `ConfiguredHistoryTraceIn`,
+  `ConfiguredHistoryTraceIn.rawFrame_reach_of_parentPrefix` places every
+  same-frame node at a checked cursor reached by `StepIn` steps of that frame
+  (entry facts from `rawFrame_entryFacts`), and
+  `exists_retainedSstore_frame_reach` adds that cursor, for any certified code
+  of the frame, to the attribution of `exists_retainedSstore_frame`.
 - To preserve the original child-root predicate on a supplied actual call
   slot, use
   [`Blanc/Lift/CursorOccurrenceRoots.lean`](../Blanc/Lift/CursorOccurrenceRoots.lean).

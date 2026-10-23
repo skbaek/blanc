@@ -95,6 +95,7 @@ import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionStagedAdmission
 import Blanc.ExecutionStagedFrameEnv
 import Blanc.ExecutionStagedRootFacts
+import Blanc.ExecutionStagedSstoreAttribution
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
@@ -1180,6 +1181,7 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 import Blanc.Lift.UniswapV2Pair.ModelControls
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
+import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.CursorExactLine
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorNoExecSuffix
