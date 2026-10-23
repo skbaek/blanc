@@ -94,6 +94,7 @@ import Blanc.ExecutionTraceSettledOrigin
 import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionStagedAdmission
 import Blanc.ExecutionStagedFrameEnv
+import Blanc.ExecutionStagedRootFacts
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
@@ -1761,4 +1762,5 @@ import Blanc.Lift.Usdc.OldInitializerV1Payload
 import Blanc.Lift.Usdc.OldInitializerV1Staging
 import Blanc.Lift.Usdc.OldInitializerV1Callee
 import Blanc.Lift.Usdc.OldInitializerV1Root
+import Blanc.Lift.Usdc.OldInitializerHistory
 import Blanc.Lift.WriteSiteZero

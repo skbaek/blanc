@@ -5796,6 +5796,14 @@ contract-neutral.
   owner for protected childless storage and child-entry alignment; the child
   need not execute at that owner. Initial zero and committing-child recursion
   remain explicit, including every actual entered occurrence.
+  On historical forks use the `_noStateGas` forms
+  (`exec_zero_of_committed_child_noStateGas`,
+  `runP_zero_of_committed_children_noStateGas`,
+  `progRunP_zero_of_committed_children_noStateGas`): their premise is
+  `stateGas = none` and the recursive obligation receives
+  `child.sta.benvStat = sevm.benvStat` in place of a covered child fork; the
+  covered-fork forms are corollaries. `GuardObs.step_zero_of_exec` is the
+  fork-free one-step law with the external arm supplied by the caller.
 - For solc's storage-string clearing tail, use
   [`Blanc/Lift/SolcStorageClear.lean`](../Blanc/Lift/SolcStorageClear.lean).
   `body_store_cut` derives the literal-zero value from the actual
@@ -5860,8 +5868,8 @@ contract-neutral.
   still be established by the consumer; none follows from this local loop.
   The concrete V2 consumer in
   [`Blanc/Lift/Usdc/OldInitializerEffects.lean`](../Blanc/Lift/Usdc/OldInitializerEffects.lean)
-  derives `implV2_initializeV2_observed` from successful fresh execution and
-  the actual initializer selector: every store targets metadata key4/15/18,
+  derives `implV2_initializeV2_observed` from successful fresh execution with
+  `stateGas = none` and the actual initializer selector: every store targets metadata key4/15/18,
   writes zero, or targets a bounded modular payload word of the actual long
   decoded name; the same route has no external instruction. The wrapper
   derives its calldata bounds. `implV2_initializeV2_writeClass` projects
@@ -5893,6 +5901,17 @@ contract-neutral.
   (fork-free, through `progRunP_zero_noExec`) mirror the V2 consumers; they
   do not establish the historical string profile, seed or payload-key
   separation.
+  At a raw frame of a `ConfiguredHistoryTraceIn`, the root form of both
+  classifiers comes from the history:
+  [`Blanc/ExecutionStagedRootFacts.lean`](../Blanc/ExecutionStagedRootFacts.lean)
+  `ConfiguredHistoryTraceIn.rawFrame_entryFacts` gives pc zero, the selected
+  fork, `stateGas = none`, fresh stack and memory and `gasMeasure < 2 ^ 256`
+  from `BodyStageCapabilities` alone, and
+  [`Blanc/Lift/Usdc/OldInitializerHistory.lean`](../Blanc/Lift/Usdc/OldInitializerHistory.lean)
+  (`implV1_initialize_observed_rawFrame`,
+  `implV2_initializeV2_observed_rawFrame` and their `_short_zero_rawFrame`
+  forms) leaves only success, the running implementation code and the
+  selector. Raw frames include delegated children.
 - Bytecode whose control flow runs through `PC`, constant arithmetic, constant
   `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
   memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;

@@ -4,7 +4,7 @@ import Blanc.Lift.RunPWalk
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.WriteSiteZero
-import Blanc.Lift.SolcStorageClear
+import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.WalkSteps
 
 /-!
@@ -15,6 +15,10 @@ ABI decode and compiled initializer route. Its same-provenance instruction
 observations classify metadata, bounded modular name-payload and literal-zero
 tail stores, and exclude external instructions. Short actual names therefore
 preserve an explicitly supplied demanded-zero seed with fixed-key separation.
+The only rule premise is `stateGas = none` (historical forks through
+`HistFork.stateGas_none`, covered forks through
+`CoveredFork.rules_stateGas_none`): the walk reads storage instructions by
+their stack shape alone, under either access-list rule.
 No historical seed, arbitrary nonzero administrative equality or hash-range
 separation is asserted here.
 -/
@@ -22,6 +26,7 @@ separation is asserted here.
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite
+open Blanc.Lift.SolcStorageReturn (ri_sload_any ri_sstore_any)
 
 /-- The name length read by the actual V2 dynamic ABI wrapper. -/
 def v2InitializerNameLength (sevm : Sevm) : Nat :=
@@ -128,7 +133,6 @@ private theorem v2Payload_pass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p i : Nat}
     {S : List B256} {seg : Seg} {payloadBase : B256}
     (hashEq : payloadBase = ((4 : B256).toBytes).keccak)
-    (fork : CoveredFork sevm.benvStat.fork)
     (long : 31 < v2InitializerNameLength sevm)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
@@ -226,7 +230,7 @@ private theorem v2Payload_pass
       · intro _ key value rest stack
         have keyEq := (List.cons.inj stack).1
         exact Or.inr (Or.inr ⟨long, i, storeIndex, by rw [← hashEq]; exact keyEq.symm⟩)
-      obtain ⟨_, rfl⟩ := ri_sstore fork (StepIn.toRun step)
+      obtain ⟨_, _, rfl⟩ := ri_sstore_any (StepIn.toRun step)
       obtain ⟨next, step, run⟩ := ric_nextP run
       refine And.imp_right (fun (rest : ∀ _ : Outcome, _ → _ → _) out recur done => .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ (rest out recur done)) ?_
       obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun step)
@@ -289,7 +293,6 @@ private theorem v2Payload_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p i : Nat}
     {S : List B256} {out : Outcome} {payloadBase : B256}
     (hashEq : payloadBase = ((4 : B256).toBytes).keccak)
-    (fork : CoveredFork sevm.benvStat.fork)
     (long : 31 < v2InitializerNameLength sevm)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
@@ -319,7 +322,7 @@ private theorem v2Payload_writeClass
       | .done o => SFunc.RunP observed ImplV2.cert.prog sevm start ImplV2.t_54b6_c86 o := by
     intro d inv seg cut
     obtain ⟨j, b', M', G', bound, rfl, continuation⟩ := inv
-    have pass := v2Payload_pass hashEq fork long lengthBound pointerBound bound cut
+    have pass := v2Payload_pass hashEq long lengthBound pointerBound bound cut
     cases seg with
     | «at» k middle =>
       obtain ⟨rfl, b'', M'', G'', shape, nextBound⟩ := pass.1
@@ -339,7 +342,6 @@ private theorem v2Payload_writeClass
 private theorem v2NameLong_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p : Nat}
     {oldEnd : B256} {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (long : 31 < v2InitializerNameLength sevm)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
@@ -402,7 +404,7 @@ private theorem v2NameLong_writeClass
     · intro _ key value rest stack
       have keyEq := (List.cons.inj stack).1
       exact Or.inl (by rw [← keyEq]; exact List.mem_cons_self)
-    obtain ⟨_, rfl⟩ := ri_sstore fork (StepIn.toRun step)
+    obtain ⟨_, _, rfl⟩ := ri_sstore_any (StepIn.toRun step)
     clear step
     have nextCut := rpw_next run
     clear run
@@ -459,13 +461,12 @@ private theorem v2NameLong_writeClass
       have zeroWord : (0 : Nat).toB256 = (0 : B256) := rfl
       simpa only [zeroWord, Nat.mul_zero, Nat.add_zero, B256.add_zero] using
         (v2Payload_writeClass (R := R) (sevm := sevm) (p := p) (i := 0)
-          (S := oldEnd :: 4 :: S) hashAt.symm fork long lengthBound pointerBound
+          (S := oldEnd :: 4 :: S) hashAt.symm long lengthBound pointerBound
           (Nat.zero_le _) (by simpa only [zeroWord, Nat.mul_zero, Nat.add_zero, B256.add_zero] using run))
 
 private theorem v2Name_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p : Nat}
     {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
@@ -497,7 +498,7 @@ private theorem v2Name_writeClass
     clear run
     obtain ⟨next, step, run⟩ := nextCut
     refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
-    obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun step)
+    obtain ⟨_, _, _, rfl⟩ := ri_sload_any (StepIn.toRun step)
     clear step
     have nextCut := rpw_next run
     clear run
@@ -611,8 +612,6 @@ private theorem v2Name_writeClass
         (Bytes.toB256 [0]).toNat (Bytes.toB256 [32]).toNat).1 = (4 : B256).toBytes := by
       exact Mem.read_write_zero M (by decide)
     rw [hashInput] at run ⊢
-    generalize readBase : afterSload sevm b 4 = loadedBase at run ⊢
-    generalize oldHeader : b.getStorVal sevm.currentTarget 4 = header at run ⊢
     generalize readMemory : ((M.write (Bytes.toB256 [0]).toNat (B256.toBytes 4)).read
       (Bytes.toB256 [0]).toNat (Bytes.toB256 [32]).toNat).2 = μ at run ⊢
     dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at run ⊢
@@ -761,7 +760,7 @@ private theorem v2Name_writeClass
       · intro _ key value rest stack
         have keyEq := (List.cons.inj stack).1
         exact Or.inl (by rw [← keyEq]; exact List.mem_cons_self)
-      obtain ⟨_, rfl⟩ := ri_sstore fork (StepIn.toRun step)
+      obtain ⟨_, _, rfl⟩ := ri_sstore_any (StepIn.toRun step)
       clear step
       have nextCut := rpw_next run
       clear run
@@ -791,7 +790,7 @@ private theorem v2Name_writeClass
           B256.toNat_toB256_of_lt (by omega)] at less
         exact less
       rw [shape] at run ⊢
-      exact v2NameLong_writeClass fork long lengthBound pointerBound run
+      exact v2NameLong_writeClass long lengthBound pointerBound run
 
 /-- The actual domain helper has only memory, hash and environment operations.
 No desired domain value is needed for the write classifier. -/
@@ -814,7 +813,6 @@ private theorem v2Domain_writeClass
 
 private theorem v2Terminal_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {pre : Devm} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm pre ImplV2.t_36d3_c18 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
       ImplV2.cert.prog sevm pre ImplV2.t_36d3_c18 out := by
@@ -844,7 +842,7 @@ private theorem v2Terminal_writeClass
     obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun step)
     obtain ⟨next, step, run⟩ := rpw_next run
     refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
-    obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun step)
+    obtain ⟨_, _, _, rfl⟩ := ri_sload_any (StepIn.toRun step)
     obtain ⟨next, step, run⟩ := rpw_next run
     refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
     obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun step)
@@ -870,7 +868,6 @@ private theorem v2Terminal_writeClass
 
 private theorem v2DomainCaller_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {pre : Devm} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm pre ImplV2.t_365e_c18 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
       ImplV2.cert.prog sevm pre ImplV2.t_365e_c18 out := by
@@ -890,12 +887,11 @@ private theorem v2DomainCaller_writeClass
       rw [show ImplV2.cert.prog[69]? = some ImplV2.t_4904_c69 from rfl] at lookup
       cases lookup
       exact .callRet dest rfl pop (v2Domain_writeClass callee)
-        (v2Terminal_writeClass fork rest)
+        (v2Terminal_writeClass rest)
 
 private theorem v2Body_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p : Nat}
     {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
@@ -916,7 +912,7 @@ private theorem v2Body_writeClass
     obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun step)
     obtain ⟨next, step, run⟩ := rpw_next run
     refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
-    obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun step)
+    obtain ⟨_, _, _, rfl⟩ := ri_sload_any (StepIn.toRun step)
     obtain ⟨next, step, run⟩ := rpw_next run
     refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
     obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun step)
@@ -968,19 +964,18 @@ private theorem v2Body_writeClass
           refine .callHalt dest rfl pop ?_
           have shape := (St.of_pop1 pop).2
           rw [shape] at callee ⊢
-          exact v2Name_writeClass fork lengthBound pointerBound callee
+          exact v2Name_writeClass lengthBound pointerBound callee
         | callRet dest lookup pop callee rest =>
           rw [show ImplV2.cert.prog[68]? = some ImplV2.t_5445_c68 from rfl] at lookup
           cases lookup
-          refine .callRet dest rfl pop ?_ (v2DomainCaller_writeClass fork rest)
+          refine .callRet dest rfl pop ?_ (v2DomainCaller_writeClass rest)
           have shape := (St.of_pop1 pop).2
           rw [shape] at callee ⊢
-          exact v2Name_writeClass fork lengthBound pointerBound callee
+          exact v2Name_writeClass lengthBound pointerBound callee
 
 private theorem v2WrapperCall_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G p : Nat}
     {dummy four endpoint : B256} {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (lengthBound : v2InitializerNameLength sevm ≤ 2 ^ 32)
     (pointerBound : p ≤ 2 ^ 33)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
@@ -1024,7 +1019,7 @@ private theorem v2WrapperCall_writeClass
       refine .callHalt dest rfl pop ?_
       have shape := (St.of_pop1 pop).2
       rw [shape] at callee ⊢
-      exact v2Body_writeClass fork lengthBound pointerBound callee
+      exact v2Body_writeClass lengthBound pointerBound callee
     | callRet dest lookup pop callee rest =>
       rw [show ImplV2.cert.prog[18]? = some ImplV2.t_35f6_c18 from rfl] at lookup
       cases lookup
@@ -1036,12 +1031,11 @@ private theorem v2WrapperCall_writeClass
           refine .callRet dest rfl pop ?_ (.dest burn (.last stop))
           have shape := (St.of_pop1 pop).2
           rw [shape] at callee ⊢
-          exact v2Body_writeClass fork lengthBound pointerBound callee
+          exact v2Body_writeClass lengthBound pointerBound callee
 
 private theorem v2WrapperTail_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {headEnd endpoint : B256} {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (offsetBound : (Sevm.dataWord sevm 4).toNat ≤ 2 ^ 32)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
       (St b ((4 + Sevm.dataWord sevm 4) :: headEnd :: 4 :: endpoint :: S) M G)
@@ -1149,12 +1143,11 @@ private theorem v2WrapperTail_writeClass
       rw [shape] at run ⊢
       rw [lengthWord] at run ⊢
       exact v2WrapperCall_writeClass (p := 36 + (Sevm.dataWord sevm 4).toNat)
-        fork lengthBound (by omega) run
+        lengthBound (by omega) run
 
 private theorem v2WrapperHead_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {available : B256} {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
       (St b (available :: 4 :: S) M G) ImplV2.t_0c3a_c106 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
@@ -1261,11 +1254,10 @@ private theorem v2WrapperHead_writeClass
           obtain ⟨_, flag, shape⟩ := St.of_pop2 pop
           have lengthWordInBounds := eq_zero_of_iszero_ne_zero (flag ▸ nonzero)
           rw [shape] at run ⊢
-          exact v2WrapperTail_writeClass fork offsetBound run
+          exact v2WrapperTail_writeClass offsetBound run
 
 private theorem v2Wrapper_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {pre : Devm} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm pre ImplV2.t_0c24_c106 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
       ImplV2.cert.prog sevm pre ImplV2.t_0c24_c106 out := by
@@ -1317,12 +1309,11 @@ private theorem v2Wrapper_writeClass
       obtain ⟨_, flag, shape⟩ := St.of_pop2 pop
       have headAvailable := eq_zero_of_iszero_ne_zero (flag ▸ nonzero)
       rw [shape] at run ⊢
-      exact v2WrapperHead_writeClass fork run
+      exact v2WrapperHead_writeClass run
 
 private theorem v2Selector_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
       (St b (0xd608ea64 :: S) M G) ImplV2.t_002b_c0 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
@@ -1414,12 +1405,11 @@ private theorem v2Selector_writeClass
           | toSucc dest word nonzero lookup pop run =>
             rw [show ImplV2.cert.prog[106]? = some ImplV2.t_0c24_c106 from rfl] at lookup
             cases lookup
-            exact .toSucc dest word nonzero rfl pop (v2Wrapper_writeClass fork run)
+            exact .toSucc dest word nonzero rfl pop (v2Wrapper_writeClass run)
 
 private theorem v2DataHead_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm (St b S M G) ImplV2.t_001a_c0 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
@@ -1462,12 +1452,11 @@ private theorem v2DataHead_writeClass
     refine .zero dest pop ?_
     have shape := (St.of_pop2 pop).2.2
     rw [shape] at run ⊢
-    exact v2Selector_writeClass fork run
+    exact v2Selector_writeClass run
 
 private theorem v2Entry_writeClass
     {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {S : List B256} {out : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64)
     (run : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm (St b S M G) ImplV2.t_0000_c0 out) :
     SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧ V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x)
@@ -1538,27 +1527,27 @@ private theorem v2Entry_writeClass
         refine .zero dest pop ?_
         have shape := (St.of_pop2 pop).2.2
         rw [shape] at run ⊢
-        exact v2DataHead_writeClass fork selector run
+        exact v2DataHead_writeClass selector run
 
 /-- Observe the actual whole successful fresh V2 initializer: every real store
 is classified and the same source route has no external instruction. -/
 theorem implV2_initializeV2_observed
     {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = ImplV2.code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (stack : pre.stack = []) (memory : pre.memory = Mem.empty)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64) :
     SProg.RunP (fun s d n d' => StepIn ⟨0, sevm, pre, .ok post, run⟩ s d n d' ∧
       V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x) ImplV2.cert.prog sevm pre post := by
   let R : Exec.Deriv := ⟨0, sevm, pre, .ok post, run⟩
-  obtain ⟨entry, lookup, lifted⟩ := lift_sound_in ImplV2.cert_check code fork run
+  obtain ⟨entry, lookup, lifted⟩ := lift_sound_in_noStateGas ImplV2.cert_check code hsg run
   rw [show ImplV2.cert.prog[0]? = some ImplV2.t_0000_c0 from rfl] at lookup
   cases lookup
   have stateEq : St pre [] Mem.empty pre.gasLeft = pre := (St.self stack memory).symm
   have framed : SFunc.RunP (StepIn R) ImplV2.cert.prog sevm
       (St pre [] Mem.empty pre.gasLeft) ImplV2.t_0000_c0 (.halted post) :=
     stateEq.symm ▸ lifted
-  have classified := v2Entry_writeClass fork selector framed
+  have classified := v2Entry_writeClass selector framed
   have unframed : SFunc.RunP (fun s d n d' => StepIn R s d n d' ∧
       V2InitializerWriteClass sevm d n ∧ ∀ x, n ≠ .exec x) ImplV2.cert.prog sevm pre
       ImplV2.t_0000_c0 (.halted post) :=
@@ -1571,13 +1560,13 @@ theorem implV2_initializeV2_observed
 theorem implV2_initializeV2_writeClass
     {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = ImplV2.code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (stack : pre.stack = []) (memory : pre.memory = Mem.empty)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64) :
     SProg.RunP (fun s d n d' => StepIn ⟨0, sevm, pre, .ok post, run⟩ s d n d' ∧
       V2InitializerWriteClass sevm d n) ImplV2.cert.prog sevm pre post := by
   exact SProg.RunP.mono (fun step => ⟨step.1, step.2.1⟩)
-    (implV2_initializeV2_observed run code fork stack memory selector)
+    (implV2_initializeV2_observed run code hsg stack memory selector)
 
 private theorem v2Short_observation
     {K : B256 → Prop} {sevm frame : Sevm} {d : Devm} {n : Ninst}
@@ -1597,7 +1586,7 @@ separation therefore gives demanded-row nonincrease, even on a zero-tail alias. 
 theorem implV2_initializeV2_short_nonInc
     {K : B256 → Prop} {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = ImplV2.code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (stack : pre.stack = []) (memory : pre.memory = Mem.empty)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64)
     (short : v2InitializerNameLength sevm ≤ 31)
@@ -1605,7 +1594,7 @@ theorem implV2_initializeV2_short_nonInc
     SProg.RunP (fun s d n d' => StepIn ⟨0, sevm, pre, .ok post, run⟩ s d n d' ∧
       GuardObs K False s d n) ImplV2.cert.prog sevm pre post := by
   refine SProg.RunP.mono ?_
-    (implV2_initializeV2_writeClass run code fork stack memory selector)
+    (implV2_initializeV2_writeClass run code hsg stack memory selector)
   intro s d n d' step
   exact ⟨step.1, v2Short_observation step.2 short separate⟩
 
@@ -1615,7 +1604,7 @@ route; no child-effect or nonzero administrative-word preservation is assumed. -
 theorem implV2_initializeV2_short_zero
     {K : B256 → Prop} {sevm : Sevm} {pre post : Devm}
     (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = ImplV2.code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (stack : pre.stack = []) (memory : pre.memory = Mem.empty)
     (selector : Blanc.Sevm.selector sevm = 0xd608ea64)
     (short : v2InitializerNameLength sevm ≤ 31)
@@ -1628,8 +1617,8 @@ theorem implV2_initializeV2_short_zero
       ImplV2.cert.prog sevm pre post :=
     SProg.RunP.mono
       (fun step => ⟨step.1, v2Short_observation step.2.1 short separate, step.2.2⟩)
-      (implV2_initializeV2_observed run code fork stack memory selector)
-  exact progRunP_zero_of_children fork (fun step => StepIn.toRun step.1)
-    (fun step => step.2.1) (fun step _ _ _ => (step.2.2 _ rfl).elim) observed zero
+      (implV2_initializeV2_observed run code hsg stack memory selector)
+  exact progRunP_zero_noExec (fun step => StepIn.toRun step.1)
+    (fun step => step.2.1) (fun step => step.2.2) observed zero
 
 end Blanc.Lift.Usdc
