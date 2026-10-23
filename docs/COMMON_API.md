@@ -5451,6 +5451,19 @@ contract-neutral.
   memory-well-formedness premise. The consumer must still derive the actual
   wrapper stacks, intermediate memory equality and initial potential; this
   facility does not assert a complete ABI decoder or historical execution.
+  For solc ABI decoding of dynamic strings from calldata, use
+  [`Blanc/Lift/SolcAbiStringStaging.lean`](../Blanc/Lift/SolcAbiStringStaging.lean).
+  `allocMem` is one allocation's memory in code order (free-pointer read
+  expansion, free-pointer update at 64, header, payload copy); `stage1` and
+  `stage3` derive the header readbacks, pointer chain, final free pointer,
+  ordered non-overlap and prior-word survival from `96 <= p1`, the payload
+  lengths and the final post-`Pot` size bound. The exact code fragments
+  `strFrag`, `rotFrag` and `staticFrag` come with `PotStep` run inversions
+  (`strFrag_runP`, `rotFrag_runP`, `staticFrag_runP`) over an abstract stack
+  tail, memory and continuation, so a wrapper with several decodes composes
+  them instead of unfolding one long walk; prove the wrapper's code equals
+  their composition by `rfl`. `Blanc/Lift/Usdc/OldInitializerV1Staging.lean`
+  (`wrapper_strengthen`) is the worked three-string example.
   For the source-shaped memory-to-storage payload loop, use
   [`Blanc/Lift/SolcStoragePayload.lean`](../Blanc/Lift/SolcStoragePayload.lean).
   `runP_enriched` retains the actual step relation, entry state and outcome,
