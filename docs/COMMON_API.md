@@ -88,6 +88,12 @@ registry has identified the likely vocabulary.
   `mainnetChainConfig_pragueTimestamp_le_of_covered` is the converse of
   `mainnetChainConfig_covered` (a covered mainnet selection is at or after
   Prague), which turns a covered deployment block into the floor's start.
+  A contract-local selected-fork deployment root composes the ladder theorem
+  directly with its own invariant (`DeploymentRootAt.reachable_registryStable`
+  in [`Blanc/LidoCircuitBreakerDeploymentRoot.lean`](../Blanc/LidoCircuitBreakerDeploymentRoot.lean)),
+  and its named-network specialization takes the deployment timestamp as the
+  floor ([`Blanc/LidoCircuitBreakerMainnetDeployment.lean`](../Blanc/LidoCircuitBreakerMainnetDeployment.lean)),
+  so no reach induction is repeated per contract.
   To move an execution *between* covered forks, use
   [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean): `withFork` replaces the fork on
   `Sevm`/`Evm`/`Msg`/`Frame`; `evm_step_withFork` (one step commutes at an

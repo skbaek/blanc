@@ -2,6 +2,7 @@
 -- inherited Registry-history consequences.
 
 import Blanc.LidoCircuitBreakerDeploymentBlock
+import Blanc.LadderReached
 
 namespace Blanc
 
@@ -350,6 +351,146 @@ theorem DeploymentRoot.reachable_countConservation
         ((future.state.getStor ca).get (countSlot pauser)).toNat) =
           entries.length :=
   (hroot.reachable_registryStable hreach).countConservation
+
+/-! ## Selected-fork deployment-rooted configured histories
+
+The supplied schedule may select uncovered historical forks before the
+deployment.  Coverage is therefore asked only at or after a timestamp floor
+that the deployed tip has reached; every block a configured history then
+accepts is strictly later than its parent, so each actual successor's selected
+fork is covered (`ContractSpec.chainUsing_preserves_inv_of_reached`).  The
+total-wei-plus-withdrawals bound of every step stays inside `ReachUsing`. -/
+
+/-- The deployed checkpoint itself is a configured reachable future under the
+supplied schedule. -/
+theorem DeploymentRootAt.reflReach
+    (hroot : DeploymentRootAt cfg base deployed ca) :
+    BlockChain.ReachUsing cfg deployed deployed :=
+  .refl deployed hroot.configValid hroot.deployed_validContext
+    hroot.deployed_chainId
+
+/-- The deployed chain's tip is the deployment block, whose own number and
+timestamp the schedule maps to a covered fork. -/
+theorem DeploymentRootAt.tip_covered
+    (hroot : DeploymentRootAt cfg base deployed ca) :
+    ∃ tip fork, deployed.blocks.getLast? = some tip ∧
+      cfg.forkAt tip.header.number tip.header.timestamp = .ok fork ∧
+      CoveredFork fork := by
+  obtain ⟨fork, cb, _, _, _, _, _, _, hfork, hforkAt, _, _, _, _, _, hstep, _⟩ :=
+    hroot.execution
+  obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
+  exact ⟨cb.block, fork, hnew, hforkAt, hfork⟩
+
+/-- A timestamp floor that every covered selection of the schedule respects
+holds at the deployed tip. -/
+theorem DeploymentRootAt.tip_floor
+    (hroot : DeploymentRootAt cfg base deployed ca) {T : Nat}
+    (hT : ∀ {number timestamp f}, cfg.forkAt number timestamp = .ok f →
+      CoveredFork f → T ≤ timestamp) :
+    ∃ tip, deployed.blocks.getLast? = some tip ∧ T ≤ tip.header.timestamp := by
+  obtain ⟨tip, _, htip, hf, hcov⟩ := hroot.tip_covered
+  exact ⟨tip, htip, hT hf hcov⟩
+
+/-- The deployment seed is transported through every configured future of the
+supplied schedule whose selections at or after a floor the deployed tip has
+reached are covered. -/
+theorem DeploymentRootAt.reachable_registryStable
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    RegistryStable officialParams ca future.state :=
+  (registryStable_iff_stateInv officialParams ca future.state).mpr
+    (ContractSpec.chainUsing_preserves_inv_of_reached ca
+      (registrySpec_preserves officialParams ca) cfg T hcov hreach
+      ((registryStable_iff_stateInv officialParams ca deployed.state).mp
+        hroot.stable) hstart).1
+
+/-- Every reachable future retains the exact compiled official runtime. -/
+theorem DeploymentRootAt.reachable_code
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    some (future.state.getCode ca).toList =
+      Prog.compile (runtime officialParams) :=
+  (hroot.reachable_registryStable hreach T hcov hstart).code
+
+/-- Byte-oriented form of the exact installed-code consequence. -/
+theorem DeploymentRootAt.reachable_installedCode
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    (future.state.getCode ca).toList =
+      lidoCircuitBreakerCode officialParams :=
+  (hroot.reachable_registryStable hreach T hcov hstart).installedCode
+
+/-- A reachable future has some coherent Registry entry list; the deployment
+root does not freeze that list to its initial empty value. -/
+theorem DeploymentRootAt.reachable_witness
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  (hroot.reachable_registryStable hreach T hcov hstart).witness
+
+/-- Reader-facing assignment/index membership consequences at an arbitrary
+canonical target in any reachable future. -/
+theorem DeploymentRootAt.reachable_membership
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  (hroot.reachable_registryStable hreach T hcov hstart).membership htarget
+
+/-- Reader-facing global pauser-count conservation in any reachable future. -/
+theorem DeploymentRootAt.reachable_countConservation
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  (hroot.reachable_registryStable hreach T hcov hstart).countConservation
 
 end LidoCircuitBreaker
 
