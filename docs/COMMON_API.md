@@ -5432,6 +5432,16 @@ contract-neutral.
   specializes this common proof. These observations need no slot separation,
   but neither establish an initial zero seed nor preserve an arbitrary
   nonzero administrative word when a cleared cell aliases it.
+  For the legacy layout with extra push/swap staging and an indirect return,
+  `legacyBody_store_cut` derives the actual zero store and its continuation;
+  `legacyRunP_zeroStores_noExec` follows both the head and return table entries.
+  It shares the comparison and back-edge fold with the compact layout. The
+  concrete [`OldInitializerV1Clearing`](../Blanc/Lift/Usdc/OldInitializerV1Clearing.lean)
+  theorems `v1Clear_zeroStores_noExec` and `v1ClearEntry_zeroStores_noExec`
+  instantiate the actual V1 clearing head and helper prefix, retaining the
+  original `StepIn R` relation and outcome. They require no memory bounds,
+  nonwrapping arithmetic or initial zero seed; whole-initializer coverage
+  and historical execution remain separate obligations.
   The concrete V2 consumer in
   [`Blanc/Lift/Usdc/OldInitializerEffects.lean`](../Blanc/Lift/Usdc/OldInitializerEffects.lean)
   derives `implV2_initializeV2_observed` from successful fresh execution and

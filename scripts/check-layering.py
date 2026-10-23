@@ -1376,6 +1376,7 @@ CONTRACTS = {
         "Lift.Usdc.AllowLocalityV2_2",
         "Lift.Usdc.InitializerClearing",
         "Lift.Usdc.OldInitializerEffects",
+        "Lift.Usdc.OldInitializerV1Clearing",
         "Lift.Usdc.ImplV1Ws",
         "Lift.Usdc.ImplV1Ws.Ann",
         "Lift.Usdc.ImplV1Ws.Check",

@@ -1735,4 +1735,5 @@ import Blanc.Lift.Usdc.AllowLocalityInit
 import Blanc.Lift.Usdc.AllowLocalityV2_2
 import Blanc.Lift.Usdc.InitializerClearing
 import Blanc.Lift.Usdc.OldInitializerEffects
+import Blanc.Lift.Usdc.OldInitializerV1Clearing
 import Blanc.Lift.WriteSiteZero
