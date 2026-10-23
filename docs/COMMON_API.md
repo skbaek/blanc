@@ -823,6 +823,29 @@ For every *raw* frame, rolled back or not, [`Blanc/ExecutionRawFramesCodeImage.l
 image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the `*.stateInv_admitted_sem`
 message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
 (`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
+For the In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
+`ConfiguredHistoryTraceIn`), [`Blanc/ExecutionInCodeImage.lean`](../Blanc/ExecutionInCodeImage.lean):
+`…rawFrames_codeImageIn` per wrapper (and `_of_installedIn` for staged bodies,
+In-blocks and In-histories) carries the image through the In-rungs
+(`*.stateInv_admitted_semIn`, with the installed certificate and image
+identification the In-rungs demand; message and transaction levels are
+fork-free and reused). `ConfiguredHistoryTraceIn.settled_codeImageIn` follows
+through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bridge
+In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
+forest `settledFrames_parentIn`. No recipe is registered: use this branch and
+the named theorem.
+For installed code at settled frames of an In-history on a historical fork
+(where `CoveredFork` cannot hold),
+[`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
+`OwnCodeAtIn F ca C` (installed at start, pc `0`, selected domain `F`, no
+state gas, runs `C` at `ca`); per-level `…settledRoots_ownCodeIn` concluding
+it at every settled root with no cover premise (roots need no spawn
+classification); `OwnSpawnsIn` (fork-free spawn contract: state-gas absence
+in place of coverage) with `Exec.descendantFrames_ownCodeIn` (child `F`/gas
+via `step_spawn_child_benvStat`; create2 arm split on `op.create2`); and
+per-level `…settledFrames_ownCodeIn` ending in
+`ConfiguredHistoryTraceIn.settled_ownCodeIn` at every settled frame, no
+cover premise. No recipe is registered: use this branch and the named theorem.
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its
@@ -2226,6 +2249,28 @@ a protected target executing arbitrary code.
   `wa` is never targeted; block-level `createdAccounts` is empty at
   `initBenv`. Also `payRewards_getCode` and the shared
   `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
+  Every `…_of_installedCert` above is a wrapper over the safe-parametric chain
+  below, via its trace's `safeRawFrames_of_installedCert` bridge.
+- Safe-parametric no-deletion and code survival across configured In-histories:
+  [`Blanc/ExecutionNoDelSafeHistory.lean`](../Blanc/ExecutionNoDelSafeHistory.lean).
+  `ExecutionTrace.SafeRawFrames wa trace.rawFrames` says every node of every
+  listed frame's own execution (`Exec.rawNodes` of each `Exec.Deriv` in the
+  trace's own `rawFrames` enumeration) excludes decoded SELFDESTRUCT in the
+  executing storage context `wa`. The `…_of_safe` chain
+  (`RunFrame.invNoDel_of_safe`, `ProcessMessage` /
+  `ProcessCreateMessage.inv_noDel_of_safe`, the retained-trace
+  `ProcessMessageTrace` / `ProcessCreateMessageTrace.inv_noDel_of_safe`,
+  `MessageCallTrace.noDel_of_safe`, `TransactionTrace.noDel_of_safe`, system /
+  request stages, `StagedBodyTrace.noDel_of_safe`,
+  `ConfiguredBlockTraceIn.noDel_of_safe`,
+  `ConfiguredHistoryTraceIn.noDel_of_safe`) concludes what the installed-cert
+  version concludes (`…NoDelScheduled wa`, `getCode wa = C`) from that premise
+  plus the code facts the proofs actually use (`C.toList ≠ []`,
+  `¬ isValidDelegation C`); raw levels take an explicit retained run with its
+  slot equation instead. `Exec.safeNodes_of_installedCert` turns the
+  installed-cert producer into per-frame safety (`Exec.rawNodes` of a listed
+  frame sit inside the whole run's `Exec.rawNodes`). No recipe is registered:
+  use this branch and the named theorem.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
