@@ -319,6 +319,7 @@ SHARED += [
     "ExecutionSettledCodeImage",
     "ExecutionInCodeImage",
     "ExecutionInOwnCode",
+    "ExecutionInCodeImageSafe",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",
