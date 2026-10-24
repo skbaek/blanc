@@ -857,6 +857,19 @@ in place of `Exec.rawFrameRoots`; `…mem_rawNodes_iff_rawFrame_parentPrefix`
 `ConfiguredHistoryTraceIn.exists_rawNodes_split_of_mem_rawFrames`
 (positional split of a listed root). No recipe is registered: use this branch
 and the named theorem.
+For storage-cell provenance along the raw chronology,
+[`Blanc/ExecutionCellProvenance.lean`](../Blanc/ExecutionCellProvenance.lean):
+`CellProv wa k init nodes v` (entry value kept or a listed successful
+`SSTORE` of `v`); `CellProv.mono_left` / `mono_right` / `trans` (assembly
+across concatenations); `CellProv.of_replayCell` (retained-write replay is
+provenance); `Evm.step_cont_getStor_get_noStateGas` and
+`Evm.step_spawn_enter_getStor_noStateGas` (state-gas-absence twins of the
+covered-fork per-step facts); `Exec.Deriv.successfulSstore?_sound_raw`
+(recognizer soundness at raw nodes); storage twins
+`sweepTouchedAccounts_getStor_of_nonempty`, `payRewards_getStor`,
+`ExecutionTrace.messageCallExecutionMessage_getStor`; and the level-zero
+`Exec.rawNodes_getCode`, `Exec.rawNodes_cellProv_noStateGas` (per-run,
+by induction). No recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
