@@ -5,6 +5,7 @@ import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionTraceSettledForest
 import Blanc.Lift.CallerProvenance
 import Blanc.StorageOnlySpec
+import Blanc.ExecutionMidHistoryIn
 
 /-!
 # Code images and settled positions over In-carrier staged histories
@@ -30,6 +31,12 @@ preservation. `settled_codeImageIn` follows from the raw-frame version
 through the settled-to-raw bridge (`mem_rawFrames_of_mem_settledFrames`);
 `settledFrames_contigIn` and `settledFrames_parentIn` follow from the
 In-`settledFrames_eq` bridges through the shared `rootFrames_forest`.
+
+`MidHistoryTraceIn.rawFrames_codeImageIn` threads the same image from an actual
+transaction cut's starting Benv through its suffix and later whole blocks.
+`MidHistoryTraceIn.settled_codeImageIn` specializes the trivial storage-only
+invariant to an installed image at that start, keeping each retained frame's
+original entry world. No BlockChain checkpoint is constructed at the cut.
 
 Historical own code lives in `Blanc/ExecutionInOwnCode.lean`: `OwnCodeAtIn`
 with the selected domain `F` and state-gas absence in place of coverage,
@@ -145,6 +152,24 @@ theorem RequestStageTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArr
       intro root member
       exact requests.rawFrames_codeImageIn preserves hF hsg admitted inv K image root member
 
+/-- The actual withdrawal stage threads the transaction-end invariant once. -/
+private theorem withdrawal_benvInv
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (inv : c.BenvInv ca trace.transactionBenv)
+    (bound : sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256) :
+    c.BenvInv ca (trace.transactionBenv.withState trace.withdrawalState) := by
+  have run := trace.withdrawalsRun
+  cases enabled : benv.stat.rules.header.withdrawalsRoot with
+  | false =>
+      rw [(trace.withdrawals_disabled enabled).1]
+      exact ⟨inv.state, by simpa only [Benv.withState] using inv.ca⟩
+  | true =>
+      simp only [withdrawalsPass, processWithdrawals, enabled, ↓reduceIte] at run
+      rw [← (Prod.mk.inj run).1]
+      exact benvInv_processWithdrawalsState_sem inv bound
+
 /-- A staged body keeps a code image at every raw frame, in D1 stage order.
 Stage invariants come back out of the In-rungs; the request entry invariant
 is built from the transaction invariant through the (fork-free) withdrawal
@@ -187,16 +212,7 @@ theorem StagedBodyTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray
     le_trans (trace.transactions.sum_le_noStateGas (by simpa only [Benv.withState] using hsg))
       historyLe
   have txStat : trace.transactionBenv.stat = benv.stat := trace.transactions.stat_eq
-  have withdrawalInv : c.BenvInv ca (trace.transactionBenv.withState trace.withdrawalState) := by
-    have run := trace.withdrawalsRun
-    cases enabled : benv.stat.rules.header.withdrawalsRoot with
-    | false =>
-        rw [(trace.withdrawals_disabled enabled).1]
-        exact ⟨transactionsInv.state, by simpa only [Benv.withState] using transactionsInv.ca⟩
-    | true =>
-        simp only [withdrawalsPass, processWithdrawals, enabled, ↓reduceIte] at run
-        rw [← (Prod.mk.inj run).1]
-        exact benvInv_processWithdrawalsState_sem transactionsInv (by omega)
+  have withdrawalInv := withdrawal_benvInv trace transactionsInv (by omega)
   have hFreq : F trace.transactionBenv.stat.fork := by
     rw [txStat]; exact hF
   have hsgreq : trace.transactionBenv.stat.rules.stateGas = none := by
@@ -326,6 +342,90 @@ theorem ConfiguredHistoryTraceIn.settled_codeImageIn (sem : CodeSem) (a : Adr)
     K image
   intro f member
   exact code _ (history.mem_rawFrames_of_mem_settledFrames f member)
+
+/-- The actual suffix after a retained transaction cut keeps the installed image at raw entries. -/
+private theorem tail_rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray}
+    {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : (MidHistoryTraceIn.tail block cut).FrameAdmitted ca entry)
+    (inv : c.StateInv ca cut.afterBenv.state)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    ∀ root ∈ (MidHistoryTraceIn.tail block cut).rawFrames,
+      some (root.devm.getCode ca).toList = c.sem.image := by
+  have afterF : F cut.afterBenv.stat.fork := by
+    rw [block.txSplit_stat cut]
+    exact block.forkIn
+  have afterSg := capabilities.stateGas_none afterF
+  have afterInv : c.BenvInv ca cut.afterBenv := ⟨inv, block.txSplit_notCreated cut ca⟩
+  have bound : sum cut.txState.bal + wdsum block.block.wds < 2 ^ 256 :=
+    block.txSplit_bound cut capabilities
+  have afterSum : sum cut.afterBenv.state.bal < 2 ^ 256 := by
+    change sum cut.txState.bal < 2 ^ 256
+    omega
+  have txInv : c.BenvInv ca block.bodyTrace.transactionBenv :=
+    cut.after.benvInv_admitted_semIn preserves afterF afterSg admitted.1 afterSum
+      afterInv K image
+  have txLe := cut.after.sum_le_noStateGas afterSg
+  have withdrawalInv := withdrawal_benvInv block.bodyTrace txInv (by
+    simp only [Benv.withState] at txLe
+    omega)
+  have txStat : block.bodyTrace.transactionBenv.stat = cut.afterBenv.stat := cut.after.stat_eq
+  have reqF : F block.bodyTrace.transactionBenv.stat.fork := by rw [txStat]; exact afterF
+  have reqSg : block.bodyTrace.transactionBenv.stat.rules.stateGas = none := by
+    rw [txStat]
+    exact afterSg
+  intro root member
+  rcases List.mem_append.mp member with transaction | request
+  · exact cut.after.rawFrames_codeImageIn preserves afterF afterSg admitted.1 afterSum
+      afterInv K image root transaction
+  · exact block.bodyTrace.requests.rawFrames_codeImageIn preserves reqF reqSg admitted.2
+      withdrawalInv K image root request
+
+/-- A mid history keeps the code image at every raw entry from its actual starting Benv. -/
+theorem MidHistoryTraceIn.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray}
+    {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future)
+    (preserves : c.PreservesAdmittedIn F ca entry)
+    (capabilities : BodyStageCapabilities F)
+    (admitted : history.FrameAdmitted ca entry)
+    (rewards : history.RewardCreditsFunded)
+    (inv : c.StateInv ca start.state)
+    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    ∀ root ∈ history.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
+  induction history with
+  | tail block cut =>
+    exact tail_rawFrames_codeImageIn block cut preserves capabilities admitted inv K image
+  | step prior block ih =>
+    intro root member
+    rcases List.mem_append.mp member with earlier | inBlock
+    · exact ih admitted.1 rewards.1 inv root earlier
+    · exact block.rawFrames_codeImageIn preserves capabilities admitted.2
+        (prior.stateInv_admitted_semIn preserves capabilities admitted.1 rewards.1 inv K image)
+        K image root inBlock
+
+/-- A certified image installed at the actual mid start is installed at every retained
+frame's original entry world. The storage-only invariant is trivial. -/
+theorem MidHistoryTraceIn.settled_codeImageIn (sem : CodeSem) (a : Adr)
+    {F : Fork → Prop} {C : ByteArray}
+    {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future)
+    (capabilities : BodyStageCapabilities F)
+    (rewards : history.RewardCreditsFunded)
+    (installed : some (start.state.getCode a).toList = sem.image)
+    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    ∀ frame ∈ history.settledFrames, some (frame.pre.getCode a).toList = sem.image := by
+  have inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).StateInv a start.state :=
+    ⟨installed, trivial, trivial⟩
+  have admitted : history.FrameAdmitted a (fun _ _ => True) :=
+    (history.frameAdmitted_iff_rawFrames a _).2 fun _ _ _ => trivial
+  have preserves : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).PreservesAdmittedIn
+      F a (fun _ _ => True) := fun _ _ _ _ _ _ _ _ _ => ⟨trivial, trivial⟩
+  have code := history.rawFrames_codeImageIn preserves capabilities admitted rewards inv K image
+  intro frame member
+  exact code _ (history.mem_rawFrames_of_mem_settledFrames frame member)
 
 /-! ## Settled roots and positions over In-histories -/
 

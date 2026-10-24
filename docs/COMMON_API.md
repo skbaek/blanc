@@ -895,8 +895,13 @@ identification the In-rungs demand; message and transaction levels are
 fork-free and reused). `ConfiguredHistoryTraceIn.settled_codeImageIn` follows
 through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bridge
 In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
-forest `settledFrames_parentIn`. No recipe is registered: use this branch and
-the named theorem.
+forest `settledFrames_parentIn`. `MidHistoryTraceIn.rawFrames_codeImageIn`
+starts at a genuine mid-history `Benv`, using the actual transaction suffix
+and later whole blocks. `MidHistoryTraceIn.settled_codeImageIn` specializes
+this to a certified image installed at that start and preserves each retained
+frame's original entry code; it requires no fabricated block checkpoint or
+storage replay invariant. The original and mid proofs share the withdrawal
+invariant fragment. No recipe is registered: use this branch and the named theorem.
 When no installed certificate exists (a proxy runtime that `DELEGATECALL`s),
 [`Blanc/ExecutionInCodeImageSafe.lean`](../Blanc/ExecutionInCodeImageSafe.lean):
 `…codeImage_of_safe` per wrapper (message, transaction, system / request
@@ -7317,8 +7322,15 @@ contract-neutral.
   `tail0_falseH`, `enc_falseH` and `site9_falseH` in SignedSites uses actual
   state-gas/BAL absence and the same local rejection capability; it preserves
   the original memory bounds, free-pointer observations and copy-loop proof.
-  Historical storage walks, implementation permit endpoints and retained-owner
-  consumers remain separate.
+  `walk8H`, `walk94H`, `path_permitVrsH` and `path_permitBytesH` in
+  `Blanc/Lift/Usdc/SignedPathsPermit.lean` use actual SLOAD/SSTORE inversions
+  at the certified instruction positions, with canonical historical code
+  preservation and unchanged owner-word cleanup. Their original covered
+  interfaces remain projections. `impl_permit_pair_not_okH` in
+  `Blanc/Lift/Usdc/SignedPaths.lean` excludes successful Pair-owned calls for
+  the canonical V2_2 permit selectors, preserving the actual execution and
+  entry-world library/Pair code premises. Its dispatcher adaptation is shared
+  with the original covered endpoint. Retained-owner consumers remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
