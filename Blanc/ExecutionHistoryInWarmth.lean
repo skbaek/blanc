@@ -15,12 +15,11 @@ step needs only `stateGas = none` (the existing
 sets only grow), so `CoveredFork` is replaced by the history's own
 `BodyStageCapabilities` everywhere.
 
-The scope is explicit per fork, as ordered: an access hypothesis
-`∀ f, F f → (Fork.ruleSet f).access = .eip2929` restricts the claim to
-EIP-2929 forks (flat-access forks get no warmth claim, since warmth plays
-no part in pricing there), and precompile membership is a separate per-fork
-premise. The `0x02` headline corollary discharges both on `HistFork` from
-Berlin on, by decision.
+The scope is explicit per fork, as ordered: precompile membership is a
+per-fork premise. Warmth holds on every access regime (`prepareMessage`
+warms precompiles unconditionally), so there is no access hypothesis.
+The `0x02` headline corollary discharges precompile membership on `HistFork`
+by decision.
 
 Contract-neutral: no contract name in any statement.
 -/
@@ -85,7 +84,6 @@ theorem ConfiguredBlockTraceIn.transactions_rawFrames_warmIn
     {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTraceIn F cfg pre post)
     (capabilities : BodyStageCapabilities F)
-    (haccess : ∀ f, F f → (Fork.ruleSet f).access = .eip2929)
     {a : Adr} (ha : ∀ f, F f → a ∈ (Fork.ruleSet f).precompiles) :
     ∀ root ∈ trace.bodyTrace.transactions.rawFrames,
       a ∈ root.devm.accessedAddresses :=
@@ -93,13 +91,11 @@ theorem ConfiguredBlockTraceIn.transactions_rawFrames_warmIn
     (capabilities.stateGas_none trace.forkIn) (ha _ trace.forkIn)
 
 /-- **Every transaction frame of a retained `In`-history starts with `a`
-warm**, whenever `a` is a precompile of every selected fork and every
-selected fork uses EIP-2929 access. -/
+warm**, whenever `a` is a precompile of every selected fork. -/
 theorem ConfiguredHistoryTraceIn.txRawFrames_warmIn
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
-    (haccess : ∀ f, F f → (Fork.ruleSet f).access = .eip2929)
     {a : Adr} (ha : ∀ f, F f → a ∈ (Fork.ruleSet f).precompiles) :
     ∀ root ∈ history.txRawFrames, a ∈ root.devm.accessedAddresses := by
   induction history with
@@ -109,19 +105,17 @@ theorem ConfiguredHistoryTraceIn.txRawFrames_warmIn
       simp only [ConfiguredHistoryTraceIn.txRawFrames, List.mem_append] at member
       rcases member with member | member
       · exact ih root member
-      · exact block.transactions_rawFrames_warmIn capabilities haccess ha root member
+      · exact block.transactions_rawFrames_warmIn capabilities ha root member
 
 /-- **The `0x02` precompile is warm in every transaction frame of a
-historical `In`-history**, on a Berlin-onwards selected domain. Both
-per-fork premises discharge on `HistFork` by decision. -/
+historical `In`-history.** The precompile premise discharges on `HistFork`
+by decision; there is no access or Berlin-onwards premise. -/
 theorem ConfiguredHistoryTraceIn.txRawFrames_warm_hist
     {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (capabilities : BodyStageCapabilities HistFork)
-    (hberlin : ∀ f, HistFork f → BerlinOnwards f) :
+    (capabilities : BodyStageCapabilities HistFork) :
     ∀ root ∈ history.txRawFrames, (2 : Adr) ∈ root.devm.accessedAddresses :=
   history.txRawFrames_warmIn capabilities
-    (fun f hf => hf.access_eip2929_of_berlinOnwards (hberlin f hf))
     (fun _ hf => hf.two_mem_precompiles)
 
 end ExecutionTrace
