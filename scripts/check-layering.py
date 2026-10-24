@@ -167,7 +167,7 @@ SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistAccessWalkFacts", "Lift.HistShaWalk"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
@@ -359,6 +359,23 @@ SHARED += [
 # duplicate): contract-neutral.
 SHARED += [
     "B256CheckFacts",
+]
+
+# Concatenation of selected-domain In-histories with the modern-to-historical
+# bridge (beacon-deposit-historical-reach-v1): contract-neutral.
+SHARED += [
+    "ExecutionHistoryInAppend",
+]
+
+# Fork-era schedule facts and historical environment facts for selected-domain
+# In-histories (beacon-deposit-historical-reach-v1): contract-neutral.
+SHARED += [
+    "ExecutionHistoryInForkFacts",
+    "ExecutionHistoryInNoDel",
+    "ExecutionHistoryInSystemCodeKeep",
+    "ExecutionHistoryInWarmth",
+    "ExecutionHistoryInCodeAt",
+    "ExecutionHistoryInSystemFrames",
 ]
 
 CONTRACTS = {
@@ -739,7 +756,7 @@ CONTRACTS = {
                                "Lift.ConsolidationRequest.SystemWalk"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
-                       "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
+                       "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views", "Lift.BeaconDeposit.HistSafeWorld", "Lift.BeaconDeposit.HistSafeGuards", "Lift.BeaconDeposit.HistSafeCount", "Lift.BeaconDeposit.HistSafeInsert", "Lift.BeaconDeposit.HistSafePubkeyRoot", "Lift.BeaconDeposit.HistSafeNode", "Lift.BeaconDeposit.HistSafeSignatureRoot", "Lift.BeaconDeposit.HistSafe", "Lift.BeaconDeposit.HistLadder",
                        "BeaconDepositCore", "BeaconDepositEncoding",
                        "BeaconDeposit", "BeaconDepositErrorCatalog",
                        "BeaconDepositErrorModel",
