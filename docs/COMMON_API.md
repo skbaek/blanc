@@ -4479,7 +4479,13 @@ observation of its committed frames) plus `SpawnKinds`;
 (`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
 the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
-its step can name the committed frame. Worked use: the Uniswap V2 pair
+its step can name the committed frame. Over a selected fork domain `F`, the In forms
+live in [`Blanc/ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean):
+`SpawnKindsIn F`, `spawnChildIn`, `staticObservedNilIn`/`staticFrameIn`,
+`WholeFrameReplayIn F` (same binder order as `WholeFrameReplay`, so the Mac's
+`pair_wholeFrameReplayWithIn` fits), and `wholeFrameLadderIn` producing
+`AccountingLadderAdmittedIn F` (takes `hsgF`, `kinds`, `whole` and In `preserves`;
+`messageRoot_facts` reused). Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplayWith`, `pairLadderWith`,
 `pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
 `PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
@@ -4563,6 +4569,14 @@ has at most one child, which heads its descendants), and
 `ConfiguredHistoryTrace.settled_mem_rawFrames` (a settled frame's root derivation is a raw frame;
 the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`). Worked
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
+Over a selected fork domain `F`, the In forms live in
+[`Blanc/Lift/SettledFramePositionsIn.lean`](../Blanc/Lift/SettledFramePositionsIn.lean):
+`parentLadderIn` (the same one-rung construction over `AccountingLadderAdmittedIn F`,
+reusing `parentCarrier`/`parentObservation`) and
+`ConfiguredHistoryTraceIn.settledFrames_parent_of_codeAddress` (via
+`configuredHistoryIn`, admission from `frameAdmitted_iff_rawFrames`; takes
+`capabilities`, `rewards`, `inv`, `K` and `image`).
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 

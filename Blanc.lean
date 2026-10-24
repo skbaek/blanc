@@ -62,6 +62,7 @@ import Blanc.ExecutionAccountingHistoryIn
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionModelAccounting
 import Blanc.ExecutionWholeFrameAccounting
+import Blanc.ExecutionWholeFrameAccountingIn
 import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
@@ -1579,6 +1580,7 @@ import Blanc.Lift.RegionStor
 import Blanc.Lift.RunPWalk
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
+import Blanc.Lift.SettledFramePositionsIn
 import Blanc.Lift.ShuffleSkip
 import Blanc.Lift.SpawnExact
 import Blanc.Lift.StaticOnlyPrefix
