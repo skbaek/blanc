@@ -3662,6 +3662,18 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   no enclosing-frame success or preselected recovery query is assumed.
   The actual query bytes remain existential; this theorem does not claim
   complete old-version coverage or the historical absence of Pair signatures.
+  `RetainedOldOwnerNativeQuery` in
+  [`Blanc/Lift/Usdc/RetainedOldRecovery.lean`](../Blanc/Lift/Usdc/RetainedOldRecovery.lean)
+  is the independent actual native-query carrier for globally retained old
+  owner-route parents. It keeps the parent position, original occurrence,
+  version/site, message and arbitrary child result; membership never tests the
+  desired answer or a tracked write. `global_retention` derives the same node's
+  retention under an actual settled root. `retained_old_owner_pair_query_at`
+  reuses the successful old-owner producer for both V2 and V2_1, deriving fresh
+  entry from history. `retained_old_owner_not_pair` applies exclusion only over
+  that retained universe. Domain capabilities, BAL absence and original code1
+  nondelegation remain explicit; this does not constrain discarded raw frames
+  or finish the complete allowance-history fold.
   `Usdc.recoveryV2_consumes` in
   [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.

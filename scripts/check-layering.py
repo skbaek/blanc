@@ -1486,6 +1486,7 @@ CONTRACTS = {
         "Lift.Usdc.PermitRowNativeV2_1",
         "Lift.Usdc.OwnerQueriesV2",
         "Lift.Usdc.OldRecoveryRelevance",
+        "Lift.Usdc.RetainedOldRecovery",
         "Lift.Usdc.Proxy.Cert",
         "Lift.Usdc.Proxy.Check",
         "Lift.Usdc.Proxy.Contract",

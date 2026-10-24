@@ -1752,6 +1752,7 @@ import Blanc.Lift.Usdc.PermitRowPrefixV2_1
 import Blanc.Lift.Usdc.PermitRowNativeV2_1
 import Blanc.Lift.Usdc.OwnerQueriesV2
 import Blanc.Lift.Usdc.OldRecoveryRelevance
+import Blanc.Lift.Usdc.RetainedOldRecovery
 import Blanc.Lift.Usdc.RefineAdmin
 import Blanc.Lift.Usdc.RefineAdminBits
 import Blanc.Lift.Usdc.RefineAdminBodies
