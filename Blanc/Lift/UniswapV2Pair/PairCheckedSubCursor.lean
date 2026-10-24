@@ -68,14 +68,5 @@ theorem pair_sub59_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨g', state⟩)
   exact ⟨cover, returner.retH cert_check success stateGas⟩
 
-/-- Checked subtraction returns through the actual pending continuation.
-No-underflow is inferred from that same successful cursor's source suffix. -/
-theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {x y ρ : B256} {K : List SFunc} {tail : SFunc}
-    (cut : CursorStateAt code cert root t_226e_c59 b (y :: x :: ρ :: R) M (tail :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    y ≤ x ∧ Nonempty (CursorStateAt code cert root tail b ((x - y) :: R) M K) :=
-  pair_sub59_cursor_stateH cut success fork.rules_stateGas_none
-
 
 end Blanc.Lift.UniswapV2Pair

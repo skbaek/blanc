@@ -54,26 +54,6 @@ theorem BurnInitialPairH.firstViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rw [samePaths]
   exact .staticViews views mapped authentic turns
 
-/-- The first Burn source request obtains its complete queue and static views
-from the retained original occurrence at the exact locked entry frame. -/
-theorem BurnInitialPair.firstViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
-    let frame := burnSourceLockedFrame current (writerContext sevm invocation)
-      (Sevm.dataWord sevm 4).toAdr
-    let request := requestFor .burnInitialBalance0 current.state.token0 (.balanceOf sevm.currentTarget)
-    ∃ (observed : SourceCallAt root frame request (feeObservedResult r.out0) 0)
-      (views : List StaticViewTurn), observed.call = r.first ∧
-      PositionalTurns frame request observed.paths (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} :=
-  BurnInitialPairH.firstViews (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none fork.rules_bal_none fresh
-
 
 theorem BurnInitialPairH.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
@@ -124,28 +104,6 @@ theorem BurnInitialPairH.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm
   refine ⟨observed, views, same, ?_⟩
   rw [samePaths]
   exact .staticViews views mapped authentic turns
-
-/-- The second Burn source request keeps the exact first-resume frame and
-obtains the complete queue from its retained second original slot. -/
-theorem BurnInitialPair.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
-    let frame0 := burnSourceLockedFrame current (writerContext sevm invocation)
-      (Sevm.dataWord sevm 4).toAdr
-    let request0 := requestFor .burnInitialBalance0 current.state.token0 (.balanceOf sevm.currentTarget)
-    let frame := frame0.beginResume request0
-    let request := requestFor .burnInitialBalance1 current.state.token1 (.balanceOf sevm.currentTarget)
-    ∃ (observed : SourceCallAt root frame request (feeObservedResult r.out1) 1)
-      (views : List StaticViewTurn), observed.call = r.second ∧
-      PositionalTurns frame request observed.paths (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} :=
-  BurnInitialPairH.secondViews (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none fork.rules_bal_none fresh
 
 
 /-- The factory request's views and paths are extracted from the same third
@@ -213,27 +171,5 @@ theorem BurnThreeCallsH.feeViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w
   rw [samePaths]
   exact .staticViews views mapped authentic turns
 
-
-theorem BurnThreeCalls.feeViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
-    let frame0 := burnSourceLockedFrame current (writerContext sevm invocation)
-      (Sevm.dataWord sevm 4).toAdr
-    let request0 := requestFor .burnInitialBalance0 current.state.token0 (.balanceOf sevm.currentTarget)
-    let request1 := requestFor .burnInitialBalance1 current.state.token1 (.balanceOf sevm.currentTarget)
-    let frame := (frame0.beginResume request0).beginResume request1
-    let request := requestFor .burnFeeTo current.state.factory .feeTo
-    ∃ (observed : SourceCallAt root frame request (feeObservedResult r.fee.out) 2)
-      (views : List StaticViewTurn), observed.call = r.fee.occurrence.call ∧
-      PositionalTurns frame request observed.paths (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} :=
-  BurnThreeCallsH.feeViews (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none
-    fork.rules_bal_none fresh
 
 end Blanc.Lift.UniswapV2Pair

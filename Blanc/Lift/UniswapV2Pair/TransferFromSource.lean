@@ -881,20 +881,6 @@ theorem transferFrom_bytecode_refines_sourceH {K : WriterKey → Prop} {current 
   rw [eq]
   exact transferFrom_public_source_resultH rep fresh value allowed nonstatic cover nowrap
 
-/-- Actual raw pc-zero success derives source acceptance; no desired endpoint is a premise. -/
-theorem transferFrom_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (transferFromTouched (transferFromOwner sevm) sevm.caller (transferFromRecipient sevm)))
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ 100 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      ∃ residual, TransferFromSourceResult K current invocation sevm b post residual := by
-  simpa only [TransferFromSourceResultH_of_covered fork] using
-    transferFrom_bytecode_refines_sourceH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 /-- Existing handler acceptance constructs exact bytecode gas with every incoming store sentry. -/
 theorem transferFrom_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpoint}

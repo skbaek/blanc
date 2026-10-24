@@ -90,23 +90,6 @@ def MintPositionalQueuesH.toCovered {root : Exec.Deriv} {b : Devm} {current : Ch
   during1 := h.during1
   duringF := h.duringF
 
-/-- On a covered fork, the modern `MintPositionalQueues` gives `MintPositionalQueuesH` with the same fields. -/
-def MintPositionalQueues.toH {root : Exec.Deriv} {b : Devm} {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositions root b}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : MintPositionalQueues current invocation r) :
-    MintPositionalQueuesH current invocation (r.toH fork) where
-  call0 := h.call0
-  call1 := h.call1
-  callF := h.callF
-  same0 := h.same0
-  same1 := h.same1
-  sameF := h.sameF
-  views0 := h.views0
-  views1 := h.views1
-  viewsF := h.viewsF
-  during0 := h.during0
-  during1 := h.during1
-  duringF := h.duringF
-
 theorem mint_positional_queuesH {sevm : Sevm} {b post : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm} {G : Nat}
     {K : WriterKey → Prop} {current : Checkpoint}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
@@ -191,23 +174,6 @@ theorem mint_positional_queuesH {sevm : Sevm} {b post : Devm} {W1 : Devm} {A2 F 
     exact .staticViews views1 mapped1 auth1 turns1
   · rw [pathsEqF]
     exact .staticViews viewsF mappedF authF turnsF
-
-/-- Original Mint calls supply complete source queues, including the .none case.
-Root freshness is an internal trace obligation, not a guessed child-queue premise. -/
-theorem mint_positional_queues {sevm : Sevm} {b post : Devm} {G : Nat}
-    {K : WriterKey → Prop} {current : Checkpoint}
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (r : MintRootCallPositions ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
-    Nonempty (MintPositionalQueues current invocation r) := by
-  obtain ⟨h⟩ := mint_positional_queuesH run (r.toH fork) rep invocation sem image installed
-    fork.rules_stateGas_none fork.rules_bal_none fresh
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

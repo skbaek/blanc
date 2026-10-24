@@ -26,47 +26,6 @@ theorem initializeSourceState_value (st : State) (token0 token1 : Adr) (k : Writ
     k.value (initializeSourceState st token0 token1) = k.value st := by
   cases k <;> rfl
 
-theorem WriterRep.initialize_public_post {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
-    WriterRep K
-      ((initializePublicPost sevm b [0x485cc955] getterInitMemory G).getStor sevm.currentTarget)
-      (initializeSourceState current.state (initializeToken0 sevm) (initializeToken1 sevm)) := by
-  have step := initializePublicPost_storstep (sevm := sevm) (b := b)
-    (R := [0x485cc955]) (M := getterInitMemory) (G := G)
-  rw [step.self]
-  have packed := initializePublicStorage_packed (sevm := sevm) (b := b)
-  have unchanged (n : B256) (off6 : (6 : B256) ≠ n) (off7 : (7 : B256) ≠ n) :
-      (initializePublicStorage sevm b).get n = (b.getStor sevm.currentTarget).get n := by
-    unfold initializePublicStorage
-    rw [Stor.get_set_ne _ off7, Stor.get_set_ne _ off6]
-  refine ⟨rep.finite, ?_, ?_, rep.inj, rep.apart, ?_, ?_⟩
-  · dsimp only [WriterFixedMatches, initializeSourceState]
-    rw [unchanged 0 (by decide) (by decide), unchanged 3 (by decide) (by decide),
-      unchanged 5 (by decide) (by decide), packed.1, packed.2.1,
-      unchanged 8 (by decide) (by decide), unchanged 9 (by decide) (by decide),
-      unchanged 10 (by decide) (by decide), unchanged 11 (by decide) (by decide),
-      unchanged 12 (by decide) (by decide)]
-    exact ⟨rep.fixed.1, rep.fixed.2.1, rep.fixed.2.2.1, rfl, rfl, rep.fixed.2.2.2.2.2⟩
-  · intro n nonzero
-    by_cases slot6 : n = 6
-    · exact .inl (slot6.symm ▸ (by decide : (6 : B256) ∈ writerFixedSlots))
-    · by_cases slot7 : n = 7
-      · exact .inl (slot7.symm ▸ (by decide : (7 : B256) ∈ writerFixedSlots))
-      · rw [unchanged n (Ne.symm slot6) (Ne.symm slot7)] at nonzero
-        exact rep.support n nonzero
-  · intro k tracked
-    have apart := rep.apart k tracked
-    have off6 : (6 : B256) ≠ k.slot :=
-      fun eq => apart (eq ▸ (by decide : (6 : B256) ∈ writerFixedSlots))
-    have off7 : (7 : B256) ≠ k.slot :=
-      fun eq => apart (eq ▸ (by decide : (7 : B256) ∈ writerFixedSlots))
-    rw [unchanged k.slot off6 off7, initializeSourceState_value]
-    exact rep.selected k tracked
-  · intro k outside
-    rw [initializeSourceState_value]
-    exact rep.logicalZero k outside
-
 theorem WriterRep.initialize_public_postH {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
@@ -237,36 +196,6 @@ theorem InitializeSourceResultH_of_covered {sevm : Sevm} (fork : CoveredFork sev
       h.upper0,
       h.upper1,
       h.gas⟩
-
-theorem initialize_public_source_result {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (freshOutput : b.output = []) (value : sevm.value = 0)
-    (authorized : sevm.caller = current.state.factory) (nonstatic : sevm.isStatic = false) :
-    InitializeSourceResult K current invocation sevm b
-      (initializePublicPost sevm b [0x485cc955] getterInitMemory G) G := by
-  have sourceFacts := initializeSourceFrame_prefix current (writerContext sevm invocation)
-    (initializeToken0 sevm) (initializeToken1 sevm)
-  have step := initializePublicPost_storstep (sevm := sevm) (b := b)
-    (R := [0x485cc955]) (M := getterInitMemory) (G := G)
-  have packed := initializePublicStorage_packed (sevm := sevm) (b := b)
-  refine ⟨rfl, rep.initialize_public_post, initialize_startImmediate_done value authorized nonstatic,
-    initialize_drive_done value authorized nonstatic, sourceFacts.1, sourceFacts.2.1, sourceFacts.2.2.1,
-    sourceFacts.2.2.2.1, sourceFacts.2.2.2.2.1, sourceFacts.2.2.2.2.2, ?_, step.self, step.logs,
-    step.other, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [initializePublicPost_output, freshOutput]
-  · intro n off6 off7
-    rw [step.getStorVal n]
-    exact initializePublicStorage_unchanged off6 off7
-  · rw [step.getStorVal 6]
-    exact packed.1
-  · rw [step.getStorVal 7]
-    exact packed.2.1
-  · rw [step.getStorVal 6]
-    exact packed.2.2.1
-  · rw [step.getStorVal 7]
-    exact packed.2.2.2
-  · rfl
 
 theorem initialize_public_source_resultH {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}

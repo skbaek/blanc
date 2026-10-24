@@ -123,15 +123,6 @@ theorem storedScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
-theorem storedScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : StoredScalar)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (afterSload sevm b s.slot)
-      (b.getStorVal sevm.currentTarget s.slot :: ρ :: R) M G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact storedScalar_callee_invH s fork.rules_bal_none run
-
 inductive AddressScalar
   | factory | token0 | token1
 
@@ -194,15 +185,6 @@ theorem addressScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
-
-theorem addressScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome} (s : AddressScalar)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (afterSload sevm b s.slot)
-      ((b.getStorVal sevm.currentTarget s.slot).toAdr.toB256 :: ρ :: R) M G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact addressScalar_callee_invH s fork.rules_bal_none run
 
 inductive ScalarGetter
   | constant (s : ConstantScalar)
@@ -424,13 +406,6 @@ def ScalarGetter.afterH (s : ScalarGetter) (sevm : Sevm) (b : Devm) : Devm :=
   | .constant _ => b
   | .stored s => afterSloadH sevm b s.slot
   | .address s => afterSloadH sevm b s.slot
-
-theorem ScalarGetter.afterH_of_eip2929 (s : ScalarGetter) {sevm : Sevm} (b : Devm)
-    (access : sevm.benvStat.rules.access = .eip2929) : s.afterH sevm b = s.after sevm b := by
-  cases s with
-  | constant _ => rfl
-  | stored _ => exact afterSloadH_of_eip2929 access
-  | address _ => exact afterSloadH_of_eip2929 access
 
 theorem ScalarGetter.afterH_storage (s : ScalarGetter) (sevm : Sevm) (b : Devm) (a : Adr) :
     Devm.getStor (s.afterH sevm b) a = Devm.getStor b a := by

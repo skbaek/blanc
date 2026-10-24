@@ -6,26 +6,11 @@ import Blanc.Lift.CursorQuietReturn
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-def BurnSevenCalls.finishInputMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnSevenCalls root sevm b) : Mem :=
-  burnBalanceReplyMemory
-    (skimRequestMemory (burnBalanceReplyMemory r.five.finalRequestMemory r.five.finalPointer r.final0.out)
-      r.five.finalPointer sevm.currentTarget) r.five.finalPointer r.final1.out
-
 def BurnSevenCallsH.finishInputMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) : Mem :=
   burnBalanceReplyMemory
     (skimRequestMemory (burnBalanceReplyMemory r.five.finalRequestMemory r.five.finalPointer r.final0.out)
       r.five.finalPointer sevm.currentTarget) r.five.finalPointer r.final1.out
-
-def BurnSevenCalls.finishWorld {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnSevenCalls root sevm b) : Devm :=
-  burnSuffixPost sevm r.final1.call.returned.devm
-    (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b)
-    (Bytes.toB256 (r.final0.out.take 32)) (Bytes.toB256 (r.final1.out.take 32))
-    (feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32)))
-    (Sevm.dataWord sevm 4).toAdr.toB256
-    (r.five.four.three.amount0 r.five.four.pricing) (r.five.four.three.amount1 r.five.four.pricing)
 
 def BurnSevenCallsH.finishWorld {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) : Devm :=
@@ -36,33 +21,12 @@ def BurnSevenCallsH.finishWorld {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w 
     (Sevm.dataWord sevm 4).toAdr.toB256
     (r.five.four.three.amount0 r.five.four.pricing) (r.five.four.three.amount1 r.five.four.pricing)
 
-def BurnSevenCalls.finishMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnSevenCalls root sevm b) : Mem :=
-  burnSuffixMemory sevm r.final1.call.returned.devm r.finishInputMemory r.five.finalPointer
-    (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b)
-    (Bytes.toB256 (r.final0.out.take 32)) (Bytes.toB256 (r.final1.out.take 32))
-    (r.five.four.three.amount0 r.five.four.pricing) (r.five.four.three.amount1 r.five.four.pricing)
-
 def BurnSevenCallsH.finishMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) : Mem :=
   burnSuffixMemoryH sevm r.final1.call.returned.devm r.finishInputMemory r.five.finalPointer
     (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b)
     (Bytes.toB256 (r.final0.out.take 32)) (Bytes.toB256 (r.final1.out.take 32))
     (r.five.four.three.amount0 r.five.four.pricing) (r.five.four.three.amount1 r.five.four.pricing)
-
-theorem BurnSevenCalls.finishWorld_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnSevenCalls root sevm b) :
-    (r.toH fork).finishWorld = r.finishWorld := by
-  unfold BurnSevenCallsH.finishWorld BurnSevenCalls.finishWorld
-  rw [burnSuffixPostH_of_covered fork]
-  rfl
-
-theorem BurnSevenCalls.finishMemory_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnSevenCalls root sevm b) :
-    (r.toH fork).finishMemory = r.finishMemory := by
-  unfold BurnSevenCallsH.finishMemory BurnSevenCalls.finishMemory
-  rw [burnSuffixMemoryH_of_covered fork]
-  rfl
 
 theorem BurnSevenCallsH.finishRaw {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) (success : root.exn = .ok post)
@@ -121,27 +85,6 @@ theorem BurnSevenCallsH.finishRaw {root : Exec.Deriv} {sevm : Sevm} {b post : De
   · obtain ⟨continuation, tail, _, _, sameK, _, _, _, _⟩ := resumed
     rw [sameK, List.map_cons] at conts
     cases conts
-
-/-- The retained final answer returns through this actual internal body and
-the original ABI caller, fixing the complete successful output and raw post. -/
-theorem BurnSevenCalls.finishRaw {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnSevenCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    (Bytes.toB256 (r.final0.out.take 32)).toNat < 2 ^ 112 ∧
-    (Bytes.toB256 (r.final1.out.take 32)).toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
-    ∃ (N : Exec.Deriv) (next : Cursor) (gas : Nat),
-      Exec.Deriv.ExecFreeUntil r.final1.call.returned N ∧ N.sevm = sevm ∧ N.exn = .ok post ∧
-      CursorOK code cert N next ∧ next.f = t_053d_c83 ∧ next.K.map Cont.f = [] ∧
-      N.devm = St r.finishWorld
-        [r.five.four.three.amount1 r.five.four.pricing,
-          r.five.four.three.amount0 r.five.four.pricing, 0x89afcb44] r.finishMemory gas ∧
-      post.output = (r.five.four.three.amount0 r.five.four.pricing).toBytes ++
-        (r.five.four.three.amount1 r.five.four.pricing).toBytes ∧
-      (∀ a, post.getStor a = r.finishWorld.getStor a) ∧ post.logs = r.finishWorld.logs := by
-  have h := BurnSevenCallsH.finishRaw (r.toH fork) success fork.rules_stateGas_none
-    fork.rules_bal_none
-  rw [BurnSevenCalls.finishWorld_toH fork, BurnSevenCalls.finishMemory_toH fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

@@ -43,20 +43,6 @@ theorem MintRootCallPositionsH.firstSourceCall {root : Exec.Deriv} {b : Devm} {W
     (by rw [r.first.sevm_eq]; rfl) operands data flag rfl r.post0.returnData.symm rfl
     guard (by rw [r.first.sevm_eq]; exact stateGas) queue
 
-/-- The first typed balance request names this certificate's original call. -/
-theorem MintRootCallPositions.firstSourceCall {root : Exec.Deriv} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {paths : List Exec.LocatedFrame}
-    (r : MintRootCallPositions root b)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (fork : CoveredFork root.sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.first.call root.sevm.currentTarget 0 paths) :
-    let ctx := writerContext root.sevm invocation
-    ∃ observed : SourceCallAt root (mintSourceLockedFrame current ctx (Sevm.dataWord root.sevm 4).toAdr)
-        (requestFor .mintBalance0 current.state.token0 (.balanceOf ctx.pair))
-        (feeObservedResult r.out0) 0,
-      observed.call = r.first.call ∧ observed.paths = paths :=
-  MintRootCallPositionsH.firstSourceCall (r.toH fork) rep invocation fork.rules_stateGas_none queue
-
 
 theorem MintRootCallPositionsH.secondSourceCall {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
     {K : WriterKey → Prop} {current : Checkpoint} {paths : List Exec.LocatedFrame}
@@ -101,22 +87,6 @@ theorem MintRootCallPositionsH.secondSourceCall {root : Exec.Deriv} {b : Devm} {
     (by rw [r.second.sevm_eq, env]; rfl) operands data flag rfl r.post1.returnData.symm rfl
     guard (by rw [r.second.sevm_eq, env]; exact stateGas) queue
 
-/-- The second request uses the first call's actual returned parent and reply. -/
-theorem MintRootCallPositions.secondSourceCall {root : Exec.Deriv} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {paths : List Exec.LocatedFrame}
-    (r : MintRootCallPositions root b)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (fork : CoveredFork root.sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.second.call root.sevm.currentTarget 1 paths) :
-    let ctx := writerContext root.sevm invocation
-    ∃ observed : SourceCallAt root
-        ((mintSourceLockedFrame current ctx (Sevm.dataWord root.sevm 4).toAdr).beginResume
-          (requestFor .mintBalance0 current.state.token0 (.balanceOf ctx.pair)))
-        (requestFor .mintBalance1 current.state.token1 (.balanceOf ctx.pair))
-        (feeObservedResult r.out1) 1,
-      observed.call = r.second.call ∧ observed.paths = paths :=
-  MintRootCallPositionsH.secondSourceCall (r.toH fork) rep invocation fork.rules_stateGas_none queue
-
 
 theorem MintRootCallPositionsH.feeSourceCall {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
     {K : WriterKey → Prop} {current : Checkpoint} {paths : List Exec.LocatedFrame}
@@ -143,22 +113,6 @@ theorem MintRootCallPositionsH.feeSourceCall {root : Exec.Deriv} {b : Devm} {W1 
   have mem3 := balanceReplyMemory_ptr r.out1 mem2
   exact r.fee.sourceCall .mintFeeTo 2 word (by rw [env1]; rfl) mem3.wf
     (by rw [env1]; exact stateGas) queue
-
-/-- The factory source request uses the same third occurrence that supplies the
-physical fee word to the original pricing and public suffixes. -/
-theorem MintRootCallPositions.feeSourceCall {root : Exec.Deriv} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {paths : List Exec.LocatedFrame}
-    (r : MintRootCallPositions root b)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (fork : CoveredFork root.sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.fee.occurrence.call root.sevm.currentTarget 2 paths) :
-    let ctx := writerContext root.sevm invocation
-    ∃ observed : SourceCallAt root
-        (mintSourceFeeFrame current ctx (Sevm.dataWord root.sevm 4).toAdr)
-        (requestFor .mintFeeTo current.state.factory .feeTo)
-        (feeObservedResult r.fee.out) 2,
-      observed.call = r.fee.occurrence.call ∧ observed.paths = paths :=
-  MintRootCallPositionsH.feeSourceCall (r.toH fork) rep invocation fork.rules_stateGas_none queue
 
 
 end Blanc.Lift.UniswapV2Pair

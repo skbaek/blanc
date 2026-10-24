@@ -109,20 +109,6 @@ theorem skim_first_sourceH {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : L
   have pathsEq := queue.paths_unique observedQueue
   exact ⟨⟨observed, same, views, mapped.trans pathsEq, authentic, during⟩⟩
 
-theorem skim_first_source {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
-    {K U : WriterKey → Prop} {current : Checkpoint}
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (r : SkimFirstObservation root b toWord R)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = root.sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    Nonempty (SkimFirstSource r current invocation) := by
-  obtain ⟨h⟩ := skim_first_sourceH inj apart sub (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
-
 
 def skimPositionalAmount0 {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
     (r : SkimFirstObservation root b toWord R) (current : Checkpoint) : B256 :=
@@ -131,11 +117,6 @@ def skimPositionalAmount0 {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : Li
 def skimPositionalAmount0H {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
     (r : SkimFirstObservationH root b toWord R) (current : Checkpoint) : B256 :=
   Bytes.toB256 (r.out.take 32) - Nat.toB256 current.state.reserve0.val
-
-theorem skimPositionalAmount0H_of_covered {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256} {r : SkimFirstObservationH root b toWord R} {current : Checkpoint}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    skimPositionalAmount0H r current = skimPositionalAmount0 (r.toCovered fork) current :=
-  rfl
 
 /-- The first transfer's full original event queue and recursively admitted children
 are tied to its same actual returned checkpoint and storage. -/
@@ -300,20 +281,6 @@ theorem skim_first_mutableH {root : Exec.Deriv} {b : Devm}
   exact ⟨⟨observed, same, events, turns, c, added, rets, queue, mappedPaths, mappedTurns,
     during, authentic, afterRep, sourceLogs, rawLogs⟩⟩
 
-theorem skim_first_mutable {root : Exec.Deriv} {b : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint}
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77])
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = root.sevm.currentTarget →
-      LockedGood U F) : Nonempty (SkimFirstMutable r U current invocation) := by
-  obtain ⟨h⟩ :=
-    skim_first_mutableH inj apart sub (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
-
 
 def skimPositionalFrame2 {root : Exec.Deriv} {b : Devm}
     {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
@@ -346,11 +313,6 @@ def skimPositionalFrame3H {root : Exec.Deriv} {b : Devm}
     (first : SkimFirstMutableH r U current invocation) : Frame :=
   (skimPositionalFrame2H first).beginResume (skimRequest2 current (writerContext root.sevm invocation))
 
-theorem skimPositionalFrame3H_of_covered {root : Exec.Deriv} {b : Devm} {r : SkimFourCallsH root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {first : SkimFirstMutableH r U current invocation}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    skimPositionalFrame3H first = skimPositionalFrame3 (first.toCovered fork) :=
-  rfl
-
 def skimPositionalAmount1 {root : Exec.Deriv} {b : Devm}
     (r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77])
     (checkpoint : Checkpoint) : B256 :=
@@ -360,11 +322,6 @@ def skimPositionalAmount1H {root : Exec.Deriv} {b : Devm}
     (r : SkimFourCallsH root b (skimToWord root.sevm) [0x0257, 0xbc25cf77])
     (checkpoint : Checkpoint) : B256 :=
   Bytes.toB256 (r.reply.out.take 32) - Nat.toB256 checkpoint.state.reserve1.val
-
-theorem skimPositionalAmount1H_of_covered {root : Exec.Deriv} {b : Devm} {r : SkimFourCallsH root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {checkpoint : Checkpoint}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    skimPositionalAmount1H r checkpoint = skimPositionalAmount1 (r.toCovered fork) checkpoint :=
-  rfl
 
 structure SkimSecondSource {root : Exec.Deriv} {b : Devm}
     {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
@@ -488,21 +445,6 @@ theorem skim_second_sourceH {root : Exec.Deriv} {b : Devm}
   rw [same] at observedQueue
   have pathsEq := queue.paths_unique observedQueue
   exact ⟨⟨observed, same, views, mapped.trans pathsEq, authentic, during⟩⟩
-
-theorem skim_second_source {root : Exec.Deriv} {b : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (inj : WriterInj U) (apart : WriterApart U)
-    {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (first : SkimFirstMutable r U current invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = root.sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) : Nonempty (SkimSecondSource first) := by
-  obtain ⟨h⟩ :=
-    skim_second_sourceH inj apart rep (first.toH fork) sem image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
 
 
 structure SkimSecondMutable {root : Exec.Deriv} {b : Devm}
@@ -679,21 +621,6 @@ theorem skim_second_mutableH {root : Exec.Deriv} {b : Devm}
   exact ⟨⟨observed, same, events, turns, c, added, rets, queue, mappedPaths, mappedTurns,
     during, authentic, afterRep, sourceLogs, rawLogs⟩⟩
 
-theorem skim_second_mutable {root : Exec.Deriv} {b : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (inj : WriterInj U) (apart : WriterApart U)
-    {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (first : SkimFirstMutable r U current invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = root.sevm.currentTarget →
-      LockedGood U F) : Nonempty (SkimSecondMutable first) := by
-  obtain ⟨h⟩ :=
-    skim_second_mutableH inj apart rep (first.toH fork) sem image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
-
 
 def skimPositionalTranscript {root : Exec.Deriv} {b : Devm}
     {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
@@ -720,11 +647,6 @@ def skimPositionalTranscriptH {root : Exec.Deriv} {b : Devm}
       (.next (skimBalanceReply r.reply.out) (staticViewTranscript balance1.views .done)
         (.next (skimTransferReply r.transfer.call.returned.devm.returnData
             r.transfer.call.occurrence.slot.isSome) (mutableTranscript transfer1.turns .done) .done)))
-
-theorem skimPositionalTranscriptH_of_covered {root : Exec.Deriv} {b : Devm} {r : SkimFourCallsH root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {balance0 : SkimFirstSourceH r.two.first current invocation} {transfer0 : SkimFirstMutableH r U current invocation} {balance1 : SkimSecondSourceH transfer0} {transfer1 : SkimSecondMutableH transfer0}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    skimPositionalTranscriptH balance0 transfer0 balance1 transfer1 = skimPositionalTranscript (balance0.toCovered fork) (transfer0.toCovered fork) (balance1.toCovered fork) (transfer1.toCovered fork) :=
-  rfl
 
 def skimPositionalResult {root : Exec.Deriv} {b : Devm}
     {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
@@ -757,11 +679,6 @@ def skimPositionalResultH {root : Exec.Deriv} {b : Devm}
         (skimRequest0 current (writerContext root.sevm invocation)) 0 balance0.views ++
       (transfer0.rets ++ (staticViewChildReturns (skimPositionalFrame2H transfer0)
         (skimRequest2 current (writerContext root.sevm invocation)) 0 balance1.views ++ transfer1.rets))}
-
-theorem skimPositionalResultH_of_covered {root : Exec.Deriv} {b : Devm} {r : SkimFourCallsH root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {balance0 : SkimFirstSourceH r.two.first current invocation} {transfer0 : SkimFirstMutableH r U current invocation} {balance1 : SkimSecondSourceH transfer0} {transfer1 : SkimSecondMutableH transfer0}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    skimPositionalResultH balance0 transfer0 balance1 transfer1 = skimPositionalResult (balance0.toCovered fork) (transfer0.toCovered fork) (balance1.toCovered fork) (transfer1.toCovered fork) :=
-  rfl
 
 theorem SkimFourCallsH.admittedConsumes {root : Exec.Deriv} {b : Devm}
     {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
@@ -860,25 +777,6 @@ theorem SkimFourCallsH.admittedConsumes {root : Exec.Deriv} {b : Devm}
   rw [skim_startTyped_suspended paid r.two.first.nonstatic unlocked]
   simpa only [skimPositionalTranscriptH, skimPositionalResultH, List.append_nil,
     skimPositionalFrame0, frame3, request3, locals, skimBalanceReply, skimTransferReply] using initial
-
-/-- Four same-slot source stages compose one recursively admitted result. The
-terminal source frame is computed from the actual final return's closed suffix. -/
-theorem SkimFourCalls.admittedConsumes {root : Exec.Deriv} {b : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]}
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (balance0 : SkimFirstSource r.two.first current invocation)
-    (transfer0 : SkimFirstMutable r U current invocation)
-    (balance1 : SkimSecondSource transfer0) (transfer1 : SkimSecondMutable transfer0)
-    (paid : root.sevm.value = 0) (unlocked : current.state.unlocked = 1)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    AdmittedSourceConsumes LockedAuth root root 0
-      (startTyped current (writerContext root.sevm invocation) (.skim (skimRecipient root.sevm)))
-      (skimPositionalTranscript balance0 transfer0 balance1 transfer1)
-      (skimPositionalResult balance0 transfer0 balance1 transfer1) := by
-  have h := SkimFourCallsH.admittedConsumes rep (balance0.toH fork) (transfer0.toH fork) (balance1.toH fork) (transfer1.toH fork) paid unlocked fork.rules_stateGas_none
-  exact AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-    (fun _ _ _ covered auth => auth.toCovered covered) fork h
 
 
 /-- One original raw Skim run, one incoming checkpoint, and the same four-call

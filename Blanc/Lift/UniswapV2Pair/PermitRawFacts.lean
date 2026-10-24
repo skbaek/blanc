@@ -27,21 +27,5 @@ theorem permit_raw_inH {sevm : Sevm} {b post : Devm} {G : Nat}
   exact ⟨value, size, guard, nonstatic, timely, gw, callGas, d, out, G', call,
     Outcome.halted.inj eq⟩
 
-/-- The certified raw pc-zero permit run supplies its recovery STATICCALL as a step of the
-very same derivation. -/
-theorem permit_raw_in {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCallP (Blanc.Lift.StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
-          sevm b 0xd505accf gw callGas d out ∧
-        post = permitPublicPost sevm b d out 0xd505accf G' := by
-  simpa only [PermitRawCallPH_of_covered fork, permitPublicPostH_of_covered fork] using
-    permit_raw_inH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 end Blanc.Lift.UniswapV2Pair

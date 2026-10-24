@@ -4,24 +4,6 @@ import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The retained actual pricing memory fixes the first transfer's physical
-request allocation, without a memory-shape premise on the public producer. -/
-theorem BurnFourCalls.transferMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnFourCalls root sevm b) :
-    PtrMem 292 416 (r.three.transferMemory r.pricing r.residual) := by
-  have lpMem : PtrMem 128 192 (r.three.transferWorld r.pricing r.residual).memory :=
-    pairLPBurnPost_ptr r.pricing_memory
-  have pointer := safeTransfer_callMemory_ptr (amount := r.three.amount0 r.pricing)
-    (toWord := (Sevm.dataWord sevm 4).toAdr.toB256) lpMem (by decide) (by decide)
-  have size := (safeTransfer_copySizes (amount := r.three.amount0 r.pricing)
-    (toWord := (Sevm.dataWord sevm 4).toAdr.toB256) lpMem (by decide) (by decide)).1
-  have fixedSize : safeTransferPreSize 192 128 = 416 := by
-    norm_num only [safeTransferPreSize, List.foldl, memExtSize, ceilDiv,
-      ite_true, ite_false, Nat.max_def, show (128 : B256).toNat = 128 from rfl]
-  simpa only [BurnThreeCalls.transferMemory, size,
-    show (128 + 164 : B256) = 292 from by decide,
-    fixedSize] using pointer
-
 theorem BurnFourCallsH.transferMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnFourCallsH root sevm b w) :
     PtrMem 292 416 (r.three.transferMemory r.pricing r.residual) := by

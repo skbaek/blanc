@@ -95,28 +95,6 @@ theorem mintPositionalFeeResultH_of_covered {root : Exec.Deriv} {b : Devm} {curr
   unfold mintPositionalFeeResultH mintPositionalFeeResult
   rw [mintPositionalFeeBaseH_of_covered fork, mintPositionalFeeWordH_of_covered fork]
 
-/-- The source finish keeps the original incoming checkpoint and the full actual fee state. -/
-def MintPositionalSourceFinish {root : Exec.Deriv} {b : Devm} (K : WriterKey → Prop)
-    (current : Checkpoint) (invocation : List Nat) (post : Devm)
-    (r : MintRootCallPositions root b) : Prop :=
-  ∃ (feeN : Exec.Deriv) (feeGas : Nat),
-    Exec.Deriv.ExecFreeUntil r.fee.occurrence.call.returned feeN ∧
-    FeeMintSourceResult K { current.state with unlocked := 0 } root.sevm
-      (mintPositionalFeeBase r) (mintPositionalLocals r) (mintPositionalFeeMemory r)
-      (mintPositionalFeeWord r) (mintRootReserve0 root b) (mintRootReserve1 root b) feeGas ∧
-    feeN.devm = feeBranchPost root.sevm (mintPositionalFeeBase r)
-      (mintPositionalLocals r) (mintPositionalFeeMemory r) current.state.kLast
-      (mintPositionalFeeWord r) (mintRootReserve0 root b) (mintRootReserve1 root b) feeGas ∧
-    MintPublicFrameResult (mintPositionalFeeKeys K current r)
-      (mintSourceAfterFeeFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr)
-      (mintBalanceObserved current.state (Sevm.dataWord root.sevm 4).toAdr
-        (Bytes.toB256 (r.out0.take 32)) (Bytes.toB256 (r.out1.take 32)))
-      (mintPositionalFeeResult current r) root.sevm feeN.devm
-      (Bytes.toB256 (r.out1.take 32) - mintRootReserve1 root b)
-      (Bytes.toB256 (r.out0.take 32) - mintRootReserve0 root b)
-      (Bytes.toB256 (r.out1.take 32)) (Bytes.toB256 (r.out0.take 32))
-      (Sevm.dataWord root.sevm 4).toAdr.toB256 (.halted post)
-
 def MintPositionalSourceFinishH {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm} (K : WriterKey → Prop)
     (current : Checkpoint) (invocation : List Nat) (post : Devm)
     (r : MintRootCallPositionsH root b W1 A2 F) : Prop :=
@@ -137,13 +115,6 @@ def MintPositionalSourceFinishH {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F
       (Bytes.toB256 (r.out0.take 32) - mintRootReserve0 root b)
       (Bytes.toB256 (r.out1.take 32)) (Bytes.toB256 (r.out0.take 32))
       (Sevm.dataWord root.sevm 4).toAdr.toB256 (.halted post)
-
-theorem MintPositionalSourceFinishH_of_covered {root : Exec.Deriv} {b : Devm} {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {post : Devm} {r : MintRootCallPositions root b}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    MintPositionalSourceFinishH K current invocation post (r.toH fork) = MintPositionalSourceFinish K current invocation post r := by
-  unfold MintPositionalSourceFinishH MintPositionalSourceFinish
-  simp only [FeeMintSourceResultH_of_covered fork, feeBranchPostH_of_covered fork, mintPositionalFeeBaseH_of_covered fork, mintPositionalFeeKeysH_of_covered fork, mintPositionalFeeMemoryH_of_covered fork, mintPositionalFeeResultH_of_covered fork, mintPositionalFeeWordH_of_covered fork, mintPositionalLocalsH_of_covered fork]
-  simp only [MintRootCallPositions.toH, PairFeeObservation.toH]
 
 theorem MintRootCallPositionsH.sourceFinish {root : Exec.Deriv} {b post : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
     {K : WriterKey → Prop} {current : Checkpoint} (r : MintRootCallPositionsH root b W1 A2 F)
@@ -215,26 +186,6 @@ theorem MintRootCallPositionsH.sourceFinish {root : Exec.Deriv} {b post : Devm} 
   refine ⟨feeN, feeGas, spanFee, sourceFee, stateFee', ?_⟩
   exact mint_fixed_fee_public_frameH stateGas bal mem bound0 bound1 sourceFee stateFee'
     freshMint cache rfl rfl rfl sourceMint sourceABI
-
-/-- Fixed-reply finite accounting starts at the actual fee return and consumes
-its original Mint and ABI continuations. The incoming checkpoint is unchanged. -/
-theorem MintRootCallPositions.sourceFinish {root : Exec.Deriv} {b post : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : MintRootCallPositions root b)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (invocation : List Nat) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (freshFee : FeeMintFresh K { current.state with unlocked := 0 } root.sevm
-      (mintPositionalFeeBase r) (mintPositionalFeeWord r)
-      (mintRootReserve0 root b) (mintRootReserve1 root b))
-    (freshMint : MintAfterFeeFresh (mintPositionalFeeKeys K current r)
-      (mintPositionalFeeResult current r).state (Sevm.dataWord root.sevm 4).toAdr.toB256) :
-    MintPositionalSourceFinish K current invocation post r := by
-  have h := MintRootCallPositionsH.sourceFinish (r.toH fork) rep invocation success
-    fork.rules_stateGas_none fork.rules_bal_none
-    (by rw [mintPositionalFeeBaseH_of_covered fork, mintPositionalFeeWordH_of_covered fork]; exact freshFee)
-    (by rw [mintPositionalFeeKeysH_of_covered fork, mintPositionalFeeResultH_of_covered fork]; exact freshMint)
-  simp only [MintPositionalSourceFinishH_of_covered fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

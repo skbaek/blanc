@@ -23,14 +23,5 @@ theorem pair_checked_mul_cursor_stateH {root : Exec.Deriv} {b post : Devm}
   exact ⟨nowrap, ⟨⟨returned, cursor, cut.free.trans gap, env.trans cut.sevm_eq,
     outcome.trans cut.exn_eq, placed, tree, ⟨residual, full⟩, conts⟩⟩⟩
 
-/-- The checked multiplication returns through its supplied actual continuation.
-No-wrap is derived from the same actual callee, with arbitrary caller tail/K. -/
-theorem pair_checked_mul_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {caller : SFunc} {x y ρ : B256}
-    (cut : CursorStateAt code cert root t_21e8_c58 b (y :: x :: ρ :: R) M (caller :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    B256.Nofm x y ∧ Nonempty (CursorStateAt code cert root caller b ((x * y) :: R) M K) :=
-  pair_checked_mul_cursor_stateH cut success fork.rules_stateGas_none
-
 
 end Blanc.Lift.UniswapV2Pair

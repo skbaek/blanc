@@ -133,22 +133,5 @@ theorem burn_initial_actual_reply_cursorH {F : Exec.Deriv} {κ : Cursor}
   rw [reply.returnData] at decoded
   exact ⟨one, decoded⟩
 
-/-- Classify and decode the supplied actual returned parent, preserving its
-complete world, physical reply memory, and original mapped continuation. -/
-theorem burn_initial_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
-    {b post : Devm} {R : List B256} {M : Mem} {flag a x y : B256} {out : Bytes}
-    (site : BurnInitialBalanceSite) (placed : CursorOK code cert F κ)
-    (tree : κ.f = site.afterCallTree) (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork)
-    (reply : StaticCallPost b F.devm (a :: x :: y :: R)
-      (balanceRequestMemory M F.sevm.currentTarget) 128 36 128 32 flag out)
-    (mem : PtrMem 128 192 (balanceReplyMemory M F.sevm.currentTarget out))
-    (bound : out.length < 2 ^ 256) :
-    flag = 1 ∧ 32 ≤ out.length ∧
-      Nonempty (CursorStateAt code cert F site.afterDecodeTree F.devm
-        (Bytes.toB256 ((balanceReplyMemory M F.sevm.currentTarget out).read 128 32).1 :: R)
-        (balanceReplyMemory M F.sevm.currentTarget out) (κ.K.map Cont.f)) :=
-  burn_initial_actual_reply_cursorH site placed tree success fork.rules_stateGas_none reply mem bound
-
 
 end Blanc.Lift.UniswapV2Pair

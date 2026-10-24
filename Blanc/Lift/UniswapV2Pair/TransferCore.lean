@@ -39,12 +39,6 @@ def transferCreditPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
   St (transferCreditBaseH sevm b owner recipient amount credited) R
     ((transferScratch M recipient.toB256).write 128 amount.toBytes) G
 
-theorem transferCreditPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount credited : B256) (G : Nat) :
-    transferCreditPostH sevm b R M owner recipient amount credited G = transferCreditPost sevm b R M owner recipient amount credited G := by
-  unfold transferCreditPostH transferCreditPost
-  simp only [transferCreditBaseH_of_covered fork]
-
 /-- The literal credit continuation retains the actual incoming storage metadata. -/
 theorem transfer_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G c : Nat} {owner recipient : Adr}
@@ -292,19 +286,6 @@ theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
-/-- Any completed credit continuation returns its entire store/log/memory image. -/
-theorem transfer_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {owner recipient : Adr}
-    {amount credited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run fs sevm
-      (St b (credited :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
-      t_2683_c61 o) :
-    sevm.isStatic = false ∧
-      ∃ residual, o = .returned (transferCreditPost sevm b R M owner recipient amount credited residual) := by
-  simpa only [transferCreditPostH_of_covered fork] using
-    transfer_credit_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def transferDebitBase (sevm : Sevm) (b : Devm) (owner : Adr) (debited : B256) : Devm :=
   afterSstore sevm b (transferBalanceSlot owner) debited
@@ -347,12 +328,6 @@ def transferDebitPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (afterSloadH sevm (transferDebitBaseH sevm b owner debited) (transferBalanceSlot recipient))
     R ((transferScratch M owner.toB256).write 0 recipient.toB256.toBytes)
     owner recipient amount (transferRecipientWordH sevm b owner recipient debited + amount) G
-
-theorem transferDebitPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount debited : B256) (G : Nat) :
-    transferDebitPostH sevm b R M owner recipient amount debited G = transferDebitPost sevm b R M owner recipient amount debited G := by
-  unfold transferDebitPostH transferDebitPost
-  simp only [transferCreditPostH_of_covered fork, transferDebitBaseH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- The recipient load is evaluated after the actual debit store, including physical aliases. -/
 theorem transfer_debit_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -571,19 +546,6 @@ theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   · obtain ⟨_, _, eq⟩ := add72_inv checked
     cases eq
 
-/-- Successful debit continuation derives credit safety from the actual post-debit load. -/
-theorem transfer_debit_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {owner recipient : Adr} {amount debited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (debited :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
-      t_2641_c61 o) :
-    sevm.isStatic = false ∧
-      (transferRecipientWord sevm b owner recipient debited).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferDebitPost sevm b R M owner recipient amount debited residual) := by
-  simpa only [transferDebitPostH_of_covered fork, transferRecipientWordH_of_covered fork] using
-    transfer_debit_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def transferSourceWord (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
   b.getStorVal sevm.currentTarget (transferBalanceSlot owner)
@@ -624,12 +586,6 @@ def transferCorePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
   St (transferCoreBaseH sevm b owner recipient amount) R
     (transferCoreMemory M owner recipient amount) G
-
-theorem transferCorePostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (b : Devm) (R : List B256) (M : Mem) (owner recipient : Adr) (amount : B256) (G : Nat) :
-    transferCorePostH sevm b R M owner recipient amount G = transferCorePost sevm b R M owner recipient amount G := by
-  unfold transferCorePostH transferCorePost
-  simp only [transferCoreBaseH_of_covered fork]
 
 /-- The literal transfer core consumes checked subtraction before its sequential debit/credit tail. -/
 theorem transfer61_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -794,19 +750,6 @@ theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
 
-/-- Successful transfer derives owner cover and recipient safety from both checked callees. -/
-theorem transfer61_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {owner recipient : Adr} {amount ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_260b_c61 o) :
-    amount ≤ transferSourceWord sevm b owner ∧ sevm.isStatic = false ∧
-      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot owner))
-        owner recipient (transferSourceWord sevm b owner - amount)).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferCorePost sevm b R M owner recipient amount residual) := by
-  simpa only [transferCorePostH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    transfer61_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def transfer40Post (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (recipient : Adr) (amount : B256) (G : Nat) : Devm :=
@@ -817,12 +760,6 @@ def transfer40PostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (recipient : Adr) (amount : B256) (G : Nat) : Devm :=
   St (transferCoreBaseH sevm b sevm.caller recipient amount) (1 :: R)
     (transferCoreMemory M sevm.caller recipient amount) G
-
-theorem transfer40PostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (b : Devm) (R : List B256) (M : Mem) (recipient : Adr) (amount : B256) (G : Nat) :
-    transfer40PostH sevm b R M recipient amount G = transfer40Post sevm b R M recipient amount G := by
-  unfold transfer40PostH transfer40Post
-  simp only [transferCoreBaseH_of_covered fork]
 
 /-- The actual immediate body supplies CALLER and returns the true word. -/
 theorem transfer40_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -909,19 +846,6 @@ theorem transfer40_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     exact ⟨cover, nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, _, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
-
-/-- Immediate successful transfer obtains acceptance from the literal core, including its halt exclusion. -/
-theorem transfer40_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {recipient : Adr} {amount ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (amount :: recipient.toB256 :: ρ :: R) M G) t_18cb_c40 o) :
-    amount ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot sevm.caller))
-        sevm.caller recipient (transferSourceWord sevm b sevm.caller - amount)).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transfer40Post sevm b R M recipient amount residual) := by
-  simpa only [transfer40PostH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    transfer40_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 end Blanc.Lift.UniswapV2Pair

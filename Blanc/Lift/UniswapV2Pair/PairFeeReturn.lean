@@ -43,22 +43,6 @@ theorem PairFeeObservationH.returnCursor {root start : Exec.Deriv} {b post Wc : 
     env.trans (r.decoded.sevm_eq.trans returnedEnv),
     outcome.trans (r.decoded.exn_eq.trans returnedOutcome), placed, tree, conts, gas, source⟩
 
-/-- The physical factory reply drives the same checked body to its original
-caller. The supplied caller and outer continuations may contain external calls. -/
-theorem PairFeeObservation.returnCursor {root start : Exec.Deriv} {b post : Devm}
-    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
-    (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (next : Cursor),
-      Exec.Deriv.ExecFreeUntil r.occurrence.call.returned N ∧
-      N.sevm = start.sevm ∧ N.exn = .ok post ∧
-      CursorOK code cert N next ∧ next.f = caller ∧ next.K.map Cont.f = K ∧
-      ∃ gas, SFunc.Run cert.prog start.sevm
-        (St r.occurrence.call.returned.devm
-          (Bytes.toB256 (r.out.take 32) :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-          (feeReplyMemory M r.out) gas) pairFeeAfterDecodeTree (.returned N.devm) :=
-  PairFeeObservationH.returnCursor (r.toH fork) success fork.rules_stateGas_none
-
 
 theorem pair_fee_decoder_tail_invH {sevm : Sevm} {b : Devm} {R : List B256}
     {M : Mem} {G : Nat} {w r1 r0 ρ : B256} {o : Outcome}
@@ -104,19 +88,6 @@ theorem pair_fee_decoder_tail_invH {sevm : Sevm} {b : Devm} {R : List B256}
         feeKLastWorldH, feeKLastWord, feeOnWord, B256.eqCheck, ite_eq_right addressZero] using tail)⟩
     · exact (hz rfl).elim
 
-/-- Invert the fee decoder tail already reached by the physical reply cursor. -/
-theorem pair_fee_decoder_tail_inv {sevm : Sevm} {b : Devm} {R : List B256}
-    {M : Mem} {G : Nat} {w r1 r0 ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run cert.prog sevm
-      (St b (w :: 0 :: 0 :: r1 :: r0 :: ρ :: R) M G) pairFeeAfterDecodeTree o) :
-    ∃ gas, SFunc.Run cert.prog sevm
-      (St (feeKLastWorld sevm b)
-        (feeKLastWord sevm b :: w :: feeOnWord w :: r1 :: r0 :: ρ :: R) M gas)
-      (feeDecodedTree w) o := by
-  simpa only [feeKLastWorldH_of_covered fork] using
-    pair_fee_decoder_tail_invH fork.rules_bal_none run
-
 
 theorem PairFeeObservationH.returnState {root start : Exec.Deriv} {b post Wc : Devm}
     {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
@@ -143,29 +114,6 @@ theorem PairFeeObservationH.returnState {root start : Exec.Deriv} {b post Wc : D
     (feeReplyMemory_ptr r.out (feeRequestMemory_ptr mem)) bound0 bound1 branch
   exact ⟨N, next, span, env, outcome, placed, tree, conts, guards, residual,
     Outcome.returned.inj same⟩
-
-/-- The same original fee reply determines the complete actual caller state.
-Both fee branch guards and residual gas are inferred from this successful suffix. -/
-theorem PairFeeObservation.returnState {root start : Exec.Deriv} {b post : Devm}
-    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
-    (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) (bound0 : r0.toNat < 2 ^ 112)
-    (bound1 : r1.toNat < 2 ^ 112) :
-    ∃ (N : Exec.Deriv) (next : Cursor),
-      Exec.Deriv.ExecFreeUntil r.occurrence.call.returned N ∧
-      N.sevm = start.sevm ∧ N.exn = .ok post ∧
-      CursorOK code cert N next ∧ next.f = caller ∧ next.K.map Cont.f = K ∧
-      feeBranchAccepts start.sevm (feeKLastWorld start.sevm r.occurrence.call.returned.devm)
-        (feeKLastWord start.sevm r.occurrence.call.returned.devm)
-        (Bytes.toB256 (r.out.take 32)) r0 r1 ∧
-      ∃ gas, N.devm = feeBranchPost start.sevm
-        (feeKLastWorld start.sevm r.occurrence.call.returned.devm) R (feeReplyMemory M r.out)
-        (feeKLastWord start.sevm r.occurrence.call.returned.devm)
-        (Bytes.toB256 (r.out.take 32)) r0 r1 gas := by
-  simpa only [PairFeeObservation.toH, feeBranchAcceptsH_of_covered fork, feeBranchPostH_of_covered fork,
-    feeKLastWorldH_of_covered fork] using
-    PairFeeObservationH.returnState (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1
 
 
 /-- Normalize this actual return as a full cursor state, retaining the guards
@@ -201,27 +149,5 @@ theorem PairFeeObservationH.returnCutData {root start : Exec.Deriv} {b post Wc :
     Blanc.Exec.Deriv.ParentPrefix.sevm_eq span.1,
     Blanc.Exec.Deriv.ParentPrefix.exn_eq span.1, placed, tree,
     ⟨N.devm.gasLeft, St.self machine.1 rfl⟩, conts⟩, rfl, guards, gas, state⟩
-
-theorem PairFeeObservation.returnCutData {root start : Exec.Deriv} {b post : Devm}
-    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
-    (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) (bound0 : r0.toNat < 2 ^ 112)
-    (bound1 : r1.toNat < 2 ^ 112) :
-    ∃ N : Exec.Deriv, PtrMem 128 192 N.devm.memory ∧
-      ∃ cut : CursorStateAt code cert r.occurrence.call.returned caller N.devm
-        (feeOnWord (Bytes.toB256 (r.out.take 32)) :: R) N.devm.memory K,
-        cut.node = N ∧
-        feeBranchAccepts start.sevm (feeKLastWorld start.sevm r.occurrence.call.returned.devm)
-          (feeKLastWord start.sevm r.occurrence.call.returned.devm)
-          (Bytes.toB256 (r.out.take 32)) r0 r1 ∧
-        ∃ gas, N.devm = feeBranchPost start.sevm
-          (feeKLastWorld start.sevm r.occurrence.call.returned.devm) R (feeReplyMemory M r.out)
-          (feeKLastWord start.sevm r.occurrence.call.returned.devm)
-          (Bytes.toB256 (r.out.take 32)) r0 r1 gas := by
-  simpa only [PairFeeObservation.toH, feeBranchAcceptsH_of_covered fork, feeBranchPostH_of_covered fork,
-    feeKLastWorldH_of_covered fork] using
-    PairFeeObservationH.returnCutData (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
-      mem bound0 bound1
 
 end Blanc.Lift.UniswapV2Pair

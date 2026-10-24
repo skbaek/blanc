@@ -480,21 +480,6 @@ theorem pair_selector_dispatch {sevm : Sevm} {Goal : Prop} {R : (Sevm → Prop) 
   · exact use (views (.string .name)) (h.trans (by decide))
   · exact use (views (.getReserves)) (h.trans (by decide))
 
-/-- The single Pair selector dispatch, parameterized by the operation producers. -/
-theorem pairSupplyWith
-    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
-    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
-    (rules : PairSupplyRules Consumes Auth U) :
-    PairStepSupplyWith Consumes Auth U (fun _ => True) := by
-  intro current invocation sevm b post G run K codeEq installedCode fork freshOutput representable
-    _ good sub wrep
-  exact pair_selector_dispatch (R := PairStepSupplyWith Consumes Auth U)
-    (pair_bytecode_selector_inv codeEq fork run)
-    (fun supply chosen => supply current invocation run codeEq installedCode fork freshOutput
-      representable chosen good sub wrep)
-    rules.transfer rules.approve rules.transferFrom rules.initializeEntry rules.permit rules.mint
-    rules.sync rules.skim rules.swap rules.burn rules.views
-
 /-- `PairSupplyRules` from the historical rule facts: one `PairStepSupplyWithH` producer per family. -/
 structure PairSupplyRulesH
     (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)

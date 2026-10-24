@@ -8,13 +8,6 @@ import Blanc.Lift.UniswapV2Pair.LPMintCore
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The sequential LP burn scratch writes preserve the original free pointer. -/
-theorem pairLPBurnPost_ptr {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {fromWord value : B256} {G : Nat} (mem : PtrMem 128 192 M) :
-    PtrMem 128 192 (lpBurnPost sevm b R M fromWord value G).memory := by
-  simpa only [lpBurnPost, lpBurnBalancePost, lpBurnSupplyPost, St.memory, lpMintMemory] using
-    lpMintMemory_ptr (lpMintScratch_ptr mem fromWord) fromWord value
-
 theorem pairLPBurnPost_ptrH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {fromWord value : B256} {G : Nat} (mem : PtrMem 128 192 M) :
     PtrMem 128 192 (lpBurnPostH sevm b R M fromWord value G).memory := by
@@ -53,25 +46,6 @@ theorem pair_lp_burn_cursor_stateH {root : Exec.Deriv} {b post : Devm}
   exact ⟨nonstatic, balance, supply, residual,
     ⟨⟨returned, cursor, cut.free.trans gap, env.trans cut.sevm_eq,
       outcome.trans cut.exn_eq, placed, tree, ⟨residual, machine⟩, conts⟩⟩⟩
-
-/-- The actual LP burn returns through its original caller with the sequential
-storage/log world derived by entry63, without a storage-representation premise. -/
-theorem pair_lp_burn_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {caller : SFunc}
-    {fromWord value ρ : B256}
-    (cut : CursorStateAt code cert root t_2992_c63 b
-      (value :: fromWord :: ρ :: R) M (caller :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    root.sevm.isStatic = false ∧ value ≤ lpBurnBalanceWord root.sevm b fromWord ∧
-      value ≤ lpBurnSupplyWord root.sevm
-        (afterSload root.sevm b (transferBalanceSlot fromWord.toAdr))
-        fromWord (lpBurnBalanceWord root.sevm b fromWord - value) ∧
-      ∃ residual, Nonempty (CursorStateAt code cert root caller
-        (lpBurnPost root.sevm b R M fromWord value residual) R
-        (lpBurnPost root.sevm b R M fromWord value residual).memory K) := by
-  simpa only [lpBurnPostH_of_covered fork, lpBurnSupplyWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    pair_lp_burn_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
 
 
 end Blanc.Lift.UniswapV2Pair

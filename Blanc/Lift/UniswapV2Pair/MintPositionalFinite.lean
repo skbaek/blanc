@@ -51,31 +51,5 @@ theorem mint_fixed_fee_public_frameH {K : WriterKey → Prop} {st : State}
   have actualPointer : PtrMem 128 192 calleePost.memory := same.symm ▸ pointer
   exact mintFrameResult_public_return_inv actualPointer finite sourceABI
 
-/-- Fixed fee-output source accounting consumes the supplied actual pricing and
-ABI suffixes. No factory observation is selected again by this adapter. -/
-theorem mint_fixed_fee_public_frame {K : WriterKey → Prop} {st : State}
-    {frame : Frame} {observed : MintObserved} {sevm : Sevm}
-    {feeBase feePost calleePost post : Devm} {R : List B256} {M : Mem}
-    {w amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {feeGas : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (sourceFee : FeeMintSourceResult K st sevm feeBase
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M w r0 r1 feeGas)
-    (stateFee : feePost = feeBranchPost sevm feeBase
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M st.kLast w r0 r1 feeGas)
-    (fresh : MintAfterFeeFresh (feeBranchSourceKeys K st sevm feeBase w r0 r1)
-      (feeBranchSourceFee st sevm feeBase w r0 r1).state toWord)
-    (cache : MintAfterFeeCache observed (feeBranchSourceFee st sevm feeBase w r0 r1)
-      (feeOnWord w) amount1 amount0 b1 b0 r1 r0 toWord)
-    (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (sourceMint : SFunc.Run cert.prog sevm feePost t_1233_c41 (.returned calleePost))
-    (sourceABI : SFunc.Run cert.prog sevm calleePost t_039b_c86 (.halted post)) :
-    MintPublicFrameResult (feeBranchSourceKeys K st sevm feeBase w r0 r1)
-      frame observed (feeBranchSourceFee st sevm feeBase w r0 r1)
-      sevm feePost amount1 amount0 b1 b0 toWord (.halted post) := by
-  simpa only [FeeMintSourceResultH_of_covered fork, feeBranchPostH_of_covered fork] using
-    mint_fixed_fee_public_frameH fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1 (by simpa only [FeeMintSourceResultH_of_covered fork] using sourceFee) (by simpa only [feeBranchPostH_of_covered fork] using stateFee) fresh cache time pair sender sourceMint sourceABI
-
 
 end Blanc.Lift.UniswapV2Pair

@@ -265,17 +265,5 @@ theorem burn_four_occurrences_of_successH {sevm : Sevm} {b post : Devm} {w : Bur
   · rw [env] at primitive
     exact primitive
 
-/-- Successful original Burn execution determines the fourth call; no payout,
-gas schedule, endpoint or chosen occurrence is supplied as a premise. -/
-theorem burn_four_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    Nonempty (BurnFourCalls root sevm b) := by
-  obtain ⟨h⟩ := burn_four_occurrences_of_successH (BurnScheduleH.of_covered fork) codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
-
 
 end Blanc.Lift.UniswapV2Pair

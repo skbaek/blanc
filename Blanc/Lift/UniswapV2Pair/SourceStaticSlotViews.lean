@@ -51,25 +51,5 @@ theorem CallOccurrenceStep.staticSlotViewsH {root : Exec.Deriv}
     exact ⟨_, chosen, Or.inr ⟨evm, raw, callee, resume, pc, child, next, spawn, enter,
       resumed, slot, original, rfl⟩, mapped, authentic, during⟩
 
-/-- The actual static occurrence supplies its exact slot queue, complete child
-paths, and source views. Root freshness is projected to that same child. -/
-theorem CallOccurrenceStep.staticSlotViews {root : Exec.Deriv}
-    (call : CallOccurrenceStep root .staticcall) {K : WriterKey → Prop}
-    {frame : Frame} {request : Request} (index : Nat)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (call.occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (call.occurrence.node.devm.getStor frame.context.pair) frame.current.state)
-    (time : frame.context.timestamp = call.occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = frame.context.pair →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
-    ∃ (paths : List Exec.LocatedFrame) (views : List StaticViewTurn),
-      SourceSlotQueue call frame.context.pair index paths ∧ views.map Prod.fst = paths ∧
-      (∀ picked ∈ views, picked.Authentic frame) ∧
-      ExactTurns frame request 0 (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} :=
-  CallOccurrenceStep.staticSlotViewsH call index sem image installed rep time fork.rules_stateGas_none fork.rules_bal_none fresh
-
 
 end Blanc.Lift.UniswapV2Pair

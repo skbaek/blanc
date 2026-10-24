@@ -55,26 +55,5 @@ theorem mint_balance_reply_cursor_stateH {start : Exec.Deriv} {b post : Devm}
       balanceReplyMemory_word wf start.sevm.currentTarget out width] at decoded
     exact ⟨one, width, decoded⟩
 
-/-- The physical reply at either Mint balance site forces success, checks full
-returndata width, and decodes its own output memory at the same actual cursor. -/
-theorem mint_balance_reply_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {f : SFunc} {R : List B256} {M : Mem} {K : List SFunc} {flag a x y : B256} {out : Bytes}
-    (site : MintBalanceSite)
-    (cut : CursorStateAt code cert start f b (flag :: a :: x :: y :: R)
-      (balanceReplyMemory M start.sevm.currentTarget out) K)
-    (shape : f = (callFlagGuardLine (match site with | .first => [0x11,0x22] | .second => [0x11,0xc5])
-      (by cases site <;> (change (2 : Nat) ≤ 32; decide))).foldr SFunc.next
-      (.branch (match site with | .first => t_1119_c41 | .second => t_11bc_c41) site.returnTree))
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (flag01 : flag = 0 ∨ flag = 1) (data : b.returnData = out)
-    (bound : out.length < 2 ^ 256)
-    (mem : PtrMem 128 192 (balanceRequestMemory M start.sevm.currentTarget))
-    (wf : Mem.Wf M) :
-    flag = 1 ∧ 32 ≤ out.length ∧
-      Nonempty (CursorStateAt code cert start site.afterDecodeTree b
-        (Bytes.toB256 (out.take 32) :: R)
-        (balanceReplyMemory M start.sevm.currentTarget out) K) :=
-  mint_balance_reply_cursor_stateH site cut shape success fork.rules_stateGas_none flag01 data bound mem wf
-
 
 end Blanc.Lift.UniswapV2Pair

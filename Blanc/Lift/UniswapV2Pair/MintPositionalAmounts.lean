@@ -52,17 +52,6 @@ theorem mint_amount0_callee_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [0] = (0 : B256) from rfl] using state⟩)
   exact caller.callH cert_check success stateGas (by rfl)
 
-/-- Mint's literal amount0 caller preserves the actual helper and continuation. -/
-theorem mint_amount0_callee_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {b1 b0 r1 r0 toWord ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root MintBalanceSite.second.afterDecodeTree b
-      (b1 :: 0 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (bound : r0.toNat < 2 ^ 112) :
-    Nonempty (CursorStateAt code cert root t_226e_c59 b
-      (r0 :: b0 :: 0x1201 :: 0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M (t_1201_c41 :: K)) :=
-  mint_amount0_callee_cursor_stateH cut success fork.rules_stateGas_none bound
-
 
 def mintAmount1CallerLine : List Ninst := [
   .reg (.swap 0),
@@ -111,17 +100,6 @@ theorem mint_amount1_callee_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [0] = (0 : B256) from rfl] using state⟩)
   exact caller.callH cert_check success stateGas (by rfl)
 
-/-- Mint's literal amount1 caller preserves the actual helper and continuation. -/
-theorem mint_amount1_callee_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {b1 b0 r1 r0 toWord ρ amount0 : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_1201_c41 b
-      (amount0 :: 0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (bound : r1.toNat < 2 ^ 112) :
-    Nonempty (CursorStateAt code cert root t_226e_c59 b
-      (r1 :: b1 :: 0x1225 :: 0 :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M (t_1225_c41 :: K)) :=
-  mint_amount1_callee_cursor_stateH cut success fork.rules_stateGas_none bound
-
 
 def mintFeeCallerLine : List Ninst := [
   .reg (.swap 0),
@@ -160,17 +138,6 @@ theorem mint_fee_callee_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       cases line
       exact ⟨gas, state⟩)
   exact caller.callH cert_check success stateGas (by rfl)
-
-/-- The actual Mint caller enters the shared fee helper with its real continuation. -/
-theorem mint_fee_callee_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_1225_c41 b
-      (amount1 :: 0 :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root t_26ec_c68 b
-      (r1 :: r0 :: 0x1233 :: mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R)
-      M (t_1233_c41 :: K)) :=
-  mint_fee_callee_cursor_stateH cut success fork.rules_stateGas_none
 
 
 end Blanc.Lift.UniswapV2Pair

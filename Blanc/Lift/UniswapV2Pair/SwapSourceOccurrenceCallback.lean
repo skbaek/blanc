@@ -81,24 +81,5 @@ theorem SwapCallbackOccurrenceH.sourceCallH {root start : Exec.Deriv} {b : Devm}
     partition := raw.partition
   }, same⟩
 
-/-- A guarded callback keeps its own successful reply and actual code guard;
-its entered slot bit is not substituted for the guarded request's code bit. -/
-theorem SwapCallbackOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
-    (frame : Frame) (index : Nat)
-    (staticContext : frame.context.isStatic = start.sevm.isStatic)
-    (pair : frame.context.pair = start.sevm.currentTarget)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
-          (start.sevm.data.sliceD dataStart.toNat len.toNat 0)))
-        (swapCallbackReply r.step.returned.devm.returnData) index,
-      observed.call = r.step :=
-  SwapCallbackOccurrenceH.sourceCallH (r.toH (by
-    rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.step.sameFrame, r.sevmEq]
-    exact fork)) frame index staticContext pair
-    fork.rules_stateGas_none
-
 
 end Blanc.Lift.UniswapV2Pair

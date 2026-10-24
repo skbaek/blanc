@@ -76,41 +76,5 @@ theorem MintRootCallPositionsH.suffixes {root : Exec.Deriv} {b post W1 : Devm}
     rw [empty] at sameK
     cases sameK
 
-/-- The actual fee reply, fee return, Mint return and public halt share one root.
-The source suffixes start at those very original continuation nodes. -/
-theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
-    (r : MintRootCallPositions root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    ∃ (feeN mintN : Exec.Deriv) (feeCursor mintCursor : Cursor) (feeGas : Nat),
-      Exec.Deriv.ExecFreeUntil r.fee.occurrence.call.returned feeN ∧
-      feeN.sevm = root.sevm ∧ feeN.exn = .ok post ∧
-      CursorOK code cert feeN feeCursor ∧ feeCursor.f = t_1233_c41 ∧
-      feeCursor.K.map Cont.f = [t_039b_c86] ∧
-      feeBranchAccepts root.sevm
-        (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
-        (feeKLastWord root.sevm r.fee.occurrence.call.returned.devm)
-        (Bytes.toB256 (r.fee.out.take 32)) (mintRootReserve0 root b) (mintRootReserve1 root b) ∧
-      feeN.devm = feeBranchPost root.sevm
-        (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
-        (mintFeeLocals (Bytes.toB256 (r.out1.take 32) - mintRootReserve1 root b)
-          (Bytes.toB256 (r.out0.take 32) - mintRootReserve0 root b)
-          (Bytes.toB256 (r.out1.take 32)) (Bytes.toB256 (r.out0.take 32))
-          (mintRootReserve1 root b) (mintRootReserve0 root b)
-          (Sevm.dataWord root.sevm 4).toAdr.toB256 0x039b [0x6a627842])
-        (feeReplyMemory (balanceReplyMemory
-          (balanceReplyMemory getterInitMemory root.sevm.currentTarget r.out0)
-          r.first.call.returned.sevm.currentTarget r.out1) r.fee.out)
-        (feeKLastWord root.sevm r.fee.occurrence.call.returned.devm)
-        (Bytes.toB256 (r.fee.out.take 32)) (mintRootReserve0 root b) (mintRootReserve1 root b) feeGas ∧
-      Exec.Deriv.ExecFreeUntil feeN mintN ∧
-      mintN.sevm = root.sevm ∧ mintN.exn = .ok post ∧
-      CursorOK code cert mintN mintCursor ∧ mintCursor.f = t_039b_c86 ∧
-      mintCursor.K.map Cont.f = [] ∧
-      SFunc.Run cert.prog root.sevm feeN.devm t_1233_c41 (.returned mintN.devm) ∧
-      SFunc.Run cert.prog root.sevm mintN.devm t_039b_c86 (.halted post) := by
-  simpa only [MintRootCallPositions.toH, PairFeeObservation.toH, feeBranchAcceptsH_of_covered fork,
-    feeBranchPostH_of_covered fork, feeKLastWorldH_of_covered fork] using
-    MintRootCallPositionsH.suffixes (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
-
 
 end Blanc.Lift.UniswapV2Pair

@@ -60,39 +60,5 @@ theorem BurnSevenCallsH.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post :
   exact ⟨updated, event, oracle, accepted, finished,
     (stor sevm.currentTarget).symm ▸ represented, output, logs.trans rawLogs⟩
 
-/-- The same actual final answers produce the finite update, unlock and Burn
-event, and that exact source finisher represents the actual successful post. -/
-theorem BurnSevenCalls.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (rep : WriterRep J (r.final1.call.returned.devm.getStor sevm.currentTarget) frame.current.state)
-    (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork) :
-    let balance0 := Bytes.toB256 (r.final0.out.take 32)
-    let balance1 := Bytes.toB256 (r.final1.out.take 32)
-    let flag := feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32))
-    let recipient := (Sevm.dataWord sevm 4).toAdr.toB256
-    let amount0 := r.five.four.three.amount0 r.five.four.pricing
-    let amount1 := r.five.four.three.amount1 r.five.four.pricing
-    ∃ (updated : State) (event : Event) (oracle : OracleUpdate),
-      frame.current.state.update frame.context balance0 balance1
-        current.state.cachedReserves.reserve0.val current.state.cachedReserves.reserve1.val =
-          .ok (updated, event, oracle) ∧
-      frame.finishUpdated balance0 balance1 current.state.cachedReserves (decide (flag ≠ 0))
-        (some (.burn frame.context.sender amount0 amount1 recipient.toAdr))
-        (encodeWords [amount0, amount1]) =
-          .finished (burnFinishedFrame frame updated event oracle flag recipient amount0 amount1)
-            (encodeWords [amount0, amount1]) ∧
-      WriterRep J (post.getStor sevm.currentTarget)
-        (burnFinishedFrame frame updated event oracle flag recipient amount0 amount1).current.state ∧
-      post.output = encodeWords [amount0, amount1] ∧
-      post.logs = r.final1.call.returned.devm.logs ++
-        [⟨frame.context.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩,
-         ⟨frame.context.pair, [burnEventTopic, frame.context.sender.toB256, recipient.toAdr.toB256],
-          encodeWords [amount0, amount1]⟩] :=
-  BurnSevenCallsH.finishSource (r.toH fork) incoming rep time pair sender success fork.rules_stateGas_none fork.rules_bal_none
-
 
 end Blanc.Lift.UniswapV2Pair

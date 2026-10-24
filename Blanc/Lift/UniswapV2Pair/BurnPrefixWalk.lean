@@ -39,20 +39,6 @@ theorem burnLockGuard_invH {P : Sevm → Devm → Ninst → Devm → Prop}
         exact (accepted rfl).elim
     exact ⟨unlocked, gas, tail⟩
 
-/-- Burn's literal lock test creates both output temporaries and reads the entry
-lock before any write. The successful arm retains the original relation. -/
-theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
-      SFunc.RunCutP P cert.prog sevm C
-        (St (afterSload sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    burnLockGuard_invH project fork.rules_bal_none run
-
 def burnLockedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 12) 12 0
 
@@ -116,24 +102,6 @@ theorem burnReservePrefix_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [eq] at callee
     obtain ⟨_, returned⟩ := reserves_callee_invH bal (callee.mono project)
     cases returned
-
-/-- Burn's actual lock write and getter56 call cache all three reserve fields
-before the two initial balance queries. No cached-reserve premise is added. -/
-theorem burnReservePrefix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧ ∃ gas,
-      let locked := burnLockedWorld sevm b
-      SFunc.RunCutP P cert.prog sevm C (St (afterSload sevm locked 8)
-        (reserveTimestampRead (locked.getStorVal sevm.currentTarget 8) ::
-         reserve1Read (locked.getStorVal sevm.currentTarget 8) ::
-         reserve0Read (locked.getStorVal sevm.currentTarget 8) ::
-         0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M gas) t_1479_c37 seg := by
-  simpa only [burnLockedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    burnReservePrefix_invH project fork.rules_stateGas_none fork.rules_bal_none run
 
 
 /-- Both token slots are cached before Burn's initial external observations. -/
@@ -288,29 +256,6 @@ theorem burnInitialFirstRequest_invH {P : Sevm → Devm → Ninst → Devm → P
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using tail
 
-/-- Literal Burn staging obtains the first token target from storage, preserves
-both cached token words, and passes the actual code guard into STATICCALL. -/
-theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {timestamp r1 r0 toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
-      t_1479_c37 seg) :
-    let mask : B256 := 0xffffffffffffffffffffffffffffffffffffffff
-    let t0 := mask &&& b.getStorVal sevm.currentTarget 6
-    let t1 := mask &&& (afterSload sevm b 6).getStorVal sevm.currentTarget 7
-    let loaded := burnTokensWorld sevm b
-    (loaded.getCode t0.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
-      SFunc.RunCutP P cert.prog sevm C
-        (St (temporalAccountAccessBase loaded t0.toAdr)
-          (0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 ::
-            0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-          (balanceRequestMemory M sevm.currentTarget) gas) t_14fb_c37 seg := by
-  simpa only [burnTokensWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
-    burnInitialFirstRequest_invH project fork.rules_bal_none mem run
-
 
 inductive BurnInitialBalanceSite where
   | first
@@ -443,26 +388,6 @@ theorem burnInitialSecondRequest_invH {P : Sevm → Devm → Ninst → Devm → 
       show Bytes.toB256 [112, 160, 130, 49] = (0x70a08231 : B256) from rfl,
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using tail
-
-/-- The first actual answer replaces its balance temporary; the second request
-uses the already cached token1 word and preserves token0 and the old reserves. -/
-theorem burnInitialSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {b0 token1 token0 r1 r0 toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
-      BurnInitialBalanceSite.first.afterDecodeTree seg) :
-    let t1 := token1 &&& 0xffffffffffffffffffffffffffffffffffffffff
-    (b.getCode t1.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
-      SFunc.RunCutP P cert.prog sevm C
-        (St (temporalAccountAccessBase b t1.toAdr)
-          (0 :: t1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t1 ::
-            0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-          (balanceRequestMemory M sevm.currentTarget) gas) t_1599_c37 seg := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    burnInitialSecondRequest_invH project fork.rules_bal_none mem run
 
 
 /-- The real lock store transports the entry representation into Burn's locked world. -/

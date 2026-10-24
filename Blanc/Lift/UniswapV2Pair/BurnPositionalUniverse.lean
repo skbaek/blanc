@@ -24,13 +24,6 @@ theorem BurnThreeCallsH.feeTraceRow {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rw [r.fee.reply.returnData] at member
   exact member
 
-/-- This actual factory reply contributes its own recipient row to the
-original trace universe, including interpreted and synchronous precompile calls. -/
-theorem BurnThreeCalls.feeTraceRow {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnThreeCalls root sevm b) (fork : CoveredFork sevm.benvStat.fork) :
-    .balance (Bytes.toB256 (r.fee.out.take 32)).toAdr ∈ mintTraceKeys root :=
-  BurnThreeCallsH.feeTraceRow (r.toH fork) fork.rules_stateGas_none
-
 
 theorem BurnThreeCallsH.feeUniverse {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {U K : WriterKey → Prop} (r : BurnThreeCallsH root sevm b w) (current : Checkpoint)
@@ -41,19 +34,6 @@ theorem BurnThreeCallsH.feeUniverse {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have row := trace _ (r.feeTraceRow stateGas)
   exact ⟨feeMintFresh_of_universe inj apart sub row _ _ _ _ _,
     pairFeeSourceKeys_sub sub row _ _ _ _ _⟩
-
-/-- The original separated trace universe discharges the internal fee
-freshness and contains every key of this same actual fee result. -/
-theorem BurnThreeCalls.feeUniverse {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {U K : WriterKey → Prop} (r : BurnThreeCalls root sevm b) (current : Checkpoint)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys root, U k) :
-    r.feeFresh K current ∧ ∀ k, r.sourceFeeKeys K current k → U k := by
-  have h := BurnThreeCallsH.feeUniverse (r.toH fork) current fork.rules_stateGas_none
-    inj apart sub trace
-  rw [BurnThreeCalls.feeFresh_toH fork, BurnThreeCalls.sourceFeeKeys_toH fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

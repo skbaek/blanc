@@ -74,18 +74,6 @@ theorem mint_second_code_guardH {root : Exec.Deriv} {b post : Devm}
   rw [cut.sevm_eq, state, cut.tree] at source
   exact (mintSecondRequest_invH bal mem (SFunc.runP_iff_runCutP_nil.mp source)).1
 
-/-- The actual successful request suffix supplies its own token code guard. -/
-theorem mint_second_code_guard {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root MintBalanceSite.first.afterDecodeTree b
-      (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    ((afterSload root.sevm b 7).getCode
-      (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    mint_second_code_guardH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 theorem mint_second_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
@@ -211,22 +199,6 @@ theorem mint_second_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
         balanceRequestMemory, balanceOfSelectorWord] using state⟩)
   exact guard.branchSuccH cert_check success stateGas (by decide)
-
-/-- Mint's second request staging retains the actual full world, request memory and cursor. -/
-theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root MintBalanceSite.first.afterDecodeTree b
-      (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    let token := (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256
-    Nonempty (CursorStateAt code cert root t_11b1_c41
-      (temporalAccountAccessBase (afterSload root.sevm b 7) token.toAdr)
-      (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-        token :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M root.sevm.currentTarget) K) := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
-    mint_second_guard_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
 
 
 end Blanc.Lift.UniswapV2Pair

@@ -86,18 +86,5 @@ theorem BurnFourCallsH.prefixLogs {root : Exec.Deriv} {sevm : Sevm} {b post : De
     rfl
   exact ⟨added, raw, pending, rawPrefix, prefixImage⟩
 
-/-- The actual fee and LP-burn prefix has the same pending/raw log image as
-the exact source frame suspended at the first retained transfer slot. -/
-theorem BurnFourCalls.prefixLogs {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnFourCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : r.three.feeFresh K current) (tracked : K (.balance sevm.currentTarget))
-    (invocation : List Nat) (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork) :
-    ∃ (added : List PendingLog) (raw : List Log),
-      (r.sourceTransferFrame current invocation).current.logs = current.logs ++ added ∧
-      r.transfer.occurrence.node.devm.logs = b.logs ++ raw ∧
-      added.map (PendingLog.rawWith (burnOwnedRaw sevm.currentTarget)) = raw.map some :=
-  BurnFourCallsH.prefixLogs (r.toH fork) incoming fresh tracked invocation success fork.rules_stateGas_none fork.rules_bal_none
-
 
 end Blanc.Lift.UniswapV2Pair

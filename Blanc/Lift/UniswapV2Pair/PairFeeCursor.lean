@@ -136,20 +136,6 @@ theorem pair_fee_preparation_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [4] + (128 : B256) = 132 from by decide,
         show (132 : B256) - 128 = 4 from by decide] using state⟩)
 
-/-- The original shared factory preparation line transports the full actual state. -/
-theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {r1 r0 ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_26ec_c68 b (r1 :: r0 :: ρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    Nonempty (CursorStateAt code cert root feeCodeGuardTree
-      (feeFactoryLoadWorld root.sevm b)
-      (feeFactoryWord root.sevm b :: feeFactoryWord root.sevm b :: 128 :: 4 :: 128 :: 32 ::
-        132 :: 0x017e7e58 :: feeFactoryWord root.sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-      (feeRequestMemory M) K) := by
-  simpa only [feeFactoryLoadWorldH_of_covered fork] using
-    pair_fee_preparation_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 theorem pair_fee_code_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {S : List B256} {M : Mem} {factory : B256} {K : List SFunc}
@@ -160,17 +146,6 @@ theorem pair_fee_code_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       Nonempty (CursorStateAt code cert root t_2757_c68
         (accountAccessH root.sevm b factory.toAdr) (0 :: S) M K) := by
   exact pair_code_guard_cursor_stateH cut success stateGas bal [0x27,0x57] (by decide) rfl (by decide)
-
-/-- The same successful code-guard cursor proves factory code exists and retains its warming. -/
-theorem pair_fee_code_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {factory : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root feeCodeGuardTree b (factory :: S) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    (b.getCode factory.toAdr).size.toB256 ≠ 0 ∧
-      Nonempty (CursorStateAt code cert root t_2757_c68
-        (temporalAccountAccessBase b factory.toAdr) (0 :: S) M K) := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    pair_fee_code_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none
 
 
 end Blanc.Lift.UniswapV2Pair

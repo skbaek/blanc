@@ -33,16 +33,6 @@ theorem skim_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (0x59f :: 1 :: [0xbc25cf77]) getterInitMemory [] at guard
   exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
 
-/-- The actual Skim selector route retains the initialized full state. -/
-theorem skim_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_059f_c80 b [0xbc25cf77] getterInitMemory []) :=
-  skim_selector_cursor_stateH codeEq fork.rules_stateGas_none selector run
-
 
 def skimAbiGuardLine : List Ninst := [
   .push [0x02,0x57] (by decide), .push [4] (by decide), .reg (.dup 0),
@@ -109,16 +99,6 @@ theorem skim_abi_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨g', state⟩)
   exact caller.gotoH cert_check success stateGas rfl
 
-/-- The actual ABI cursor enters Skim's referenced entry without adding a continuation. -/
-theorem skim_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
-    (cut : CursorStateAt code cert root t_059f_c80 b [0xbc25cf77] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (abiSize : (32 : B256) ≤ root.sevm.data.length.toB256 - 4) :
-    Nonempty (CursorStateAt code cert root t_18de_c34 b
-      [(Sevm.dataWord root.sevm 4).toAdr.toB256, 0x0257, 0xbc25cf77]
-      getterInitMemory []) :=
-  skim_abi_cursor_stateH cut success fork.rules_stateGas_none abiSize
-
 
 def skimLockGuardLine : List Ninst := [
   .push [0x0c] (by decide), .reg .sload, .push [0x01] (by decide),
@@ -168,18 +148,6 @@ theorem skim_prefix_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
       cases line
       exact ⟨gas', state⟩)
   exact guard.branchSuccH cert_check rfl stateGas (by decide)
-
-/-- Successful original execution derives both guards and the actual lock-read cursor. -/
-theorem skim_prefix_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_194f_c34 (afterSload sevm b 12)
-      [skimToWord sevm, 0x0257, 0xbc25cf77] getterInitMemory []) := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    skim_prefix_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 end Blanc.Lift.UniswapV2Pair

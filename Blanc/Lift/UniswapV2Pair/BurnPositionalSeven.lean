@@ -94,25 +94,6 @@ def BurnSevenCallsH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
       ((Cursor.parentStep_sevm h.five.second.edge).trans h.five.sevm_eq))]; exact fork)
   suffix := h.suffix
 
-/-- On a covered fork, the modern `BurnSevenCalls` gives `BurnSevenCallsH` with the same fields. -/
-def BurnSevenCalls.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnSevenCalls root sevm b) :
-    BurnSevenCallsH root sevm b BurnSchedule.modern where
-  five := h.five.toH fork
-  second_bound := h.second_bound
-  second_accepted := h.second_accepted
-  second_decoded := by
-    rw [BurnFiveCalls.finalMemory_toH fork]
-    exact h.second_decoded
-  final0 := h.final0.toH (by
-    show CoveredFork h.five.second.returned.sevm.benvStat.fork
-    rw [(Cursor.parentStep_sevm h.five.second.edge).trans h.five.sevm_eq]; exact fork)
-  final1 := h.final1.toH (by
-    show CoveredFork h.final0.call.returned.sevm.benvStat.fork
-    rw [(Cursor.parentStep_sevm h.final0.call.edge).trans (h.final0.sevm_eq.trans
-      ((Cursor.parentStep_sevm h.five.second.edge).trans h.five.sevm_eq))]; exact fork)
-  suffix := h.suffix
-
 theorem burn_seven_occurrences_of_successH {sevm : Sevm} {b post : Devm} {w : BurnSchedule} {G : Nat}
     (worlds : BurnScheduleH sevm w) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -188,19 +169,6 @@ theorem burn_seven_occurrences_of_successH {sevm : Sevm} {b post : Devm} {w : Bu
   · simpa only [BurnFiveCallsH.finalLocals, BurnFiveCallsH.finalRequestMemory, BurnThreeCallsH.pricedLocals,
       burnPricedLocals, List.set] using observation1
   · exact suffix
-
-/-- Successful execution of the checked original Burn bytecode fixes all
-seven actual calls, their own replies and ordered gaps. No desired mapping,
-model success, payout equality, guard or cursor endpoint is a premise. -/
-theorem burn_seven_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    Nonempty (BurnSevenCalls root sevm b) := by
-  obtain ⟨h⟩ := burn_seven_occurrences_of_successH (BurnScheduleH.of_covered fork) codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

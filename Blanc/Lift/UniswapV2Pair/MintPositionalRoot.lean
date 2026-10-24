@@ -276,18 +276,6 @@ theorem mint_first_guarded_occurrence_of_successH {sevm : Sevm} {b post : Devm} 
   rw [keep]
   exact guarded
 
-/-- The successful public root retains the actual first code guard as well as
-the original first slot; neither fact is inferred from a later reply. -/
-theorem mint_first_guarded_occurrence_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ((mintRootFirstWorld root b).getCode (mintRootToken0 root b).toAdr).size.toB256 ≠ 0 ∧
-      Nonempty (MintRootFirst root b) := by
-  simpa only [mintRootFirstWorldH_of_covered (root := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩) fork] using
-    mint_first_guarded_occurrence_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 theorem mint_three_occurrences_of_successH {sevm : Sevm} {b post W1 : Devm} {G : Nat}
     {A2 F : Sevm → Devm → Devm} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -333,17 +321,6 @@ theorem mint_three_occurrences_of_successH {sevm : Sevm} {b post W1 : Devm} {G :
   exact ⟨⟨⟨rfl, hA2, hF⟩, first, guarded0, out0, reply0, bound0, width0, answer0,
     second, guarded1, out1, reply1, bound1, width1, answer1, cover0, cover1, fee⟩⟩
 
-/-- All three occurrences and physical replies are derived from the supplied
-public execution; code and arithmetic guards are retained without new premises. -/
-theorem mint_three_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (MintRootCallPositions ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b) := by
-  obtain ⟨h⟩ := mint_three_occurrences_of_successH codeEq fork.rules_stateGas_none
-    fork.rules_bal_none selector run (MintRootWorldsH.of_covered fork)
-  exact ⟨h.toCovered fork⟩
-
 
 theorem MintRootCallPositionsH.final_no_exec {root : Exec.Deriv} {b W1 : Devm}
     {A2 F : Sevm → Devm → Devm}
@@ -355,14 +332,6 @@ theorem MintRootCallPositionsH.final_no_exec {root : Exec.Deriv} {b W1 : Devm}
       (r.fee.occurrence.sevm_eq.trans (r.second.returned_sevm.trans r.first.returned_sevm))
   exact mint_fee_suffix_no_execH r.fee.occurrence.placed r.fee.occurrence.tree
     r.fee.occurrence.continuations (by rw [returnedEnv]; exact stateGas)
-
-/-- The final no-exec fact uses this certificate's own fee occurrence and
-continuations, rather than an independently selected terminal cursor. -/
-theorem MintRootCallPositions.final_no_exec {root : Exec.Deriv} {b : Devm}
-    (r : MintRootCallPositions root b) (fork : CoveredFork root.sevm.benvStat.fork) :
-    ∀ N, Exec.Deriv.ParentPrefix r.fee.occurrence.call.returned N → ∀ x,
-      ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  MintRootCallPositionsH.final_no_exec (r.toH fork) fork.rules_stateGas_none
 
 
 end Blanc.Lift.UniswapV2Pair

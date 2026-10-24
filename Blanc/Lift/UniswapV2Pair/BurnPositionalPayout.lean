@@ -117,21 +117,5 @@ theorem burn_payout_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨gas, result⟩)
   exact target.branchSuccH cert_check success stateGas (by decide : (1 : B256) ≠ 0)
 
-/-- Both payout words survive the actual short-circuit checks and reach LP burn.
-The positive-word guards are those derived from this same successful suffix. -/
-theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {product1 supply f L b1 b0 token1 token0 r1 r0 amount0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_1614_c37 b
-      (product1 :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        0 amount0 toWord extρ R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (nonzero : supply ≠ 0) (positive0 : 0 < amount0.toNat)
-    (positive1 : 0 < (product1 / supply).toNat) :
-    Nonempty (CursorStateAt code cert root t_1683_c13 b
-      (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        (product1 / supply) amount0 toWord extρ R) M K) :=
-  burn_payout_cursor_stateH cut success fork.rules_stateGas_none nonzero positive0 positive1
-
 
 end Blanc.Lift.UniswapV2Pair

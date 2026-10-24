@@ -295,12 +295,6 @@ def LPMintSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b :
     [lpMintRawLog sevm.currentTarget toWord.toAdr value] ∧
   (lpMintPostH sevm b R M toWord value G).gasLeft = G
 
-theorem LPMintSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {st : State} {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    LPMintSourceResultH K st sevm b R M toWord value G = LPMintSourceResult K st sevm b R M toWord value G := by
-  unfold LPMintSourceResultH LPMintSourceResult
-  simp only [lpMintPostH_of_covered fork]
-
 theorem lpMint_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)

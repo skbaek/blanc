@@ -1581,28 +1581,6 @@ private theorem safeTransfer_firstCall_post_invH {P : Sevm → Devm → Ninst �
   rw [memory]
   exact preMem
 
-/-- The first actual helper call derives successful settlement while preserving opaque child effects. -/
-private theorem safeTransfer_firstCall_post_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
-    ∃ forwarded callGas d,
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
-      SFunc.RunCutP P cert.prog sevm C d safeTransfer_afterCall r ∧
-      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
-      d.memory = safeTransfer_call128Memory M amount toWord ∧
-      d.output = b.output ∧ d.returnData.length < 2^256 ∧ PtrMem 292 416 d.memory :=
-  safeTransfer_firstCall_post_invH project fork.rules_stateGas_none mem notCopyCut notAlloc notGuard run
-
 
 /-- Actual nonempty first-reply allocation keeps the modular free-pointer expression. -/
 def safeTransfer_reply292Memory (M : Mem) (reply : Bytes) : Mem :=
@@ -1759,33 +1737,6 @@ private theorem safeTransfer_firstReply_invH {P : Sevm → Devm → Ninst → De
   rw [copied] at decoded
   exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, width, postMem, decoded⟩
 
-/-- The first actual callback-to-decoder composition retains the full reply and SAME P child step. -/
-private theorem safeTransfer_firstReply_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
-    ∃ forwarded callGas d decoderGas,
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
-      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
-      d.memory = safeTransfer_call128Memory M amount toWord ∧
-      d.output = b.output ∧ d.returnData.length < 2^256 ∧ PtrMem 292 416 d.memory ∧
-      SFunc.RunCutP P cert.prog sevm C
-        (St d (d.returnData.length.toB256 ::
-          (if d.returnData.length.toB256 = 0 then 96 else 292) ::
-          1 :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-          (if d.returnData.length.toB256 = 0 then d.memory else
-            safeTransfer_reply292Memory d.memory d.returnData) decoderGas) t_2148_c16 r :=
-  safeTransfer_firstReply_invH project fork.rules_stateGas_none mem notCopyCut notAlloc notGuard run
-
 
 private theorem safeTransfer_firstReturned_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
@@ -1866,31 +1817,6 @@ private theorem safeTransfer_firstReturned_invH {P : Sevm → Devm → Ninst →
         Or.inr ⟨enough, head⟩, ?_⟩
       rw [ite_eq_right empty]
       exact outEq
-
-/-- Full first helper57 inverse derives its optional-return acceptance and raw returned world.
-Its whole-run input discharges internal cuts; arbitrary child storage/log effects are retained. -/
-private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
-    {amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.RunP P cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
-    ∃ forwarded callGas d residual,
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
-      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
-      d.memory = safeTransfer_call128Memory M amount toWord ∧ d.output = b.output ∧
-      d.returnData.length < 2^256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      out = St d R (if d.returnData = [] then d.memory else
-        safeTransfer_reply292Memory d.memory d.returnData) residual :=
-  safeTransfer_firstReturned_invH project fork.rules_stateGas_none mem run
 
 
 /-- The actual first helper's overlapping copy exposes precisely its 68-byte source window. -/
@@ -1980,34 +1906,6 @@ theorem safeTransfer_first_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     safeTransfer_firstReturned_invH project stateGas mem run
   exact ⟨forwarded, callGas, d, residual, step, stack, safeTransfer_call128_data mem.wf,
     memory, output, width, accepted, returned⟩
-
-/-- The actual returned first helper exposes canonical calldata at its SAME P primitive CALL,
-full optional-return acceptance and the raw child world. No child storage/log effect is erased. -/
-theorem safeTransfer_first_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
-    {amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.RunP P cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
-    ∃ forwarded callGas d residual,
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
-      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
-      ((safeTransfer_call128Memory M amount toWord).read 292 68).1 =
-        abiSelectorBytes 0xa9059cbb ++
-          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount.toBytes ∧
-      d.memory = safeTransfer_call128Memory M amount toWord ∧ d.output = b.output ∧
-      d.returnData.length < 2^256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      out = St d R (if d.returnData = [] then d.memory else
-        safeTransfer_reply292Memory d.memory d.returnData) residual :=
-  safeTransfer_first_invH project fork.rules_stateGas_none mem run
 
 
 /-- The helper's ordered payload writes at the moving pointer left by an

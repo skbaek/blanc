@@ -44,24 +44,6 @@ theorem BurnFourCallsH.transferSourceCall {root : Exec.Deriv} {sevm : Sevm} {b p
     (by rw [r.transfer_sevm]; exact pair) operands data flag rfl rfl rfl
     (by rw [r.transfer_sevm]; exact stateGas) queue
 
-/-- The first transfer request consumes the retained fourth original call,
-including its physical entry bit and full reply. -/
-theorem BurnFourCalls.transferSourceCall {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnFourCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (staticContext : frame.context.isStatic = sevm.isStatic)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.transfer frame.context.pair 3 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnTransfer0 current.state.token0
-          (.transfer (Sevm.dataWord sevm 4).toAdr (r.three.amount0 r.pricing)))
-        { success := true, returndata := r.transfer.returned.devm.returnData,
-          codeExists := r.transfer.occurrence.slot.isSome, recoveryOutput := 0 } 3,
-      observed.call = r.transfer ∧ observed.paths = paths :=
-  BurnFourCallsH.transferSourceCall (r.toH fork) rep pair staticContext success fork.rules_stateGas_none queue
-
 
 theorem BurnFiveCallsH.secondTransferSourceCall {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
     {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
@@ -104,24 +86,6 @@ theorem BurnFiveCallsH.secondTransferSourceCall {root : Exec.Deriv} {sevm : Sevm
     (by rw [r.sevm_eq]; exact staticContext)
     (by rw [r.sevm_eq]; exact pair) operands data flag rfl rfl rfl
     (by rw [r.sevm_eq]; exact stateGas) queue
-
-/-- The second transfer source request uses the actual first reply's moving
-allocation and the retained fifth call's own slot and full reply. -/
-theorem BurnFiveCalls.secondTransferSourceCall {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnFiveCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (staticContext : frame.context.isStatic = sevm.isStatic)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.second frame.context.pair 4 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnTransfer1 current.state.token1
-          (.transfer (Sevm.dataWord sevm 4).toAdr (r.four.three.amount1 r.four.pricing)))
-        { success := true, returndata := r.second.returned.devm.returnData,
-          codeExists := r.second.occurrence.slot.isSome, recoveryOutput := 0 } 4,
-      observed.call = r.second ∧ observed.paths = paths :=
-  BurnFiveCallsH.secondTransferSourceCall (r.toH fork) rep pair staticContext success fork.rules_stateGas_none queue
 
 
 end Blanc.Lift.UniswapV2Pair

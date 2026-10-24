@@ -84,22 +84,10 @@ private theorem permit_St_getCode (x : Devm) (S : List B256) (M : Mem) (g : Nat)
 private theorem permit_St_getStor (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     Devm.getStor (St x S M g) a = Devm.getStor x a := rfl
 
-theorem permitNonceWorld_getCode (sevm : Sevm) (b : Devm) (owner : Adr) (a : Adr) :
-    (permitNonceWorld sevm b owner).getCode a = b.getCode a := by
-  unfold permitNonceWorld
-  rw [afterSstore_getCode, afterSload_getCode, afterSload_getCode]
-
 theorem permitNonceWorld_getCodeH (sevm : Sevm) (b : Devm) (owner : Adr) (a : Adr) :
     (permitNonceWorldH sevm b owner).getCode a = b.getCode a := by
   unfold permitNonceWorldH
   rw [afterSstoreH_getCode, afterSloadH_getCode, afterSloadH_getCode]
-
-theorem permitNonceWorld_getStor (sevm : Sevm) (b : Devm) (owner : Adr) :
-    (permitNonceWorld sevm b owner).getStor sevm.currentTarget =
-      (b.getStor sevm.currentTarget).set (permitNonceSlot owner)
-        (permitNonceRead sevm b owner + 1) := by
-  unfold permitNonceWorld
-  rw [afterSstore_getStor_self, afterSload_getStor, afterSload_getStor]
 
 theorem permitNonceWorld_getStorH (sevm : Sevm) (b : Devm) (owner : Adr) :
     (permitNonceWorldH sevm b owner).getStor sevm.currentTarget =
@@ -107,23 +95,6 @@ theorem permitNonceWorld_getStorH (sevm : Sevm) (b : Devm) (owner : Adr) :
         (permitNonceReadH sevm b owner + 1) := by
   unfold permitNonceWorldH
   rw [afterSstoreH_getStor_self, afterSloadH_getStor, afterSloadH_getStor]
-
-/-- The nonce-incremented world represents the suspended permit frame's state over the
-footprint extended by the permit's decoded rows. -/
-theorem permit_suspended_rep {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b : Devm}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm))) :
-    WriterRep (WriterExtend K (permitTouched (permitOwner sevm) (permitSpender sevm)))
-      ((permitNonceWorld sevm b (permitOwner sevm)).getStor sevm.currentTarget)
-      (permitPublicSuspended current invocation sevm).current.state := by
-  have nonceKey : WriterExtend K (permitTouched (permitOwner sevm) (permitSpender sevm))
-      (.nonce (permitOwner sevm)) := .inr (List.mem_cons.mpr (.inl rfl))
-  have stored := (rep.extend fresh).nonce_store
-    (value := current.state.nonces (permitOwner sevm) + 1) nonceKey
-  obtain ⟨nonce, _⟩ := permit_reads (spender := permitSpender sevm) rep fresh
-  rw [permitNonceWorld_getStor, nonce]
-  exact stored
 
 theorem permit_suspended_repH {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b : Devm}
@@ -179,29 +150,6 @@ theorem PermitCallOccurrenceH.recovery_turns {U K : WriterKey → Prop}
       intro F member target
       exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart extended (good F member target))
   exact ⟨views, mapped.trans (queue.paths_unique settled.queue), authentic, during⟩
-
-/-- The recovery views use the exact queue of the successful original occurrence. -/
-theorem PermitCallOccurrence.recovery_turns {U K : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b : Devm}
-    (actual : PermitCallOccurrence root b) (settled : PermitRecoverySettlement actual)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
-    (touched : ∀ k ∈ permitTouched (permitOwner root.sevm) (permitSpender root.sevm), U k)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = root.sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    ∃ views : List StaticViewTurn,
-      views.map Prod.fst = settled.paths ∧
-      (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation root.sevm)) ∧
-      ExactTurns (permitPublicSuspended current invocation root.sevm)
-        (permitPublicRequest current root.sevm) 0 (staticViewTranscript views .done)
-        {complete := true, frame := permitPublicSuspended current invocation root.sevm,
-          childReturns := staticViewChildReturns
-            (permitPublicSuspended current invocation root.sevm)
-            (permitPublicRequest current root.sevm) 0 views} :=
-  PermitCallOccurrenceH.recovery_turns inj apart sub sem image (actual.toH fork) (settled.toH fork) rep touched installed fork.rules_stateGas_none fork.rules_bal_none good
 
 
 /-- Typed consumption of the public permit with its recovery turns: the turns run at the
@@ -302,41 +250,6 @@ theorem permit_bytecode_actual_turnsH {U K : WriterKey → Prop} (inj : WriterIn
     simpa only [← postImage] using source
   exact ⟨paid, length, nonstatic, timely, actual, settled, views, samePost, mapped, authentic, during⟩
 
-/-- The public source result and recovery turns share the same actual call,
-settlement, returned state, and full located queue. -/
-theorem permit_bytecode_actual_turns {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (actual : PermitCallOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
-        (settled : PermitRecoverySettlement actual) (views : List StaticViewTurn),
-        PermitSourceResult K current invocation sevm b post actual.call.returned.devm
-          actual.out settled.entered post.gasLeft ∧
-        views.map Prod.fst = settled.paths ∧
-        (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) ∧
-        ExactTurns (permitPublicSuspended current invocation sevm)
-          (permitPublicRequest current sevm) 0 (staticViewTranscript views .done)
-          {complete := true, frame := permitPublicSuspended current invocation sevm,
-            childReturns := staticViewChildReturns (permitPublicSuspended current invocation sevm)
-              (permitPublicRequest current sevm) 0 views} := by
-  obtain ⟨paid, length, nonstatic, timely, actual, settled, views, source, rest⟩ :=
-    permit_bytecode_actual_turnsH inj apart sub sem image rep touched installed representable codeEq
-      fork.rules_stateGas_none fork.rules_bal_none selector freshOutput run good
-  refine ⟨paid, length, nonstatic, timely, actual.toCovered fork, settled.toCovered fork, views, ?_, rest⟩
-  rw [← PermitSourceResultH_of_covered fork]
-  exact source
-
 
 theorem permit_bytecode_exact_turnsH {U K : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) (sub : ∀ k, K k → U k)
@@ -385,45 +298,6 @@ theorem permit_bytecode_exact_turnsH {U K : WriterKey → Prop} (inj : WriterInj
     post.gasLeft, settled.entered, views,
     ⟨b, G, actual, settled, rfl, rfl, rfl, rfl, mapped⟩, source,
     permit_exact_consumes_turns paid timely nonstatic recovered signer during noCode, authentic⟩
-
-/-- **Authentic permit refinement.** Every successful literal permit run at the Pair code
-derives, besides the existing source facts, the source transcript whose recovery turns are
-derived from the SAME pc-zero execution: the recovery STATICCALL is a step of this
-derivation at the nonce-incremented world, its reply is the observation, and its turn queue
-is the actual child's retained static Pair views (the frame-entry bit is `true`), or empty
-when an enabled precompile answers (the bit is `false`). Original raw paths are retained:
-every Pair frame of the queue is a retained frame of a committed sub-derivation. -/
-theorem permit_bytecode_exact_turns {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (d : Devm) (out : Bytes) (residual : Nat) (entered : Bool)
-        (views : List StaticViewTurn),
-        PermitRecoveryAuth ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ out entered views ∧
-        PermitSourceResult K current invocation sevm b post d out entered residual ∧
-        ExactConsumes (startTyped current (writerContext sevm invocation)
-            (permitDecodedEntry sevm))
-          (.next (permitExternalResult out entered) (staticViewTranscript views .done) .done)
-          (permitPublicDone current invocation sevm
-            (staticViewChildReturns (permitPublicSuspended current invocation sevm)
-              (permitPublicRequest current sevm) 0 views)) ∧
-        (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) := by
-  obtain ⟨paid, length, nonstatic, timely, d, out, residual, entered, views, auth, source, rest⟩ :=
-    permit_bytecode_exact_turnsH inj apart sub sem image rep touched installed representable codeEq
-      fork.rules_stateGas_none fork.rules_bal_none selector freshOutput run good
-  exact ⟨paid, length, nonstatic, timely, d, out, residual, entered, views, auth.toCovered fork,
-    (PermitSourceResultH_of_covered fork) ▸ source, rest⟩
 
 
 end Blanc.Lift.UniswapV2Pair

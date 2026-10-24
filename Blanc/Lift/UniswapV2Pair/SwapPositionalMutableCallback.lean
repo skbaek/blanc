@@ -63,26 +63,6 @@ structure SwapCallbackMutableH {root start : Exec.Deriv} {b : Devm}
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
 
-/-- On a covered fork, `SwapCallbackMutableH` gives the modern `SwapCallbackMutable` with the same fields. -/
-def SwapCallbackMutableH.toCovered {root start : Exec.Deriv} {b : Devm} {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc} {r : SwapCallbackOccurrenceH root start b L M q toWord a0 a1 len dataStart K} {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapCallbackMutableH r U ctx current base frame index) :
-    SwapCallbackMutable (r.toCovered fork) U ctx current base frame index where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    h.mappedTurns fork h.authentic
-  invariant := h.invariant
-
 /-- On a covered fork, the modern `SwapCallbackMutable` gives `SwapCallbackMutableH` with the same fields. -/
 def SwapCallbackMutable.toH {root start : Exec.Deriv} {b : Devm} {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc} {r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K} {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame} {index : Nat}
     (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapCallbackMutable r U ctx current base frame index) :
@@ -161,24 +141,6 @@ theorem swap_callback_mutableH {root start : Exec.Deriv} {b : Devm}
     simp only [St, Devm.setMach_logs, accountAccessH_logs]
     rw [oldLogs, List.append_assoc]
   · rw [List.map_append, List.map_append, oldImages, newImages]
-
-/-- The shared locked fold supplies the SAME guarded callback event queue. -/
-theorem swap_callback_mutable {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
-    (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    Nonempty (SwapCallbackMutable r U ctx current base frame index) := by
-  obtain ⟨h⟩ := swap_callback_mutableH (r.toH fork) index inj apart sem image installed inv pair time nonstatic rootNonstatic fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
 
 
 def swapCallbackPhaseRequest (frame : Frame) (locals : SwapLocals) : Request :=
@@ -278,43 +240,6 @@ theorem swap_optional_callback_admittedH {root start : Exec.Deriv} {b : Devm}
           (out := actual.step.returned.devm.returnData)
         exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuthH root
           actual.step.returned (index + 1) segment tail out) resumed) rest
-
-/-- Optional callback admission shares the same selected children and result;
-the skipped branch consumes no instruction or source index. -/
-theorem swap_optional_callback_admitted {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {q toWord len dataStart : B256} {K : List SFunc}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm}
-    {frame : Frame} {locals : SwapLocals}
-    (opt : SwapOptionalCallback root start b L M q toWord locals.amount0Out locals.amount1Out
-      len dataStart K)
-    (recipientEq : toWord.toAdr = locals.recipient)
-    (dataEq : locals.data = start.sevm.data.sliceD dataStart.toNat len.toNat 0)
-    (senderEq : ctx.sender = start.sevm.caller)
-    (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    ∃ (nextFrame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
-      SwapFrontState U root.sevm.currentTarget ctx current base nextFrame opt.world ∧
-      ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root opt.next (index + if len = 0 then 0 else 1)
-          (swapBalancePhaseStart nextFrame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root start index (frame.afterSwapTransfer1 locals)
-          (T tail) {out with childReturns := rets ++ out.childReturns} := by
-  obtain ⟨nextFrame, T, rets, inv', reach⟩ := swap_optional_callback_admittedH (opt.toH (by
-      rw [← opt.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq opt.reached]
-      exact fork))
-    recipientEq dataEq senderEq index inj apart sem image installed inv pair time nonstatic
-    rootNonstatic fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨nextFrame, T, rets, inv', fun tail out rest => AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) fork
-    (reach tail out (AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-        (fun _ _ _ covered auth => auth.toH covered) fork rest))⟩
 
 
 theorem swap_source_callbacksH {root : Exec.Deriv} {b W : Devm}

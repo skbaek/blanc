@@ -127,17 +127,6 @@ theorem skimLock_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         exact False.elim (accepted rfl)
     exact ⟨unlocked, gas, body⟩
 
-/-- Entry34 reads the lock slot and selects the actual unlocked arm. -/
-theorem skimLock_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm [] (St b R M G) t_18de_c34 seg) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
-      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St (afterSload sevm b 12) R M gas)
-        t_194f_c34 seg := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    skimLock_invH fork.rules_bal_none run
-
 /-- The 112-bit reserve mask pushed by the literal cache code. -/
 def skimReserveMask : B256 :=
   Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
@@ -316,20 +305,6 @@ theorem skimFirstLine_invH {sevm : Sevm} {b final : Devm}
   cases run
   rw [skimToken0_eqH, skimToken1_eqH, skimReserve0_eqH]
   exact ⟨mutable, gas, rfl⟩
-
-theorem skimFirstLine_inv {sevm : Sevm} {b final : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {toWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : Line.Run sevm (St (afterSload sevm b 12) (toWord :: R) M G) skimFirstLine final) :
-    sevm.isStatic = false ∧ ∃ gas,
-      final = St (skimCachedWorld sevm b)
-        (skimToken0 sevm b :: skimToken0 sevm b :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 :: toWord :: skimToken0 sevm b ::
-          0x1a2b :: skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
-        (balanceRequestMemory M sevm.currentTarget) gas := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at run
-  simpa only [skimCachedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    skimFirstLine_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 /-- Facts of a successful first skim query and transfer0 from the cached frame; `k`
@@ -515,20 +490,6 @@ theorem skimFirstHalf_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
           exact ⟨mutable, nonzero, gw, callGas, d0, out0, call, post, long, bound, answered,
             cover, _, forwarded, callGas', d, residual, helper, step, calldata, memory,
             output, width, accepted, tail⟩
-
-/-- The actual first skim query from its cached frame: the code guard, the real
-STATICCALL with its full bounded reply, the width guard and the decoded word, then
-the checked subtraction and the literal transfer0 helper call. -/
-theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {toWord : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St (afterSload sevm b 12) (toWord :: R) M G) t_194f_c34 seg) :
-    SkimFirstFacts D sevm b R M toWord (fun d Mres g => SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St d (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R) Mres g) t_1a2b_c34 seg) := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at run
-  simpa only [SkimFirstFactsH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    skimFirstHalf_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 /-- Strengthen the transfer0 continuation using the actual CALL memory it settled in. -/

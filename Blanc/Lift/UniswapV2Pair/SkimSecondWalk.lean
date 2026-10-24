@@ -189,21 +189,6 @@ theorem skimSecondLine_invH {sevm : Sevm} {b final : Devm}
   rw [B256.sub_self]
   rfl
 
-theorem skimSecondLine_inv {sevm : Sevm} {b final : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
-    (run : Line.Run sevm (St b (t1 :: t0 :: toWord :: R) M G) skimSecondLine final) :
-    ∃ gas, final = St (afterSload sevm b 8)
-      ((t1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        (t1 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: p :: 36 :: p :: 32 :: (p + 36) ::
-        0x70a08231 :: (t1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        skimReserve1Word (b.getStorVal sevm.currentTarget 8) :: 0x1a26 :: toWord :: t1 ::
-        0x1aca :: t1 :: t0 :: toWord :: R)
-      (skimRequestMemory M p sevm.currentTarget) gas := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    skimSecondLine_invH fork.rules_bal_none ptr low high run
-
 
 /-- The decoded balance word at the reply window of a moved query. -/
 theorem skimReplyWord {Q : Mem} {p : B256} {out : Bytes} {pairs : List (Nat × Nat)}
@@ -277,16 +262,6 @@ theorem skimUnlockTail_invH {D : Exec.Deriv} {sevm : Sevm} {d post : Devm}
     | last stop =>
       have eq := Except.ok.inj stop
       exact ⟨_, g, eq.symm⟩
-
-/-- The literal unlock tail: two cache pops, SSTORE slot12 := 1, return-tag jump, STOP. -/
-theorem skimUnlockTail_inv {D : Exec.Deriv} {sevm : Sevm} {d post : Devm}
-    {R0 : List B256} {M : Mem} {G : Nat} {t1 t0 toWord tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St d (t1 :: t0 :: toWord :: tag :: R0) M G) t_1aca_c67 (.done (.halted post))) :
-    ∃ M' g, post = St (afterSstore sevm d 12 1) R0 M' g := by
-  simpa only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
-    skimUnlockTail_invH fork.rules_stateGas_none fork.rules_bal_none run
 
 
 /-- Facts of the second skim query, transfer1 and unlock from the post-transfer0 frame. -/
@@ -534,18 +509,6 @@ theorem skimSecondHalf_flag_invH {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
           exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
             forwarded, callGas', V, d2, call2, flagged, calldata, output, width2, accepted2, M'', g,
             final⟩
-
-/-- The second skim query, transfer1 and unlock from the cached frame after transfer0, at
-a fitting moved free pointer `p`. The reserve1 field is read on the post-transfer0 world. -/
-theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
-    {n : Nat} (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (low : 128 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
-    SkimSecondFlagFacts D sevm b M p t1 t0 toWord tag R0 post := by
-  simpa only [SkimSecondFlagFactsH_of_covered fork] using
-    skimSecondHalf_flag_invH fork.rules_stateGas_none fork.rules_bal_none mem low high run
 
 
 /-- The free pointer left by transfer0's helper: 292 for an empty reply, else the modular bump. -/

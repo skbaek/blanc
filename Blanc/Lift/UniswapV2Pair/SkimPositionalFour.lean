@@ -161,14 +161,6 @@ theorem skim_third_replyH {root : Exec.Deriv} {b post : Devm} {toWord : B256} {R
   rw [one] at reply
   exact ⟨⟨out, _, reply, long, bound, accepted, actualMem, decoded⟩⟩
 
-/-- The actual third static call supplies its own physical reply and decoder. -/
-theorem skim_third_reply {root : Exec.Deriv} {b post : Devm} {toWord : B256} {R : List B256}
-    {two : SkimTwoCalls root b toWord R} (third : SkimThirdCall two)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (SkimThirdReply third) := by
-  obtain ⟨h⟩ := skim_third_replyH (third.toH fork) success fork.rules_stateGas_none
-  exact ⟨h.toCovered fork⟩
-
 
 structure SkimFourCalls (root : Exec.Deriv) (b : Devm) (toWord : B256) (R : List B256) where
   two : SkimTwoCalls root b toWord R
@@ -244,18 +236,6 @@ theorem skim_four_calls_of_prefixH {root : Exec.Deriv} {b post : Devm}
     (by rw [env]; exact stateGas) reply.memory low (by omega)
   exact ⟨⟨two, third, reply, cover, transfer⟩⟩
 
-/-- The fourth original call uses the same actual third reply and post-transfer0
-reserve1, with every intervening non-exec step and helper return retained. -/
-theorem skim_four_calls_of_prefix {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
-      (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (SkimFourCalls root b toWord R) := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at cut
-  obtain ⟨h⟩ := skim_four_calls_of_prefixH cut success fork.rules_stateGas_none fork.rules_bal_none
-  exact ⟨h.toCovered fork⟩
-
 
 theorem skim_four_calls_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -266,17 +246,6 @@ theorem skim_four_calls_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
       (skimToWord sevm) [0x0257, 0xbc25cf77]) := by
   obtain ⟨cut⟩ := skim_prefix_cursor_stateH codeEq stateGas bal selector run
   exact skim_four_calls_of_prefixH cut rfl stateGas bal
-
-/-- The original code/fork/selector/success premises determine all four physical
-calls in their alternating order, with no supplied endpoint or gas schedule. -/
-theorem skim_four_calls_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (SkimFourCalls ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b
-      (skimToWord sevm) [0x0257, 0xbc25cf77]) := by
-  obtain ⟨h⟩ := skim_four_calls_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

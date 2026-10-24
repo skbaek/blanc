@@ -35,18 +35,6 @@ theorem mintLockGuard_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         exact False.elim (accepted rfl)
     exact ⟨unlocked, gas, body⟩
 
-/-- The actual mint lock test also creates the liquidity temporary. -/
-theorem mintLockGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {toWord ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (toWord :: ρ :: R) M G) t_1011_c41 seg) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St (afterSload sevm b 12) (0 :: toWord :: ρ :: R) M gas) t_1084_c41 seg := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    mintLockGuard_invH fork.rules_bal_none run
-
 /-- The lock test costs26 gas besides the selected slot12 read. -/
 theorem mintLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
     {M : Mem} {G load : Nat} {toWord ρ : B256} {o : Outcome}

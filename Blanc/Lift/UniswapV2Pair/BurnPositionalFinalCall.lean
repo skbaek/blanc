@@ -43,26 +43,5 @@ theorem burn_final_call_of_request_cursorH {root start : Exec.Deriv}
         exact ⟨g', state⟩)
   exact beforeGas.gasCallH cert_check reached success stateGas
 
-/-- Each final site produces its original-root occurrence from the supplied
-request cursor; the gap starts at the preceding actual returned parent. -/
-theorem burn_final_call_of_request_cursor {root start : Exec.Deriv}
-    {b post : Devm} {R : List B256} {M : Mem} {K : List SFunc}
-    {p token a x y : B256} (site : BurnFinalBalanceSite)
-    (cut : CursorStateAt code cert start site.callTree b
-      (0 :: token :: p :: 36 :: p :: 32 :: a :: x :: y :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ (step : CallOccurrenceStep root .staticcall) (cursor : Cursor) (gas : Nat),
-      Exec.Deriv.ExecFreeUntil start step.occurrence.node ∧
-      step.occurrence.node.sevm = start.sevm ∧
-      step.occurrence.node.exn = start.exn ∧
-      step.occurrence.node.devm = St b
-        (gas.toB256 :: token :: p :: 36 :: p :: 32 :: a :: x :: y :: R) M gas ∧
-      Ninst.RunWith (Cursor.DescOf step.occurrence.node) start.sevm
-        step.occurrence.node.devm (.exec .staticcall) step.returned.devm ∧
-      CursorOK code cert step.returned cursor ∧
-      cursor.f = burnFinalAfterCallTree site ∧ cursor.K.map Cont.f = K :=
-  burn_final_call_of_request_cursorH site cut reached success fork.rules_stateGas_none
-
 
 end Blanc.Lift.UniswapV2Pair

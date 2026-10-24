@@ -251,20 +251,6 @@ theorem swap_balance_occurrenceH {root start : Exec.Deriv} {b post : Devm}
   exact ⟨⟨step, gas, gap, env, present, input, out, reply, short, long, calldata,
     answered', memory, replyCut, rfl, tail, pointer⟩⟩
 
-/-- The supplied staged balance query derives its actual code guard, reply
-flag, full bytes and word at the same moving pointer. -/
-theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {K : List SFunc} {p token : B256} {second : Bool} {n : Nat}
-    (cut : CursorStateAt code cert start (swapBalanceCodeTree second) b
-      (swapTokenWord token :: swapTokenWord token :: p :: 36 :: p :: 32 ::
-        (p + 36) :: 0x70a08231 :: swapTokenWord token :: S) (swapBalanceRequest M p start.sevm.currentTarget) K)
-    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
-    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SwapBalanceOccurrence root start b S M p token second K) := by
-  obtain ⟨h⟩ := swap_balance_occurrenceH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
-  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
-
 
 theorem swap_first_balance_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 : B256} {n : Nat}
@@ -292,17 +278,6 @@ theorem swap_first_balance_cursor_stateH {root start : Exec.Deriv} {b post : Dev
     swapStagePrepare_inv
   exact swap_balance_occurrenceH cut reached success stateGas bal mem lower width
 
-/-- The first balance request starts at the actual post-callback join. -/
-theorem swap_first_balance_cursor_state {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 : B256} {n : Nat}
-    (cut : CursorStateAt code cert start t_09c3_c5 b (t1 :: t0 :: 0 :: 0 :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
-    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SwapBalanceOccurrence root start b (t1 :: t0 :: 0 :: 0 :: R) M p t0 false K) := by
-  obtain ⟨h⟩ := swap_first_balance_cursor_stateH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
-  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
-
 
 theorem swap_second_balance_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 bal0 : B256} {n : Nat}
@@ -329,18 +304,6 @@ theorem swap_second_balance_cursor_stateH {root start : Exec.Deriv} {b post : De
           List.not_mem_nil, reduceCtorEq, or_self] at member)
     swapStagePrepare_inv
   exact swap_balance_occurrenceH cut reached success stateGas bal mem lower width
-
-/-- The second request starts after decoding the first actual reply. -/
-theorem swap_second_balance_cursor_state {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 bal0 : B256} {n : Nat}
-    (cut : CursorStateAt code cert start (swapBalanceDecodedTail false) b
-      (bal0 :: t1 :: t0 :: 0 :: 0 :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
-    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SwapBalanceOccurrence root start b (t1 :: t0 :: 0 :: bal0 :: R) M p t1 true K) := by
-  obtain ⟨h⟩ := swap_second_balance_cursor_stateH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
-  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
 
 
 /-- The physically decoded first balance replaces its own cached local slot. -/

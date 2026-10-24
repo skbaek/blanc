@@ -46,19 +46,6 @@ theorem permit_request_prefix_line_invH {sevm : Sevm} {b d : Devm} {G : Nat}
   obtain ⟨G', state⟩ := permitRequestLine_inv mC request
   exact ⟨G', state⟩
 
-/-- The four existing body inverses classify the full actual request state. -/
-theorem permit_request_prefix_line_inv {sevm : Sevm} {b d : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (line : Line.Run sevm (St b
-      [permitS sevm, permitR sevm, (permitV sevm).toB256, permitDeadline sevm,
-        permitValue sevm, (permitSpender sevm).toB256, (permitOwner sevm).toB256,
-        0x0257, 0xd505accf] getterInitMemory G) permitRequestPrefixLine d) :
-    ∃ G', d = St (permitNonceWorld sevm b (permitOwner sevm))
-      (1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm b 0xd505accf)
-      (permitPublicCallMemory sevm b) G' := by
-  simpa only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork] using
-    permit_request_prefix_line_invH fork.rules_stateGas_none fork.rules_bal_none line
-
 
 theorem permit_request_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -81,21 +68,6 @@ theorem permit_request_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
         permitDigestLine, permitRequestLine, List.mem_append, List.mem_cons,
         List.not_mem_nil, reduceCtorEq, or_self] at member)
     (permit_request_prefix_line_invH stateGas bal)
-
-/-- The original successful permit reaches its recovery GAS instruction after
-the actual nonce update and digest/request preparation, without an external call. -/
-theorem permit_request_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      (.next (.reg .gas) (.next (.exec .staticcall) permitRecoveryTail))
-      (permitNonceWorld sevm b (permitOwner sevm))
-      (1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm b 0xd505accf)
-      (permitPublicCallMemory sevm b) [t_0257_c76]) := by
-  simpa only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork] using
-    permit_request_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem permit_call_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -137,20 +109,6 @@ theorem permit_call_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     cases impossible
   · rw [treeK.2]
     exact gas.continuations
-
-/-- The gas word and residual gas are selected by the actual GAS step. -/
-theorem permit_call_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    ∃ gw : B256, Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      (.next (.exec .staticcall) permitRecoveryTail)
-      (permitNonceWorld sevm b (permitOwner sevm))
-      (gw :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm b 0xd505accf)
-      (permitPublicCallMemory sevm b) [t_0257_c76]) := by
-  simpa only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork] using
-    permit_call_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 end Blanc.Lift.UniswapV2Pair

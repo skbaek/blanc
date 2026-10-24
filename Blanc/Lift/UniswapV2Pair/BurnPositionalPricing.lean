@@ -26,18 +26,6 @@ theorem burn_pricing_guards_of_cursorH {root : Exec.Deriv} {b post : Devm}
       (SFunc.runP_iff_runCutP_nil.mp run)
   exact ⟨product0, product1, nonzero, positive0, positive1⟩
 
-/-- Successful original pricing supplies its own product and payout guards. -/
-theorem burn_pricing_guards_of_cursor {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_15e2_c37 b
-      (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    let supply := b.getStorVal root.sevm.currentTarget 0
-    B256.Nofm L b0 ∧ B256.Nofm L b1 ∧ supply ≠ 0 ∧
-      0 < ((L * b0) / supply).toNat ∧ 0 < ((L * b1) / supply).toNat :=
-  burn_pricing_guards_of_cursorH cut success fork.rules_stateGas_none fork.rules_bal_none
-
 
 def burnPricingFirstLine : List Ninst := [
   .push [0x00] (by decide), .reg .sload, .reg (.swap 0), .reg (.swap 1), .reg .pop,
@@ -103,22 +91,6 @@ theorem burn_pricing_first_product_cursor_stateH {root : Exec.Deriv} {b post : D
         show (0x21e8 : B256) &&& 0xffffffff = 0x21e8 from by decide] using result⟩)
   obtain ⟨callee⟩ := caller.callH cert_check success stateGas rfl
   exact pair_checked_mul_cursor_stateH callee success stateGas
-
-/-- Post-fee supply and the first product are read and computed along the actual
-pricing caller, retaining the cached pre-fee liquidity and all later locals. -/
-theorem burn_pricing_first_product_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_15e2_c37 b
-      (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    let supply := b.getStorVal root.sevm.currentTarget 0
-    B256.Nofm L b0 ∧ Nonempty (CursorStateAt code cert root t_15f9_c37
-      (afterSload root.sevm b 0)
-      ((L * b0) :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        0 0 toWord extρ R) M K) := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    burn_pricing_first_product_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none
 
 
 end Blanc.Lift.UniswapV2Pair

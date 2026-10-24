@@ -61,33 +61,6 @@ theorem burnUpdate_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨_, _, _, _, returned⟩ := update_inv_atH stateGas bal mem low high (callee.mono project)
     cases returned
 
-/-- The literal Burn continuation replaces cached balance1 and invokes the
-shared update with both actual answers. Its original relation and caller tail
-survive, and the event stores preserve the moved free-memory pointer. -/
-theorem burnUpdate_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
-    {p supply f L b1 b0 balance1 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (balance1 :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R) M G) BurnFinalBalanceSite.second.afterDecodeTree seg) :
-    b0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
-    ∃ callGas tailGas,
-      let locals := burnPricedLocals supply f L balance1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R
-      let post := updateWorld sevm b r0 r1 b0 balance1
-      let N := updateMemoryAt sevm b M p r0 r1 b0 balance1
-      SFunc.RunP P cert.prog sevm
-        (St b (r1 :: r0 :: balance1 :: b0 :: 0x17e5 :: locals) M callGas) t_22e0_c60
-        (.returned (St post locals N tailGas)) ∧
-      PtrMem p (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32) N ∧
-      SFunc.RunCutP P cert.prog sevm C (St post locals N tailGas) t_17e5_c13 seg := by
-  simpa only [updateMemoryAtH_of_covered fork, updateWorldH_of_covered fork] using
-    burnUpdate_caller_invH project fork.rules_stateGas_none fork.rules_bal_none mem low high run
-
 
 /-- Fee-on Burn reads the current packed reserves for its actual kLast write. -/
 def burnKLastStorePost (sevm : Sevm) (b : Devm) : Devm :=
@@ -99,12 +72,6 @@ def burnKLastStorePostH (sevm : Sevm) (b : Devm) : Devm :=
   afterSstoreH sevm (afterSloadH sevm b 8) 11
     (reserve0Read (b.getStorVal sevm.currentTarget 8) *
       reserve1Read (b.getStorVal sevm.currentTarget 8))
-
-theorem burnKLastStorePostH_of_covered {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    burnKLastStorePostH sevm b = burnKLastStorePost sevm b := by
-  unfold burnKLastStorePostH burnKLastStorePost
-  simp only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 private theorem burnKLast_store_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
@@ -166,21 +133,6 @@ private theorem burnKLast_store_invH {P : Sevm → Devm → Ninst → Devm → P
     obtain ⟨_, _, returned⟩ := mul58_inv (callee.mono project)
     cases returned
 
-private theorem burnKLast_store_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R) M G) t_17ec_c13 seg) :
-    sevm.isStatic = false ∧ ∃ gas, SFunc.RunCutP P cert.prog sevm C
-      (St (burnKLastStorePost sevm b)
-        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        M gas) t_1827_c14 seg := by
-  simpa only [burnKLastStorePostH_of_covered fork] using
-    burnKLast_store_invH project fork.rules_stateGas_none fork.rules_bal_none run
-
 
 /-- The actual fee flag selects the current-reserve kLast store or skips it. -/
 def burnKLastPost (sevm : Sevm) (b : Devm) (feeFlag : B256) : Devm :=
@@ -188,12 +140,6 @@ def burnKLastPost (sevm : Sevm) (b : Devm) (feeFlag : B256) : Devm :=
 
 def burnKLastPostH (sevm : Sevm) (b : Devm) (feeFlag : B256) : Devm :=
   if feeFlag = 0 then b else burnKLastStorePostH sevm b
-
-theorem burnKLastPostH_of_covered {sevm : Sevm} {b : Devm} {feeFlag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    burnKLastPostH sevm b feeFlag = burnKLastPost sevm b feeFlag := by
-  unfold burnKLastPostH burnKLastPost
-  simp only [burnKLastStorePostH_of_covered fork]
 
 theorem burnKLast_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
@@ -239,23 +185,6 @@ theorem burnKLast_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [burnKLastPostH, ite_eq_left fee]
     exact ⟨fun on => False.elim (on fee), _, continuation⟩
 
-/-- Both real Burn fee branches reach the event with the same retained relation
-and memory; only the fee-on branch reads slot8 and stores its product in slot11. -/
-theorem burnKLast_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (notCut : 14 ∉ C)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R) M G) t_17e5_c13 seg) :
-    (f ≠ 0 → sevm.isStatic = false) ∧ ∃ gas, SFunc.RunCutP P cert.prog sevm C
-      (St (burnKLastPost sevm b f)
-        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        M gas) t_1827_c14 seg := by
-  simpa only [burnKLastPostH_of_covered fork] using
-    burnKLast_caller_invH project fork.rules_stateGas_none fork.rules_bal_none notCut run
-
 
 def burnEventTopic : B256 :=
   0xdccd412f0b1252819cb1fd330b93224ca42612892bb3f4f789976e6d81936496
@@ -273,12 +202,6 @@ def burnUnlockPost (sevm : Sevm) (b : Devm) (toWord amount0 amount1 : B256) : De
 
 def burnUnlockPostH (sevm : Sevm) (b : Devm) (toWord amount0 amount1 : B256) : Devm :=
   afterSstoreH sevm (burnEventPost sevm b toWord amount0 amount1) 12 1
-
-theorem burnUnlockPostH_of_covered {sevm : Sevm} {b : Devm} {toWord amount0 amount1 : B256}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    burnUnlockPostH sevm b toWord amount0 amount1 = burnUnlockPost sevm b toWord amount0 amount1 := by
-  unfold burnUnlockPostH burnUnlockPost
-  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 theorem burnEvent_unlock_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
@@ -393,59 +316,15 @@ theorem burnEvent_unlock_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     refine ⟨mutable, out.gasLeft, ?_, m2, covered⟩
     exact congrArg (fun x => Seg.done (Outcome.returned x)) eq
 
-/-- The literal Burn LOG3 and unlock return the two priced amounts, with exact
-emitter, caller/recipient topics, complete memory image and retained pointer. -/
-theorem burnEvent_unlock_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
-    {p supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256} {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R) M G) t_1827_c14 seg) :
-    sevm.isStatic = false ∧ ∃ gas,
-      seg = .done (.returned (St (burnUnlockPost sevm b toWord amount0 amount1)
-        (amount1 :: amount0 :: R) (burnEventMemory M p amount0 amount1) gas)) ∧
-      PtrMem p (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32)
-        (burnEventMemory M p amount0 amount1) ∧
-      p.toNat + 64 ≤ memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32 := by
-  simpa only [burnUnlockPostH_of_covered fork] using
-    burnEvent_unlock_invH project fork.rules_stateGas_none fork.rules_bal_none mem low high run
-
-
-/-- Exact actual Burn world after the two final decoded balances: reserve and
-oracle update, the fee-selected kLast write, Burn log, and unlock. -/
-def burnSuffixPost (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 feeFlag
-    toWord amount0 amount1 : B256) : Devm :=
-  burnUnlockPost sevm (burnKLastPost sevm
-    (updateWorld sevm b old0 old1 balance0 balance1) feeFlag) toWord amount0 amount1
 
 def burnSuffixPostH (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 feeFlag
     toWord amount0 amount1 : B256) : Devm :=
   burnUnlockPostH sevm (burnKLastPostH sevm
     (updateWorldH sevm b old0 old1 balance0 balance1) feeFlag) toWord amount0 amount1
 
-theorem burnSuffixPostH_of_covered {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 feeFlag toWord amount0 amount1 : B256}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    burnSuffixPostH sevm b old0 old1 balance0 balance1 feeFlag toWord amount0 amount1 = burnSuffixPost sevm b old0 old1 balance0 balance1 feeFlag toWord amount0 amount1 := by
-  unfold burnSuffixPostH burnSuffixPost
-  simp only [burnKLastPostH_of_covered fork, burnUnlockPostH_of_covered fork, updateWorldH_of_covered fork]
-
-def burnSuffixMemory (sevm : Sevm) (b : Devm) (M : Mem) (p old0 old1 balance0 balance1
-    amount0 amount1 : B256) : Mem :=
-  burnEventMemory (updateMemoryAt sevm b M p old0 old1 balance0 balance1) p amount0 amount1
-
 def burnSuffixMemoryH (sevm : Sevm) (b : Devm) (M : Mem) (p old0 old1 balance0 balance1
     amount0 amount1 : B256) : Mem :=
   burnEventMemory (updateMemoryAtH sevm b M p old0 old1 balance0 balance1) p amount0 amount1
-
-theorem burnSuffixMemoryH_of_covered {sevm : Sevm} {b : Devm} {M : Mem}
-    {p old0 old1 balance0 balance1 amount0 amount1 : B256} (fork : CoveredFork sevm.benvStat.fork) :
-    burnSuffixMemoryH sevm b M p old0 old1 balance0 balance1 amount0 amount1 =
-      burnSuffixMemory sevm b M p old0 old1 balance0 balance1 amount0 amount1 := by
-  unfold burnSuffixMemoryH burnSuffixMemory
-  rw [updateMemoryAtH_of_covered fork]
 
 theorem burnSuffix_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
@@ -483,42 +362,6 @@ theorem burnSuffix_invH {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨_, gas, returned, eventMem, covered⟩ :=
     burnEvent_unlock_invH project stateGas bal updateMem low high eventRun
   exact ⟨bound0, bound1, mutable, callGas, updateGas, gas, callee, returned, eventMem, covered⟩
-
-/-- Same-execution Burn suffix: neither update acceptance nor its returned world
-is assumed. Both uint112 bounds, mutability and the complete result follow from
-literal successful continuations. The actual update call retains P. -/
-theorem burnSuffix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
-    {p supply f L b1 b0 balance1 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    {seg : Seg}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256) (notCut : 14 ∉ C)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (balance1 :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R) M G) BurnFinalBalanceSite.second.afterDecodeTree seg) :
-    b0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
-    ∃ callGas updateGas gas,
-      let locals := burnPricedLocals supply f L balance1 b0 token1 token0 r1 r0
-        amount1 amount0 toWord extρ R
-      let N := updateMemoryAt sevm b M p r0 r1 b0 balance1
-      SFunc.RunP P cert.prog sevm
-        (St b (r1 :: r0 :: balance1 :: b0 :: 0x17e5 :: locals) M callGas) t_22e0_c60
-        (.returned (St (updateWorld sevm b r0 r1 b0 balance1) locals N updateGas)) ∧
-      seg = .done (.returned (St
-        (burnSuffixPost sevm b r0 r1 b0 balance1 f toWord amount0 amount1)
-        (amount1 :: amount0 :: R)
-        (burnSuffixMemory sevm b M p r0 r1 b0 balance1 amount0 amount1) gas)) ∧
-      PtrMem p
-        (memExtSize (memExtSize (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32)
-          p.toNat 32) (p + 32).toNat 32)
-        (burnSuffixMemory sevm b M p r0 r1 b0 balance1 amount0 amount1) ∧
-      p.toNat + 64 ≤
-        memExtSize (memExtSize (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32)
-          p.toNat 32) (p + 32).toNat 32 := by
-  simpa only [burnSuffixPostH_of_covered fork, burnSuffixMemoryH_of_covered fork,
-    updateMemoryAtH_of_covered fork, updateWorldH_of_covered fork] using
-    burnSuffix_invH project fork.rules_stateGas_none fork.rules_bal_none mem low high notCut run
 
 
 /-- The actual public Burn wrapper encodes amount0 then amount1 at the retained

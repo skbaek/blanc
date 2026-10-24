@@ -164,32 +164,6 @@ theorem PermitCallOccurrenceH.admittedConsumes {Auth : Exec.Deriv → Entry → 
   simpa only [permitPublicDone, permitSourceDone, List.append_nil,
     permitPublicSuspended, permitPublicRequest] using consumed
 
-/-- The exact same source result consumes the original recovery occurrence and
-then the actual returned frame's closed suffix. -/
-theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {K : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (settled : PermitRecoverySettlement actual)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (source : PermitSourceResult K current invocation root.sevm b post
-      actual.call.returned.devm actual.out settled.entered post.gasLeft)
-    {views : List StaticViewTurn} (mapped : views.map Prod.fst = settled.paths)
-    (authentic : ∀ picked ∈ views,
-      picked.Authentic (permitPublicSuspended current invocation root.sevm))
-    (during : ExactTurns (permitPublicSuspended current invocation root.sevm)
-      (permitPublicRequest current root.sevm) 0 (staticViewTranscript views .done)
-      {complete := true, frame := permitPublicSuspended current invocation root.sevm,
-        childReturns := staticViewChildReturns (permitPublicSuspended current invocation root.sevm)
-          (permitPublicRequest current root.sevm) 0 views}) :
-    AdmittedSourceConsumes Auth root root 0
-      (startTyped current (writerContext root.sevm invocation) (permitDecodedEntry root.sevm))
-      (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
-      (permitPublicDone current invocation root.sevm
-        (staticViewChildReturns (permitPublicSuspended current invocation root.sevm)
-          (permitPublicRequest current root.sevm) 0 views)) :=
-  PermitCallOccurrenceH.admittedConsumes (actual.toH fork) (settled.toH fork) success
-    fork.rules_stateGas_none fork.rules_bal_none
-    (by rw [PermitSourceResultH_of_covered fork]; exact source) mapped authentic during
-
 
 
 theorem permit_bytecode_admitted_consumesH {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K : WriterKey → Prop} (inj : WriterInj U)

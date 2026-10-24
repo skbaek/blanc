@@ -235,22 +235,6 @@ theorem swap_callback_occurrenceH {root start : Exec.Deriv} {b post : Devm}
     ReturnDataBound.call_returnData_length_ltH call stateGas, calldata, tail, ptr⟩⟩
   rw [reply.stack, one]
 
-/-- The same supplied callback entry derives its code presence and successful
-physical reply, rather than selecting a matching CALL elsewhere. -/
-theorem swap_callback_occurrence {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {n : Nat}
-    {q t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
-    (cut : CursorStateAt code cert start t_08e8_c4 b
-      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem q n M) (lower : 128 ≤ q.toNat) (upper : q.toNat < 2 ^ 162)
-    (short : len.toNat ≤ 2 ^ 32) :
-    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
-    Nonempty (SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K) := by
-  obtain ⟨h⟩ := swap_callback_occurrenceH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower upper short
-  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
-
 
 /-- The optional callback either crosses its call-free skip or retains the
 same guarded occurrence and physical reply. Its free pointer stays fixed. -/
@@ -359,21 +343,6 @@ theorem swap_optional_callback_cursor_stateH {root start : Exec.Deriv} {b post :
       (Blanc.Exec.Deriv.ParentPrefix.exn_eq (actual.step.sameFrame.snoc actual.step.edge)).trans
         (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).symm,
       actual.tail, actual.pointer, Or.inr ⟨actual, zero, rfl, rfl, rfl⟩⟩⟩
-
-/-- Every successful callback branch follows its own actual length test. -/
-theorem swap_optional_callback_cursor_state {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {n : Nat}
-    {q t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
-    (cut : CursorStateAt code cert start t_08e1_c4 b
-      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem q n M) (lower : 128 ≤ q.toNat) (upper : q.toNat < 2 ^ 162)
-    (short : len.toNat ≤ 2 ^ 32) :
-    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
-    Nonempty (SwapOptionalCallback root start b L M q toWord a0 a1 len dataStart K) := by
-  obtain ⟨h⟩ := swap_optional_callback_cursor_stateH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower upper short
-  exact ⟨h.toCovered fork⟩
 
 
 /-- All three optional mutable calls compose from the original Swap root. -/

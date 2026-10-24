@@ -55,17 +55,6 @@ theorem skim_transfer_callee_cursor_stateH {start : Exec.Deriv} {b post : Devm}
         exact ri_push step)
   exact ⟨cover, transferCaller.callH cert_check success stateGas rfl⟩
 
-/-- Checked subtraction and the actual helper call preserve the original
-continuation for each of Skim's two physical balance replies. -/
-theorem skim_transfer_callee_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {x y rho : B256}
-    (site : SkimBalanceSite)
-    (cut : CursorStateAt code cert start site.afterDecodeTree b (x :: y :: rho :: R) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    y ≤ x ∧ Nonempty (CursorStateAt code cert start t_1fdb_c57 b
-      ((x - y) :: R) M (site.transferReturnTree :: K)) :=
-  skim_transfer_callee_cursor_stateH site cut success fork.rules_stateGas_none
-
 
 structure SkimTransferObservation (root start : Exec.Deriv) (site : SkimBalanceSite)
     (b : Devm) (M : Mem) (p amount toWord tokenWord rho : B256)
@@ -129,20 +118,6 @@ theorem skim_transfer_observation_of_calleeH {root start : Exec.Deriv} {b post :
     (congrArg (fun N : Mem => (N.read (p + 164).toNat 68).1) memoryEq).trans data,
     primitive, placed, tree, conts, stack, memory, output, bound, accepted, returned⟩⟩
 
-/-- The shared physical transfer donors classify the exact original Skim CALL
-and return through its real suspended continuation. -/
-theorem skim_transfer_observation_of_callee {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {p amount toWord tokenWord rho : B256} {n : Nat}
-    (site : SkimBalanceSite)
-    (cut : CursorStateAt code cert start t_1fdb_c57 b
-      (amount :: toWord :: tokenWord :: rho :: R) M (site.transferReturnTree :: K))
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SkimTransferObservation root start site b M p amount toWord tokenWord rho R K) :=
-  skim_transfer_observation_of_calleeH site cut reached success fork.rules_stateGas_none mem lower width
-
 
 structure SkimTwoCalls (root : Exec.Deriv) (b : Devm) (toWord : B256) (R : List B256) where
   first : SkimFirstObservation root b toWord R
@@ -204,18 +179,6 @@ theorem skim_two_calls_of_prefixH {root : Exec.Deriv} {b post : Devm}
     (balanceReplyMemory_ptr first.out (balanceRequestMemory_ptr getterInitMemory_ptr root.sevm.currentTarget))
     (by decide) (by decide)
   exact ⟨⟨first, cover, transfer⟩⟩
-
-/-- The first transfer consumes the balance decoded from the same preceding
-static call; the second operation starts at that actual returned world. -/
-theorem skim_two_calls_of_prefix {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
-      (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (SkimTwoCalls root b toWord R) := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at cut
-  obtain ⟨h⟩ := skim_two_calls_of_prefixH cut success fork.rules_stateGas_none fork.rules_bal_none
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

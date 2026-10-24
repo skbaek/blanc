@@ -40,13 +40,6 @@ def SwapBalancesH.input1 {root : Exec.Deriv} {b W : Devm}
     (r : SwapBalancesH root root.sevm b W) : B256 :=
   swapInWord r.balance1 (swapRawReserve1 root.sevm b) (swapAmount1Out root.sevm)
 
-def SwapBalances.finalMemory {root : Exec.Deriv} {b : Devm}
-    (r : SwapBalances root root.sevm b) : Mem :=
-  swapBalanceReply
-    (swapBalanceReply r.optional.callback.memory r.optional.transfers.second.ptr
-      r.optional.callback.next.sevm.currentTarget r.first.out)
-    r.optional.transfers.second.ptr r.first.step.returned.sevm.currentTarget r.second.out
-
 def SwapBalancesH.finalMemory {root : Exec.Deriv} {b W : Devm}
     (r : SwapBalancesH root root.sevm b W) : Mem :=
   swapBalanceReply
@@ -146,20 +139,6 @@ theorem SwapBalancesH.decoded_tail_inv {root : Exec.Deriv} {W : Devm} {b : Devm}
     r.second.pointer r.optional.transfers.secondLower width plain
   exact ⟨⟨input, pricing, bound0, bound1, nonstatic⟩, M, gas, returned⟩
 
-/-- Existing input, pricing and update inverses consume this same actual
-second decoder. No other balance call or returned world is selected. -/
-theorem SwapBalances.decoded_tail_inv {root : Exec.Deriv} {b : Devm}
-    (r : SwapBalances root root.sevm b) {G : Nat} {o : Outcome}
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (run : SFunc.Run cert.prog root.sevm
-      (St r.second.step.returned.devm (r.balance1 :: swapBalance1LocalsStack root.sevm b r.first.out)
-        r.finalMemory G) (swapBalanceDecodedTail true) o) :
-    SwapSuffixFacts r ∧ ∃ M gas, o = .returned (St r.finalWorld [0x022c0d9f] M gas) := by
-  obtain ⟨facts, M, gas, image⟩ :=
-    SwapBalancesH.decoded_tail_inv (r.toH fork) fork.rules_stateGas_none fork.rules_bal_none run
-  rw [SwapBalances.finalWorld_toH] at image
-  exact ⟨⟨facts.input, facts.pricing, facts.bound0, facts.bound1, facts.nonstatic⟩, M, gas, image⟩
-
 
 theorem SwapBalancesH.post_image {root : Exec.Deriv} {W : Devm} {b post : Devm}
     (r : SwapBalancesH root root.sevm b W) (success : root.exn = .ok post)
@@ -201,17 +180,6 @@ theorem SwapBalancesH.post_image {root : Exec.Deriv} {W : Devm} {b post : Devm}
       exact ⟨facts, M, G', result⟩
     · obtain ⟨next, rest, d', actual', noContinuation, _⟩ := returnedAgain
       cases noContinuation
-
-/-- The checked actual body return and its actual pending wrapper STOP derive
-this root's final machine image and acceptance facts. -/
-theorem SwapBalances.post_image {root : Exec.Deriv} {b post : Devm}
-    (r : SwapBalances root root.sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    SwapSuffixFacts r ∧ ∃ M gas, post = St r.finalWorld [0x022c0d9f] M gas := by
-  obtain ⟨facts, M, gas, image⟩ :=
-    SwapBalancesH.post_image (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
-  rw [SwapBalances.finalWorld_toH] at image
-  exact ⟨⟨facts.input, facts.pricing, facts.bound0, facts.bound1, facts.nonstatic⟩, M, gas, image⟩
 
 
 /-- Both transfer branches preserve the actual incoming output buffer. -/
@@ -256,13 +224,6 @@ theorem SwapBalancesH.output_eq {root : Exec.Deriv} {b post W : Devm}
     r.optional.transfers.second.output_eq, r.optional.transfers.first.output_eq, hW,
     swapPrefixWorldH, afterSloadH_output, afterSloadH_output, afterSloadH_output,
     mintLockedWorldH, afterSstoreH_output, afterSloadH_output]
-
-/-- The same physical endpoint retains the original input output buffer. -/
-theorem SwapBalances.output_eq {root : Exec.Deriv} {b post : Devm}
-    (r : SwapBalances root root.sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) : post.output = b.output :=
-  SwapBalancesH.output_eq (r.toH fork) (swapPrefixWorldH_of_covered fork).symm success
-    fork.rules_stateGas_none fork.rules_bal_none
 
 
 /-- One complete physical Swap chain, including its actual suffix endpoint. -/

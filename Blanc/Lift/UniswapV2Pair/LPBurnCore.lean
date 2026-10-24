@@ -192,16 +192,6 @@ theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
-/-- Successful LP burn return derives the supply write and exact raw Transfer log. -/
-theorem lpBurn_supply_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {fromWord value supply ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run fs sevm (St b (supply :: value :: fromWord :: ρ :: R) M G) t_2a02_c63 o) :
-    sevm.isStatic = false ∧
-      ∃ residual, o = .returned (lpBurnSupplyPost sevm b R M fromWord value supply residual) := by
-  simpa only [lpBurnSupplyPostH_of_covered fork] using
-    lpBurn_supply_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def lpBurnBalanceBase (sevm : Sevm) (b : Devm) (fromWord debited : B256) : Devm :=
   afterSstore sevm b (transferBalanceSlot fromWord.toAdr) debited
@@ -413,16 +403,6 @@ theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
 
-/-- Inverse keeps the post-balance-write supply read and derives its checked debit. -/
-theorem lpBurn_balance_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {fromWord value debited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm (St b (debited :: value :: fromWord :: ρ :: R) M G) t_29c8_c63 o) :
-    sevm.isStatic = false ∧ value ≤ lpBurnSupplyWord sevm b fromWord debited ∧
-      ∃ residual, o = .returned (lpBurnBalancePost sevm b R M fromWord value debited residual) := by
-  simpa only [lpBurnBalancePostH_of_covered fork, lpBurnSupplyWordH_of_covered fork] using
-    lpBurn_balance_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def lpBurnBalanceWord (sevm : Sevm) (b : Devm) (fromWord : B256) : B256 :=
   b.getStorVal sevm.currentTarget (transferBalanceSlot fromWord.toAdr)
@@ -615,18 +595,6 @@ theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     exact ⟨nonstatic, balanceCover, supplyCover, residual, result⟩
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
-
-/-- Successful entry63 derives both covers and its sequential raw world, without hash separation. -/
-theorem lpBurn63_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {fromWord value ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm (St b (value :: fromWord :: ρ :: R) M G) t_2992_c63 o) :
-    sevm.isStatic = false ∧ value ≤ lpBurnBalanceWord sevm b fromWord ∧
-      value ≤ lpBurnSupplyWord sevm (afterSload sevm b (transferBalanceSlot fromWord.toAdr))
-        fromWord (lpBurnBalanceWord sevm b fromWord - value) ∧
-      ∃ residual, o = .returned (lpBurnPost sevm b R M fromWord value residual) := by
-  simpa only [lpBurnPostH_of_covered fork, lpBurnSupplyWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    lpBurn63_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 end Blanc.Lift.UniswapV2Pair

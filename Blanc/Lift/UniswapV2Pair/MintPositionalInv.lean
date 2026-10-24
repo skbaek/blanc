@@ -83,13 +83,6 @@ theorem mint_selector_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨g', state⟩)
   exact guardHit.toSuccH cert_check success stateGas (by decide) (by rfl)
 
-/-- Mint's literal selector route retains the actual same-root cursor and full state. -/
-theorem mint_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
-    (cut : CursorStateAt code cert root t_002b_c0 b [0x6a627842] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root t_0469_c86 b [0x6a627842] getterInitMemory []) :=
-  mint_selector_cursor_stateH cut success fork.rules_stateGas_none
-
 
 theorem mint_prefix_guards_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)

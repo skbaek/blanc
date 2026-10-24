@@ -706,23 +706,6 @@ theorem syncPc0_canonical_live {K : WriterKey → Prop} {current : Checkpoint}
   · exact data0.symm.trans (congrArg Devm.returnData returned0Eq)
   · exact data1.symm.trans (congrArg Devm.returnData returned1Eq)
 
-/-- The actual result world of the shared update and unlock keeps every
-foreign account's complete storage map. -/
-private theorem syncResultWorld_getStor_foreign {sevm : Sevm} {b : Devm}
-    {balance0 balance1 : B256} {a : Adr} (foreign : a ≠ sevm.currentTarget) :
-    (syncResultWorld sevm b balance0 balance1).getStor a = b.getStor a := by
-  have other : sevm.currentTarget ≠ a := Ne.symm foreign
-  unfold syncResultWorld syncUpdatedWorld updateWorld updateSyncPost updatePackedPost
-  rw [afterSstore_getStor_ne _ _ _ _ _ other, Devm.addLog_getStor,
-    afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor]
-  unfold updateOracleWorld
-  split
-  · unfold updateAccumulatorPost
-    rw [afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor,
-      afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor, afterSload_getStor,
-      afterSload_getStor]
-  · rw [afterSload_getStor, afterSload_getStor]
-
 private theorem syncResultWorld_getStor_foreignH {sevm : Sevm} {b : Devm}
     {balance0 balance1 : B256} {a : Adr} (foreign : a ≠ sevm.currentTarget) :
     (syncResultWorldH sevm b balance0 balance1).getStor a = b.getStor a := by
@@ -755,16 +738,6 @@ theorem sync_bytecode_foreign_storageH {sevm : Sevm} {b post : Devm} {G : Nat}
   unfold syncFirstWorldH syncLockedWorldH
   rw [afterSloadH_getStor, afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm foreign),
     afterSloadH_getStor]
-
-/-- Every successful Sync run, hence every canonical Sync result of that run,
-leaves the complete storage of every foreign account unchanged. Both external
-observations are STATICCALLs whose actual posts keep all storage. -/
-theorem sync_bytecode_foreign_storage {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    ∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a :=
-  sync_bytecode_foreign_storageH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem sync_bytecode_exact_consumesH {K : WriterKey → Prop} {current : Checkpoint}

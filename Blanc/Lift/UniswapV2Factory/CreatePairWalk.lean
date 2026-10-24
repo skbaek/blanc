@@ -45,9 +45,6 @@ theorem muir_rules (hfork : sevm.benvStat.fork = .muirGlacier) :
 theorem muir_stateGas (hfork : sevm.benvStat.fork = .muirGlacier) :
     sevm.benvStat.rules.stateGas = none := by rw [muir_rules hfork]; rfl
 
-theorem muir_shifts (hfork : sevm.benvStat.fork = .muirGlacier) :
-    sevm.benvStat.rules.op.shifts = true := by rw [muir_rules hfork]; rfl
-
 /-- `SLOAD` at Muir Glacier: 800 gas, the value named. -/
 theorem rx_sload_muir (hfork : sevm.benvStat.fork = .muirGlacier) {k' v : B256}
     (hv : b.getStorVal sevm.currentTarget k' = v) (hroom : S.length < 1024)

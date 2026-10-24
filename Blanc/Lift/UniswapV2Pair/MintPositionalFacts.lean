@@ -47,15 +47,6 @@ theorem MintRootCallPositionsH.second_storage {root : Exec.Deriv} {b : Devm} {W1
     _ = (mintLockedWorldH root.sevm b).getStor a := by
       rw [afterSloadH_getStor, r.first_storage]
 
-/-- Incoming finite state is transported by these particular original static replies. -/
-theorem MintRootCallPositions.fee_entry_rep {root : Exec.Deriv} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : MintRootCallPositions root b)
-    (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state) :
-    WriterRep K (r.second.call.returned.devm.getStor root.sevm.currentTarget)
-      { current.state with unlocked := 0 } := by
-  rw [r.second_storage]
-  exact rep.mint_locked_world
-
 theorem MintRootCallPositionsH.fee_entry_rep {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
     {K : WriterKey → Prop} {current : Checkpoint} (r : MintRootCallPositionsH root b W1 A2 F)
     (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state) :
@@ -151,19 +142,6 @@ theorem mint_positional_balance_handlersH {sevm : Sevm} {b post : Devm} {W1 : De
     exact B256.toNat_le_toNat r.cover1
   exact ⟨value, nonstatic,
     mint_source_balance_handlers value nonstatic sourceUnlocked r.width0 r.width1 cover0 cover1⟩
-
-/-- These retained physical balance replies advance the incoming source state. -/
-theorem mint_positional_balance_handlers {sevm : Sevm} {b post : Devm} {G : Nat}
-    {K : WriterKey → Prop} {current : Checkpoint}
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (r : MintRootCallPositions ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork) (selector : Blanc.Sevm.selector sevm = 0x6a627842) :
-    sevm.value = 0 ∧ sevm.isStatic = false ∧
-      MintBalanceHandlerResult current (writerContext sevm invocation)
-        (Sevm.dataWord sevm 4).toAdr r.out0 r.out1 :=
-  mint_positional_balance_handlersH run (r.toH fork) rep invocation codeEq fork.rules_stateGas_none fork.rules_bal_none selector
 
 
 end Blanc.Lift.UniswapV2Pair

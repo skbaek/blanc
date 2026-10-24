@@ -20,12 +20,6 @@ theorem MintRootCallPositionsH.feeReplyKey {root : Exec.Deriv} {b : Devm} {W1 : 
   rw [r.fee.reply.returnData] at member
   exact member
 
-/-- The fee recipient row comes from this original occurrence's retained reply. -/
-theorem MintRootCallPositions.feeReplyKey {root : Exec.Deriv} {b : Devm}
-    (r : MintRootCallPositions root b) (fork : CoveredFork root.sevm.benvStat.fork) :
-    mintReplyRow r.fee.out ∈ mintTraceKeys root :=
-  MintRootCallPositionsH.feeReplyKey (r.toH fork) fork.rules_stateGas_none
-
 
 theorem mint_positional_source_finishH {sevm : Sevm} {b post : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm} {G : Nat}
     {K : WriterKey → Prop} {current : Checkpoint}
@@ -54,23 +48,6 @@ theorem mint_positional_source_finishH {sevm : Sevm} {b post : Devm} {W1 : Devm}
   have freshMint := mint_afterFeeFresh_of_universe inj apart feeKeys rows.1 rows.2
     (mintPositionalFeeResultH current r).state
   exact r.sourceFinish rep invocation rfl stateGas bal freshFee freshMint
-
-/-- Existing trace-local separation discharges the fixed physical fee reply's
-freshness. This projection preserves the original occurrence slot. -/
-theorem mint_positional_source_finish {sevm : Sevm} {b post : Devm} {G : Nat}
-    {K : WriterKey → Prop} {current : Checkpoint}
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (r : MintRootCallPositions ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (fork : CoveredFork sevm.benvStat.fork)
-    (inj : WriterInj (WriterExtend K
-      (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (apart : WriterApart (WriterExtend K
-      (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
-    MintPositionalSourceFinish K current invocation post r := by
-  have h := mint_positional_source_finishH run (r.toH fork) rep invocation fork.rules_stateGas_none fork.rules_bal_none inj apart
-  simp only [MintPositionalSourceFinishH_of_covered (root := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩) fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

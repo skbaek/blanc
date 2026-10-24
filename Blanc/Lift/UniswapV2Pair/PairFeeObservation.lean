@@ -60,21 +60,6 @@ theorem pair_fee_occurrence_of_calleeH {root start : Exec.Deriv} {b post : Devm}
   simpa only [feeFactoryCallWorldH, Devm.getCode, Devm.getAcct,
     accountAccessH_state] using nonzero
 
-/-- The shared checked fee caller reaches its real STATICCALL with the code
-guard proved from its actual successful suffix. -/
-theorem pair_fee_occurrence_of_callee {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {r1 r0 ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert start t_26ec_c68 b (r1 :: r0 :: ρ :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    Nonempty (PairFeeOccurrence root start (feeFactoryCallWorld start.sevm b)
-      (feeFactoryWord start.sevm b)
-      (132 :: 0x017e7e58 :: feeFactoryWord start.sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-      (feeRequestMemory M) K) := by
-  simpa only [feeFactoryCallWorldH_of_covered fork] using
-    pair_fee_occurrence_of_calleeH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 
 def pairFeeAfterDecodeTree : SFunc :=
@@ -192,20 +177,6 @@ theorem pair_fee_observation_of_calleeH {root start : Exec.Deriv} {b post Wc : D
   rw [feeRequestMemory_read mem.wf] at accepted
   rw [one] at reply
   exact ⟨⟨occ, out, reply, long, bound, accepted, decoded⟩⟩
-
-/-- The same actual factory occurrence supplies the flag, complete reply, and
-word decoding. Source suffix facts establish guards; checked cursor transport
-retains the supplied occurrence and its original parent continuation. -/
-theorem pair_fee_observation_of_callee {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {r1 r0 ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert start t_26ec_c68 b (r1 :: r0 :: ρ :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    Nonempty (PairFeeObservation root start b M r1 r0 ρ R K) := by
-  obtain ⟨h⟩ := pair_fee_observation_of_calleeH (feeFactoryCallWorldH_of_covered fork).symm cut reached
-    success fork.rules_stateGas_none fork.rules_bal_none mem
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

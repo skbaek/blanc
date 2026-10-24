@@ -151,29 +151,6 @@ theorem balanceCall_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   · exact staticCallGuard_invPH [0x1e, 0xf1] (by decide) rfl StepIn.toRun stateGas (by decide) run
   · exact staticCallGuard_invPH [0x1f, 0x8e] (by decide) rfl StepIn.toRun stateGas (by decide) run
 
-/-- The actual call sites preserve the call's derivation provenance, derive its
-successful flag and full return-data bound, and retain the same continuation. -/
-theorem balanceCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M G)
-      site.callTree seg) :
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (tailGas : Nat),
-      StepIn D sevm
-        (St b (gw :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M callGas)
-        (.exec .staticcall) d ∧
-      StaticCallPost b d (a :: x :: y :: R) M 128 36 128 32 1 out ∧
-      out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (M.read 128 36).1 out ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St d (0 :: a :: x :: y :: R)
-          ((M.extends [(128, 36), (128, 32)]).write 128 (out.take 32)) tailGas)
-        site.returnTree seg := by
-  simpa only [StaticAnsweredH_iff_of_covered fork] using
-    balanceCall_invH site fork.rules_stateGas_none run
-
 
 def SyncBalanceSite.shortTree : SyncBalanceSite → SFunc
   | .first => t_1f03_c31
@@ -228,31 +205,6 @@ theorem balanceObservation_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rw [post.returnData] at long decoded
   rw [balanceRequestMemory_read wf sevm.currentTarget] at answered
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, decoded⟩
-
-/-- A successful actual balance call consumes the overlapping request, derives
-both return-length guards, and reaches the decoder with full returndata retained. -/
-theorem balanceObservation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
-    (wf : Mem.Wf M)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
-        (balanceRequestMemory M sevm.currentTarget) G) site.callTree seg) :
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (tailGas : Nat),
-      StepIn D sevm
-        (St b (gw :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
-          (balanceRequestMemory M sevm.currentTarget) callGas) (.exec .staticcall) d ∧
-      StaticCallPost b d (a :: x :: y :: R) (balanceRequestMemory M sevm.currentTarget)
-        128 36 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St d (out.length.toB256 :: 128 :: R)
-          (balanceReplyMemory M sevm.currentTarget out) tailGas) site.decodeTree seg := by
-  simpa only [StaticAnsweredH_iff_of_covered fork] using
-    balanceObservation_invH site fork.rules_stateGas_none mem wf run
 
 
 /-- Each literal call site has five gas before the actual callee step and
@@ -394,31 +346,6 @@ theorem balanceRead_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     balanceObservation_invH site stateGas mem wf run
   obtain ⟨tailGas, decoded⟩ := balanceDecode_inv site mem wf long tail
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, decoded⟩
-
-/-- The actual balance observation reaches the source balance word, retaining
-its full output, precise request, actual call provenance and same continuation. -/
-theorem balanceRead_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
-    {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
-    (wf : Mem.Wf M)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
-        (balanceRequestMemory M sevm.currentTarget) G) site.callTree seg) :
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (tailGas : Nat),
-      StepIn D sevm
-        (St b (gw :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
-          (balanceRequestMemory M sevm.currentTarget) callGas) (.exec .staticcall) d ∧
-      StaticCallPost b d (a :: x :: y :: R) (balanceRequestMemory M sevm.currentTarget)
-        128 36 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St d (Bytes.toB256 (out.take 32) :: R)
-          (balanceReplyMemory M sevm.currentTarget out) tailGas) site.afterDecodeTree seg := by
-  simpa only [StaticAnsweredH_iff_of_covered fork] using
-    balanceRead_invH site fork.rules_stateGas_none mem wf run
 
 
 /-- Five local gas precede the callee and70 follow it through the actual MLOAD.

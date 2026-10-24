@@ -142,37 +142,6 @@ theorem burn_first_observation_of_successH {sevm : Sevm} {b post : Devm} {G : Na
   exact ⟨step, cursor, gas, out, gap, env, outcome, input, primitive, placed, tree, conts,
     reply, long, bound, accepted, decoded⟩
 
-/-- The first decoded observation is attached to the actual original-root
-occurrence and its actual returned parent, including the physical reply. -/
-theorem burn_first_observation_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (step : CallOccurrenceStep root .staticcall) (cursor : Cursor) (gas : Nat) (out : Bytes),
-      Exec.Deriv.ExecFreeUntil root step.occurrence.node ∧
-      step.occurrence.node.sevm = sevm ∧ step.occurrence.node.exn = .ok post ∧
-      step.occurrence.node.devm = burnFirstCallInput sevm (burnInitialReserveWorld sevm b)
-        [0x89afcb44] getterInitMemory gas
-        (reserve1Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8))
-        (reserve0Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8))
-        (Sevm.dataWord sevm 4).toAdr.toB256 0x053d ∧
-      Ninst.RunWith (Cursor.DescOf step.occurrence.node) sevm
-        step.occurrence.node.devm (.exec .staticcall) step.returned.devm ∧
-      CursorOK code cert step.returned cursor ∧
-      cursor.f = burnFirstAfterCallTree ∧ cursor.K.map Cont.f = [t_053d_c83] ∧
-      StaticCallPost (burnInitialWorld0 sevm b) step.returned.devm
-        (164 :: 0x70a08231 :: burnInitialToken0 sevm b :: burnInitialTail0 sevm b)
-        (balanceRequestMemory getterInitMemory sevm.currentTarget) 128 36 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      StaticAnswered sevm (burnInitialWorld0 sevm b) (burnInitialToken0 sevm b).toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
-      Nonempty (CursorStateAt code cert step.returned BurnInitialBalanceSite.first.afterDecodeTree
-        step.returned.devm (Bytes.toB256 (out.take 32) :: burnInitialTail0 sevm b)
-        (balanceReplyMemory getterInitMemory sevm.currentTarget out) [t_053d_c83]) := by
-  simpa only [burnFirstCallInputH_of_covered fork, burnInitialReserveWorldH_of_covered fork, burnInitialWorld0H_of_covered fork, burnLockedWorldH_of_covered fork, StaticAnsweredH_iff_of_covered fork] using
-    burn_first_observation_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 
 def burnInitialTarget1 (sevm : Sevm) (b : Devm) : B256 :=
@@ -307,51 +276,6 @@ theorem burn_initial_occurrences_of_successH {sevm : Sevm} {b post : Devm} {G : 
     long0, bound0, gap1, env1', outcome1', input1', ?_, placed1, tree1, cont1,
     reply1, long1, bound1, decoded1, ⟨decoded0⟩, code0', code1⟩
   exact primitive1
-
-/-- Both initial observations are actual positions in the supplied original
-Burn execution. The second request uses the first actual reply and returned
-world, and the intervening prefix contains no external instruction. -/
-theorem burn_initial_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (first second : CallOccurrenceStep root .staticcall)
-      (cursor1 : Cursor) (gas0 gas1 : Nat) (out0 out1 : Bytes),
-      Exec.Deriv.ExecFreeUntil root first.occurrence.node ∧
-      first.occurrence.node.devm = burnFirstCallInput sevm (burnInitialReserveWorld sevm b)
-        [0x89afcb44] getterInitMemory gas0
-        (reserve1Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8))
-        (reserve0Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8))
-        (Sevm.dataWord sevm 4).toAdr.toB256 0x053d ∧
-      StaticCallPost (burnInitialWorld0 sevm b) first.returned.devm
-        (164 :: 0x70a08231 :: burnInitialToken0 sevm b :: burnInitialTail0 sevm b)
-        (balanceRequestMemory getterInitMemory sevm.currentTarget) 128 36 128 32 1 out0 ∧
-      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
-      Exec.Deriv.ExecFreeUntil first.returned second.occurrence.node ∧
-      second.occurrence.node.sevm = sevm ∧ second.occurrence.node.exn = .ok post ∧
-      second.occurrence.node.devm = burnInitialSecondInput sevm b first.returned.devm out0 gas1 ∧
-      Ninst.RunWith (Cursor.DescOf second.occurrence.node) sevm
-        second.occurrence.node.devm (.exec .staticcall) second.returned.devm ∧
-      CursorOK code cert second.returned cursor1 ∧
-      cursor1.f = burnSecondAfterCallTree ∧ cursor1.K.map Cont.f = [t_053d_c83] ∧
-      StaticCallPost (temporalAccountAccessBase first.returned.devm (burnInitialTarget1 sevm b).toAdr)
-        second.returned.devm
-        (164 :: 0x70a08231 :: burnInitialTarget1 sevm b :: burnInitialTail1 sevm b out0)
-        (balanceRequestMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)
-          sevm.currentTarget) 128 36 128 32 1 out1 ∧
-      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
-      Nonempty (CursorStateAt code cert second.returned BurnInitialBalanceSite.second.afterDecodeTree
-        second.returned.devm (Bytes.toB256 (out1.take 32) :: burnInitialTail1 sevm b out0)
-        (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)
-          sevm.currentTarget out1) [t_053d_c83]) ∧
-      Nonempty (CursorStateAt code cert first.returned BurnInitialBalanceSite.first.afterDecodeTree
-        first.returned.devm (Bytes.toB256 (out0.take 32) :: burnInitialTail0 sevm b)
-        (balanceReplyMemory getterInitMemory sevm.currentTarget out0) [t_053d_c83]) ∧
-      ((burnInitialWorld0 sevm b).getCode (burnInitialToken0 sevm b).toAdr).size.toB256 ≠ 0 ∧
-      (first.returned.devm.getCode (burnInitialTarget1 sevm b).toAdr).size.toB256 ≠ 0 := by
-  simpa only [burnFirstCallInputH_of_covered fork, burnInitialReserveWorldH_of_covered fork, burnInitialSecondInputH_of_covered fork, burnInitialWorld0H_of_covered fork, burnLockedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access] using
-    burn_initial_occurrences_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 end Blanc.Lift.UniswapV2Pair

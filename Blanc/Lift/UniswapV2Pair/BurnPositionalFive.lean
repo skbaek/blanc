@@ -24,21 +24,6 @@ def BurnFourCallsH.replyPointer {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w 
     (r : BurnFourCallsH root sevm b w) : B256 :=
   burnFirstTransferPointer r.transfer.returned.devm.returnData
 
-/-- The full actual first reply supplies the moving pointer, including the
-empty synchronous case; no sentinel assumption is needed for this carrier. -/
-theorem BurnFourCalls.replyMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnFourCalls root sevm b) : ∃ n, PtrMem r.replyPointer n r.replyMemory := by
-  by_cases empty : r.transfer.returned.devm.returnData = []
-  · exact ⟨416, by simpa only [BurnFourCalls.replyPointer, burnFirstTransferPointer,
-      BurnFourCalls.replyMemory, empty, ite_true] using r.transferMem⟩
-  · have image := Blanc.Lift.bytesArrayMemory_image
-      (bytes := r.transfer.returned.devm.returnData) r.transferMem
-      (by decide) (by decide) (by decide)
-    exact ⟨memExtSize 416 324 r.transfer.returned.devm.returnData.length,
-      by simpa only [BurnFourCalls.replyPointer, burnFirstTransferPointer,
-        BurnFourCalls.replyMemory, ite_eq_right empty,
-        show (292 + 32 : B256).toNat = 324 from by decide] using image.1⟩
-
 theorem BurnFourCallsH.replyMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnFourCallsH root sevm b w) : ∃ n, PtrMem r.replyPointer n r.replyMemory := by
   by_cases empty : r.transfer.returned.devm.returnData = []
@@ -245,18 +230,6 @@ theorem burn_five_occurrences_of_successH {sevm : Sevm} {b post : Devm} {w : Bur
       BurnFourCallsH.secondTransferMemory] using input
   · rw [env] at primitive
     exact primitive
-
-/-- Successful original Burn execution fixes the first five calls and their
-ordered no-external gaps; no token answer or payout equality is assumed. -/
-theorem burn_five_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    Nonempty (BurnFiveCalls root sevm b) := by
-  obtain ⟨h⟩ := burn_five_occurrences_of_successH (BurnScheduleH.of_covered fork) codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

@@ -156,12 +156,6 @@ theorem PermitCallOccurrenceH.flag_one {root : Exec.Deriv} {b post : Devm}
       (failed.tree.trans rfl) (failed.exn_eq.trans returnedSuccess)).elim
   · exact one
 
-/-- The actual successful parent cannot take the recovery failure/revert arm. -/
-theorem PermitCallOccurrence.flag_one {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) : actual.flag = 1 :=
-  PermitCallOccurrenceH.flag_one (actual.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
-
 
 theorem PermitCallOccurrenceH.noExecSuffix {root : Exec.Deriv} {b : Devm}
     (actual : PermitCallOccurrenceH root b) (stateGas : root.sevm.benvStat.rules.stateGas = none) :
@@ -175,14 +169,6 @@ theorem PermitCallOccurrenceH.noExecSuffix {root : Exec.Deriv} {b : Devm}
     intro f member
     rcases List.mem_singleton.mp member with rfl
     decide
-
-/-- Both the post-call tree and every actual suspended continuation are in the
-checked closed region, so no later external instruction exists in this frame. -/
-theorem PermitCallOccurrence.noExecSuffix {root : Exec.Deriv} {b : Devm}
-    (actual : PermitCallOccurrence root b) (fork : CoveredFork root.sevm.benvStat.fork) :
-    ∀ N, Exec.Deriv.ParentPrefix actual.call.returned N → ∀ x,
-      ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  PermitCallOccurrenceH.noExecSuffix (actual.toH fork) fork.rules_stateGas_none
 
 
 theorem permit_call_occurrenceH {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -242,15 +228,6 @@ theorem permit_call_occurrenceH {sevm : Sevm} {b post : Devm} {G : Nat}
       (1 : B256).toAdr ((permitPublicCallMemoryH sevm b).read 482 128).1 out at answer
     rw [request] at answer
     exact answer
-
-theorem permit_call_occurrence {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (PermitCallOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b) := by
-  obtain ⟨actual⟩ := permit_call_occurrenceH codeEq fork.rules_stateGas_none fork.rules_bal_none
-    selector run
-  exact ⟨actual.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

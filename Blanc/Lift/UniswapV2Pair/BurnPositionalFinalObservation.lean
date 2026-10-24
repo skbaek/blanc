@@ -91,31 +91,6 @@ def BurnFinalObservationH.toCovered {root start : Exec.Deriv} {site : BurnFinalB
   pointer := h.pointer
   decoded := h.decoded
 
-/-- On a covered fork, the modern `BurnFinalObservation` gives `BurnFinalObservationH` with the same fields. -/
-def BurnFinalObservation.toH {root start : Exec.Deriv} {site : BurnFinalBalanceSite} {b : Devm} {token p : B256} {R : List B256} {M : Mem} {K : List SFunc}
-    (fork : CoveredFork start.sevm.benvStat.fork) (h : BurnFinalObservation root start site b token p R M K) :
-    BurnFinalObservationH root start site b token p R M K where
-  call := h.call
-  cursor := h.cursor
-  gas := h.gas
-  free := h.free
-  sevm_eq := h.sevm_eq
-  exn_eq := h.exn_eq
-  input := h.input
-  primitive := h.primitive
-  placed := h.placed
-  tree := h.tree
-  continuations := h.continuations
-  code_exists := h.code_exists
-  calldata := h.calldata
-  out := h.out
-  reply := h.reply
-  width := h.width
-  bound := h.bound
-  answered := by simpa only [StaticAnsweredH_iff_of_covered fork] using h.answered
-  pointer := h.pointer
-  decoded := h.decoded
-
 theorem burn_final_observation_of_request_cursorH {root start : Exec.Deriv}
     {b post : Devm} {R : List B256} {M : Mem} {K : List SFunc} {token p : B256} {n : Nat}
     (site : BurnFinalBalanceSite)
@@ -153,23 +128,6 @@ theorem burn_final_observation_of_request_cursorH {root start : Exec.Deriv}
     exact pointer
   exact ⟨⟨call, cursor, gas, free, env, outcome, input, primitive, placed, tree, conts,
     codeExists, data, out, reply, long, bound, accepted, sized, decoded⟩⟩
-
-/-- This observer consumes only the supplied actual request cursor. Reply
-classification and guards cannot substitute another occurrence or child slot. -/
-theorem burn_final_observation_of_request_cursor {root start : Exec.Deriv}
-    {b post : Devm} {R : List B256} {M : Mem} {K : List SFunc} {token p : B256} {n : Nat}
-    (site : BurnFinalBalanceSite)
-    (cut : CursorStateAt code cert start site.callTree b
-      (0 :: token :: p :: 36 :: p :: 32 :: (p + 36) :: 0x70a08231 :: token :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (low : 96 ≤ p.toNat) (fit : p.toNat + 36 ≤ n)
-    (codeExists : (b.getCode token.toAdr).size.toB256 ≠ 0)
-    (data : (M.read p.toNat 36).1 = ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) :
-    Nonempty (BurnFinalObservation root start site b token p R M K) := by
-  obtain ⟨h⟩ := burn_final_observation_of_request_cursorH site cut reached success
-    fork.rules_stateGas_none mem low fit codeExists data
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

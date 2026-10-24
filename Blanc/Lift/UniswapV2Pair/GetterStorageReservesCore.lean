@@ -89,15 +89,4 @@ theorem reserves_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine ⟨g, ?_⟩
   simpa only [reserveTimestampRead, reserve1Read, reserve0Read, B256.and_comm] using eq
 
-theorem reserves_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) t_0d90_c56 o) :
-    ∃ G', o = .returned (St (afterSload sevm b 8)
-      (reserveTimestampRead (b.getStorVal sevm.currentTarget 8) ::
-       reserve1Read (b.getStorVal sevm.currentTarget 8) ::
-       reserve0Read (b.getStorVal sevm.currentTarget 8) :: R) M G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact reserves_callee_invH fork.rules_bal_none run
-
 end Blanc.Lift.UniswapV2Pair

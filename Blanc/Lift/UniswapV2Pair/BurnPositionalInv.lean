@@ -106,14 +106,6 @@ theorem burn_selector_cursor_stateH {root : Exec.Deriv} {b post : Devm}
   obtain ⟨entry⟩ := guardHit.toSuccH cert_check success stateGas (by decide) (by rfl)
   exact ⟨entry⟩
 
-/-- The selected Burn comparison route preserves the actual root cursor,
-complete entry world, initialized memory and residual gas. -/
-theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
-    (cut : CursorStateAt code cert root t_002b_c0 b [0x89afcb44] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root t_050a_c83 b [0x89afcb44] getterInitMemory []) :=
-  burn_selector_cursor_stateH cut success fork.rules_stateGas_none
-
 
 /-- Burn's public ABI size guard follows from its successful source suffix. -/
 theorem burn_abi_size_of_source {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -167,20 +159,6 @@ theorem burn_prefix_guards_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     bal getterInitMemory_ptr reserves
   exact ⟨value, size, abiSize, unlocked, nonstatic, nonzero⟩
 
-/-- Actual successful source execution derives all non-gas prefix guards. -/
-theorem burn_prefix_guards_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-    (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ((burnTokensWorld sevm (afterSload sevm (burnLockedWorld sevm b) 8)).getCode
-      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-        (afterSload sevm (burnLockedWorld sevm b) 8).getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
-  simpa only [burnLockedWorldH_of_covered fork, burnTokensWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    burn_prefix_guards_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 theorem burn_public_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -191,17 +169,6 @@ theorem burn_public_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
       t_050a_c83 b [0x89afcb44] getterInitMemory []) := by
   obtain ⟨comparison⟩ := pair_dispatch_comparison_cursor_stateH codeEq stateGas selector (by decide) run
   exact burn_selector_cursor_stateH comparison rfl stateGas
-
-/-- The actual successful public Burn root reaches its selected ABI entry,
-with no supplied gas schedule or reached-endpoint premise. -/
-theorem burn_public_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_050a_c83 b [0x89afcb44] getterInitMemory []) :=
-  burn_public_cursor_stateH codeEq fork.rules_stateGas_none selector run
 
 
 def burnAbiGuardLine : List Ninst := [
@@ -269,16 +236,6 @@ theorem burn_abi_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨g', state⟩)
   exact caller.callH cert_check success stateGas (by rfl)
 
-/-- The actual public ABI cursor calls Burn's selected internal entry. -/
-theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
-    (cut : CursorStateAt code cert root t_050a_c83 b [0x89afcb44] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (abiSize : (32 : B256) ≤ root.sevm.data.length.toB256 - 4) :
-    Nonempty (CursorStateAt code cert root t_13f5_c37 b
-      [(Sevm.dataWord root.sevm 4).toAdr.toB256, 0x053d, 0x89afcb44]
-      getterInitMemory [t_053d_c83]) :=
-  burn_abi_cursor_stateH cut success fork.rules_stateGas_none abiSize
-
 
 def burnLockGuardLine : List Ninst := [
   .push [0] (by decide), .reg (.dup 0), .push [12] (by decide), .reg .sload,
@@ -343,18 +300,6 @@ theorem burn_lock_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨g', state⟩)
   exact caller.callH cert_check success stateGas (by rfl)
 
-/-- Actual successful Burn execution performs the lock write and calls the
-reserve helper without a prescribed residual gas or a caller sentry premise. -/
-theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {toWord extρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_13f5_c37 b (toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (unlocked : b.getStorVal root.sevm.currentTarget 12 = 1) :
-    Nonempty (CursorStateAt code cert root t_0d90_c56 (burnLockedWorld root.sevm b)
-      (0x1479 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M (t_1479_c37 :: K)) := by
-  simpa only [burnLockedWorldH_of_covered fork] using
-    burn_lock_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none unlocked
-
 
 theorem burn_reserves_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {ρ : B256} {K : List SFunc}
@@ -366,19 +311,6 @@ theorem burn_reserves_cursor_stateH {root : Exec.Deriv} {b post : Devm}
        reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
        reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) M K) := by
   exact pair_reserves_cursor_stateH cut success stateGas bal
-
-/-- The actual reserve helper returns the three cached reserve words through
-its supplied parent continuation, preserving the full world and memory. -/
-theorem burn_reserves_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {ρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_0d90_c56 b (ρ :: R) M (t_1479_c37 :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root t_1479_c37 (afterSload root.sevm b 8)
-      (reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
-       reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
-       reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) M K) := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    burn_reserves_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none
 
 
 def burnFirstGuardLine : List Ninst := [
@@ -593,29 +525,6 @@ theorem burn_first_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using state)
   exact guard.branchSuccH cert_check success stateGas (by decide)
-
-/-- Burn's first request staging follows the actual cursor and retains the
-physical request memory, token worlds and cached reserve words. -/
-theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {timestamp r1 r0 toWord extρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_1479_c37 b
-      (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 96 M)
-    (nonzero : ((burnTokensWorld root.sevm b).getCode
-      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-        b.getStorVal root.sevm.currentTarget 6).toAdr).size.toB256 ≠ 0) :
-    let t0 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-      b.getStorVal root.sevm.currentTarget 6
-    let t1 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-      (afterSload root.sevm b 6).getStorVal root.sevm.currentTarget 7
-    Nonempty (CursorStateAt code cert root t_14fb_c37
-      (temporalAccountAccessBase (burnTokensWorld root.sevm b) t0.toAdr)
-      (0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 ::
-        0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M root.sevm.currentTarget) K) := by
-  simpa only [burnTokensWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
-    burn_first_guard_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem (by simpa only [burnTokensWorldH_of_covered fork] using nonzero)
 
 
 end Blanc.Lift.UniswapV2Pair

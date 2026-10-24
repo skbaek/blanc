@@ -38,18 +38,6 @@ theorem MintBalanceOccurrence.replyH {root start : Exec.Deriv}
   rw [r.input] at actual
   exact ri_staticcall_boundedH stateGas actual
 
-/-- The complete reply is classified at this original occurrence's actual
-returned parent, with no replacement call or answer witness. -/
-theorem MintBalanceOccurrence.reply {root start : Exec.Deriv}
-    {site : MintBalanceSite} {b : Devm} {token : B256} {S : List B256}
-    {M : Mem} {K : List SFunc}
-    (r : MintBalanceOccurrence root start site b token S M K)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ flag out, StaticCallPost b r.call.returned.devm S M 128 36 128 32 flag out ∧
-      out.length < 2 ^ 256 ∧
-      (flag = 1 → StaticAnswered start.sevm b token.toAdr (M.read 128 36).1 out) := by
-  simpa only [StaticAnsweredH_iff_of_covered fork] using r.replyH fork.rules_stateGas_none
-
 private theorem mint_balance_after_call_shape (site : MintBalanceSite) :
     site.afterCallTree = (callFlagGuardLine
       (match site with | .first => [0x11,0x22] | .second => [0x11,0xc5])
@@ -96,26 +84,6 @@ theorem mint_balance_occurrence_decodeH {root start : Exec.Deriv} {b post : Devm
   rw [balanceRequestMemory_read wf start.sevm.currentTarget] at answer
   rw [returnedEnv] at decoded
   exact ⟨out, reply, bound, width, answer, decoded⟩
-
-/-- Checked decoding of the output selected by the supplied actual call. -/
-theorem mint_balance_occurrence_decode {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {token a x y : B256}
-    (site : MintBalanceSite)
-    (r : MintBalanceOccurrence root start site b token (a :: x :: y :: R)
-      (balanceRequestMemory M start.sevm.currentTarget) K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (wf : Mem.Wf M)
-    (mem : PtrMem 128 192 (balanceRequestMemory M start.sevm.currentTarget)) :
-    ∃ out, StaticCallPost b r.call.returned.devm (a :: x :: y :: R)
-        (balanceRequestMemory M start.sevm.currentTarget) 128 36 128 32 1 out ∧
-      out.length < 2 ^ 256 ∧ 32 ≤ out.length ∧
-      StaticAnswered start.sevm b token.toAdr
-        (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out ∧
-      Nonempty (CursorStateAt code cert r.call.returned site.afterDecodeTree
-        r.call.returned.devm (Bytes.toB256 (out.take 32) :: R)
-        (balanceReplyMemory M start.sevm.currentTarget out) K) := by
-  simpa only [StaticAnsweredH_iff_of_covered fork] using
-    mint_balance_occurrence_decodeH site r success fork.rules_stateGas_none wf mem
 
 
 theorem mint_second_occurrence_of_firstH {root start : Exec.Deriv} {b post : Devm}
@@ -165,44 +133,6 @@ theorem mint_second_occurrence_of_firstH {root start : Exec.Deriv} {b post : Dev
   refine ⟨out, reply, bound, width, answer, ?_, ?_⟩
   · simpa only [Devm.getCode, Devm.getAcct, accountAccessH_state] using nonzero
   · simpa only [returnedEnv] using (Nonempty.intro second)
-
-/-- Mint's second actual instruction follows the first actual reply. The
-between-call span starts at that same returned node and contains no exec. -/
-theorem mint_second_occurrence_of_first {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {token r1 r0 toWord extρ : B256}
-    (first : MintBalanceOccurrence root start .first b token
-      (164 :: 0x70a08231 :: token :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M start.sevm.currentTarget) K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (wf : Mem.Wf M)
-    (mem : PtrMem 128 192 (balanceRequestMemory M start.sevm.currentTarget)) :
-    ∃ out, StaticCallPost b first.call.returned.devm
-        (164 :: 0x70a08231 :: token :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-        (balanceRequestMemory M start.sevm.currentTarget) 128 36 128 32 1 out ∧
-      out.length < 2 ^ 256 ∧ 32 ≤ out.length ∧
-      StaticAnswered start.sevm b token.toAdr
-        (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out ∧
-      let returned := first.call.returned
-      let token1 := (returned.devm.getStorVal returned.sevm.currentTarget 7).toAdr.toB256
-      ((temporalAccountAccessBase (afterSload returned.sevm returned.devm 7)
-        token1.toAdr).getCode token1.toAdr).size.toB256 ≠ 0 ∧
-      Nonempty (MintBalanceOccurrence root returned .second
-        (temporalAccountAccessBase (afterSload returned.sevm returned.devm 7) token1.toAdr)
-        token1
-        (164 :: 0x70a08231 :: token1 :: 0 :: Bytes.toB256 (out.take 32) ::
-          r1 :: r0 :: 0 :: toWord :: extρ :: R)
-        (balanceRequestMemory (balanceReplyMemory M start.sevm.currentTarget out)
-          returned.sevm.currentTarget) K) := by
-  obtain ⟨out, reply, bound, width, answer, guard, ⟨second⟩⟩ :=
-    mint_second_occurrence_of_firstH first success fork.rules_stateGas_none fork.rules_bal_none wf mem
-  have returnedFork : CoveredFork first.call.returned.sevm.benvStat.fork := by
-    rw [first.returned_sevm]; exact fork
-  refine ⟨out, reply, bound, width, (StaticAnsweredH_iff_of_covered fork).mp answer, ?_, ?_⟩
-  · simpa only [afterSloadH_of_eip2929 returnedFork.rules_access,
-      accountAccessH_of_eip2929 returnedFork.rules_access] using guard
-  · rw [← afterSloadH_of_eip2929 returnedFork.rules_access,
-      ← accountAccessH_of_eip2929 returnedFork.rules_access]
-    exact ⟨second⟩
 
 
 end Blanc.Lift.UniswapV2Pair

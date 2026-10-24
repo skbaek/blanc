@@ -48,21 +48,6 @@ theorem SwapBalanceOccurrenceH.sourceCallH {root start : Exec.Deriv} {b : Devm}
     (by rw [r.sevmEq]; exact stateGas) queue
   exact ⟨observed, same⟩
 
-/-- The supplied balance occurrence determines its guarded source request,
-full actual bytes and complete original slot queue. -/
-theorem SwapBalanceOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
-    {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc}
-    (r : SwapBalanceOccurrence root start b S M p token second K)
-    (frame : Frame) (site : CallSite) (index : Nat)
-    (pair : frame.context.pair = start.sevm.currentTarget)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor site token.toAdr (.balanceOf frame.context.pair)) (feeObservedResult r.out) index,
-      observed.call = r.step :=
-  SwapBalanceOccurrenceH.sourceCallH (r.toH (by
-    rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.step.sameFrame, r.sevmEq]
-    exact fork)) frame site index pair fork.rules_stateGas_none
-
 
 /-- The exact balance queue has the same static getter results and authentic paths. -/
 structure SwapBalanceSource {root start : Exec.Deriv} {b : Devm}
@@ -183,23 +168,6 @@ theorem swap_balance_sourceH {root start : Exec.Deriv} {b : Devm}
   · obtain ⟨added, raw, source, rawEq, images⟩ := inv.logs
     exact ⟨added, raw, source, logs.trans rawEq, images⟩
 
-/-- Static view supply and final storage are taken from the SAME original balance slot. -/
-theorem swap_balance_source {root start : Exec.Deriv} {b : Devm}
-    {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
-    (r : SwapBalanceOccurrence root start b S M p token second K)
-    (site : CallSite) (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    Nonempty (SwapBalanceSource r U ctx current base frame site index) := by
-  obtain ⟨h⟩ := swap_balance_sourceH (r.toH fork) site index inj apart sem image installed inv pair time fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
-
 
 def swapPhysicalBalanceFrame1 {root : Exec.Deriv} {b : Devm}
     (_r : SwapBalances root root.sevm b) (frame : Frame) : Frame :=
@@ -210,12 +178,6 @@ def swapPhysicalBalanceFrame1H {root : Exec.Deriv} {b W : Devm}
     (_r : SwapBalancesH root root.sevm b W) (frame : Frame) : Frame :=
   frame.beginResume (requestFor .swapBalance0 (swapInitialToken0 root.sevm b).toAdr
     (.balanceOf frame.context.pair))
-
-theorem swapPhysicalBalanceFrame1H_of_covered {root : Exec.Deriv} {b : Devm}
-    {_r : SwapBalancesH root root.sevm b (swapPrefixWorld root.sevm b)} {frame : Frame}
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    swapPhysicalBalanceFrame1H _r frame = swapPhysicalBalanceFrame1 (_r.toCovered fork) frame :=
-  rfl
 
 /-- Both complete static queues follow the same post-callback frame and physical
 returned-node chain; the second source frame resumes the first exact request. -/
@@ -268,23 +230,6 @@ theorem swap_balance_pair_sourceH {root : Exec.Deriv} {b W : Devm}
       (requestFor .swapBalance0 (swapInitialToken0 root.sevm b).toAdr (.balanceOf frame.context.pair)))
     pair time stateGas bal good
   exact ⟨⟨first, second⟩⟩
-
-/-- The two source view queues come from these two supplied physical calls,
-with freshness derived from the same finite carried representation. -/
-theorem swap_balance_pair_source {root : Exec.Deriv} {b : Devm}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {frame : Frame}
-    (r : SwapBalances root root.sevm b) (index : Nat)
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current b frame r.optional.callback.world)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    Nonempty (SwapBalancePairSource r U ctx current b frame index) := by
-  obtain ⟨h⟩ := swap_balance_pair_sourceH (r.toH fork) index inj apart sem image installed inv pair time fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

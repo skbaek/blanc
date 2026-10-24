@@ -33,15 +33,6 @@ theorem getterScalar_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, out, stor, logs⟩
 
-theorem getterScalar_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (s : ScalarGetter) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = s.selector)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      post.output = (s.value sevm b).toBytes ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  getterScalar_pc0_invH s fork.rules_bal_none selector run
-
 theorem getterScalar_bytecode_exact {sevm : Sevm} {b : Devm} {G : Nat}
     (s : ScalarGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)

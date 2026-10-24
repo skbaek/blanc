@@ -63,31 +63,6 @@ structure SwapTransferMutableH {root start : Exec.Deriv} {b : Devm}
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
 
-/-- Under the root's covered fork, the historical transfer queue authenticates every child as `LockedAuth`. -/
-def SwapTransferMutableH.toCovered {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {p amount toWord token rho : B256}
-    {caller : SFunc} {K : List SFunc}
-    {r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm}
-    {frame : Frame} {site : CallSite} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapTransferMutableH r U ctx current base frame site index) :
-    SwapTransferMutable r U ctx current base frame site index where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    h.mappedTurns fork h.authentic
-  invariant := h.invariant
-
 /-- Under the root's covered fork, the modern transfer queue authenticates every child as `LockedAuthH`. -/
 def SwapTransferMutable.toH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
@@ -166,27 +141,6 @@ theorem swap_transfer_mutableH {root start : Exec.Deriv} {b : Devm}
     simp only [St, Devm.setMach_logs]
     rw [oldLogs, List.append_assoc]
   · rw [List.map_append, List.map_append, oldImages, newImages]
-
-/-- The shared locked supply consumes this transfer's SAME original complete slot,
-retaining recursive admission and exact located-entry authentication. -/
-theorem swap_transfer_mutable {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {p amount toWord token rho : B256}
-    {caller : SFunc} {K : List SFunc} {U : WriterKey → Prop}
-    {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
-    (r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K)
-    (site : CallSite) (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    Nonempty (SwapTransferMutable r U ctx current base frame site index) := by
-  obtain ⟨h⟩ := swap_transfer_mutableH r site index inj apart sem image installed inv pair time
-    nonstatic rootNonstatic fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨h.toCovered fork⟩
 
 
 def swapTransferPhaseRequest (second : Bool) (locals : SwapLocals) : Request :=

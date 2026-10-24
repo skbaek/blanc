@@ -56,20 +56,6 @@ theorem skim_actual_reply_cursorH {F : Exec.Deriv} {κ : Cursor}
     exact returned.returnWordH (shortTree := t_1a14_c67) (decodeTree := t_1a18_c67)
       cert_check success stateGas [0x1a, 0x18] (by decide) rfl rfl mem fit bound (by decide)
 
-/-- Both checked contexts decode at the supplied actual returned cursor. -/
-theorem skim_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
-    {post : Devm} {R : List B256} {M : Mem} {flag a x y p : B256} {n : Nat}
-    (site : SkimBalanceSite) (placed : CursorOK code cert F κ)
-    (tree : κ.f = site.afterCallTree) (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork)
-    (state : F.devm = St F.devm (flag :: a :: x :: y :: R) M F.devm.gasLeft)
-    (flag01 : flag = 0 ∨ flag = 1) (mem : PtrMem p n M)
-    (fit : p.toNat + 32 ≤ n) (bound : F.devm.returnData.length < 2 ^ 256) :
-    flag = 1 ∧ 32 ≤ F.devm.returnData.length ∧
-      Nonempty (CursorStateAt code cert F site.afterDecodeTree F.devm
-        (Bytes.toB256 (M.read p.toNat 32).1 :: R) M (κ.K.map Cont.f)) :=
-  skim_actual_reply_cursorH site placed tree success fork.rules_stateGas_none state flag01 mem fit bound
-
 
 structure SkimFirstObservation (root : Exec.Deriv) (b : Devm)
     (toWord : B256) (R : List B256) where
@@ -247,17 +233,6 @@ theorem skim_first_observation_of_prefixH {root : Exec.Deriv} {b post : Devm}
   rw [one] at reply
   exact ⟨⟨step, cursor, gas, out, nonstatic, codeGuard, gap, env, outcome, input,
     primitive, placed, tree, conts, reply, long, bound, accepted, decoded⟩⟩
-
-/-- The observation and physical decoding come from the same first occurrence. -/
-theorem skim_first_observation_of_prefix {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
-      (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (SkimFirstObservation root b toWord R) := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at cut
-  obtain ⟨h⟩ := skim_first_observation_of_prefixH cut success fork.rules_stateGas_none fork.rules_bal_none
-  exact ⟨h.toCovered fork⟩
 
 
 end Blanc.Lift.UniswapV2Pair

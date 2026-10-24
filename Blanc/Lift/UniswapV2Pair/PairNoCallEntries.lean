@@ -167,15 +167,6 @@ theorem PairNoCallComparison.cutH {root : Exec.Deriv} {b post : Devm}
     simp only [PairNoCallComparison.line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member
   · exact q.line_inv sel
 
-/-- The literal comparison is traversed on the original checked cursor. -/
-theorem PairNoCallComparison.cut {root : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {K : List SFunc} (q : PairNoCallComparison) (sel : B256)
-    (cut : CursorStateAt code cert root q.body b (sel :: S) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root q.tail b
-      (Bytes.toB256 q.target :: q.compute sel :: sel :: S) M K) :=
-  q.cutH sel cut success fork.rules_stateGas_none
-
 /-- The four immediate writers and all seventeen actual view selectors. -/
 inductive PairNoCallEntry
   | transfer | approve | transferFrom | initialize | decimals | minimumLiquidity | permitTypehash | domainSeparator | price0CumulativeLast | price1CumulativeLast | kLast | factory | token0 | token1 | name | symbol | totalSupply | balanceOf | nonces | allowance | getReserves
@@ -720,18 +711,6 @@ theorem PairNoCallEntry.cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     change CursorStateAt code cert _ (.branchTo t_01b9_c0 101) b
       (0x2d6 :: 1 :: [0x902f1ac]) getterInitMemory [] at guard
     exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
-
-/-- The selected function is reached by an actual call-free prefix; all world,
-memory and continuation fields come from the same successful original root. -/
-theorem PairNoCallEntry.cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (entry : PairNoCallEntry) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = entry.selector)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      entry.tree b [entry.selector] getterInitMemory []) :=
-  entry.cursor_stateH codeEq fork.rules_stateGas_none selector run
 
 theorem PairNoCallEntry.root_noExecH {sevm : Sevm} {b post : Devm} {G : Nat}
     (entry : PairNoCallEntry) (codeEq : sevm.code = code)

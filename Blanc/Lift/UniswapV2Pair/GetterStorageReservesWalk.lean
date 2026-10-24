@@ -38,18 +38,6 @@ theorem reserves_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, out, stor, logs⟩
 
-theorem reserves_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x0902f1ac)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      post.output = encodeWords
-        [reserve0Read (b.getStorVal sevm.currentTarget 8),
-         reserve1Read (b.getStorVal sevm.currentTarget 8),
-         reserveTimestampRead (b.getStorVal sevm.currentTarget 8)] ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  reserves_pc0_invH fork.rules_bal_none selector run
-
 theorem getReserves_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -63,16 +51,6 @@ theorem getReserves_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {s
     reserves_pc0_invH bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
   refine ⟨value, size, ?_, stor, logs⟩
   rw [reserveSource_result slots, out]
-
-theorem getReserves_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x0902f1ac)
-    (slots : ReserveSlotMatches st sevm b)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      some post.output = getterResult st .getReserves ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  getReserves_bytecode_refinesH codeEq fork.rules_stateGas_none fork.rules_bal_none selector slots run
 
 theorem getReserves_bytecode_live {sevm : Sevm} {b : Devm} {G c : Nat} {st : State}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)

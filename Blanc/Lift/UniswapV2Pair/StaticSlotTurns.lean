@@ -89,36 +89,6 @@ theorem sync_static_slot_turns_invH {K : WriterKey → Prop} {frame : Frame}
   · exact childFork.1
   · exact childFork.2
 
-/-- The SAME supplied STATICCALL slot supplies its actual ordered static turn
-queue. Entry/code/context are derived from its primitive and frame equations. -/
-theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
-    {request : Request} {path : List Nat} {root : Exec.Deriv}
-    (occurrence : Exec.NinstOccurrence root)
-    (instruction : occurrence.instruction = Ninst.staticcall)
-    {callee : Jaune.Frame} {resume : Resume} {pc' : Nat}
-    {childEvm : Evm} {raw : Execution}
-    (slot : occurrence.slot = .some ⟨childEvm, raw⟩)
-    (step : Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
-      .spawn callee resume pc')
-    (enter : callee.enter = .run childEvm)
-    (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (occurrence.node.devm.getStor frame.context.pair) frame.current.state)
-    (fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?,
-      WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm))
-    (time : frame.context.timestamp = occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork occurrence.node.sevm.benvStat.fork) :
-    occurrence.slot = .some ⟨childEvm, raw⟩ ∧
-      ∃ views : List StaticViewTurn,
-        views.map Prod.fst =
-          (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight? ∧
-        (∀ picked ∈ views, picked.Authentic frame) ∧
-        ExactTurns frame request 0 (staticViewTranscript views .done)
-          { complete := true, frame := frame,
-            childReturns := staticViewChildReturns frame request 0 views } :=
-  sync_static_slot_turns_invH occurrence instruction slot step enter childRun sem image installed rep fresh time fork.rules_stateGas_none fork.rules_bal_none
-
 
 
 
@@ -201,46 +171,6 @@ theorem sync_static_slot_filtered_turns_invH {K : WriterKey → Prop}
       · intro picked member
         cases member
       · exact ExactTurns.done _ _ _
-
-/-- The existing filtered-slot fold at the supplied actual first occurrence. -/
-theorem sync_static_slot_filtered_turns_inv {K : WriterKey → Prop}
-    {frame : Frame} {request : Request} {path : List Nat} {root : Exec.Deriv}
-    (occurrence : Exec.NinstOccurrence root) (returned : Exec.Deriv)
-    (instruction : occurrence.instruction = Ninst.staticcall)
-    (result : occurrence.stepResult = .ok returned.devm)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (occurrence.node.devm.getStor frame.context.pair) frame.current.state)
-    (time : frame.context.timestamp = occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork occurrence.node.sevm.benvStat.fork) :
-      ((occurrence.slot = .none ∧
-          ExactTurns frame request 0 .done
-            { complete := true, frame := frame, childReturns := [] }) ∨
-        ∃ (childEvm : Evm) (raw : Execution) (callee : Jaune.Frame)
-          (resume : Resume) (pc' : Nat)
-          (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-          (next : Exec pc' occurrence.node.sevm returned.devm occurrence.node.exn)
-          (spawn : Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
-            .spawn callee resume pc')
-          (enter : callee.enter = .run childEvm)
-          (resumed : resume.run (callee.settle raw) = .ok returned.devm),
-          occurrence.slot = .some ⟨childEvm, raw⟩ ∧
-          occurrence.node.exc = .runOk spawn enter childRun resumed next ∧
-          ((∀ located ∈
-            (if Jaune.Frame.settlementCommits callee raw = true then
-              (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?
-            else []),
-            WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
-            ∃ views : List StaticViewTurn,
-              views.map Prod.fst =
-                (if Jaune.Frame.settlementCommits callee raw = true then
-              (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?
-            else []) ∧
-              (∀ picked ∈ views, picked.Authentic frame) ∧
-              ExactTurns frame request 0 (staticViewTranscript views .done)
-                { complete := true, frame := frame,
-                  childReturns := staticViewChildReturns frame request 0 views })) :=
-  sync_static_slot_filtered_turns_invH occurrence returned instruction result sem image installed rep time fork.rules_stateGas_none fork.rules_bal_none
 
 
 end Blanc.Lift.UniswapV2Pair

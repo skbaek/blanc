@@ -21,14 +21,6 @@ theorem SkimFourCallsH.noExecTail {root : Exec.Deriv} {b : Devm} {toWord : B256}
     subst f
     decide
 
-/-- The original final CALL's checked helper/caller suffix contains no further
-external instruction, including its real pending return and stop entry. -/
-theorem SkimFourCalls.noExecTail {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
-    (r : SkimFourCalls root b toWord R) (fork : CoveredFork root.sevm.benvStat.fork) :
-    ∀ N, Exec.Deriv.ParentPrefix r.transfer.call.returned N → ∀ x,
-      ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  SkimFourCallsH.noExecTail (r.toH fork) fork.rules_stateGas_none
-
 
 theorem SkimFourCallsH.post_image {root : Exec.Deriv} {b post : Devm} {toWord : B256}
     (r : SkimFourCallsH root b toWord [0x0257, 0xbc25cf77])
@@ -73,14 +65,6 @@ theorem SkimFourCallsH.output_eq {root : Exec.Deriv} {b post : Devm} {toWord : B
     SkimTwoCallsH.secondWorld, accountAccessH_output, afterSloadH_output,
     r.two.transfer.output, r.two.first.reply.output rfl, accountAccessH_output,
     skim_cached_outputH]
-
-/-- Every physical static reply and transfer return preserves this invocation's
-output; the actual unlock/STOP result has the same bytes. -/
-theorem SkimFourCalls.output_eq {root : Exec.Deriv} {b post : Devm} {toWord : B256}
-    (r : SkimFourCalls root b toWord [0x0257, 0xbc25cf77])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    post.output = b.output :=
-  SkimFourCallsH.output_eq (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
 
 
 end Blanc.Lift.UniswapV2Pair

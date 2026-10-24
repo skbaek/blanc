@@ -125,14 +125,6 @@ theorem approve_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
   · obtain ⟨_, _, eq⟩ := approve51_invH stateGas bal mem hc
     cases eq
 
-theorem approve_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x034e, sel] M G) t_032b_c96 o) :
-    sevm.isStatic = false ∧ ∃ G', o = .halted (approvePublicPost sevm b [sel] M G') := by
-  simpa only [approvePublicPostH_of_covered fork] using
-    approve_decoder_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 theorem approve_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel : B256} {o : Outcome}
@@ -178,15 +170,6 @@ theorem approve_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
       rw [flag] at nonzero
       exact nonzero (by decide)
     exact ⟨guard, approve_decoder_invH stateGas bal mem h.uncut⟩
-
-theorem approve_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_0315_c96 o) :
-    (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      ∃ G', o = .halted (approvePublicPost sevm b [sel] M G') := by
-  simpa only [approvePublicPostH_of_covered fork] using
-    approve_entry_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 
@@ -294,17 +277,6 @@ theorem approve_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨_, run⟩ := approve_selector_inv selector run
   obtain ⟨guard, nonstatic, G', eq⟩ := approve_entry_invH stateGas bal getterInitMemory_ptr run
   exact ⟨value, size, guard, nonstatic, G', Outcome.halted.inj eq⟩
-
-/-- The inverse retains the entire final state and derives the real acceptance guards. -/
-theorem approve_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      ∃ G', post = approvePublicPost sevm b [0x095ea7b3] getterInitMemory G' := by
-  simpa only [approvePublicPostH_of_covered fork] using
-    approve_pc0_invH fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem approve_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}

@@ -257,8 +257,6 @@ abbrev w1 (sevm : Sevm) (b : Devm) : Devm := afterSstore sevm b 12 1
 abbrev w2 (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (w1 sevm b) 3 (domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget)
 abbrev w3 (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (w2 sevm b) 5
-abbrev w4 (sevm : Sevm) (b : Devm) : Devm := afterSstore sevm (w3 sevm b) 5 sevm.caller.toB256
-
 /-- The constructor's exact cost from the world `b`. -/
 def ctorCost (sevm : Sevm) (b : Devm) : Nat :=
   3 + 2322 + 3 + 3 + 3 + 3 + sstoreCost sevm (w3 sevm b) 5 sevm.caller.toB256 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (w2 sevm b) 5 + 3 + 3 + 2 + sstoreCost sevm (w1 sevm b) 3 (domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget) + 3 + 60 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 48 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 24 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 2 + 1 + 10 + 3 + 3 + 3 + 2 + sstoreCost sevm b 12 1 + 3 + 3 + 12 + 3 + 3
@@ -280,14 +278,6 @@ abbrev w4H (sevm : Sevm) (b : Devm) : Devm := afterSstoreH sevm (w3H sevm b) 5 s
 /-- The constructor's exact cost from the world `b` under the frame's actual storage schedule. -/
 def ctorCostH (sevm : Sevm) (b : Devm) : Nat :=
   3 + 2322 + 3 + 3 + 3 + 3 + sstoreCostH sevm (w3H sevm b) 5 sevm.caller.toB256 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCostH sevm (w2H sevm b) 5 + 3 + 3 + 2 + sstoreCostH sevm (w1H sevm b) 3 (domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget) + 3 + 60 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 48 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 24 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 2 + 1 + 10 + 3 + 3 + 3 + 2 + sstoreCostH sevm b 12 1 + 3 + 3 + 12 + 3 + 3
-
-/-- On a covered fork the historical charge is the modern one. -/
-theorem ctorCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
-    ctorCostH sevm b = ctorCost sevm b := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
-  simp only [ctorCostH, ctorCost, w1H, w2H, w3H, w1, w2, w3,
-    afterSstoreH_of_eip2929 hfork.rules_access nm, afterSloadH_of_eip2929 hfork.rules_access,
-    sstoreCostH_of_eip2929 hfork.rules_access nm, sloadCostH_of_eip2929 hfork.rules_access]
 
 /-- The constructor's final machine under historical rule facts: the `RETURN` of the runtime
 window from the last world `w4H`, with `G` gas left. -/
@@ -535,22 +525,5 @@ theorem ctor_runH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
       post.gasLeft = G := by
   exact ⟨ctorPostH sevm b G, ctor_run_postH hsg hchain hshifts hstatic hcode hvalue hstor G,
     ctorPostH_facts sevm b G⟩
-
-/-- **The Pair constructor, gas-exact**: from a fresh account (empty storage, zero call value)
-with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
-gas left, returning the runtime window, with the world's error unchanged and the constructor
-storage written. -/
-theorem ctor_run {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hcode : sevm.code = code) (hvalue : sevm.value = 0)
-    {b : Devm} (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) (G : Nat) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
-      post.output = runtimeWindow ∧ post.error = b.error ∧
-      Devm.getStor post sevm.currentTarget =
-        ctorStor sevm.benvStat.chainId.toB256 sevm.currentTarget sevm.caller
-          (Devm.getStor b sevm.currentTarget) ∧
-      post.gasLeft = G := by
-  rw [← ctorCostH_covered hfork]
-  exact ctor_runH hfork.rules_stateGas_none hfork.rules_chainId hfork.rules_shifts hstatic hcode
-    hvalue hstor G
 
 end Blanc.Lift.UniswapV2Pair.Creation

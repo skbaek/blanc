@@ -56,22 +56,5 @@ theorem pair_transfer_initialize_cursor_stateH {root : Exec.Deriv} {b post : Dev
       exact raw)
   exact ⟨h8, reached⟩
 
-/-- The original initializer advances the supplied actual cursor, retaining its
-full world and physical moving payload image before the bounded copy. -/
-theorem pair_transfer_initialize_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {p amount toWord tokenWord rho : B256} {n : Nat}
-    (cut : CursorStateAt code cert root t_1fdb_c57 b
-      (amount :: toWord :: tokenWord :: rho :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
-    (width : p.toNat + 260 < 2 ^ 256) :
-    let N := safeTransfer_dynamicPayloadMemory M p amount toWord
-    PtrMem (p + 164) N.size N ∧ Nonempty (CursorStateAt code cert root t_20a4_c57 b
-      ((p + 96) :: (p + 164) :: 68 :: 68 :: (p + 96) :: (p + 164) ::
-        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N K) :=
-  pair_transfer_initialize_cursor_stateH cut success fork.rules_stateGas_none mem lower width
-
 
 end Blanc.Lift.UniswapV2Pair

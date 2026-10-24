@@ -151,14 +151,6 @@ theorem getterScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   | stored s => exact storedScalar_callee_invH s bal run
   | address s => exact addressScalar_callee_invH s bal run
 
-theorem getterScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
-    (s : ScalarGetter) (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (s.after sevm b) (s.value sevm b :: ρ :: R) M G') := by
-  rw [← s.afterH_of_eip2929 b fork.rules_access]
-  exact getterScalar_callee_invH s fork.rules_bal_none run
-
 theorem getterScalar_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} (s : ScalarGetter)
     (mem : PtrMem 128 96 M) (room : R.length ≤ 1019) :
@@ -243,13 +235,5 @@ theorem getterScalar_entry_invH {sevm : Sevm} {b : Devm}
     exact ⟨d, ho, hout, fun a => (hs a).trans (s.afterH_storage sevm b a), hl.trans (s.afterH_logs sevm b)⟩
   · obtain ⟨_, eq⟩ := getterScalar_callee_invH s bal hc
     cases eq
-
-theorem getterScalar_entry_inv {sevm : Sevm} {b : Devm}
-    {M : Mem} {G : Nat} {sel : B256} {o : Outcome} (s : ScalarGetter)
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [sel] M G) s.entryTree o) :
-    ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
-      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
-  getterScalar_entry_invH s fork.rules_bal_none mem run
 
 end Blanc.Lift.UniswapV2Pair

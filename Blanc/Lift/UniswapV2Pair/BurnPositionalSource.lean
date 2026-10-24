@@ -54,20 +54,6 @@ theorem BurnInitialPairH.firstSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : 
     (by rw [env]; exact pair) operands data flag rfl r.first_reply.returnData.symm rfl
     guard (by rw [env]; exact stateGas) queue
 
-/-- The first source balance request consumes this retained original slot. -/
-theorem BurnInitialPair.firstSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnInitialPair root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.first frame.context.pair 0 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnInitialBalance0 current.state.token0 (.balanceOf frame.context.pair))
-        (feeObservedResult r.out0) 0,
-      observed.call = r.first ∧ observed.paths = paths :=
-  BurnInitialPairH.firstSourceCall (r.toH fork) rep pair fork.rules_stateGas_none queue
-
 
 theorem BurnInitialPairH.secondSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
@@ -116,20 +102,6 @@ theorem BurnInitialPairH.secondSourceCall {root : Exec.Deriv} {sevm : Sevm} {b :
     (by rw [r.second_sevm]; exact pair) operands data flag rfl r.second_reply.returnData.symm rfl
     guard (by rw [r.second_sevm]; exact stateGas) queue
 
-/-- The second source balance request consumes the first actual return's successor slot. -/
-theorem BurnInitialPair.secondSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnInitialPair root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.second frame.context.pair 1 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnInitialBalance1 current.state.token1 (.balanceOf frame.context.pair))
-        (feeObservedResult r.out1) 1,
-      observed.call = r.second ∧ observed.paths = paths :=
-  BurnInitialPairH.secondSourceCall (r.toH fork) rep pair fork.rules_stateGas_none queue
-
 
 theorem BurnThreeCallsH.feeSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
@@ -155,19 +127,6 @@ theorem BurnThreeCallsH.feeSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Dev
   have scratch := feeBurnMemory_ptr mem sevm.currentTarget
   exact r.fee.sourceCall .burnFeeTo 2 word (by rw [env]; exact pair)
     (by rw [env]; exact scratch.wf) (by rw [env]; exact stateGas) queue
-
-/-- The factory source request consumes this same third call and its own reply. -/
-theorem BurnThreeCalls.feeSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnThreeCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.fee.occurrence.call frame.context.pair 2 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnFeeTo current.state.factory .feeTo) (feeObservedResult r.fee.out) 2,
-      observed.call = r.fee.occurrence.call ∧ observed.paths = paths :=
-  BurnThreeCallsH.feeSourceCall (r.toH fork) rep pair fork.rules_stateGas_none queue
 
 theorem BurnSevenCallsH.final0SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
@@ -214,20 +173,6 @@ theorem BurnSevenCallsH.final0SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : 
     (by intro digest v rr ss impossible; cases impossible) rfl
     (by rw [r.final0.sevm_eq, env]; exact pair) operands data flag rfl r.final0.reply.returnData.symm rfl
     guard (by rw [r.final0.sevm_eq, env]; exact stateGas) queue
-
-/-- The first final balance source request names the retained sixth original slot. -/
-theorem BurnSevenCalls.final0SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnSevenCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.final0.call frame.context.pair 5 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnFinalBalance0 current.state.token0 (.balanceOf frame.context.pair))
-        (feeObservedResult r.final0.out) 5,
-      observed.call = r.final0.call ∧ observed.paths = paths :=
-  BurnSevenCallsH.final0SourceCall (r.toH fork) rep pair fork.rules_stateGas_none queue
 
 
 theorem BurnSevenCallsH.final1SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
@@ -277,20 +222,6 @@ theorem BurnSevenCallsH.final1SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : 
     (by intro digest v rr ss impossible; cases impossible) rfl
     (by rw [r.final1.sevm_eq, env]; exact pair) operands data flag rfl r.final1.reply.returnData.symm rfl
     guard (by rw [r.final1.sevm_eq, env]; exact stateGas) queue
-
-/-- The second final balance source request names the retained seventh original slot. -/
-theorem BurnSevenCalls.final1SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    {paths : List Exec.LocatedFrame} (r : BurnSevenCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (pair : frame.context.pair = sevm.currentTarget)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.final1.call frame.context.pair 6 paths) :
-    ∃ observed : SourceCallAt root frame
-        (requestFor .burnFinalBalance1 current.state.token1 (.balanceOf frame.context.pair))
-        (feeObservedResult r.final1.out) 6,
-      observed.call = r.final1.call ∧ observed.paths = paths :=
-  BurnSevenCallsH.final1SourceCall (r.toH fork) rep pair fork.rules_stateGas_none queue
 
 
 end Blanc.Lift.UniswapV2Pair

@@ -62,16 +62,6 @@ theorem singleMapping_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, guard, out, stor, logs⟩
 
-theorem singleMapping_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (s : SingleMappingGetter) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = s.selector)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      post.output = (b.getStorVal sevm.currentTarget (s.slot sevm)).toBytes ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  singleMapping_pc0_invH s fork.rules_bal_none selector run
-
 theorem singleMapping_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
     (s : SingleMappingGetter) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -208,16 +198,6 @@ theorem allowance_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, guard, out, stor, logs⟩
 
-theorem allowance_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xdd62ed3e)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      post.output = (b.getStorVal sevm.currentTarget (allowanceSlot sevm)).toBytes ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  allowance_pc0_invH fork.rules_bal_none selector run
-
 theorem allowance_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -234,19 +214,6 @@ theorem allowance_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st 
   refine ⟨value, size, guard, ?_, stor, logs⟩
   simp only [getterResult, encodeWords, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, slot, out]
-
-/-- Exact actual nested mapping order, with no hash injectivity premise. -/
-theorem allowance_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xdd62ed3e)
-    (slot : st.allowance (mappingOwner sevm) (mappingSpender sevm) =
-      b.getStorVal sevm.currentTarget (allowanceSlot sevm))
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      some post.output = getterResult st (.allowance (mappingOwner sevm) (mappingSpender sevm)) ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  allowance_bytecode_refinesH codeEq fork.rules_stateGas_none fork.rules_bal_none selector slot run
 
 /-- Closed opcode overhead 493, including both KECCAK256 stages, plus the actual SLOAD charge. -/
 theorem allowance_bytecode_live {sevm : Sevm} {b : Devm} {G c : Nat} {st : State}

@@ -32,16 +32,6 @@ theorem swapLockGuardLine_invH {sevm : Sevm} {b d : Devm} {S : List B256}
   cases line
   exact ⟨gas, state⟩
 
-theorem swapLockGuardLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
-    {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (line : Line.Run sevm (St b S M G) swapLockGuardLine d) :
-    ∃ G', d = St (afterSload sevm b (Bytes.toB256 [0x0c]))
-      ((Bytes.toB256 [0x06, 0xf4]) ::
-       (B256.eqCheck (Bytes.toB256 [0x01]) (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x0c]))) :: S) M G' := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    swapLockGuardLine_invH fork.rules_bal_none line
-
 
 /-- Literal Swap lockstore line shared by the inverse and original cursor. -/
 def swapLockStoreLine : List Ninst := [
@@ -81,23 +71,6 @@ theorem swapLockStoreLine_invH {sevm : Sevm} {b d : Devm} {S : List B256}
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
   cases line
   exact ⟨nonstatic, gas, state⟩
-
-theorem swapLockStoreLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
-    {len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (line : Line.Run sevm (St b (len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapLockStoreLine d) :
-    sevm.isStatic = false ∧ ∃ G', d = St (afterSstore sevm b (Bytes.toB256 [0x0c]) (Bytes.toB256 [0x00]))
-      ((Bytes.toB256 [0x07, 0x07]) ::
-       (B256.eqCheck (B256.eqCheck a0 0) 0) ::
-       (B256.eqCheck (B256.eqCheck a0 0) 0) ::
-       len ::
-       start ::
-       toWord ::
-       a1 ::
-       a0 ::
-       rho :: S) M G' := by
-  simpa only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
-    swapLockStoreLine_invH fork.rules_stateGas_none fork.rules_bal_none line
 
 
 /-- Literal Swap outputfallback line shared by the inverse and original cursor. -/
@@ -308,29 +281,6 @@ theorem swapTokenLoadLine_invH {sevm : Sevm} {b d : Devm} {S : List B256}
   dsimp only [List.set] at state
   exact ⟨gas, state⟩
 
-theorem swapTokenLoadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
-    {r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (line : Line.Run sevm (St b (r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTokenLoadLine d) :
-    ∃ G', d = St (afterSload sevm (afterSload sevm b (Bytes.toB256 [0x06])) (Bytes.toB256 [0x07]))
-      ((Bytes.toB256 [0x08, 0x54]) ::
-       (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) ::
-       (B256.eqCheck (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) 0) ::
-       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& ((afterSload sevm b (Bytes.toB256 [0x06])).getStorVal sevm.currentTarget (Bytes.toB256 [0x07]))) ::
-       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) ::
-       (Bytes.toB256 [0x00]) ::
-       (Bytes.toB256 [0x00]) ::
-       r1 ::
-       r0 ::
-       len ::
-       start ::
-       toWord ::
-       a1 ::
-       a0 ::
-       rho :: S) M G' := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    swapTokenLoadLine_invH fork.rules_bal_none line
-
 
 /-- Literal Swap recipient1 line shared by the inverse and original cursor. -/
 def swapRecipient1Line : List Ninst := [
@@ -411,21 +361,6 @@ theorem swapReserves_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       obtain ⟨gas, returned⟩ := reserves_callee_invH bal (callee'.mono StepIn.toRun)
       cases returned
       exact ⟨gas, body⟩
-
-/-- The internal reserve read after a nonzero output flag. -/
-theorem swapReserves_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {flag len start toWord a1 a0 ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (flag :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M G) t_0707_c2 seg) :
-    flag ≠ 0 ∧ ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St (afterSload sevm b 8)
-        (reserveTimestampRead (b.getStorVal sevm.currentTarget 8) ::
-         reserve1Read (b.getStorVal sevm.currentTarget 8) ::
-         reserve0Read (b.getStorVal sevm.currentTarget 8) ::
-         0 :: 0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M gas) t_0767_c2 seg := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    swapReserves_invH fork.rules_bal_none run
 
 
 theorem swapLockOutput_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -683,24 +618,6 @@ theorem swapBody_prefix_invH {K : WriterKey → Prop} {st : State} {D : Exec.Der
     fun eq => ne1 (by rw [eq]), gas, ?_⟩
   rw [cache0, cache1] at run
   exact run
-
-/-- The actual swap body prefix against the finite entry storage: the lock was open, the frame
-is non-static, every source guard of `startTyped` held on the decoded arguments and the cached
-state, and the run continues at the transfer branch with the source-named locals. -/
-theorem swapBody_prefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm}
-    {b : Devm} {M : Mem} {G : Nat} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (swapBodyStack sevm) M G) t_0683_c54 seg) :
-    st.unlocked = 1 ∧ sevm.isStatic = false ∧
-    (swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0) ∧
-    (swapAmount0Out sevm).toNat < st.reserve0.val ∧ (swapAmount1Out sevm).toNat < st.reserve1.val ∧
-    swapRecipient sevm ≠ st.token0 ∧ swapRecipient sevm ≠ st.token1 ∧
-    ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St (swapPrefixWorld sevm b) (swapLocalsStack sevm st) M gas) t_08bf_c4 seg := by
-  simpa only [swapPrefixWorldH_of_covered fork] using
-    swapBody_prefix_invH fork.rules_stateGas_none fork.rules_bal_none rep run
 
 
 end Blanc.Lift.UniswapV2Pair

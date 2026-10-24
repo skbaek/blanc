@@ -80,14 +80,6 @@ theorem burn_raw_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
       cases lookup
       exact lockGuard (SFunc.runP_iff_runCutP_nil.mp ((St.of_pop1 pop).2 ▸ callee))
 
-/-- A successful burn entry passes its lock test on the entry world. -/
-theorem burn_raw_unlocked {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    b.getStorVal sevm.currentTarget 12 = 1 :=
-  burn_raw_unlockedH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 /-- Actual swap selector dispatch retains the supplied derivation into 01be. -/
 private theorem swapSelector_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {M : Mem} {G : Nat} {o : Outcome}
@@ -261,14 +253,6 @@ theorem swap_raw_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
       cases lookup
       exact lockGuard (SFunc.runP_iff_runCutP_nil.mp ((St.of_pop1 pop).2 ▸ callee))
 
-/-- A successful swap entry passes its lock test on the entry world. -/
-theorem swap_raw_unlocked {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    b.getStorVal sevm.currentTarget 12 = 1 :=
-  swap_raw_unlockedH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 theorem mint_raw_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -282,14 +266,6 @@ theorem mint_raw_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨_, h⟩ := mintSelector_inv selector (SFunc.runP_iff_runCutP_nil.mp guarded)
   obtain ⟨_, _, _, callee, _⟩ := mintAbi_inv h
   exact (mintLockGuard_invH bal (SFunc.runP_iff_runCutP_nil.mp callee)).1
-
-/-- A successful mint entry passes its lock test on the entry world. -/
-theorem mint_raw_unlocked {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    b.getStorVal sevm.currentTarget 12 = 1 :=
-  mint_raw_unlockedH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 /-- A successful skim entry passes its lock test on the entry world. -/
 theorem skim_raw_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -321,15 +297,5 @@ theorem pair_lockGuarded_unlockedH {sevm : Sevm} {b post : Devm} {G : Nat}
   · obtain ⟨_, _, _, _, _, callee, _⟩ := sync_raw_invH codeEq stateGas bal sync run
     exact (syncCallee_invH stateGas bal getterInitMemory_ptr callee).1
   · exact skim_raw_unlockedH codeEq stateGas bal skim run
-
-/-- The five lock-guarded entries succeed only from an unlocked entry world. -/
-theorem pair_lockGuarded_unlocked {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (guarded : Blanc.Sevm.selector sevm = 0x6a627842 ∨ Blanc.Sevm.selector sevm = 0x89afcb44 ∨
-      Blanc.Sevm.selector sevm = 0x022c0d9f ∨ Blanc.Sevm.selector sevm = 0xfff6cae9 ∨
-      Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    b.getStorVal sevm.currentTarget 12 = 1 :=
-  pair_lockGuarded_unlockedH codeEq fork.rules_stateGas_none fork.rules_bal_none guarded run
 
 end Blanc.Lift.UniswapV2Pair

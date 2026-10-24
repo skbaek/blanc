@@ -140,18 +140,6 @@ theorem permitNonceLine_invH {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem
   cases run
   exact ⟨nonstatic, G', rfl⟩
 
-theorem permitNonceLine_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {s r vw dl val spw : B256} {owner : Adr}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : Line.Run sevm (St b (s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) M G)
-      permitNonceLine d) :
-    sevm.isStatic = false ∧ ∃ G', d = St (permitNonceWorld sevm b owner)
-      (permitNonceRead sevm b owner :: 1 :: 64 :: 32 :: 0 :: owner.toB256 :: ~~~ addressMask ::
-        b.getStorVal sevm.currentTarget 3 ::
-        s :: r :: vw :: dl :: val :: spw :: owner.toB256 :: R) (permitNonceMemory M owner) G' := by
-  simpa only [permitNonceReadH_of_covered fork, permitNonceWorldH_of_covered fork] using
-    permitNonceLine_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 /-- One hundred fourteen fixed gas besides the three selected storage charges. -/
 theorem permitNonceLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : List B256}

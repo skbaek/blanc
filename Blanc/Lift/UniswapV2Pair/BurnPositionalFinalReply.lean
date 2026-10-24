@@ -53,21 +53,5 @@ theorem burn_final_actual_reply_cursorH {F : Exec.Deriv} {κ : Cursor}
   rw [burnBalanceReplyMemory_word mem fit decoded.1] at decoded
   exact ⟨one, decoded.1, replyMem, decoded.2⟩
 
-/-- The supplied final-query returned parent supplies its own flag, full reply
-width and physical decoded word, with the original continuations retained. -/
-theorem burn_final_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
-    {b post : Devm} {R : List B256} {M : Mem} {flag a x y p : B256} {out : Bytes} {n : Nat}
-    (site : BurnFinalBalanceSite) (placed : CursorOK code cert F κ)
-    (tree : κ.f = burnFinalAfterCallTree site) (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork)
-    (reply : StaticCallPost b F.devm (a :: x :: y :: R) M p 36 p 32 flag out)
-    (mem : PtrMem p n M) (low : 96 ≤ p.toNat) (fit : p.toNat + 36 ≤ n)
-    (bound : out.length < 2 ^ 256) :
-    flag = 1 ∧ 32 ≤ out.length ∧
-      PtrMem p n (burnBalanceReplyMemory M p out) ∧
-      Nonempty (CursorStateAt code cert F site.afterDecodeTree F.devm
-        (Bytes.toB256 (out.take 32) :: R) (burnBalanceReplyMemory M p out) (κ.K.map Cont.f)) :=
-  burn_final_actual_reply_cursorH site placed tree success fork.rules_stateGas_none reply mem low fit bound
-
 
 end Blanc.Lift.UniswapV2Pair

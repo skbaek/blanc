@@ -667,19 +667,6 @@ theorem mintReturn_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine ⟨nonstatic, gas, ?_⟩
   exact Seg.done.inj eq
 
-/-- Invert the complete Mint log/unlock/return, preserving the actual full world. -/
-theorem mintReturn_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 ::
-        liquidity :: toWord :: ρ :: R) M G) t_137e_c12 o) :
-    sevm.isStatic = false ∧ ∃ gas,
-      o = .returned (St (mintReturnWorld sevm b amount0 amount1) (liquidity :: R)
-        (mintEventMemory M amount0 amount1) gas) := by
-  simpa only [mintReturnWorldH_of_covered fork] using
-    mintReturn_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 def mintKLastWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 8) 11
@@ -751,20 +738,6 @@ theorem mintKLast_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
     exact ⟨mutable, _, run⟩
   · obtain ⟨_, _, eq⟩ := mul58_inv callee
     cases eq
-
-/-- The fee-on suffix reads the UPDATED slot8 before checked multiplication and writes the actual product to11. -/
-theorem mintKLast_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
-    {M : Mem} {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.RunCut cert.prog sevm C
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R) M G)
-      t_1343_c11 r) :
-    sevm.isStatic = false ∧ ∃ gas, SFunc.RunCut cert.prog sevm C
-      (St (mintKLastWorld sevm b)
-        (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R) M gas)
-      t_137e_c12 r := by
-  simpa only [mintKLastWorldH_of_covered fork] using
-    mintKLast_invH fork.rules_stateGas_none fork.rules_bal_none run
 
 
 
@@ -851,19 +824,6 @@ theorem mintAfterUpdate_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     · obtain ⟨_, _, tail⟩ := mintKLast_invH stateGas bal tail
       simpa only [mintConditionalLastWorldH, ite_eq_right off] using mintReturn_invH stateGas bal mem tail.uncut
     · exact (bad rfl).elim
-
-/-- Complete post-update conditional kLast, Mint log, unlock and return, including fee-off. -/
-theorem mintAfterUpdate_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R) M G)
-      t_133c_c11 o) :
-    sevm.isStatic = false ∧ ∃ gas,
-      o = .returned (St (mintReturnWorld sevm (mintConditionalLastWorld sevm b f) amount0 amount1)
-        (liquidity :: R) (mintEventMemory M amount0 amount1) gas) := by
-  simpa only [mintConditionalLastWorldH_of_covered fork, mintReturnWorldH_of_covered fork] using
-    mintAfterUpdate_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 
@@ -974,20 +934,6 @@ theorem mintUpdateCaller_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   · obtain ⟨_, _, _, _, eq⟩ := update_invH stateGas bal mem callee
     cases eq
 
-/-- The actual1330 caller consumes update60 and all its true post-update continuation. -/
-theorem mintUpdateCaller_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R) M G)
-      t_1330_c11 o) :
-    b0.toNat < 2 ^ 112 ∧ b1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧ ∃ gas,
-      o = .returned (St
-        (mintReturnWorld sevm (mintConditionalLastWorld sevm (updateWorld sevm b r0 r1 b0 b1) f) amount0 amount1)
-        (liquidity :: R) (mintEventMemory (updateMemory sevm b M r0 r1 b0 b1) amount0 amount1) gas) := by
-  simpa only [mintConditionalLastWorldH_of_covered fork, mintReturnWorldH_of_covered fork, updateMemoryH_of_covered fork, updateWorldH_of_covered fork] using
-    mintUpdateCaller_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 /-- Literal LP world separates its completed sequential stores/log from the overwritten machine. -/
 def mintLPWorld (sevm : Sevm) (b : Devm) (toWord value : B256) : Devm :=
@@ -1001,12 +947,6 @@ def mintLPWorldH (sevm : Sevm) (b : Devm) (toWord value : B256) : Devm :=
     (afterSloadH sevm (lpMintSupplyBaseH sevm (afterSloadH sevm b 0) (lpMintSupplyWord sevm b + value))
       (transferBalanceSlot toWord.toAdr))
     toWord value (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord (lpMintSupplyWord sevm b + value) + value)
-
-theorem mintLPWorldH_of_covered {sevm : Sevm} {b : Devm} {toWord value : B256}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    mintLPWorldH sevm b toWord value = mintLPWorld sevm b toWord value := by
-  unfold mintLPWorldH mintLPWorld
-  simp only [lpMintCreditBaseH_of_covered fork, lpMintRecipientWordH_of_covered fork, lpMintSupplyBaseH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- The LP post carries BOTH actual scratch-write stages, then its Transfer log word. -/
 def mintLPBuffer (M : Mem) (toWord value : B256) : Mem :=
@@ -1365,17 +1305,6 @@ theorem mintPriced_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       mintUpdateCaller_invH stateGas bal (mintLPPost_ptrH mem) tail.uncut
     exact ⟨natPositive, accepted, bound0, bound1, mintGas, residual, gas, callee, result⟩
 
-/-- Complete common priced mint: derive positive liquidity, the real recipient mint62, update60 and137e return. -/
-theorem mintPriced_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R) M G)
-      t_12cd_c11 o) :
-    MintPricedResult sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o := by
-  simpa only [MintPricedResultH_of_covered fork] using
-    mintPriced_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 
 /-- Construct the complete common priced mint from real LP guards and primitive store affordability. -/
@@ -1594,16 +1523,6 @@ theorem mintInitial_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   have result := mintPriced_invH stateGas bal (mintLPPost_ptrH mem) tail.uncut
   exact ⟨product, cover, minimumGas, residual, callee, accepted, result⟩
 
-theorem mintInitial_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M G)
-      t_123f_c41 o) :
-    MintInitialResult sevm b R M supply f amount1 amount0 b1 b0 r1 r0 toWord ρ o := by
-  simpa only [MintInitialResultH_of_covered fork] using
-    mintInitial_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 /-- The later arm consumes both floor quotients and literal min70 in the complete common suffix. -/
 def MintLaterResult (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
@@ -1636,17 +1555,6 @@ theorem mintLater_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   unfold MintLaterResultH
   obtain ⟨product0, nonzero0, product1, nonzero1, _, tail⟩ := mintLaterPrice_inv bound0 bound1 run.cut
   exact ⟨product0, nonzero0, product1, nonzero1, mintPriced_invH stateGas bal mem tail.uncut⟩
-
-theorem mintLater_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {supply f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (run : SFunc.Run cert.prog sevm
-      (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M G)
-      t_1270_c41 o) :
-    MintLaterResult sevm b R M supply f amount1 amount0 b1 b0 r1 r0 toWord ρ o := by
-  simpa only [MintLaterResultH_of_covered fork] using
-    mintLater_invH fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1 run
 
 
 /-- The complete actual1233 suffix selects its pricing arm from the current slot0 read. -/

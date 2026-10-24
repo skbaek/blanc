@@ -82,27 +82,6 @@ theorem burn_lp_first_transfer_cursor_stateH {root : Exec.Deriv} {b post : Devm}
       exact ⟨gas, result⟩)
   exact ⟨residual, caller.callH cert_check success stateGas rfl⟩
 
-/-- The priced caller burns cached LP liquidity, then reaches the actual first
-transfer helper with the unchanged payout and receiver words. -/
-theorem burn_lp_first_transfer_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_1683_c13 b
-      (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    ∃ residual, Nonempty (CursorStateAt code cert root t_1fdb_c57
-      (lpBurnPost root.sevm b
-        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        M root.sevm.currentTarget.toB256 L residual)
-      (amount0 :: toWord :: token0 :: 0x1698 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-      (lpBurnPost root.sevm b
-        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        M root.sevm.currentTarget.toB256 L residual).memory (t_1698_c13 :: K)) := by
-  simpa only [lpBurnPostH_of_covered fork] using
-    burn_lp_first_transfer_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 theorem burn_pricing_first_transfer_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
@@ -126,27 +105,6 @@ theorem burn_pricing_first_transfer_cursor_stateH {root : Exec.Deriv} {b post : 
   obtain ⟨_, ⟨second⟩⟩ := burn_second_product_cursor_stateH first success stateGas nonzero
   obtain ⟨priced⟩ := burn_payout_cursor_stateH second success stateGas nonzero positive0 positive1
   exact burn_lp_first_transfer_cursor_stateH priced success stateGas bal mem
-
-/-- Successful original pricing derives all guards consumed by the actual
-product/division/LP transports, without adding those guards to its callers. -/
-theorem burn_pricing_first_transfer_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_15e2_c37 b
-      (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    let supply := b.getStorVal root.sevm.currentTarget 0
-    let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-      ((L * b1) / supply) ((L * b0) / supply) toWord extρ R
-    ∃ residual, Nonempty (CursorStateAt code cert root t_1fdb_c57
-      (lpBurnPost root.sevm (afterSload root.sevm b 0) locals M
-        root.sevm.currentTarget.toB256 L residual)
-      (((L * b0) / supply) :: toWord :: token0 :: 0x1698 :: locals)
-      (lpBurnPost root.sevm (afterSload root.sevm b 0) locals M
-        root.sevm.currentTarget.toB256 L residual).memory (t_1698_c13 :: K)) := by
-  simpa only [lpBurnPostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
-    burn_pricing_first_transfer_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
 
 
 end Blanc.Lift.UniswapV2Pair

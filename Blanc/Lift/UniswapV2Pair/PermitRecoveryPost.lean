@@ -77,24 +77,6 @@ theorem PermitCallOccurrenceH.suffix_inverse {root : Exec.Deriv} {b post : Devm}
     rw [facts.2.2 actual.out] at recovered signer
     exact ⟨recovered, signer, nonstatic, gas, image⟩
 
-/-- Local signer facts use the actual successful reply, before its original
-internal caller continuation is resumed. -/
-theorem PermitCallOccurrence.suffix_inverse {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) {o : Outcome}
-    (run : SFunc.Run cert.prog root.sevm actual.call.returned.devm permitRecoveryTail o) :
-    (permitRecoveredWord actual.out).toAdr ≠ 0 ∧
-      (permitRecoveredWord actual.out).toAdr = permitOwner root.sevm ∧
-      root.sevm.isStatic = false ∧
-      ∃ gas, o = .returned (St
-        (approveCoreBase root.sevm actual.call.returned.devm (permitOwner root.sevm)
-          (permitSpender root.sevm) (permitValue root.sevm)) [0xd505accf]
-        (permitFinalMemory (permitReplyMemory (permitPublicCallMemory root.sevm b) actual.out)
-          (permitOwner root.sevm) (permitSpender root.sevm) (permitValue root.sevm)) gas) := by
-  have h := PermitCallOccurrenceH.suffix_inverse (actual.toH fork) success fork.rules_stateGas_none fork.rules_bal_none run
-  simp only [approveCoreBaseH_of_covered fork, permitPublicCallMemoryH_of_covered fork] at h
-  exact h
-
 
 theorem PermitCallOccurrenceH.post_image {root : Exec.Deriv} {b post : Devm}
     (actual : PermitCallOccurrenceH root b) (success : root.exn = .ok post)
@@ -143,20 +125,6 @@ theorem PermitCallOccurrenceH.post_image {root : Exec.Deriv} {b post : Devm}
       change K = next :: rest at impossible
       rw [tail] at impossible
       cases impossible
-
-/-- The signer and final post are derived from this actual reply and its
-original checked internal continuation. -/
-theorem PermitCallOccurrence.post_image {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    (permitRecoveredWord actual.out).toAdr ≠ 0 ∧
-      (permitRecoveredWord actual.out).toAdr = permitOwner root.sevm ∧
-      root.sevm.isStatic = false ∧
-      post = permitPublicPost root.sevm b actual.call.returned.devm actual.out
-        0xd505accf post.gasLeft := by
-  have h := PermitCallOccurrenceH.post_image (actual.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
-  simp only [permitPublicPostH_of_covered fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

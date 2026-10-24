@@ -111,23 +111,6 @@ theorem foot_depositH {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {d : De
     exact hsup.set hcaller _
   · rw [hstor, trackedSum_deposit hinj hcaller hbound]
 
-/-- **Deposit** (entry 1) preserves the footprint when the caller's balance row is tracked. -/
-theorem foot_deposit {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {d : Devm}
-    {o : Outcome} {g : SFunc} (hfork : CoveredFork sevm.benvStat.fork)
-    (hg : prog[1]? = some g) (hcaller : U (.bal sevm.caller))
-    (hpre : (footSpec U).Pre sevm.currentTarget sevm d) (run : SFunc.Run prog sevm d g o) :
-    (footSpec U).Post sevm.currentTarget sevm (Outcome.devm o) := by
-  obtain ⟨hstor, hbal⟩ := Weth9.deposit_effect hg hfork run
-  have hsup := (footSpec_inv.mp (hpre.inv.left rfl)).1
-  have hbound : trackedSum U (Devm.getStor d sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
-    have h := (footSpec_inv.mp (hpre.inv.left rfl)).2
-    have hlt := B256.toNat_lt (d.getBal sevm.currentTarget)
-    omega
-  refine footPost_of hpre hbal ?_ ?_
-  · rw [hstor]
-    exact hsup.set hcaller _
-  · rw [hstor, trackedSum_deposit hinj hcaller hbound]
-
 /-- **The `withdraw` debit step** for the footprint invariant: the `hstep` premise of
 `Weth9.withdraw_post` when the caller's balance row is tracked. -/
 theorem foot_withdraw_step {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm}

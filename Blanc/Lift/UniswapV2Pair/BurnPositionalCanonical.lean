@@ -8,19 +8,6 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalSource
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Both final static calls preserve the represented Pair storage of the
-same second mutable return. -/
-theorem BurnSevenCalls.finalStorage {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnSevenCalls root sevm b) :
-    r.final1.call.returned.devm.getStor sevm.currentTarget =
-      r.five.second.returned.devm.getStor sevm.currentTarget := by
-  rw [r.final1.reply.stor]
-  simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
-  change r.final0.call.returned.devm.getStor sevm.currentTarget =
-    r.five.second.returned.devm.getStor sevm.currentTarget
-  rw [r.final0.reply.stor]
-  simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
-
 theorem BurnSevenCallsH.finalStorage {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) :
     r.final1.call.returned.devm.getStor sevm.currentTarget =
@@ -31,14 +18,6 @@ theorem BurnSevenCallsH.finalStorage {root : Exec.Deriv} {sevm : Sevm} {b : Devm
     r.five.second.returned.devm.getStor sevm.currentTarget
   rw [r.final0.reply.stor]
   simp only [Devm.getStor, Devm.getAcct, r.five.four.three.worlds.2.2, accountAccessH_state]
-
-/-- The two actual static replies leave the selected second-transfer logs
-unchanged before the Burn/Sync suffix. -/
-theorem BurnSevenCalls.finalLogs {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnSevenCalls root sevm b) :
-    r.final1.call.returned.devm.logs = r.five.second.returned.devm.logs := by
-  rw [r.final1.reply.logs, temporalAccountAccessBase_logs,
-    r.final0.reply.logs, temporalAccountAccessBase_logs]
 
 theorem BurnSevenCallsH.finalLogs {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root sevm b w) :
@@ -78,30 +57,12 @@ def burnPositionalTranscriptH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule} 
             (.next (feeObservedResult r.final0.out) (staticViewTranscript finalViews0 .done)
               (.next (feeObservedResult r.final1.out) (staticViewTranscript finalViews1 .done) .done))))))
 
-def burnPositionalFinalFrame {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCalls root root.sevm b)
-    {first : BurnFirstMutable r.five.four U current invocation} (second : BurnSecondMutable r.five first) : Frame :=
-  let priced := r.five.four.sourcePriced current
-  let frame1 := second.finalFrame.beginResume (burnFinalRequest0 second.finalFrame priced)
-  frame1.beginResume (burnFinalRequest1 frame1 priced)
-
 def burnPositionalFinalFrameH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCallsH root root.sevm b w)
     {first : BurnFirstMutableH r.five.four U current invocation} (second : BurnSecondMutableH r.five first) : Frame :=
   let priced := r.five.four.sourcePriced current
   let frame1 := second.finalFrame.beginResume (burnFinalRequest0 second.finalFrame priced)
   frame1.beginResume (burnFinalRequest1 frame1 priced)
-
-def burnPositionalSuffixPending {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCalls root root.sevm b)
-    {first : BurnFirstMutable r.five.four U current invocation} (second : BurnSecondMutable r.five first) :
-    List PendingLog :=
-  let frame := burnPositionalFinalFrame r second
-  let priced := r.five.four.sourcePriced current
-  [.owned frame.origin (.sync (Bytes.toB256 (r.final0.out.take 32)).toNat
-      (Bytes.toB256 (r.final1.out.take 32)).toNat),
-   .owned frame.origin (.burn root.sevm.caller priced.amount0 priced.amount1
-      (Sevm.dataWord root.sevm 4).toAdr)]
 
 def burnPositionalSuffixPendingH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCallsH root root.sevm b w)
@@ -113,15 +74,6 @@ def burnPositionalSuffixPendingH {root : Exec.Deriv} {b : Devm} {w : BurnSchedul
       (Bytes.toB256 (r.final1.out.take 32)).toNat),
    .owned frame.origin (.burn root.sevm.caller priced.amount0 priced.amount1
       (Sevm.dataWord root.sevm 4).toAdr)]
-
-def burnPositionalSuffixRaw {root : Exec.Deriv} {b : Devm}
-    (r : BurnSevenCalls root root.sevm b) (current : Checkpoint) : List Log :=
-  let priced := r.five.four.sourcePriced current
-  [⟨root.sevm.currentTarget, [updateSyncTopic],
-     encodeWords [Bytes.toB256 (r.final0.out.take 32), Bytes.toB256 (r.final1.out.take 32)]⟩,
-   ⟨root.sevm.currentTarget,
-     [burnEventTopic, root.sevm.caller.toB256, (Sevm.dataWord root.sevm 4).toAdr.toB256],
-     encodeWords [priced.amount0, priced.amount1]⟩]
 
 def burnPositionalSuffixRawH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule}
     (r : BurnSevenCallsH root root.sevm b w) (current : Checkpoint) : List Log :=
@@ -155,20 +107,6 @@ def burnPositionalFinishedH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule} {U
   burnFinishedFrame frame2 updated event oracle
     (feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32)))
     (Sevm.dataWord root.sevm 4).toAdr.toB256 priced.amount0 priced.amount1
-
-theorem burnPositionalFinished_logs {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCalls root root.sevm b)
-    {first : BurnFirstMutable r.five.four U current invocation} (second : BurnSecondMutable r.five first)
-    (updated : State) (event : Event) (oracle : OracleUpdate)
-    (eventEq : event = .sync (Bytes.toB256 (r.final0.out.take 32)).toNat
-      (Bytes.toB256 (r.final1.out.take 32)).toNat) :
-    (burnPositionalFinished r second updated event oracle).current.logs =
-      second.checkpoint.logs ++ burnPositionalSuffixPending r second := by
-  simp only [burnPositionalFinished, burnFinishedFrame, Frame.withEvents, Frame.withUpdate,
-    Frame.origin, Frame.beginResume, burnPositionalSuffixPending, burnPositionalFinalFrame,
-    BurnSecondMutable.finalFrame, BurnFirstMutable.secondFrame, eventEq, List.map_cons,
-    List.map_nil, List.append_nil, List.append_assoc, toAdr_toB256]
-  rfl
 
 theorem burnPositionalFinished_logsH {root : Exec.Deriv} {b : Devm} {w : BurnSchedule} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} (r : BurnSevenCallsH root root.sevm b w)

@@ -95,49 +95,6 @@ def SwapSourceUpdate.toH {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
     simp only [updateWorldH_of_covered fork] at field ⊢
     exact field
 
-/-- Pricing, update acceptance and final finite representation derive from the
-original guards and the SAME physical suffix facts and carried static frame. -/
-theorem swap_source_update {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
-    (r : SwapBalances root root.sevm b)
-    (entryFacts : SwapSourcePrefix U current invocation root.sevm b)
-    (queries : SwapBalancePairSource r U (writerContext root.sevm invocation) current b frame index)
-    (facts : SwapSuffixFacts r) : Nonempty (SwapSourceUpdate r queries) := by
-  let locals := swapFrontLocals root.sevm current.state
-  let frame1 := swapPhysicalBalanceFrame1 r frame
-  have raw0 : swapRawReserve0 root.sevm b = Nat.toB256 locals.reserves.reserve0.val := entryFacts.reserve0
-  have raw1 : swapRawReserve1 root.sevm b = Nat.toB256 locals.reserves.reserve1.val := entryFacts.reserve1
-  have boundOld0 := locals.reserves.reserve0.isLt
-  have boundOld1 := locals.reserves.reserve1.isLt
-  have old0 : (swapRawReserve0 root.sevm b).toNat = locals.reserves.reserve0.val := by
-    rw [raw0, B256.toNat_toB256_of_lt (by omega)]
-  have old1 : (swapRawReserve1 root.sevm b).toNat = locals.reserves.reserve1.val := by
-    rw [raw1, B256.toNat_toB256_of_lt (by omega)]
-  have guard := facts.input
-  have pricing := facts.pricing
-  simp only [SwapBalances.input0, SwapBalances.input1] at guard pricing
-  rw [raw0, raw1] at guard pricing
-  have check := swapCheck_source boundOld0 boundOld1 entryFacts.liquidity0 entryFacts.liquidity1 guard pricing
-  obtain ⟨keys, sub, rep, locked⟩ := queries.second.invariant.rep
-  have pair : frame1.context.pair = root.sevm.currentTarget := by
-    rw [queries.second.invariant.context]; rfl
-  have time : frame1.context.timestamp = root.sevm.benvStat.time := by
-    rw [queries.second.invariant.context]; rfl
-  have slots : ReserveSlotMatches frame1.current.state root.sevm r.second.step.returned.devm :=
-    ⟨rep.fixed.2.2.2.2.2.1, rep.fixed.2.2.2.2.2.2.1, rep.fixed.2.2.2.2.2.2.2.1⟩
-  obtain ⟨state, event, oracle, accepted, _, _, _, sync, updateLogs⟩ :=
-    update_source_result slots rep.fixed.2.2.2.2.2.2.2.2.1 rep.fixed.2.2.2.2.2.2.2.2.2.1
-      time pair (by rw [old0]; exact boundOld0) (by rw [old1]; exact boundOld1)
-      facts.bound0 facts.bound1
-  have finalRep := (rep.mint_update time pair (by rw [old0]; exact boundOld0)
-    (by rw [old1]; exact boundOld1) accepted).mint_unlock_store
-  rw [old0, old1] at accepted
-  refine ⟨⟨state, event, oracle, keys, sub, check, accepted, sync, ?_, ?_⟩⟩
-  · rw [SwapBalances.finalWorld, afterSstore_getStor_self, Devm.addLog_getStor]
-    exact finalRep
-  · rw [pair] at updateLogs
-    exact updateLogs
-
 theorem swap_source_updateH {root : Exec.Deriv} {b W : Devm} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
     (r : SwapBalancesH root root.sevm b W)
@@ -337,38 +294,6 @@ theorem swap_source_suffix_admittedH {root : Exec.Deriv} {b W : Devm} {U : Write
             queries.second.views ++ []}) resume0) second)
   exact first
 
-/-- Both static continuations and the terminal return use these SAME observed
-queues, full replies, update result and actual call-free suffix. -/
-theorem swap_source_suffix_admitted {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
-    (r : SwapBalances root root.sevm b)
-    (entryFacts : SwapSourcePrefix U current invocation root.sevm b)
-    (queries : SwapBalancePairSource r U (writerContext root.sevm invocation) current b frame index)
-    (updated : SwapSourceUpdate r queries) (fork : CoveredFork root.sevm.benvStat.fork) :
-    AdmittedSourceConsumes LockedAuth root r.optional.callback.next index
-      (swapBalancePhaseStart frame (swapFrontLocals root.sevm current.state)) queries.transcript
-      {status := .success [], frame := updated.finalFrame, remaining := .done,
-        childReturns := queries.childReturns} :=
-  AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-    (fun _ _ _ covered auth => auth.toCovered covered) fork
-    (swap_source_suffix_admittedH (r.toH fork) entryFacts.toH (queries.toH fork) (updated.toH fork)
-      fork.rules_stateGas_none)
-
-
-/-- The final source frame retains the original checkpoint and writer context. -/
-theorem SwapSourceUpdate.frame_facts {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
-    {r : SwapBalances root root.sevm b}
-    {queries : SwapBalancePairSource r U (writerContext root.sevm invocation) current b frame index}
-    (updated : SwapSourceUpdate r queries) :
-    updated.finalFrame.checkpoint = current ∧
-    updated.finalFrame.context = writerContext root.sevm invocation ∧
-    updated.finalFrame.current.state.unlocked = 1 := by
-  refine ⟨?_, ?_, rfl⟩
-  · simpa only [SwapSourceUpdate.finalFrame, swapFinishedFrame, Frame.beginResume,
-      Frame.withUpdate, Frame.withEvents] using queries.second.invariant.checkpoint
-  · simpa only [SwapSourceUpdate.finalFrame, swapFinishedFrame, Frame.beginResume,
-      Frame.withUpdate, Frame.withEvents] using queries.second.invariant.context
 
 theorem SwapSourceUpdateH.frame_facts {root : Exec.Deriv} {b W : Devm} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
@@ -487,24 +412,6 @@ theorem SwapSourceUpdateH.logs {root : Exec.Deriv} {b W : Devm} {U : WriterKey �
       swap_sync_image facts.bound0 facts.bound1]
     exact congrArg (fun x => raw.map some ++ [some _, x]) swapImage
 
-/-- The actual post storage represents this SAME unlocked final source frame. -/
-theorem SwapSourceUpdate.post_storage {root : Exec.Deriv} {b post : Devm} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
-    {physical : SwapPhysicalResult root b post}
-    {queries : SwapBalancePairSource physical.balances U (writerContext root.sevm invocation)
-      current b frame index}
-    (updated : SwapSourceUpdate physical.balances queries) :
-    WriterRep updated.keys (post.getStor root.sevm.currentTarget) updated.finalFrame.current.state := by
-  obtain ⟨M, gas, image⟩ := physical.image
-  have postStor : post.getStor root.sevm.currentTarget =
-      physical.balances.finalWorld.getStor root.sevm.currentTarget := by
-    simpa only [St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using
-      congrArg (fun d : Devm => d.getStor root.sevm.currentTarget) image
-  exact Eq.mpr (congrArg (fun storage => WriterRep updated.keys storage
-    updated.finalFrame.current.state) postStor)
-    (by simpa only [SwapSourceUpdate.finalFrame, swapFinishedFrame, Frame.withUpdate,
-      Frame.withEvents, Frame.beginResume] using updated.storage)
-
 theorem SwapSourceUpdateH.post_storage {root : Exec.Deriv} {b post W : Devm} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
     {physical : SwapPhysicalResultH root b post W}
@@ -521,25 +428,6 @@ theorem SwapSourceUpdateH.post_storage {root : Exec.Deriv} {b post W : Devm} {U 
     updated.finalFrame.current.state) postStor)
     (by simpa only [SwapSourceUpdateH.finalFrame, swapFinishedFrame, Frame.withUpdate,
       Frame.withEvents, Frame.beginResume] using updated.storage)
-
-/-- The actual post preserves foreign storage from the SAME post-callback world. -/
-theorem SwapPhysicalResult.foreign_storage {root : Exec.Deriv} {b post : Devm}
-    (physical : SwapPhysicalResult root b post) :
-    ∀ a, a ≠ root.sevm.currentTarget →
-      post.getStor a = physical.balances.optional.callback.world.getStor a := by
-  intro a foreign
-  obtain ⟨M, gas, image⟩ := physical.image
-  have postStor : post.getStor a = physical.balances.finalWorld.getStor a := by
-    simpa only [St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using
-      congrArg (fun d : Devm => d.getStor a) image
-  rw [postStor, SwapBalances.finalWorld,
-    afterSstore_getStor_ne root.sevm _ 12 1 a (Ne.symm foreign), Devm.addLog_getStor]
-  unfold Devm.getStor
-  rw [updateWorld_account_frame foreign]
-  change physical.balances.second.step.returned.devm.getStor a = _
-  rw [physical.balances.second.reply.stor, Blanc.Lift.temporalAccountAccessBase_getStor,
-    physical.balances.first.reply.stor, Blanc.Lift.temporalAccountAccessBase_getStor]
-  rfl
 
 theorem SwapPhysicalResultH.foreign_storage {root : Exec.Deriv} {b post W : Devm}
     (physical : SwapPhysicalResultH root b post W) :

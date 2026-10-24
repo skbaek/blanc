@@ -31,19 +31,6 @@ private theorem pair_code_guard_compare_cursor_stateH {start : Exec.Deriv} {b po
         exact ri_push step)
   exact ⟨guard⟩
 
-private theorem pair_code_guard_compare_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {token : B256} {K : List SFunc} {f tail : SFunc}
-    (cut : CursorStateAt code cert start f b (token :: S) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (destination : Bytes) (le : destination.length ≤ 32)
-    (shape : f = syncCodeGuardLine.foldr SFunc.next (.next (.push destination le) tail)) :
-    Nonempty (CursorStateAt code cert start tail (temporalAccountAccessBase b token.toAdr)
-      (Bytes.toB256 destination ::
-        B256.eqCheck (B256.eqCheck (b.getCode token.toAdr).size.toB256 0) 0 ::
-        B256.eqCheck (b.getCode token.toAdr).size.toB256 0 :: S) M K) := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    pair_code_guard_compare_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none destination le shape
-
 
 theorem pair_code_guard_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     {S : List B256} {M : Mem} {token : B256} {K : List SFunc}

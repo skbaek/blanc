@@ -77,18 +77,6 @@ theorem mint_first_code_guardH {root : Exec.Deriv} {b post : Devm}
   rw [cut.sevm_eq, state, cut.tree] at source
   exact (mintFirstRequest_invH bal mem (SFunc.runP_iff_runCutP_nil.mp source)).1
 
-/-- The actual successful request suffix supplies its own token code guard. -/
-theorem mint_first_code_guard {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {timestamp r1 r0 toWord extρ : B256} {K : List SFunc}
-    (cut : CursorStateAt code cert root t_1094_c41 b
-      (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 96 M) :
-    ((afterSload root.sevm b 6).getCode
-      (b.getStorVal root.sevm.currentTarget 6).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
-    mint_first_code_guardH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 theorem mint_first_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {timestamp r1 r0 toWord extρ : B256} {K : List SFunc}

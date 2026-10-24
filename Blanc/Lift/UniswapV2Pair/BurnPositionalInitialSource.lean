@@ -73,36 +73,5 @@ theorem BurnThreeCallsH.initialSource
     (by simpa only [same0, feeObservedResult, ite_true] using second)
   exact ⟨views0, views1, first⟩
 
-/-- Both initial balance suspensions consume their own original slots and full
-static-view queues before the same supplied fee continuation. -/
-theorem BurnThreeCalls.initialSource
-    {Auth : Exec.Deriv → Entry → Transcript → Prop}
-    {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys K (staticViewDecodedKeys F.sevm))
-    {tail : Transcript} {out : RunResult} :
-    let frame0 := burnSourceLockedFrame current (writerContext sevm invocation)
-      (Sevm.dataWord sevm 4).toAdr
-    let request0 := requestFor .burnInitialBalance0 current.state.token0 (.balanceOf sevm.currentTarget)
-    let frame1 := frame0.beginResume request0
-    let request1 := requestFor .burnInitialBalance1 current.state.token1 (.balanceOf sevm.currentTarget)
-    let frameF := frame1.beginResume request1
-    AdmittedSourceConsumes Auth root r.initial.second.returned 2
-      (.suspended frameF (requestFor .burnFeeTo current.state.factory .feeTo)
-        (.burnFee (r.sourceObserved current))) tail out →
-    ∃ views0 views1 : List StaticViewTurn,
-      AdmittedSourceConsumes Auth root root 0
-        (.suspended frame0 request0 (.burnInitialBalance0 (r.sourceObserved current).locals))
-        (.next (feeObservedResult r.initial.out0) (staticViewTranscript views0 .done)
-          (.next (feeObservedResult r.initial.out1) (staticViewTranscript views1 .done) tail))
-        {out with childReturns := staticViewChildReturns frame0 request0 0 views0 ++
-          (staticViewChildReturns frame1 request1 0 views1 ++ out.childReturns)} :=
-  BurnThreeCallsH.initialSource (r.toH fork) rep invocation sem image installed fork.rules_stateGas_none fork.rules_bal_none fresh
-
 
 end Blanc.Lift.UniswapV2Pair

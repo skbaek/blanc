@@ -62,28 +62,6 @@ theorem BurnSevenCallsH.final0Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   · rw [returnedStorage]
     exact rep
 
-/-- The first final query's source views retain the exact sixth slot and the
-supplied same-state frame from the second transfer. -/
-theorem BurnSevenCalls.final0Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (rep : WriterRep J (r.five.second.returned.devm.getStor sevm.currentTarget) frame.current.state)
-    (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
-    let request := burnFinalRequest0 frame (r.five.four.sourcePriced current)
-    ∃ (observed : SourceCallAt root frame request (feeObservedResult r.final0.out) 5)
-      (views : List StaticViewTurn), observed.call = r.final0.call ∧
-      PositionalTurns frame request observed.paths (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} ∧
-      WriterRep J (r.final0.call.returned.devm.getStor sevm.currentTarget) frame.current.state :=
-  BurnSevenCallsH.final0Views (r.toH fork) incoming rep invocation context sem image installed fork.rules_stateGas_none fork.rules_bal_none fresh
-
 
 theorem BurnSevenCallsH.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
@@ -141,28 +119,6 @@ theorem BurnSevenCallsH.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     exact .staticViews views mapped authentic during
   · rw [returnedStorage]
     exact rep
-
-/-- The second final query's views retain the exact seventh slot and the
-first final query's full returned state. -/
-theorem BurnSevenCalls.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (rep : WriterRep J (r.final0.call.returned.devm.getStor sevm.currentTarget) frame.current.state)
-    (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
-    let request := burnFinalRequest1 frame (r.five.four.sourcePriced current)
-    ∃ (observed : SourceCallAt root frame request (feeObservedResult r.final1.out) 6)
-      (views : List StaticViewTurn), observed.call = r.final1.call ∧
-      PositionalTurns frame request observed.paths (staticViewTranscript views .done)
-        {complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views} ∧
-      WriterRep J (r.final1.call.returned.devm.getStor sevm.currentTarget) frame.current.state :=
-  BurnSevenCallsH.final1Views (r.toH fork) incoming rep invocation context sem image installed fork.rules_stateGas_none fork.rules_bal_none fresh
 
 
 
@@ -262,52 +218,6 @@ theorem BurnSevenCallsH.finalSourceData
   refine ⟨updated, event, oracle, views0, views1, accepted, ?_, finalRep, output, logs⟩
   simpa only [List.append_nil, feeObservedResult, priced, request0, frame1, request1, frame2,
     flag, recipient, finished] using first
-
-/-- The same second-transfer source frame consumes both original final slots
-and their full view queues, then the actual accepted update/unlock/output tail. -/
-theorem BurnSevenCalls.finalSourceData
-    {Auth : Exec.Deriv → Entry → Transcript → Prop}
-    {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (rep : WriterRep J (r.five.second.returned.devm.getStor sevm.currentTarget) frame.current.state)
-    (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
-    let priced := r.five.four.sourcePriced current
-    let request0 := burnFinalRequest0 frame priced
-    let frame1 := frame.beginResume request0
-    let request1 := burnFinalRequest1 frame1 priced
-    let frame2 := frame1.beginResume request1
-    let flag := feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32))
-    let recipient := (Sevm.dataWord sevm 4).toAdr.toB256
-    ∃ (updated : State) (event : Event) (oracle : OracleUpdate) (views0 views1 : List StaticViewTurn),
-      let finished := burnFinishedFrame frame2 updated event oracle flag recipient
-        priced.amount0 priced.amount1
-      frame2.current.state.update frame2.context
-        (Bytes.toB256 (r.final0.out.take 32)) (Bytes.toB256 (r.final1.out.take 32))
-        current.state.cachedReserves.reserve0.val current.state.cachedReserves.reserve1.val =
-          .ok (updated, event, oracle) ∧
-      AdmittedSourceConsumes Auth root r.five.second.returned 5
-        (.suspended frame request0 (.burnFinalBalance0 priced))
-        (.next (feeObservedResult r.final0.out) (staticViewTranscript views0 .done)
-          (.next (feeObservedResult r.final1.out) (staticViewTranscript views1 .done) .done))
-        {status := .success (encodeWords [priced.amount0, priced.amount1]), frame := finished,
-          remaining := .done, childReturns := staticViewChildReturns frame request0 0 views0 ++
-            staticViewChildReturns frame1 request1 0 views1} ∧
-      WriterRep J (post.getStor sevm.currentTarget) finished.current.state ∧
-      post.output = encodeWords [priced.amount0, priced.amount1] ∧
-      post.logs = r.final1.call.returned.devm.logs ++
-        [⟨frame.context.pair, [updateSyncTopic],
-          encodeWords [Bytes.toB256 (r.final0.out.take 32), Bytes.toB256 (r.final1.out.take 32)]⟩,
-         ⟨frame.context.pair,
-          [burnEventTopic, frame.context.sender.toB256, recipient.toAdr.toB256],
-          encodeWords [priced.amount0, priced.amount1]⟩] :=
-  BurnSevenCallsH.finalSourceData (r.toH fork) incoming rep invocation context sem image installed success fork.rules_stateGas_none fork.rules_bal_none fresh
 
 
 end Blanc.Lift.UniswapV2Pair

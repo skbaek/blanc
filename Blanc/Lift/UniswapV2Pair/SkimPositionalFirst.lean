@@ -50,23 +50,6 @@ theorem skim_first_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     [0x19, 0xee] (by decide) rfl (by decide : t_19ea_c34.noOk = true)
   exact ⟨nonstatic, codeGuard, entered⟩
 
-/-- Skim's staging inverse is applied at the actual lock-read cursor. -/
-theorem skim_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
-      (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    root.sevm.isStatic = false ∧
-    ((skimCachedWorld root.sevm b).getCode (skimToken0 root.sevm b).toAdr).size.toB256 ≠ 0 ∧
-    Nonempty (CursorStateAt code cert root t_19ee_c34
-      (temporalAccountAccessBase (skimCachedWorld root.sevm b) (skimToken0 root.sevm b).toAdr)
-      (0 :: skimToken0 root.sevm b :: 128 :: 36 :: 128 :: 32 ::
-        skimFirstBalanceRest root.sevm b toWord R)
-      (balanceRequestMemory getterInitMemory root.sevm.currentTarget) []) := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at cut
-  simpa only [skimCachedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
-    skim_first_guard_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none
-
 
 theorem skim_first_call_of_prefixH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {toWord : B256}
@@ -98,31 +81,6 @@ theorem skim_first_call_of_prefixH {root : Exec.Deriv} {b post : Devm}
         cases line
         exact ri_pop step)
   exact ⟨nonstatic, codeGuard, ready.gasCallH cert_check (.refl root) success stateGas⟩
-
-/-- The first balance call retains its original filled occurrence, complete
-request state, returned checked cursor and predecessor-free span. -/
-theorem skim_first_call_of_prefix {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
-      (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    root.sevm.isStatic = false ∧
-    ((skimCachedWorld root.sevm b).getCode (skimToken0 root.sevm b).toAdr).size.toB256 ≠ 0 ∧
-    ∃ (step : CallOccurrenceStep root .staticcall) (cursor : Cursor) (gas : Nat),
-      Exec.Deriv.ExecFreeUntil root step.occurrence.node ∧
-      step.occurrence.node.sevm = root.sevm ∧ step.occurrence.node.exn = root.exn ∧
-      step.occurrence.node.devm = St
-        (temporalAccountAccessBase (skimCachedWorld root.sevm b) (skimToken0 root.sevm b).toAdr)
-        (gas.toB256 :: skimToken0 root.sevm b :: 128 :: 36 :: 128 :: 32 ::
-          skimFirstBalanceRest root.sevm b toWord R)
-        (balanceRequestMemory getterInitMemory root.sevm.currentTarget) gas ∧
-      Ninst.RunWith (Cursor.DescOf step.occurrence.node) root.sevm
-        step.occurrence.node.devm (.exec .staticcall) step.returned.devm ∧
-      CursorOK code cert step.returned cursor ∧ cursor.f = skimFirstAfterCallTree ∧
-      cursor.K.map Cont.f = [] := by
-  simp only [← afterSloadH_of_eip2929 fork.rules_access] at cut
-  simpa only [skimCachedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
-    skim_first_call_of_prefixH cut success fork.rules_stateGas_none fork.rules_bal_none
 
 
 end Blanc.Lift.UniswapV2Pair

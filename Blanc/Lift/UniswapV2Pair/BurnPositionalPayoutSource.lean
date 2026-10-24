@@ -71,34 +71,5 @@ theorem BurnFourCallsH.payoutSource {root : Exec.Deriv} {sevm : Sevm} {b post : 
   simpa only [St_getStor, BurnThreeCallsH.transferWorld, env, sample, burnPricedFrame,
     Frame.withEvents, pair, BurnThreeCallsH.sourceObserved, toAdr_toB256] using lp.2.1
 
-/-- The same actual fee/pricing/LP result selects the first transfer suspension
-and represents its physical input. No independently selected payout is used. -/
-theorem BurnFourCalls.payoutSource {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} {resumed : Frame}
-    (r : BurnFourCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : r.three.feeFresh K current) (tracked : K (.balance sevm.currentTarget))
-    (pair : resumed.context.pair = sevm.currentTarget)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork) :
-    let observed := r.three.sourceObserved current
-    let fee := r.three.sourceFee current
-    let amount0 := r.three.amount0 r.pricing
-    let amount1 := r.three.amount1 r.pricing
-    resumed.burnAfterFee observed fee =
-      .suspended (burnPricedFrame resumed observed fee)
-        (requestFor .burnTransfer0 current.state.token0
-          (.transfer (Sevm.dataWord sevm 4).toAdr amount0))
-        (.burnTransfer0 (burnPricedSource observed fee amount0 amount1)) ∧
-    WriterRep (WriterExtend (r.three.sourceFeeKeys K current) (lpMintTouched sevm.currentTarget))
-      (r.transfer.occurrence.node.devm.getStor sevm.currentTarget)
-      (burnPricedFrame resumed observed fee).current.state := by
-  have fresh' : (r.three.toH fork).feeFresh K current := by
-    rw [BurnThreeCalls.feeFresh_toH fork]; exact fresh
-  have h := BurnFourCallsH.payoutSource (r.toH fork) rep fresh' tracked pair success
-    fork.rules_stateGas_none fork.rules_bal_none
-  simp only [BurnFourCalls.toH] at h
-  rw [BurnThreeCalls.sourceFee_toH fork, BurnThreeCalls.sourceFeeKeys_toH fork] at h
-  exact h
-
 
 end Blanc.Lift.UniswapV2Pair

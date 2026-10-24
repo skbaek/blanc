@@ -113,22 +113,6 @@ theorem pair_createH (msg : Msg) (hvalue : msg.value = 0)
   rw [hst, hempty, hstat]
   rfl
 
-/-- **Deploying the Pair.**  The creation code, executed as a zero-value creation message with
-enough gas under a covered fork, succeeds without error; the new account's code is the certified
-runtime and its storage is exactly the constructor's. -/
-theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
-    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
-    (hgas : 2400000 ≤ msg.gas) (hfork : CoveredFork msg.benv.stat.fork)
-    (hstatic : msg.isStatic = false)
-    (hmax : 11293 ≤ msg.benv.stat.rules.code.maxCodeSize) :
-    ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = Blanc.Lift.UniswapV2Pair.code.toList ∧
-      Devm.getStor post msg.currentTarget =
-        ctorStor msg.benv.stat.chainId.toB256 msg.currentTarget msg.caller Stor.empty ∧
-      post.error = .none :=
-  pair_createH msg hvalue hcodeAddress hcode hgas hfork.rules_stateGas_none hfork.rules_chainId
-    hfork.rules_shifts (fun _ h => by rw [hfork.rules_access] at h; cases h) hstatic hmax
-
 /-- Every covered fork admits the Pair's runtime and creation code sizes. -/
 theorem covered_codeLimits {s : BenvStat} (h : CoveredFork s.fork) :
     11293 ≤ s.rules.code.maxCodeSize ∧ 11636 ≤ s.rules.code.maxInitCodeSize := by

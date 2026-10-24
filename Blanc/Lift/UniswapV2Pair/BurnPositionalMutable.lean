@@ -206,23 +206,6 @@ theorem BurnFourCallsH.firstMutable {root : Exec.Deriv} {sevm : Sevm} {b post : 
   exact ⟨⟨observed, same, nonstatic, events, turns, c, added, rets, queue, mappedPaths, mappedTurns,
     during, authentic, afterRep, sourceLogs, rawLogs⟩⟩
 
-/-- The actual first CALL supplies its queue and recursive admitted children;
-its finite input is derived from the same fee and LP result. -/
-theorem BurnFourCalls.firstMutable {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint} (r : BurnFourCalls root sevm b)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (tracked : K (.balance sevm.currentTarget)) (invocation : List Nat)
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys root, U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      LockedGood U F) : Nonempty (BurnFirstMutable r U current invocation) :=
-  let ⟨h⟩ := BurnFourCallsH.firstMutable (r.toH fork) rep tracked invocation inj apart sub trace sem
-    image installed success fork.rules_stateGas_none fork.rules_bal_none good
-  ⟨h.toCovered fork⟩
-
 
 /-- The second transfer starts at the checkpoint produced by the first
 original mutable queue, while the priced locals stay cached. -/
@@ -412,22 +395,6 @@ theorem BurnFiveCallsH.secondMutable {root : Exec.Deriv} {sevm : Sevm} {b post :
   rw [same] at afterRep rawLogs
   exact ⟨⟨observed, same, events, turns, c, added, rets, queue, mappedPaths, mappedTurns,
     during, authentic, afterRep, sourceLogs, rawLogs⟩⟩
-
-/-- The first actual returned world is the physical and finite input of the
-second CALL's same full event queue and recursively admitted child fold. -/
-theorem BurnFiveCalls.secondMutable {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (r : BurnFiveCalls root sevm b) (first : BurnFirstMutable r.four U current invocation)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      LockedGood U F) : Nonempty (BurnSecondMutable r first) :=
-  let ⟨h⟩ := BurnFiveCallsH.secondMutable (r.toH fork) (first.toH fork) rep inj apart sem image
-    installed success fork.rules_stateGas_none fork.rules_bal_none good
-  ⟨h.toCovered fork⟩
 
 
 /-- The final queries resume the same second mutable checkpoint. -/

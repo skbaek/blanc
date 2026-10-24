@@ -43,37 +43,5 @@ theorem mint_fee_observation_of_secondH {root start : Exec.Deriv} {b post : Devm
     (balanceReplyMemory_ptr out mem)
   exact ⟨out, reply, bound, width, answer, cover0, cover1, ⟨fee⟩⟩
 
-/-- The third call begins after the supplied second actual reply. Both checked
-subtractions and fee preparation belong to that same original parent path. -/
-theorem mint_fee_observation_of_second {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {token b0 r1 r0 toWord extρ : B256}
-    (second : MintBalanceOccurrence root start .second b token
-      (164 :: 0x70a08231 :: token :: 0 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M start.sevm.currentTarget) K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (wf : Mem.Wf M)
-    (mem : PtrMem 128 192 (balanceRequestMemory M start.sevm.currentTarget))
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) :
-    ∃ out, StaticCallPost b second.call.returned.devm
-        (164 :: 0x70a08231 :: token :: 0 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-        (balanceRequestMemory M start.sevm.currentTarget) 128 36 128 32 1 out ∧
-      out.length < 2 ^ 256 ∧ 32 ≤ out.length ∧
-      StaticAnswered start.sevm b token.toAdr
-        (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out ∧
-      r0 ≤ b0 ∧ r1 ≤ Bytes.toB256 (out.take 32) ∧
-      Nonempty (PairFeeObservation root second.call.returned second.call.returned.devm
-        (balanceReplyMemory M start.sevm.currentTarget out) r1 r0 0x1233
-        (mintFeeLocals (Bytes.toB256 (out.take 32) - r1) (b0 - r0)
-          (Bytes.toB256 (out.take 32)) b0 r1 r0 toWord extρ R)
-        (t_1233_c41 :: K)) := by
-  obtain ⟨out, reply, bound, width, answer, cover0, cover1, ⟨fee⟩⟩ :=
-    mint_fee_observation_of_secondH (F := feeFactoryCallWorld)
-      (fun s d same => by subst same; exact (feeFactoryCallWorldH_of_covered fork).symm)
-      second success fork.rules_stateGas_none fork.rules_bal_none wf mem bound0 bound1
-  have returnedFork : CoveredFork second.call.returned.sevm.benvStat.fork := by
-    rw [second.returned_sevm]; exact fork
-  exact ⟨out, reply, bound, width, (StaticAnsweredH_iff_of_covered fork).mp answer, cover0, cover1,
-    ⟨fee.toCovered returnedFork⟩⟩
-
 
 end Blanc.Lift.UniswapV2Pair

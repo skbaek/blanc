@@ -42,19 +42,5 @@ theorem burn_second_transfer_callee_cursor_stateH {start : Exec.Deriv} {b post :
       exact ⟨gas, result⟩)
   exact caller.callH cert_check success stateGas rfl
 
-/-- The second transfer caller retains the cached payout and the complete
-world and physical memory left by the first actual token reply. -/
-theorem burn_second_transfer_callee_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (cut : CursorStateAt code cert start t_1698_c13 b
-      (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert start t_1fdb_c57 b
-      (amount1 :: toWord :: token1 :: 0x16a3 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-      M (t_16a3_c13 :: K)) :=
-  burn_second_transfer_callee_cursor_stateH cut success fork.rules_stateGas_none
-
 
 end Blanc.Lift.UniswapV2Pair

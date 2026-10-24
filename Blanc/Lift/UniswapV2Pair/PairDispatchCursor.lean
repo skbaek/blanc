@@ -123,15 +123,4 @@ theorem pair_dispatch_comparison_cursor_stateH {sevm : Sevm} {b post : Devm} {G 
   simpa only [high, ite_true] using
     pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
 
-/-- Compatibility projection of the actual upper comparison prefix. -/
-theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = sel)
-    (high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_002b_c0 b [sel] getterInitMemory []) :=
-  pair_dispatch_comparison_cursor_stateH codeEq fork.rules_stateGas_none selector high run
-
 end Blanc.Lift.UniswapV2Pair

@@ -154,17 +154,6 @@ theorem permit_dispatch_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨result⟩ := entryGuard.toSuccH cert_check rfl stateGas (by decide) (by rfl)
   exact ⟨result⟩
 
-/-- The actual selected dispatcher reaches the public permit entry before any
-external instruction, with its original full world and initialized memory. -/
-theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_05e2_c76 b [0xd505accf] getterInitMemory []) :=
-  permit_dispatch_cursor_stateH codeEq fork.rules_stateGas_none selector run
-
 
 
 theorem permit_body_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -273,19 +262,6 @@ theorem permit_body_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
       cases line
       exact ⟨g', by simpa only [show B256.eqCheck (0 : B256) 0 = 1 from by decide, show Bytes.toB256 [27, 123] = (0x1b7b : B256) from rfl] using state⟩)
   exact guard.branchSuccH cert_check rfl stateGas (by decide)
-
-/-- ABI decoding and the deadline check are actual non-exec cursor cuts. -/
-theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_1b7b_c29 b
-      [permitS sevm, permitR sevm, (permitV sevm).toB256, permitDeadline sevm,
-        permitValue sevm, (permitSpender sevm).toB256, (permitOwner sevm).toB256,
-        0x0257, 0xd505accf] getterInitMemory [t_0257_c76]) :=
-  permit_body_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 end Blanc.Lift.UniswapV2Pair

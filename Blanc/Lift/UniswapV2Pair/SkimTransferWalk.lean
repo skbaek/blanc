@@ -476,19 +476,6 @@ theorem skimTransferCallStep_invH {sevm : Sevm} {b d : Devm} {R : List B256} {M 
     rw [memory, parentMemory, returned]
     rfl
 
-/-- The real helper57 CALL keeps the seven-operand frame below its pushed flag; a
-nonzero flag is an entered call whose parent memory and output settle literally. -/
-theorem skimTransferCallStep_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {forwarded token ptr inputSize endWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (callStep : Ninst.Run sevm
-      (St b (forwarded :: token :: 0 :: ptr :: inputSize :: ptr :: 0 :: endWord :: token :: R)
-        M G) (.exec .call) d) :
-    ∃ flag, d.stack = flag :: endWord :: token :: R ∧ d.returnData.length < 2 ^ 256 ∧
-      (flag ≠ 0 → d.memory = (M.extends [(ptr.toNat, inputSize.toNat), (ptr.toNat, 0)]).write
-        ptr.toNat (d.returnData.take 0) ∧ d.output = b.output) :=
-  skimTransferCallStep_invH fork.rules_stateGas_none callStep
-
 
 
 /-- A window inside a zero-padded prefix slice reads the original prefix. -/
@@ -564,28 +551,6 @@ theorem skimTransferTail_flag_invH {P : Sevm → Devm → Ninst → Devm → Pro
           (by rw [List.sliceD_eq_map, List.length_map, List.length_range, lenNat]; omega),
         Nat.sub_self, lenNat, skimSliceD_prefix _ enough] at head
       exact ⟨enough, head⟩
-
-/-- The helper57 CALL and reply tail at a memory whose free pointer word is `ptr`:
-the flag is nonzero, the call entered, and the reply passes the optional-bool rule. -/
-theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {N : Mem} {G : Nat}
-    {forwarded tokenM ptr endWord amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf (N.read 64 32).2)
-    (word : Bytes.toB256 (N.read 64 32).1 = ptr)
-    (low : 96 ≤ ptr.toNat) (high : ptr.toNat + 64 < 2 ^ 256)
-    (run : SFunc.RunCutP P cert.prog sevm []
-      (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM :: 96 :: 0 ::
-        amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G)
-      (.next (.exec .call) skimTransferReplyTree) (.done (.returned out))) :
-    ∃ d, P sevm (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G) (.exec .call) d ∧
-      (∃ flag rest, d.stack = flag :: rest ∧ flag ≠ 0) ∧
-      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      ∃ M' residual, out = St d R M' residual :=
-  skimTransferTail_flag_invH project fork.rules_stateGas_none wf word low high run
 
 
 
@@ -734,33 +699,6 @@ theorem skimTransfer_flag_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     skimTransferTail_flag_invH project stateGas wq hq (by rw [nat164]; omega)
       (by rw [nat164]; omega) tail
   exact ⟨forwarded, callGas, _, d, call, calldata, flagged, output, width, accept, outEq⟩
-
-/-- A returned pointer-generic helper57 run at a free pointer `p` carried by the actual
-memory (`PtrMem`): the SAME P-step CALL with canonical transfer calldata at `p+164`, its
-nonzero success flag, the optional-bool acceptance of its full reply, and the returned
-frame. Child effects stay opaque in `d`. -/
-theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat} {n : Nat}
-    {p amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork)
-    (mem : PtrMem p n M) (low : 128 ≤ p.toNat) (high : p.toNat + 260 < 2 ^ 256)
-    (run : SFunc.RunP P cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
-    ∃ (forwarded : B256) (callGas : Nat) (V : Mem) (d : Devm),
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: (64 + p + 100) :: 68 :: (64 + p + 100) :: 0 :: (68 + (64 + p + 100)) ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount ::
-        toWord :: tokenWord :: rho :: R) V callGas) (.exec .call) d ∧
-      (V.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
-        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
-          amount.toBytes ∧
-      (∃ flag rest, d.stack = flag :: rest ∧ flag ≠ 0) ∧
-      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      ∃ M' residual, out = St d R M' residual :=
-  skimTransfer_flag_invH project fork.rules_stateGas_none mem low high run
 
 
 end Blanc.Lift.UniswapV2Pair

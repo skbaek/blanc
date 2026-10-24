@@ -182,23 +182,6 @@ theorem burn_second_guard_cursor_dataH {root : Exec.Deriv} {b post : Devm}
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using state)
   exact ⟨nonzero, guard.branchSuccH cert_check success stateGas (by decide)⟩
 
-theorem burn_second_guard_cursor_data {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root BurnInitialBalanceSite.first.afterDecodeTree b
-      (b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    let t1 := token1 &&& 0xffffffffffffffffffffffffffffffffffffffff
-    (b.getCode t1.toAdr).size.toB256 ≠ 0 ∧
-    Nonempty (CursorStateAt code cert root t_1599_c37
-      (temporalAccountAccessBase b t1.toAdr)
-      (0 :: t1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t1 ::
-        0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M root.sevm.currentTarget) K) := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    burn_second_guard_cursor_dataH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 
 def burnSecondAfterCallTree : SFunc :=
@@ -246,40 +229,6 @@ theorem burn_second_call_of_request_cursorH {root start : Exec.Deriv}
       exact ⟨g', state⟩)
   exact beforeGas.gasCallH (x := .staticcall) (tail := burnSecondAfterCallTree)
     cert_check reached success stateGas
-
-/-- The actual second request cursor gives an original-root occurrence, while
-the no-call gap starts at the supplied preceding returned parent. -/
-theorem burn_second_call_of_request_cursor {root start : Exec.Deriv}
-    {b post : Devm} {R : List B256} {M : Mem} {K : List SFunc}
-    {b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert start t_1599_c37
-      (temporalAccountAccessBase b
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
-      (0 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-      (balanceRequestMemory M start.sevm.currentTarget) K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ (step : CallOccurrenceStep root .staticcall) (cursor : Cursor) (gas : Nat),
-      Exec.Deriv.ExecFreeUntil start step.occurrence.node ∧
-      step.occurrence.node.sevm = start.sevm ∧
-      step.occurrence.node.exn = start.exn ∧
-      step.occurrence.node.devm = St
-        (temporalAccountAccessBase b
-          (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
-        (gas.toB256 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-          0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-        (balanceRequestMemory M start.sevm.currentTarget) gas ∧
-      Ninst.RunWith (Cursor.DescOf step.occurrence.node) start.sevm
-        step.occurrence.node.devm (.exec .staticcall) step.returned.devm ∧
-      CursorOK code cert step.returned cursor ∧
-      cursor.f = burnSecondAfterCallTree ∧ cursor.K.map Cont.f = K := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    burn_second_call_of_request_cursorH (by simpa only [accountAccessH_of_eip2929 fork.rules_access] using cut) reached success fork.rules_stateGas_none
 
 
 end Blanc.Lift.UniswapV2Pair

@@ -56,12 +56,6 @@ def transferCreditSafe (sevm : Sevm) (b : Devm) : Prop :=
 def transferCreditSafeH (sevm : Sevm) (b : Devm) : Prop :=
   (transferCreditWordH sevm b).toNat + (transferAmount sevm).toNat < 2 ^ 256
 
-theorem transferCreditSafeH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
-    (b : Devm) :
-    transferCreditSafeH sevm b = transferCreditSafe sevm b := by
-  unfold transferCreditSafeH transferCreditSafe
-  simp only [transferCreditWordH_of_covered fork]
-
 def transferPublicPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
   getterWordPost (transferCoreBase sevm b sevm.caller (transferRecipient sevm) (transferAmount sevm)) R
     (transferCoreMemory M sevm.caller (transferRecipient sevm) (transferAmount sevm)) 1 G
@@ -196,15 +190,6 @@ theorem transfer_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
   · obtain ⟨_, _, _, _, eq⟩ := transfer40_invH stateGas bal mem core
     cases eq
 
-theorem transfer_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x034e, sel] M G) t_0574_c85 o) :
-    transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧ ∃ residual, o = .halted (transferPublicPost sevm b [sel] M residual) := by
-  simpa only [transferCreditSafeH_of_covered fork, transferPublicPostH_of_covered fork] using
-    transfer_decoder_invH fork.rules_stateGas_none fork.rules_bal_none mem run
-
 
 theorem transfer_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel : B256} {o : Outcome}
@@ -251,16 +236,6 @@ theorem transfer_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
       rw [flag] at nonzero
       exact nonzero (by decide)
     exact ⟨guard, transfer_decoder_invH stateGas bal mem h.uncut⟩
-
-theorem transfer_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
-    {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_055e_c85 o) :
-    (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧ ∃ residual, o = .halted (transferPublicPost sevm b [sel] M residual) := by
-  simpa only [transferCreditSafeH_of_covered fork, transferPublicPostH_of_covered fork] using
-    transfer_entry_invH fork.rules_stateGas_none fork.rules_bal_none mem run
 
 
 theorem transfer_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
@@ -394,18 +369,6 @@ theorem transfer_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
     transfer_entry_invH stateGas bal getterInitMemory_ptr run
   exact ⟨value, size, guard, cover, nonstatic, nowrap, residual, Outcome.halted.inj result⟩
 
-theorem transfer_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧
-      ∃ residual, post = transferPublicPost sevm b [0xa9059cbb] getterInitMemory residual := by
-  simpa only [transferCreditSafeH_of_covered fork, transferPublicPostH_of_covered fork] using
-    transfer_pc0_invH fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 theorem transfer_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -418,18 +381,6 @@ theorem transfer_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}
       transferCreditSafeH sevm b ∧
       ∃ residual, post = transferPublicPostH sevm b [0xa9059cbb] getterInitMemory residual :=
   transfer_pc0_invH stateGas bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
-
-theorem transfer_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-      transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧
-      ∃ residual, post = transferPublicPost sevm b [0xa9059cbb] getterInitMemory residual := by
-  simpa only [transferCreditSafeH_of_covered fork, transferPublicPostH_of_covered fork] using
-    transfer_bytecode_refines_rawH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem transfer_bytecode_live_raw {sevm : Sevm} {b : Devm} {G : Nat}

@@ -218,14 +218,4 @@ theorem reserves_entry_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : 
   · obtain ⟨_, eq⟩ := reserves_callee_invH bal hc
     cases eq
 
-theorem reserves_entry_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_02d6_c101 o) :
-    ∃ d, o = .halted d ∧ d.output = encodeWords
-      [reserve0Read (b.getStorVal sevm.currentTarget 8),
-       reserve1Read (b.getStorVal sevm.currentTarget 8),
-       reserveTimestampRead (b.getStorVal sevm.currentTarget 8)] ∧
-      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
-  reserves_entry_invH fork.rules_bal_none mem run
-
 end Blanc.Lift.UniswapV2Pair

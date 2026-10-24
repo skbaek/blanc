@@ -140,20 +140,6 @@ theorem swapUpdate_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     simpa only [updateWorldH, updateFinalPackedWordH, updateOracleWorldH,
       updateOracleActive, active, ite_false] using eq
 
-/-- The shared update routine at pointer `p`: the same guards, oracle, packed
-store and exact world as `update_inv`, with a pointer-preserving memory. -/
-theorem swapUpdate_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {p old0 old1 balance0 balance1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
-    (run : SFunc.Run cert.prog sevm
-      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
-    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
-      ∃ n' M' G', PtrMem p n' M' ∧
-        o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1) R M' G') := by
-  simpa only [updateWorldH_of_covered fork] using
-    swapUpdate_invH fork.rules_stateGas_none fork.rules_bal_none mem lower width run
-
 
 def swapEventTopic : B256 :=
   0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822

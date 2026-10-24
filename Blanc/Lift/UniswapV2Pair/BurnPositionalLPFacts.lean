@@ -63,38 +63,5 @@ theorem BurnFourCallsH.lp_source_result {root : Exec.Deriv} {sevm : Sevm} {b pos
   exact ⟨product0, product1, nonzero, supplyEq, amounts, positive0, positive1,
     mutable, actual⟩
 
-/-- The same actual pricing cursor derives finite payouts and LP acceptance;
-the result is instantiated at the retained physical transfer world's gas. -/
-theorem BurnFourCalls.lp_source_result {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K : WriterKey → Prop} {st : State} (r : BurnFourCalls root sevm b)
-    (rep : WriterRep K
-      (r.pricing.devm.getStor r.three.fee.occurrence.call.returned.sevm.currentTarget) st)
-    (fresh : WriterFreshKeys K (lpMintTouched r.three.fee.occurrence.call.returned.sevm.currentTarget))
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork) :
-    let e := r.three.fee.occurrence.call.returned.sevm
-    let L := feeBurnLiquidity r.three.initial.second.returned.sevm
-      r.three.initial.second.returned.devm
-    let supply := r.pricing.devm.getStorVal e.currentTarget 0
-    B256.Nofm L (Bytes.toB256 (r.three.initial.out0.take 32)) ∧
-    B256.Nofm L (Bytes.toB256 (r.three.initial.out1.take 32)) ∧ supply ≠ 0 ∧
-    supply = st.totalSupply ∧
-    burnAmounts L (Bytes.toB256 (r.three.initial.out0.take 32))
-      (Bytes.toB256 (r.three.initial.out1.take 32)) supply =
-        .ok ((r.three.amount0 r.pricing).toNat, (r.three.amount1 r.pricing).toNat) ∧
-    0 < (r.three.amount0 r.pricing).toNat ∧ 0 < (r.three.amount1 r.pricing).toNat ∧
-    e.isStatic = false ∧
-    LPBurnSourceResult K st e (afterSload e r.pricing.devm 0)
-      (r.three.pricedLocals r.pricing) r.pricing.devm.memory e.currentTarget.toB256 L r.residual := by
-  have h := BurnFourCallsH.lp_source_result (r.toH fork) rep fresh success fork.rules_stateGas_none
-    fork.rules_bal_none
-  have f : CoveredFork r.three.fee.occurrence.call.returned.sevm.benvStat.fork := by
-    rw [(Cursor.parentStep_sevm r.three.fee.occurrence.call.edge).trans
-      (r.three.fee.occurrence.sevm_eq.trans
-        ((Cursor.parentStep_sevm r.three.initial.second.edge).trans r.three.initial.second_sevm))]
-    exact fork
-  simp only [BurnFourCalls.toH, BurnThreeCalls.toH, PairFeeObservation.toH] at h
-  simp only [LPBurnSourceResultH_of_covered f, afterSloadH_of_eip2929 f.rules_access] at h
-  exact h
-
 
 end Blanc.Lift.UniswapV2Pair

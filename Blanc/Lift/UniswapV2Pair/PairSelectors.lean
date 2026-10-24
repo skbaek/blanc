@@ -326,11 +326,4 @@ theorem pair_bytecode_selector_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨_, _, _, run⟩ := getter_guards_inv run
   exact pair_selector_inv run
 
-/-- Every successful raw run at the Pair code carries a published selector. -/
-theorem pair_bytecode_selector_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Blanc.Sevm.selector sevm ∈ pairSelectors :=
-  pair_bytecode_selector_invH codeEq fork.rules_stateGas_none run
-
 end Blanc.Lift.UniswapV2Pair

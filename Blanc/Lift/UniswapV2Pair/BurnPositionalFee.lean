@@ -124,21 +124,5 @@ theorem burn_fee_caller_cursor_stateH {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [0x26,0xec] = (0x26ec : B256) from rfl] using state⟩)
   exact caller.callH cert_check success stateGas rfl
 
-/-- The pair LP balance is sampled by the actual original caller before fee68.
-No representation, chosen fee result, or caller gas schedule is needed here. -/
-theorem burn_fee_caller_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {b1 discarded b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root BurnInitialBalanceSite.second.afterDecodeTree b
-      (b1 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (mem : PtrMem 128 192 M) :
-    Nonempty (CursorStateAt code cert root t_26ec_c68 (feeBurnWorld root.sevm b)
-      (r1 :: r0 :: 0x15e2 :: burnFeeLocals (feeBurnLiquidity root.sevm b)
-        b1 b0 token1 token0 r1 r0 toWord extρ R)
-      (feeBurnMemory M root.sevm.currentTarget) (t_15e2_c37 :: K)) := by
-  simpa only [feeBurnWorldH_of_covered fork] using
-    burn_fee_caller_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
-
 
 end Blanc.Lift.UniswapV2Pair

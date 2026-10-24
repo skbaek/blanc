@@ -44,15 +44,6 @@ theorem totalSupply_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
-theorem totalSupply_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (ρ :: R) M G) t_0e18_c53 o) :
-    ∃ G', o = .returned (St (afterSload sevm b 0)
-      (b.getStorVal sevm.currentTarget 0 :: ρ :: R) M G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact totalSupply_callee_invH fork.rules_bal_none run
-
 /-- The literal word return charges only its actual memory expansion. -/
 theorem getterWord_tail_ptr_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G n : Nat} {v : B256}
@@ -212,14 +203,6 @@ theorem totalSupply_entry_invH {sevm : Sevm} {b : Devm}
     exact ⟨d, ho, hout, fun a => (hs a).trans (afterSloadH_getStor _ _ _ _), hl.trans (afterSloadH_logs _ _ _)⟩
   · obtain ⟨_, eq⟩ := totalSupply_callee_invH bal hc
     cases eq
-
-theorem totalSupply_entry_inv {sevm : Sevm} {b : Devm}
-    {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_0393_c98 o) :
-    ∃ d, o = .halted d ∧ d.output = (b.getStorVal sevm.currentTarget 0).toBytes ∧
-      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs :=
-  totalSupply_entry_invH fork.rules_bal_none mem run
 
 /-- The guard compares the wrapped CALLDATASIZE word; trailing bytes are unrestricted. -/
 theorem totalSupply_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
@@ -492,15 +475,6 @@ theorem totalSupply_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
   cases eq
   exact ⟨value, size, out, stor, logs⟩
 
-theorem totalSupply_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x18160ddd)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      post.output = (b.getStorVal sevm.currentTarget 0).toBytes ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  totalSupply_pc0_invH fork.rules_bal_none selector run
-
 theorem totalSupply_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (bal : sevm.benvStat.rules.bal = none)
@@ -515,17 +489,6 @@ theorem totalSupply_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {s
   refine ⟨value, size, ?_, stor, logs⟩
   simp only [getterResult, encodeWords, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, supply, out]
-
-/-- Universal successful pc-zero refinement to the source getter, independent of gas and staticness. -/
-theorem totalSupply_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x18160ddd)
-    (supply : st.totalSupply = b.getStorVal sevm.currentTarget 0)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      some post.output = getterResult st .totalSupply ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
-  totalSupply_bytecode_refinesH codeEq fork.rules_stateGas_none fork.rules_bal_none selector supply run
 
 /-- Source-result liveness with closed opcode overhead 288 and the actual selected SLOAD charge. -/
 theorem totalSupply_bytecode_live {sevm : Sevm} {b : Devm} {G c : Nat} {st : State}

@@ -255,7 +255,6 @@ theorem fm25_size (v : B256) : (fm25 v).size = 11968 := by
 
 def fm26 (v : B256) : Mem := (fm25 v).write 11880 (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256).toBytes
 def fimg26 (v : B256) : Bytes := Bytes.writeAt (fimg25 v) 11880 (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256).toBytes
-theorem fm26_wf (v : B256) : Mem.Wf (fm26 v) := (fm25_wf v).write _ _
 theorem fm26_reads (v : B256) : Mem.Reads (fm26 v) (fimg26 v) :=
   Mem.Reads.write (fm25_wf v) (fm25_reads v) _ _
 theorem fm26_size (v : B256) : (fm26 v).size = 11968 := by

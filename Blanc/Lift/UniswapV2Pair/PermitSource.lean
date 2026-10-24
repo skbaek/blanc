@@ -185,23 +185,6 @@ theorem WriterRep.permit_store {K : WriterKey → Prop} {s : Stor} {st : State}
   rw [keys] at approved
   exact approved
 
-/-- The raw old-nonce and domain reads are the tracked logical values. -/
-theorem permit_reads {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
-    {owner spender : Adr}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (fresh : WriterFreshKeys K (permitTouched owner spender)) :
-    permitNonceRead sevm b owner = st.nonces owner ∧
-      b.getStorVal sevm.currentTarget 3 = st.domainSeparator := by
-  have extended := rep.extend fresh
-  have member : WriterExtend K (permitTouched owner spender) (.nonce owner) :=
-    .inr (List.mem_cons.mpr (.inl rfl))
-  refine ⟨?_, rep.fixed.2.1⟩
-  have read := extended.selected (.nonce owner) member
-  unfold permitNonceRead
-  change ((afterSload sevm b 3).getStor sevm.currentTarget).get (permitNonceSlot owner) = _
-  rw [afterSload_getStor]
-  exact read
-
 theorem permit_readsH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
     {owner spender : Adr}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -218,16 +201,6 @@ theorem permit_readsH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : D
   rw [afterSloadH_getStor]
   exact read
 
-theorem permitCallDigest_source {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
-    {owner spender : Adr} {value deadline : B256}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (fresh : WriterFreshKeys K (permitTouched owner spender)) :
-    permitCallDigest sevm b owner spender value deadline =
-      permitDigest st owner spender value (st.nonces owner) deadline := by
-  obtain ⟨nonce, domain⟩ := permit_reads (spender := spender) rep fresh
-  unfold permitCallDigest permitDigestOf permitInner permitDigest
-  rw [nonce, domain]
-
 theorem permitCallDigest_sourceH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
     {owner spender : Adr} {value deadline : B256}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -237,45 +210,6 @@ theorem permitCallDigest_sourceH {K : WriterKey → Prop} {st : State} {sevm : S
   obtain ⟨nonce, domain⟩ := permit_readsH (spender := spender) rep fresh
   unfold permitCallDigestH permitDigestOf permitInner permitDigest
   rw [nonce, domain]
-
-/-- Raw post facts over the actual call world: the call preserves storage, logs and output. -/
-theorem permitPublicPost_facts {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {out : Bytes}
-    {sel : B256} {G : Nat}
-    (post : StaticCallPost (permitNonceWorld sevm b (permitOwner sevm)) d S M 482 128 450 32 1 out) :
-    (permitPublicPost sevm b d out sel G).output = b.output ∧
-    (permitPublicPost sevm b d out sel G).logs = b.logs ++
-      [approvalRawLog sevm.currentTarget (permitOwner sevm) (permitSpender sevm) (permitValue sevm)] ∧
-    (permitPublicPost sevm b d out sel G).getStor sevm.currentTarget =
-      (((b.getStor sevm.currentTarget).set (permitNonceSlot (permitOwner sevm))
-        (permitNonceRead sevm b (permitOwner sevm) + 1)).set
-        (mapSlot (permitSpender sevm).toB256 (mapSlot (permitOwner sevm).toB256 2))
-        (permitValue sevm)) ∧
-    (∀ a, a ≠ sevm.currentTarget →
-      (permitPublicPost sevm b d out sel G).getStor a = b.getStor a) ∧
-    (permitPublicPost sevm b d out sel G).gasLeft = G := by
-  refine ⟨?_, ?_, ?_, ?_, rfl⟩
-  · change (afterSstore sevm d (mapSlot (permitSpender sevm).toB256 (mapSlot (permitOwner sevm).toB256 2))
-      (permitValue sevm)).output = _
-    rw [afterSstore_output, post.output rfl]
-    unfold permitNonceWorld
-    rw [afterSstore_output, afterSload_output, afterSload_output]
-  · change (afterSstore sevm d (mapSlot (permitSpender sevm).toB256 (mapSlot (permitOwner sevm).toB256 2))
-      (permitValue sevm)).logs ++
-      [approvalRawLog sevm.currentTarget (permitOwner sevm) (permitSpender sevm) (permitValue sevm)] = _
-    rw [afterSstore_logs, post.logs]
-    unfold permitNonceWorld
-    rw [afterSstore_logs, afterSload_logs, afterSload_logs]
-  · change Devm.getStor (approveCoreBase sevm d (permitOwner sevm) (permitSpender sevm) (permitValue sevm))
-      sevm.currentTarget = _
-    rw [approveCoreBase, Devm.addLog_getStor, afterSstore_getStor_self, post.stor]
-    unfold permitNonceWorld
-    rw [afterSstore_getStor_self, afterSload_getStor, afterSload_getStor]
-  · intro a different
-    change Devm.getStor (approveCoreBase sevm d (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) a = _
-    rw [approveCoreBase, Devm.addLog_getStor, afterSstore_getStor_ne _ _ _ _ _ different.symm,
-      post.stor]
-    unfold permitNonceWorld
-    rw [afterSstore_getStor_ne _ _ _ _ _ different.symm, afterSload_getStor, afterSload_getStor]
 
 theorem permitPublicPost_factsH {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {out : Bytes}
     {sel : B256} {G : Nat}
@@ -424,44 +358,6 @@ theorem PermitSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {c
     PermitSourceResultH K current invocation sevm b post d out codeExists residual = PermitSourceResult K current invocation sevm b post d out codeExists residual := by
   unfold PermitSourceResultH PermitSourceResult
   simp only [permitPublicDigestH_of_covered fork, permitPublicPostH_of_covered fork]
-
-/-- The result from the raw guards: the typed segment, its resume, and the exact post. -/
-theorem permit_public_source_result {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {out : Bytes}
-    {codeExists : Bool} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
-    (freshOutput : b.output = [])
-    (paid : sevm.value = 0) (nonstatic : sevm.isStatic = false)
-    (timely : sevm.benvStat.time ≤ permitDeadline sevm)
-    (post : StaticCallPost (permitNonceWorld sevm b (permitOwner sevm)) d S M 482 128 450 32 1 out)
-    (recovered : (permitRecoveredWord out).toAdr ≠ 0)
-    (signer : (permitRecoveredWord out).toAdr = permitOwner sevm) :
-    PermitSourceResult K current invocation sevm b (permitPublicPost sevm b d out 0xd505accf G)
-      d out codeExists G := by
-  obtain ⟨output, logs, storage, foreign, gas⟩ := permitPublicPost_facts (sel := 0xd505accf)
-    (G := G) post
-  obtain ⟨nonce, _⟩ := permit_reads (spender := permitSpender sevm) rep fresh
-  have digest := permitCallDigest_source (value := permitValue sevm)
-    (deadline := permitDeadline sevm) rep fresh
-  have consumed := permit_exact_consumes (current := current) (ctx := writerContext sevm invocation)
-    (codeExists := codeExists) (owner := permitOwner sevm) (spender := permitSpender sevm)
-    (value := permitValue sevm) (deadline := permitDeadline sevm) (v := permitV sevm) (r := permitR sevm) (s := permitS sevm)
-    paid timely nonstatic recovered signer
-  rw [nonce] at storage
-  refine ⟨rfl, ?_, permit_startTyped_suspended paid timely nonstatic, ?_, rfl, consumed,
-    ExactConsumes.realizes consumed 3 (by show 1 + 0 + 0 + 1 ≤ 3; omega), rfl, ?_, rfl,
-    output.trans freshOutput, logs, storage, foreign, gas⟩
-  · rw [storage]
-    exact rep.permit_store fresh
-  · change ExternalOperation.encode (.recover (permitDigest current.state (permitOwner sevm)
-      (permitSpender sevm) (permitValue sevm) (current.state.nonces (permitOwner sevm))
-      (permitDeadline sevm)) (permitV sevm) (permitR sevm) (permitS sevm)) = _
-    rw [← digest]
-    rfl
-  · change (current.logs ++ List.map _ []) ++ List.map _ [_] = _
-    rw [List.map_nil, List.append_nil]
-    rfl
 
 theorem permit_public_source_resultH {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {out : Bytes}

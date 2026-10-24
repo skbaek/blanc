@@ -78,20 +78,5 @@ theorem burn_second_product_cursor_stateH {root : Exec.Deriv} {b post : Devm}
   obtain ⟨callee⟩ := caller.callH cert_check success stateGas rfl
   exact pair_checked_mul_cursor_stateH callee success stateGas
 
-/-- The actual first quotient becomes amount0 before the second checked product.
-The denominator guard is supplied by the successful pricing suffix. -/
-theorem burn_second_product_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {product0 supply f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
-    (cut : CursorStateAt code cert root t_15f9_c37 b
-      (product0 :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        0 0 toWord extρ R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
-    (nonzero : supply ≠ 0) :
-    B256.Nofm L b1 ∧ Nonempty (CursorStateAt code cert root t_1614_c37 b
-      ((L * b1) :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
-        0 (product0 / supply) toWord extρ R) M K) :=
-  burn_second_product_cursor_stateH cut success fork.rules_stateGas_none nonzero
-
 
 end Blanc.Lift.UniswapV2Pair

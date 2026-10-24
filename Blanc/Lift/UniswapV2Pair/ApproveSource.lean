@@ -315,20 +315,6 @@ theorem approve_bytecode_refines_sourceH {K : WriterKey → Prop} {current : Che
   rw [eq]
   exact approve_public_source_resultH rep fresh value nonstatic
 
-/-- Successful literal bytecode derives source acceptance; no source endpoint is a premise. -/
-theorem approve_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)))
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      ∃ residual, ApproveSourceResult K current invocation sevm b post residual := by
-  simpa only [ApproveSourceResultH_of_covered fork] using
-    approve_bytecode_refines_sourceH rep fresh representable codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 /-- Existing handler acceptance yields exact raw gas with the actual selected-store sentry. -/
 theorem approve_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpoint}

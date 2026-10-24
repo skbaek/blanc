@@ -78,19 +78,6 @@ theorem swap_transfer_occurrenceH {root start : Exec.Deriv} {b post : Devm}
         (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)).1⟩
   exact ⟨⟨step, gas, gap, env, input, stack, memory, output, short, accepted, data, tail', pointer⟩⟩
 
-/-- The shared transfer request/call/reply helpers classify this supplied
-actual invocation; no different equal-payload CALL or synthetic return is used. -/
-theorem swap_transfer_occurrence {root start : Exec.Deriv} {b post : Devm}
-    {L : List B256} {M : Mem} {K : List SFunc} {caller : SFunc}
-    {p amount toWord token rho : B256} {n : Nat}
-    (cut : CursorStateAt code cert start t_1fdb_c57 b
-      (amount :: toWord :: token :: rho :: L) M (caller :: K))
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SwapTransferOccurrence root start b L M p amount toWord token rho caller K) :=
-  swap_transfer_occurrenceH cut reached success fork.rules_stateGas_none mem lower width
-
 
 /-- A skipped transfer keeps its source position; an executed transfer keeps
 its exact occurrence and returned node. Both reach the same original caller. -/
@@ -187,21 +174,6 @@ theorem swap_transfer0_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
       have short := actual.short
       omega
 
-/-- Optional transfer0 follows its literal amount branch. A zero amount
-crosses a call-free span; a nonzero amount consumes its own physical CALL. -/
-theorem swap_transfer0_cursor_state {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {p : B256} {n : Nat}
-    {t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
-    (cut : CursorStateAt code cert start t_08bf_c4 b
-      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ 159) :
-    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
-    ∃ result : SwapOptionalTransfer root start b L M p a0 toWord t0 0x8d0 t_08d0_c4 K,
-      128 ≤ result.ptr.toNat ∧ result.ptr.toNat < 2 ^ 161 :=
-  swap_transfer0_cursor_stateH cut reached success fork.rules_stateGas_none mem lower upper
-
 
 theorem swap_transfer1_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p : B256} {n : Nat}
@@ -249,21 +221,6 @@ theorem swap_transfer1_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     · change (swapMovedPointer p actual.step.returned.devm.returnData).toNat < 2 ^ 162
       have short := actual.short
       omega
-
-/-- Optional transfer1 follows its literal amount branch. A zero amount
-crosses a call-free span; a nonzero amount consumes its own physical CALL. -/
-theorem swap_transfer1_cursor_state {root start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {p : B256} {n : Nat}
-    {t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
-    (cut : CursorStateAt code cert start t_08d0_c4 b
-      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
-    (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ 161) :
-    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
-    ∃ result : SwapOptionalTransfer root start b L M p a1 toWord t1 0x8e1 t_08e1_c4 K,
-      128 ≤ result.ptr.toNat ∧ result.ptr.toNat < 2 ^ 162 :=
-  swap_transfer1_cursor_stateH cut reached success fork.rules_stateGas_none mem lower upper
 
 
 /-- Cached token0 word of the original Swap prefix. -/

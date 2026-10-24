@@ -105,22 +105,6 @@ theorem swap_source_start_of_successH {K : WriterKey → Prop} {current : Checkp
     swapSourceLocals, swapDecodedEntry, Frame.suspend, Bool.false_eq_true, ite_false]
     using started
 
-/-- Existing inverses derive only the original source guards and starting segment. -/
-theorem swap_source_start_of_success {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat) (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ sevm.isStatic = false ∧
-    (swapAmount0Out sevm).toNat < current.state.reserve0.val ∧
-    (swapAmount1Out sevm).toNat < current.state.reserve1.val ∧
-    startTyped current (writerContext sevm invocation) (swapDecodedEntry sevm) =
-      swapTransferPhaseStart false
-        (swapLockedFrame current (writerContext sevm invocation) (swapDecodedEntry sevm))
-        (swapFrontLocals sevm current.state) :=
-  swap_source_start_of_successH invocation rep codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 theorem swap_source_prefix_of_successH {K U : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post W : Devm} {G : Nat} (hW : W = swapPrefixWorldH sevm b)
@@ -136,18 +120,6 @@ theorem swap_source_prefix_of_successH {K U : WriterKey → Prop} {current : Che
   obtain ⟨value, nonstatic, liquidity0, liquidity1, started⟩ := swap_source_start_of_successH invocation rep codeEq stateGas bal selector run
   exact ⟨value, nonstatic, liquidity0, liquidity1, token0, token1, reserve0, reserve1, started,
     swap_prefix_source_invariantH rep sub⟩
-
-/-- No optional-call or model witness is selected from the legacy inverses. -/
-theorem swap_source_prefix_of_success {K U : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat) (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sub : ∀ k, K k → U k)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    SwapSourcePrefix U current invocation sevm b :=
-  SwapSourcePrefixH.toCovered <| swap_source_prefix_of_successH (swapPrefixWorldH_of_covered fork).symm
-    invocation rep sub codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem swap_source_transfersH {root : Exec.Deriv} {b W : Devm}

@@ -184,20 +184,6 @@ theorem update_packed_store_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   obtain ⟨g, rfl⟩ := ri_sstoreH stateGas bal hd
   exact ⟨nonstatic, g, h.uncut⟩
 
-/-- Successful bytecode derives its mutable frame and exact sole packed store. -/
-theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run cert.prog sevm
-      (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_2492_c22 o) :
-    sevm.isStatic = false ∧ ∃ G', SFunc.Run cert.prog sevm
-      (St (updatePackedPost sevm b b0 b1 ts)
-        (reserveDiv112 :: reserveMask112 ::
-          updatePackedWord (b.getStorVal sevm.currentTarget 8) b0 b1 ts ::
-          dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') updateSyncTree o := by
-  simpa only [updatePackedPostH_of_covered fork] using
-    update_packed_store_invH fork.rules_stateGas_none fork.rules_bal_none run
-
 
 
 def updateSyncTopic : B256 :=

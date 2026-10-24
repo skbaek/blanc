@@ -33,20 +33,12 @@ open Jaune
 /-- The lifted constructor program. -/
 abbrev prog : List SFunc := Cert.prog cert
 
-/-- The frame facts the walk needs of the creation frame. -/
-structure CtorFrame (sevm : Sevm) : Prop where
-  fork : CoveredFork sevm.benvStat.fork
-  static : sevm.isStatic = false
-
 /-- The frame facts the walk needs of the creation frame under historical rule facts: no state
 gas (the `SLOAD`/`SSTORE` steps are charged under the frame's actual storage schedule) and a
 non-static frame. -/
 structure CtorFrameH (sevm : Sevm) : Prop where
   stateGas : sevm.benvStat.rules.stateGas = none
   static : sevm.isStatic = false
-
-theorem CtorFrame.toH {sevm : Sevm} (fr : CtorFrame sevm) : CtorFrameH sevm :=
-  ⟨fr.fork.rules_stateGas_none, fr.static⟩
 
 /-! ## The string-storing helper (entry 2) -/
 
@@ -321,17 +313,6 @@ theorem ctorCostH_le (sevm : Sevm) (b : Devm)
 /-- The constructor's storage: the fresh storage with name, symbol and decimals written. -/
 def ctorStor (s : Stor) : Stor := ((s.set 0 nameSlotWord).set 1 symbolSlotWord).set 2 18
 
-/-- The constructor's final world, projected before substituting a memory image. -/
-theorem ctor_return_state (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
-    (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
-      [Nat.toB256 0, Nat.toB256 3124] M G) (Nat.toB256 0) (Nat.toB256 3124) []).state =
-      ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
-        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
-  rw [returnPost_state, St_state]
-  rw [Blanc.afterSstore_state]
-  unfold wDecimals wSymbol wName
-  simp only [Blanc.Lift.NodeWalk.afterSload_state, Blanc.afterSstore_state]
-
 /-- The walk up to the name string's storage (entry 0 through the first helperH call). -/
 theorem segNameH {sevm : Sevm} (fr : CtorFrameH sevm) {b : Devm}
     (hold0 : b.getStorVal sevm.currentTarget 0 = 0) {X : Nat} (hX : 2300 ≤ X) {o : Outcome}
@@ -577,112 +558,5 @@ theorem ctor_run_framedH {sevm : Sevm} (fr : CtorFrameH sevm) (hcode : sevm.code
     (segDecimalsH fr hcode hvalue hold2 hG))
 
 /-! ## Modern statements from the historical walk -/
-
-theorem helperCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm)
-    (p v : B256) : helperCostH sevm b p v = helperCost sevm b p v := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
-  simp only [helperCostH, helperCost, afterSloadH_of_eip2929 hfork.rules_access,
-    sstoreCostH_of_eip2929 hfork.rules_access nm, sloadCostH_of_eip2929 hfork.rules_access]
-
-theorem wNameH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
-    wNameH sevm b = wName sevm b := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
-  simp only [wNameH, wName, afterSloadH_of_eip2929 hfork.rules_access,
-    afterSstoreH_of_eip2929 hfork.rules_access nm]
-
-theorem wSymbolH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
-    wSymbolH sevm b = wSymbol sevm b := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
-  simp only [wSymbolH, wSymbol, wNameH_covered hfork, afterSloadH_of_eip2929 hfork.rules_access,
-    afterSstoreH_of_eip2929 hfork.rules_access nm]
-
-theorem wDecimalsH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
-    wDecimalsH sevm b = wDecimals sevm b := by
-  simp only [wDecimalsH, wDecimals, wSymbolH_covered hfork,
-    afterSloadH_of_eip2929 hfork.rules_access]
-
-theorem ctorCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
-    ctorCostH sevm b = ctorCost sevm b := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
-  simp only [ctorCostH, ctorCost, helperCostH_covered hfork, wNameH_covered hfork,
-    wSymbolH_covered hfork, wDecimalsH_covered hfork, sstoreCostH_of_eip2929 hfork.rules_access nm,
-    sloadCostH_of_eip2929 hfork.rules_access]
-
-/-- **Storing a short string** (`0 < ℓ < 32` bytes, left-aligned data word `w` at `s` in memory)
-into the empty slot `p`: the slot receives `w | 2ℓ`, the scratch word `0` receives `p`, and the
-helper returns `p`. -/
-theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ : Nat}
-    {s p r w : B256} {R : List B256} (hℓ : ℓ < 32) (hsz : M.size = n) (hn : n % 32 = 0)
-    (h32 : 32 ≤ n) (hs : s.toNat + 32 ≤ n) (hR : R.length < 1000)
-    (hold : b.getStorVal sevm.currentTarget p = 0)
-    (hw : Bytes.toB256 ((M.write 0 p.toBytes).read s.toNat 32).1 = w)
-    (hmask : (~~~ Bytes.toB256 [0xff]) &&& w = w) {G : Nat}
-    (hsentry : gCallStipend < G + 115) :
-    SFunc.RunExact prog sevm
-      (St b (Nat.toB256 ℓ :: s :: p :: r :: R) M
-        (G + helperCost sevm b p (Nat.toB256 (ℓ + ℓ) ||| w)))
-      t_00c8_c2
-      (.returned (St (afterSstore sevm (afterSload sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w))
-        (p :: R) (M.write 0 p.toBytes) G)) := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := (by rw [fr.fork.rules_sstore])
-  rw [← helperCostH_covered fr.fork, ← afterSloadH_of_eip2929 fr.fork.rules_access,
-    ← afterSstoreH_of_eip2929 fr.fork.rules_access nm]
-  exact helperH fr.toH hℓ hsz hn h32 hs hR hold hw hmask hsentry
-
-/-- The walk up to the name string's storage (entry 0 through the first helper call). -/
-theorem segName {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
-    (hold0 : b.getStorVal sevm.currentTarget 0 = 0) {X : Nat} (hX : 2300 ≤ X) {o : Outcome}
-    (k : SFunc.RunExact prog sevm (St (wName sevm b) [0] m5 X) t_004f_c0 o) :
-    SFunc.RunExact prog sevm (St b [] Mem.empty (X + helperCost sevm b 0 nameSlotWord + 8 + 116))
-      t_0000_c0 o := by
-  rw [← wNameH_covered fr.fork] at k
-  rw [← helperCostH_covered fr.fork]
-  exact segNameH fr.toH hold0 hX k
-
-/-- The walk of the symbol string's storage (from the first call's return through the second
-helper call). -/
-theorem segSymbol {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
-    (hold1 : (wName sevm b).getStorVal sevm.currentTarget 1 = 0) {X : Nat} (hX : 2300 ≤ X)
-    {o : Outcome} (k : SFunc.RunExact prog sevm (St (wSymbol sevm b) [1] m9 X) t_009b_c0 o) :
-    SFunc.RunExact prog sevm
-      (St (wName sevm b) [0] m5 (X + helperCost sevm (wName sevm b) 1 symbolSlotWord + 8 + 101))
-      t_004f_c0 o := by
-  rw [← wNameH_covered fr.fork] at hold1
-  rw [← wSymbolH_covered fr.fork] at k
-  rw [← helperCostH_covered fr.fork, ← wNameH_covered fr.fork]
-  exact segSymbolH fr.toH hold1 hX k
-
-/-- The walk from the second call's return: decimals, the value check, the runtime copy and
-`RETURN`. -/
-theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
-    (hvalue : sevm.value = 0) {b : Devm}
-    (hold2 : (wSymbol sevm b).getStorVal sevm.currentTarget 2 = 0) {G : Nat} (hG : 2300 ≤ G) :
-    SFunc.RunExact prog sevm
-      (St (wSymbol sevm b) [1] m9 (G + 3 + copyCost + 45 +
-        sstoreCost sevm (wDecimals sevm b) 2 18 + 40 + sloadCost sevm (wSymbol sevm b) 2 + 28))
-      t_009b_c0 (.halted (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
-        [Nat.toB256 0, Nat.toB256 3124] m10w G) (Nat.toB256 0)
-        (Nat.toB256 3124) [])) := by
-  have nm : sevm.benvStat.rules.sstore.netMetering = true := (by rw [fr.fork.rules_sstore])
-  rw [← wSymbolH_covered fr.fork] at hold2
-  rw [← sstoreCostH_of_eip2929 fr.fork.rules_access nm, ← sloadCostH_of_eip2929 fr.fork.rules_access,
-    ← afterSstoreH_of_eip2929 fr.fork.rules_access nm, ← wDecimalsH_covered fr.fork, ← wSymbolH_covered fr.fork]
-  exact segDecimalsH fr.toH hcode hvalue hold2 hG
-
-/-- **The WETH9 constructor, gas-exact**: from a fresh account (empty storage, zero call value)
-with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
-gas left, returning the runtime window, with the world's error unchanged and the name, symbol
-and decimals written. -/
-theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
-    (hvalue : sevm.value = 0) {b : Devm}
-    (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
-      post.output = runtimeWindow ∧ post.error = b.error ∧
-      Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
-      post.gasLeft = G ∧
-      post.state = ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
-        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
-  rw [← ctorCostH_covered fr.fork b]
-  exact ctor_run_framedH fr.toH hcode hvalue hstor hG
 
 end Blanc.Lift.Weth9.Creation

@@ -214,16 +214,6 @@ theorem initializeWrites_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, done⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj done⟩
 
-/-- Any successful literal packed suffix derives nonstatic and its complete returned state. -/
-theorem initializeWrites_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0fb2_c45 o) :
-    sevm.isStatic = false ∧ ∃ residual,
-      o = .returned (St (initializeWritesBase sevm b token0 token1) R M residual) := by
-  simpa only [initializeWritesBaseH_of_covered fork] using
-    initializeWrites_invH fork.rules_stateGas_none fork.rules_bal_none run
-
 
 def initializeFactoryBase (sevm : Sevm) (b : Devm) : Devm := afterSload sevm b 5
 
@@ -320,16 +310,6 @@ theorem initialize45_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       simpa only [toAdr_toB256] using congrArg B256.toAdr same
     obtain ⟨nonstatic, residual, done⟩ := initializeWrites_invH stateGas bal h.uncut
     exact ⟨authorized, nonstatic, residual, done⟩
-
-/-- Success derives the factory guard; arbitrary old token words and lock values are permitted. -/
-theorem initialize45_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {token0 token1 : Adr} {ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run fs sevm (St b (token1.toB256 :: token0.toB256 :: ρ :: R) M G) t_0f2c_c45 o) :
-    sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, o = .returned (St (initializeCoreBase sevm b token0 token1) R M residual) := by
-  simpa only [initializeCoreBaseH_of_covered fork] using
-    initialize45_invH fork.rules_stateGas_none fork.rules_bal_none run
 
 
 end Blanc.Lift.UniswapV2Pair

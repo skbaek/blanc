@@ -32,17 +32,6 @@ theorem swap_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     [0x1be, 1, 0x022c0d9f] getterInitMemory [] at guard
   exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
 
-/-- The actual Swap selector route keeps the original root, full world and
-initialized memory. Its predecessor gap contains no external instruction. -/
-theorem swap_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_01be_c99 b [0x022c0d9f] getterInitMemory []) :=
-  swap_selector_cursor_stateH codeEq fork.rules_stateGas_none selector run
-
 
 theorem swap_prefix_guards_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -59,16 +48,6 @@ theorem swap_prefix_guards_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨unlocked, nonstatic, output, _, _⟩ :=
     swapLockOutput_invH stateGas bal (SFunc.runP_iff_runCutP_nil.mp callee)
   exact ⟨value, size, abi, unlocked, nonstatic, output⟩
-
-/-- The ABI and lock guards come from the same original successful root. -/
-theorem swap_prefix_guards_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧ SwapAbiGuards sevm ∧
-      b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-      (swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0) :=
-  swap_prefix_guards_of_successH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
 
 
 theorem swap_abi_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -168,17 +147,6 @@ theorem swap_abi_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (fun line => swapAbiCallLine_inv line)
   exact cut.callH cert_check rfl stateGas rfl
 
-/-- The literal ABI wrapper enters the actual body with the original stop
-continuation. All decoded words and residual gas come from the successful root. -/
-theorem swap_abi_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_0683_c54 b (swapBodyStack sevm) getterInitMemory [t_0257_c99]) :=
-  swap_abi_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 theorem swap_reserves_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
@@ -271,22 +239,6 @@ theorem swap_reserves_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨cut⟩ := cut.callH cert_check rfl stateGas rfl
   exact pair_reserves_cursor_stateH cut rfl stateGas bal
 
-/-- The actual lock write and internal reserve return stay in the original
-successful execution, retaining the body caller's stop continuation. -/
-theorem swap_reserves_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_0767_c2 (afterSload sevm (mintLockedWorld sevm b) 8)
-      (reserveTimestampRead ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
-       reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
-       reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
-       0 :: 0 :: swapBodyStack sevm) getterInitMemory [t_0257_c99]) := by
-  simpa only [afterSloadH_of_eip2929 fork.rules_access, mintLockedWorldH_of_covered fork] using
-    swap_reserves_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 /-- Raw cached locals before the first optimistic-transfer choice. -/
 def swapRawLocalsStack (sevm : Sevm) (b : Devm) : List B256 :=
@@ -334,26 +286,6 @@ theorem swap_prefix_raw_guardsH {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨_, _, _, _, body⟩ := swapLockOutput_invH stateGas bal (SFunc.runP_iff_runCutP_nil.mp callee)
   obtain ⟨lt0, lt1, ne0, ne1, _, _⟩ := swapGuards_invH bal body
   exact ⟨lt0, lt1, ne0, ne1⟩
-
-/-- Successful execution derives the raw liquidity and recipient guards of
-its own cached reserve and token words. -/
-theorem swap_prefix_raw_guards {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let locked := mintLockedWorld sevm b
-    let reserved := afterSload sevm locked 8
-    let m : B256 := 0xffffffffffffffffffffffffffffffffffffffff
-    (swapAmount0Out sevm).toNat <
-      (reserveMask112 &&& reserve0Read (locked.getStorVal sevm.currentTarget 8)).toNat ∧
-    (swapAmount1Out sevm).toNat <
-      (reserveMask112 &&& reserve1Read (locked.getStorVal sevm.currentTarget 8)).toNat ∧
-    (m &&& reserved.getStorVal sevm.currentTarget 6) ≠ (swapRecipientWord sevm &&& m) ∧
-    (m &&& swapRecipientWord sevm) ≠
-      (m &&& (m &&& reserved.getStorVal sevm.currentTarget 7)) := by
-  have guards := swap_prefix_raw_guardsH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-  simp only [mintLockedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] at guards
-  exact guards
 
 
 theorem swap_prefix_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}

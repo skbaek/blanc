@@ -117,17 +117,6 @@ theorem singleMapping_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
-theorem singleMapping_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {key ρ : B256} {o : Outcome}
-    (s : SingleMappingGetter) (fork : CoveredFork sevm.benvStat.fork)
-    (mem : PtrMem 128 96 M)
-    (run : SFunc.Run fs sevm (St b (key :: ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (afterSload sevm b (mapSlot key s.base))
-      (b.getStorVal sevm.currentTarget (mapSlot key s.base) :: ρ :: R)
-      (s.memory M key) G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact singleMapping_callee_invH s fork.rules_bal_none mem run
-
 def allowanceScratch1 (M : Mem) (owner : B256) : Mem :=
   (M.write 32 (2 : B256).toBytes).write 0 owner.toBytes
 
@@ -271,15 +260,5 @@ theorem allowance_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
-
-theorem allowance_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {owner spender ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : SFunc.Run fs sevm (St b (spender :: owner :: ρ :: R) M G) t_1dd8_c30 o) :
-    ∃ G', o = .returned (St (afterSload sevm b (mapSlot spender (mapSlot owner 2)))
-      (b.getStorVal sevm.currentTarget (mapSlot spender (mapSlot owner 2)) :: ρ :: R)
-      (allowanceScratch2 M owner spender) G') := by
-  rw [← afterSloadH_of_eip2929 fork.rules_access]
-  exact allowance_callee_invH fork.rules_bal_none mem run
 
 end Blanc.Lift.UniswapV2Pair

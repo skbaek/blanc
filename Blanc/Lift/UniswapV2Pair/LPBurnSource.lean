@@ -222,12 +222,6 @@ def LPBurnSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b :
     [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] ∧
   (lpBurnPostH sevm b R M fromWord value G).gasLeft = G
 
-theorem LPBurnSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {st : State} {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) :
-    LPBurnSourceResultH K st sevm b R M fromWord value G = LPBurnSourceResult K st sevm b R M fromWord value G := by
-  unfold LPBurnSourceResultH LPBurnSourceResult
-  simp only [lpBurnPostH_of_covered fork]
-
 theorem lpBurn_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -276,19 +270,6 @@ theorem lpBurn63_source_invH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
       LPBurnSourceResultH K st sevm b R M fromWord value residual := by
   obtain ⟨nonstatic, balance, supply, residual, result⟩ := lpBurn63_invH stateGas bal mem run
   exact ⟨nonstatic, residual, result, lpBurn_source_resultH rep fresh balance supply⟩
-
-/-- The actual successful internal LP burn derives source acceptance and the finite post. -/
-theorem lpBurn63_source_inv {K : WriterKey → Prop} {st : State} {sevm : Sevm}
-    {b : Devm} {R : List B256} {M : Mem} {fromWord value ρ : B256} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (fresh : WriterFreshKeys K (lpMintTouched fromWord.toAdr))
-    (run : SFunc.Run cert.prog sevm (St b (value :: fromWord :: ρ :: R) M G) t_2992_c63 o) :
-    sevm.isStatic = false ∧ ∃ residual,
-      o = .returned (lpBurnPost sevm b R M fromWord value residual) ∧
-      LPBurnSourceResult K st sevm b R M fromWord value residual := by
-  simpa only [LPBurnSourceResultH_of_covered fork, lpBurnPostH_of_covered fork] using
-    lpBurn63_source_invH fork.rules_stateGas_none fork.rules_bal_none mem rep fresh run
 
 
 def lpBurnSourceCharge (sevm : Sevm) (b : Devm) (fromWord : B256) : Nat :=
