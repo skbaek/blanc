@@ -54,7 +54,7 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
     (run : Reach P ImplV2.cert.prog sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
       (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, ImplV2.t_35f6_c18, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
+    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T := by
   unfold ImplV2.t_35f6_c18 at run
   rsd
   rsx
@@ -80,8 +80,8 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨b', M'', G'', T', inside, hT', rfl, lenB, offB⟩ :=
     CdStrWrap.reach erase (show ImplV2.cert.prog[18]? = some ImplV2.t_35f6_c18 from rfl) run hT
   have small : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 34 := by omega
-  exact InitStore.below.mpr (body_reach erase
-    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT')
+  exact InitStore.below.mpr (InitStore.mono (KeysV2Len.cap lenB) (body_reach erase
+    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT'))
 
 end Blanc.Lift.Usdc.InitReachV2
 

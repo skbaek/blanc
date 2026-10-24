@@ -68,7 +68,8 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   have small : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 34 := by omega
   have bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256 :=
     small.trans (Nat.pow_le_pow_right (by decide) (by decide))
-  refine InitStore.below.mpr (InitV2Check.reach erase join_eq ?_ inside hT')
+  refine InitStore.below.mpr (InitStore.mono (KeysV2Len.cap lenB)
+    (InitV2Check.reach erase join_eq ?_ inside hT'))
   intro d' M₁ G₁ tail
   exact InitV2Tail.reach erase entries helper_eq freeDom (by decide) rfl bound tail hT'
 

@@ -182,8 +182,10 @@ theorem callFrag_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
 abbrev KeysV1 (sevm : Sevm) : B256 → Prop :=
   KeysInit (lenAt sevm head1).toNat (lenAt sevm head2).toNat (lenAt sevm head3).toNat
 
-theorem keysV1_eq (sevm : Sevm) : KeysInit06 sevm = KeysV1 sevm := by
-  unfold KeysInit06 Init06.len06 KeysV1 lenAt head1 head2 head3
+theorem keysV1_eq (sevm : Sevm) : KeysInit06 sevm =
+    KeysInit (min (lenAt sevm head1).toNat (2 ^ 160)) (min (lenAt sevm head2).toNat (2 ^ 160))
+      (min (lenAt sevm head3).toNat (2 ^ 160)) := by
+  unfold KeysInit06 Init06.len06 lenAt head1 head2 head3
   rw [show Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32] = (68 : B256) by decide,
     show Bytes.toB256 [4] + Bytes.toB256 [32] = (36 : B256) by decide,
     show Bytes.toB256 [4] = (4 : B256) by decide]
@@ -308,13 +310,13 @@ private theorem e196 : (32 : B256) + 164 = 196 := by decide
 private theorem e228 : (32 : B256) + 196 = 228 := by decide
 
 /-- **The V1 wrapper on a reach.** From memory whose free pointer is `p1 ≥ 96`, a reach of the
-`initialize` wrapper `t_0410_c60` to an `SSTORE` stops at a write of `KeysV1` or of zero. -/
+`initialize` wrapper `t_0410_c60` to an `SSTORE` stops at a write of `KeysInit06` or of zero. -/
 theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {b : Devm} {cv : B256} {R : List B256} {M0 : Mem} {G0 : Nat} {p1 : B256}
     (hfp : memWord M0 64 = p1) (hp96 : 96 ≤ p1.toNat)
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St b (cv :: R) M0 G0, ImplV1.t_0410_c60, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysV1 sevm) T := by
+    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
     fun h => eraseQ h.1
   subst hfp
@@ -360,8 +362,11 @@ theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d
     rfl
   have l3 : (lenAt sevm head3).toNat = (Sevm.dataWord sevm (4 + Sevm.dataWord sevm 68)).toNat :=
     rfl
-  exact InitStore.below.mpr (callee_reach eraseQ hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega)
-    (by omega) (by omega) (by omega) (by omega) (by omega) inside hT')
+  have f1 := hS.fit1
+  rw [keysV1_eq]
+  exact InitStore.below.mpr (InitStore.mono (fun _ h => Init06.KeysInit.cap (by omega)
+    (by omega) (by omega) h) (callee_reach eraseQ hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega)
+    (by omega) (by omega) (by omega) (by omega) (by omega) inside hT'))
 
 theorem route_init : SFunc.selWalk 0x3357162b
     (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
@@ -379,7 +384,6 @@ theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
     fun h => eraseQ h.1
-  rw [keysV1_eq]
   unfold ImplV1.t_0000_c0 at run
   iterate 7 rsx
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩

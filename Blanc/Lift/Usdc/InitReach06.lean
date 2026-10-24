@@ -588,10 +588,18 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
 def len06 (sevm : Sevm) (h : B256) : Nat :=
   (Sevm.dataWord sevm (Bytes.toB256 [4] + Sevm.dataWord sevm h)).toNat
 
-/-- The keys `initialize` writes, with the frame's three decoded string lengths. -/
+theorem KeysInit.cap {L1 L2 L3 B : Nat} (h1 : L1 ≤ B) (h2 : L2 ≤ B) (h3 : L3 ≤ B) {key : B256}
+    (h : KeysInit L1 L2 L3 key) : KeysInit (min L1 B) (min L2 B) (min L3 B) key := by
+  rw [Nat.min_eq_left h1, Nat.min_eq_left h2, Nat.min_eq_left h3]
+  exact h
+
+/-- The keys `initialize` writes, with the frame's three decoded string lengths, each capped at
+`2 ^ 160` (a longer string reverts before any store: the V2-line decoder bounds lengths by
+`2 ^ 32`, V1's memory potential by `2 ^ 160`). -/
 def KeysInit06 (sevm : Sevm) : B256 → Prop :=
-  KeysInit (len06 sevm (Bytes.toB256 [4])) (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32]))
-    (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32]))
+  KeysInit (min (len06 sevm (Bytes.toB256 [4])) (2 ^ 160))
+    (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32])) (2 ^ 160))
+    (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32])) (2 ^ 160))
 
 /-- **The wrapper and body on a reach to an `SSTORE`.** From the dispatcher's memory (free
 pointer `0x80`), a reach of the wrapper to an `SSTORE` stops at a write of `KeysInit06` or of
@@ -678,10 +686,12 @@ theorem wrap06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     A3.keep _ (by rw [hfp, h128]; omega) (by rw [hfp, h128]; omega) (by rw [hfp, h128]; omega)
   have k23 : memWord M3 (memWord M1 64).toNat = memWord M2 (memWord M1 64).toNat :=
     A3.keep _ (by omega) (by omega) (by omega)
-  refine InitStore.below.mpr (body06_reach eraseQ hh E ho
-    (k13.trans (k12.trans A1.hdr)) (k23.trans A2.hdr) A3.hdr
-    (by omega) (by omega) (by omega) (by omega)
-    (by rw [hfp, h128]; omega) (by omega) (by omega) inside hT')
+  refine InitStore.below.mpr (InitStore.mono
+    (fun _ h => KeysInit.cap (by unfold len06; omega) (by unfold len06; omega)
+      (by unfold len06; omega) h)
+    (body06_reach eraseQ hh E ho (k13.trans (k12.trans A1.hdr)) (k23.trans A2.hdr) A3.hdr
+      (by omega) (by omega) (by omega) (by omega)
+      (by rw [hfp, h128]; omega) (by omega) (by omega) inside hT'))
 
 /-- **`initialize` from entry `0` on a reach to an `SSTORE`.** A reach of a V2-line code from
 its solc 0.6 dispatcher, with empty stack and memory and the `initialize` selector, stops at a

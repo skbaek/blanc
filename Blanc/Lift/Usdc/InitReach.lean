@@ -81,10 +81,22 @@ theorem dispatch06_reach {P : Sevm → Devm → Ninst → Devm → Prop} {fs : L
   obtain ⟨-, g, _, hg, run⟩ := Reach.selWalk_inlS erase hw run hT
   exact ⟨g, _, _, hg, run⟩
 
-/-- The keys `initializeV2(name)` writes: slots `4`, `15`, `18` and the name's payload words. -/
-def KeysInitV2 (sevm : Sevm) (key : B256) : Prop :=
+/-- The keys `initializeV2(name)` writes for a name of length `n`: slots `4`, `15`, `18` and
+the name's payload words. -/
+def KeysV2Len (n : Nat) (key : B256) : Prop :=
   key = 4 ∨ key = 15 ∨ key = 18 ∨
-    ∃ j : Nat, j < (CdStrWrap.cdLen sevm + 31) / 32 ∧ key = (4 : B256).toBytes.keccak + j.toB256
+    ∃ j : Nat, j < (n + 31) / 32 ∧ key = (4 : B256).toBytes.keccak + j.toB256
+
+/-- The keys `initializeV2(name)` writes, with the frame's decoded name length capped at the
+decoder's bound `2 ^ 32` (a longer name reverts before any store). -/
+def KeysInitV2 (sevm : Sevm) : B256 → Prop :=
+  KeysV2Len (min (CdStrWrap.cdLen sevm) (2 ^ 32))
+
+theorem KeysV2Len.cap {sevm : Sevm} (h : CdStrWrap.cdLen sevm ≤ 2 ^ 32) (key : B256)
+    (k : KeysV2Len (CdStrWrap.cdLen sevm) key) : KeysInitV2 sevm key := by
+  unfold KeysInitV2
+  rw [Nat.min_eq_left h]
+  exact k
 
 /-- The tags and table indices of one compilation of `initializeV2`'s shared part. -/
 structure V2Tags : Type where
@@ -141,7 +153,7 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : 
     (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
     (run : Reach P fs sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
       (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, tree ν, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
+    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T := by
   unfold tree at run
   rsd
   iterate 5 rsx

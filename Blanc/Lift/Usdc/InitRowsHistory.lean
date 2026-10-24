@@ -26,7 +26,8 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- The keys an initializer frame's code writes under its selector, read from the frame's
 own calldata: `initialize`'s fixed slots and string payload keys, `initializeV2`'s, and
-`initializeV2_2`'s. -/
+`initializeV2_2`'s (with its blacklist mapping keys). Each decoded length is capped at the
+bound past which the frame reverts before any store. -/
 def InitKeys (sevm : Sevm) (key : B256) : Prop :=
   Init06.KeysInit06 sevm key ∨
     (selWord sevm = 0xd608ea64 ∧ KeysInitV2 sevm key) ∨

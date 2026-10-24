@@ -68,7 +68,8 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   have small : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 34 := by omega
   have bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256 :=
     small.trans (Nat.pow_le_pow_right (by decide) (by decide))
-  refine InitStore.below.mpr (InitV2Check.reach erase join_eq ?_ inside hT')
+  refine InitStore.below.mpr (InitStore.mono (KeysV2Len.cap lenB)
+    (InitV2Check.reach erase join_eq ?_ inside hT'))
   intro d' M₁ G₁ tail
   exact InitV2Tail.reach erase entries helper_eq freeDom (by decide) rfl bound tail hT'
 
@@ -281,9 +282,10 @@ def strOff (sevm : Sevm) : Nat := (Sevm.dataWord sevm 36).toNat
 
 def strLen (sevm : Sevm) : Nat := (Sevm.dataWord sevm (4 + Sevm.dataWord sevm 36)).toNat
 
-/-- The keys `initializeV2_2(accounts, symbol)` writes. -/
+/-- The keys `initializeV2_2(accounts, symbol)` writes, with the frame's decoded symbol and
+array lengths capped at the decoder's bound `2 ^ 32` (a longer one reverts before any store). -/
 def KeysInitV2_2 (sevm : Sevm) : B256 → Prop :=
-  BodyKeys sevm (strLen sevm) (arrPtr sevm) (arrLen sevm).toNat
+  BodyKeys sevm (min (strLen sevm) (2 ^ 32)) (arrPtr sevm) (min (arrLen sevm).toNat (2 ^ 32))
 
 theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -330,7 +332,7 @@ theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   have four : Bytes.toB256 [4] = (4 : B256) := by decide
   have big : (Bytes.toB256 [1, 0, 0, 0, 0]).toNat = 2 ^ 32 := by decide
   rw [e36] at off2 len2 inside
-  rw [big] at off2 len2
+  rw [big] at off2 len2 len1
   rw [show Bytes.toB256 [4] + Sevm.dataWord sevm 36 = 4 + Sevm.dataWord sevm 36 by rw [four]]
     at len2 inside
   have ptr : Bytes.toB256 [0x20] + (4 + Sevm.dataWord sevm 36) = (36 + strOff sevm).toB256 := by
@@ -344,6 +346,11 @@ theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   rw [ptr, show Sevm.dataWord sevm (4 + Sevm.dataWord sevm 36) = (strLen sevm).toB256 from
     (toB256_toNat _).symm] at inside
   have small : 36 + strOff sevm + strLen sevm + 32 ≤ 2 ^ 34 := by unfold strOff strLen; omega
+  have hs : min (strLen sevm) (2 ^ 32) = strLen sevm := Nat.min_eq_left (by unfold strLen; omega)
+  have ha : min (arrLen sevm).toNat (2 ^ 32) = (arrLen sevm).toNat :=
+    Nat.min_eq_left (by unfold arrLen; omega)
+  unfold KeysInitV2_2
+  rw [hs, ha]
   exact InitStore.below.mpr (body22 erase
     (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT')
 
