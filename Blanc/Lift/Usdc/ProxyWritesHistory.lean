@@ -103,6 +103,28 @@ theorem ConfiguredHistoryTraceIn.upgradesWithin
   · rw [value]
     exact admin G hG gTarget gCode sel caller
 
+/-- **P1 with the proxy's own writes discharged.** `usdc_pairAllowance_noIncrease` with
+`ProxyRowsApart` from `ProxySlotsApart` and `UpgradesWithin` from `AdminUpgradesWithin`. -/
+theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease_admin
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcContextWorld P W checkpoint.state)
+    (admin : AdminUpgradesWithin P W history.rawFrames)
+    (apartSlot : ImplSlotApart P history.rawNodes)
+    (slotsApart : ProxySlotsApart pair Tr)
+    (rowSep : UsdcRowSep P pair Tr history.rawFrames)
+    (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
+      ¬ UsdcPairException pair G)
+    (initRows : InitRowWritesNonInc P pair Tr history.rawFrames)
+    {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
+    (∀ n ∈ history.rawNodes,
+        ((n.devm.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat) ∧
+      ((future.state.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat :=
+  ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease history capabilities bal world
+    (ConfiguredHistoryTraceIn.upgradesWithin history capabilities bal admin) apartSlot
+    (ConfiguredHistoryTraceIn.proxyRowsApart history capabilities bal slotsApart) rowSep
+    noPairException initRows tracked
+
 /-! ## Positional form, for accounts deployed after the checkpoint
 
 With a base at a committed boundary per account (the shape of the drafted
