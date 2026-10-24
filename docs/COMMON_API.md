@@ -4378,6 +4378,16 @@ In twins: [`Blanc/ExecutionAccountingStepsIn.lean`](../Blanc/ExecutionAccounting
 `Exec.CoreAccounting.eq_coveredFork`). `messageRoot_facts` is fork-free and
 reused unchanged; discharge `hsgF` on `HistFork` with `HistFork.stateGas_none`.
 
+The message/transaction rungs over `F` live in
+[`Blanc/ExecutionAccountingAdmissionIn.lean`](../Blanc/ExecutionAccountingAdmissionIn.lean):
+`AccountingLadderAdmittedIn F` (with `AccountingLadderAdmitted.toIn` and
+`AccountingLadderAdmittedIn.mono`), `processMessageIn`, `processCreateMessageIn`,
+`messageCallIn`, `transactionMessageIn` (all routing `F` through entry
+preparation, the settlement equations through their `_noStateGas` twins),
+`transactionIn` (selected chronology, `InstalledCert` NoDel, the deletion fold
+plus the touched sweep via `sweepTouchedAccounts_get_of_code_nonempty`), and
+`transactionListIn`.
+
 Two consumers exist. The beacon deposit contract observes deposit nodes
 (`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
 ordered writer invocations of its settlement-committed frames, with the storage
