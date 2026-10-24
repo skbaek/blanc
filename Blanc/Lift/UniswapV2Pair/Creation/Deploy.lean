@@ -37,12 +37,28 @@ theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 80000 := by
   unfold ctorCost
   omega
 
-/-- **Deploying the Pair.**  The creation code, executed as a zero-value creation message with
-enough gas under a covered fork, succeeds without error; the new account's code is the certified
+/-- Under a flat `SLOAD` price of at most 2100, the constructor costs at most 80,000 gas under the
+frame's actual storage schedule. -/
+theorem ctorCostH_le (sevm : Sevm) (b : Devm)
+    (flat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100) :
+    ctorCostH sevm b ≤ 80000 := by
+  have := sloadCostH_le (base := w2H sevm b) (key := 5) flat
+  have := sstoreCostH_le (devm := b) (key := 12) (value := 1) flat
+  have := sstoreCostH_le (devm := w1H sevm b) (key := 3)
+    (value := domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget) flat
+  have := sstoreCostH_le (devm := w3H sevm b) (key := 5) (value := sevm.caller.toB256) flat
+  unfold ctorCostH
+  omega
+
+/-- **Deploying the Pair, from rule facts.**  The creation code, executed as a zero-value creation
+message with enough gas under rules without state gas, with `CHAINID` and the shifts, and a flat
+`SLOAD` price (if any) of at most 2100, succeeds without error; the new account's code is the certified
 runtime and its storage is exactly the constructor's. -/
-theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
+theorem pair_createH (msg : Msg) (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
-    (hgas : 2400000 ≤ msg.gas) (hfork : CoveredFork msg.benv.stat.fork)
+    (hgas : 2400000 ≤ msg.gas) (hsg : msg.benv.stat.rules.stateGas = none)
+    (hchain : msg.benv.stat.rules.op.chainId = true) (hshifts : msg.benv.stat.rules.op.shifts = true)
+    (hflat : ∀ g, msg.benv.stat.rules.access = .flat g → g.sload ≤ 2100)
     (hstatic : msg.isStatic = false)
     (hmax : 11293 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post, processCreateMessage msg = .ok post ∧
@@ -64,22 +80,24 @@ theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
       (initSevm (createSeed msg benv)).currentTarget).get x = 0 := fun x => by
     rw [hempty]
     rfl
-  have hle := ctorCost_le (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv))
+  have hle := ctorCostH_le (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv))
+    (by rw [hstat]; exact hflat)
   obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
-    ctor_run (sevm := initSevm (createSeed msg benv)) (by rw [hstat]; exact hfork) hstatic hcode
-      hvalue hstor (msg.gas - ctorCost (initSevm (createSeed msg benv))
+    ctor_runH (sevm := initSevm (createSeed msg benv)) (by rw [hstat]; exact hsg)
+      (by rw [hstat]; exact hchain) (by rw [hstat]; exact hshifts) hstatic hcode
+      hvalue hstor (msg.gas - ctorCostH (initSevm (createSeed msg benv))
         (initDevm (createSeed msg benv)))
   have hpre : St (initDevm (createSeed msg benv)) [] Mem.empty
-      (msg.gas - ctorCost (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv)) +
-        ctorCost (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv))) =
+      (msg.gas - ctorCostH (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv)) +
+        ctorCostH (initSevm (createSeed msg benv)) (initDevm (createSeed msg benv))) =
       initDevm (createSeed msg benv) :=
     pre_eq_St rfl rfl (by show _ = msg.gas; omega)
   rw [hpre] at hrun
   have hwin : raw.output = Blanc.Lift.UniswapV2Pair.code.toList := by
     rw [hout, runtimeWindow_eq]
   have hlen : raw.output.length = 11293 := by rw [hout, runtimeWindow_length]
-  obtain ⟨post, hpost, hcodePost, hstorPost, herrPost⟩ := liftCreate_ok cert_check jumps_ok msg
-    hcodeAddress hcode hfork htransfer hrun (by rw [herr]; rfl)
+  obtain ⟨post, hpost, hcodePost, hstorPost, herrPost⟩ := liftCreate_okH cert_check jumps_ok msg
+    hcodeAddress hcode hsg htransfer hrun (by rw [herr]; rfl)
     (by rw [hwin]; exact runtime_head)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega) (by rw [hlen]; exact hmax)
   refine ⟨post, hpost, hcodePost.trans hwin, ?_, herrPost⟩
@@ -95,6 +113,22 @@ theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
   rw [hst, hempty, hstat]
   rfl
 
+/-- **Deploying the Pair.**  The creation code, executed as a zero-value creation message with
+enough gas under a covered fork, succeeds without error; the new account's code is the certified
+runtime and its storage is exactly the constructor's. -/
+theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
+    (hgas : 2400000 ≤ msg.gas) (hfork : CoveredFork msg.benv.stat.fork)
+    (hstatic : msg.isStatic = false)
+    (hmax : 11293 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ post, processCreateMessage msg = .ok post ∧
+      (post.getCode msg.currentTarget).toList = Blanc.Lift.UniswapV2Pair.code.toList ∧
+      Devm.getStor post msg.currentTarget =
+        ctorStor msg.benv.stat.chainId.toB256 msg.currentTarget msg.caller Stor.empty ∧
+      post.error = .none :=
+  pair_createH msg hvalue hcodeAddress hcode hgas hfork.rules_stateGas_none hfork.rules_chainId
+    hfork.rules_shifts (fun _ h => by rw [hfork.rules_access] at h; cases h) hstatic hmax
+
 /-- Every covered fork admits the Pair's runtime and creation code sizes. -/
 theorem covered_codeLimits {s : BenvStat} (h : CoveredFork s.fork) :
     11293 ≤ s.rules.code.maxCodeSize ∧ 11636 ≤ s.rules.code.maxInitCodeSize := by
@@ -102,6 +136,59 @@ theorem covered_codeLimits {s : BenvStat} (h : CoveredFork s.fork) :
   exact h.cases (motive := fun f => 11293 ≤ (Fork.ruleSet f).code.maxCodeSize ∧
     11636 ≤ (Fork.ruleSet f).code.maxInitCodeSize) (by decide) (by decide) (by decide)
     (by decide)
+
+/-- **Deploying the Pair by `CREATE2`, from rule facts.**  As `pair_create2`, under the rule facts of
+`pair_createH`, `CREATE2` available and the Pair's code-size limits (the init-code bound only where
+`creation.initCodeLimit` holds), charging `create2ChargeH`. In a non-static frame (the factory),
+a zero-endowment `CREATE2` whose memory window holds the Pair creation code, with the creator's
+nonce below the maximum, positive depth, an empty target and at least 2,400,000 gas forwarded,
+is a compiled step.  It pushes the address `create2NewAddress creator salt code`, and the world
+after it holds the certified runtime there with the constructor storage: `unlocked = 1`, the
+domain separator over the creating frame's chain id and that address, and the creator as
+`factory`. -/
+theorem pair_create2H {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {i sz salt : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hchain : sevm.benvStat.rules.op.chainId = true)
+    (hshifts : sevm.benvStat.rules.op.shifts = true)
+    (hflat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100)
+    (hcreate2 : sevm.benvStat.rules.op.create2 = true)
+    (hcodeMax : 11293 ≤ sevm.benvStat.rules.code.maxCodeSize)
+    (hinitMax : sevm.benvStat.rules.creation.initCodeLimit = true →
+      11636 ≤ sevm.benvStat.rules.code.maxInitCodeSize)
+    (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2ChargeH sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) =
+        ctorStor sevm.benvStat.chainId.toB256
+          (create2NewAddress sevm.currentTarget salt code.toList) sevm.currentTarget
+          Stor.empty := by
+  have hsz : sz.toNat = 11636 := by
+    have hlen := congrArg List.length hinit
+    rw [create2InitCode, Array.sliceD_eq_map, List.length_map, List.length_range,
+      code_toList_length] at hlen
+    exact hlen
+  rw [← hinit] at hfresh ⊢
+  obtain ⟨child, hchild, hcode, hstor, herr⟩ := pair_createH (createMsg sevm
+      (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+      (except64th G) 0 (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))
+      (create2InitCode M i sz)) rfl rfl
+    (by
+      show ByteArray.mk ⟨create2InitCode M i sz⟩ = code
+      rw [hinit, ByteArray.toList_eq_toList_data])
+    hgas hsg hchain hshifts hflat rfl hcodeMax
+  refine ⟨_, create2_runCompiledH hsg hcreate2 (fun h => by rw [hsz]; exact hinitMax h) hstatic
+    (not_lt_of_ge (B256.zero_le _)) hnonce hdepth hfresh hchild herr hroom, rfl, hcode, hstor⟩
 
 /-- **Deploying the Pair by `CREATE2`.**  In a non-static frame under a covered fork (the factory),
 a zero-endowment `CREATE2` whose memory window holds the Pair creation code, with the creator's
@@ -130,22 +217,12 @@ theorem pair_create2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat
           (create2NewAddress sevm.currentTarget salt code.toList) sevm.currentTarget
           Stor.empty := by
   have hlimits := covered_codeLimits hfork
-  have hsz : sz.toNat = 11636 := by
-    have hlen := congrArg List.length hinit
-    rw [create2InitCode, Array.sliceD_eq_map, List.length_map, List.length_range,
-      code_toList_length] at hlen
-    exact hlen
-  rw [← hinit] at hfresh ⊢
-  obtain ⟨child, hchild, hcode, hstor, herr⟩ := pair_create (createMsg sevm
-      (create2Prepared sevm b S M G i sz
-        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
-      (except64th G) 0 (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))
-      (create2InitCode M i sz)) rfl rfl
-    (by
-      show ByteArray.mk ⟨create2InitCode M i sz⟩ = code
-      rw [hinit, ByteArray.toList_eq_toList_data])
-    hgas hfork rfl hlimits.1
-  refine ⟨_, create2_runCompiled hfork (by rw [hsz]; exact hlimits.2) hstatic
-    (not_lt_of_ge (B256.zero_le _)) hnonce hdepth hfresh hchild herr hroom, rfl, hcode, hstor⟩
+  have hlim : sevm.benvStat.rules.creation.initCodeLimit = true :=
+    hfork.cases (motive := fun f => (Fork.ruleSet f).creation.initCodeLimit = true) rfl rfl rfl rfl
+  rw [← create2ChargeH_of_initCodeLimit hlim]
+  exact pair_create2H hfork.rules_stateGas_none hfork.rules_chainId hfork.rules_shifts
+    (fun _ h => by rw [hfork.rules_access] at h; cases h)
+    (hfork.cases (motive := fun f => (Fork.ruleSet f).op.create2 = true) rfl rfl rfl rfl)
+    hlimits.1 (fun _ => hlimits.2) hstatic hinit hnonce hdepth hfresh hgas hroom
 
 end Blanc.Lift.UniswapV2Pair.Creation

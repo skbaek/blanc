@@ -6079,7 +6079,13 @@ contract-neutral.
   [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
   [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
-  form there is the modern statement from `CoveredFork`;
+  form there is the modern statement from `CoveredFork`; the forward creation kit under
+  historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with their
+  `_of_eip2929` equations and `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
+  settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
+  `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
+  `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

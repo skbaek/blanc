@@ -455,6 +455,7 @@ import Blanc.DripStackSafetyCertificate
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.TerminalSafety
 import Blanc.Lift.Weth9.FootHistory
+import Blanc.Lift.Weth9.DeployHistory
 import Blanc.Lift.Weth9.FootPrefix
 import Blanc.Lift.Weth9.Model
 import Blanc.Lift.Weth9.Ledger
@@ -1727,3 +1728,4 @@ import Blanc.Lift.HistStaticCallGuard
 import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
+import Blanc.Lift.HistCreate

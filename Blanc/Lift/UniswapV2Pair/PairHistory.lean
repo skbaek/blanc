@@ -996,4 +996,27 @@ theorem pair_history_representedHist {pair : Adr} {cfg : ChainConfig}
     HistFork.neutral BodyStageCapabilities.historical (fun _ hf => hf.dataNonZero_ge)
     trace installed initial fresh
 
+/-- **The Pair storage from its initialized checkpoint, through a historical-domain history.**
+From the storage `Creation.pair_create2_initializedH` (or `_muirGlacier`) establishes after
+deployment by `factory` and `initialize`, with no initially tracked row: the runtime stays
+installed and the future Pair storage represents some model state over touched rows only. The
+replay identifying that state with `initializedState` advanced by the committed invocations is the
+committed-history ladder, not stated here. -/
+theorem pair_history_initializedHist {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeysIn pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ (finish : State) (K' : WriterKey → Prop),
+      (∀ k, K' k → k ∈ pairHistoryTouchedKeysIn pair trace) ∧
+      WriterRep K' (future.state.getStor pair) finish := by
+  obtain ⟨code, finish, K', inside, rep⟩ :=
+    pair_history_representedHist trace installed initial fresh
+  refine ⟨code, finish, K', fun k tracked => ?_, rep⟩
+  rcases inside k tracked with none | row
+  · exact none.elim
+  · exact row
+
 end Blanc.Lift.UniswapV2Pair

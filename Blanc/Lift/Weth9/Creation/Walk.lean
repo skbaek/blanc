@@ -4,6 +4,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.Deploy
 import Blanc.SystemCallForward
 import Blanc.Lift.ExactLeaf
+import Blanc.Lift.HistCreate
 
 /-!
 # The WETH9 constructor, walked
@@ -37,16 +38,30 @@ structure CtorFrame (sevm : Sevm) : Prop where
   fork : CoveredFork sevm.benvStat.fork
   static : sevm.isStatic = false
 
+/-- The frame facts the walk needs of the creation frame under historical rule facts: no state
+gas (the `SLOAD`/`SSTORE` steps are charged under the frame's actual storage schedule) and a
+non-static frame. -/
+structure CtorFrameH (sevm : Sevm) : Prop where
+  stateGas : sevm.benvStat.rules.stateGas = none
+  static : sevm.isStatic = false
+
+theorem CtorFrame.toH {sevm : Sevm} (fr : CtorFrame sevm) : CtorFrameH sevm :=
+  ⟨fr.fork.rules_stateGas_none, fr.static⟩
+
 /-! ## The string-storing helper (entry 2) -/
 
 /-- The helper's exact cost from the world `b`, storing `v` at slot `p`. -/
 def helperCost (sevm : Sevm) (b : Devm) (p v : B256) : Nat :=
   115 + sstoreCost sevm (afterSload sevm b p) p v + 172 + sloadCost sevm b p + 7
 
-/-- **Storing a short string** (`0 < ℓ < 32` bytes, left-aligned data word `w` at `s` in memory)
+/-- The helperH's exact cost from the world `b`, storing `v` at slot `p`. -/
+def helperCostH (sevm : Sevm) (b : Devm) (p v : B256) : Nat :=
+  115 + sstoreCostH sevm (afterSloadH sevm b p) p v + 172 + sloadCostH sevm b p + 7
+
+/-- **Storing a short string**, under the frame's actual storage schedule (`0 < ℓ < 32` bytes, left-aligned data word `w` at `s` in memory)
 into the empty slot `p`: the slot receives `w | 2ℓ`, the scratch word `0` receives `p`, and the
-helper returns `p`. -/
-theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ : Nat}
+helperH returns `p`. -/
+theorem helperH {sevm : Sevm} (fr : CtorFrameH sevm) {b : Devm} {M : Mem} {n ℓ : Nat}
     {s p r w : B256} {R : List B256} (hℓ : ℓ < 32) (hsz : M.size = n) (hn : n % 32 = 0)
     (h32 : 32 ≤ n) (hs : s.toNat + 32 ≤ n) (hR : R.length < 1000)
     (hold : b.getStorVal sevm.currentTarget p = 0)
@@ -55,22 +70,22 @@ theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ :
     (hsentry : gCallStipend < G + 115) :
     SFunc.RunExact prog sevm
       (St b (Nat.toB256 ℓ :: s :: p :: r :: R) M
-        (G + helperCost sevm b p (Nat.toB256 (ℓ + ℓ) ||| w)))
+        (G + helperCostH sevm b p (Nat.toB256 (ℓ + ℓ) ||| w)))
       t_00c8_c2
-      (.returned (St (afterSstore sevm (afterSload sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w))
+      (.returned (St (afterSstoreH sevm (afterSloadH sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w))
         (p :: R) (M.write 0 p.toBytes) G)) := by
   have hsz' : (M.write 0 p.toBytes).size = n := by
     rw [Mem.size_write_word_aligned (by omega) (by omega), hsz]; omega
   have hgt : ∀ x : B256, B256.gtCheck x x = 0 := fun x => by
     unfold B256.gtCheck; rw [ite_eq_right (lt_irrefl x)]
-  rw [show G + helperCost sevm b p (Nat.toB256 (ℓ + ℓ) ||| w) =
-    G + 115 + sstoreCost sevm (afterSload sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w) + 172 +
-      sloadCost sevm b p + 7 by unfold helperCost; omega]
+  rw [show G + helperCostH sevm b p (Nat.toB256 (ℓ + ℓ) ||| w) =
+    G + 115 + sstoreCostH sevm (afterSloadH sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w) + 172 +
+      sloadCostH sevm b p + 7 by unfold helperCostH; omega]
   unfold t_00c8_c2
   refine rx_dest ?_
   refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_sload_sel fr.fork (by simp only [List.length_cons]; omega) ?_
+  refine rx_sload_selH fr.stateGas (by simp only [List.length_cons]; omega) ?_
   rw [hold]
   refine rx_push (w := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
@@ -123,7 +138,7 @@ theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ :
   refine rx_add' (toB256_add_toB256 (by omega)) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_or rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_dup (n := 5) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
-  refine rx_sstore fr.fork (by omega) fr.static ?_
+  refine rx_sstoreH fr.stateGas (fun _ => by omega) fr.static ?_
   refine rx_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_jump (j := 1) rfl ?_
   unfold t_0137_c1
@@ -255,6 +270,19 @@ def ctorCost (sevm : Sevm) (b : Devm) : Nat :=
     sloadCost sevm (wSymbol sevm b) 2 + 28 + helperCost sevm (wName sevm b) 1 symbolSlotWord +
     109 + helperCost sevm b 0 nameSlotWord + 124
 
+/-- The worlds of the main walk under the frame's actual storage schedule: after the name, after the symbol, after reading decimals. -/
+def wNameH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b 0) 0 nameSlotWord
+def wSymbolH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm (wNameH sevm b) 1) 1 symbolSlotWord
+def wDecimalsH (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm (wSymbolH sevm b) 2
+
+/-- The constructor's exact cost from the world `b`. -/
+def ctorCostH (sevm : Sevm) (b : Devm) : Nat :=
+  48 + copyCost + sstoreCostH sevm (wDecimalsH sevm b) 2 18 + 40 +
+    sloadCostH sevm (wSymbolH sevm b) 2 + 28 + helperCostH sevm (wNameH sevm b) 1 symbolSlotWord +
+    109 + helperCostH sevm b 0 nameSlotWord + 124
+
 theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 80000 := by
   have hl : ∀ (b : Devm) (k : B256), sloadCost sevm b k ≤ 2100 := by
     intro b k; unfold sloadCost; split <;> decide
@@ -270,16 +298,45 @@ theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 80000 := by
   rw [copyCost_eq]
   omega
 
+/-- Under a flat `SLOAD` price of at most 2100, the constructor costs at most 80,000 gas under the
+frame's actual storage schedule. -/
+theorem ctorCostH_le (sevm : Sevm) (b : Devm)
+    (flat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100) :
+    ctorCostH sevm b ≤ 80000 := by
+  have hl : ∀ (b : Devm) (k : B256), sloadCostH sevm b k ≤ 2100 := fun _ _ => sloadCostH_le flat
+  have hs : ∀ (b : Devm) (k v : B256), sstoreCostH sevm b k v ≤ 22100 :=
+    fun _ _ _ => sstoreCostH_le flat
+  unfold ctorCostH helperCostH
+  have := hl b 0
+  have := hl (wNameH sevm b) 1
+  have := hl (wSymbolH sevm b) 2
+  have := hs (afterSloadH sevm b 0) 0 nameSlotWord
+  have := hs (afterSloadH sevm (wNameH sevm b) 1) 1 symbolSlotWord
+  have := hs (wDecimalsH sevm b) 2 18
+  rw [copyCost_eq]
+  omega
+
 /-! ## The whole constructor -/
 
 /-- The constructor's storage: the fresh storage with name, symbol and decimals written. -/
 def ctorStor (s : Stor) : Stor := ((s.set 0 nameSlotWord).set 1 symbolSlotWord).set 2 18
 
-/-- The walk up to the name string's storage (entry 0 through the first helper call). -/
-theorem segName {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
+/-- The constructor's final world, projected before substituting a memory image. -/
+theorem ctor_return_state (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
+    (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+      [Nat.toB256 0, Nat.toB256 3124] M G) (Nat.toB256 0) (Nat.toB256 3124) []).state =
+      ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
+        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
+  rw [returnPost_state, St_state]
+  rw [Blanc.afterSstore_state]
+  unfold wDecimals wSymbol wName
+  simp only [Blanc.Lift.NodeWalk.afterSload_state, Blanc.afterSstore_state]
+
+/-- The walk up to the name string's storage (entry 0 through the first helperH call). -/
+theorem segNameH {sevm : Sevm} (fr : CtorFrameH sevm) {b : Devm}
     (hold0 : b.getStorVal sevm.currentTarget 0 = 0) {X : Nat} (hX : 2300 ≤ X) {o : Outcome}
-    (k : SFunc.RunExact prog sevm (St (wName sevm b) [0] m5 X) t_004f_c0 o) :
-    SFunc.RunExact prog sevm (St b [] Mem.empty (X + helperCost sevm b 0 nameSlotWord + 8 + 116))
+    (k : SFunc.RunExact prog sevm (St (wNameH sevm b) [0] m5 X) t_004f_c0 o) :
+    SFunc.RunExact prog sevm (St b [] Mem.empty (X + helperCostH sevm b 0 nameSlotWord + 8 + 116))
       t_0000_c0 o := by
   unfold t_0000_c0
   refine rx_push (w := Nat.toB256 96) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
@@ -321,17 +378,17 @@ theorem segName {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
   refine rx_swap (n := 1) (S' := [Nat.toB256 128, Nat.toB256 13, 0, Nat.toB256 0x4f]) rfl ?_
   refine rx_swap (n := 0) (S' := [Nat.toB256 13, Nat.toB256 128, 0, Nat.toB256 0x4f]) rfl ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_callRet (j := 2) rfl (helper fr (ℓ := 13) (n := 160) (R := []) (by decide) m4_size
+  refine rx_callRet (j := 2) rfl (helperH fr (ℓ := 13) (n := 160) (R := []) (by decide) m4_size
     (by decide) (by decide) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) hold0 (by decide +kernel) nameWord_mask
     (by unfold gCallStipend; omega)) k
 
 /-- The walk of the symbol string's storage (from the first call's return through the second
-helper call). -/
-theorem segSymbol {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
-    (hold1 : (wName sevm b).getStorVal sevm.currentTarget 1 = 0) {X : Nat} (hX : 2300 ≤ X)
-    {o : Outcome} (k : SFunc.RunExact prog sevm (St (wSymbol sevm b) [1] m9 X) t_009b_c0 o) :
+helperH call). -/
+theorem segSymbolH {sevm : Sevm} (fr : CtorFrameH sevm) {b : Devm}
+    (hold1 : (wNameH sevm b).getStorVal sevm.currentTarget 1 = 0) {X : Nat} (hX : 2300 ≤ X)
+    {o : Outcome} (k : SFunc.RunExact prog sevm (St (wSymbolH sevm b) [1] m9 X) t_009b_c0 o) :
     SFunc.RunExact prog sevm
-      (St (wName sevm b) [0] m5 (X + helperCost sevm (wName sevm b) 1 symbolSlotWord + 8 + 101))
+      (St (wNameH sevm b) [0] m5 (X + helperCostH sevm (wNameH sevm b) 1 symbolSlotWord + 8 + 101))
       t_004f_c0 o := by
   unfold t_004f_c0
   refine rx_dest ?_
@@ -371,19 +428,19 @@ theorem segSymbol {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
   refine rx_swap (n := 1) (S' := [Nat.toB256 192, Nat.toB256 4, 1, Nat.toB256 0x9b]) rfl ?_
   refine rx_swap (n := 0) (S' := [Nat.toB256 4, Nat.toB256 192, 1, Nat.toB256 0x9b]) rfl ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_callRet (j := 2) rfl (helper fr (ℓ := 4) (n := 224) (R := []) (by decide) m8_size
+  refine rx_callRet (j := 2) rfl (helperH fr (ℓ := 4) (n := 224) (R := []) (by decide) m8_size
     (by decide) (by decide) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) hold1 (by decide +kernel) symbolWord_mask
     (by unfold gCallStipend; omega)) k
 
 /-- The walk from the second call's return: decimals, the value check, the runtime copy and
 `RETURN`. -/
-theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+theorem segDecimalsH {sevm : Sevm} (fr : CtorFrameH sevm) (hcode : sevm.code = code)
     (hvalue : sevm.value = 0) {b : Devm}
-    (hold2 : (wSymbol sevm b).getStorVal sevm.currentTarget 2 = 0) {G : Nat} (hG : 2300 ≤ G) :
+    (hold2 : (wSymbolH sevm b).getStorVal sevm.currentTarget 2 = 0) {G : Nat} (hG : 2300 ≤ G) :
     SFunc.RunExact prog sevm
-      (St (wSymbol sevm b) [1] m9 (G + 3 + copyCost + 45 +
-        sstoreCost sevm (wDecimals sevm b) 2 18 + 40 + sloadCost sevm (wSymbol sevm b) 2 + 28))
-      t_009b_c0 (.halted (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+      (St (wSymbolH sevm b) [1] m9 (G + 3 + copyCost + 45 +
+        sstoreCostH sevm (wDecimalsH sevm b) 2 18 + 40 + sloadCostH sevm (wSymbolH sevm b) 2 + 28))
+      t_009b_c0 (.halted (returnPost (St (afterSstoreH sevm (wDecimalsH sevm b) 2 18)
         [Nat.toB256 0, Nat.toB256 3124] m10w G) (Nat.toB256 0)
         (Nat.toB256 3124) [])) := by
   have hbexp : B256.bexp 256 0 = 1 := by decide +kernel
@@ -399,7 +456,7 @@ theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = cod
   refine rx_exp' (c := 10) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [hbexp]
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
-  refine rx_sload_sel fr.fork (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sload_selH fr.stateGas (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [hold2]
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_push (w := 255) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
@@ -413,7 +470,7 @@ theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = cod
   refine rx_mul (v := 18) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_or (v := 18) (b256_or_zero _) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) (S' := [2, 18, 18]) rfl ?_
-  refine rx_sstore fr.fork (by unfold gCallStipend; omega) fr.static ?_
+  refine rx_sstoreH fr.stateGas (fun _ => by unfold gCallStipend; omega) fr.static ?_
   refine rx_pop ?_
   refine rx_callvalue (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   rw [hvalue]
@@ -448,24 +505,24 @@ theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = cod
 
 
 /-- The constructor's final world, projected before substituting a memory image. -/
-theorem ctor_return_state (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
-    (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+theorem ctor_return_stateH (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
+    (returnPost (St (afterSstoreH sevm (wDecimalsH sevm b) 2 18)
       [Nat.toB256 0, Nat.toB256 3124] M G) (Nat.toB256 0) (Nat.toB256 3124) []).state =
       ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
         sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
   rw [returnPost_state, St_state]
-  rw [Blanc.afterSstore_state]
-  unfold wDecimals wSymbol wName
-  simp only [Blanc.Lift.NodeWalk.afterSload_state, Blanc.afterSstore_state]
+  rw [afterSstoreH_state]
+  unfold wDecimalsH wSymbolH wNameH
+  simp only [afterSloadH_state, afterSstoreH_state]
 
-/-- **The WETH9 constructor, gas-exact**: from a fresh account (empty storage, zero call value)
-with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
+/-- **The WETH9 constructor, gas-exact, from rule facts** (`CtorFrameH`): from a fresh account (empty storage, zero call value)
+with an empty stack and memory and `G + ctorCostH` gas, the lifted constructor halts with `G`
 gas left, returning the runtime window, with the world's error unchanged and the name, symbol
 and decimals written. -/
-theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+theorem ctor_run_framedH {sevm : Sevm} (fr : CtorFrameH sevm) (hcode : sevm.code = code)
     (hvalue : sevm.value = 0) {b : Devm}
     (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
+    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCostH sevm b)) post ∧
       post.output = runtimeWindow ∧ post.error = b.error ∧
       Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
       post.gasLeft = G ∧
@@ -484,22 +541,22 @@ theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code =
     rwa [runtimeWindow_length] at this
   have hstor' : ∀ x, (Devm.getStor b ca).get x = 0 := hstor
   have hold0 : b.getStorVal ca 0 = 0 := hstor' 0
-  have hold1 : (wName sevm b).getStorVal ca 1 = 0 := by
-    show (Devm.getStor (wName sevm b) ca).get 1 = 0
-    rw [wName, afterSstore_getStor_self, afterSload_getStor, Stor.get_set_ite,
+  have hold1 : (wNameH sevm b).getStorVal ca 1 = 0 := by
+    show (Devm.getStor (wNameH sevm b) ca).get 1 = 0
+    rw [wNameH, afterSstoreH_getStor_self, afterSloadH_getStor, Stor.get_set_ite,
       ite_eq_right (by decide)]
     exact hstor' 1
-  have hold2 : (wSymbol sevm b).getStorVal ca 2 = 0 := by
-    show (Devm.getStor (wSymbol sevm b) ca).get 2 = 0
-    rw [wSymbol, afterSstore_getStor_self, afterSload_getStor, Stor.get_set_ite,
-      ite_eq_right (by decide), wName, afterSstore_getStor_self, afterSload_getStor,
+  have hold2 : (wSymbolH sevm b).getStorVal ca 2 = 0 := by
+    show (Devm.getStor (wSymbolH sevm b) ca).get 2 = 0
+    rw [wSymbolH, afterSstoreH_getStor_self, afterSloadH_getStor, Stor.get_set_ite,
+      ite_eq_right (by decide), wNameH, afterSstoreH_getStor_self, afterSloadH_getStor,
       Stor.get_set_ite, ite_eq_right (by decide)]
     exact hstor' 2
-  refine ⟨returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+  refine ⟨returnPost (St (afterSstoreH sevm (wDecimalsH sevm b) 2 18)
       [Nat.toB256 0, Nat.toB256 3124] m10 G) (Nat.toB256 0) (Nat.toB256 3124) [], ⟨t_0000_c0, rfl,
     ?_⟩, ?_⟩
   swap
-  · obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (afterSstore sevm (wDecimals sevm b) 2 18)
+  · obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (afterSstoreH sevm (wDecimalsH sevm b) 2 18)
       [Nat.toB256 0, Nat.toB256 3124] m10 G) (Nat.toB256 0) (Nat.toB256 3124) []
     refine ⟨?_, ?_, ?_, p4, ?_⟩
     · rw [p1]
@@ -507,16 +564,125 @@ theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code =
         toNat_toB256' (show 0 < 2 ^ 256 by decide)]
       exact hout
     · rw [p2, St_error]
-      simp only [afterSstore_error, wDecimals, wSymbol, wName, afterSload_error]
+      simp only [afterSstoreH_error, wDecimalsH, wSymbolH, wNameH, afterSloadH_error]
     · rw [p3, St_getStor, hca]
-      simp only [afterSstore_getStor_self, wDecimals, wSymbol, wName, afterSload_getStor,
+      simp only [afterSstoreH_getStor_self, wDecimalsH, wSymbolH, wNameH, afterSloadH_getStor,
         ctorStor]
-    · exact ctor_return_state sevm b m10 G
-  rw [show G + ctorCost sevm b = G + 3 + copyCost + 45 +
-      sstoreCost sevm (wDecimals sevm b) 2 18 + 40 + sloadCost sevm (wSymbol sevm b) 2 + 28 +
-      helperCost sevm (wName sevm b) 1 symbolSlotWord + 8 + 101 +
-      helperCost sevm b 0 nameSlotWord + 8 + 116 by unfold ctorCost; omega]
-  exact segName fr hold0 (by omega) (segSymbol fr hold1 (by omega)
-    (segDecimals fr hcode hvalue hold2 hG))
+    · exact ctor_return_stateH sevm b m10 G
+  rw [show G + ctorCostH sevm b = G + 3 + copyCost + 45 +
+      sstoreCostH sevm (wDecimalsH sevm b) 2 18 + 40 + sloadCostH sevm (wSymbolH sevm b) 2 + 28 +
+      helperCostH sevm (wNameH sevm b) 1 symbolSlotWord + 8 + 101 +
+      helperCostH sevm b 0 nameSlotWord + 8 + 116 by unfold ctorCostH; omega]
+  exact segNameH fr hold0 (by omega) (segSymbolH fr hold1 (by omega)
+    (segDecimalsH fr hcode hvalue hold2 hG))
+
+/-! ## Modern statements from the historical walk -/
+
+theorem helperCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm)
+    (p v : B256) : helperCostH sevm b p v = helperCost sevm b p v := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
+  simp only [helperCostH, helperCost, afterSloadH_of_eip2929 hfork.rules_access,
+    sstoreCostH_of_eip2929 hfork.rules_access nm, sloadCostH_of_eip2929 hfork.rules_access]
+
+theorem wNameH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
+    wNameH sevm b = wName sevm b := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
+  simp only [wNameH, wName, afterSloadH_of_eip2929 hfork.rules_access,
+    afterSstoreH_of_eip2929 hfork.rules_access nm]
+
+theorem wSymbolH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
+    wSymbolH sevm b = wSymbol sevm b := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
+  simp only [wSymbolH, wSymbol, wNameH_covered hfork, afterSloadH_of_eip2929 hfork.rules_access,
+    afterSstoreH_of_eip2929 hfork.rules_access nm]
+
+theorem wDecimalsH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
+    wDecimalsH sevm b = wDecimals sevm b := by
+  simp only [wDecimalsH, wDecimals, wSymbolH_covered hfork,
+    afterSloadH_of_eip2929 hfork.rules_access]
+
+theorem ctorCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) (b : Devm) :
+    ctorCostH sevm b = ctorCost sevm b := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := by rw [hfork.rules_sstore]
+  simp only [ctorCostH, ctorCost, helperCostH_covered hfork, wNameH_covered hfork,
+    wSymbolH_covered hfork, wDecimalsH_covered hfork, sstoreCostH_of_eip2929 hfork.rules_access nm,
+    sloadCostH_of_eip2929 hfork.rules_access]
+
+/-- **Storing a short string** (`0 < ℓ < 32` bytes, left-aligned data word `w` at `s` in memory)
+into the empty slot `p`: the slot receives `w | 2ℓ`, the scratch word `0` receives `p`, and the
+helper returns `p`. -/
+theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ : Nat}
+    {s p r w : B256} {R : List B256} (hℓ : ℓ < 32) (hsz : M.size = n) (hn : n % 32 = 0)
+    (h32 : 32 ≤ n) (hs : s.toNat + 32 ≤ n) (hR : R.length < 1000)
+    (hold : b.getStorVal sevm.currentTarget p = 0)
+    (hw : Bytes.toB256 ((M.write 0 p.toBytes).read s.toNat 32).1 = w)
+    (hmask : (~~~ Bytes.toB256 [0xff]) &&& w = w) {G : Nat}
+    (hsentry : gCallStipend < G + 115) :
+    SFunc.RunExact prog sevm
+      (St b (Nat.toB256 ℓ :: s :: p :: r :: R) M
+        (G + helperCost sevm b p (Nat.toB256 (ℓ + ℓ) ||| w)))
+      t_00c8_c2
+      (.returned (St (afterSstore sevm (afterSload sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w))
+        (p :: R) (M.write 0 p.toBytes) G)) := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := (by rw [fr.fork.rules_sstore])
+  rw [← helperCostH_covered fr.fork, ← afterSloadH_of_eip2929 fr.fork.rules_access,
+    ← afterSstoreH_of_eip2929 fr.fork.rules_access nm]
+  exact helperH fr.toH hℓ hsz hn h32 hs hR hold hw hmask hsentry
+
+/-- The walk up to the name string's storage (entry 0 through the first helper call). -/
+theorem segName {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
+    (hold0 : b.getStorVal sevm.currentTarget 0 = 0) {X : Nat} (hX : 2300 ≤ X) {o : Outcome}
+    (k : SFunc.RunExact prog sevm (St (wName sevm b) [0] m5 X) t_004f_c0 o) :
+    SFunc.RunExact prog sevm (St b [] Mem.empty (X + helperCost sevm b 0 nameSlotWord + 8 + 116))
+      t_0000_c0 o := by
+  rw [← wNameH_covered fr.fork] at k
+  rw [← helperCostH_covered fr.fork]
+  exact segNameH fr.toH hold0 hX k
+
+/-- The walk of the symbol string's storage (from the first call's return through the second
+helper call). -/
+theorem segSymbol {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm}
+    (hold1 : (wName sevm b).getStorVal sevm.currentTarget 1 = 0) {X : Nat} (hX : 2300 ≤ X)
+    {o : Outcome} (k : SFunc.RunExact prog sevm (St (wSymbol sevm b) [1] m9 X) t_009b_c0 o) :
+    SFunc.RunExact prog sevm
+      (St (wName sevm b) [0] m5 (X + helperCost sevm (wName sevm b) 1 symbolSlotWord + 8 + 101))
+      t_004f_c0 o := by
+  rw [← wNameH_covered fr.fork] at hold1
+  rw [← wSymbolH_covered fr.fork] at k
+  rw [← helperCostH_covered fr.fork, ← wNameH_covered fr.fork]
+  exact segSymbolH fr.toH hold1 hX k
+
+/-- The walk from the second call's return: decimals, the value check, the runtime copy and
+`RETURN`. -/
+theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+    (hvalue : sevm.value = 0) {b : Devm}
+    (hold2 : (wSymbol sevm b).getStorVal sevm.currentTarget 2 = 0) {G : Nat} (hG : 2300 ≤ G) :
+    SFunc.RunExact prog sevm
+      (St (wSymbol sevm b) [1] m9 (G + 3 + copyCost + 45 +
+        sstoreCost sevm (wDecimals sevm b) 2 18 + 40 + sloadCost sevm (wSymbol sevm b) 2 + 28))
+      t_009b_c0 (.halted (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+        [Nat.toB256 0, Nat.toB256 3124] m10w G) (Nat.toB256 0)
+        (Nat.toB256 3124) [])) := by
+  have nm : sevm.benvStat.rules.sstore.netMetering = true := (by rw [fr.fork.rules_sstore])
+  rw [← wSymbolH_covered fr.fork] at hold2
+  rw [← sstoreCostH_of_eip2929 fr.fork.rules_access nm, ← sloadCostH_of_eip2929 fr.fork.rules_access,
+    ← afterSstoreH_of_eip2929 fr.fork.rules_access nm, ← wDecimalsH_covered fr.fork, ← wSymbolH_covered fr.fork]
+  exact segDecimalsH fr.toH hcode hvalue hold2 hG
+
+/-- **The WETH9 constructor, gas-exact**: from a fresh account (empty storage, zero call value)
+with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
+gas left, returning the runtime window, with the world's error unchanged and the name, symbol
+and decimals written. -/
+theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+    (hvalue : sevm.value = 0) {b : Devm}
+    (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
+    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
+      post.output = runtimeWindow ∧ post.error = b.error ∧
+      Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
+      post.gasLeft = G ∧
+      post.state = ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
+        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
+  rw [← ctorCostH_covered fr.fork b]
+  exact ctor_run_framedH fr.toH hcode hvalue hstor hG
 
 end Blanc.Lift.Weth9.Creation
