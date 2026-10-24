@@ -87,29 +87,6 @@ def PermitCallOccurrenceH.toCovered {root : Exec.Deriv} {b : Devm}
   bound := h.bound
   answered := by simpa only [permitNonceWorldH_of_covered fork, permitPublicDigestH_of_covered fork, StaticAnsweredH_iff_of_covered fork] using h.answered
 
-/-- On a covered fork, the modern `PermitCallOccurrence` gives `PermitCallOccurrenceH` with the same fields. -/
-def PermitCallOccurrence.toH {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : PermitCallOccurrence root b) :
-    PermitCallOccurrenceH root b where
-  call := h.call
-  gasWord := h.gasWord
-  gas := h.gas
-  beforeSevm := h.beforeSevm
-  beforeState := by simpa only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork] using h.beforeState
-  beforeMemory := by simpa only [permitPublicCallMemoryH_of_covered fork] using h.beforeMemory
-  gap := h.gap
-  returnedCursor := h.returnedCursor
-  placed := h.placed
-  tree := h.tree
-  continuations := h.continuations
-  returnedSevm := h.returnedSevm
-  returnedExn := h.returnedExn
-  flag := h.flag
-  out := h.out
-  post := by simpa only [permitNonceWorldH_of_covered fork, permitPublicCallMemoryH_of_covered fork, permitPublicCallStackH_of_covered fork] using h.post
-  bound := h.bound
-  answered := by simpa only [permitNonceWorldH_of_covered fork, permitPublicDigestH_of_covered fork, StaticAnsweredH_iff_of_covered fork] using h.answered
-
 def permitReplyGuardLine : List Ninst :=
   [.reg .iszero, .reg (.dup 0), .reg .iszero, .push [0x1c, 0xdc] (by decide)]
 

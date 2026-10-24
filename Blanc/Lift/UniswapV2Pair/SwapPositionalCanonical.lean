@@ -131,43 +131,6 @@ def SwapPositionalCanonicalResultH.toCovered {K : WriterKey → Prop} {current :
   prefixForeign := h.prefixForeign
   foreign := h.foreign
 
-/-- On a covered fork, the modern `SwapPositionalCanonicalResult` gives `SwapPositionalCanonicalResultH` with the same fields. -/
-def SwapPositionalCanonicalResult.toH {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapPositionalCanonicalResult K current invocation root b post) :
-    SwapPositionalCanonicalResultH K current invocation root b post (swapPrefixWorld root.sevm b) where
-  positions := h.positions.toH fork
-  entryFacts := h.entryFacts.toH
-  frontFrame := h.frontFrame
-  frontIndex := h.frontIndex
-  frontIndex_eq := h.frontIndex_eq
-  frontTranscript := h.frontTranscript
-  frontReturns := h.frontReturns
-  queries := h.queries.toH fork
-  updated := h.updated.toH fork
-  transcript := h.transcript
-  transcript_eq := h.transcript_eq
-  result := h.result
-  result_eq := h.result_eq
-  admitted := AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-    (fun _ _ _ covered auth => auth.toH covered) fork h.admitted
-  checkpoint := h.checkpoint
-  context := h.context
-  unlocked := h.unlocked
-  grown := h.grown
-  storage := h.storage
-  bound0 := h.bound0
-  bound1 := h.bound1
-  added := h.added
-  raw := h.raw
-  sourceLogs := h.sourceLogs
-  rawLogs := h.rawLogs
-  images := h.images
-  output := h.output
-  actualOutput := h.actualOutput
-  remaining := h.remaining
-  prefixForeign := h.prefixForeign
-  foreign := h.foreign
-
 /-- The actual post-callback tail emits exactly the same observed Sync then Swap. -/
 theorem SwapPositionalCanonicalResult.terminal_logs {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}

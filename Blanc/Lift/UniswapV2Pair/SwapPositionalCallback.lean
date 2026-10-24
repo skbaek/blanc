@@ -400,16 +400,5 @@ theorem swap_callback_cursor_stateH {sevm : Sevm} {b post W : Devm} {G : Nat}
     rfl fork2.1 fork2.2 mem transfers.secondLower transfers.secondUpper short
   exact ⟨⟨transfers, callback⟩⟩
 
-/-- Derive the exact post-callback cursor from the original four public
-premises, including the ABI data bound and every optional call choice. -/
-theorem swap_callback_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (SwapCallbacks ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b) := by
-  obtain ⟨h⟩ := swap_callback_cursor_stateH (swapPrefixWorldH_of_covered fork).symm codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
-
 
 end Blanc.Lift.UniswapV2Pair

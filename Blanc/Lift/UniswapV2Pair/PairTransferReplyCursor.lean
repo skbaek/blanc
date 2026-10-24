@@ -96,33 +96,5 @@ theorem pair_transfer_reply_cursor_stateH {root : Exec.Deriv} {b post : Devm}
   exact ⟨stack, memoryEq, output, bound, accepted,
     ⟨⟨N, next, span, env, outcome, nextPlaced, nextTree, ⟨residual, fullMemory⟩, nextConts⟩⟩⟩
 
-/-- The exact supplied CALL's successful continuation returns through its
-original caller. Full returndata drives the physical allocation and decoder. -/
-theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {caller : SFunc} {cursor : Cursor}
-    {p token endWord amount toWord tokenWord rho : B256} {gas n : Nat}
-    (step : CallOccurrenceStep root .call)
-    (input : step.occurrence.node.devm = St b
-      (gas.toB256 :: token :: 0 :: (p + 164) :: 68 :: (p + 164) :: 0 ::
-        endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) M gas)
-    (placed : CursorOK code cert step.returned cursor)
-    (tree : cursor.f = pairTransferAfterCallTree)
-    (conts : cursor.K.map Cont.f = caller :: K)
-    (success : root.exn = .ok post)
-    (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork)
-    (mem : PtrMem (p + 164) n M) (lower : 128 ≤ p.toNat)
-    (width : p.toNat + 260 < 2 ^ 256) (fit : p.toNat + 260 ≤ n) :
-    step.returned.devm.stack =
-      1 :: endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
-    step.returned.devm.memory = M ∧ step.returned.devm.output = b.output ∧
-    step.returned.devm.returnData.length < 2 ^ 160 ∧
-    (step.returned.devm.returnData = [] ∨
-      (32 ≤ step.returned.devm.returnData.length ∧
-        Bytes.toB256 (step.returned.devm.returnData.sliceD 0 32 0) ≠ 0)) ∧
-    Nonempty (CursorStateAt code cert step.returned caller step.returned.devm R
-      (if step.returned.devm.returnData = [] then M else
-        Blanc.Lift.bytesArrayMemory M (p + 164) step.returned.devm.returnData) K) :=
-  pair_transfer_reply_cursor_stateH step input placed tree conts success fork.rules_stateGas_none mem lower width fit
-
 
 end Blanc.Lift.UniswapV2Pair

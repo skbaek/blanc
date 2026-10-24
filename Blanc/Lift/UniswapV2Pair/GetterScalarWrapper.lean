@@ -188,16 +188,6 @@ theorem getterScalar_tail_inv_base {fs : List SFunc} {sevm : Sevm} {b b' : Devm}
     rw [B256.and_comm]
     exact ff20_and_adr _
 
-theorem getterScalar_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {o : Outcome} (s : ScalarGetter)
-    (mem : PtrMem 128 96 M)
-    (run : SFunc.Run fs sevm
-      (St (s.after sevm b) (s.value sevm b :: R) M G) s.tailTree o) :
-    ∃ d, o = .halted d ∧ d.output = (s.value sevm b).toBytes ∧
-      (∀ a, Devm.getStor d a = Devm.getStor (s.after sevm b) a) ∧
-      d.logs = (s.after sevm b).logs :=
-  getterScalar_tail_inv_base s mem run
-
 theorem getterScalar_entry_exact {sevm : Sevm} {b : Devm}
     {M : Mem} {G c : Nat} {sel : B256} (s : ScalarGetter)
     (fork : CoveredFork sevm.benvStat.fork) (cost : c = s.loadGas sevm b)

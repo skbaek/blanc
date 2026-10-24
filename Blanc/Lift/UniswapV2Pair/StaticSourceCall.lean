@@ -79,28 +79,5 @@ theorem static_source_call_atH {root : Exec.Deriv} {frame : Frame} {request : Re
       partition := partition
     }, rfl, rfl⟩
 
-/-- An ordinary code-guarded source request is bound to the supplied original
-STATICCALL, its exact slot, full physical reply and per-spawn partition. -/
-theorem static_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Request}
-    {reply : ExternalResult} {index : Nat} {g ii is oi os : B256} {S : List B256}
-    {paths : List Exec.LocatedFrame}
-    (call : CallOccurrenceStep root
-      (match request.kind with | .call => .call | .staticCall => .staticcall))
-    (kind : request.kind = .staticCall) (requires : request.requiresCode = true)
-    (ordinary : ∀ digest v r s, request.operation ≠ .recover digest v r s)
-    (value : request.value = 0) (pair : frame.context.pair = call.occurrence.node.sevm.currentTarget)
-    (operands : (g :: request.target.toB256 :: ii :: is :: oi :: os :: S) <<+
-      call.occurrence.node.devm.stack)
-    (calldata : (call.occurrence.node.devm.memory.read ii.toNat is.toNat).1 = request.calldata)
-    (flag : [1] <<+ call.returned.devm.stack)
-    (success : reply.success = true) (bytes : reply.returndata = call.returned.devm.returnData)
-    (codeBit : reply.codeExists = true)
-    (guard : (call.occurrence.node.devm.getCode request.target).size.toB256 ≠ 0)
-    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
-    (queue : SourceSlotQueue call frame.context.pair index paths) :
-    ∃ observed : SourceCallAt root frame request reply index,
-      observed.call = call ∧ observed.paths = paths :=
-  static_source_call_atH call kind requires ordinary value pair operands calldata flag success bytes codeBit guard fork.rules_stateGas_none queue
-
 
 end Blanc.Lift.UniswapV2Pair

@@ -1935,11 +1935,13 @@ target frames interleaved with each foreign frame's successful `Exec.logAt?`.
 `Exec.targetLogEventsFrom_frames` proves its frame projection equals
 `Exec.retainedTargetFramesFromAt`, with matching `_target`, `_halt`, `_cont`,
 `_doneOk` and `_runOk` equations. The same module transports one foreign step for
-arbitrary callee code: `Evm.step_cont_getStor_foreign` preserves a foreign owner's
+arbitrary callee code: `Evm.step_cont_getStor_foreign_noStateGas` preserves a foreign owner's
 storage without protection; `Evm.step_done_getStor` requires a protected owner
 for completed childless message settlement; `Xinst.spawn_run_getStor` and
-`Evm.step_run_getStor` transport code-bearing storage from the settled child's
-committed endpoint or rollback, pointwise. The actual-step helpers
+`Evm.step_run_getStor_noStateGas` transport code-bearing storage from the settled child's
+committed endpoint or rollback, pointwise. The `_noStateGas` forms take
+`rules.stateGas = none`; under a covered fork apply them to
+`CoveredFork.rules_stateGas_none`. The actual-step helpers
 `GenericCreate.step_done_getStor`, `GenericCall.step_done_getStor` and
 `Xinst.step_done_getStor`, in
 [`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean),
@@ -1949,7 +1951,7 @@ spawn and does not satisfy that actual-step premise. The module also transports
 logs (`Exec.cont_logs_eq`,
 `Exec.doneOk_logs_eq`, `Exec.runOk_logs_eq`, path-independent `Exec.committed_logs_at`,
 and `Xinst.call_run_logs`: a CALL/STATICCALL appends exactly its committed child's
-logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
+logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild_noStateGas`,
 `CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
 `Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
 `Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
@@ -4327,10 +4329,11 @@ For bounded actual CALL input, the same pinned module provides
 Both require the seven actual CALL operands, `stateGas = none`, and
 `inputSize.toNat < 2^160`, and bound the complete reply below `2^160` on either
 child outcome. They require no parent gas/memory potential or output-copy-window
-bound. `pair_transfer_reply_cursor_state` in
+bound. `pair_transfer_reply_cursor_stateH` in
 `Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean` consumes the actual 68-byte
-input operands with `CoveredFork.rules_stateGas_none`; `BurnFourCalls.actualReply`
-and `BurnFiveCalls.actualReply` use it for the two actual Burn transfer replies.
+input operands and takes `stateGas = none` as a premise (`CoveredFork.rules_stateGas_none`
+supplies it under a covered fork); `BurnFourCallsH.actualReply`
+and `BurnFiveCallsH.actualReply` use it for the two actual Burn transfer replies.
 The accepted `swapTransferCall_replyShort` in
 `Blanc/Lift/UniswapV2Pair/SwapTransfer.lean` and `skim_raw_flag_inv` in
 `Blanc/Lift/UniswapV2Pair/SkimSecondWalk.lean` use the same literal 68-byte
@@ -5980,7 +5983,8 @@ contract-neutral.
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
   with `Cursor.DescOf`, `SStep`, `ConfStep` and successor `CursorOK`.
-  `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forward`
+  `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forwardH`
+  (from `rules.stateGas = none`; `cursor_branch_forwardH_covered` is the `CoveredFork` form)
   derives the faithful branch disjunction from the checked tree and literal
   abstract target, without choosing the branch as a premise.
   `cursor_nexts_line_forward` composes a literal instruction list into a real
@@ -6013,15 +6017,16 @@ contract-neutral.
   `CursorStateAt` carries a checked actual cursor, a call-free span, a complete
   `St` state with existential residual gas, and the mapped return continuation.
   Its `line` and `jump` methods apply source inverses to the actual primitive
-  line or `ConfStep`, deriving the successor state and tree. Its `call` and
-  `ret` methods retain and consume the actual mapped internal continuation,
+  line or `ConfStep`, deriving the successor state and tree. Its `call` method and
+  `CursorStateAt.retH` retain and consume the actual mapped internal continuation,
   preserving the complete non-gas state without requiring a gas schedule.
   `memory_eq` projects the symbolic memory without unfolding a concrete state.
 - To cross a checked referenced goto while preserving the complete actual
   state and return continuation, use
   [`Blanc/Lift/CursorJump.lean`](../Blanc/Lift/CursorJump.lean).
   `CursorOK.jumpAt_of_jump` derives the actual JUMP byte from the checked node;
-  `CursorStateAt.goto` consumes its actual `ConfStep` and checked lookup,
+  `CursorStateAt.gotoH` (`gotoH_covered` is the `CoveredFork` form) consumes its actual
+  `ConfStep` and checked lookup,
   retaining the full non-gas state and original K. The joint node/tree/lookup
   premises are discovered here; the existential result is not a reliable
   recipe trigger.
@@ -6358,8 +6363,8 @@ contract-neutral.
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
   [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
   form there is the modern statement from `CoveredFork`; the forward creation kit under
-  historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with their
-  `_of_eip2929` equations and `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
+  historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with the
+  `sloadCostH_of_eip2929` equation and their `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
   settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
   `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
   `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
@@ -6959,6 +6964,15 @@ contract-neutral.
 There is no recipe: the entry points are whole-contract theorems, not goal
 shapes a trigger could match.
 
+The Pair cursor, source-call and positional statements named below are the
+historical `H` forms, which take `rules.stateGas = none` (and `rules.bal = none`
+where it appears) as premises instead of `CoveredFork`. The `CoveredFork` forms
+were removed as unconsumed. Under a covered fork recover one by applying the `H`
+form to `CoveredFork.rules_stateGas_none` and `CoveredFork.rules_bal_none`,
+bridging the world argument with the `…H_of_covered` equations (for example
+`swapPrefixWorldH_of_covered`) and converting an `H` carrier back with its
+`toCovered` conversion (for example `SwapCallbacksH.toCovered`).
+
 Shared Pair adapters retain their supplied original-bytecode cursor and actual
 world rather than selecting a call through a source run. The reusable fee
 request/reply carrier in
@@ -6971,7 +6985,7 @@ caller and outer continuations; `returnCutExact` retains `cut.node = N` for
 consumers which sample storage from the returned world. `returnCutData` also
 retains the fee guards and full physical `feeBranchPost` at that exact node;
 `returnCutExact` and `returnCut` project the same witness. The ordinary guarded
-static-call adapter `static_source_call_at`
+static-call adapter `static_source_call_atH`
 in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
 binds the supplied occurrence to the request, reply and original per-spawn
 partition through its actual slot queue. These are registry entries: their
@@ -6998,7 +7012,7 @@ LP-row freshness.
 [`PairTraceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairTraceKeys.lean) owns the
 unchanged `mintReplyRow`, `mintFeeReplyKeys`, `mintTraceKeys`,
 `mintTraceKeys_frame` and `mintTraceKeys_rows` definitions and laws.
-`mint_feeReply_mem` places the supplied actual fee primitive's own reply row
+`mint_feeReply_memH` places the supplied actual fee primitive's own reply row
 in that trace, covering entered child roots and synchronous precompile answers.
 The original names remain available through Mint's imports. The actual Burn
 consumer applies this only to the primitive projected from its retained slot;
@@ -7037,28 +7051,28 @@ with actual output and represented state. `pairAdmittedSupplyRules` and
 assemble all eleven concrete families through the existing selector dispatcher,
 without an additional supply premise for callers.
 
-`transfer_source_call_at` in
+`transfer_source_call_atH` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
 binds an ordinary transfer request to the supplied actual CALL, its complete
 slot queue and per-spawn partition. Its entered bit is the actual slot's
 `isSome`; the selected-step CALL inverse derives the same message, process,
 spawn and resume. It does not select a different model call.
-`pair_code_guard_cursor_state` in
+`pair_code_guard_cursor_stateH` in
 [`PairCodeGuardCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCodeGuardCursor.lean)
 advances the supplied actual code-size guard, derives code presence from its
 successful branch and retains the full warmed world and K. The existing fee
 cursor theorem delegates to this same proof.
-For a checked referenced branch, `pair_code_guard_to_cursor_state` retains
+For a checked referenced branch, `pair_code_guard_to_cursor_stateH` retains
 the same guard data and advances to the certificate-selected successor;
 the original literal-branch interface is preserved.
 
-The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
+The shared dispatcher entry `pair_dispatch_selector_cursor_stateH` in
 [`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)
 retains the actual root state before either selector comparison route; the
 existing upper-comparison wrapper projects it. The parameterized quiet-entry
 cuts and checked closed regions in
 [`PairNoCallEntries.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallEntries.lean)
-derive `PairNoCallEntry.root_noExec` from that same supplied successful root.
+derive `PairNoCallEntry.root_noExecH` from that same supplied successful root.
 [`PairNoCallSource.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallSource.lean)
 consumes this raw certificate to couple the selected source frame to the
 empty actual child queue; it does not assume a caller-provided no-call suffix.
@@ -7076,15 +7090,15 @@ and [`PairTransferPreparation.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferPre
 their actual cursor consumers are
 [`PairTransferCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCursor.lean)
 and [`PairTransferCopyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCopyCursor.lean).
-`pair_transfer_request_cursor_state` in
+`pair_transfer_request_cursor_stateH` in
 [`PairTransferRequestCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferRequestCursor.lean)
 normalizes the physical transfer payload at a moving free pointer;
-`pair_transfer_call_of_gas_cursor` in
+`pair_transfer_call_of_gas_cursorH` in
 [`PairTransferCallCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCallCursor.lean)
 binds it to the supplied root's actual call slot and returned cursor. Use the
 literal line inverses through `CursorStateAt.line`, and retain the occurrence
 carrier when subsequent consumers need raw child identity.
-`pair_transfer_reply_cursor_state` in
+`pair_transfer_reply_cursor_stateH` in
 [`PairTransferReplyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean)
 uses that supplied actual slot and returned cursor to derive the success flag,
 unchanged parent memory/output, the operand-derived full-reply bound, optional
@@ -7097,7 +7111,7 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
-For the original Swap prefix, `swap_prefix_cursor_state` in
+For the original Swap prefix, `swap_prefix_cursor_stateH` in
 [`SwapPositionalPrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalPrefix.lean)
 derives the selector, ABI, lock/write, packed-reserve return, liquidity and
 recipient route from original code, fork, selector and successful PC-zero
@@ -7115,7 +7129,7 @@ They preserve the supplied physical free pointer and identify the decoded
 word; the original whole-read inverse and actual final reply cursor share
 these facts.
 
-`swap_transfers_cursor_state` in
+`swap_transfers_cursor_stateH` in
 [`SwapPositionalTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalTransfer.lean)
 composes both optional optimistic transfers from those same original public
 premises. `SwapTransfers` retains each real amount branch, original-root CALL
@@ -7125,7 +7139,7 @@ amount retains an actual call-free gap; an executed CALL with an absent child
 slot still has its physical occurrence. The shared transfer request/call/reply
 cursors supply each occurrence rather than searching by an equal payload.
 
-`swap_callback_cursor_state` in
+`swap_callback_cursor_stateH` in
 [`SwapPositionalCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCallback.lean)
 adds the optional callback to that same original-root chain. `SwapCallbacks`
 starts its callback at transfer1's actual result; the executed branch retains
@@ -7134,7 +7148,7 @@ reply and checked caller join. The empty-data branch selects no CALL. Pointer
 and ABI length bounds are derived internally. Callback preparation and join
 lines are shared with the unchanged legacy callback inverses.
 
-`swap_balances_cursor_state` in
+`swap_balances_cursor_stateH` in
 [`SwapPositionalBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalBalance.lean)
 adds both required observations to the same optional-call carrier, from the
 same four original premises. Each `SwapBalanceOccurrence` keeps its own guarded
@@ -7201,13 +7215,13 @@ is projected from the carried representation and original root universe.
 
 [`SwapPositionalMutableCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableCallback.lean)
 retains the same guarded callback's complete events and recursively admitted
-children. `swap_source_callbacks` composes all optional mutable calls from the
+children. `swap_source_callbacksH` composes all optional mutable calls from the
 original decoded source entry to the same actual post-callback node and frame.
 
 [`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
 retains each transfer's same complete event queue, mapped selected turns,
 recursively admitted children, checkpoint, finite locked representation and log
-images. `swap_optional_transfer_admitted` shares both optional-transfer source
+images. `swap_optional_transfer_admittedH` shares both optional-transfer source
 phases and composes only `nextMutableCall` with the same selected queue; its
 source index increases exactly when that external instruction executes.
 
@@ -7223,15 +7237,15 @@ child's positional consumption and committed output.
 For recursive entry admission on that same selected proof, use
 `AdmittedSourceConsumes` and `SourceAdmission` in
 [`SourceAdmission.lean`](../Blanc/Lift/UniswapV2Pair/SourceAdmission.lean),
-then `admitted_source_slot_turns` and `AdmittedMutableTurns` in
+then `admitted_source_slot_turnsH` and `AdmittedMutableTurns` in
 [`AdmittedMutableFold.lean`](../Blanc/Lift/UniswapV2Pair/AdmittedMutableFold.lean).
 These acyclic adapters parameterize child authentication, retain the complete
 actual slot event queue and its selected turns, and index each recursive
 admission by the same child consumption proof. The Pair endpoint
 `PairAdmittedConsumes` uses `PairSourceAdmission` in
 [`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
-For actual locked children, `lockedPairAdmittedSupply` and
-`locked_admitted_mutable_source_slot_turns` in
+For actual locked children, `lockedPairAdmittedSupplyH` and
+`locked_admitted_mutable_source_slot_turnsH` in
 [`MutablePositionalLockedSupply.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalLockedSupply.lean)
 retain the same child selector admission, positional proof, committed output,
 incoming representation and complete mutable event/turn queues.
@@ -7262,14 +7276,14 @@ modern forms under `CoveredFork`. The same weakening for one retained fold or
 queue is `AdmittedSourceConsumes.mono_benvStat`,
 `AdmittedMutableTurns.mono_benvStat` (`AdmittedMutableFold.lean`),
 `SourceSlotEvents.located_inherits` and `SourceSlotEvents.turns_mono_benvStat`;
-`LockedAuth.toH` and `PermitRecoveryAuth.toH` give the converse of the
-`toCovered` conversions under a covered fork. Skim's historical supply is
+`LockedAuthH.toCovered` and `PermitRecoveryAuthH.toCovered` convert the
+historical authentication to the covered one under a covered fork. Skim's historical supply is
 `pair_admitted_skim_supplyH` in `PairPositionalSkim.lean`, over
 `skim_positional_canonicalH`; the cached token and reserve words read storage
 only, so `skimToken0_eqH`, `skimToken1_eqH` and `skimReserve0_eqH` in
 `SkimWalk.lean` restate them over the historical lock world without a fork fact.
 
-For a retained factory fee observation, `PairFeeObservation.sourceCall` in
+For a retained factory fee observation, `PairFeeObservationH.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
 binds the supplied original slot, complete physical reply, literal feeTo
 request and code guard to the supplied model frame and full path queue.
@@ -7348,6 +7362,6 @@ changing foreign logs. The original Burn source donor imports the same proofs.
 
 [`SwapPositionalSourcePrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourcePrefix.lean)
 derives the initial source guards, cached words and starting segment from the
-original successful execution. `swap_source_transfers` composes both optional
+original successful execution. `swap_source_transfersH` composes both optional
 transfers from that same physical chain and the same admitted queue witnesses;
 only executed calls advance the source index.

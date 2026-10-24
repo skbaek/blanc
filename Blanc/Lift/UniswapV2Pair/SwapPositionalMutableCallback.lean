@@ -5,36 +5,6 @@ import Blanc.Lift.UniswapV2Pair.SwapPositionalSourcePrefix
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The exact guarded callback retains its full events, same admitted children,
-checkpoint, finite representation and source/raw log images. -/
-structure SwapCallbackMutable {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
-    (U : WriterKey → Prop) (ctx : Context) (current : Checkpoint) (base : Devm)
-    (frame : Frame) (index : Nat) where
-  observed : SourceCallAt root frame
-    (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
-      (start.sevm.data.sliceD dataStart.toNat len.toNat 0)))
-    (swapCallbackReply r.step.returned.devm.returnData) index
-  same : observed.call = r.step
-  events : List (Log ⊕ Exec.LocatedFrame)
-  turns : List MutableTurn
-  checkpoint : Checkpoint
-  added : List PendingLog
-  rets : List ChildReturn
-  queue : SourceSlotEvents observed.call frame.context.pair index events
-  mappedPaths : events.filterMap Sum.getRight? = observed.paths
-  mappedTurns : turns.map MutableTurn.event = events
-  during : AdmittedMutableTurns LockedAuth frame
-    (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
-      (start.sevm.data.sliceD dataStart.toNat len.toNat 0))) 0 events
-    (mutableTranscript turns .done)
-    {complete := true, frame := {frame with current := checkpoint}, childReturns := rets}
-  authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
-    LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested
-  invariant : SwapFrontState U root.sevm.currentTarget ctx current base
-    {frame with current := checkpoint} r.step.returned.devm
-
 structure SwapCallbackMutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
     (r : SwapCallbackOccurrenceH root start b L M q toWord a0 a1 len dataStart K)
@@ -62,26 +32,6 @@ structure SwapCallbackMutableH {root start : Exec.Deriv} {b : Devm}
     LockedAuthH (Exec.Frame.rootDeriv located.frame) entry nested
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
-
-/-- On a covered fork, the modern `SwapCallbackMutable` gives `SwapCallbackMutableH` with the same fields. -/
-def SwapCallbackMutable.toH {root start : Exec.Deriv} {b : Devm} {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc} {r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K} {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapCallbackMutable r U ctx current base frame index) :
-    SwapCallbackMutableH (r.toH fork) U ctx current base frame index where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    h.mappedTurns fork h.authentic
-  invariant := h.invariant
 
 theorem swap_callback_mutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
@@ -285,38 +235,6 @@ theorem swap_source_callbacksH {root : Exec.Deriv} {b W : Devm}
   have callback := reachC tail out rest
   have prefixRun := reach (TC tail) _ callback
   simpa only [List.append_assoc] using prefixRun
-
-/-- All optional mutable calls compose from the original source entry, on the
-same physical chain and the same evolving admitted source checkpoint. -/
-theorem swap_source_callbacks {root : Exec.Deriv} {b : Devm}
-    {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (r : SwapCallbacks root root.sevm b)
-    (entryFacts : SwapSourcePrefix U current invocation root.sevm b)
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    let locals := swapFrontLocals root.sevm current.state
-    let count0 := if swapAmount0Out root.sevm = 0 then 0 else 1
-    let count1 := if swapAmount1Out root.sevm = 0 then 0 else 1
-    let countC := if swapDataLength root.sevm = 0 then 0 else 1
-    ∃ (frame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
-      SwapFrontState U root.sevm.currentTarget (writerContext root.sevm invocation)
-        current b frame r.callback.world ∧
-      ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root r.callback.next (count0 + count1 + countC)
-          (swapBalancePhaseStart frame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root root 0
-          (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
-          (T tail) {out with childReturns := rets ++ out.childReturns} := by
-  obtain ⟨frame, T, rets, inv, reach⟩ := swap_source_callbacksH (r.toH fork) entryFacts.toH inj
-    apart sem image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨frame, T, rets, inv, fun tail out rest => AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) fork
-    (reach tail out (AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-        (fun _ _ _ covered auth => auth.toH covered) fork rest))⟩
 
 
 end Blanc.Lift.UniswapV2Pair

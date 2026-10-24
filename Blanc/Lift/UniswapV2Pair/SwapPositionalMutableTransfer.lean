@@ -7,35 +7,6 @@ import Blanc.Lift.CursorOccurrenceRoots
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- One exact transfer's full event queue, admitted selected children and resulting
-finite source state remain tied to the same physical returned parent. -/
-structure SwapTransferMutable {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {p amount toWord token rho : B256}
-    {caller : SFunc} {K : List SFunc}
-    (r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K)
-    (U : WriterKey → Prop) (ctx : Context) (current : Checkpoint) (base : Devm)
-    (frame : Frame) (site : CallSite) (index : Nat) where
-  observed : SourceCallAt root frame
-    (requestFor site token.toAdr (.transfer toWord.toAdr amount))
-    (swapObservedTransferReply r.step.returned.devm.returnData r.step.occurrence.slot.isSome) index
-  same : observed.call = r.step
-  events : List (Log ⊕ Exec.LocatedFrame)
-  turns : List MutableTurn
-  checkpoint : Checkpoint
-  added : List PendingLog
-  rets : List ChildReturn
-  queue : SourceSlotEvents observed.call frame.context.pair index events
-  mappedPaths : events.filterMap Sum.getRight? = observed.paths
-  mappedTurns : turns.map MutableTurn.event = events
-  during : AdmittedMutableTurns LockedAuth frame
-    (requestFor site token.toAdr (.transfer toWord.toAdr amount)) 0 events
-    (mutableTranscript turns .done)
-    {complete := true, frame := {frame with current := checkpoint}, childReturns := rets}
-  authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
-    LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested
-  invariant : SwapFrontState U root.sevm.currentTarget ctx current base
-    {frame with current := checkpoint} r.step.returned.devm
-
 structure SwapTransferMutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
     {caller : SFunc} {K : List SFunc}
@@ -62,31 +33,6 @@ structure SwapTransferMutableH {root start : Exec.Deriv} {b : Devm}
     LockedAuthH (Exec.Frame.rootDeriv located.frame) entry nested
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
-
-/-- Under the root's covered fork, the modern transfer queue authenticates every child as `LockedAuthH`. -/
-def SwapTransferMutable.toH {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {p amount toWord token rho : B256}
-    {caller : SFunc} {K : List SFunc}
-    {r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm}
-    {frame : Frame} {site : CallSite} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapTransferMutable r U ctx current base frame site index) :
-    SwapTransferMutableH r U ctx current base frame site index where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    h.mappedTurns fork h.authentic
-  invariant := h.invariant
 
 theorem swap_transfer_mutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
@@ -259,42 +205,6 @@ theorem swap_optional_transfer_admittedH {root start : Exec.Deriv} {b : Devm}
           (locals := locals) second actual.step.occurrence.slot.isSome actual.accepted
         exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuthH root
           actual.step.returned (index + 1) segment tail out) resumed) rest
-
-/-- Both optional transfers compose their SAME admitted queue and resumed frame;
-only an executed instruction advances the original source index. -/
-theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {p toWord token rho : B256} {caller : SFunc} {K : List SFunc}
-    {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
-    {locals : SwapLocals} (second : Bool)
-    (opt : SwapOptionalTransfer root start b L M p
-      (if second then locals.amount1Out else locals.amount0Out) toWord token rho caller K)
-    (tokenEq : token.toAdr = if second then locals.token1 else locals.token0)
-    (recipientEq : toWord.toAdr = locals.recipient)
-    (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
-    (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
-    (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
-    (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    ∃ (nextFrame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
-      SwapFrontState U root.sevm.currentTarget ctx current base nextFrame opt.world ∧
-      ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root opt.next
-          (index + if (if second then locals.amount1Out else locals.amount0Out) = 0 then 0 else 1)
-          (swapTransferPhaseEnd second nextFrame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root start index
-          (swapTransferPhaseStart second frame locals) (T tail)
-          {out with childReturns := rets ++ out.childReturns} := by
-  obtain ⟨nextFrame, T, rets, inv', reach⟩ := swap_optional_transfer_admittedH second opt tokenEq
-    recipientEq index inj apart sem image installed inv pair time nonstatic rootNonstatic
-    fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨nextFrame, T, rets, inv', fun tail out rest => AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) fork
-    (reach tail out (AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-        (fun _ _ _ covered auth => auth.toH covered) fork rest))⟩
 
 
 end Blanc.Lift.UniswapV2Pair

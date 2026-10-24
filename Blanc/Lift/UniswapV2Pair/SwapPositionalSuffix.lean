@@ -82,14 +82,6 @@ theorem SwapBalancesH.finalWorld_toCovered {root : Exec.Deriv} {b : Devm}
     updateWorldH_of_covered fork]
   rfl
 
-theorem SwapBalances.finalWorld_toH {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork root.sevm.benvStat.fork) (r : SwapBalances root root.sevm b) :
-    (r.toH fork).finalWorld = r.finalWorld := by
-  unfold SwapBalancesH.finalWorld SwapBalances.finalWorld
-  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore]),
-    updateWorldH_of_covered fork]
-  rfl
-
 structure SwapSuffixFactsH {root : Exec.Deriv} {b W : Devm}
     (r : SwapBalancesH root root.sevm b W) : Prop where
   input : 0 < r.input0 ∨ 0 < r.input1
@@ -104,16 +96,6 @@ theorem SwapSuffixFactsH.toCovered {root : Exec.Deriv} {b : Devm}
     {r : SwapBalancesH root root.sevm b (swapPrefixWorld root.sevm b)}
     (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapSuffixFactsH r) :
     SwapSuffixFacts (r.toCovered fork) where
-  input := h.input
-  pricing := h.pricing
-  bound0 := h.bound0
-  bound1 := h.bound1
-  nonstatic := h.nonstatic
-
-/-- On a covered fork, the modern `SwapSuffixFacts` gives `SwapSuffixFactsH` with the same fields. -/
-theorem SwapSuffixFacts.toH {root : Exec.Deriv} {b : Devm} {r : SwapBalances root root.sevm b}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapSuffixFacts r) :
-    SwapSuffixFactsH (r.toH fork) where
   input := h.input
   pricing := h.pricing
   bound0 := h.bound0
@@ -192,15 +174,6 @@ theorem SwapOptionalTransfer.output_eq {root start : Exec.Deriv} {b : Devm}
   · rw [world]
   · rw [world]; exact actual.output
 
-/-- The optional callback preserves its own incoming output buffer. -/
-theorem SwapOptionalCallback.output_eq {root start : Exec.Deriv} {b : Devm}
-    {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    (r : SwapOptionalCallback root start b L M q toWord a0 a1 len dataStart K) :
-    r.world.output = b.output := by
-  rcases r.choice with ⟨_, _, world, _⟩ | ⟨actual, _, _, world, _⟩
-  · rw [world]
-  · rw [world]; exact actual.output
-
 theorem SwapOptionalCallbackH.output_eq {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
     (r : SwapOptionalCallbackH root start b L M q toWord a0 a1 len dataStart K) :
@@ -248,17 +221,6 @@ def SwapPhysicalResultH.toCovered {root : Exec.Deriv} {b post : Devm}
   facts := h.facts.toCovered fork
   image := by
     rw [SwapBalancesH.finalWorld_toCovered]
-    exact h.image
-  output := h.output
-
-/-- On a covered fork, the modern `SwapPhysicalResult` gives `SwapPhysicalResultH` with the same fields. -/
-def SwapPhysicalResult.toH {root : Exec.Deriv} {b post : Devm}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapPhysicalResult root b post) :
-    SwapPhysicalResultH root b post (swapPrefixWorld root.sevm b) where
-  balances := h.balances.toH fork
-  facts := h.facts.toH fork
-  image := by
-    rw [← SwapBalancesH.finalWorld_toCovered fork]
     exact h.image
   output := h.output
 

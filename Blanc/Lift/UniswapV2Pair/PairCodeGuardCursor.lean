@@ -61,23 +61,6 @@ theorem pair_code_guard_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     rw [zero, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at guard
     exact ⟨nonzero, guard.branchSuccH cert_check success stateGas (by decide)⟩
 
-/-- The supplied actual Pair code guard derives code presence from its own
-successful branch and preserves the full warmed state and continuations. -/
-theorem pair_code_guard_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {token : B256} {K : List SFunc}
-    {f failed callTree : SFunc}
-    (cut : CursorStateAt code cert start f b (token :: S) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (destination : Bytes) (le : destination.length ≤ 32)
-    (shape : f = syncCodeGuardLine.foldr SFunc.next
-      (.next (.push destination le) (.branch failed callTree)))
-    (noFail : failed.noOk = true) :
-    (b.getCode token.toAdr).size.toB256 ≠ 0 ∧
-      Nonempty (CursorStateAt code cert start callTree
-        (temporalAccountAccessBase b token.toAdr) (0 :: S) M K) := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    pair_code_guard_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none destination le shape noFail
-
 
 theorem pair_code_guard_to_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     {S : List B256} {M : Mem} {token : B256} {K : List SFunc}
@@ -110,23 +93,6 @@ theorem pair_code_guard_to_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     exact (by decide : (1 : B256) ≠ 0) zero
   rw [zero, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at guard
   exact ⟨nonzero, guard.toSuccH cert_check success stateGas (by decide) lookup⟩
-
-/-- A referenced code guard reaches its actual checked entry and preserves the
-complete warmed state; successful execution supplies its own code-presence fact. -/
-theorem pair_code_guard_to_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {S : List B256} {M : Mem} {token : B256} {K : List SFunc}
-    {f failed callTree : SFunc} {k : Nat}
-    (cut : CursorStateAt code cert start f b (token :: S) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (destination : Bytes) (le : destination.length ≤ 32)
-    (shape : f = syncCodeGuardLine.foldr SFunc.next
-      (.next (.push destination le) (.branchTo failed k)))
-    (noFail : failed.noOk = true) (lookup : cert.prog[k]? = some callTree) :
-    (b.getCode token.toAdr).size.toB256 ≠ 0 ∧
-      Nonempty (CursorStateAt code cert start callTree
-        (temporalAccountAccessBase b token.toAdr) (0 :: S) M K) := by
-  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
-    pair_code_guard_to_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none destination le shape noFail lookup
 
 
 end Blanc.Lift.UniswapV2Pair

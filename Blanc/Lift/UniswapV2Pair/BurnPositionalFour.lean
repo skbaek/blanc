@@ -77,25 +77,6 @@ theorem BurnThreeCallsH.transferMemory_toCovered {root : Exec.Deriv} {sevm : Sev
     (r.toCovered fork).transferMemory N residual = r.transferMemory N residual := by
   rfl
 
-theorem BurnThreeCalls.transferWorld_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnThreeCalls root sevm b)
-    (N : Exec.Deriv) (residual : Nat) :
-    (r.toH fork).transferWorld N residual = r.transferWorld N residual := by
-  have f : CoveredFork r.fee.occurrence.call.returned.sevm.benvStat.fork := by
-    rw [(Cursor.parentStep_sevm r.fee.occurrence.call.edge).trans
-      (r.fee.occurrence.sevm_eq.trans
-        ((Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm))]
-    exact fork
-  unfold BurnThreeCalls.transferWorld BurnThreeCallsH.transferWorld
-  rw [← lpBurnPostH_of_covered f, ← afterSloadH_of_eip2929 f.rules_access]
-  rfl
-
-theorem BurnThreeCalls.transferMemory_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnThreeCalls root sevm b)
-    (N : Exec.Deriv) (residual : Nat) :
-    (r.toH fork).transferMemory N residual = r.transferMemory N residual := by
-  rfl
-
 /-- Four supplied original-root positions, including the real first transfer
 slot. The actual fee return fixes the supply world and the exact payout request. -/
 structure BurnFourCalls (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
@@ -174,30 +155,6 @@ def BurnFourCallsH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
   transfer_sevm := h.transfer_sevm
   transfer_input := by
     rw [BurnThreeCallsH.transferWorld_toCovered fork, BurnThreeCallsH.transferMemory_toCovered fork]
-    exact h.transfer_input
-  calldata := h.calldata
-  primitive := h.primitive
-  returnedCursor := h.returnedCursor
-  returnedPlaced := h.returnedPlaced
-  returnedTree := h.returnedTree
-  returnedConts := h.returnedConts
-
-/-- On a covered fork, the modern `BurnFourCalls` gives `BurnFourCallsH` with the same fields. -/
-def BurnFourCalls.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFourCalls root sevm b) :
-    BurnFourCallsH root sevm b BurnSchedule.modern where
-  three := h.three.toH fork
-  pricing := h.pricing
-  residual := h.residual
-  pricing_data := h.pricing_data.toH fork
-  pricing_gap := h.pricing_gap
-  pricing_memory := h.pricing_memory
-  transfer := h.transfer
-  gas := h.gas
-  transfer_gap := h.transfer_gap
-  transfer_sevm := h.transfer_sevm
-  transfer_input := by
-    rw [BurnThreeCalls.transferWorld_toH fork, BurnThreeCalls.transferMemory_toH fork]
     exact h.transfer_input
   calldata := h.calldata
   primitive := h.primitive

@@ -96,18 +96,6 @@ def SwapBalanceSourceH.toCovered {root start : Exec.Deriv} {b : Devm} {S : List 
   during := h.during
   invariant := h.invariant
 
-/-- On a covered fork, the modern `SwapBalanceSource` gives `SwapBalanceSourceH` with the same fields. -/
-def SwapBalanceSource.toH {root start : Exec.Deriv} {b : Devm} {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc} {r : SwapBalanceOccurrence root start b S M p token second K} {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame} {site : CallSite} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapBalanceSource r U ctx current base frame site index) :
-    SwapBalanceSourceH (r.toH fork) U ctx current base frame site index where
-  observed := h.observed
-  same := h.same
-  views := h.views
-  mapped := h.mapped
-  authentic := h.authentic
-  during := h.during
-  invariant := h.invariant
-
 theorem swap_balance_sourceH {root start : Exec.Deriv} {b : Devm}
     {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc}
     {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
@@ -202,13 +190,6 @@ def SwapBalancePairSourceH.toCovered {root : Exec.Deriv} {b : Devm}
     SwapBalancePairSource (r.toCovered fork) U ctx current base frame index where
   first := h.first.toCovered fork
   second := h.second.toCovered fork
-
-/-- On a covered fork, the modern `SwapBalancePairSource` gives `SwapBalancePairSourceH` with the same fields. -/
-def SwapBalancePairSource.toH {root : Exec.Deriv} {b : Devm} {r : SwapBalances root root.sevm b} {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame} {index : Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapBalancePairSource r U ctx current base frame index) :
-    SwapBalancePairSourceH (r.toH fork) U ctx current base frame index where
-  first := h.first.toH fork
-  second := h.second.toH fork
 
 theorem swap_balance_pair_sourceH {root : Exec.Deriv} {b W : Devm}
     {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {frame : Frame}

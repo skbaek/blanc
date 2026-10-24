@@ -73,22 +73,5 @@ theorem pair_transfer_request_cursor_stateH {start : Exec.Deriv} {b post : Devm}
       exact raw)
   exact ⟨callMem, ⟨gas⟩⟩
 
-/-- The original moving initializer, both copy passes and partial merge reach
-this actual GAS cursor with the exact 68-byte transfer payload. -/
-theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc}
-    {p amount toWord tokenWord rho : B256} {n : Nat}
-    (cut : CursorStateAt code cert start t_1fdb_c57 b
-      (amount :: toWord :: tokenWord :: rho :: R) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    let V := safeTransfer_dynamicCallMemory M p amount toWord
-    PtrMem (p + 164) V.size V ∧ Nonempty (CursorStateAt code cert start pairTransferGasTree b
-      ((tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 0 ::
-        (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) V K) :=
-  pair_transfer_request_cursor_stateH cut success fork.rules_stateGas_none mem lower width
-
 
 end Blanc.Lift.UniswapV2Pair

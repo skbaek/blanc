@@ -57,17 +57,6 @@ def SkimFirstSourceH.toCovered {root : Exec.Deriv} {b : Devm} {toWord : B256} {R
   authentic := h.authentic
   during := h.during
 
-/-- On a covered fork, the modern `SkimFirstSource` gives `SkimFirstSourceH` with the same fields. -/
-def SkimFirstSource.toH {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256} {r : SkimFirstObservation root b toWord R} {current : Checkpoint} {invocation : List Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimFirstSource r current invocation) :
-    SkimFirstSourceH (r.toH fork) current invocation where
-  observed := h.observed
-  same := h.same
-  views := h.views
-  mapped := h.mapped
-  authentic := h.authentic
-  during := h.during
-
 theorem skim_first_sourceH {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
     {K U : WriterKey → Prop} {current : Checkpoint}
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
@@ -195,28 +184,6 @@ def SkimFirstMutableH.toCovered {root : Exec.Deriv} {b : Devm} {r : SkimFourCall
   during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
     (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
   authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    h.mappedTurns fork h.authentic
-  rep := h.rep
-  sourceLogs := h.sourceLogs
-  rawLogs := h.rawLogs
-
-/-- On a covered fork, the modern `SkimFirstMutable` gives `SkimFirstMutableH` with the same fields. -/
-def SkimFirstMutable.toH {root : Exec.Deriv} {b : Devm} {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimFirstMutable r U current invocation) :
-    SkimFirstMutableH (r.toH fork) U current invocation where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
     h.mappedTurns fork h.authentic
   rep := h.rep
   sourceLogs := h.sourceLogs
@@ -375,26 +342,6 @@ def SkimSecondSourceH.toCovered {root : Exec.Deriv} {b : Devm} {r : SkimFourCall
     simp only [skimPositionalFrame2H_of_covered fork] at field ⊢
     exact field
 
-/-- On a covered fork, the modern `SkimSecondSource` gives `SkimSecondSourceH` with the same fields. -/
-def SkimSecondSource.toH {root : Exec.Deriv} {b : Devm} {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {first : SkimFirstMutable r U current invocation}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimSecondSource first) :
-    SkimSecondSourceH (first.toH fork) where
-  observed := by
-    have field := h.observed
-    simp only [skimPositionalFrame2H_of_covered fork] at field ⊢
-    exact field
-  same := h.same
-  views := h.views
-  mapped := h.mapped
-  authentic := by
-    have field := h.authentic
-    simp only [skimPositionalFrame2H_of_covered fork] at field ⊢
-    exact field
-  during := by
-    have field := h.during
-    simp only [skimPositionalFrame2H_of_covered fork] at field ⊢
-    exact field
-
 theorem skim_second_sourceH {root : Exec.Deriv} {b : Devm}
     {K U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
     (inj : WriterInj U) (apart : WriterApart U)
@@ -522,28 +469,6 @@ def SkimSecondMutableH.toCovered {root : Exec.Deriv} {b : Devm} {r : SkimFourCal
   during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
     (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
   authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    h.mappedTurns fork h.authentic
-  rep := h.rep
-  sourceLogs := h.sourceLogs
-  rawLogs := h.rawLogs
-
-/-- On a covered fork, the modern `SkimSecondMutable` gives `SkimSecondMutableH` with the same fields. -/
-def SkimSecondMutable.toH {root : Exec.Deriv} {b : Devm} {r : SkimFourCalls root b (skimToWord root.sevm) [0x0257, 0xbc25cf77]} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {first : SkimFirstMutable r U current invocation}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimSecondMutable first) :
-    SkimSecondMutableH (first.toH fork) where
-  observed := h.observed
-  same := h.same
-  events := h.events
-  turns := h.turns
-  checkpoint := h.checkpoint
-  added := h.added
-  rets := h.rets
-  queue := h.queue
-  mappedPaths := h.mappedPaths
-  mappedTurns := h.mappedTurns
-  during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
-    (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) fork) h.during
-  authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
     h.mappedTurns fork h.authentic
   rep := h.rep
   sourceLogs := h.sourceLogs
@@ -849,29 +774,6 @@ def SkimPositionalCanonicalResultH.toCovered {K : WriterKey → Prop} {current :
   value := h.value
   nonstatic := h.nonstatic
   admitted := AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toCovered covered)
-    fork h.admitted
-  checkpoint := h.checkpoint
-  context := h.context
-  unlocked := h.unlocked
-  keys := h.keys
-  grown := h.grown
-  storage := h.storage
-  output := h.output
-  sourceLogs := h.sourceLogs
-  rawLogs := h.rawLogs
-
-/-- On a covered fork, the modern `SkimPositionalCanonicalResult` gives `SkimPositionalCanonicalResultH` with the same fields. -/
-def SkimPositionalCanonicalResult.toH {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimPositionalCanonicalResult K current invocation root b post) :
-    SkimPositionalCanonicalResultH K current invocation root b post where
-  positions := h.positions.toH fork
-  balance0 := h.balance0.toH fork
-  transfer0 := h.transfer0.toH fork
-  balance1 := h.balance1.toH fork
-  transfer1 := h.transfer1.toH fork
-  value := h.value
-  nonstatic := h.nonstatic
-  admitted := AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork) (fun _ _ _ covered auth => auth.toH covered)
     fork h.admitted
   checkpoint := h.checkpoint
   context := h.context

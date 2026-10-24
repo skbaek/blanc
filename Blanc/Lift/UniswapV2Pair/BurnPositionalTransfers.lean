@@ -38,15 +38,6 @@ def BurnFiveCallsH.finalPointer {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w 
     (r : BurnFiveCallsH root sevm b w) : B256 :=
   burnSecondTransferPointer r.four.transfer.returned.devm.returnData r.second.returned.devm.returnData
 
-theorem BurnFiveCalls.finalMemory_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnFiveCalls root sevm b) :
-    (r.toH fork).finalMemory = r.finalMemory := by
-  unfold BurnFiveCallsH.finalMemory BurnFiveCalls.finalMemory
-  show (if r.second.returned.devm.returnData = [] then (r.four.toH fork).secondTransferMemory else
-    Blanc.Lift.bytesArrayMemory (r.four.toH fork).secondTransferMemory (r.four.replyPointer + 164)
-      r.second.returned.devm.returnData) = _
-  rw [BurnFourCalls.secondTransferMemory_toH fork]
-
 theorem BurnFiveCallsH.finalMemory_toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (fork : CoveredFork sevm.benvStat.fork) (r : BurnFiveCallsH root sevm b BurnSchedule.modern) :
     (r.toCovered fork).finalMemory = r.finalMemory := by
@@ -80,29 +71,6 @@ theorem BurnFiveCallsH.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : D
   simpa only [BurnFiveCallsH.finalMemory] using
     pair_transfer_reply_cursor_stateH r.second r.input r.placed r.tree r.conts success
       (by rw [r.sevm_eq]; exact stateGas) r.secondMem.1 lower width r.secondMem.2
-
-/-- The second actual CALL supplies its own full reply and checked final-query
-caller; the prior reply determines only its moving input pointer. -/
-theorem BurnFiveCalls.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnFiveCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    r.second.returned.devm.stack = 1 :: (68 + (r.four.replyPointer + 164)) ::
-      (burnInitialToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: r.four.three.amount1 r.four.pricing :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
-      burnInitialToken1 sevm b :: 0x16a3 :: r.four.three.pricedLocals r.four.pricing ∧
-    r.second.returned.devm.memory = r.four.secondTransferMemory ∧
-    r.second.returned.devm.output = r.four.transfer.returned.devm.output ∧
-    r.second.returned.devm.returnData.length < 2 ^ 160 ∧
-    (r.second.returned.devm.returnData = [] ∨
-      (32 ≤ r.second.returned.devm.returnData.length ∧
-        Bytes.toB256 (r.second.returned.devm.returnData.sliceD 0 32 0) ≠ 0)) ∧
-    Nonempty (CursorStateAt code cert r.second.returned t_16a3_c13
-      r.second.returned.devm (r.four.three.pricedLocals r.four.pricing) r.finalMemory [t_053d_c83]) := by
-  have h := BurnFiveCallsH.actualReply (r.toH fork) success fork.rules_stateGas_none
-
-  simp only [BurnFiveCalls.finalMemory_toH fork] at h
-  simp only [BurnFiveCalls.toH, BurnFourCalls.secondTransferMemory_toH fork] at h
-  exact h
 
 
 theorem BurnFiveCallsH.finalMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}

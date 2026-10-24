@@ -102,18 +102,6 @@ theorem LockedAuthH.toCovered {D : Exec.Deriv} {entry : Entry} {nested : Transcr
       ⟨selector, entryEq, out, entered, views, nestedEq, recovery.toCovered fork⟩))))
   · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
 
-theorem LockedAuth.toH {D : Exec.Deriv} {entry : Entry} {nested : Transcript}
-    (fork : CoveredFork D.sevm.benvStat.fork) (auth : LockedAuth D entry nested) :
-    LockedAuthH D entry nested := by
-  rcases auth with h | h | h | h | ⟨selector, entryEq, out, entered, views, nestedEq, recovery⟩ | h
-  · exact Or.inl h
-  · exact Or.inr (Or.inl h)
-  · exact Or.inr (Or.inr (Or.inl h))
-  · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl
-      ⟨selector, entryEq, out, entered, views, nestedEq, recovery.toH fork⟩))))
-  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
-
 theorem LockedRep.congr {U : WriterKey → Prop} {st : State} {s s' : Stor}
     (same : ∀ k, s'.get k = s.get k) (rep : LockedRep U st s) : LockedRep U st s' := by
   obtain ⟨K, sub, wrep, locked⟩ := rep

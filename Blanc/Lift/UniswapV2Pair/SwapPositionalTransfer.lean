@@ -288,16 +288,5 @@ theorem swap_transfers_cursor_stateH {sevm : Sevm} {b post W : Devm} {G : Nat}
     rfl fork1 mem1 lower0 upper0
   exact ⟨⟨first, lower0, upper0, second, lower1, upper1⟩⟩
 
-/-- Both optional transfers belong to the supplied original successful root.
-No physical call, gas, desired join state or pointer bound is a public premise. -/
-theorem swap_transfers_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (SwapTransfers ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b) := by
-  obtain ⟨h⟩ := swap_transfers_cursor_stateH (swapPrefixWorldH_of_covered fork).symm codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered⟩
-
 
 end Blanc.Lift.UniswapV2Pair

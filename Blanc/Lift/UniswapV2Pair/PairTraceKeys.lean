@@ -83,13 +83,5 @@ theorem mint_feeReply_memH {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {
       refine List.mem_append_left _ (List.mem_filterMap.mpr
         ⟨⟨evm.pc, evm.sta, evm.dyna, .ok body, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
 
-theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S : List B256}
-    {M : Mem} {c : Nat} (fork : CoveredFork root.sevm.benvStat.fork) (wf : Mem.Wf M)
-    (call : Blanc.Lift.StepIn root root.sevm
-      (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c) (.exec .staticcall) d)
-    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0) :
-    mintReplyRow d.returnData ∈ mintTraceKeys root :=
-  mint_feeReply_memH fork.rules_stateGas_none wf call flag
-
 
 end Blanc.Lift.UniswapV2Pair

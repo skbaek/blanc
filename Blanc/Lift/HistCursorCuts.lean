@@ -196,7 +196,8 @@ theorem cursor_nexts_forwardH_covered {code : ByteArray} {c : Cert}
       CursorOK code c N κ' ∧ κ'.f = tail :=
   cursor_nexts_forwardH checked ok ns tail tree success fork.rules_stateGas_none
 
-/-- `cursor_branch_forward` from `rules.stateGas = none` alone. -/
+/-- The forward branch cut from `rules.stateGas = none` alone;
+`cursor_branch_forwardH_covered` is the `CoveredFork` form. -/
 theorem cursor_branch_forwardH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (ok : CursorOK code c F κ) {f g : SFunc} (tree : κ.f = .branch f g)
@@ -395,7 +396,8 @@ theorem CursorStateAt.destH_covered {f : SFunc}
     Nonempty (CursorStateAt code c start f b S M K) :=
   cut.destH checked success fork.rules_stateGas_none
 
-/-- `CursorStateAt.branchZero` from `rules.stateGas = none` alone. -/
+/-- The branch-on-zero state cut from `rules.stateGas = none` alone;
+`CursorStateAt.branchZeroH_covered` is the `CoveredFork` form. -/
 theorem CursorStateAt.branchZeroH {f g : SFunc} {target : B256}
     (cut : CursorStateAt code c start (.branch f g) b (target :: 0 :: S) M K)
     (checked : Cert.check code c = true) (success : start.exn = .ok post)
@@ -433,7 +435,8 @@ theorem CursorStateAt.branchSuccH_covered {f g : SFunc} {target flag : B256}
     Nonempty (CursorStateAt code c start g b S M K) :=
   cut.branchSuccH checked success fork.rules_stateGas_none nonzero
 
-/-- `CursorStateAt.toZero` from `rules.stateGas = none` alone. -/
+/-- The branch-to-zero state cut from `rules.stateGas = none` alone;
+`CursorStateAt.toZeroH_covered` is the `CoveredFork` form. -/
 theorem CursorStateAt.toZeroH {f : SFunc} {k : Nat} {target : B256}
     (cut : CursorStateAt code c start (.branchTo f k) b (target :: 0 :: S) M K)
     (checked : Cert.check code c = true) (success : start.exn = .ok post)
@@ -452,7 +455,8 @@ theorem CursorStateAt.toZeroH_covered {f : SFunc} {k : Nat} {target : B256}
     Nonempty (CursorStateAt code c start f b S M K) :=
   cut.toZeroH checked success fork.rules_stateGas_none
 
-/-- `CursorStateAt.toSucc` from `rules.stateGas = none` alone. -/
+/-- The branch-to-successor state cut from `rules.stateGas = none` alone;
+`CursorStateAt.toSuccH_covered` is the `CoveredFork` form. -/
 theorem CursorStateAt.toSuccH {f g : SFunc} {k : Nat} {target flag : B256}
     (cut : CursorStateAt code c start (.branchTo f k) b (target :: flag :: S) M K)
     (checked : Cert.check code c = true) (success : start.exn = .ok post)
@@ -493,7 +497,8 @@ theorem CursorStateAt.callH_covered {f g : SFunc} {k : Nat} {target : B256}
     Nonempty (CursorStateAt code c start g b S M (f :: K)) :=
   cut.callH checked success fork.rules_stateGas_none lookup
 
-/-- `CursorStateAt.ret` from `rules.stateGas = none` alone. -/
+/-- The return state cut from `rules.stateGas = none` alone;
+`CursorStateAt.retH_covered` is the `CoveredFork` form. -/
 theorem CursorStateAt.retH {f : SFunc} {target : B256}
     (cut : CursorStateAt code c start .ret b (target :: S) M (f :: K))
     (checked : Cert.check code c = true) (success : start.exn = .ok post)
@@ -511,7 +516,8 @@ theorem CursorStateAt.retH_covered {f : SFunc} {target : B256}
     Nonempty (CursorStateAt code c start f b S M K) :=
   cut.retH checked success fork.rules_stateGas_none
 
-/-- `CursorStateAt.goto` from `rules.stateGas = none` alone. -/
+/-- The goto state cut from `rules.stateGas = none` alone;
+`CursorStateAt.gotoH_covered` is the `CoveredFork` form. -/
 theorem CursorStateAt.gotoH {f : SFunc} {k : Nat} {target : B256}
     (cut : CursorStateAt code c start (.jump k) b (target :: S) M K)
     (checked : Cert.check code c = true) (success : start.exn = .ok post)

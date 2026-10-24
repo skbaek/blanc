@@ -37,19 +37,5 @@ theorem PairFeeObservationH.sourceCall {root start : Exec.Deriv} {b Wc : Devm}
     (by rw [r.occurrence.sevm_eq]; exact pair) operands data flag rfl r.reply.returnData.symm rfl
     guard (by rw [r.occurrence.sevm_eq]; exact stateGas) queue
 
-/-- The fee source request names this same original factory slot and full reply. -/
-theorem PairFeeObservation.sourceCall {root start : Exec.Deriv} {b : Devm}
-    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc}
-    {frame : Frame} {target : Adr} {paths : List Exec.LocatedFrame}
-    (r : PairFeeObservation root start b M r1 r0 ρ R K) (site : CallSite) (index : Nat)
-    (word : feeFactoryWord start.sevm b = target.toB256)
-    (pair : frame.context.pair = start.sevm.currentTarget)
-    (memory : Mem.Wf M) (fork : CoveredFork start.sevm.benvStat.fork)
-    (queue : SourceSlotQueue r.occurrence.call frame.context.pair index paths) :
-    ∃ observed : SourceCallAt root frame (requestFor site target .feeTo)
-        (feeObservedResult r.out) index,
-      observed.call = r.occurrence.call ∧ observed.paths = paths :=
-  PairFeeObservationH.sourceCall (r.toH fork) site index word pair memory fork.rules_stateGas_none queue
-
 
 end Blanc.Lift.UniswapV2Pair

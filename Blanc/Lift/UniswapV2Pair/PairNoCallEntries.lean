@@ -728,15 +728,4 @@ theorem PairNoCallEntry.root_noExecH {sevm : Sevm} {b post : Devm} {G : Nat}
   · exact suffix N after x decoded
   · exact clean x decoded
 
-/-- The checked selected suffix and original prefix exclude every same-frame
-external instruction of this successful original bytecode execution. -/
-theorem PairNoCallEntry.root_noExec {sevm : Sevm} {b post : Devm} {G : Nat}
-    (entry : PairNoCallEntry) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = entry.selector)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ N →
-      ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  entry.root_noExecH codeEq fork.rules_stateGas_none selector run
-
 end Blanc.Lift.UniswapV2Pair

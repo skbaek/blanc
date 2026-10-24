@@ -115,31 +115,6 @@ def PermitRecoverySettlementH.toCovered {root : Exec.Deriv} {b : Devm} {actual :
   childFrames := h.childFrames
   partition := h.partition
 
-/-- On a covered fork, the modern `PermitRecoverySettlement` gives `PermitRecoverySettlementH` with the same fields. -/
-def PermitRecoverySettlement.toH {root : Exec.Deriv} {b : Devm} {actual : PermitCallOccurrence root b}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : PermitRecoverySettlement actual) :
-    PermitRecoverySettlementH (actual.toH fork) where
-  message := h.message
-  parent := h.parent
-  child := h.child
-  delegated := h.delegated
-  codeAddress := h.codeAddress
-  childCode := h.childCode
-  availableGas := h.availableGas
-  messageEq := by rw [permitPublicDigestH_of_covered fork]; exact h.messageEq
-  process := h.process
-  clean := h.clean
-  output := h.output
-  resumed := h.resumed
-  spawned := h.spawned
-  entered := h.entered
-  enteredEq := h.enteredEq
-  immediate := h.immediate
-  paths := h.paths
-  queue := h.queue
-  childFrames := h.childFrames
-  partition := h.partition
-
 theorem PermitCallOccurrenceH.settlement {root : Exec.Deriv} {b post : Devm}
     (actual : PermitCallOccurrenceH root b) (success : root.exn = .ok post)
     (stateGas : root.sevm.benvStat.rules.stateGas = none)

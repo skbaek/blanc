@@ -100,18 +100,6 @@ theorem pair_dispatch_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : 
   · obtain ⟨compareA⟩ := comparison.branchSuccH cert_check rfl stateGas high
     exact ⟨by simpa only [high, ite_false] using compareA⟩
 
-/-- The selected upper or lower comparison is reached by an actual frame-free prefix.
-Its full world and initialized memory are retained; residual gas is derived. -/
-theorem pair_dispatch_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = sel)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      (if B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
-        then t_002b_c0 else t_00f9_c0) b [sel] getterInitMemory []) :=
-  pair_dispatch_selector_cursor_stateH codeEq fork.rules_stateGas_none selector run
-
 theorem pair_dispatch_comparison_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     {sel : B256} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = sel)

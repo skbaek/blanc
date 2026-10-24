@@ -70,60 +70,6 @@ theorem BurnThreeCallsH.root_sevm {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {
     (r : BurnThreeCallsH root sevm b w) : root.sevm = sevm :=
   (Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.initial.second.sameFrame).symm.trans r.initial.second_sevm
 
-/-- On a covered fork, `BurnFirstMutableH` gives the modern `BurnFirstMutable` with the same fields. -/
-def BurnFirstMutableH.toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnFourCalls root sevm b} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFirstMutableH (r.toH fork) U current invocation) :
-    BurnFirstMutable r U current invocation :=
-  have rootFork : CoveredFork root.sevm.benvStat.fork := by
-    rw [(r.toH fork).three.root_sevm]; exact fork
-  { observed := h.observed,
-    same := h.same,
-    nonstatic := h.nonstatic,
-    events := h.events,
-    turns := h.turns,
-    checkpoint := h.checkpoint,
-    added := h.added,
-    rets := h.rets,
-    queue := h.queue,
-    mappedPaths := h.mappedPaths,
-    mappedTurns := h.mappedTurns,
-    during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered)
-      (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) rootFork) h.during,
-    authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) h.mappedTurns rootFork h.authentic,
-    rep := h.rep,
-    sourceLogs := h.sourceLogs,
-    rawLogs := h.rawLogs }
-
-/-- On a covered fork, the modern `BurnFirstMutable` gives `BurnFirstMutableH` with the same fields. -/
-def BurnFirstMutable.toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnFourCalls root sevm b} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFirstMutable r U current invocation) :
-    BurnFirstMutableH (r.toH fork) U current invocation :=
-  have rootFork : CoveredFork root.sevm.benvStat.fork := by
-    rw [(r.toH fork).three.root_sevm]; exact fork
-  { observed := h.observed,
-    same := h.same,
-    nonstatic := h.nonstatic,
-    events := h.events,
-    turns := h.turns,
-    checkpoint := h.checkpoint,
-    added := h.added,
-    rets := h.rets,
-    queue := h.queue,
-    mappedPaths := h.mappedPaths,
-    mappedTurns := h.mappedTurns,
-    during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toH covered)
-      (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) rootFork) h.during,
-    authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toH covered) h.mappedTurns rootFork h.authentic,
-    rep := h.rep,
-    sourceLogs := h.sourceLogs,
-    rawLogs := h.rawLogs }
-
 /-- At the modern call worlds and on a covered fork, `BurnFirstMutableH` over `r` gives the modern
 `BurnFirstMutable` over `r.toCovered fork`. -/
 def BurnFirstMutableH.toCoveredOf {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -275,60 +221,6 @@ structure BurnSecondMutableH {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : B
     r.second.returned.devm.logs = r.second.occurrence.node.devm.logs ++ L ∧
     added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) = L.map some
 
-/-- On a covered fork, `BurnSecondMutableH` gives the modern `BurnSecondMutable` with the same fields. -/
-def BurnSecondMutableH.toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnFiveCalls root sevm b} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    {first : BurnFirstMutable r.four U current invocation}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnSecondMutableH (r.toH fork) (first.toH fork)) :
-    BurnSecondMutable r first :=
-  have rootFork : CoveredFork root.sevm.benvStat.fork := by
-    rw [(r.toH fork).four.three.root_sevm]; exact fork
-  { observed := h.observed,
-    same := h.same,
-    events := h.events,
-    turns := h.turns,
-    checkpoint := h.checkpoint,
-    added := h.added,
-    rets := h.rets,
-    queue := h.queue,
-    mappedPaths := h.mappedPaths,
-    mappedTurns := h.mappedTurns,
-    during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered)
-      (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) rootFork) h.during,
-    authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) h.mappedTurns rootFork h.authentic,
-    rep := h.rep,
-    sourceLogs := h.sourceLogs,
-    rawLogs := h.rawLogs }
-
-/-- On a covered fork, the modern `BurnSecondMutable` gives `BurnSecondMutableH` with the same fields. -/
-def BurnSecondMutable.toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnFiveCalls root sevm b} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    {first : BurnFirstMutable r.four U current invocation}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnSecondMutable r first) :
-    BurnSecondMutableH (r.toH fork) (first.toH fork) :=
-  have rootFork : CoveredFork root.sevm.benvStat.fork := by
-    rw [(r.toH fork).four.three.root_sevm]; exact fork
-  { observed := h.observed,
-    same := h.same,
-    events := h.events,
-    turns := h.turns,
-    checkpoint := h.checkpoint,
-    added := h.added,
-    rets := h.rets,
-    queue := h.queue,
-    mappedPaths := h.mappedPaths,
-    mappedTurns := h.mappedTurns,
-    during := AdmittedMutableTurns.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toH covered)
-      (h.queue.located_inherits (P := fun stat => CoveredFork stat.fork) rootFork) h.during,
-    authentic := h.queue.turns_mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toH covered) h.mappedTurns rootFork h.authentic,
-    rep := h.rep,
-    sourceLogs := h.sourceLogs,
-    rawLogs := h.rawLogs }
-
 /-- At the modern call worlds and on a covered fork, `BurnSecondMutableH` over `r` gives the modern
 `BurnSecondMutable` over `r.toCovered fork`. -/
 def BurnSecondMutableH.toCoveredOf {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -411,69 +303,6 @@ def BurnSecondMutableH.finalFrame {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {
     (second : BurnSecondMutableH r first) : Frame :=
   {first.secondFrame with current := second.checkpoint}.beginResume
     (burnTransferRequest1 (r.four.sourcePriced current))
-
-/-- Resume the first original mutable fold into its same selected checkpoint,
-then consume the second-transfer continuation. -/
-theorem BurnFirstMutable.consume {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnFiveCalls root sevm b} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} (first : BurnFirstMutable r.four U current invocation)
-    {tail : Transcript} {out : RunResult}
-    (rest : AdmittedSourceConsumes LockedAuth root r.four.transfer.returned 4
-      (.suspended first.secondFrame (burnTransferRequest1 (r.four.sourcePriced current))
-        (.burnTransfer1 (r.four.sourcePriced current))) tail out) :
-    AdmittedSourceConsumes LockedAuth root r.four.three.fee.occurrence.call.returned 3
-      (.suspended (r.four.sourceTransferFrame current invocation)
-        (burnTransferRequest0 (r.four.sourcePriced current)) (.burnTransfer0 (r.four.sourcePriced current)))
-      (.next (burnTransferResult r.four.transfer.returned.devm.returnData
-        r.four.transfer.occurrence.slot.isSome) (mutableTranscript first.turns .done) tail)
-      {out with childReturns := first.rets ++ out.childReturns} := by
-  have resumed := burn_resumeTransfer0 (frame :=
-    {r.four.sourceTransferFrame current invocation with current := first.checkpoint})
-    (priced := r.four.sourcePriced current) (entered := r.four.transfer.occurrence.slot.isSome)
-    (by
-      rcases r.first_accepted with empty | ⟨long, nonzero⟩
-      · exact Or.inl empty
-      · exact Or.inr ⟨long, by
-          simpa only [List.sliceD, List.drop_zero, List.takeD_eq_take _ long] using nonzero⟩)
-  dsimp only [BurnFirstMutable.secondFrame] at rest
-  rw [← resumed] at rest
-  exact AdmittedSourceConsumes.nextMutableCall first.observed
-    (by rw [first.same]; exact r.four.transfer_gap) first.queue rfl
-    (first.observed.noCodeMutableTranscript rfl first.queue first.mappedTurns)
-    first.mappedTurns first.authentic first.during
-    (by simpa only [first.same, burnTransferResult, ite_true] using rest)
-
-/-- Resume the second original mutable fold into the same final-query frame,
-retaining its full queue and recursively selected children. -/
-theorem BurnSecondMutable.consume {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {r : BurnFiveCalls root sevm b} {U : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {first : BurnFirstMutable r.four U current invocation}
-    (second : BurnSecondMutable r first) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) {tail : Transcript} {out : RunResult}
-    (rest : AdmittedSourceConsumes LockedAuth root r.second.returned 5
-      (.suspended second.finalFrame (burnFinalRequest0 second.finalFrame (r.four.sourcePriced current))
-        (.burnFinalBalance0 (r.four.sourcePriced current))) tail out) :
-    AdmittedSourceConsumes LockedAuth root r.four.transfer.returned 4
-      (.suspended first.secondFrame (burnTransferRequest1 (r.four.sourcePriced current))
-        (.burnTransfer1 (r.four.sourcePriced current)))
-      (.next (burnTransferResult r.second.returned.devm.returnData r.second.occurrence.slot.isSome)
-        (mutableTranscript second.turns .done) tail)
-      {out with childReturns := second.rets ++ out.childReturns} := by
-  have accepted := (r.actualReply success fork).2.2.2.2.1
-  have resumed := burn_resumeTransfer1 (frame := {first.secondFrame with current := second.checkpoint})
-    (priced := r.four.sourcePriced current) (entered := r.second.occurrence.slot.isSome)
-    (by
-      rcases accepted with empty | ⟨long, nonzero⟩
-      · exact Or.inl empty
-      · exact Or.inr ⟨long, by
-          simpa only [List.sliceD, List.drop_zero, List.takeD_eq_take _ long] using nonzero⟩)
-  dsimp only [BurnSecondMutable.finalFrame] at rest
-  rw [← resumed] at rest
-  exact AdmittedSourceConsumes.nextMutableCall second.observed
-    (by rw [second.same]; exact r.gap) second.queue rfl
-    (second.observed.noCodeMutableTranscript rfl second.queue second.mappedTurns)
-    second.mappedTurns second.authentic second.during
-    (by simpa only [second.same, burnTransferResult, ite_true] using rest)
 
 theorem BurnFirstMutableH.consume {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {r : BurnFiveCallsH root sevm b w} {U : WriterKey → Prop}

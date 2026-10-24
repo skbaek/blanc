@@ -60,28 +60,6 @@ structure BurnFeeReturnDataH {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : B
     (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
     (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) gas
 
-/-- On a covered fork, the modern `BurnFeeReturnData` gives `BurnFeeReturnDataH` over the
-converted calls with the same fields. -/
-def BurnFeeReturnData.toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {r : BurnThreeCalls root sevm b} {N : Exec.Deriv}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFeeReturnData r N) :
-    BurnFeeReturnDataH (r.toH fork) N where
-  memory := h.memory
-  cut := h.cut
-  node_eq := h.node_eq
-  guards := by
-    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
-      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
-    have g := h.guards
-    rw [← feeBranchAcceptsH_of_covered f, ← feeKLastWorldH_of_covered f] at g
-    exact g
-  state := by
-    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
-      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
-    have g := h.state
-    simp only [← feeBranchPostH_of_covered f, ← feeKLastWorldH_of_covered f] at g
-    exact g
-
 /-- At the modern call worlds and on a covered fork, `BurnFeeReturnDataH` gives the modern
 `BurnFeeReturnData` over the converted calls. -/
 def BurnFeeReturnDataH.toCoveredOf {root : Exec.Deriv} {sevm : Sevm} {b : Devm}

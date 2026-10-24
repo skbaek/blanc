@@ -32,16 +32,6 @@ def BurnFourCallsH.replyMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w :
   else Blanc.Lift.bytesArrayMemory (r.three.transferMemory r.pricing r.residual) 292
     r.transfer.returned.devm.returnData
 
-theorem BurnFourCalls.replyMemory_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnFourCalls root sevm b) :
-    (r.toH fork).replyMemory = r.replyMemory := by
-  unfold BurnFourCallsH.replyMemory BurnFourCalls.replyMemory
-  show (if r.transfer.returned.devm.returnData = [] then
-      (r.three.toH fork).transferMemory r.pricing r.residual
-    else Blanc.Lift.bytesArrayMemory ((r.three.toH fork).transferMemory r.pricing r.residual) 292
-      r.transfer.returned.devm.returnData) = _
-  rw [BurnThreeCalls.transferMemory_toH fork]
-
 theorem BurnFourCallsH.replyMemory_toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (fork : CoveredFork sevm.benvStat.fork) (r : BurnFourCallsH root sevm b BurnSchedule.modern) :
     (r.toCovered fork).replyMemory = r.replyMemory := by
@@ -81,30 +71,6 @@ theorem BurnFourCallsH.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : D
     r.returnedTree r.returnedConts success (by rw [r.transfer_sevm]; exact stateGas)
     memory (by decide) (by decide) (by decide)
   simpa only [BurnFourCallsH.replyMemory, show (128 + 164 : B256) = 292 from by decide] using reply
-
-/-- The first original transfer's own reply supplies the actual caller state
-and full physical allocation used by transfer1. -/
-theorem BurnFourCalls.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnFourCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    r.transfer.returned.devm.stack = 1 :: 360 ::
-      (burnInitialToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: r.three.amount0 r.pricing :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
-      burnInitialToken0 sevm b :: 0x1698 :: r.three.pricedLocals r.pricing ∧
-    r.transfer.returned.devm.memory = r.three.transferMemory r.pricing r.residual ∧
-    r.transfer.returned.devm.output = (r.three.transferWorld r.pricing r.residual).output ∧
-    r.transfer.returned.devm.returnData.length < 2 ^ 160 ∧
-    (r.transfer.returned.devm.returnData = [] ∨
-      (32 ≤ r.transfer.returned.devm.returnData.length ∧
-        Bytes.toB256 (r.transfer.returned.devm.returnData.sliceD 0 32 0) ≠ 0)) ∧
-    Nonempty (CursorStateAt code cert r.transfer.returned t_1698_c13
-      r.transfer.returned.devm (r.three.pricedLocals r.pricing) r.replyMemory [t_053d_c83]) := by
-  have h := BurnFourCallsH.actualReply (r.toH fork) success fork.rules_stateGas_none
-
-  simp only [BurnFourCalls.replyMemory_toH fork] at h
-  simp only [BurnFourCalls.toH, BurnThreeCalls.transferWorld_toH fork,
-    BurnThreeCalls.transferMemory_toH fork] at h
-  exact h
 
 
 end Blanc.Lift.UniswapV2Pair

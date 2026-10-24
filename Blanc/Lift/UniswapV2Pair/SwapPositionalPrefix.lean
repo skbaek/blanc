@@ -391,19 +391,5 @@ theorem swap_prefix_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
   rw [swapRawLocalsStack_eqH]
   exact ⟨cut⟩
 
-/-- The complete no-external-call prefix reaches the first optimistic-transfer
-choice in the original root, with its exact lock/read world, cached locals,
-memory and pending caller. No desired endpoint or residual gas is supplied. -/
-theorem swap_prefix_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (CursorStateAt code cert
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_08bf_c4 (swapPrefixWorld sevm b) (swapRawLocalsStack sevm b)
-      getterInitMemory [t_0257_c99]) := by
-  simpa only [swapPrefixWorldH_of_covered fork] using
-    swap_prefix_cursor_stateH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
-
 
 end Blanc.Lift.UniswapV2Pair

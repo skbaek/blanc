@@ -119,32 +119,6 @@ def BurnInitialPairH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
   second_guard := h.second_guard
   decoded := h.decoded
 
-/-- On a covered fork, the modern `BurnInitialPair` gives `BurnInitialPairH` with the same fields. -/
-def BurnInitialPair.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnInitialPair root sevm b) :
-    BurnInitialPairH root sevm b where
-  first := h.first
-  second := h.second
-  gas0 := h.gas0
-  gas1 := h.gas1
-  out0 := h.out0
-  out1 := h.out1
-  first_gap := h.first_gap
-  first_input := by simpa only [burnFirstCallInputH_of_covered fork, burnInitialReserveWorldH_of_covered fork] using h.first_input
-  first_reply := by simpa only [burnInitialWorld0H_of_covered fork] using h.first_reply
-  first_width := h.first_width
-  first_bound := h.first_bound
-  first_decoded := h.first_decoded
-  first_guard := by simpa only [burnInitialWorld0H_of_covered fork] using h.first_guard
-  second_gap := h.second_gap
-  second_sevm := h.second_sevm
-  second_input := by simpa only [burnInitialSecondInputH_of_covered fork] using h.second_input
-  second_reply := by simpa only [accountAccessH_of_eip2929 fork.rules_access] using h.second_reply
-  second_width := h.second_width
-  second_bound := h.second_bound
-  second_guard := h.second_guard
-  decoded := h.decoded
-
 /-- The Burn call worlds that depend on the access schedule: the LP-balance load before the
 factory call (`FB`), the factory call world (`FC`), both as functions of the returned node's
 environment and world, and the final balance calls' account access (`acc`). -/
@@ -234,19 +208,6 @@ def BurnThreeCallsH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
   fee := h.fee.toCovered (by
     show CoveredFork h.initial.second.returned.sevm.benvStat.fork
     rw [h.initial.returned_sevm]; exact fork)
-
-/-- On a covered fork, the modern `BurnThreeCalls` gives `BurnThreeCallsH` at the modern
-call worlds. -/
-def BurnThreeCalls.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnThreeCalls root sevm b) :
-    BurnThreeCallsH root sevm b BurnSchedule.modern where
-  worlds := BurnScheduleH.of_covered fork
-  initial := h.initial.toH fork
-  fee := by
-    have f : CoveredFork h.initial.second.returned.sevm.benvStat.fork := by
-      rw [(Cursor.parentStep_sevm h.initial.second.edge).trans h.initial.second_sevm]; exact fork
-    have x := h.fee.toH f
-    exact x
 
 theorem burn_three_occurrences_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     {w : BurnSchedule} (worlds : BurnScheduleH sevm w) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)

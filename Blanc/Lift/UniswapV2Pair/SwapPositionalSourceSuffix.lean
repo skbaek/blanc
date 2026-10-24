@@ -75,26 +75,6 @@ def SwapSourceUpdateH.toCovered {root : Exec.Deriv} {b : Devm} {U : WriterKey �
     simp only [updateWorldH_of_covered fork] at field ⊢
     exact field
 
-/-- On a covered fork, the modern `SwapSourceUpdate` gives `SwapSourceUpdateH` with the same fields. -/
-def SwapSourceUpdate.toH {root : Exec.Deriv} {b : Devm} {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat} {r : SwapBalances root root.sevm b} {queries : SwapBalancePairSource r U (writerContext root.sevm invocation) current b frame index}
-    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapSourceUpdate r queries) :
-    SwapSourceUpdateH (r.toH fork) (queries.toH fork) where
-  state := h.state
-  event := h.event
-  oracle := h.oracle
-  keys := h.keys
-  grown := h.grown
-  check := h.check
-  accepted := h.accepted
-  sync := h.sync
-  storage := by
-    rw [SwapBalances.finalWorld_toH]
-    exact h.storage
-  updateLogs := by
-    have field := h.updateLogs
-    simp only [updateWorldH_of_covered fork] at field ⊢
-    exact field
-
 theorem swap_source_updateH {root : Exec.Deriv} {b W : Devm} {U : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {frame : Frame} {index : Nat}
     (r : SwapBalancesH root root.sevm b W)

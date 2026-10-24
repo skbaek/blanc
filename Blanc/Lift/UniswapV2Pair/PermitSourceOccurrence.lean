@@ -4,52 +4,6 @@ import Blanc.Lift.UniswapV2Pair.PermitTurns
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The source recovery request and copied reply are those of the same original
-instruction, processed slot, and returned machine state. -/
-theorem PermitCallOccurrence.sourceCall {K : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (settled : PermitRecoverySettlement actual)
-    (source : PermitSourceResult K current invocation root.sevm b post
-      actual.call.returned.devm actual.out settled.entered post.gasLeft) :
-    ∃ observed : SourceCallAt root (permitPublicSuspended current invocation root.sevm)
-        (permitPublicRequest current root.sevm) (permitExternalResult actual.out settled.entered) 0,
-      observed.call = actual.call ∧ observed.paths = settled.paths := by
-  have calldata := source.2.2.2.1
-  have target := source.2.2.2.2.1
-  refine ⟨{
-    call := actual.call
-    message := settled.message
-    resume := Resume.call settled.parent 450 32
-    nextPc := actual.call.occurrence.node.pc + 1
-    child := settled.child
-    outputOffset := 450
-    outputSize := 32
-    parent := settled.parent
-    spawned := settled.spawned
-    target := by rw [settled.messageEq]; exact congrArg some target.symm
-    caller := by rw [settled.messageEq]; rfl
-    value := by rw [settled.messageEq]; rfl
-    calldata := by rw [settled.messageEq]; exact calldata.symm
-    static := by
-      rw [settled.messageEq]
-      simp only [callMsg, externalStatic, permitPublicRequest, permitRequest, requestFor,
-        BEq.rfl, Bool.or_true, Bool.true_or]
-    response := settled.process
-    resumeEq := rfl
-    resumed := settled.resumed
-    replyAt := by
-      apply SourceReplyAt.recovery (by rfl)
-      · rw [settled.clean]; rfl
-      · exact settled.output.symm
-      · exact actual.recovered_image.symm
-    guarded := by intro impossible; cases impossible
-    unguardedEntry := by intro _; exact settled.enteredEq
-    paths := settled.paths
-    queue := settled.queue
-    childFrames := settled.childFrames
-    partition := settled.partition
-  }, rfl, rfl⟩
-
 theorem PermitCallOccurrenceH.sourceCall {K : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
     (actual : PermitCallOccurrenceH root b) (settled : PermitRecoverySettlementH actual)

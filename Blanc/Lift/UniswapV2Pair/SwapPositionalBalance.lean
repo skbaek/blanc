@@ -376,17 +376,6 @@ theorem swap_balances_cursor_stateH {sevm : Sevm} {b post W : Devm} {G : Nat}
     optional.transfers.secondLower (by have upper := optional.transfers.secondUpper; omega)
   exact ⟨⟨optional, first, second⟩⟩
 
-/-- Both final balance calls are derived from the same original successful
-Swap; every full reply, decoder and gas is selected internally. -/
-theorem swap_balances_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (SwapBalances ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b) := by
-  obtain ⟨h⟩ := swap_balances_cursor_stateH (swapPrefixWorldH_of_covered fork).symm codeEq
-    fork.rules_stateGas_none fork.rules_bal_none selector run
-  exact ⟨h.toCovered fork⟩
-
 
 theorem SwapBalancesH.noExecTail {root : Exec.Deriv} {sevm : Sevm} {b W : Devm}
     (r : SwapBalancesH root sevm b W) (stateGas : root.sevm.benvStat.rules.stateGas = none) :

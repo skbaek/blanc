@@ -47,12 +47,6 @@ theorem SwapSourcePrefixH.toCovered {sevm : Sevm} {U : WriterKey → Prop} {curr
     SwapSourcePrefix U current invocation sevm b :=
   ⟨h.value, h.nonstatic, h.liquidity0, h.liquidity1, h.token0, h.token1, h.reserve0, h.reserve1, h.started, h.invariant⟩
 
-/-- The modern `SwapSourcePrefix` is `SwapSourcePrefixH` at the modern prefix world. -/
-theorem SwapSourcePrefix.toH {sevm : Sevm} {U : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {b : Devm} (h : SwapSourcePrefix U current invocation sevm b) :
-    SwapSourcePrefixH U current invocation sevm b (swapPrefixWorld sevm b) :=
-  ⟨h.value, h.nonstatic, h.liquidity0, h.liquidity1, h.token0, h.token1, h.reserve0, h.reserve1, h.started, h.invariant⟩
-
 /-- Initial finite storage fixes the four raw cached Swap words. -/
 theorem swap_source_cached_words {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b : Devm}
@@ -170,37 +164,6 @@ theorem swap_source_transfersH {root : Exec.Deriv} {b W : Devm}
     AdmittedSourceConsumes LockedAuthH root root 0 segment (T0 (T1 tail))
       {out with childReturns := (R0 ++ R1) ++ out.childReturns}) entryFacts.started)
     (by simpa only [List.append_assoc] using first)
-
-/-- Both admitted transfer phases start at the original decoded Swap entry,
-sharing this physical chain's actual nodes and the same evolving source frame. -/
-theorem swap_source_transfers {root : Exec.Deriv} {b : Devm}
-    {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (r : SwapTransfers root root.sevm b)
-    (entryFacts : SwapSourcePrefix U current invocation root.sevm b)
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    let locals := swapFrontLocals root.sevm current.state
-    let count0 := if swapAmount0Out root.sevm = 0 then 0 else 1
-    let count1 := if swapAmount1Out root.sevm = 0 then 0 else 1
-    ∃ (frame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
-      SwapFrontState U root.sevm.currentTarget (writerContext root.sevm invocation)
-        current b frame r.second.world ∧
-      ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root r.second.next (count0 + count1)
-          (frame.afterSwapTransfer1 locals) tail out →
-        AdmittedSourceConsumes LockedAuth root root 0
-          (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
-          (T tail) {out with childReturns := rets ++ out.childReturns} := by
-  obtain ⟨frame, T, rets, inv, reach⟩ := swap_source_transfersH r.toH entryFacts.toH inj apart sem
-    image installed fork.rules_stateGas_none fork.rules_bal_none good
-  exact ⟨frame, T, rets, inv, fun tail out rest => AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-      (fun _ _ _ covered auth => auth.toCovered covered) fork
-    (reach tail out (AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
-        (fun _ _ _ covered auth => auth.toH covered) fork rest))⟩
 
 
 end Blanc.Lift.UniswapV2Pair

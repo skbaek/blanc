@@ -54,13 +54,6 @@ theorem BurnFourCallsH.secondTransferMemory_toCovered {root : Exec.Deriv} {sevm 
   rw [BurnFourCallsH.replyMemory_toCovered fork]
   rfl
 
-theorem BurnFourCalls.secondTransferMemory_toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (r : BurnFourCalls root sevm b) :
-    (r.toH fork).secondTransferMemory = r.secondTransferMemory := by
-  unfold BurnFourCalls.secondTransferMemory BurnFourCallsH.secondTransferMemory
-  rw [BurnFourCalls.replyMemory_toH fork]
-  rfl
-
 /-- The first transfer's own full world and reply allocation feed the second
 actual original-root CALL, with the real raw slot and full returned cursor. -/
 structure BurnFiveCalls (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
@@ -143,30 +136,6 @@ def BurnFiveCallsH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
   sevm_eq := h.sevm_eq
   input := by
     rw [BurnFourCallsH.secondTransferMemory_toCovered fork]
-    exact h.input
-  calldata := h.calldata
-  primitive := h.primitive
-  cursor := h.cursor
-  placed := h.placed
-  tree := h.tree
-  conts := h.conts
-
-/-- On a covered fork, the modern `BurnFiveCalls` gives `BurnFiveCallsH` with the same fields. -/
-def BurnFiveCalls.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFiveCalls root sevm b) :
-    BurnFiveCallsH root sevm b BurnSchedule.modern where
-  four := h.four.toH fork
-  first_bound := h.first_bound
-  first_accepted := h.first_accepted
-  first_decoded := by
-    rw [BurnFourCalls.replyMemory_toH fork]
-    exact h.first_decoded
-  second := h.second
-  gas := h.gas
-  gap := h.gap
-  sevm_eq := h.sevm_eq
-  input := by
-    rw [BurnFourCalls.secondTransferMemory_toH fork]
     exact h.input
   calldata := h.calldata
   primitive := h.primitive

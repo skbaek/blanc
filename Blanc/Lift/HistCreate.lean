@@ -13,7 +13,7 @@ they read.
 
 * `sloadCostH`, `sstoreCostH` — the charges under the frame's actual access schedule and
   `SSTORE` regime (legacy, flat net-metered, EIP-2929), equal to `sloadCost`/`sstoreCost` under
-  EIP-2929 (`sloadCostH_of_eip2929`, `sstoreCostH_of_eip2929`);
+  EIP-2929 (`sloadCostH_of_eip2929`);
 * `Ninst.runCompiled_sload_selectedH`, `Ninst.runCompiled_sstore_selectedH`, `rx_sload_selH`,
   `rx_sstoreH` — forward steps over `afterSloadH`/`afterSstoreH`, from `rules.stateGas = none`
   (the `SSTORE` stipend sentry is required only where the rules have it);
@@ -60,15 +60,6 @@ def sstoreCostH (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
   sstoreRegimeGasCost sevm.benvStat.rules.sstore sevm.benvStat.rules.access
     (storageAccessCostH sevm devm key) value
     (devm.getOrigStorVal sevm sevm.currentTarget key) (devm.getStorVal sevm.currentTarget key)
-
-theorem sstoreCostH_of_eip2929 {sevm : Sevm} {devm : Devm} {key value : B256}
-    (access : sevm.benvStat.rules.access = .eip2929)
-    (netMetering : sevm.benvStat.rules.sstore.netMetering = true) :
-    sstoreCostH sevm devm key value = sstoreCost sevm devm key value := by
-  unfold sstoreCostH storageAccessCostH sstoreCost sstoreRegimeGasCost sstoreValueCost
-  rw [access, netMetering]
-  by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ devm.accessedStorageKeys <;>
-    simp only [hw, ite_true, ite_false] <;> split_ifs <;> omega
 
 theorem afterSloadH_state (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSloadH sevm base key).state = base.state := by

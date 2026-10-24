@@ -228,13 +228,6 @@ theorem Evm.step_cont_getStor_foreign_noStateGas {pc pc' : Nat} {sevm : Sevm} {p
               exact ((Ninst.exchange_instructionFrame_effectRec
                 (xl := .none) trivial nrun).getStor ca).symm
 
-theorem Evm.step_cont_getStor_foreign {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
-    {ca : Adr} (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (foreign : sevm.currentTarget ≠ ca) :
-    Devm.getStor post ca = Devm.getStor pre ca :=
-  Evm.step_cont_getStor_foreign_noStateGas fork.rules_stateGas_none step foreign
-
 /-- A childless message preserves storage at each structurally protected owner. -/
 theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume}
@@ -375,23 +368,6 @@ theorem Evm.step_run_getStor_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter 
       (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   exact Xinst.spawn_run_getStor_noStateGas fork spawn entered child resumed nonempty
-
-theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (entered : frame.enter = .run childEvm)
-    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (resumed : resume.run (frame.settle raw) = .ok inter)
-    {ca : Adr} (nonempty : pre.getCode ca ≠ .empty) :
-    (∀ settles : Frame.settlementCommits frame raw = true, ∀ key,
-      (Devm.getStor inter ca).get key =
-        (Devm.getStor (Execution.committedPost raw
-          (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
-    (¬ Frame.settlementCommits frame raw = true → ∀ key,
-      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) :=
-  Evm.step_run_getStor_noStateGas fork.rules_stateGas_none step entered child resumed
-    nonempty
 
 /-- A CALL or STATICCALL child of any frame runs the installed image of `ca` when it
 executes at `ca`. -/
@@ -695,23 +671,6 @@ theorem CodeSem.At.spawnChild_noStateGas {sem : CodeSem} {ca : Adr}
     rfl
   · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv enter
     rfl
-
-theorem CodeSem.At.spawnChild {sem : CodeSem} {ca : Adr}
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {callee : Jaune.Frame} {resume : Resume} {child : Evm}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn callee resume pc')
-    (enter : callee.enter = .run child)
-    (installed : sem.At ca pc sevm pre) (foreign : sevm.currentTarget ≠ ca)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    sem.At ca child.pc child.sta child.dyna ∧
-      Devm.getStor child.dyna ca = Devm.getStor pre ca ∧
-      (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty ∧ child.dyna.output = []) ∧
-      child.sta.data.length < 2 ^ 256 ∧ child.sta.benvStat = sevm.benvStat ∧
-      CoveredFork child.sta.benvStat.fork := by
-  obtain ⟨installed', storage, machine, short, statEq⟩ :=
-    CodeSem.At.spawnChild_noStateGas step enter installed foreign fork.rules_stateGas_none
-  obtain ⟨_, childFork⟩ := Blanc.ExecutionTrace.Evm.step_spawn_child_data fork step enter
-  exact ⟨installed', storage, machine, short, statEq, childFork⟩
 
 /-- A lifted instruction step, with its actual child if any, keeps every nonempty code. -/
 theorem Lift.StepIn.codePreserve {R : Exec.Deriv} {sevm : Sevm} {pre post : Devm} {n : Ninst}

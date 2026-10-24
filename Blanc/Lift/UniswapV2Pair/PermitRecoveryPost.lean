@@ -4,16 +4,6 @@ import Blanc.Lift.CursorSourceRunReturn
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The recovery word is read from the memory of the actual returned parent. -/
-theorem PermitCallOccurrence.reply_memory {root : Exec.Deriv} {b : Devm}
-    (actual : PermitCallOccurrence root b) :
-    actual.call.returned.devm.memory =
-      permitReplyMemory (permitPublicCallMemory root.sevm b) actual.out := by
-  simpa only [permitReplyMemory,
-    show (482 : B256).toNat = 482 from rfl, show (128 : B256).toNat = 128 from rfl,
-    show (450 : B256).toNat = 450 from rfl, show (32 : B256).toNat = 32 from rfl]
-    using actual.post.memory
-
 theorem PermitCallOccurrenceH.reply_memory {root : Exec.Deriv} {b : Devm}
     (actual : PermitCallOccurrenceH root b) :
     actual.call.returned.devm.memory =
@@ -22,16 +12,6 @@ theorem PermitCallOccurrenceH.reply_memory {root : Exec.Deriv} {b : Devm}
     show (482 : B256).toNat = 482 from rfl, show (128 : B256).toNat = 128 from rfl,
     show (450 : B256).toNat = 450 from rfl, show (32 : B256).toNat = 32 from rfl]
     using actual.post.memory
-
-theorem PermitCallOccurrence.recovered_image {root : Exec.Deriv} {b : Devm}
-    (actual : PermitCallOccurrence root b) :
-    Bytes.toB256 (actual.call.returned.devm.memory.read 450 32).1 =
-      permitRecoveredWord actual.out := by
-  rw [actual.reply_memory]
-  exact (permitCallMemory_facts (sevm := root.sevm) (b := b)
-    getterInitMemory_ptr (Mem.reads_data getterInitMemory) (permitOwner root.sevm)
-    (permitSpender root.sevm) (permitValue root.sevm) (permitDeadline root.sevm)
-    (permitV root.sevm) (permitR root.sevm) (permitS root.sevm)).2.2 actual.out
 
 theorem PermitCallOccurrenceH.recovered_image {root : Exec.Deriv} {b : Devm}
     (actual : PermitCallOccurrenceH root b) :
