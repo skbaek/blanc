@@ -1567,6 +1567,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
+import Blanc.Composition.UniswapV2PairUsdcWeth9P1
 import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
@@ -1823,6 +1824,7 @@ import Blanc.Lift.Usdc.InitReachV2_2
 import Blanc.Lift.Usdc.InitReach06
 import Blanc.Lift.Usdc.InitReachV1
 import Blanc.Lift.Usdc.InitRowsHistory
+import Blanc.Lift.Usdc.GovernanceHistory
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk
