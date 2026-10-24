@@ -870,6 +870,21 @@ covered-fork per-step facts); `Exec.Deriv.successfulSstore?_sound_raw`
 `ExecutionTrace.messageCallExecutionMessage_getStor`; and the level-zero
 `Exec.rawNodes_getCode`, `Exec.rawNodes_cellProv_noStateGas` (per-run,
 by induction). No recipe is registered: use this branch and the named theorem.
+For cell provenance at message and transaction level (L1-L2), each relative
+to an arbitrary entry world,
+[`Blanc/ExecutionInCellProvenance.lean`](../Blanc/ExecutionInCellProvenance.lean):
+`RetainedXlot.cellProv_at` (frame-generic, with the entry cell equation);
+`ProcessMessageTrace.cellProv_at` / `cellProv_post` and
+`ProcessCreateMessageTrace.cellProv_at` / `cellProv_post` (call/create cores
+via settlement replay); `MessageCallTrace.cellProv_at` / `cellProv_post`
+(collision/create/call arms); `TransactionTrace.cellProv_at` /
+`cellProv_post` (debit plus gas-credit, deletion-fold and sweep settlement);
+plus the entry bridges `Frame.enter_run_getStor`, `createEntry_getStor`,
+`delegation_keeps_code_entry`, `execMsg_cell_eq`,
+`not_protected_target_of_noCollision`, `prepareMessage_own_entry` and the
+settlement storage facts `addBal_getStor_of_codenonempty`,
+`foldl_destroyAccount_getStor`, `CellProv.of_replay_nodes`. No recipe is
+registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
