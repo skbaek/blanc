@@ -64,7 +64,8 @@ theorem dispatch06_reach {P : Sevm → Devm → Ninst → Devm → Prop} {fs : L
     {a b : UInt8 × UInt8} {sel : SFunc} {σ c : B256} {j : Nat} (hs : selWord sevm = σ)
     (hw : sel.selWalk σ = .inl (c, j)) {d : Devm} {G : Nat} {M : Mem}
     (run : Reach P fs sevm ⟨St d [] M G, dispatch06 a b sel, []⟩ T) (hT : AtSstore T) :
-    ∃ g b' M' G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b' [σ] M' G', g, []⟩ T := by
+    ∃ g b' G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b' [σ]
+      (M.write (Bytes.toB256 [0x40]).toNat (Bytes.toB256 [0x80]).toBytes) G', g, []⟩ T := by
   unfold dispatch06 at run
   iterate 7 rsx
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
@@ -78,7 +79,7 @@ theorem dispatch06_reach {P : Sevm → Devm → Ninst → Devm → Prop} {fs : L
   change Reach _ _ _ ⟨St _ (selWord sevm :: _) _ _, _, _⟩ _ at run
   rw [hs] at run
   obtain ⟨-, g, _, hg, run⟩ := Reach.selWalk_inlS erase hw run hT
-  exact ⟨g, _, _, _, hg, run⟩
+  exact ⟨g, _, _, hg, run⟩
 
 /-- The keys `initializeV2(name)` writes: slots `4`, `15`, `18` and the name's payload words. -/
 def KeysInitV2 (sevm : Sevm) (key : B256) : Prop :=

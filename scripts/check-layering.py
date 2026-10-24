@@ -1430,6 +1430,7 @@ CONTRACTS = {
         "Lift.Usdc.InitReachV2",
         "Lift.Usdc.InitReachV2_1",
         "Lift.Usdc.InitReachV2_2",
+        "Lift.Usdc.InitReach06",
         "Lift.Usdc.InitializerClearing",
         "Lift.Usdc.OldInitializerEffects",
         "Lift.Usdc.OldInitializerV1Clearing",

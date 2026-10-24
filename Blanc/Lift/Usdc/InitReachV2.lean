@@ -74,7 +74,7 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (run : Reach P ImplV2.cert.prog sevm ⟨St d [] M G, ImplV2.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
   rw [root_eq] at run
-  obtain ⟨g, b, M', G', hg, run⟩ := dispatch06_reach erase sel route_initV2 run hT
+  obtain ⟨g, b, G', hg, run⟩ := dispatch06_reach erase sel route_initV2 run hT
   rw [wrap_eq] at hg
   cases hg
   obtain ⟨b', M'', G'', T', inside, hT', rfl, lenB, offB⟩ :=
@@ -84,3 +84,4 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT')
 
 end Blanc.Lift.Usdc.InitReachV2
+

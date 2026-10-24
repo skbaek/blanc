@@ -35,6 +35,10 @@ namespace Blanc.Lift
 
 open Jaune Blanc
 
+-- Structural equality of synthetic trees, so a shape equation over a whole certificate entry
+-- is a kernel decision.
+deriving instance DecidableEq for SFunc
+
 /-! ## One straight-line step -/
 
 /-- The successor stack and memory of a straight-line, storage-free instruction over the

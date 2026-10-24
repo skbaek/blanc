@@ -6605,7 +6605,12 @@ contract-neutral.
   `j < (len + 31) / 32`) and `CdStrWrap.reach` (the reach lies in the body, entered with the
   decoded length and data pointer, both below `2 ^ 32`), are in
   [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean); worked use:
-  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`.
+  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`. The same module
+  has the memory form (`StrStore.reach` over `MLOAD`, memory kept outside scratch), solc 0.6's
+  string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
+  old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
+  `memWord_write_far` (a word read clear of a write); worked use: USDC
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region

@@ -309,6 +309,157 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : E
 
 end StrStoreCd
 
+/-! ## A solc 0.6 dynamic-string allocation from calldata -/
+
+/-- A write leaves every word of the old memory that lies outside its window. -/
+theorem memWord_write_far {μ : Mem} {n o : Nat} {ys : Bytes} (hsz : o + 32 ≤ μ.size)
+    (h : o + 32 ≤ n ∨ n + ys.length ≤ o) : memWord (μ.write n ys) o = memWord μ o := by
+  apply memWord_congr
+  intro j hj
+  exact (Mem.write_agree μ n ys).2 _ (by omega) (by omega)
+
+theorem size_write_ge (μ : Mem) (n : Nat) (ys : Bytes) : μ.size ≤ (μ.write n ys).size :=
+  (Mem.write_agree μ n ys).1
+
+/-- **One solc 0.6 string allocation.** The memory after the free-pointer read and update,
+the length header, the payload copy and the zero word after the payload, as the code computes
+it: the header reads back, the free pointer is the next allocation's, and every word between
+`96` and the allocation that the old memory held is kept. -/
+theorem alloc06_facts {M : Mem} {L : B256} {ys : Bytes} (hlen : ys.length = L.toNat)
+    (hp : 96 ≤ (memWord M 64).toNat) (hb : (memWord M 64).toNat + L.toNat + 128 < 2 ^ 256) :
+    let fp := (M.read (Bytes.toB256 [64]).toNat 32).1.toB256
+    let sz := Bytes.toB256 [32] + (Bytes.toB256 [31] + L) / Bytes.toB256 [32] * Bytes.toB256 [32]
+    let M' := ((((M.read (Bytes.toB256 [64]).toNat 32).2.write (Bytes.toB256 [64]).toNat
+      (fp + sz).toBytes).write fp.toNat L.toBytes).write (Bytes.toB256 [32] + fp).toNat ys).write
+      (Bytes.toB256 [32] + fp + L).toNat (Bytes.toB256 [0]).toBytes
+    memWord M' fp.toNat = L ∧ memWord M' 64 = fp + sz ∧
+      (fp + sz).toNat = fp.toNat + 32 + ((L.toNat + 31) / 32 * 32) ∧
+      fp.toNat + 32 ≤ M'.size ∧ M.size ≤ M'.size ∧
+      ∀ o, 96 ≤ o → o + 32 ≤ fp.toNat → o + 32 ≤ M.size → memWord M' o = memWord M o := by
+  intro fp sz M'
+  have h64 : (Bytes.toB256 [64]).toNat = 64 := by decide
+  have hfp : fp = memWord M 64 := by
+    show (M.read (Bytes.toB256 [64]).toNat 32).1.toB256 = Bytes.toB256 (M.read 64 32).1
+    rw [h64]
+  rw [← hfp] at hp hb
+  have h32 : (Bytes.toB256 [32] + fp).toNat = fp.toNat + 32 := by
+    rw [B256.toNat_add, show (Bytes.toB256 [32]).toNat = 32 by decide, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have h32L : (Bytes.toB256 [32] + fp + L).toNat = fp.toNat + 32 + L.toNat := by
+    rw [B256.toNat_add, h32, Nat.lo_eq_of_lt (by omega)]
+  have hsz : sz.toNat = 32 + ((L.toNat + 31) / 32 * 32) := by
+    have e31 : (Bytes.toB256 [31] + L).toNat = 31 + L.toNat := by
+      rw [B256.toNat_add, show (Bytes.toB256 [31]).toNat = 31 by decide,
+        Nat.lo_eq_of_lt (by omega)]
+    have ediv : ((Bytes.toB256 [31] + L) / Bytes.toB256 [32]).toNat = (31 + L.toNat) / 32 := by
+      rw [B256.toNat_div (by decide), e31, show (Bytes.toB256 [32]).toNat = 32 by decide]
+    have emul : ((Bytes.toB256 [31] + L) / Bytes.toB256 [32] * Bytes.toB256 [32]).toNat =
+        (31 + L.toNat) / 32 * 32 := by
+      rw [B256.toNat_mul, ediv, show (Bytes.toB256 [32]).toNat = 32 by decide,
+        Nat.lo_eq_of_lt (by have := Nat.div_mul_le_self (31 + L.toNat) 32; omega)]
+    show (Bytes.toB256 [32] + (Bytes.toB256 [31] + L) / Bytes.toB256 [32] * Bytes.toB256 [32]).toNat
+      = _
+    rw [B256.toNat_add, emul, show (Bytes.toB256 [32]).toNat = 32 by decide,
+      Nat.lo_eq_of_lt (by have := Nat.div_mul_le_self (31 + L.toNat) 32; omega)]
+    rw [Nat.add_comm L.toNat 31]
+  have hnext : (fp + sz).toNat = fp.toNat + 32 + ((L.toNat + 31) / 32 * 32) := by
+    have hr : ((L.toNat + 31) / 32 * 32) ≤ L.toNat + 31 := by
+      have := Nat.div_mul_le_self (L.toNat + 31) 32
+      omega
+    rw [B256.toNat_add, hsz, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have e : M' = ((((M.read 64 32).2.write 64 (fp + sz).toBytes).write fp.toNat L.toBytes).write
+      (fp.toNat + 32) ys).write (fp.toNat + 32 + L.toNat) (Bytes.toB256 [0]).toBytes := by
+    show ((((M.read (Bytes.toB256 [64]).toNat 32).2.write (Bytes.toB256 [64]).toNat
+      (fp + sz).toBytes).write fp.toNat L.toBytes).write (Bytes.toB256 [32] + fp).toNat ys).write
+      (Bytes.toB256 [32] + fp + L).toNat (Bytes.toB256 [0]).toBytes = _
+    rw [h64, h32, h32L]
+  rw [e]
+  have s0 : M.size ≤ (M.read 64 32).2.size := (SolcStorageReturn.Keeps.read M _ _).2
+  have m0 : ∀ o, memWord (M.read 64 32).2 o = memWord M o := fun _ => rfl
+  generalize (M.read 64 32).2 = A0 at s0 m0
+  have hL32 : L.toBytes.length = 32 := B256.length_toBytes L
+  have hz32 : (Bytes.toB256 [0]).toBytes.length = 32 := B256.length_toBytes _
+  have hv32 : (fp + sz).toBytes.length = 32 := B256.length_toBytes _
+  have a1 := Mem.memWord_write_word A0 64 (fp + sz)
+  have a2 := Mem.memWord_write_word (A0.write 64 (fp + sz).toBytes) fp.toNat L
+  have t1 := size_write_ge A0 64 (fp + sz).toBytes
+  have t2 := size_write_ge (A0.write 64 (fp + sz).toBytes) fp.toNat L.toBytes
+  have t3 := size_write_ge ((A0.write 64 (fp + sz).toBytes).write fp.toNat L.toBytes)
+    (fp.toNat + 32) ys
+  have t4 := size_write_ge (((A0.write 64 (fp + sz).toBytes).write fp.toNat L.toBytes).write
+    (fp.toNat + 32) ys) (fp.toNat + 32 + L.toNat) (Bytes.toB256 [0]).toBytes
+  refine ⟨?_, ?_, hnext, by omega, by omega, ?_⟩
+  · rw [memWord_write_far (by omega) (by omega), memWord_write_far (by omega) (by omega)]
+    exact a2.1
+  · rw [memWord_write_far (by omega) (by omega), memWord_write_far (by omega) (by omega),
+      memWord_write_far (by omega) (by omega)]
+    exact a1.1
+  · intro o ho96 ho hoM
+    rw [memWord_write_far (by omega) (by omega), memWord_write_far (by omega) (by omega),
+      memWord_write_far (by omega) (by omega), memWord_write_far (by omega) (by omega)]
+    exact m0 o
+
+/-- The allocation code of one string: size, free-pointer read and update, header, payload
+copy from calldata, zero word, then the spare word popped. -/
+def alloc06Frag (k : SFunc) : SFunc :=
+  .next (.reg (.swap 1)) <| .next (.reg (.swap 0)) <| .next (.reg (.dup 0)) <|
+  .next (.reg (.dup 0)) <| .next (.push [0x1f] (by decide)) <| .next (.reg .add) <|
+  .next (.push [0x20] (by decide)) <| .next (.reg (.dup 0)) <| .next (.reg (.swap 1)) <|
+  .next (.reg .div) <| .next (.reg .mul) <| .next (.push [0x20] (by decide)) <|
+  .next (.reg .add) <| .next (.push [0x40] (by decide)) <| .next (.reg .mload) <|
+  .next (.reg (.swap 0)) <| .next (.reg (.dup 1)) <| .next (.reg .add) <|
+  .next (.push [0x40] (by decide)) <| .next (.reg .mstore) <| .next (.reg (.dup 0)) <|
+  .next (.reg (.swap 3)) <| .next (.reg (.swap 2)) <| .next (.reg (.swap 1)) <|
+  .next (.reg (.swap 0)) <| .next (.reg (.dup 1)) <| .next (.reg (.dup 1)) <|
+  .next (.reg .mstore) <| .next (.push [0x20] (by decide)) <| .next (.reg .add) <|
+  .next (.reg (.dup 3)) <| .next (.reg (.dup 3)) <| .next (.reg (.dup 0)) <|
+  .next (.reg (.dup 2)) <| .next (.reg (.dup 4)) <| .next (.reg .calldatacopy) <|
+  .next (.push [0x00] (by decide)) <| .next (.reg (.swap 2)) <| .next (.reg .add) <|
+  .next (.reg (.swap 1)) <| .next (.reg (.swap 0)) <| .next (.reg (.swap 1)) <|
+  .next (.reg .mstore) <| .next (.reg .pop) k
+
+/-- What one allocation leaves: the header at the old free pointer `fp`, the next free pointer
+at `64`, the allocation's room, and every older word between `96` and `fp` kept. -/
+structure Alloc06 (M M' : Mem) (fp L : B256) : Prop where
+  hdr : memWord M' fp.toNat = L
+  next : (memWord M' 64).toNat = fp.toNat + 32 + (L.toNat + 31) / 32 * 32
+  fit : fp.toNat + 32 ≤ M'.size
+  grow : M.size ≤ M'.size
+  keep : ∀ o, 96 ≤ o → o + 32 ≤ fp.toNat → o + 32 ≤ M.size → memWord M' o = memWord M o
+
+section Alloc
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {T : Conf}
+
+/-- **One allocation on a reach to an `SSTORE`.** -/
+theorem alloc06Frag_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {k : SFunc} {K : List SFunc} {b : Devm} {a L src : B256} {R : List B256} {M : Mem}
+    {G : Nat} (hp : 96 ≤ (memWord M 64).toNat)
+    (hb : (memWord M 64).toNat + L.toNat + 128 < 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b (a :: L :: src :: R) M G, alloc06Frag k, K⟩ T)
+    (hT : AtSstore T) :
+    ∃ M' G', Alloc06 M M' (memWord M 64) L ∧
+      Reach P fs sevm ⟨St b (L :: L :: src :: memWord M 64 :: a :: R) M' G', k, K⟩ T := by
+  unfold alloc06Frag at run
+  iterate 44 rsx
+  have hlen : (sevm.data.sliceD src.toNat L.toNat 0).length = L.toNat := List.takeD_length _ _ _
+  have h := alloc06_facts (M := M) hlen hp hb
+  dsimp only at h
+  obtain ⟨hdr, hnx, hnext, fit, grow, keep⟩ := h
+  have hfp : (M.read (Bytes.toB256 [64]).toNat 32).1.toB256 = memWord M 64 := by
+    show (M.read (Bytes.toB256 [64]).toNat 32).1.toB256 = Bytes.toB256 (M.read 64 32).1
+    rw [show (Bytes.toB256 [64]).toNat = 64 by decide]
+  revert grow hfp
+  generalize (M.read (Bytes.toB256 [64]).toNat 32).1.toB256 = fp at run hdr hnx hnext fit keep ⊢
+  intro grow hfp
+  subst hfp
+  refine ⟨_, _, ⟨hdr, ?_, fit, grow, keep⟩, run⟩
+  rw [hnx]
+  exact hnext
+
+end Alloc
+
 /-! ## The external wrapper of `f(string calldata)` -/
 
 /-- The tags of one compilation of the wrapper and its body's table index. -/
@@ -380,7 +531,6 @@ theorem or_gt_zero {x y u v : B256} (h : (B256.gtCheck x y ||| B256.gtCheck u v)
   all_goals first
     | rfl
     | exact ((by decide : ((1 : B256) ||| 1) ≠ 0) h).elim
-    | exact ((by decide : ((1 : B256) ||| 0) ≠ 0) h).elim
 
 variable {ω} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {T : Conf}
