@@ -214,17 +214,6 @@ theorem syncCachedReserves_source {st : State} {sevm : Sevm} {b : Devm}
     B256.toNat_toB256_of_lt (lt_trans st.reserve1.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
   exact ⟨rfl, rfl⟩
 
-/-- Unlock changes only slot12 after the shared update; the other selected
-slots still contain its exact packed and cumulative result. -/
-theorem syncResultWorld_selected {sevm : Sevm} {b : Devm} {balance0 balance1 key : B256}
-    (other : key ≠ 12) :
-    (syncResultWorld sevm b balance0 balance1).getStorVal sevm.currentTarget key =
-      (syncUpdatedWorld sevm b balance0 balance1).getStorVal sevm.currentTarget key := by
-  unfold syncResultWorld
-  change (Devm.getStor _ _).get key = _
-  rw [afterSstore_getStor_self, Stor.get_set_ne _ (Ne.symm other)]
-  rfl
-
 theorem syncResultWorld_selectedH {sevm : Sevm} {b : Devm} {balance0 balance1 key : B256}
     (other : key ≠ 12) :
     (syncResultWorldH sevm b balance0 balance1).getStorVal sevm.currentTarget key =

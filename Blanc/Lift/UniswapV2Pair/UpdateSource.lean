@@ -282,30 +282,6 @@ theorem updateWorld_logsH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 
   rw [logs_addLog, updatePackedPostH, logs_afterStoreH, oracleLogs, field0, field1]
   simp only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
-/-- Every foreign account, including its nonce, balance, code and complete
-storage map, is preserved. -/
-theorem updateWorld_account_frame {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
-    {a : Adr} (foreign : a ≠ sevm.currentTarget) :
-    (updateWorld sevm b old0 old1 balance0 balance1).getAcct a = b.getAcct a := by
-  have store (base : Devm) (key value : B256) :
-      (afterSstore sevm base key value).getAcct a = base.getAcct a := by
-    obtain ⟨stor, account⟩ := afterSstore_getAcct (sevm := sevm) (b := base)
-      (key := key) (value := value) a
-    have storage := congrArg Acct.stor account
-    change (afterSstore sevm base key value).getStor a = stor at storage
-    rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign)] at storage
-    rw [← storage] at account
-    exact account
-  unfold updateWorld updateSyncPost
-  rw [getAcct_addLog]
-  unfold updatePackedPost
-  rw [store, afterSload_getAcct]
-  unfold updateOracleWorld
-  split
-  · unfold updateAccumulatorPost
-    rw [store, afterSload_getAcct, store, afterSload_getAcct, afterSload_getAcct]
-  · exact afterSload_getAcct _
-
 theorem updateWorld_account_frameH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
     {a : Adr} (foreign : a ≠ sevm.currentTarget) :
     (updateWorldH sevm b old0 old1 balance0 balance1).getAcct a = b.getAcct a := by
