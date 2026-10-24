@@ -6250,10 +6250,9 @@ contract-neutral.
   fork, `stateGas = none`, fresh stack and memory and `gasMeasure < 2 ^ 256`
   from `BodyStageCapabilities` alone, and
   [`Blanc/Lift/Usdc/OldInitializerHistory.lean`](../Blanc/Lift/Usdc/OldInitializerHistory.lean)
-  (`implV1_initialize_observed_rawFrame`,
-  `implV2_initializeV2_observed_rawFrame` and their `_short_zero_rawFrame`
-  forms) leaves only success, the running implementation code and the
-  selector. Raw frames include delegated children.
+  (`implV1_initialize_observed_rawFrame` and the V1 and V2
+  `_short_zero_rawFrame` forms) leaves only success, the running
+  implementation code and the selector. Raw frames include delegated children.
   [`Blanc/ExecutionStagedSstoreAttribution.lean`](../Blanc/ExecutionStagedSstoreAttribution.lean)
   `ConfiguredHistoryTraceIn.rawFrames_closed` (with the stage and staged-body
   forms) closes the raw frames under descent, and
