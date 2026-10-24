@@ -7668,6 +7668,14 @@ instruction through one of the six call-capable wrappers, retaining its selector
 world, initialized memory and remaining reach. It excludes fallback and quiet
 entries using checked source regions. It does not classify the wrappers' calls
 or establish callback-to-token exclusion.
+`pair_raw_reach_call_sites` and `pair_raw_node_call_sites` in
+[`PairRawCallSites.lean`](../Blanc/Lift/UniswapV2Pair/PairRawCallSites.lean)
+classify every reached external instruction through the certificate-wide
+`nodesSatisfy` check: STATICCALL, or CALL with the exact safeTransfer or callback
+continuation. The actual-node form retains the original `StepIn` reach and
+checked cursor under state-gas absence, with no final-outcome premise. It rejects
+other external instruction families but does not determine CALL operands or
+supply callback target exclusion.
 The parameterized quiet-entry
 cuts and checked closed regions in
 [`PairNoCallEntries.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallEntries.lean)
