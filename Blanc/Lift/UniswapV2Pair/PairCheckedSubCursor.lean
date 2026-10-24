@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorSourceRun
 import Blanc.Lift.UniswapV2Pair.Check
@@ -14,15 +15,13 @@ def pairSubGuardLine : List Ninst := [
 def pairCheckedReturnLine : List Ninst := [
   .reg (.swap 2), .reg (.swap 1), .reg .pop, .reg .pop]
 
-/-- Checked subtraction returns through the actual pending continuation.
-No-underflow is inferred from that same successful cursor's source suffix. -/
-theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem pair_sub59_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {x y ρ : B256} {K : List SFunc} {tail : SFunc}
     (cut : CursorStateAt code cert root t_226e_c59 b (y :: x :: ρ :: R) M (tail :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     y ≤ x ∧ Nonempty (CursorStateAt code cert root tail b ((x - y) :: R) M K) := by
-  obtain ⟨outcome, source⟩ := cut.placed.sourceRun cert_check
-    (cut.exn_eq.trans success) (cut.sevm_eq ▸ fork)
+  obtain ⟨outcome, source⟩ := cut.placed.sourceRunH cert_check
+    (cut.exn_eq.trans success) (cut.sevm_eq ▸ stateGas)
   obtain ⟨G, state⟩ := cut.state
   rw [cut.tree, state, cut.sevm_eq] at source
   have cover := (sub59_inv (source.mono (fun step => step.toRun))).1
@@ -31,8 +30,8 @@ theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
     change ¬ x < x - y
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_sub_eq_of_le x y cover]
     omega
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨guard⟩ := opened.line cert_check success fork pairSubGuardLine rfl
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨guard⟩ := opened.lineH cert_check success stateGas pairSubGuardLine rfl
     (by intro n member z equal; subst n
         simp only [pairSubGuardLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := 0x0df6 :: 1 :: (x - y) :: y :: x :: ρ :: R) (M' := M) (by
@@ -50,9 +49,9 @@ theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨returned⟩ := guard.toSucc cert_check success fork (by decide) (by rfl)
-  obtain ⟨returned⟩ := returned.dest cert_check success fork
-  obtain ⟨returner⟩ := returned.line cert_check success fork pairCheckedReturnLine rfl
+  obtain ⟨returned⟩ := guard.toSuccH cert_check success stateGas (by decide) (by rfl)
+  obtain ⟨returned⟩ := returned.destH cert_check success stateGas
+  obtain ⟨returner⟩ := returned.lineH cert_check success stateGas pairCheckedReturnLine rfl
     (by intro n member z equal; subst n
         simp only [pairCheckedReturnLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := ρ :: (x - y) :: R) (M' := M) (by
@@ -67,6 +66,16 @@ theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_pop step
       cases line
       exact ⟨g', state⟩)
-  exact ⟨cover, returner.ret cert_check success fork⟩
+  exact ⟨cover, returner.retH cert_check success stateGas⟩
+
+/-- Checked subtraction returns through the actual pending continuation.
+No-underflow is inferred from that same successful cursor's source suffix. -/
+theorem pair_sub59_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {x y ρ : B256} {K : List SFunc} {tail : SFunc}
+    (cut : CursorStateAt code cert root t_226e_c59 b (y :: x :: ρ :: R) M (tail :: K))
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
+    y ≤ x ∧ Nonempty (CursorStateAt code cert root tail b ((x - y) :: R) M K) :=
+  pair_sub59_cursor_stateH cut success fork.rules_stateGas_none
+
 
 end Blanc.Lift.UniswapV2Pair

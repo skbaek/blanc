@@ -5,14 +5,12 @@ import Blanc.Lift.UniswapV2Pair.PairTransferCallCursor
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The original moving initializer, both copy passes and partial merge reach
-this actual GAS cursor with the exact 68-byte transfer payload. -/
-theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
+theorem pair_transfer_request_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {p amount toWord tokenWord rho : B256} {n : Nat}
     (cut : CursorStateAt code cert start t_1fdb_c57 b
       (amount :: toWord :: tokenWord :: rho :: R) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     let V := safeTransfer_dynamicCallMemory M p amount toWord
     PtrMem (p + 164) V.size V ∧ Nonempty (CursorStateAt code cert start pairTransferGasTree b
@@ -27,8 +25,8 @@ theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
   obtain ⟨adv96, adv128, adv164, adv196, length68⟩ := safeTransfer_stageAdvance width
   have read96 := safeTransfer_copyRead96 (amount := amount) (toWord := toWord) mem lower width
   have read128 := safeTransfer_copyRead128 (amount := amount) (toWord := toWord) mem lower width
-  obtain ⟨payloadMem, ⟨copy⟩⟩ := pair_transfer_initialize_cursor_state cut success fork mem lower width
-  obtain ⟨remaining⟩ := pair_transfer_copy68_cursor_state copy success fork
+  obtain ⟨payloadMem, ⟨copy⟩⟩ := pair_transfer_initialize_cursor_stateH cut success stateGas mem lower width
+  obtain ⟨remaining⟩ := pair_transfer_copy68_cursor_stateH copy success stateGas
   rw [read96, adv96, adv128, adv164, adv196, read128] at remaining
   have addNat (k : Nat) (bound : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
     rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
@@ -51,8 +49,8 @@ theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
   have callMem := safeTransfer_callMemory_ptr (amount := amount) (toWord := toWord) mem lower width
   have sameMemory := safeTransfer_callMemory_eq (M := M) (amount := amount) (toWord := toWord) width
   dsimp only at sameMemory
-  obtain ⟨opened⟩ := remaining.dest cert_check success fork
-  obtain ⟨gas⟩ := opened.line cert_check success fork pairTransferPartialLine rfl
+  obtain ⟨opened⟩ := remaining.destH cert_check success stateGas
+  obtain ⟨gas⟩ := opened.lineH cert_check success stateGas pairTransferPartialLine rfl
     (by intro inst member x equal; subst inst; simp only [pairTransferPartialLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (S' := (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 0 ::
@@ -74,5 +72,23 @@ theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
       rw [pointer, callMem.read_self callMem.ge, length68] at raw
       exact raw)
   exact ⟨callMem, ⟨gas⟩⟩
+
+/-- The original moving initializer, both copy passes and partial merge reach
+this actual GAS cursor with the exact 68-byte transfer payload. -/
+theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (cut : CursorStateAt code cert start t_1fdb_c57 b
+      (amount :: toWord :: tokenWord :: rho :: R) M K)
+    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    let V := safeTransfer_dynamicCallMemory M p amount toWord
+    PtrMem (p + 164) V.size V ∧ Nonempty (CursorStateAt code cert start pairTransferGasTree b
+      ((tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 0 ::
+        (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) V K) :=
+  pair_transfer_request_cursor_stateH cut success fork.rules_stateGas_none mem lower width
+
 
 end Blanc.Lift.UniswapV2Pair

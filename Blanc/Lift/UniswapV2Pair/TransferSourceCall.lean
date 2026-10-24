@@ -5,9 +5,7 @@ import Blanc.LadderBase
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- An ordinary unguarded source request is bound to the supplied original
-CALL, its exact slot, full physical reply and per-spawn partition. -/
-theorem transfer_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Request}
+theorem transfer_source_call_atH {root : Exec.Deriv} {frame : Frame} {request : Request}
     {reply : ExternalResult} {index : Nat} {g ii is oi os : B256} {S : List B256}
     {paths : List Exec.LocatedFrame}
     (call : CallOccurrenceStep root
@@ -22,7 +20,7 @@ theorem transfer_source_call_at {root : Exec.Deriv} {frame : Frame} {request : R
     (flag : [1] <<+ call.returned.devm.stack)
     (success : reply.success = true) (bytes : reply.returndata = call.returned.devm.returnData)
     (codeBit : reply.codeExists = call.occurrence.slot.isSome)
-    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
+    (stateGas : call.occurrence.node.sevm.benvStat.rules.stateGas = none)
     (queue : SourceSlotQueue call frame.context.pair index paths) :
     ∃ observed : SourceCallAt root frame request reply index,
       observed.call = call ∧ observed.paths = paths := by
@@ -31,7 +29,7 @@ theorem transfer_source_call_at {root : Exec.Deriv} {frame : Frame} {request : R
   have primitive : Ninst.StepRun call.occurrence.node.pc call.occurrence.node.sevm
       call.occurrence.node.devm Ninst.call call.occurrence.slot (.ok call.returned.devm) := by
     simpa only [instruction, call.result] using call.occurrence.stepRun
-  rcases of_step_call_val_with_depth_frame operands call.occurrence.filled primitive fork
+  rcases of_step_call_val_with_depth_frameH operands call.occurrence.filled primitive stateGas
     with failed | entered
   · have impossible : (0 : B256) = 1 := pref_head_unique failed.1 flag
     exact False.elim ((by decide : (0 : B256) ≠ 1) impossible)
@@ -87,5 +85,29 @@ theorem transfer_source_call_at {root : Exec.Deriv} {frame : Frame} {request : R
       childFrames := childFrames
       partition := partition
     }, rfl, rfl⟩
+
+/-- An ordinary unguarded source request is bound to the supplied original
+CALL, its exact slot, full physical reply and per-spawn partition. -/
+theorem transfer_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Request}
+    {reply : ExternalResult} {index : Nat} {g ii is oi os : B256} {S : List B256}
+    {paths : List Exec.LocatedFrame}
+    (call : CallOccurrenceStep root
+      (match request.kind with | .call => .call | .staticCall => .staticcall))
+    (kind : request.kind = .call) (requires : request.requiresCode = false)
+    (ordinary : ∀ digest v r s, request.operation ≠ .recover digest v r s)
+    (staticContext : frame.context.isStatic = call.occurrence.node.sevm.isStatic)
+    (pair : frame.context.pair = call.occurrence.node.sevm.currentTarget)
+    (operands : (g :: request.target.toB256 :: request.value :: ii :: is :: oi :: os :: S) <<+
+      call.occurrence.node.devm.stack)
+    (calldata : (call.occurrence.node.devm.memory.read ii.toNat is.toNat).1 = request.calldata)
+    (flag : [1] <<+ call.returned.devm.stack)
+    (success : reply.success = true) (bytes : reply.returndata = call.returned.devm.returnData)
+    (codeBit : reply.codeExists = call.occurrence.slot.isSome)
+    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
+    (queue : SourceSlotQueue call frame.context.pair index paths) :
+    ∃ observed : SourceCallAt root frame request reply index,
+      observed.call = call ∧ observed.paths = paths :=
+  transfer_source_call_atH call kind requires ordinary staticContext pair operands calldata flag success bytes codeBit fork.rules_stateGas_none queue
+
 
 end Blanc.Lift.UniswapV2Pair

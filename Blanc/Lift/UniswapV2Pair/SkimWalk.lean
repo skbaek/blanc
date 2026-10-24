@@ -146,6 +146,15 @@ def skimReserveMask : B256 :=
 def skimCachedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8
 
+def skimCachedWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm (afterSloadH sevm (afterSloadH sevm (syncLockedWorldH sevm b) 6) 7) 8
+
+theorem skimCachedWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    skimCachedWorldH sevm b = skimCachedWorld sevm b := by
+  unfold skimCachedWorldH skimCachedWorld
+  simp only [syncLockedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def skimToken0 (sevm : Sevm) (b : Devm) : B256 :=
   ((syncLockedWorld sevm b).getStorVal sevm.currentTarget 6).toAdr.toB256
 
@@ -156,6 +165,34 @@ def skimToken1 (sevm : Sevm) (b : Devm) : B256 :=
 def skimReserve0 (sevm : Sevm) (b : Devm) : B256 :=
   skimReserveMask &&&
     (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7).getStorVal sevm.currentTarget 8
+
+/-- The cached token and reserve words read storage only, so the historical lock and read
+worlds give the same words. -/
+theorem skimToken0_eqH (sevm : Sevm) (b : Devm) :
+    skimToken0 sevm b = ((syncLockedWorldH sevm b).getStorVal sevm.currentTarget 6).toAdr.toB256 := by
+  unfold skimToken0
+  show ((Devm.getStor _ _).get _).toAdr.toB256 = ((Devm.getStor _ _).get _).toAdr.toB256
+  unfold syncLockedWorld syncLockedWorldH
+  rw [afterSstore_getStor_self, afterSstoreH_getStor_self, afterSload_getStor, afterSloadH_getStor]
+
+theorem skimToken1_eqH (sevm : Sevm) (b : Devm) :
+    skimToken1 sevm b =
+      ((afterSloadH sevm (syncLockedWorldH sevm b) 6).getStorVal sevm.currentTarget 7).toAdr.toB256 := by
+  unfold skimToken1
+  show ((Devm.getStor _ _).get _).toAdr.toB256 = ((Devm.getStor _ _).get _).toAdr.toB256
+  unfold syncLockedWorld syncLockedWorldH
+  rw [afterSload_getStor, afterSloadH_getStor, afterSstore_getStor_self, afterSstoreH_getStor_self,
+    afterSload_getStor, afterSloadH_getStor]
+
+theorem skimReserve0_eqH (sevm : Sevm) (b : Devm) :
+    skimReserve0 sevm b = skimReserveMask &&&
+      (afterSloadH sevm (afterSloadH sevm (syncLockedWorldH sevm b) 6) 7).getStorVal
+        sevm.currentTarget 8 := by
+  unfold skimReserve0
+  show skimReserveMask &&& (Devm.getStor _ _).get _ = skimReserveMask &&& (Devm.getStor _ _).get _
+  unfold syncLockedWorld syncLockedWorldH
+  rw [afterSload_getStor, afterSloadH_getStor, afterSload_getStor, afterSloadH_getStor,
+    afterSstore_getStor_self, afterSstoreH_getStor_self, afterSload_getStor, afterSloadH_getStor]
 
 /-- The literal lock write, cache reads and first request before the code guard. -/
 def skimFirstLine : List Ninst := [
@@ -176,12 +213,13 @@ def skimFirstLine : List Ninst := [
   .reg (.swap 0), .reg (.dup 2), .reg (.swap 0), .reg .sub, .reg .add, .reg (.dup 1),
   .reg (.dup 6), .reg (.dup 0)]
 
-theorem skimFirstLine_inv {sevm : Sevm} {b final : Devm}
+theorem skimFirstLine_invH {sevm : Sevm} {b final : Devm}
     {R : List B256} {M : Mem} {G : Nat} {toWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (run : Line.Run sevm (St (afterSload sevm b 12) (toWord :: R) M G) skimFirstLine final) :
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
+    (run : Line.Run sevm (St (afterSloadH sevm b 12) (toWord :: R) M G) skimFirstLine final) :
     sevm.isStatic = false ∧ ∃ gas,
-      final = St (skimCachedWorld sevm b)
+      final = St (skimCachedWorldH sevm b)
         (skimToken0 sevm b :: skimToken0 sevm b :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
           skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 :: toWord :: skimToken0 sevm b ::
           0x1a2b :: skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
@@ -199,14 +237,14 @@ theorem skimFirstLine_inv {sevm : Sevm} {b final : Devm}
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run
-  have mutable := ri_sstore_nonstatic fork hs
-  obtain ⟨_, rfl⟩ := ri_sstore fork hs
+  have mutable := ri_sstore_nonstaticH stateGas hs
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨d, hs, run⟩ := Line.of_run_cons run
@@ -276,7 +314,23 @@ theorem skimFirstLine_inv {sevm : Sevm} {b final : Devm}
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
   cases run
+  rw [skimToken0_eqH, skimToken1_eqH, skimReserve0_eqH]
   exact ⟨mutable, gas, rfl⟩
+
+theorem skimFirstLine_inv {sevm : Sevm} {b final : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {toWord : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : Line.Run sevm (St (afterSload sevm b 12) (toWord :: R) M G) skimFirstLine final) :
+    sevm.isStatic = false ∧ ∃ gas,
+      final = St (skimCachedWorld sevm b)
+        (skimToken0 sevm b :: skimToken0 sevm b :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 :: toWord :: skimToken0 sevm b ::
+          0x1a2b :: skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
+        (balanceRequestMemory M sevm.currentTarget) gas := by
+  simp only [← afterSloadH_of_eip2929 fork.rules_access] at run
+  simpa only [skimCachedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    skimFirstLine_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 /-- Facts of a successful first skim query and transfer0 from the cached frame; `k`
 receives the post-transfer0 world, memory and residual gas. -/
@@ -321,17 +375,62 @@ def SkimFirstFacts (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (R : List B256) (M 
         k d (if d.returnData = [] then d.memory else
           safeTransfer_reply292Memory d.memory d.returnData) residual
 
-/-- The actual first skim query from its cached frame: the code guard, the real
-STATICCALL with its full bounded reply, the width guard and the decoded word, then
-the checked subtraction and the literal transfer0 helper call. -/
-theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+def SkimFirstFactsH (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (toWord : B256) (k : Devm → Mem → Nat → Prop) : Prop :=
+    let W := skimCachedWorldH sevm b
+    let t0 := skimToken0 sevm b
+    let t1 := skimToken1 sevm b
+    let r0 := skimReserve0 sevm b
+    let S := 164 :: 0x70a08231 :: t0 :: r0 :: 0x1a26 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 :: toWord :: R
+    sevm.isStatic = false ∧ (W.getCode t0.toAdr).size.toB256 ≠ 0 ∧
+    ∃ (gw : B256) (callGas : Nat) (d0 : Devm) (out0 : Bytes),
+      StepIn D sevm
+        (St (accountAccessH sevm W t0.toAdr) (gw :: t0 :: 128 :: 36 :: 128 :: 32 :: S)
+          (balanceRequestMemory M sevm.currentTarget) callGas) (.exec .staticcall) d0 ∧
+      StaticCallPost (accountAccessH sevm W t0.toAdr) d0 S
+        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
+      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
+      StaticAnsweredH sevm (accountAccessH sevm W t0.toAdr) t0.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
+      r0 ≤ Bytes.toB256 (out0.take 32) ∧
+      ∃ (helperGas : Nat) (forwarded : B256) (callGas' : Nat) (d : Devm) (residual : Nat),
+        let a0 := Bytes.toB256 (out0.take 32) - r0
+        let M1 := balanceReplyMemory M sevm.currentTarget out0
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St d0 (a0 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 :: toWord :: R) M1 helperGas)
+          t_1fdb_c57 (.returned (St d (t1 :: t0 :: toWord :: R)
+            (if d.returnData = [] then d.memory else
+              safeTransfer_reply292Memory d.memory d.returnData) residual)) ∧
+        StepIn D sevm (St d0 (forwarded :: (t0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
+          (t0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          96 :: 0 :: a0 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 :: toWord :: R)
+          (safeTransfer_call128Memory M1 a0 toWord) callGas') (.exec .call) d ∧
+        ((safeTransfer_call128Memory M1 a0 toWord).read 292 68).1 =
+          abiSelectorBytes 0xa9059cbb ++
+            ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ a0.toBytes ∧
+        d.memory = safeTransfer_call128Memory M1 a0 toWord ∧ d.output = d0.output ∧
+        d.returnData.length < 2 ^ 256 ∧
+        (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+          Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
+        k d (if d.returnData = [] then d.memory else
+          safeTransfer_reply292Memory d.memory d.returnData) residual
+
+theorem SkimFirstFactsH_of_covered {sevm : Sevm} {D : Exec.Deriv} {b : Devm} {R : List B256} {M : Mem} {toWord : B256} {k : Devm → Mem → Nat → Prop}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    SkimFirstFactsH D sevm b R M toWord k = SkimFirstFacts D sevm b R M toWord k := by
+  unfold SkimFirstFactsH SkimFirstFacts
+  simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access, StaticAnsweredH_iff_of_covered fork]
+
+theorem skimFirstHalf_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {toWord : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St (afterSload sevm b 12) (toWord :: R) M G) t_194f_c34 seg) :
-    SkimFirstFacts D sevm b R M toWord (fun d Mres g => SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St (afterSloadH sevm b 12) (toWord :: R) M G) t_194f_c34 seg) :
+    SkimFirstFactsH D sevm b R M toWord (fun d Mres g => SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St d (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R) Mres g) t_1a2b_c34 seg) := by
-  unfold SkimFirstFacts
+  unfold SkimFirstFactsH
   dsimp only
   have h := run
   unfold t_194f_c34 at h
@@ -341,17 +440,17 @@ theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       (syncCodeGuardLine.foldr SFunc.next (.next (.push [0x19, 0xee] (by decide))
         (.branch t_19ea_c34 t_19ee_c34)))) seg at h
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) skimFirstLine h
-  obtain ⟨mutable, _, state⟩ := skimFirstLine_inv fork mem line
+  obtain ⟨mutable, _, state⟩ := skimFirstLine_invH stateGas bal mem line
   rw [state] at h
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) syncCodeGuardLine h
-  obtain ⟨_, state⟩ := syncCodeGuardLine_inv fork line
+  obtain ⟨_, state⟩ := syncCodeGuardLine_invH bal line
   rw [state] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   rcases ric_branchP h with ⟨-, _, failed⟩ | ⟨accepted, _, h⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_19ea_c34.noOk = true))
   have zero := eq_zero_of_iszero_ne_zero accepted
-  have nonzero : ((skimCachedWorld sevm b).getCode (skimToken0 sevm b).toAdr).size.toB256 ≠ 0 := by
+  have nonzero : ((skimCachedWorldH sevm b).getCode (skimToken0 sevm b).toAdr).size.toB256 ≠ 0 := by
     intro hz
     rw [hz, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
     exact (by decide : (1 : B256) ≠ 0) zero
@@ -359,7 +458,7 @@ theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have req : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
     balanceRequestMemory_ptr mem sevm.currentTarget
   obtain ⟨gw, callGas, d0, out0, _, call, post, bound, answered, h⟩ :=
-    staticCallGuard_invP [0x1a, 0x02] (by decide) rfl StepIn.toRun fork (by decide) h
+    staticCallGuard_invPH [0x1a, 0x02] (by decide) rfl StepIn.toRun stateGas (by decide) h
   have full : d0.returnData.length < 2 ^ 256 := by rw [post.returnData]; exact bound
   change SFunc.RunCutP (StepIn D) cert.prog sevm []
     (St d0 _ (balanceReplyMemory M sevm.currentTarget out0) _) _ _ at h
@@ -411,11 +510,26 @@ theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
           cases lookup
           have helper := (St.of_pop1 pop).2 ▸ callee
           obtain ⟨forwarded, callGas', d, residual, step, _, calldata, memory, output, width,
-            accepted, returned⟩ := safeTransfer_first_inv StepIn.toRun fork reply helper
+            accepted, returned⟩ := safeTransfer_first_invH StepIn.toRun stateGas reply helper
           rw [returned] at helper tail
           exact ⟨mutable, nonzero, gw, callGas, d0, out0, call, post, long, bound, answered,
             cover, _, forwarded, callGas', d, residual, helper, step, calldata, memory,
             output, width, accepted, tail⟩
+
+/-- The actual first skim query from its cached frame: the code guard, the real
+STATICCALL with its full bounded reply, the width guard and the decoded word, then
+the checked subtraction and the literal transfer0 helper call. -/
+theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {toWord : B256} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St (afterSload sevm b 12) (toWord :: R) M G) t_194f_c34 seg) :
+    SkimFirstFacts D sevm b R M toWord (fun d Mres g => SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St d (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R) Mres g) t_1a2b_c34 seg) := by
+  simp only [← afterSloadH_of_eip2929 fork.rules_access] at run
+  simpa only [SkimFirstFactsH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    skimFirstHalf_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 /-- Strengthen the transfer0 continuation using the actual CALL memory it settled in. -/
 theorem SkimFirstFacts.mono {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}

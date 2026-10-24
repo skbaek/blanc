@@ -6,9 +6,7 @@ import Blanc.ExecutionModelAccounting
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The exact supplied CALL's successful continuation returns through its
-original caller. Full returndata drives the physical allocation and decoder. -/
-theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem pair_transfer_reply_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {caller : SFunc} {cursor : Cursor}
     {p token endWord amount toWord tokenWord rho : B256} {gas n : Nat}
     (step : CallOccurrenceStep root .call)
@@ -19,7 +17,7 @@ theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
     (tree : cursor.f = pairTransferAfterCallTree)
     (conts : cursor.K.map Cont.f = caller :: K)
     (success : root.exn = .ok post)
-    (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork)
+    (stateGas : step.occurrence.node.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem (p + 164) n M) (lower : 128 ≤ p.toNat)
     (width : p.toNat + 260 < 2 ^ 256) (fit : p.toNat + 260 ≤ n) :
     step.returned.devm.stack =
@@ -38,7 +36,7 @@ theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq
       (step.sameFrame.snoc step.edge)).trans success
   obtain ⟨N, next, span, env, outcome, nextPlaced, nextTree, nextConts, source⟩ :=
-    placed.quietReturn cert_check retSuccess (by rw [retEnv]; exact fork)
+    placed.quietReturnH cert_check retSuccess (by rw [retEnv]; exact stateGas)
       (E := [16, 17]) (by decide) (by decide)
       (by rw [tree]; decide) (by rw [tree]; decide) conts
   rw [tree, retEnv] at source
@@ -53,11 +51,11 @@ theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
       (St b (gas.toB256 :: token :: 0 :: (p + 164) :: 68 :: (p + 164) :: 0 ::
         endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) M gas)
       (.exec .call) step.returned.devm := by rw [← input]; exact raw
-  obtain ⟨stack, memory, output, replyWidth⟩ := safeTransfer_call_inv
-    (fun h => h) fork (by decide : 16 ∉ []) (by decide : 17 ∉ []) call tail
+  obtain ⟨stack, memory, output, replyWidth⟩ := safeTransfer_call_invH
+    (fun h => h) stateGas (by decide : 16 ∉ []) (by decide : 17 ∉ []) call tail
   have bound : step.returned.devm.returnData.length < 2 ^ 160 :=
     Jaune.call_returnData_length_lt_two_pow_160_of_input_size call rfl
-      fork.rules_stateGas_none (by decide)
+      stateGas (by decide)
   have nat164 : (p + 164).toNat = p.toNat + 164 := by
     rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl,
       Nat.lo_eq_of_lt (by omega)]
@@ -97,5 +95,34 @@ theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
     simpa only [memoryEq] using full
   exact ⟨stack, memoryEq, output, bound, accepted,
     ⟨⟨N, next, span, env, outcome, nextPlaced, nextTree, ⟨residual, fullMemory⟩, nextConts⟩⟩⟩
+
+/-- The exact supplied CALL's successful continuation returns through its
+original caller. Full returndata drives the physical allocation and decoder. -/
+theorem pair_transfer_reply_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc} {caller : SFunc} {cursor : Cursor}
+    {p token endWord amount toWord tokenWord rho : B256} {gas n : Nat}
+    (step : CallOccurrenceStep root .call)
+    (input : step.occurrence.node.devm = St b
+      (gas.toB256 :: token :: 0 :: (p + 164) :: 68 :: (p + 164) :: 0 ::
+        endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) M gas)
+    (placed : CursorOK code cert step.returned cursor)
+    (tree : cursor.f = pairTransferAfterCallTree)
+    (conts : cursor.K.map Cont.f = caller :: K)
+    (success : root.exn = .ok post)
+    (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork)
+    (mem : PtrMem (p + 164) n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (fit : p.toNat + 260 ≤ n) :
+    step.returned.devm.stack =
+      1 :: endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
+    step.returned.devm.memory = M ∧ step.returned.devm.output = b.output ∧
+    step.returned.devm.returnData.length < 2 ^ 160 ∧
+    (step.returned.devm.returnData = [] ∨
+      (32 ≤ step.returned.devm.returnData.length ∧
+        Bytes.toB256 (step.returned.devm.returnData.sliceD 0 32 0) ≠ 0)) ∧
+    Nonempty (CursorStateAt code cert step.returned caller step.returned.devm R
+      (if step.returned.devm.returnData = [] then M else
+        Blanc.Lift.bytesArrayMemory M (p + 164) step.returned.devm.returnData) K) :=
+  pair_transfer_reply_cursor_stateH step input placed tree conts success fork.rules_stateGas_none mem lower width fit
+
 
 end Blanc.Lift.UniswapV2Pair

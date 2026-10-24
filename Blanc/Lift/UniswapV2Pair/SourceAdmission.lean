@@ -184,6 +184,35 @@ theorem SourceSlotEvents.located_benvStat {root : Exec.Deriv} {x : Xinst}
   · rw [dite_eq_right_of_eq_false (eq_false settles)] at member
     cases member
 
+/-- Every frame of an actual mutable slot queue below `root` satisfies any predicate of `root`'s
+block statics. -/
+theorem SourceSlotEvents.located_inherits {P : BenvStat → Prop} {root : Exec.Deriv} {x : Xinst}
+    {call : CallOccurrenceStep root x} {pair : Adr} {index : Nat}
+    {events : List (Log ⊕ Exec.LocatedFrame)} (observed : SourceSlotEvents call pair index events)
+    (admits : P root.sevm.benvStat) :
+    ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat :=
+  fun _ member => (observed.located_benvStat member).symm ▸ admits
+
+/-- The selected turns of an actual mutable slot queue below `root` change their Pair
+authentication wherever it holds at `root`'s block statics. -/
+theorem SourceSlotEvents.turns_mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {root : Exec.Deriv} {x : Xinst} {call : CallOccurrenceStep root x} {pair : Adr} {index : Nat}
+    {events : List (Log ⊕ Exec.LocatedFrame)} {turns : List MutableTurn}
+    (queue : SourceSlotEvents call pair index events) (mapped : turns.map MutableTurn.event = events)
+    (admits : P root.sevm.benvStat)
+    (authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
+      Auth (Exec.Frame.rootDeriv located.frame) entry nested) :
+    ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
+      Auth' (Exec.Frame.rootDeriv located.frame) entry nested := by
+  intro located entry nested member
+  have event : Sum.inr located ∈ events := by
+    rw [← mapped]
+    exact List.mem_map_of_mem (f := MutableTurn.event) member
+  exact weaken _ entry nested (queue.located_inherits admits located event)
+    (authentic located entry nested member)
+
 mutual
 /-- Admission under `Auth` is admission under `Auth'` when `Auth` implies `Auth'` at every frame
 whose block statics satisfy `P` and the root's statics satisfy `P`: every frame admitted below the
@@ -200,16 +229,11 @@ theorem SourceAdmission.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Tra
   | .nextCall observed gap staticExternal present noCodeTurns during rest admittedRest =>
       .nextCall observed gap staticExternal present noCodeTurns during rest
         (SourceAdmission.mono_benvStat weaken admits admittedRest)
-  | .nextMutableCall (events := events) observed gap queue present noCodeTurns during rest
+  | .nextMutableCall observed gap queue present noCodeTurns during rest
       selectedTurns mapped transcriptEq authentic admittedDuring admittedRest =>
-      have inherited : ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat :=
-        fun located member => (queue.located_benvStat member).symm ▸ admits
       .nextMutableCall observed gap queue present noCodeTurns during rest selectedTurns mapped
-        transcriptEq
-        (fun located entry nested member => weaken _ entry nested
-          (inherited located (by rw [← mapped]; exact List.mem_map_of_mem (f := MutableTurn.event) member))
-          (authentic located entry nested member))
-        (MutableAdmission.mono_benvStat weaken inherited admittedDuring)
+        transcriptEq (queue.turns_mono_benvStat weaken mapped admits authentic)
+        (MutableAdmission.mono_benvStat weaken (queue.located_inherits admits) admittedDuring)
         (SourceAdmission.mono_benvStat weaken admits admittedRest)
 
 /-- `SourceAdmission.mono_benvStat` for a mutable turn queue whose selected frames run at block
@@ -232,5 +256,14 @@ theorem MutableAdmission.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Tr
         (MutableAdmission.mono_benvStat weaken
           (fun other member => inherited other (List.mem_cons_of_mem _ member)) admittedRest)
 end
+
+theorem AdmittedSourceConsumes.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {root start : Exec.Deriv} {index : Nat} {segment : SegmentResult} {transcript : Transcript}
+    {out : RunResult} (admits : P root.sevm.benvStat)
+    (admitted : AdmittedSourceConsumes Auth root start index segment transcript out) :
+    AdmittedSourceConsumes Auth' root start index segment transcript out :=
+  ⟨admitted.1, SourceAdmission.mono_benvStat weaken admits admitted.2⟩
 
 end Blanc.Lift.UniswapV2Pair

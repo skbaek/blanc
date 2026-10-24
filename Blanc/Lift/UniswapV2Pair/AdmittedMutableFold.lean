@@ -137,4 +137,14 @@ theorem admitted_source_slot_turnsH
     (sourceAdmittedMutableTurns_done Auth) repCongr sem image (fun _ admits => admits.1) observed
     pairEq mutable installed rep time ⟨stateGas, bal⟩ good
 
+theorem AdmittedMutableTurns.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {frame : Frame} {request : Request} {turn : Nat} {events : List (Log ⊕ Exec.LocatedFrame)}
+    {transcript : Transcript} {out : TurnsResult}
+    (inherited : ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat)
+    (admitted : AdmittedMutableTurns Auth frame request turn events transcript out) :
+    AdmittedMutableTurns Auth' frame request turn events transcript out :=
+  ⟨admitted.1, MutableAdmission.mono_benvStat weaken inherited admitted.2⟩
+
 end Blanc.Lift.UniswapV2Pair

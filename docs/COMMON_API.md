@@ -6943,7 +6943,16 @@ so `SourceAdmission.mono_benvStat` and `MutableAdmission.mono_benvStat` in
 predicate of those statics. The Pair endpoint under the historical facts is
 `PairAdmittedConsumesH` (`LockedAuthH` admission) with `PairAdmittedSupplyH`;
 `PairAdmittedConsumesH.covered` and `PairAdmittedSupplyH.covered` recover the
-modern forms under `CoveredFork`.
+modern forms under `CoveredFork`. The same weakening for one retained fold or
+queue is `AdmittedSourceConsumes.mono_benvStat`,
+`AdmittedMutableTurns.mono_benvStat` (`AdmittedMutableFold.lean`),
+`SourceSlotEvents.located_inherits` and `SourceSlotEvents.turns_mono_benvStat`;
+`LockedAuth.toH` and `PermitRecoveryAuth.toH` give the converse of the
+`toCovered` conversions under a covered fork. Skim's historical supply is
+`pair_admitted_skim_supplyH` in `PairPositionalSkim.lean`, over
+`skim_positional_canonicalH`; the cached token and reserve words read storage
+only, so `skimToken0_eqH`, `skimToken1_eqH` and `skimReserve0_eqH` in
+`SkimWalk.lean` restate them over the historical lock world without a fork fact.
 
 For a retained factory fee observation, `PairFeeObservation.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)

@@ -7,17 +7,16 @@ import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The first source observation uses the same original static slot and full reply. -/
-theorem SkimFirstObservation.sourceCall {root : Exec.Deriv} {b : Devm}
-    {toWord : B256} {R : List B256} (r : SkimFirstObservation root b toWord R)
+theorem SkimFirstObservationH.sourceCallH {root : Exec.Deriv} {b : Devm}
+    {toWord : B256} {R : List B256} (r : SkimFirstObservationH root b toWord R)
     (frame : Frame) (pair : frame.context.pair = root.sevm.currentTarget)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
+    (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     ∃ observed : SourceCallAt root frame
         (requestFor .skimBalance0 (skimToken0 root.sevm b).toAdr
           (.balanceOf frame.context.pair)) (skimBalanceReply r.out) 0,
       observed.call = r.call := by
   obtain ⟨paths, queue⟩ := CallOccurrenceStep.sourceSlotQueue r.call frame.context.pair 0
-  obtain ⟨observed, same, mapped⟩ := static_source_call_at
+  obtain ⟨observed, same, mapped⟩ := static_source_call_atH
     (frame := frame)
     (request := requestFor .skimBalance0 (skimToken0 root.sevm b).toAdr
       (.balanceOf frame.context.pair)) (reply := skimBalanceReply r.out)
@@ -41,27 +40,38 @@ theorem SkimFirstObservation.sourceCall {root : Exec.Deriv} {b : Devm}
     (by
       dsimp only [requestFor]
       rw [r.input, St, Devm.getCode_setMach, Devm.getCode_state,
-        temporalAccountAccessBase_state]
+        accountAccessH_state]
       exact r.codeGuard)
-    (by rw [r.sevm]; exact fork) queue
+    (by rw [r.sevm]; exact stateGas) queue
   exact ⟨observed, same⟩
 
-/-- Either physical transfer supplies its own unguarded source observation;
-the source entry bit is exactly this original CALL slot's isSome. -/
-theorem SkimTransferObservation.sourceCall {root start : Exec.Deriv} {balanceSite : SkimBalanceSite}
+/-- The first source observation uses the same original static slot and full reply. -/
+theorem SkimFirstObservation.sourceCall {root : Exec.Deriv} {b : Devm}
+    {toWord : B256} {R : List B256} (r : SkimFirstObservation root b toWord R)
+    (frame : Frame) (pair : frame.context.pair = root.sevm.currentTarget)
+    (fork : CoveredFork root.sevm.benvStat.fork) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .skimBalance0 (skimToken0 root.sevm b).toAdr
+          (.balanceOf frame.context.pair)) (skimBalanceReply r.out) 0,
+      observed.call = r.call := by
+  have h := SkimFirstObservationH.sourceCallH (r.toH fork) frame pair fork.rules_stateGas_none
+  exact h
+
+
+theorem SkimTransferObservation.sourceCallH {root start : Exec.Deriv} {balanceSite : SkimBalanceSite}
     {b : Devm} {M : Mem} {p amount toWord tokenWord rho : B256}
     {R : List B256} {K : List SFunc}
     (r : SkimTransferObservation root start balanceSite b M p amount toWord tokenWord rho R K)
     (site : CallSite) (frame : Frame)
     (pair : frame.context.pair = start.sevm.currentTarget)
     (staticContext : frame.context.isStatic = start.sevm.isStatic)
-    (index : Nat) (fork : CoveredFork start.sevm.benvStat.fork) :
+    (index : Nat) (stateGas : start.sevm.benvStat.rules.stateGas = none) :
     ∃ observed : SourceCallAt root frame
         (requestFor site tokenWord.toAdr (.transfer toWord.toAdr amount))
         (skimTransferReply r.call.returned.devm.returnData r.call.occurrence.slot.isSome) index,
       observed.call = r.call := by
   obtain ⟨paths, queue⟩ := CallOccurrenceStep.sourceSlotQueue r.call frame.context.pair index
-  obtain ⟨observed, same, mapped⟩ := transfer_source_call_at
+  obtain ⟨observed, same, mapped⟩ := transfer_source_call_atH
     (frame := frame) (request := requestFor site tokenWord.toAdr (.transfer toWord.toAdr amount))
     (reply := skimTransferReply r.call.returned.devm.returnData r.call.occurrence.slot.isSome)
     (g := r.gas.toB256) (ii := p + 164) (is := 68) (oi := p + 164) (os := 0)
@@ -86,15 +96,30 @@ theorem SkimTransferObservation.sourceCall {root start : Exec.Deriv} {balanceSit
       rw [r.calldata, recipient]
       rfl)
     (by rw [r.stack]; exact ⟨_, rfl⟩) rfl rfl rfl
-    (by rw [r.sevm]; exact fork) queue
+    (by rw [r.sevm]; exact stateGas) queue
   exact ⟨observed, same⟩
 
-/-- The second balance observation belongs to the third original slot, with
-calldata and the code guard derived in the post-transfer0 world. -/
-theorem SkimFourCalls.sourceCall2 {root : Exec.Deriv} {b : Devm}
-    {toWord : B256} {R : List B256} (r : SkimFourCalls root b toWord R)
+/-- Either physical transfer supplies its own unguarded source observation;
+the source entry bit is exactly this original CALL slot's isSome. -/
+theorem SkimTransferObservation.sourceCall {root start : Exec.Deriv} {balanceSite : SkimBalanceSite}
+    {b : Devm} {M : Mem} {p amount toWord tokenWord rho : B256}
+    {R : List B256} {K : List SFunc}
+    (r : SkimTransferObservation root start balanceSite b M p amount toWord tokenWord rho R K)
+    (site : CallSite) (frame : Frame)
+    (pair : frame.context.pair = start.sevm.currentTarget)
+    (staticContext : frame.context.isStatic = start.sevm.isStatic)
+    (index : Nat) (fork : CoveredFork start.sevm.benvStat.fork) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor site tokenWord.toAdr (.transfer toWord.toAdr amount))
+        (skimTransferReply r.call.returned.devm.returnData r.call.occurrence.slot.isSome) index,
+      observed.call = r.call :=
+  SkimTransferObservation.sourceCallH r site frame pair staticContext index fork.rules_stateGas_none
+
+
+theorem SkimFourCallsH.sourceCall2 {root : Exec.Deriv} {b : Devm}
+    {toWord : B256} {R : List B256} (r : SkimFourCallsH root b toWord R)
     (frame : Frame) (pair : frame.context.pair = root.sevm.currentTarget)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
+    (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     ∃ observed : SourceCallAt root frame
         (requestFor .skimBalance1 (skimToken1 root.sevm b).toAdr
           (.balanceOf frame.context.pair)) (skimBalanceReply r.reply.out) 2,
@@ -109,7 +134,7 @@ theorem SkimFourCalls.sourceCall2 {root : Exec.Deriv} {b : Devm}
     rw [← addressSlotReadWord_eq_toAdr_toB256]
     exact B256.and_comm _ _
   obtain ⟨paths, queue⟩ := CallOccurrenceStep.sourceSlotQueue r.third.call frame.context.pair 2
-  obtain ⟨observed, same, mapped⟩ := static_source_call_at
+  obtain ⟨observed, same, mapped⟩ := static_source_call_atH
     (frame := frame) (request := requestFor .skimBalance1 (skimToken1 root.sevm b).toAdr
       (.balanceOf frame.context.pair)) (reply := skimBalanceReply r.reply.out)
     (g := r.third.gas.toB256) (ii := p) (is := 36) (oi := p) (os := 32)
@@ -118,9 +143,9 @@ theorem SkimFourCalls.sourceCall2 {root : Exec.Deriv} {b : Devm}
     (pair.trans (congrArg Sevm.currentTarget nodeEnv.symm))
     (by
       rw [r.third.input]
-      dsimp only [SkimTwoCalls.secondInput]
+      dsimp only [SkimTwoCallsH.secondInput]
       rw [St.stack]
-      dsimp only [requestFor, SkimTwoCalls.secondRest]
+      dsimp only [requestFor, SkimTwoCallsH.secondRest]
       rw [token]
       exact ⟨[], by simp only [Split, List.append_nil, p]⟩)
     (by
@@ -142,14 +167,28 @@ theorem SkimFourCalls.sourceCall2 {root : Exec.Deriv} {b : Devm}
     (by
       dsimp only [requestFor]
       rw [r.third.input]
-      dsimp only [SkimTwoCalls.secondInput]
-      rw [St, Devm.getCode_setMach, Devm.getCode_state, temporalAccountAccessBase_state]
+      dsimp only [SkimTwoCallsH.secondInput]
+      rw [St, Devm.getCode_setMach, Devm.getCode_state, accountAccessH_state]
       have sameAddress : (skimToken1 root.sevm b).toAdr =
           (skimToken1 root.sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr := by
         rw [← token, toAdr_toB256]
       rw [sameAddress]
       exact r.third.guard)
-    (by rw [nodeEnv]; exact fork) queue
+    (by rw [nodeEnv]; exact stateGas) queue
   exact ⟨observed, same⟩
+
+/-- The second balance observation belongs to the third original slot, with
+calldata and the code guard derived in the post-transfer0 world. -/
+theorem SkimFourCalls.sourceCall2 {root : Exec.Deriv} {b : Devm}
+    {toWord : B256} {R : List B256} (r : SkimFourCalls root b toWord R)
+    (frame : Frame) (pair : frame.context.pair = root.sevm.currentTarget)
+    (fork : CoveredFork root.sevm.benvStat.fork) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .skimBalance1 (skimToken1 root.sevm b).toAdr
+          (.balanceOf frame.context.pair)) (skimBalanceReply r.reply.out) 2,
+      observed.call = r.third.call := by
+  have h := SkimFourCallsH.sourceCall2 (r.toH fork) frame pair fork.rules_stateGas_none
+  exact h
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -69,6 +69,14 @@ theorem PermitRecoveryAuthH.toCovered {D : Exec.Deriv} {out : Bytes} {entered : 
   obtain ⟨b, G, actual, settled, pc, devm, outEq, enteredEq, mapped⟩ := auth
   exact ⟨b, G, actual.toCovered fork, settled.toCovered fork, pc, devm, outEq, enteredEq, mapped⟩
 
+/-- On a covered fork, the modern recovery authentication gives the historical one on the same
+call, settlement, reply and views. -/
+theorem PermitRecoveryAuth.toH {D : Exec.Deriv} {out : Bytes} {entered : Bool}
+    {views : List StaticViewTurn} (fork : CoveredFork D.sevm.benvStat.fork)
+    (auth : PermitRecoveryAuth D out entered views) : PermitRecoveryAuthH D out entered views := by
+  obtain ⟨b, G, actual, settled, pc, devm, outEq, enteredEq, mapped⟩ := auth
+  exact ⟨b, G, actual.toH fork, settled.toH fork, pc, devm, outEq, enteredEq, mapped⟩
+
 private theorem permit_St_getCode (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     (St x S M g).getCode a = x.getCode a := rfl
 
