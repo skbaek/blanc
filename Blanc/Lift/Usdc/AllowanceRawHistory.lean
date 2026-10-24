@@ -164,16 +164,25 @@ theorem usdcAllowException_split {pair : Adr} {G : Exec.Deriv}
 /-- **Initializer writes at the Pair's rows (stated, node level).** At every raw node of an
 initializer frame at `P`, a successful `SSTORE` at a tracked Pair row does not raise it. The
 initializers' writes are fixed slots, literal zero or payload keys of their decoded strings or
-arrays (`V1InitializerWriteClass`, `V2InitializerWriteClass`); with those keys apart from the
-tracked rows this is what the run-level classifiers give for a successful frame
-(`implV1_initialize_rowNonInc_rawFrame`,
-`implV2_initializeV2_rowNonInc_rawFrame`). The node-level form also
-covers reverting initializer frames, which no classifier reaches. -/
+arrays; with those keys apart from the tracked rows this is what the prefix walks give at
+every node of the frame, whatever its outcome (`ConfiguredHistoryTraceIn.initRowWritesNonInc`
+in `InitRowsHistory.lean`, from `InitRowsApart`). -/
 def InitRowWritesNonInc (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : Prop :=
   ∀ G ∈ frames, G.sevm.currentTarget = P → UsdcInitFrame G →
     ∀ m, Exec.Deriv.ParentPrefix G m → ∀ w : Exec.StorageWrite,
       Exec.Deriv.successfulSstore? m = some w → (∃ g, Tr g ∧ allowSlot pair g = w.key) →
         w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat
+
+/-- **No Pair exception frame above a tracked-row write (stated, node level).** For every
+raw node `m` with a successful `SSTORE` in `P`'s storage at a tracked Pair row, no raw frame at
+`P` that `m` descends from is a Pair exception frame (`UsdcPairException`). Junk frames that
+name the Pair (a reverting `permit(pair, …)`, say) but reach no such write are unconstrained. -/
+def NoPairExceptionWrites (P pair : Adr) (Tr : Adr → Prop) (frames nodes : List Exec.Deriv) :
+    Prop :=
+  ∀ m ∈ nodes, ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? m = some w →
+    w.owner = P → (∃ g, Tr g ∧ allowSlot pair g = w.key) →
+      ∀ G ∈ frames, Exec.Deriv.ParentPrefix G m → G.sevm.currentTarget = P →
+        ¬ UsdcPairException pair G
 
 section History
 
@@ -248,18 +257,17 @@ theorem ConfiguredHistoryTraceIn.usdc_rowChange_attributed
     refine ⟨b₁, b₂, m, G, w, split, hG, chain, ?_, found, owner, key, value⟩
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain]; exact target
 
-/-- **P1 over the actual history.** With no Pair exception frame at `P` (the Pair never
-approves through a caller- or owner-keyed entry point) and the initializers' writes at the
-tracked rows non-increasing (`InitRowWritesNonInc`), every tracked allowance row of the Pair
-is at most its checkpoint word at every raw node of the history and at the future. -/
+/-- **P1 over the actual history.** With no Pair exception frame at `P` above a write at a
+tracked row (`NoPairExceptionWrites`) and the initializers' writes at the tracked rows
+non-increasing (`InitRowWritesNonInc`), every tracked allowance row of the Pair is at most its
+checkpoint word at every raw node of the history and at the future. -/
 theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (proxy : checkpoint.state.getCode P = Proxy.code) (codes : UsdcNodeCodes P history.rawNodes)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
-    (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
-      ¬ UsdcPairException pair G)
+    (noPairException : NoPairExceptionWrites P pair Tr history.rawFrames history.rawNodes)
     (initRows : InitRowWritesNonInc P pair Tr history.rawFrames)
     {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
     (∀ n ∈ history.rawNodes,
@@ -276,7 +284,8 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     rw [← key]
     rcases cls with exc | le
     · rcases usdcAllowException_split exc with pairExc | init
-      · exact (noPairException G hG gTarget pairExc).elim
+      · exact (noPairException m hm w found owner (key ▸ tracked) G hG chain gTarget
+          pairExc).elim
       · exact initRows G hG gTarget init m chain w found (key ▸ tracked)
     · exact le
   have nodes : ∀ n ∈ history.rawNodes,

@@ -26,15 +26,22 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- The keys an initializer frame's code writes under its selector, read from the frame's
 own calldata: `initialize`'s fixed slots and string payload keys, `initializeV2`'s, and
-`initializeV2_2`'s (with its blacklist mapping keys). Each decoded length is capped at the
-bound past which the frame reverts before any store. -/
+`initializeV2_2`'s (with its blacklist mapping keys), each under its own selector. Each decoded
+length is capped at a bound the walks prove for any reached store: `2 ^ 32` from the solc 0.6
+ABI decoders, `2 ^ 160` for `initialize` from V1's memory potential. -/
 def InitKeys (sevm : Sevm) (key : B256) : Prop :=
-  Init06.KeysInit06 sevm key ∨
+  (selWord sevm = 0x3357162b ∧ Init06.KeysInit06 sevm key) ∨
     (selWord sevm = 0xd608ea64 ∧ KeysInitV2 sevm key) ∨
     (selWord sevm = 0x430239b4 ∧ InitReachV2_2.KeysInitV2_2 sevm key)
 
 /-- **Initializer keys apart from the tracked rows (stated, frame-local).** For every raw
-initializer frame at `P`, no tracked Pair row is one of the frame's `InitKeys`. -/
+initializer frame at `P`, no tracked Pair row is one of the frame's `InitKeys`.
+
+It is meant for a finite, explicit `Tr`. The fixed slots and mapping keys are apart from a
+tracked row unless Keccak collides. The payload keys `keccak(s) + j` (`s ∈ {4, 5, 7}`) form
+intervals from three constant bases, of at most `2 ^ 155` words under `initialize` and
+`2 ^ 27` under the solc 0.6 decoders; keeping a tracked row out of them is interval
+avoidance, decidable by arithmetic for an explicit `Tr`, not a hash-collision fact. -/
 def InitRowsApart (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : Prop :=
   ∀ G ∈ frames, G.sevm.currentTarget = P → UsdcInitFrame G →
     ∀ g, Tr g → ¬ InitKeys G.sevm (allowSlot pair g)
@@ -46,6 +53,11 @@ theorem selV1T_root (sevm : Sevm) :
   rw [B256.and_comm]
   simp only [selV1T, WriteSite.Term.eval, WriteSite.Op2.eval, WriteSite.Env.root, Sevm.dataWord]
   rfl
+
+theorem selWord_eq_selector (sevm : Sevm) : selWord sevm = Blanc.Sevm.selector sevm := by
+  unfold selWord Blanc.Sevm.selector
+  rw [show Bytes.toB256 [0] = (0 : B256) from by decide,
+    show (Bytes.toB256 [0xe0]).toNat = 224 from by decide]
 
 theorem selV2T_root_selWord (sevm : Sevm) :
     selV2T.eval (WriteSite.Env.root sevm) = selWord sevm := by
@@ -78,13 +90,14 @@ theorem initFrame_sstore {G N : Exec.Deriv} (hpc : G.pc = 0)
     have hs : Blanc.Sevm.selector G.sevm = 0x3357162b := by
       rw [← selV1T_root]
       exact List.mem_singleton.mp sel
-    exact use (InitReachV1.initV1_reach erase hs run hT) e fun _ h => .inl h
+    exact use (InitReachV1.initV1_reach erase hs run hT) e
+      fun _ h => .inl ⟨(selWord_eq_selector _).trans hs, h⟩
   · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2.cert_check hpc code hsg stack memory
       gas chain hat
     change selV2T.eval _ ∈ [0x3357162b, 0xd608ea64] at sel
     rw [selV2T_root_selWord] at sel
     rcases List.mem_cons.mp sel with hs | hs
-    · exact use (Init06.init_reach_V2 erase hs run hT) e fun _ h => .inl h
+    · exact use (Init06.init_reach_V2 erase hs run hT) e fun _ h => .inl ⟨hs, h⟩
     · rw [List.mem_singleton] at hs
       exact use (InitReachV2.initV2_reach eraseP hs run hT) e fun _ h => .inr (.inl ⟨hs, h⟩)
   · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2_1.cert_check hpc code hsg stack
@@ -92,7 +105,7 @@ theorem initFrame_sstore {G N : Exec.Deriv} (hpc : G.pc = 0)
     change selV2T.eval _ ∈ [0x3357162b, 0xd608ea64] at sel
     rw [selV2T_root_selWord] at sel
     rcases List.mem_cons.mp sel with hs | hs
-    · exact use (Init06.init_reach_V2_1 erase hs run hT) e fun _ h => .inl h
+    · exact use (Init06.init_reach_V2_1 erase hs run hT) e fun _ h => .inl ⟨hs, h⟩
     · rw [List.mem_singleton] at hs
       exact use (InitReachV2_1.initV2_reach eraseP hs run hT) e fun _ h => .inr (.inl ⟨hs, h⟩)
   · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
@@ -100,7 +113,7 @@ theorem initFrame_sstore {G N : Exec.Deriv} (hpc : G.pc = 0)
     change selV2T.eval _ ∈ [0x3357162b, 0x430239b4, 0xd608ea64] at sel
     rw [selV2T_root_selWord] at sel
     rcases List.mem_cons.mp sel with hs | hs
-    · exact use (Init06.init_reach_V2_2 erase hs run hT) e fun _ h => .inl h
+    · exact use (Init06.init_reach_V2_2 erase hs run hT) e fun _ h => .inl ⟨hs, h⟩
     rcases List.mem_cons.mp hs with hs | hs
     · exact use (InitReachV2_2.initV2_2_reach eraseP hs run hT) e
         fun _ h => .inr (.inr ⟨hs, h⟩)
@@ -137,8 +150,7 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease_deployed_apart
     (apartSlot : ImplSlotApart P history.rawNodes)
     (slotsApart : ProxySlotsApart pair Tr)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
-    (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
-      ¬ UsdcPairException pair G)
+    (noPairException : NoPairExceptionWrites P pair Tr history.rawFrames history.rawNodes)
     (initApart : InitRowsApart P pair Tr history.rawFrames)
     {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
     (∀ n ∈ history.rawNodes,

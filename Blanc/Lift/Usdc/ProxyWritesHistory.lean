@@ -83,11 +83,14 @@ theorem ConfiguredHistoryTraceIn.proxyRowsApart
   · exact (apart g hg).1 (key.trans impl)
 
 /-- **The admin's upgrades, positional (stated).** An admin upgrade frame of the proxy at `P`
-that writes at split `b₁ ++ m :: b₂` names by its upgrade argument an account of `W` active
-at `b₁`: the admin installs only deployed accounts. -/
+with a successful `SSTORE` at `(P, implSlot)` at split `b₁ ++ m :: b₂` names by its upgrade
+argument an account of `W` active at `b₁`: the admin installs only deployed accounts. Upgrade
+attempts that write no implementation slot (reverted ones, say) are unconstrained. -/
 def AdminUpgradesWithinFrom (P : Adr) (W : List UsdcDeployedEntry)
     (frames nodes : List Exec.Deriv) : Prop :=
-  ∀ b₁ m b₂, nodes = b₁ ++ m :: b₂ → ∀ G ∈ frames, Exec.Deriv.ParentPrefix G m →
+  ∀ b₁ m b₂, nodes = b₁ ++ m :: b₂ → ∀ w : Exec.StorageWrite,
+    Exec.Deriv.successfulSstore? m = some w → w.owner = P → w.key = implSlot →
+    ∀ G ∈ frames, Exec.Deriv.ParentPrefix G m →
     G.sevm.currentTarget = P → G.sevm.code = Proxy.code →
     (Proxy.dispatchWord G.sevm = Proxy.upgradeToWord ∨
       Proxy.dispatchWord G.sevm = Proxy.upgradeToAndCallWord) →
@@ -109,7 +112,8 @@ theorem ConfiguredHistoryTraceIn.upgradesWithinFrom
   rcases cls with adminKey | ⟨-, value, sel, caller⟩
   · exact absurd (adminKey.symm.trans key) (by decide)
   · rw [value]
-    exact admin b₁ m b₂ split G hG chain gTarget gCode sel caller
+    exact admin b₁ m b₂ split w found ((successfulSstore?_node_owner found).2.trans target) key G
+      hG chain gTarget gCode sel caller
 
 /-- **P1 over the deployed world.** Every tracked allowance row of the Pair is at most its
 checkpoint word at every raw node and at the future, with the implementation and library
@@ -124,8 +128,7 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease_deployed
     (apartSlot : ImplSlotApart P history.rawNodes)
     (slotsApart : ProxySlotsApart pair Tr)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
-    (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
-      ¬ UsdcPairException pair G)
+    (noPairException : NoPairExceptionWrites P pair Tr history.rawFrames history.rawNodes)
     (initRows : InitRowWritesNonInc P pair Tr history.rawFrames)
     {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
     (∀ n ∈ history.rawNodes,
