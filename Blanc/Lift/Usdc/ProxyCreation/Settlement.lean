@@ -1,6 +1,8 @@
 import Blanc.Lift.Usdc.ProxyCreation.Effects
 import Blanc.Lift.Usdc.ProxyCreation.RuntimeWindow
 import Blanc.DeploymentTouch
+import Blanc.Lift.Usdc.ProxyCreation.HistoryFrame
+import Blanc.MessageExecutionInversion
 
 /-!
 # Constructor-to-CREATE zero-row composition for the original proxy constructor
@@ -211,5 +213,84 @@ theorem constructor_message_effects
     processCreateMessage_ok_touch_of_exec_and_charge msg htransfer hcodeAddress
       hexec herror hcharge
   exact ⟨_, hsettle, hinstalled_code, hinstalled_stor⟩
+
+/-- A clean retained CREATE of the registered constructor installs the proxy
+runtime and its two initialized slots in that trace's actual result. -/
+theorem constructor_effects_of_createTrace
+    {msg : Msg} {installed : Devm}
+    (trace : Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (hcode : msg.code = code)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = none)
+    (hstateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.getCode msg.currentTarget = Proxy.code ∧
+    installed.getStor msg.currentTarget =
+      (Stor.empty.set implSlot initialImplementation).set adminSlot
+        msg.caller.toB256 := by
+  have actual := trace.result
+  rcases trace with ⟨slot, retained, process⟩
+  obtain ⟨inner, charged, innerProcess, innerClean, charge, -⟩ :=
+    ProcessCreateMessage.ok_charge_of_clean process clean
+  have innerResult : processMessage (processCreateMessage.msg msg) = .ok inner :=
+    (show Blanc.ExecutionTrace.ProcessMessageTrace
+      (processCreateMessage.msg msg) (.ok inner) from ⟨slot, retained, innerProcess⟩).result
+  obtain ⟨benv, transfer⟩ := benvAfterTransfer_exists_zero
+    (msg := processCreateMessage.msg msg) (show (processCreateMessage.msg msg).value = 0 from hvalue)
+  have entry : (Frame.ofCall (processCreateMessage.msg msg)).enter =
+      .run (initEvm ((processCreateMessage.msg msg).withBenv benv)) := by
+    unfold Frame.enter Frame.ofCall
+    rw [transfer]
+    have entryCode : (processCreateMessage.msg msg).codeAddress = none := hcodeAddress
+    unfold executeCode.enter
+    simp only [Msg.withBenv, entryCode]
+  have entered := innerProcess
+  change RunFrame (Frame.ofCall (processCreateMessage.msg msg)) slot (.ok inner) at entered
+  unfold RunFrame at entered
+  rw [entry] at entered
+  obtain ⟨raw, slotEq, -⟩ := entered
+  subst slot
+  cases retained with
+  | some run =>
+      obtain ⟨rawPost, rawEq, rawClean, -, -⟩ :=
+        Blanc.MessageExecution.processMessage_clean_rawPost innerProcess innerClean
+      subst raw
+      have hexec : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) =
+          .ok rawPost := (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩
+      have hsg :
+          (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.benvStat.rules.stateGas =
+            none := by
+        change benv.stat.rules.stateGas = none
+        rw [Msg.benvAfterTransfer_ok_stateGas transfer]
+        exact hstateGas
+      have source := constructor_run_of_exec run
+        (show (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.code = code from hcode)
+        hsg rfl rfl
+      have touched : inner =
+          Devm.recordTouch msg.benv.stat.rules true msg.currentTarget rawPost :=
+        Except.ok.inj (innerResult.symm.trans
+          (processMessage_ok_touch_of_exec transfer hcodeAddress hexec rawClean))
+      rw [touched] at charge
+      obtain ⟨result, resultEq, effects⟩ :=
+        constructor_message_effects hcode hvalue hcodeAddress transfer hexec rawClean charge source
+      have same : installed = result := Except.ok.inj (actual.symm.trans resultEq)
+      simpa only [same] using effects
+
+/-- Every row apart from the constructor's two literal slots is zero in the
+same clean retained CREATE result. -/
+theorem constructor_zero_of_createTrace
+    {msg : Msg} {installed : Devm} {key : B256}
+    (trace : Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (hcode : msg.code = code)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = none)
+    (hstateGas : msg.benv.stat.rules.stateGas = none)
+    (himpl : key ≠ implSlot) (hadmin : key ≠ adminSlot) :
+    installed.getStorVal msg.currentTarget key = 0 := by
+  change (installed.getStor msg.currentTarget).get key = 0
+  rw [(constructor_effects_of_createTrace trace clean hcode hvalue hcodeAddress hstateGas).2,
+    Stor.get_set_ne _ hadmin.symm, Stor.get_set_ne _ himpl.symm]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 end Blanc.Lift.Usdc.ProxyCreation

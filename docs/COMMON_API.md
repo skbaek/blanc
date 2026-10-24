@@ -5334,6 +5334,9 @@ Use
   `ProcessCreateMessage.ok_setCode_state_of_clean` is the common concrete
   settlement representation behind the nonce projection: the clean output
   state is the inner message state with target code installed.
+  `ProcessCreateMessage.ok_charge_of_clean` exposes the same-slot inner
+  message, its successful code-deposit charge and the exact installed Devm;
+  the older state projection reuses that one clean-settlement traversal.
   For actual execution, [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean)
   provides `Exec.nonce_ne_zero_committedPost`, on covered forks. Its instruction
   donors are `Rinst.get_nonce_eq_of_ok`, `Ninst.nonce_ne_zero_of_none`,
@@ -7716,6 +7719,13 @@ contract-neutral.
   `constructor_effects_rawFrame` and `constructor_row_preserved_rawFrame`
   need only success and the registered creation code. Installation by
   `processCreateMessage` is not part of them.
+  `ProxyCreation.constructor_effects_of_createTrace` in Settlement starts
+  from the same clean `ProcessCreateMessageTrace`: it derives the actual
+  interpreted run, source run and successful code deposit, then reuses the
+  existing effects composer to obtain the installed proxy code and two-slot
+  storage. `constructor_zero_of_createTrace` projects any row distinct from
+  those slots to zero. Neither takes a detached source-run or charge premise;
+  transaction settlement and the actual chain-boundary seed remain separate.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry
