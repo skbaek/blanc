@@ -6307,6 +6307,9 @@ contract-neutral.
   (after a lifted `DELEGATECALL` step: the success flag, and when set a successful child `Exec 0` that runs
   the target's code on the input window from an empty machine with the parent's code and `benvStat`, its
   output written into the output window), `delegatecall_generic` and `Frame.ofCall_enter_not_done`.
+  `delegatecall_generic_noStateGas` and `ri_delegatecall_child_noStateGas`
+  use the executing access/delegation rules and state-gas absence, retaining
+  the same actual child, block statics, code and output-window witnesses.
 - For crossing a silent internal call under any step relation, use
   [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
   of `ric_call_silent`, with a no-halt set so the callee must return.
@@ -7229,7 +7232,10 @@ contract-neutral.
   the abstract words `SVal` (`arg i`, `lit w`, `unk`), `Carried`, the checker `shuffle` (every
   instruction state-silent, its stack effect the lift's own `ninstTransfer` on index labels,
   literal `JUMPI`s followed, reverting arms pruned, gotos into an entry list `Fw` disjoint from the
-  cut list) and `ric_shuffle`. A `DELEGATECALL` into quiet code,
+  cut list) and `ric_shuffle`. The `shNinst_run_noStateGas`,
+  `shuffle_sound_noStateGas` and `ric_shuffle_noStateGas` variants share those
+  proofs with actual state-gas absence and the same checker/fuel.
+  A `DELEGATECALL` into quiet code,
   [`Blanc/Lift/QuietDelegateSkip.lean`](../Blanc/Lift/QuietDelegateSkip.lean): `ProcessMessage.getStor_of_quietCode` (a call
   message running `QuietCode` with no value transfer keeps its storage owner's storage),
   `Ninst.delegatecall_getStor_of_quiet`, `Ninst.Run.getCode_eq`, `ric_delegatecall_quiet`,
@@ -7288,7 +7294,14 @@ contract-neutral.
   successor). The shared nonstorage memory walks retain their modern interfaces;
   the static-call tail uses actual `StaticAnsweredH` and silence restricted to
   the same executing environment, preserving the old global silence interface.
-  The complete historical rejection endpoint remains separate.
+  `Usdc.lib_rejects_pairH` now supplies the complete raw historical rejection
+  under `NeutralFork` and historical Pair silence, sharing the original decoder
+  and selection proof. In `Blanc/Lift/Usdc/LibSeam.lean`, `LibRejectsH` and
+  `LibSeam.lib_rejects_pairH` expose its fresh-frame interface. `LibRejectsAt`
+  restricts rejection to actual children with the same `benvStat`;
+  `LibRejects.at_of_covered` and `LibRejectsH.at_of_neutral` supply it without
+  converting the old global capability into a stronger one. Historical
+  implementation permit and retained-owner consumers remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).

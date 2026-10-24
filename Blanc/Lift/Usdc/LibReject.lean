@@ -501,6 +501,12 @@ private theorem pairSilentAt_of_covered {sevm : Sevm}
   intro b t input out code notPre selector answered
   exact silent code notPre fork selector ((StaticAnsweredH_iff_of_covered fork).mp answered)
 
+private theorem pairSilentAt_of_neutral {sevm : Sevm}
+    (fork : NeutralFork sevm.benvStat.fork)
+    (silent : NoStaticAnswerH UniswapV2Pair.code 0x1626ba7e) : PairSilentAt sevm := by
+  intro b t input out code notPre selector answered
+  exact silent code notPre fork selector answered
+
 /-- **The copy loop's exit and the `STATICCALL`** (entry 7's exit, then entries 3 and 4): the
 partial last word lands above the head word; the call data at the free pointer `E` begins with the
 selector word, so a Pair signer cannot answer (the `hsilent` hypothesis, amendment A11),
@@ -859,11 +865,11 @@ theorem mask_toAdr (x : B256) : (maskAddr &&& x).toAdr = x.toAdr := by
 
 /-- **Entry 6, `isValidSignatureNow(signer, digest, signature)`, for a Pair signer**: the signer
 has code, so the EIP-1271 branch (entry 10) runs, and the frame returns `false`. -/
-theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
-    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+private theorem e6_inv_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome} (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none)
     (hcode : b.getCode signer.toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp signer.toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hsilent : PairSilentAt sevm)
     (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
     (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len) (hlen32 : len.toNat ≤ 2 ^ 32)
     (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0116_c6 o) :
@@ -875,9 +881,9 @@ theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : L
   iterate 4 lx h
   rcases ric_call rfl h with ⟨G1, ⟨D, hc, h⟩ | ⟨D, hc, -⟩⟩
   swap
-  · obtain ⟨_, e⟩ := lib_e8_inv fork hc
+  · obtain ⟨_, e⟩ := lib_e8_invH bal hc
     cases e
-  obtain ⟨G2, e⟩ := lib_e8_inv fork hc
+  obtain ⟨G2, e⟩ := lib_e8_invH bal hc
   cases e
   clear hc
   unfold t_0121_c6 at h
@@ -889,12 +895,15 @@ theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : L
   unfold t_0164_c6 at h
   ldest h
   iterate 5 lx h
+  have codeAfter : (accountAccessH sevm b signer.toAdr).getCode signer.toAdr =
+      UniswapV2Pair.code := by
+    simpa only [Devm.getCode, Devm.getAcct, accountAccessH_state] using hcode
   rcases ric_call rfl h with ⟨G3, ⟨D, hc, h⟩ | ⟨D, hc, -⟩⟩
   swap
-  · obtain ⟨_, _, _, _, _, e⟩ := e10_inv fork (by rw [access_getCode, mask_toAdr]; exact hcode)
+  · obtain ⟨_, _, _, _, _, e⟩ := e10_inv_actual hsg (by rw [mask_toAdr]; exact codeAfter)
       (by rw [mask_toAdr]; exact notPrecompile) hsilent hp hF hsig hlen hlen32 hc
     cases e
-  obtain ⟨b4, q4, M4, G4, p4, e⟩ := e10_inv fork (by rw [access_getCode, mask_toAdr]; exact hcode)
+  obtain ⟨b4, q4, M4, G4, p4, e⟩ := e10_inv_actual hsg (by rw [mask_toAdr]; exact codeAfter)
     (by rw [mask_toAdr]; exact notPrecompile) hsilent hp hF hsig hlen hlen32 hc
   cases e
   clear hc
@@ -906,6 +915,18 @@ theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : L
   iterate 5 lx h
   obtain ⟨G5, e⟩ := ric_ret h
   exact ⟨_, q4, M4, _, p4, Seg.done.inj e⟩
+
+/-- The original covered-fork code-bearing signer interface. -/
+theorem e6_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hcode : b.getCode signer.toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp signer.toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
+    (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len) (hlen32 : len.toNat ≤ 2 ^ 32)
+    (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0116_c6 o) :
+    ∃ b' q M' G', LibMem q M' ∧ o = .returned (St b' (0 :: S) M' G') :=
+  e6_inv_actual fork.rules_stateGas_none fork.rules_bal_none hcode notPrecompile (pairSilentAt_of_covered fork hsilent) hp hF hsig hlen hlen32 run
 
 theorem read_len (M : Mem) (i n : Nat) : (M.read i n).1.length = n := by
   rw [(Mem.reads_data M).read, List.sliceD_eq_map, List.length_map, List.length_range]
@@ -1037,14 +1058,14 @@ an account holding the Pair's runtime outside the precompile range, returns the 
 the signer has code, so the library asks it `isValidSignature` by `STATICCALL`, and the Pair answers
 no such call.  Every free-pointer fact the walk uses is derived inside the frame (the library sets
 `mstore(0x40, 0x80)` at pc 0 and bounds the signature length by `2 ^ 32` while decoding). -/
-theorem lib_rejects_pair {sevm : Sevm} {b post : Devm} {G : Nat}
+private theorem lib_rejects_pair_actual {sevm : Sevm} {b post : Devm} {G : Nat}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (code : sevm.code = Lib.code) (fork : CoveredFork sevm.benvStat.fork)
+    (code : sevm.code = Lib.code) (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none)
     (hcode : b.getCode (Sevm.dataWord sevm 4).toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (Sevm.dataWord sevm 4).toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) :
+    (hsilent : PairSilentAt sevm) :
     32 ≤ post.output.length ∧ post.output.take 32 = List.replicate 32 0 := by
-  have h := lib_run_cut run code fork
+  have h := lib_run_cut_noStateGas run code hsg
   clear run
   unfold t_0000_c0 at h
   lx h
@@ -1144,9 +1165,9 @@ theorem lib_rejects_pair {sevm : Sevm} {b post : Devm} {G : Nat}
   have hFb : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40 := ⟨by omega, by omega⟩
   rcases ric_call rfl h with ⟨G1, ⟨D, hc, h⟩ | ⟨D, hc, -⟩⟩
   swap
-  · obtain ⟨_, _, _, _, _, e⟩ := e6_inv fork hcode' np' hsilent hp1 hFb (by rw [l128]; omega) hlen hL32 hc
+  · obtain ⟨_, _, _, _, _, e⟩ := e6_inv_actual hsg bal hcode' np' hsilent hp1 hFb (by rw [l128]; omega) hlen hL32 hc
     cases e
-  obtain ⟨b', q, M', G', pq, e⟩ := e6_inv fork hcode' np' hsilent hp1 hFb (by rw [l128]; omega) hlen hL32 hc
+  obtain ⟨b', q, M', G', pq, e⟩ := e6_inv_actual hsg bal hcode' np' hsilent hp1 hFb (by rw [l128]; omega) hlen hL32 hc
   cases e
   clear hc
   unfold t_0102_c13 at h
@@ -1157,6 +1178,28 @@ theorem lib_rejects_pair {sevm : Sevm} {b post : Devm} {G : Nat}
     obtain ⟨hout, -, -⟩ := ri_return hl
     rw [hout, lit64, show B256.eqCheck (B256.eqCheck 0 0) 0 = (0 : B256) by decide, pq.ptr]
     exact final_output pq
+
+/-- The original covered-fork library rejection interface. -/
+theorem lib_rejects_pair {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (code : sevm.code = Lib.code) (fork : CoveredFork sevm.benvStat.fork)
+    (hcode : b.getCode (Sevm.dataWord sevm 4).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (Sevm.dataWord sevm 4).toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) :
+    32 ≤ post.output.length ∧ post.output.take 32 = List.replicate 32 0 :=
+  lib_rejects_pair_actual run code fork.rules_stateGas_none fork.rules_bal_none
+    hcode notPrecompile (pairSilentAt_of_covered fork hsilent)
+
+/-- The library rejects Pair signers under the actual rules of a neutral fork. -/
+theorem lib_rejects_pairH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (code : sevm.code = Lib.code) (fork : NeutralFork sevm.benvStat.fork)
+    (hcode : b.getCode (Sevm.dataWord sevm 4).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (Sevm.dataWord sevm 4).toAdr)
+    (hsilent : NoStaticAnswerH UniswapV2Pair.code 0x1626ba7e) :
+    32 ≤ post.output.length ∧ post.output.take 32 = List.replicate 32 0 :=
+  lib_rejects_pair_actual run code fork.stateGas fork.bal
+    hcode notPrecompile (pairSilentAt_of_neutral fork hsilent)
 
 
 end Blanc.Lift.Usdc
