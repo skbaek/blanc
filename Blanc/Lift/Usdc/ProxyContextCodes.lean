@@ -396,6 +396,25 @@ theorem world_at (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
       exact act.append _
     · exact absurd key (apartSlot m (sub m hm) target hcode w found)
 
+/-- The active library of a running V2_2 implementation holds its actual installed code. -/
+theorem UsdcDeployedWorld.active_library_code
+    {Bd : State → List Exec.Deriv → Prop} {P a : Adr} {W : List UsdcDeployedEntry}
+    {checkpoint : State} {before : List Exec.Deriv} {C : ByteArray} {d : Devm}
+    (world : UsdcDeployedWorld Bd P W checkpoint)
+    (allowed : AllowedAt P W before a C) (impl : C = Impl.code)
+    (installed : ∀ e ∈ W, e.Active before → d.getCode e.adr = e.code) :
+    ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active before ∧
+      d.getCode usdcLib = Lib.code := by
+  obtain ⟨l, hl, ladr, lcode, lact⟩ : ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code ∧
+      l.Active before := by
+    rcases allowed with ⟨-, hc⟩ | ⟨e, he, act, hc⟩
+    · exact absurd (hc.symm.trans impl) proxy_ne_impl
+    · obtain ⟨l, hl, ladr, lcode, lact⟩ := world.lib e he (hc.symm.trans impl)
+      exact ⟨l, hl, ladr, lcode, lact.trans act⟩
+  refine ⟨l, hl, ladr, lcode, lact, ?_⟩
+  rw [← ladr, ← lcode]
+  exact installed l hl lact
+
 /-- The code installed at a listed context is allowed there and is a USDC code. -/
 theorem installed_allowed {Bd : State → List Exec.Deriv → Prop}
     (world : UsdcDeployedWorld Bd P W checkpoint.state) {b : List Exec.Deriv} {d : Devm}
@@ -486,14 +505,11 @@ theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
             (by rw [hcodeE]; exact (world.impls e he).context.not_delegation), hcodeE]
           exact mono (.inr ⟨e, he, act, rfl⟩)
         · -- the V2_2 runtime forwards to the library
-          obtain ⟨l, hl, ladr, lcode, lact⟩ : ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code ∧
-              l.Active (q ++ mid₁) := by
-            rcases allowedM with ⟨-, hc⟩ | ⟨e, he, act, hc⟩
-            · exact absurd (hc.symm.trans himpl) proxy_ne_impl
-            · obtain ⟨l, hl, ladr, lcode, lact⟩ := world.lib e he (hc.symm.trans himpl)
-              exact ⟨l, hl, ladr, lcode, lact.trans act⟩
+          obtain ⟨l, hl, ladr, lcode, lact, libCode⟩ :=
+            world.active_library_code allowedM himpl hW
           have hcodeL : m.devm.getCode w.toAdr = Lib.code := by
-            rw [hw g w rest hstack, toAdr_toB256, ← ladr, ← lcode]; exact hW l hl lact
+            rw [hw g w rest hstack, toAdr_toB256]
+            exact libCode
           rw [childCode, Xinst.step_delegatecall_spawn_code hx hstack
             (by rw [hcodeL]; exact Lib.code_not_delegation), hcodeL, ← lcode]
           exact mono (.inr ⟨l, hl, lact, rfl⟩)

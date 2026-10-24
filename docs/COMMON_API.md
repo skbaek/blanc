@@ -3692,6 +3692,25 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   independent query carrier is unchanged. Domain capabilities, BAL absence
   and actual routing readiness remain explicit producer obligations. This
   does not constrain discarded raw frames or finish the allowance-history fold.
+  [`RetainedAllowanceWrites.lean`](../Blanc/Lift/Usdc/RetainedAllowanceWrites.lean)
+  connects an actual retained storage write under an original settled root to
+  its globally retained parent. `usdc_retainedRowWrite_nonInc_or_v2_2_owner`
+  reuses the raw writer classifier and transports its exception by same-frame
+  `sevm` equality, then applies retained old-query exclusion and initializer
+  separation. The actual caller producer and scoped old routing readiness
+  remain inputs; the exact V2_2 owner case remains in the conclusion.
+  `usdc_retainedRowWrite_nonInc` closes that case with a separate retained
+  V2_2 owner producer. These are local write inequalities, not a storage fold
+  or a proof of the endpoint zero seed.
+  The write-scoped caller input is supplied by `retained_caller_write_excluded`
+  in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
+  It follows actual retained parents, uses the Pair's historical child-selector
+  theorem and proxy calldata inheritance, and permits the V2_2 library as an
+  intermediate case. The library's no-SSTORE theorem excludes that case only
+  at the original successful write. Actual root caller exclusion, the deployed
+  USDC world, and installed Pair/representation/freshness remain inputs.
+  `UsdcDeployedWorld.active_library_code` shares the existing active-library
+  selection with `ctxAt_step`; it derives actual code from the world facts.
   `Usdc.recoveryV2_consumes` in
   [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.

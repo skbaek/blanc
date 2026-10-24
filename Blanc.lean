@@ -1589,6 +1589,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9P1
+import Blanc.Composition.UniswapV2PairUsdcCallersIn
 import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
@@ -1765,6 +1766,7 @@ import Blanc.Lift.Usdc.PermitRowNativeV2_1
 import Blanc.Lift.Usdc.OwnerQueriesV2
 import Blanc.Lift.Usdc.OldRecoveryRelevance
 import Blanc.Lift.Usdc.RetainedOldRecovery
+import Blanc.Lift.Usdc.RetainedAllowanceWrites
 import Blanc.Lift.Usdc.RefineAdmin
 import Blanc.Lift.Usdc.RefineAdminBits
 import Blanc.Lift.Usdc.RefineAdminBodies
