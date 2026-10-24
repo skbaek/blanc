@@ -43,7 +43,7 @@ theorem InitStore.mono {Keys Keys' : B256 → Prop} {T : Conf} (h : ∀ k, Keys 
   fun key v S hs => (s key v S hs).imp_left (h key)
 
 /-- The selector word solc 0.6's dispatcher computes. -/
-def selWord (sevm : Sevm) : B256 :=
+def initSelWord (sevm : Sevm) : B256 :=
   Sevm.dataWord sevm (Bytes.toB256 [0]) >>> (Bytes.toB256 [0xe0]).toNat
 
 /-- solc 0.6's dispatcher prefix: free pointer, nonpayable check, short-calldata fallback (a
@@ -61,7 +61,7 @@ def dispatch06 (a b : UInt8 × UInt8) (sel : SFunc) : SFunc :=
 selector word whose walk ends at the goto `(c, j)`, continues from entry `j`. -/
 theorem dispatch06_reach {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc}
     {sevm : Sevm} {T : Conf} (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    {a b : UInt8 × UInt8} {sel : SFunc} {σ c : B256} {j : Nat} (hs : selWord sevm = σ)
+    {a b : UInt8 × UInt8} {sel : SFunc} {σ c : B256} {j : Nat} (hs : initSelWord sevm = σ)
     (hw : sel.selWalk σ = .inl (c, j)) {d : Devm} {G : Nat} {M : Mem}
     (run : Reach P fs sevm ⟨St d [] M G, dispatch06 a b sel, []⟩ T) (hT : AtSstore T) :
     ∃ g b' G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b' [σ]
@@ -76,7 +76,7 @@ theorem dispatch06_reach {P : Sevm → Devm → Ninst → Devm → Prop} {fs : L
   swap
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
   iterate 4 rsx
-  change Reach _ _ _ ⟨St _ (selWord sevm :: _) _ _, _, _⟩ _ at run
+  change Reach _ _ _ ⟨St _ (initSelWord sevm :: _) _ _, _, _⟩ _ at run
   rw [hs] at run
   obtain ⟨-, g, _, hg, run⟩ := Reach.selWalk_inlS erase hw run hT
   exact ⟨g, _, _, hg, run⟩

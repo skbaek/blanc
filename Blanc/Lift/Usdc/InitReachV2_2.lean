@@ -56,7 +56,7 @@ variable {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf
 empty stack and the `initializeV2` selector, to an `SSTORE` stops at a write of `KeysInitV2`
 or of zero. -/
 theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    (sel : selWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
   rw [root_eq] at run
@@ -362,7 +362,7 @@ theorem route_initV2_2 : selTree.selWalk 0x430239b4 =
 empty stack and the `initializeV2_2` selector, to an `SSTORE` stops at a write of
 `KeysInitV2_2` or of zero. -/
 theorem initV2_2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    (sel : selWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T := by
   rw [root_eq] at run

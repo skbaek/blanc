@@ -30,9 +30,9 @@ own calldata: `initialize`'s fixed slots and string payload keys, `initializeV2`
 length is capped at a bound the walks prove for any reached store: `2 ^ 32` from the solc 0.6
 ABI decoders, `2 ^ 160` for `initialize` from V1's memory potential. -/
 def InitKeys (sevm : Sevm) (key : B256) : Prop :=
-  (selWord sevm = 0x3357162b ∧ Init06.KeysInit06 sevm key) ∨
-    (selWord sevm = 0xd608ea64 ∧ KeysInitV2 sevm key) ∨
-    (selWord sevm = 0x430239b4 ∧ InitReachV2_2.KeysInitV2_2 sevm key)
+  (initSelWord sevm = 0x3357162b ∧ Init06.KeysInit06 sevm key) ∨
+    (initSelWord sevm = 0xd608ea64 ∧ KeysInitV2 sevm key) ∨
+    (initSelWord sevm = 0x430239b4 ∧ InitReachV2_2.KeysInitV2_2 sevm key)
 
 /-- **Initializer keys apart from the tracked rows (stated, frame-local).** For every raw
 initializer frame at `P`, no tracked Pair row is one of the frame's `InitKeys`.
@@ -54,14 +54,14 @@ theorem selV1T_root (sevm : Sevm) :
   simp only [selV1T, WriteSite.Term.eval, WriteSite.Op2.eval, WriteSite.Env.root, Sevm.dataWord]
   rfl
 
-theorem selWord_eq_selector (sevm : Sevm) : selWord sevm = Blanc.Sevm.selector sevm := by
-  unfold selWord Blanc.Sevm.selector
+theorem selWord_eq_selector (sevm : Sevm) : initSelWord sevm = Blanc.Sevm.selector sevm := by
+  unfold initSelWord Blanc.Sevm.selector
   rw [show Bytes.toB256 [0] = (0 : B256) from by decide,
     show (Bytes.toB256 [0xe0]).toNat = 224 from by decide]
 
 theorem selV2T_root_selWord (sevm : Sevm) :
-    selV2T.eval (WriteSite.Env.root sevm) = selWord sevm := by
-  simp only [selV2T, WriteSite.Term.eval, WriteSite.Op2.eval, WriteSite.Env.root, selWord,
+    selV2T.eval (WriteSite.Env.root sevm) = initSelWord sevm := by
+  simp only [selV2T, WriteSite.Term.eval, WriteSite.Op2.eval, WriteSite.Env.root, initSelWord,
     Sevm.dataWord]
   rfl
 

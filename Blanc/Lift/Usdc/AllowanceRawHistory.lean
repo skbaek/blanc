@@ -78,7 +78,7 @@ theorem rawWrite_allowClass {G m : Exec.Deriv} (hpc : G.pc = 0)
   exact allow_class_of_wsObs hsel hok sep obs stack tracked
 
 /-- The library runtime never writes. -/
-theorem lib_no_sstore {G m : Exec.Deriv} (hpc : G.pc = 0)
+theorem lib_no_sstore_node {G m : Exec.Deriv} (hpc : G.pc = 0)
     (hsg : G.sevm.benvStat.rules.stateGas = none) (chain : Exec.Deriv.ParentPrefix G m)
     (hcode : G.sevm.code = Lib.code) {w : Exec.StorageWrite}
     (found : Exec.Deriv.successfulSstore? m = some w) : False := by
@@ -228,7 +228,7 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
   · exact (rawWrite_allowClass hpc hsg chain Impl.cert_check impl_wsCert h (by decide)
       implV2_2_allowSitesOk (s22 h) found tracked).imp (fun a => .inr (.inr (.inr ⟨h, a⟩)))
       nonInc
-  · exact (lib_no_sstore hpc hsg chain h found).elim
+  · exact (lib_no_sstore_node hpc hsg chain h found).elim
 
 /-- **A changed row's last word comes from an attributed raw write.** If `P`'s cell `k`
 differs between checkpoint and future, some raw node wrote the future word there, in a raw

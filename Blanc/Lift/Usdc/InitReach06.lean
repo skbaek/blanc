@@ -703,7 +703,7 @@ theorem root06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hwrap : fs[kW]? = some (b_0541_139 ι)) (hb : fs[ι.k12]? = some (b_177e_51 ι))
     (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
     (E : StrStore.Entries τ (.reg .mload) fs) (ho : fs[ι.k30]? = some (b_416c_65 ι))
-    (hs : selWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St d [] Mem.empty G, dispatch06 a c sel, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
@@ -723,7 +723,7 @@ stack and memory and the `initialize` selector, to an `SSTORE` stops at a write 
 or of zero. -/
 theorem init_reach_V2 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    (hs : selWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV2.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV2.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
@@ -740,7 +740,7 @@ stack and memory and the `initialize` selector, to an `SSTORE` stops at a write 
 or of zero. -/
 theorem init_reach_V2_1 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    (hs : selWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV2_1.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV2_1.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
@@ -757,7 +757,7 @@ stack and memory and the `initialize` selector, to an `SSTORE` stops at a write 
 or of zero. -/
 theorem init_reach_V2_2 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    (hs : selWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) Impl.cert.prog sevm
       ⟨St d [] Mem.empty G, Impl.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
