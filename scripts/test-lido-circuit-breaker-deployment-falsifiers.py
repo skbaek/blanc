@@ -172,7 +172,6 @@ GENERIC_ROOT_LEAN_CONTROL = r'''example
   have _ := root.deployed_validContext
   have _ := root.deployed_chainId
   have _ := root.reflReach
-  have _ := root.tip_covered
   have _ := root.reachable_registryStable hreach T hcov hstart
   have _ := root.reachable_code hreach T hcov hstart
   have _ := root.reachable_installedCode hreach T hcov hstart
@@ -186,10 +185,10 @@ MAINNET_ROOT_LEAN_CONTROL = r'''example
     (hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber)
     (htimestamp :
       cb.block.header.timestamp = officialMainnetDeploymentTimestamp)
-    (hbase : CanonicalDeploymentBase .bpo2 mainnetChainConfig.chainId
+    (hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId
       base sender ca)
     (henv : CanonicalOfficialDeploymentBlockAt .bpo2
-      mainnetChainConfig.chainId base cb txBytes tx sender ca)
+      officialMainnetDeploymentChainId base cb txBytes tx sender ca)
     (hstep : stateTransitionUsing mainnetChainConfig base cb.block =
       .ok deployed)
     (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future)
@@ -350,7 +349,7 @@ def run_lean_controls() -> None:
         "htx.receiptEntry", "htx.receiptSucceeded", "suffix.run", "hat", "hbody",
         "root.configValid", "root.target_not_precompile", "root.installed",
         "root.stable", "root.deployed_validContext", "root.deployed_chainId",
-        "root.tip_covered", "root.reachable_registryStable hreach T hcov hstart",
+        "root.reachable_registryStable hreach T hcov hstart",
         "root.reachable_countConservation hreach T hcov hstart",
     )
     for token in generic_required:

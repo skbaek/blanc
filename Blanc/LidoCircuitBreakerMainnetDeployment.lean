@@ -75,8 +75,9 @@ structure MainnetDeploymentRoot
     tip.header.timestamp = officialMainnetDeploymentTimestamp
 
 /-- A successful configured mainnet step over the strict official envelope,
-at the registered deployment block number and timestamp, establishes the
-mainnet deployment root.  The selected fork is BPO2, read off the pinned
+at the registered chain id, deployment block number and timestamp, establishes
+the mainnet deployment root; the chain id is carried to the configured
+schedule by `mainnetChainConfig_chainId_eq_officialDeployment`.  The selected fork is BPO2, read off the pinned
 schedule rather than assumed; every fork-sensitive envelope premise is stated
 against it.  The configured transition equation is the only premise about the
 deployed chain. -/
@@ -86,13 +87,14 @@ theorem canonicalMainnetDeploymentStep_establishes_root
     (hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber)
     (htimestamp :
       cb.block.header.timestamp = officialMainnetDeploymentTimestamp)
-    (hbase : CanonicalDeploymentBase .bpo2 mainnetChainConfig.chainId
+    (hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId
       base sender ca)
     (henv : CanonicalOfficialDeploymentBlockAt .bpo2
-      mainnetChainConfig.chainId base cb txBytes tx sender ca)
+      officialMainnetDeploymentChainId base cb txBytes tx sender ca)
     (hstep : stateTransitionUsing mainnetChainConfig base cb.block =
       .ok deployed) :
     MainnetDeploymentRoot base deployed ca := by
+  rw [← mainnetChainConfig_chainId_eq_officialDeployment] at hbase henv
   have hforkAt : mainnetChainConfig.forkAt cb.block.header.number
       cb.block.header.timestamp = .ok .bpo2 := by
     rw [hnumber, htimestamp]

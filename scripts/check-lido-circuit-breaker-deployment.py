@@ -55,9 +55,9 @@ MAINNET_SOURCE = "Blanc/LidoCircuitBreakerMainnetDeployment.lean"
 REFERENCE = "scripts/lido-circuit-breaker-reference.json"
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-PUBLIC_THEOREM_COUNT = 180
+PUBLIC_THEOREM_COUNT = 178
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "cc1b81b6d98a16da3826794b2c7313dbc25e79e548ed9c578ea73f778471425c"
+    "6b80a310d71deac8ad0f3c52b3158655ecd451f968d564f56d397f6d6ea52a55"
 )
 # The whole axiom claim of this family. Every public deployment theorem is covered by the
 # repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
@@ -112,8 +112,6 @@ PINS = {
     "DeploymentRootAt": "deb41a5a317c98ce5c9627722be2cc8c89a5c107a24e5a78af6d682aa38daf0b",
     "canonicalDeploymentStepAt_establishes_root": "d03be52a5d51d6d960fbc3f41e954aefbf5152ac9f60b6c0d4163c0113ec4f8b",
     "DeploymentRootAt.reflReach": "c1f83b86db89c79b253b8c451bb2895ffeb6c2d6dbf6b170d22d4509eb69b686",
-    "DeploymentRootAt.tip_covered": "6bb532d735b59cd7e9bebcdbf6ee77d05070566e5cb843b9b432bf59b18f21bd",
-    "DeploymentRootAt.tip_floor": "fac4f12cf4cd060bd8ed17904b64f7bad8ab1c74474af536c2bed2861bb75477",
     "DeploymentRootAt.reachable_registryStable": "381a70e663da00964e13b1e44a14fa6fc50a9874bd39aa794e1a6ed81fc62d9b",
     "DeploymentRootAt.reachable_code": "aeebc549abc34458a38bf0c990ac1391fdf794eef7ae477f8dd5b5ce4c3896b6",
     "DeploymentRootAt.reachable_installedCode": "5284daa96b40cb5a23b831f56b1e8f10a60169ed5d1c89f175e1999735d4d926",
@@ -131,7 +129,7 @@ MAINNET_PINS = {
     "officialMainnetDeployment_forkAt": "93f5064bdf581555905b74963c2c99d948513a4806e52666aeb7ec6768db2e91",
     "mainnetPragueTimestamp_le_officialDeployment": "63f54fda9bf88e9c2a82e5550b35cfb04a56101e6e848cf2724d16dc2f1aa9c5",
     "MainnetDeploymentRoot": "85580733631bfd2deae2fe9dd309513c16933a61d2418ecb72ba8f6e3c4c5121",
-    "canonicalMainnetDeploymentStep_establishes_root": "aedcc09d46ae74e2365d971d20f48e52b1bfef68d20946ad9950f8cf7551f59f",
+    "canonicalMainnetDeploymentStep_establishes_root": "3616e8365d0804b1fb4a62468dd9d6fbd5e8f9dafbf9ff2076f02709ccfba0fc",
     "mainnetChainConfig_covered_from_officialDeployment": "17615fea4cd3ac127c79d0797a4a48d1e769a42e48581677fd2ff5f1e22cdd5e",
     "MainnetDeploymentRoot.tip_floor": "287dfad2de5d5e8e2ab39ea37e9d215aaf457113efa37aaa4451eceee9bc938e",
     "MainnetDeploymentRoot.reflReach": "1fddcbea9e0532e5aee9ad372764650d666e97d0ab7bb3dfb60cedd07262ba03",
@@ -329,10 +327,6 @@ CHANNELS = {
         "hbase.target_not_precompile", "DeploymentRootAt",
     ),
     "DeploymentRootAt.reflReach": ("ReachUsing cfg", "hroot.configValid", "deployed"),
-    "DeploymentRootAt.tip_covered": (
-        "hroot.execution", "stateTransitionUsing_reachedStep", "CoveredFork fork",
-    ),
-    "DeploymentRootAt.tip_floor": ("tip_covered", "T ≤ tip.header.timestamp"),
     "DeploymentRootAt.reachable_registryStable": (
         "ReachUsing cfg", "T ≤ timestamp →", "CoveredFork f",
         "T ≤ tip.header.timestamp", "registryStable_iff_stateInv",
@@ -367,6 +361,8 @@ MAINNET_CHANNELS = {
         "tip.header.timestamp = officialMainnetDeploymentTimestamp",
     ),
     "canonicalMainnetDeploymentStep_establishes_root": (
+        "CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId",
+        "mainnetChainConfig_chainId_eq_officialDeployment",
         "officialMainnetDeployment_forkAt",
         "canonicalDeploymentStepAt_establishes_root mainnetChainConfig .bpo2",
         "CoveredFork.bpo2", "stateTransitionUsing_reachedStep",
@@ -637,7 +633,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str], mainnet_text: s
 
     The constructor owner is included only to enforce the private-to-proof
     façade below.  Its pre-existing theorem inventory is outside the nine
-    deployment proof owners and therefore outside this exact 180-name set.
+    deployment proof owners and therefore outside this exact 178-name set.
     The mainnet module's public theorems are a separate exact inventory.
     """
     names = public_theorem_names({
@@ -848,8 +844,8 @@ def mainnet_discipline(mainnet: dict[str, str], root: Path) -> None:
     for fragment in (
         "hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber",
         "htimestamp : cb.block.header.timestamp = officialMainnetDeploymentTimestamp",
-        "hbase : CanonicalDeploymentBase .bpo2 mainnetChainConfig.chainId base sender ca",
-        "henv : CanonicalOfficialDeploymentBlockAt .bpo2 mainnetChainConfig.chainId base cb txBytes tx sender ca",
+        "hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId base sender ca",
+        "henv : CanonicalOfficialDeploymentBlockAt .bpo2 officialMainnetDeploymentChainId base cb txBytes tx sender ca",
         "hstep : stateTransitionUsing mainnetChainConfig base cb.block = .ok deployed",
     ):
         if fragment not in head:

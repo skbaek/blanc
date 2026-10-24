@@ -356,28 +356,6 @@ theorem DeploymentRootAt.reflReach
   .refl deployed hroot.configValid hroot.deployed_validContext
     hroot.deployed_chainId
 
-/-- The deployed chain's tip is the deployment block, whose own number and
-timestamp the schedule maps to a covered fork. -/
-theorem DeploymentRootAt.tip_covered
-    (hroot : DeploymentRootAt cfg base deployed ca) :
-    ∃ tip fork, deployed.blocks.getLast? = some tip ∧
-      cfg.forkAt tip.header.number tip.header.timestamp = .ok fork ∧
-      CoveredFork fork := by
-  obtain ⟨fork, cb, _, _, _, _, _, _, hfork, hforkAt, _, _, _, _, _, hstep, _⟩ :=
-    hroot.execution
-  obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
-  exact ⟨cb.block, fork, hnew, hforkAt, hfork⟩
-
-/-- A timestamp floor that every covered selection of the schedule respects
-holds at the deployed tip. -/
-theorem DeploymentRootAt.tip_floor
-    (hroot : DeploymentRootAt cfg base deployed ca) {T : Nat}
-    (hT : ∀ {number timestamp f}, cfg.forkAt number timestamp = .ok f →
-      CoveredFork f → T ≤ timestamp) :
-    ∃ tip, deployed.blocks.getLast? = some tip ∧ T ≤ tip.header.timestamp := by
-  obtain ⟨tip, _, htip, hf, hcov⟩ := hroot.tip_covered
-  exact ⟨tip, htip, hT hf hcov⟩
-
 /-- The deployment seed is transported through every configured future of the
 supplied schedule whose selections at or after a floor the deployed tip has
 reached are covered. -/

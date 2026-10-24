@@ -102,4 +102,4 @@ if ! "$JAUNE_BIN" "$FIXTURE" --network Prague >"$LOG" 2>&1; then
   fail "strict Jaune replay of the pinned-EELS fixture failed"
 fi
 
-echo "OK — Lido CircuitBreaker direct deployment root (36 pins + 17 mainnet pins; 13 reduction certificates; 389 fragments; 180 + 13 mainnet public theorems under the union walk; 3 coordinates bound to the reference manifest; 4 stricter claims; 5 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
+echo "OK — Lido CircuitBreaker direct deployment root (34 pins + 17 mainnet pins; 13 reduction certificates; 386 fragments; 178 + 13 mainnet public theorems under the union walk; 3 coordinates bound to the reference manifest; 4 stricter claims; 5 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"

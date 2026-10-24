@@ -4780,10 +4780,10 @@ example (base deployed : BlockChain) (cb : CanonicalBlock) (txBytes : Bytes)
     (hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber)
     (htimestamp :
       cb.block.header.timestamp = officialMainnetDeploymentTimestamp)
-    (hbase : CanonicalDeploymentBase .bpo2 mainnetChainConfig.chainId
+    (hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId
       base sender ca)
     (henv : CanonicalOfficialDeploymentBlockAt .bpo2
-      mainnetChainConfig.chainId base cb txBytes tx sender ca)
+      officialMainnetDeploymentChainId base cb txBytes tx sender ca)
     (hstep : stateTransitionUsing mainnetChainConfig base cb.block =
       .ok deployed) :
     MainnetDeploymentRoot base deployed ca :=
