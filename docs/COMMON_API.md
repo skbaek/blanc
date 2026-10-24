@@ -899,6 +899,23 @@ earlier attributed raw successful `SSTORE`), its invariant forms
 `msgNode_code`, `txNode_code`, `StagedBodyTrace.withdrawalCell_of_code`,
 `StagedBodyTrace.withdrawalCode_of_code`, `successfulSstore?_node_owner`.
 No recipe is registered: use this branch and the named theorem.
+For the same provenance restarted at a committed boundary inside the
+history (a block-body start or the boundary after any transaction, e.g. for
+a contract deployed after the checkpoint; safety only of the raw nodes
+between the boundary and the node),
+[`Blanc/ExecutionHistoryCellProvenanceFrom.lean`](../Blanc/ExecutionHistoryCellProvenanceFrom.lean):
+the boundary predicates `BoundaryAt s pre` on `ApplyTransactionsTrace`,
+`StagedBodyTrace`, `ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn`,
+with `ConfiguredHistoryTraceIn.boundaryAt_checkpoint` and the per-level
+`BoundaryAt.prefix`; `ConfiguredHistoryTraceIn.rawNode_cellProvenance_from`
+(boundary value or an attributed raw successful `SSTORE` between),
+`rawNode_cellInv_from`, `rawFrame_entryCellInv_from`, the endpoint form
+`ConfiguredHistoryTraceIn.cellProv_post_from`; the per-level `cellProv_at_from`
+/ `cellProv_post_from` lifts, `ApplyTransactionsTrace.BoundaryAt.suffix`,
+`StagedBodyTrace.requests_cellProv_at` / `requests_cellProv_post` and
+`ConfiguredHistoryTraceIn.cellProv_attribution`. The checkpoint statement is
+the instance `boundaryAt_checkpoint`, `pre = []`. No recipe is registered:
+use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

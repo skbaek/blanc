@@ -324,6 +324,7 @@ SHARED += [
     "ExecutionCellProvenance",
     "ExecutionInCellProvenance",
     "ExecutionHistoryCellProvenance",
+    "ExecutionHistoryCellProvenanceFrom",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",
