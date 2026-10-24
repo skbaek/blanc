@@ -1,4 +1,5 @@
 import Blanc.Lift.ReachSstoreLoops
+import Blanc.Lift.SolcAbiStringStaging
 
 /-!
 # solc 0.6 `string storage = string calldata` on a prefix reach
@@ -586,5 +587,79 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {body 
   exact ⟨_, _, _, T', inside, AtSstore.below.mp hT, rfl, lenBound, offsetBound⟩
 
 end CdStrWrap
+
+/-! ## solc's ABI string decoder fragments on a prefix reach -/
+
+namespace ReachAbi
+
+open SolcAbiStringStaging
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
+  {R : List B256} {M : Mem} {G : Nat} {k : SFunc} {K : List SFunc} {T : Conf}
+
+private theorem lit20 : Bytes.toB256 [0x20] = (32 : B256) := by decide
+
+/-- **The dynamic-string fragment on a reach to an `SSTORE`.** The reach passes the fragment
+(it holds no `SSTORE`) into `k` with the allocation of `strFrag_lift` in memory, whose size
+the potential after the payload copy bounds. -/
+theorem strFrag_reach (eraseP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {h base E : B256}
+    (run : Reach (FreePtr.PotStep P) fs sevm ⟨St b (h :: base :: E :: R) M G, strFrag k, K⟩ T)
+    (hT : AtSstore T) :
+    ∃ G' : Nat,
+      (allocMem M (memWord M 64) (Sevm.dataWord sevm (base + Sevm.dataWord sevm h))
+        (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
+          (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)).size < 2 ^ 160 ∧
+      Reach (FreePtr.PotStep P) fs sevm
+        ⟨St b ((32 + (base + Sevm.dataWord sevm h)) :: memWord M 64 :: (32 + h) :: base ::
+          E :: R)
+          (allocMem M (memWord M 64) (Sevm.dataWord sevm (base + Sevm.dataWord sevm h))
+            (sevm.data.sliceD (32 + (base + Sevm.dataWord sevm h)).toNat
+              (Sevm.dataWord sevm (base + Sevm.dataWord sevm h)).toNat 0)) G', k, K⟩ T := by
+  have erase : ∀ {s d n d'}, FreePtr.PotStep P s d n d' → Ninst.Run s d n d' :=
+    fun h => eraseP h.1
+  unfold strFrag at run
+  iterate 47 rsx
+  have hnext := rs_next run hT
+  clear run
+  obtain ⟨_, hstep, run⟩ := hnext
+  obtain ⟨_, e⟩ := ri_stepR (erase hstep) rfl
+  subst e
+  have hpot := FreePtr.Pot.size_lt hstep.2.2
+  clear hstep
+  iterate 8 rsx
+  rw [strFrag_mem] at run hpot
+  rw [lit20] at run hpot
+  exact ⟨_, hpot, run⟩
+
+/-- The cursor rotation on a reach: the dropped source pointer is gone and the decoded value
+`v` sits under the decoder triple. -/
+theorem rotFrag_reach (eraseP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {x v h base E : B256}
+    (run : Reach (FreePtr.PotStep P) fs sevm
+      ⟨St b (x :: v :: h :: base :: E :: R) M G, rotFrag k, K⟩ T) (hT : AtSstore T) :
+    ∃ G' : Nat, Reach (FreePtr.PotStep P) fs sevm ⟨St b (h :: base :: E :: v :: R) M G', k, K⟩ T := by
+  have erase : ∀ {s d n d'}, FreePtr.PotStep P s d n d' → Ninst.Run s d n d' :=
+    fun h => eraseP h.1
+  unfold rotFrag at run
+  iterate 6 rsx
+  exact ⟨_, run⟩
+
+/-- One masked static head decode on a reach: the masked word sits under the decoder triple
+and the cursor advances by `32`. -/
+theorem staticFrag_reach (eraseP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {xs : Bytes} {le : xs.length ≤ 32} {h base E : B256}
+    (run : Reach (FreePtr.PotStep P) fs sevm
+      ⟨St b (h :: base :: E :: R) M G, staticFrag xs le k, K⟩ T) (hT : AtSstore T) :
+    ∃ G' : Nat, Reach (FreePtr.PotStep P) fs sevm
+      ⟨St b ((32 + h) :: base :: E :: (xs.toB256 &&& Sevm.dataWord sevm h) :: R) M G', k, K⟩ T := by
+  have erase : ∀ {s d n d'}, FreePtr.PotStep P s d n d' → Ninst.Run s d n d' :=
+    fun h => eraseP h.1
+  unfold staticFrag at run
+  iterate 11 rsx
+  rw [lit20] at run
+  exact ⟨_, run⟩
+
+end ReachAbi
 
 end Blanc.Lift

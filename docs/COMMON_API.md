@@ -6610,7 +6610,11 @@ contract-neutral.
   string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
   old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
   `memWord_write_far` (a word read clear of a write); worked use: USDC
-  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`.
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`. The solc ABI string decoder
+  fragments of `Blanc/Lift/SolcAbiStringStaging.lean` on a reach (`ReachAbi.strFrag_reach`,
+  `rotFrag_reach`, `staticFrag_reach`; the allocation is `allocMem` by `strFrag_mem`, its size
+  bounded by the potential) are there too; worked use: USDC `InitReachV1.wrapper_reach` in
+  `Blanc/Lift/Usdc/InitReachV1.lean`.
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region

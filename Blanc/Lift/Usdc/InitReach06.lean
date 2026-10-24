@@ -513,12 +513,6 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT rfl (fun _ h => by cases h)).elim
   repeat rsa
-  have fix : ∀ {key : B256} (n : Nat) (x : B256) (hx : x ∈ ([0, 1, 2, 4, 5, 6, 7, 8] : List B256))
-      (hk : key = x), KeysInit n L2.toNat L3.toNat key ∧ KeysInit L1.toNat n L3.toNat key ∧
-        KeysInit L1.toNat L2.toNat n key := fun _ _ hx hk => by
-    subst hk
-    exact ⟨.inl hx, .inl hx, .inl hx⟩
-  clear fix
   rcases helper06_call eraseQ hh E h1 b1 run hT with ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ |
     ⟨b', M', G', hk1, run⟩
   · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))

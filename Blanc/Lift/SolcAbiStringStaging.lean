@@ -298,7 +298,7 @@ theorem sliceD_length (xs : Bytes) (m n : Nat) : (xs.sliceD m n 0).length = n :=
 
 /-- The fragment's memory, in the code's literal and operand order, is
 `allocMem` at the free pointer it read. -/
-private theorem code_mem (M : Mem) (L : B256) (ys : Bytes) :
+theorem strFrag_mem (M : Mem) (L : B256) (ys : Bytes) :
     ((((M.read (Bytes.toB256 [0x40]).toNat 32).2.write (Bytes.toB256 [0x40]).toNat
       ((M.read (Bytes.toB256 [0x40]).toNat 32).1.toB256 +
         (Bytes.toB256 [0x20] + (Bytes.toB256 [0x1f] + L) / Bytes.toB256 [0x20] *
@@ -513,7 +513,7 @@ theorem strFrag_lift (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨d, w, L, run⟩ := lstep L run rfl
   obtain ⟨G, rfl⟩ := ri_pop (erase w.1)
   clear w
-  rw [code_mem] at run hpot L
+  rw [strFrag_mem] at run hpot L
   rw [lit20] at run hpot L
   exact ⟨_, hpot, run, L⟩
 

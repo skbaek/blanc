@@ -1821,6 +1821,7 @@ import Blanc.Lift.Usdc.InitReachV2
 import Blanc.Lift.Usdc.InitReachV2_1
 import Blanc.Lift.Usdc.InitReachV2_2
 import Blanc.Lift.Usdc.InitReach06
+import Blanc.Lift.Usdc.InitReachV1
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk
