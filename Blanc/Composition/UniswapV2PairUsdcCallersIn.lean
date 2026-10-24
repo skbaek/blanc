@@ -3,6 +3,7 @@ import Blanc.Lift.Usdc.ProxyRawCallers
 import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.UniswapV2Pair.PairPositionalCallsIn
 import Blanc.ExecutionInCodeImage
+import Blanc.ExecutionMidHistoryInForest
 import Blanc.StaticStorage
 
 /-! Retained Pair callers through the actual USDC proxy ancestry. -/
@@ -48,20 +49,23 @@ private theorem proxy_child_selector {A G : Exec.Frame}
     hsg bal size chain decoded spawn enter apart (by rw [← childEq]; exact caller)
   exact ⟨parentCaller, by rw [childEq]; exact selector⟩
 
-/-- Actual retained Pair callers cannot execute a successful store under a caller-keyed
-allowance selector. The root exclusion and both histories' genuine state premises are explicit. -/
-theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {pair P : Adr} {W : List UsdcDeployedEntry}
-    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+private theorem retained_caller_write_excluded_of_forest
+    {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {pair P : Adr} {W : List UsdcDeployedEntry} {frames roots : List Exec.Frame}
     (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
     (upgrades : UpgradesWithinFrom P W history.rawNodes)
     (apartSlot : ImplSlotApart P history.rawNodes) (apart : pair ≠ P)
-    (rootCallers : ∀ R ∈ history.settledRoots, R.sevm.caller ≠ pair)
-    (installed : some (checkpoint.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
-    (initial : UniswapV2Pair.WriterRep KP (checkpoint.state.getStor pair) st)
-    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairHistoryTouchedKeysIn pair history)) :
-    ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+    (parents : ∀ before G after, frames = before ++ G :: after →
+      G ∈ roots ∨ ∃ b₁ A b₂, before = b₁ ++ A :: b₂ ∧
+        G ∈ Exec.childFrames A.run ∧ Exec.SpawnedBy A.sevm G ∧
+        b₂.length < (Exec.descendantFrames A.run).length)
+    (rootCallers : ∀ R ∈ roots, R.sevm.caller ≠ pair)
+    (frameSubset : frames ⊆ history.settledFrames)
+    (pairChildren : ∀ A ∈ frames, A.sevm.currentTarget = pair → A.sevm.isStatic = false →
+      ∀ G ∈ Exec.childFrames A.run, G.sevm.isStatic = false →
+        Sevm.selector G.sevm = 0xa9059cbb ∨ Sevm.selector G.sevm = 0x10d1e85c) :
+    ∀ (G : Exec.Frame), G ∈ frames → G.sevm.currentTarget = P →
       ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
         Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
         Exec.Deriv.successfulSstore? m = some w →
@@ -70,11 +74,10 @@ theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : 
   have bal : ∀ {f}, HistFork f → f.ruleSet.bal = none := fun h => h.bal_none
   have contexts := Usdc.ConfiguredHistoryTraceIn.usdc_ctxAt history cap bal world upgrades apartSlot
   have families := Usdc.ConfiguredHistoryTraceIn.usdc_contextCodes history cap bal world upgrades apartSlot
-  have pairChildren := UniswapV2Pair.pair_history_children_shapeHist history installed initial fresh
-  have shapes : ∀ G ∈ history.settledFrames, CallerShape pair P G := by
-    refine caller_shapes (roots := history.settledRoots) ?_ rootCallers ?_
+  have shapes : ∀ G ∈ frames, CallerShape pair P G := by
+    refine caller_shapes (roots := roots) ?_ rootCallers ?_
     · intro before G after split
-      rcases history.settledFrames_parentIn split with root | ⟨b₁, A, b₂, equal, child, spawned, -⟩
+      rcases parents before G after split with root | ⟨b₁, A, b₂, equal, child, spawned, -⟩
       · exact Or.inl root
       · exact Or.inr ⟨A, by rw [equal]; exact List.mem_append_right _ List.mem_cons_self,
           child, spawned⟩
@@ -88,8 +91,8 @@ theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : 
         · exact Or.inl (h.symm.trans caller)
         · exact Or.inr (h.symm.trans target)
       rcases parentTarget with parentPair | parentP
-      · exact Or.inr (pairChildren A member parentPair parentMutable G child mutable).2.2
-      · have rawA := history.mem_rawFrames_of_mem_settledFrames A member
+      · exact Or.inr (pairChildren A member parentPair parentMutable G child mutable)
+      · have rawA := history.mem_rawFrames_of_mem_settledFrames A (frameSubset member)
         obtain ⟨pc, selected, hsg, entry, gas⟩ := history.rawFrame_entryFacts cap _ rawA
         have size := history.calldata_bound cap (fun _ hf => hf.dataNonZero_ge) _ rawA
         have family := families _ rawA parentP
@@ -137,7 +140,7 @@ theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : 
               Xinst.step_delegatecall_spawn_code spawn stack
                 (by rw [actualCode]; exact Lib.code_not_delegation), actualCode])
   intro G member target m w chain found selector caller
-  have rawG := history.mem_rawFrames_of_mem_settledFrames G member
+  have rawG := history.mem_rawFrames_of_mem_settledFrames G (frameSubset member)
   obtain ⟨pc, selected, hsg, entry, gas⟩ := history.rawFrame_entryFacts cap _ rawG
   have rawM : m ∈ Exec.rawNodes G.run :=
     (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix G.run m).mpr
@@ -161,5 +164,68 @@ theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : 
     exact (by decide : (0xa9059cbb : B256) ∉ [0x095ea7b3, 0x39509351, 0xa457c2d7]) selector
   · rw [callback] at selector
     exact (by decide : (0x10d1e85c : B256) ∉ [0x095ea7b3, 0x39509351, 0xa457c2d7]) selector
+
+/-- Actual retained Pair callers cannot execute a successful store under a caller-keyed
+allowance selector. The root exclusion and both histories' genuine state premises are explicit. -/
+theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {pair P : Adr} {W : List UsdcDeployedEntry}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes)
+    (apartSlot : ImplSlotApart P history.rawNodes) (apart : pair ≠ P)
+    (rootCallers : ∀ R ∈ history.settledRoots, R.sevm.caller ≠ pair)
+    (installed : some (checkpoint.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (checkpoint.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairHistoryTouchedKeysIn pair history)) :
+    ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+        Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+        Exec.Deriv.successfulSstore? m = some w →
+        Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair := by
+  apply retained_caller_write_excluded_of_forest history world upgrades apartSlot apart
+    (fun _ _ _ split => history.settledFrames_parentIn split) rootCallers
+    (fun _ member => member)
+  intro A member target mutable G child childMutable
+  exact (UniswapV2Pair.pair_history_children_shapeHist history installed initial fresh
+    A member target mutable G child childMutable).2.2
+
+/-- Caller-keyed allowance stores are excluded on the actual post-cut mid history.
+USDC world facts retain the original full chronology; Pair replay starts at afterBenv. -/
+theorem mid_retained_caller_write_excluded
+    {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
+    {pair P : Adr} {W : List UsdcDeployedEntry}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (prior : ConfiguredHistoryTraceIn HistFork cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfg completed future)
+    (world : UsdcDeployedWorld ((prior.step block).append later).BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W ((prior.step block).append later).rawNodes)
+    (apartSlot : ImplSlotApart P ((prior.step block).append later).rawNodes) (apart : pair ≠ P)
+    (excluded : ∀ query ∈ ((prior.step block).append later).senderQueries,
+      query.recover ≠ .ok pair)
+    (notSystem : pair ≠ systemAddress)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (cut.afterBenv.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairMidTouchedKeysIn pair
+      ((MidHistoryTraceIn.tail block cut).append later))) :
+    ∀ (G : Exec.Frame), G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+        Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+        Exec.Deriv.successfulSstore? m = some w →
+        Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair := by
+  let full := (prior.step block).append later
+  let mid := (MidHistoryTraceIn.tail block cut).append later
+  have rootCallers : ∀ R ∈ mid.settledRoots, R.sevm.caller ≠ pair :=
+    mid.settledRoots_caller_ne_of_senderQueries
+      (fun query member => excluded query
+        (MidHistoryTraceIn.senderQueries_subset_full prior block cut later member)) notSystem
+  apply retained_caller_write_excluded_of_forest full world upgrades apartSlot apart
+    (fun _ _ _ split => mid.settledFrames_parentIn split) rootCallers
+    (MidHistoryTraceIn.settledFrames_subset_full prior block cut later)
+  intro A member target mutable G child childMutable
+  exact (UniswapV2Pair.pair_mid_history_children_shapeHist mid installed initial fresh
+    A member target mutable G child childMutable).2.2
 
 end Blanc.Composition.UniswapV2PairUsdcCallers

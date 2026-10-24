@@ -3724,6 +3724,11 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   intermediate case. The library's no-SSTORE theorem excludes that case only
   at the original successful write. Actual root caller exclusion, the deployed
   USDC world, and installed Pair/representation/freshness remain inputs.
+  `mid_retained_caller_write_excluded` uses the actual transaction cut and later
+  blocks: full-history sender queries supply root exclusion, Pair replay starts
+  at `cut.afterBenv`, and USDC world/library facts stay on the original full
+  chronology. It shares the same retained-parent and successful-write proof;
+  actual cut state and finite touched-key freshness remain inputs.
   `UsdcDeployedWorld.active_library_code` shares the existing active-library
   selection with `ctxAt_step`; it derives actual code from the world facts.
   `Usdc.recoveryV2_consumes` in
@@ -7182,6 +7187,10 @@ contract-neutral.
 - One-lemma straight-line steps and the inversion helpers of solc walks:
   [`Blanc/Lift/InvWalkStep.lean`](../Blanc/Lift/InvWalkStep.lean). `stepX` computes the successor walk state of the
   straight-line instructions a walk crosses and `ri_stepX` inverts any of them at once; the
+  `ri_stepX_nonstorage` projection needs no fork premise when the actual instruction
+  is neither `SLOAD` nor `SSTORE`. It shares the original inversion body and leaves
+  the `stepX` definition unchanged; storage walks still need their actual fork semantics.
+  The
   `istep h` tactic runs one such step (or a `JUMPDEST`) of a cut run, so a straight segment is
   `repeat istep h`; `ibranch h c` crosses a conditional jump whose other arm only reverts;
   `ric_callR` enters a callee that cannot halt; `SFunc.noExit`/`NoExitSet` with

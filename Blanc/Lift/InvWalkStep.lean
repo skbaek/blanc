@@ -61,8 +61,9 @@ def stepX (sevm : Sevm) : Ninst → Devm → List B256 → Mem → Option (Devm 
         (M.read i.toNat sz.toNat).2)
   | _, _, _, _ => none
 
-theorem ri_stepX {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {G : Nat}
-    {n : Ninst} (fork : CoveredFork sevm.benvStat.fork)
+private theorem ri_stepX_of_storageFork {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {G : Nat}
+    {n : Ninst} (storageFork : (n = .reg .sload ∨ n = .reg .sstore) →
+      CoveredFork sevm.benvStat.fork)
     (h : Ninst.Run sevm (St b S M G) n d) (hs : stepX sevm n b S M = some (b', S', M')) :
     ∃ G', d = St b' S' M' G' := by
   unfold stepX at hs
@@ -94,10 +95,25 @@ theorem ri_stepX {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {
   · cases hs; exact ri_mstore h
   · cases hs; exact ri_codecopy h
   · cases hs; exact ri_keccak h
-  · cases hs; exact ri_sload fork h
-  · cases hs; exact ri_sstore fork h
+  · cases hs; exact ri_sload (storageFork (.inl rfl)) h
+  · cases hs; exact ri_sstore (storageFork (.inr rfl)) h
   · cases hs; exact ri_log3 h
   · cases hs
+
+/-- The original covered-fork step inversion. -/
+theorem ri_stepX {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {G : Nat}
+    {n : Ninst} (fork : CoveredFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b S M G) n d) (hs : stepX sevm n b S M = some (b', S', M')) :
+    ∃ G', d = St b' S' M' G' :=
+  ri_stepX_of_storageFork (fun _ => fork) h hs
+
+/-- A nonstorage straight-line step is inverted under the actual rules, with no fork premise. -/
+theorem ri_stepX_nonstorage {sevm : Sevm} {b b' d : Devm} {S S' : List B256}
+    {M M' : Mem} {G : Nat} {n : Ninst}
+    (notSload : n ≠ .reg .sload) (notSstore : n ≠ .reg .sstore)
+    (h : Ninst.Run sevm (St b S M G) n d) (hs : stepX sevm n b S M = some (b', S', M')) :
+    ∃ G', d = St b' S' M' G' :=
+  ri_stepX_of_storageFork (fun storage => (storage.elim notSload notSstore).elim) h hs
 
 macro "istep " h:ident : tactic => `(tactic|
   first
