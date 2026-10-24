@@ -135,4 +135,32 @@ theorem settled_getCode_getStor_of_code_nonempty {rules : ForkRules} {touched de
     rw [hsweep, hfold]
     exact hstorY
 
+/-- **An account installed by the message survives the transaction.**  From the stages of
+`processTransaction_of_stagesH`, an account that holds nonempty code in the message-call
+post-state and that the message does not schedule for deletion has, in the settled
+post-transaction state, the message's code and storage. -/
+theorem processTransaction_installed_of_stagesH
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {intrinsicGas calldataFloorGas : Nat} {sender : Adr} {effectiveGasPrice : Nat}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    {debit : State} {msg : Msg} {mpost : State} {mout : MsgCallOutput} {refund : Nat} {w : Adr}
+    (hsg : benv.stat.rules.stateGas = none) (hbal : benv.stat.rules.bal = none)
+    (hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas))
+    (hchecked : checkTransaction benv.beginTransaction (transactionPreludeBout bout tx index) tx =
+      .ok (sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed))
+    (hdebit : (benv.state.incrNonce sender).subBal sender
+      (tx.gas * effectiveGasPrice + transactionBlobGasFee benv tx).toB256 = some debit)
+    (hprepared : prepareMessage { benv.beginTransaction with state := debit }
+      (transactionTenv benv.beginTransaction tx index sender effectiveGasPrice intrinsicGas
+        blobVersionedHashes) tx = .ok msg)
+    (hcall : processMessageCall msg = .ok (mpost, mout))
+    (hrefund : Int.toNat? mout.refundCounter = some refund)
+    (hcode : (mpost.getCode w).toList ≠ []) (hdel : w ∉ mout.accountsToDelete) :
+    ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
+      post.getCode w = mpost.getCode w ∧ post.getStor w = mpost.getStor w := by
+  obtain ⟨bout', htx⟩ := processTransaction_of_stagesH hsg hbal hvalid hchecked hdebit hprepared
+    hcall hrefund
+  exact ⟨_, bout', htx, settled_getCode_getStor_of_code_nonempty
+    (fun a ha heq => hdel (heq ▸ Std.HashSet.mem_toList.mp ha)) hcode⟩
+
 end Blanc

@@ -4693,8 +4693,10 @@ For rules outside the covered forks (any schedule with `rules.stateGas = none` a
 refund quotient (`txGasUsedQ`), `processMessageCall_create_of_message` settles a top-level
 creation with no collision over a successful `processCreateMessage`, and
 `settled_getCode_getStor_of_code_nonempty` carries an account with nonempty code through the
-credits, the deletion fold and the sweep. Worked use: `Blanc/Lift/Weth9/DeployTransaction.lean`
-(`weth9_creation_transaction_byzantium`).
+credits, the deletion fold and the sweep; `processTransaction_installed_of_stagesH` combines the
+two for an account the message installs and does not schedule for deletion. Worked uses:
+`Blanc/Lift/Weth9/DeployTransaction.lean` (`weth9_creation_transaction_byzantium`) and
+`Blanc/Lift/UniswapV2Pair/CreationTransaction.lean` (`pair_creation_transaction_settles_muirGlacier`).
 
 The raw `debit_get_self` account equation requires the sender nonce to differ
 from `UInt64.max`; transaction admission supplies this nonwrap fact.

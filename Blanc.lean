@@ -1100,6 +1100,7 @@ import Blanc.Lift.UniswapV2Pair.PairPositionalSwap
 import Blanc.Lift.UniswapV2Pair.PairPositionalSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.PairHistoryIn
+import Blanc.Lift.UniswapV2Pair.CreationTransaction
 import Blanc.Lift.UniswapV2Pair.TerminalSafety
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept

@@ -439,6 +439,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairPositionalSupply",
         "Lift.UniswapV2Pair.PairHistory",
         "Lift.UniswapV2Pair.PairHistoryIn",
+        "Lift.UniswapV2Pair.CreationTransaction",
         "Lift.UniswapV2Pair.SwapForwardAccept",
         "Lift.UniswapV2Pair.MintForwardAccept",
         "Lift.UniswapV2Pair.PairHistoryLive",
