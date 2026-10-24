@@ -846,6 +846,17 @@ ending in `ConfiguredHistoryTraceIn.rawFrames_codeImage_of_safe`
 `…settled_codeImage_of_safe` (`f.pre.getCode wa = C` for every settled frame)
 through the settled-to-raw bridge. No recipe is registered: use this branch
 and the named theorem.
+For the raw-node chronology itself (every reached driver node in execution
+order, independently of outcome),
+[`Blanc/ExecutionInRawNodes.lean`](../Blanc/ExecutionInRawNodes.lean):
+per-level `…rawNodes` mirroring the `…rawFrames` chains with `Exec.rawNodes`
+in place of `Exec.rawFrameRoots`; `…mem_rawNodes_iff_rawFrame_parentPrefix`
+(node membership is exactly `ParentPrefix` under some listed root);
+`…rawNodes_of_mem_rawFrames` (nodes of a listed root's own run);
+`…safeRawFrames_of_rawNodes` (per-node safety into `SafeRawFrames`); and
+`ConfiguredHistoryTraceIn.exists_rawNodes_split_of_mem_rawFrames`
+(positional split of a listed root). No recipe is registered: use this branch
+and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

@@ -320,6 +320,7 @@ SHARED += [
     "ExecutionInCodeImage",
     "ExecutionInOwnCode",
     "ExecutionInCodeImageSafe",
+    "ExecutionInRawNodes",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",
