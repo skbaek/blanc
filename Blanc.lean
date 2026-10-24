@@ -39,6 +39,7 @@ import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInForkFacts
 import Blanc.ExecutionHistoryInNoDel
@@ -485,6 +486,7 @@ import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.CommittedHistoryIn
 import Blanc.Lift.Weth9.DeployTransaction
 import Blanc.Lift.Weth9.DeployTransactionHistory
+import Blanc.Lift.Weth9.DeployBlockHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
@@ -1118,6 +1120,7 @@ import Blanc.Lift.UniswapV2Pair.PairPositionalSwap
 import Blanc.Lift.UniswapV2Pair.PairPositionalSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.PairHistoryIn
+import Blanc.Lift.UniswapV2Pair.PairMidHistoryIn
 import Blanc.Lift.UniswapV2Pair.CreationTransaction
 import Blanc.Lift.UniswapV2Pair.TerminalSafety
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
@@ -1776,6 +1779,7 @@ import Blanc.Lift.UniswapV2Factory.CreatePairWalk
 import Blanc.Lift.UniswapV2Factory.CreatePairSpawns
 import Blanc.Lift.UniswapV2Factory.CreatePairFrame
 import Blanc.Lift.UniswapV2Factory.CreatePairTransaction
+import Blanc.Lift.UniswapV2Factory.CreatePairHistory
 import Blanc.Lift.UniswapV2Factory.CallShapeH
 import Blanc.Lift.HistAccessWalkFacts
 import Blanc.Lift.HistShaWalk

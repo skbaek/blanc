@@ -1626,6 +1626,11 @@ post-fold stages alone are `StagedBodyTrace.afterTransactions_stateInv_admitted_
 The accounting rungs `afterTransactionsIn`, `configuredBlockTailIn` and
 `midHistoryIn` are in
 [`Blanc/ExecutionAccountingMidHistoryIn.lean`](../Blanc/ExecutionAccountingMidHistoryIn.lean).
+The per-root block facts already transported to a mid history are in
+[`Blanc/ExecutionMidHistoryInFacts.lean`](../Blanc/ExecutionMidHistoryInFacts.lean):
+`MidHistoryTraceIn.rewardCreditsFunded` (every block, the cut block included, funds its reward
+credits under `BodyStageCapabilities F`), `rawFrames_entered` (any `EnteredCondition`),
+`rootEntryIn` and `calldata_bound`, each through `rawFrames_mem_block`.
 
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
