@@ -7742,6 +7742,13 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
+The same file's `safeTransfer_call_invH`, `safeTransfer_dynamicCall_post_invH`,
+`safeTransfer_dynamicReply_invH` and `safeTransfer_dynamicReturned_invH` require
+only state-gas absence for the actual CALL, full reply and physical return image.
+The existing modern inverses project these shared bodies with unchanged public
+statements. No BAL, access schedule or delegation premise is added; helper entry,
+pointer geometry and an actual successful helper continuation remain explicit.
+
 For the historical raw Swap token/recipient segment,
 `swap_raw_recipient_guardsH` in
 [`SwapRawRecipientH.lean`](../Blanc/Lift/UniswapV2Pair/SwapRawRecipientH.lean)
