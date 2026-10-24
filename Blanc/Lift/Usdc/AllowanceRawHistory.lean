@@ -5,8 +5,9 @@ import Blanc.Lift.Usdc.AllowLocalityV2_2
 /-!
 # The Pair's USDC allowance rows along an In-history
 
-With the codes run in the proxy `P`'s storage context bounded
-(`ConfiguredHistoryTraceIn.usdc_ctxOK`, `ProxyContextCodes.lean`), every raw node and
+With the proxy runtime at `P` at the checkpoint and the codes run in `P`'s storage
+context bounded at every raw node (`UsdcNodeCodes`, discharged by
+`ConfiguredHistoryTraceIn.usdc_nodeCodes` in `ProxyContextCodes.lean`), every raw node and
 the future see `P`'s cells through the history's raw chronology
 (`rawNode_cellProvenance`, `cellProv_post`). This module classifies each raw successful
 `SSTORE` at a tracked allowance row of the Pair and lifts the class to the history.
@@ -177,16 +178,14 @@ def InitRowWritesNonInc (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.D
 section History
 
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-  {P : Adr} {W : List (Adr × ByteArray)} {pair : Adr} {Tr : Adr → Prop}
+  {P : Adr} {pair : Adr} {Tr : Adr → Prop}
 
 /-- **Every raw write at a tracked row, attributed and classified.** A successful raw
 `SSTORE` at `(P, k)` for a tracked Pair row `k` lies in a raw frame at `P` that is an
 exception frame, or the write does not raise the row above its word at the write's node. -/
 theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcContextWorld P W checkpoint.state)
-    (upgrades : UpgradesWithin P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
     {m : Exec.Deriv} (hm : m ∈ history.rawNodes) {w : Exec.StorageWrite}
@@ -202,8 +201,7 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
   have gTarget : G.sevm.currentTarget = P := by rw [← hsevm]; exact target
   refine ⟨G, hG, chain, gTarget, ?_⟩
   obtain ⟨hpc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities G hG
-  have fam := (ConfiguredHistoryTraceIn.usdc_ctxOK history capabilities bal world upgrades
-    apartSlot m hm).context world (.inl rfl) target
+  have fam := codes m hm target
   rw [hsevm] at fam
   obtain ⟨s1, s2, s21, s22⟩ := rowSep G hG gTarget
   have nonInc : w.value.toNat ≤ (m.devm.getStorVal m.sevm.currentTarget w.key).toNat →
@@ -228,9 +226,8 @@ differs between checkpoint and future, some raw node wrote the future word there
 frame at `P`. -/
 theorem ConfiguredHistoryTraceIn.usdc_rowChange_attributed
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcContextWorld P W checkpoint.state)
-    (upgrades : UpgradesWithin P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    (capabilities : BodyStageCapabilities F)
+    (proxy : checkpoint.state.getCode P = Proxy.code) (codes : UsdcNodeCodes P history.rawNodes)
     (k : B256)
     (changed : (future.state.getStor P).get k ≠ (checkpoint.state.getStor P).get k) :
     ∃ (b₁ b₂ : List Exec.Deriv) (m G : Exec.Deriv) (w : Exec.StorageWrite),
@@ -239,9 +236,9 @@ theorem ConfiguredHistoryTraceIn.usdc_rowChange_attributed
       Exec.Deriv.successfulSstore? m = some w ∧ w.owner = P ∧ w.key = k ∧
       w.value = (future.state.getStor P).get k := by
   have proxyFam : UsdcContextCode Proxy.code := Or.inl rfl
-  have safe := usdc_safeRawFrames_of_world history capabilities bal world upgrades apartSlot
+  have safe := usdc_safeRawFrames history capabilities (codes.frames history)
   obtain ⟨cell, -⟩ := history.cellProv_post proxyFam.not_delegation proxyFam.ne_nil
-    capabilities k world.proxy safe
+    capabilities k proxy safe
   rcases cell with same | ⟨b₁, b₂, m, w, split, found, owner, key, value⟩
   · exact absurd same changed
   · have hm : m ∈ history.rawNodes := by rw [split]; exact List.mem_append_right _ List.mem_cons_self
@@ -257,9 +254,8 @@ tracked rows non-increasing (`InitRowWritesNonInc`), every tracked allowance row
 is at most its checkpoint word at every raw node of the history and at the future. -/
 theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcContextWorld P W checkpoint.state)
-    (upgrades : UpgradesWithin P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    (capabilities : BodyStageCapabilities F)
+    (proxy : checkpoint.state.getCode P = Proxy.code) (codes : UsdcNodeCodes P history.rawNodes)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
     (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
@@ -270,14 +266,13 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
         ((n.devm.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat) ∧
       ((future.state.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat := by
   have proxyFam : UsdcContextCode Proxy.code := Or.inl rfl
-  have ctx := ConfiguredHistoryTraceIn.usdc_ctxOK history capabilities bal world upgrades apartSlot
   -- a write at the row does not exceed the row at its node
   have writeLe : ∀ m ∈ history.rawNodes, ∀ w : Exec.StorageWrite,
       Exec.Deriv.successfulSstore? m = some w → w.owner = P → w.key = k →
       w.value.toNat ≤ ((m.devm.getStor P).get k).toNat := by
     intro m hm w found owner key
     obtain ⟨G, hG, chain, gTarget, cls⟩ := ConfiguredHistoryTraceIn.usdc_rawRowWrite history
-      capabilities bal world upgrades apartSlot proxyApart rowSep hm found owner (key ▸ tracked)
+      capabilities codes proxyApart rowSep hm found owner (key ▸ tracked)
     rw [← key]
     rcases cls with exc | le
     · rcases usdcAllowException_split exc with pairExc | init
@@ -289,15 +284,15 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     refine List.forall_mem_of_positional fun before n after split ih => ?_
     have sub : ∀ m ∈ before, m ∈ history.rawNodes := fun m hm => by
       rw [split]; exact List.mem_append_left _ hm
-    exact history.rawNode_cellInv capabilities proxyFam.not_delegation proxyFam.ne_nil world.proxy
+    exact history.rawNode_cellInv capabilities proxyFam.not_delegation proxyFam.ne_nil proxy
       (Inv := fun v => v.toNat ≤ ((checkpoint.state.getStor P).get k).toNat) (Nat.le_refl _) split
-      (safe_of_ctxOK history capabilities world sub (fun m hm => ctx m (sub m hm)) (.inl rfl))
+      (fun m hm => codes.safe history capabilities m (sub m hm))
       (fun m hm w found owner key =>
         (writeLe m (sub m hm) w found owner key).trans (ih m hm))
   refine ⟨nodes, ?_⟩
-  have safe := usdc_safeRawFrames_of_world history capabilities bal world upgrades apartSlot
+  have safe := usdc_safeRawFrames history capabilities (codes.frames history)
   obtain ⟨cell, -⟩ := history.cellProv_post proxyFam.not_delegation proxyFam.ne_nil
-    capabilities k world.proxy safe
+    capabilities k proxy safe
   rcases cell with same | ⟨b₁, b₂, m, w, split, found, owner, key, value⟩
   · rw [same]
   · have hm : m ∈ history.rawNodes := by rw [split]; exact List.mem_append_right _ List.mem_cons_self

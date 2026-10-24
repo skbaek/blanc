@@ -986,6 +986,14 @@ with `ConfiguredHistoryTraceIn.boundaryAt_checkpoint` and the per-level
 `ConfiguredHistoryTraceIn.cellProv_attribution`. The checkpoint statement is
 the instance `boundaryAt_checkpoint`, `pre = []`. No recipe is registered:
 use this branch and the named theorem.
+For the origin of raw nodes after such a boundary (every later node is reached
+from nodes after the boundary, so a frame running after it was entered after
+it), [`Blanc/ExecutionInRawNodeOriginFrom.lean`](../Blanc/ExecutionInRawNodeOriginFrom.lean):
+`ConfiguredHistoryTraceIn.BoundaryAt.origin` (the rest of the chronology is an
+`OriginList`), its per-level forms, `ConfiguredHistoryTraceIn.BoundaryAt.rawOrigin`
+at a split `pre ++ mid ++ n :: after`, and `List.forall_split_of_positional`, the
+strong induction along positions for a property of a node and its prefix. No
+recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

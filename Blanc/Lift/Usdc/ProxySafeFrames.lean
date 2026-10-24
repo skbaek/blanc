@@ -21,9 +21,9 @@ at the proxy (`retainedSstore_implV*_allowClass_proxy`).
 
 The `codes` premise (which code each raw frame in `P`'s context runs) depends on the
 implementation slot's values along the history and on what the admin installs there, which no
-certificate decides. `ProxyContextCodes.lean` proves it from the accounts installed at the
-checkpoint and two stated implementation-slot premises (`usdc_safeRawFrames_of_world`,
-`rawFrame_proxyCode_of_world`).
+certificate decides. `ProxyContextCodes.lean` proves it from the accounts installed at their
+deployment boundaries and two stated implementation-slot premises
+(`usdc_safeRawFrames_of_world`, `rawFrame_proxyCode_of_world`).
 -/
 
 namespace Blanc.Lift.Usdc

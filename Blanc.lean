@@ -1603,6 +1603,7 @@ import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.ExecutionHistoryCellProvenanceFrom
+import Blanc.ExecutionInRawNodeOriginFrom
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
