@@ -6378,6 +6378,15 @@ contract-neutral.
   [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
   `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- The same walk to an `SSTORE` target (`AtSstore`): `Reach.nextS`/`destS`/`branchS`/
+  `branchToS`/`jumpS`/`callS`/`not_lastS`/`not_ret_nilS`, `Reach.sstoreS` (stop at the
+  `SSTORE` or step past it), the `SSTORE`-free refutation `Reach.false_of_sstoreFree`
+  with its decidable `SstoreFreeSet`/`SFunc.sstoreFreeIn`, and the state kit `rs_next`,
+  `rs_dest`, `rs_branch`, `rs_branchTo`, `rs_jump`, `rs_callOver`, `rs_callInto` in
+  [`Blanc/Lift/ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); with
+  `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
+  value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
+  `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region
