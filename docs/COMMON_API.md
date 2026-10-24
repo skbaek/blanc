@@ -884,6 +884,18 @@ through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bri
 In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
 forest `settledFrames_parentIn`. No recipe is registered: use this branch and
 the named theorem.
+When no installed certificate exists (a proxy runtime that `DELEGATECALL`s),
+[`Blanc/ExecutionInCodeImageSafe.lean`](../Blanc/ExecutionInCodeImageSafe.lean):
+`…codeImage_of_safe` per wrapper (message, transaction, system / request
+stages, staged body, In-block) threads each entry world's `getCode wa = C`
+with the `…_of_safe` chain of `ExecutionNoDelSafeHistory` (same
+`SafeRawFrames wa` premise, plus `C.toList ≠ []` and `¬ isValidDelegation C`)
+and keeps it at every raw root by `Exec.rawFrameRoots_codePreserve`,
+ending in `ConfiguredHistoryTraceIn.rawFrames_codeImage_of_safe`
+(`R.devm.getCode wa = C` for every raw frame, rolled back or not) and
+`…settled_codeImage_of_safe` (`f.pre.getCode wa = C` for every settled frame)
+through the settled-to-raw bridge. No recipe is registered: use this branch
+and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
@@ -896,6 +908,18 @@ via `step_spawn_child_benvStat`; create2 arm split on `op.create2`); and
 per-level `…settledFrames_ownCodeIn` ending in
 `ConfiguredHistoryTraceIn.settled_ownCodeIn` at every settled frame, no
 cover premise. No recipe is registered: use this branch and the named theorem.
+For the contract postcondition across a CALL on a historical fork (where
+`CoveredFork` cannot hold),
+[`Blanc/LadderSemHist.lean`](../Blanc/LadderSemHist.lean):
+`ContractSpecSem.post_of_call_self_withIn F` is the historical form of
+`ContractSpecSem.post_of_call_self_with` (`Blanc/LadderSem.lean`): the
+deeper-frame hypothesis is quantified over the selected fork-domain fact `F`
+instead of `CoveredFork`, with `stateGas = none` as the only rule premise.
+The access schedule (`.flat` / `.eip2929`) and the delegation flag are cased
+on, never assumed, so every premise discharges on `HistFork` with
+`HistFork.stateGas_none`. Worked consumer: the WETH9 `withdraw` self-CALL via
+`Weth9.withdraw_post_gen` (`Blanc/Lift/Weth9/Withdraw.lean`). No recipe is
+registered: use this branch and the named theorem.
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its
