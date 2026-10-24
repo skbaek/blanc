@@ -367,10 +367,11 @@ SHARED += [
     "ExecutionHistoryInAppend",
 ]
 
-# Selected-domain In-histories that start in the middle of a block
-# (beacon-deposit-historical-reach-v1, W3): contract-neutral.
+# Selected-domain In-histories that start in the middle of a block, and their
+# accounting replay rungs (beacon-deposit-historical-reach-v1, W3): contract-neutral.
 SHARED += [
     "ExecutionMidHistoryIn",
+    "ExecutionAccountingMidHistoryIn",
 ]
 
 # Fork-era schedule facts and historical environment facts for selected-domain

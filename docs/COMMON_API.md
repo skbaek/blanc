@@ -1606,6 +1606,9 @@ block's frames at the cut and `FrameAdmitted.tail` restricts block
 admission to the base. Preservation: `ConfiguredBlockTraceIn.tail_stateInv_admitted_semIn`,
 `MidHistoryTraceIn.stateInv_admitted_semIn` / `stateInv_admittedIn`; the
 post-fold stages alone are `StagedBodyTrace.afterTransactions_stateInv_admitted_semIn`.
+The accounting rungs `afterTransactionsIn`, `configuredBlockTailIn` and
+`midHistoryIn` are in
+[`Blanc/ExecutionAccountingMidHistoryIn.lean`](../Blanc/ExecutionAccountingMidHistoryIn.lean).
 
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
