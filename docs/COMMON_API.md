@@ -6156,7 +6156,8 @@ contract-neutral.
   the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyH`,
   `ShaReady.toH`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
   `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
-  flag, and `ri_staticcall_shaH_covered`) in
+  flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
+  `ric_copy_shaH`, `ric_pack_shaH`) in
   [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
