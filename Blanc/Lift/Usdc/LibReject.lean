@@ -3,6 +3,7 @@ import Blanc.Lift.PairCode
 import Blanc.Lift.Usdc.Lib.Check
 import Blanc.Lift.Usdc.ProxyWalk
 import Blanc.Lift.InvWalkStep
+import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.Vyper
 import Blanc.Lift.PtrWordMemory
@@ -78,7 +79,7 @@ macro "lecs " h:ident : tactic => `(tactic|
 /-- One `stepX` instruction of a cut run. -/
 macro "lx " h:ident : tactic => `(tactic|
   (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
-   obtain ⟨_, e⟩ := ri_stepX ‹CoveredFork _› hd rfl
+   obtain ⟨_, e⟩ := ri_stepX_nonstorage (by decide) (by decide) hd rfl
    try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
    subst e; clear hd))
 
@@ -86,14 +87,21 @@ macro "lx " h:ident : tactic => `(tactic|
 macro "ldest " h:ident : tactic => `(tactic|
   (have h' := ric_dest $h; clear $h; obtain ⟨_, $h:ident⟩ := h'))
 
-theorem lib_run_cut {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem lib_run_cut_noStateGas {sevm : Sevm} {b post : Devm} {G : Nat}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (code : sevm.code = Lib.code) (fork : CoveredFork sevm.benvStat.fork) :
+    (code : sevm.code = Lib.code) (hsg : sevm.benvStat.rules.stateGas = none) :
     SFunc.RunCut Lib.cert.prog sevm [] (St b [] Mem.empty G) Lib.t_0000_c0 (.done (.halted post)) := by
-  obtain ⟨f, hf, frun⟩ := lift_sound Lib.cert_check code fork run
+  obtain ⟨f, hf, frun⟩ := lift_sound_noStateGas Lib.cert_check code hsg run
   rw [show Lib.cert.prog[0]? = some Lib.t_0000_c0 from rfl] at hf
   cases hf
   exact SFunc.Run.cut frun
+
+/-- Covered-fork projection of the actual-rules bytecode cut. -/
+theorem lib_run_cut {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (code : sevm.code = Lib.code) (fork : CoveredFork sevm.benvStat.fork) :
+    SFunc.RunCut Lib.cert.prog sevm [] (St b [] Mem.empty G) Lib.t_0000_c0 (.done (.halted post)) :=
+  lib_run_cut_noStateGas run code fork.rules_stateGas_none
 
 /-! ## Word and memory helpers -/
 
@@ -220,8 +228,8 @@ theorem lit64 : (Bytes.toB256 [64]).toNat = 64 := by decide
 /-- **Entry 10's prologue** (`isValidERC1271SignatureNow(signer, digest, signature)`, up to the
 encoding loop): the digest and the head words are written above the free pointer `F`, and the
 signature length is read back. -/
-theorem e10_pre {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
-    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+private theorem e10_pre_nonstorage {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome}
     (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
     (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len)
     (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0203_c10 o) :
@@ -265,13 +273,33 @@ theorem e10_pre {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
   · rw [hF68]; omega
   · rw [hF100]; omega
 
+/-- The original covered-fork interface to the fork-free memory walk. -/
+theorem e10_pre {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
+    (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len)
+    (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0203_c10 o) :
+    ∃ M' G', LibMem F M' ∧ SFunc.RunCut cert.prog sevm [] (St b
+      (Bytes.toB256 [0] :: (Bytes.toB256 [32] + sig) ::
+        (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)))) ::
+        len :: len :: (Bytes.toB256 [32] + sig) ::
+        (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)))) ::
+        (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)) :: (Bytes.toB256 [36] + F) :: sig :: dig ::
+        Bytes.toB256 [22, 38, 186, 126] <<< (Bytes.toB256 [224]).toNat ::
+        (Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+          255, 255, 255, 255] &&& signer) ::
+        Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+      M' G') t_0257_c10 (.done o) := by
+  have _ := fork
+  exact e10_pre_nonstorage hp hF hsig hlen run
+
 theorem t0257_eq : t_0257_c10 = t_0257_c12 := rfl
 
 /-- **The encoding loop** (entry 12, solc's word copy of the signature bytes): every run from its
 head keeps the free-pointer word `F` (all writes land at or above `dst ≥ 96`, with no wrap), so
 it satisfies whatever every exit satisfies. -/
-theorem loop12 {sevm : Sevm} {b : Devm} {src dst len F : B256} {R : List B256} {r : Seg}
-    (Q : Seg → Prop) (fork : CoveredFork sevm.benvStat.fork) (hQ : ∀ r, Q r → ∃ o, r = .done o)
+private theorem loop12_nonstorage {sevm : Sevm} {b : Devm} {src dst len F : B256} {R : List B256} {r : Seg}
+    (Q : Seg → Prop) (hQ : ∀ r, Q r → ∃ o, r = .done o)
     (hdst : 96 ≤ dst.toNat) (hfit : dst.toNat + len.toNat + 64 < 2 ^ 256)
     (exit : ∀ i M G r, LibMem F M → SFunc.RunCut cert.prog sevm [12]
       (St b (i :: src :: dst :: len :: R) M G) t_026f_c12 r → Q r)
@@ -299,6 +327,18 @@ theorem loop12 {sevm : Sevm} {b : Devm} {src dst len F : B256} {R : List B256} {
   · have q := exit _ _ _ _ hp h
     obtain ⟨o, rfl⟩ := hQ _ q
     exact q
+
+/-- The original covered-fork interface to the fork-free memory walk. -/
+theorem loop12 {sevm : Sevm} {b : Devm} {src dst len F : B256} {R : List B256} {r : Seg}
+    (Q : Seg → Prop) (fork : CoveredFork sevm.benvStat.fork) (hQ : ∀ r, Q r → ∃ o, r = .done o)
+    (hdst : 96 ≤ dst.toNat) (hfit : dst.toNat + len.toNat + 64 < 2 ^ 256)
+    (exit : ∀ i M G r, LibMem F M → SFunc.RunCut cert.prog sevm [12]
+      (St b (i :: src :: dst :: len :: R) M G) t_026f_c12 r → Q r)
+    {i : B256} {M : Mem} {G : Nat} (hp : LibMem F M) (hi : i.toNat < len.toNat + 32)
+    (run : SFunc.RunCut cert.prog sevm [] (St b (i :: src :: dst :: len :: R) M G) t_0257_c12 r) :
+    Q r := by
+  have _ := fork
+  exact loop12_nonstorage Q hQ hdst hfit exit hp hi run
 
 /-- `-32`, as solc pushes it. -/
 local notation "wNeg32" => Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 224]
@@ -340,8 +380,8 @@ theorem selWord_shr (w : B256) : selWord w >>> 224 = 0x1626ba7e := by
 
 /-- **Entry 2** (the tail of `abi.encodeWithSelector`): the encoded length at `F`, the new free
 pointer `E`, and the selector word at `F + 32`. -/
-theorem e2_head {sevm : Sevm} {b : Devm} {sig dig signer ret F E x : B256} {S : List B256}
-    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+private theorem e2_head_nonstorage {sevm : Sevm} {b : Devm} {sig dig signer ret F E x : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     (hp : LibMem F M)
     (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40)
     (h : SFunc.RunCut cert.prog sevm C (St b
@@ -393,10 +433,29 @@ theorem e2_head {sevm : Sevm} {b : Devm} {sig dig signer ret F E x : B256} {S : 
   · rw [← hMe, memRead_extend_fst, ← hMd, memRead_extend_fst, ← hMc, Mem.read_write_word_of_wf wR]
     rfl
 
+/-- The original covered-fork interface to the fork-free memory walk. -/
+theorem e2_head {sevm : Sevm} {b : Devm} {sig dig signer ret F E x : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+    (hp : LibMem F M)
+    (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40)
+    (h : SFunc.RunCut cert.prog sevm C (St b
+      (x :: E :: (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)) :: (Bytes.toB256 [36] + F) :: sig :: dig ::
+        selShl :: (maskAddr &&& signer) ::
+        Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+      M G) t_029c_c2 r) :
+    ∃ w Me G', LibMem E Me ∧ (Me.read (F + Bytes.toB256 [32]).toNat 32).1 = (selWord w).toBytes ∧
+      SFunc.RunCut cert.prog sevm C (St b
+        ((F + Bytes.toB256 [32]) :: E :: (E - F + wNeg32) :: (E - F + wNeg32) ::
+          (F + Bytes.toB256 [32]) :: E :: E :: F :: (maskAddr &&& signer) ::
+          Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+        Me G') t_032c_c2 r := by
+  have _ := fork
+  exact e2_head_nonstorage hp hF h
+
 /-- **Entries 3 and 4 after a failed `STATICCALL`**: the flag `0` is the result, and entry 10
 returns it. -/
-theorem tail3 {sevm : Sevm} {b : Devm} {a c sig dig signer ret : B256} {S : List B256}
-    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+private theorem tail3_nonstorage {sevm : Sevm} {b : Devm} {a c sig dig signer ret : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     (hC : 4 ∉ C)
     (h : SFunc.RunCut cert.prog sevm C (St b (a :: c :: 0 :: Bytes.toB256 [96] :: Bytes.toB256 [0] ::
       Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S) M G) t_03ce_c3 r) :
@@ -417,6 +476,16 @@ theorem tail3 {sevm : Sevm} {b : Devm} {a c sig dig signer ret : B256} {S : List
   iterate 8 lx h
   obtain ⟨_, e⟩ := ric_ret h
   exact ⟨_, _, e⟩
+
+/-- The original covered-fork interface to the fork-free memory walk. -/
+theorem tail3 {sevm : Sevm} {b : Devm} {a c sig dig signer ret : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+    (hC : 4 ∉ C)
+    (h : SFunc.RunCut cert.prog sevm C (St b (a :: c :: 0 :: Bytes.toB256 [96] :: Bytes.toB256 [0] ::
+      Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S) M G) t_03ce_c3 r) :
+    ∃ b' G', r = .done (.returned (St b' (0 :: S) M G')) := by
+  have _ := fork
+  exact tail3_nonstorage hC h
 
 /-- **The copy loop's exit and the `STATICCALL`** (entry 7's exit, then entries 3 and 4): the
 partial last word lands above the head word; the call data at the free pointer `E` begins with the
@@ -665,19 +734,31 @@ theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
       (by rw [hE0]; omega) (by rw [hE0]; omega) hpe hwe h
 
 /-- **Entry 8, `isContract(addr)`**: `extcodesize(addr) > 0`. -/
-theorem lib_e8_inv {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}
-    {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem lib_e8_invH {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}
+    {o : Outcome} (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm (St b (x :: ret :: S) M G) t_0179_c8 o) :
-    ∃ G', o = .returned (St (temporalAccountAccessBase b x.toAdr)
+    ∃ G', o = .returned (St (accountAccessH sevm b x.toAdr)
       (B256.eqCheck (B256.eqCheck (b.getCode x.toAdr).size.toB256 0) 0 :: S) M G') := by
   have h := run.cut
   clear run
   unfold t_0179_c8 at h
   ldest h
-  lecs h
+  obtain ⟨_, hd, h⟩ := ric_next h
+  obtain ⟨_, e⟩ := ri_extcodesizeH bal hd
+  subst e
+  clear hd
   iterate 3 lx h
   obtain ⟨G', e⟩ := ric_ret h
   exact ⟨G', Seg.done.inj e⟩
+
+/-- Covered-fork projection with the original account-access successor. -/
+theorem lib_e8_inv {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}
+    {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (x :: ret :: S) M G) t_0179_c8 o) :
+    ∃ G', o = .returned (St (temporalAccountAccessBase b x.toAdr)
+      (B256.eqCheck (B256.eqCheck (b.getCode x.toAdr).size.toB256 0) 0 :: S) M G') := by
+  rw [← accountAccessH_of_eip2929 fork.rules_access]
+  exact lib_e8_invH fork.rules_bal_none run
 
 theorem pair_size_ne : (UniswapV2Pair.code.size.toB256 : B256) ≠ 0 := by decide +kernel
 

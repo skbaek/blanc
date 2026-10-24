@@ -3729,6 +3729,12 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   at `cut.afterBenv`, and USDC world/library facts stay on the original full
   chronology. It shares the same retained-parent and successful-write proof;
   actual cut state and finite touched-key freshness remain inputs.
+  `MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner` consumes that
+  mid-history caller exclusion through the same retained-write classifier.
+  It retains the original root, committed parent and write witnesses while
+  embedding the mid frames into the full chronology. Raw facts, native-query
+  exclusion and explicit old-owner routing stay on the full history; the V2_2
+  owner exception remains an obligation.
   `UsdcDeployedWorld.active_library_code` shares the existing active-library
   selection with `ctxAt_step`; it derives actual code from the world facts.
   `Usdc.recoveryV2_consumes` in
@@ -7269,6 +7275,11 @@ contract-neutral.
   call-code resolution. The modern Pair theorem projects from it. This supplies
   the historical silence boundary for contract-signature consumers; it does
   not by itself migrate the USDC library or establish owner rejection.
+  The first library consumers in `Blanc/Lift/Usdc/LibReject.lean` are
+  `lib_run_cut_noStateGas` (the actual successful bytecode cut) and
+  `lib_e8_invH` (the `isContract` branch with the executing rules' account-access
+  successor). The shared nonstorage memory walks retain their modern interfaces;
+  the historical static-call tail and complete rejection endpoint remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
