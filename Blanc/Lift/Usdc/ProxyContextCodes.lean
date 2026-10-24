@@ -426,20 +426,8 @@ theorem ConfiguredHistoryTraceIn.usdc_ctxOK
     (world : UsdcContextWorld P W checkpoint.state)
     (upgrades : UpgradesWithin P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes) :
     ∀ n ∈ history.rawNodes, CtxOK P W n := by
-  suffices h : ∀ k before n after, history.rawNodes = before ++ n :: after →
-      before.length = k → CtxOK P W n by
-    intro n hn
-    obtain ⟨before, after, split⟩ := List.append_of_mem hn
-    exact h _ before n after split rfl
-  intro k
-  induction k using Nat.strong_induction_on with
-  | _ k ih =>
-    intro before n after split hlen
-    refine ctxOK_step history capabilities bal world upgrades apartSlot split fun m hm => ?_
-    obtain ⟨b₁, b₂, hb⟩ := List.append_of_mem hm
-    refine ih b₁.length ?_ b₁ m (b₂ ++ n :: after) ?_ rfl
-    · rw [← hlen, hb]; simp only [List.length_append, List.length_cons]; omega
-    · rw [split, hb]; simp only [List.append_assoc, List.cons_append]
+  exact List.forall_mem_of_positional fun before n after split ok =>
+    ctxOK_step history capabilities bal world upgrades apartSlot split ok
 
 /-- **`codes` discharged.** Every raw frame in the proxy's storage context runs a USDC
 code. -/

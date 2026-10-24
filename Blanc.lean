@@ -1784,6 +1784,7 @@ import Blanc.Lift.Usdc.AllowLocalitySstore
 import Blanc.Lift.Usdc.ProxySafeFrames
 import Blanc.Lift.Usdc.ProxyReachH
 import Blanc.Lift.Usdc.ProxyContextCodes
+import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk

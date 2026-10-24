@@ -15,7 +15,8 @@ reached in one of three ways (`RawOrigin before n`):
 * an earlier node runs in the same frame (`∃ m ∈ before, m.sevm = n.sevm`);
 * an earlier node spawned it (`∃ m ∈ before, Exec.Deriv.SpawnedAt m n`).
 
-`OriginList L` says this holds at every positional split of `L`; it is closed
+`List.forall_mem_of_positional` is the strong induction along positions that
+consumes it. `OriginList L` says this holds at every positional split of `L`; it is closed
 under `++` (`OriginList.append`). The level-zero fact is
 `Exec.rawNodes_split_origin` (by induction on the run); the message wrappers
 supply `RootOwnCode` at their retained roots from the message they enter:
@@ -38,6 +39,26 @@ Reused (not copied): `Frame.enter_run_code`, `Frame.enter_run_currentTarget`,
 namespace Blanc
 
 open Jaune
+
+/-- **Strong induction along positions.** A property that holds at each element once it
+holds at every strictly earlier element (positionally: values may repeat) holds at every
+element. -/
+theorem List.forall_mem_of_positional {α : Type} {L : List α} {Q : α → Prop}
+    (step : ∀ before n after, L = before ++ n :: after → (∀ m ∈ before, Q m) → Q n) :
+    ∀ n ∈ L, Q n := by
+  suffices h : ∀ k before n after, L = before ++ n :: after → before.length = k → Q n by
+    intro n hn
+    obtain ⟨before, after, split⟩ := List.append_of_mem hn
+    exact h _ before n after split rfl
+  intro k
+  induction k using Nat.strong_induction_on with
+  | _ k ih =>
+    intro before n after split hlen
+    refine step before n after split fun m hm => ?_
+    obtain ⟨b₁, b₂, hb⟩ := List.append_of_mem hm
+    refine ih b₁.length ?_ b₁ m (b₂ ++ n :: after) ?_ rfl
+    · rw [← hlen, hb]; simp only [List.length_append, List.length_cons]; omega
+    · rw [split, hb]; simp only [List.append_assoc, List.cons_append]
 
 namespace Exec.Deriv
 

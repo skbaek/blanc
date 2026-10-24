@@ -1395,6 +1395,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxySafeFrames",
         "Lift.Usdc.ProxyReachH",
         "Lift.Usdc.ProxyContextCodes",
+        "Lift.Usdc.AllowanceRawHistory",
         "Lift.Usdc.InitializerClearing",
         "Lift.Usdc.OldInitializerEffects",
         "Lift.Usdc.OldInitializerV1Clearing",

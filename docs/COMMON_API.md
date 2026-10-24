@@ -966,7 +966,8 @@ trace, [`Blanc/ExecutionInRawNodeOrigin.lean`](../Blanc/ExecutionInRawNodeOrigin
 `Exec.rawNodes_split_origin`, the per-level `…rawNodes_origin` lifts, and the
 message facts `MsgRootCode`, `MsgOwn`, `messageCallDelegation_own`,
 `messageCallExecutionMessage_rootCode`. It is the positional input of a strong
-induction over `rawNodes` that bounds the codes run in a storage context.
+induction over `rawNodes` that bounds the codes run in a storage context;
+`List.forall_mem_of_positional` is that induction along list positions.
 No recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
