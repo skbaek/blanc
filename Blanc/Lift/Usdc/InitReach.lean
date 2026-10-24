@@ -165,7 +165,7 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : 
   rw [St.self' d'] at run
   iterate 2 rsk
   iterate 2 rsx
-  rsload
+  rsld
   iterate 5 rsx
   rcases Reach.sstoreS run with rfl | ⟨d', -, run⟩
   · exact InitStore.of_top rfl (.inr (.inr (.inl (by decide))))
@@ -218,12 +218,12 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   unfold body at run
   rsd
   rsx
-  rsload
+  rsld
   iterate 8 rsx
   rcases rs_branchTo run hT with ⟨-, _, run⟩ | ⟨-, g, _, hg, run⟩
   · rsx
     rsx
-    rsload
+    rsld
     iterate 3 rsx
     exact join_reach erase cont run hT
   · rw [hk] at hg

@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.InitReach06
 import Blanc.Lift.Usdc.OldInitializerV1Callee
+import Blanc.Lift.Usdc.ProxyForward
 
 /-!
 # FiatTokenV1's `initialize` on a prefix reach
@@ -73,7 +74,7 @@ theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
   unfold ImplV1.t_2e8a_c46 at run
   rsd
   iterate 2 rsx
-  rsload
+  rsld
   iterate 31 rsx
   rw [scratch_word M slot] at run
   have k0 : SolcStorageReturn.Keeps (M.write 0 slot.toBytes)
@@ -362,12 +363,6 @@ theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d
   exact InitStore.below.mpr (callee_reach eraseQ hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega)
     (by omega) (by omega) (by omega) (by omega) (by omega) inside hT')
 
-/-- solc 0.4.24's selector word as the V1 dispatcher computes it: `and(0xffffffff,
-div(calldataload(0), 2 ^ 224))`. -/
-def selWordV1 (sevm : Sevm) : B256 :=
-  Bytes.toB256 [0xff, 0xff, 0xff, 0xff] &&&
-    (Sevm.dataWord sevm (Bytes.toB256 [0x00]) / Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-
 theorem route_init : SFunc.selWalk 0x3357162b
     (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
       (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
@@ -378,7 +373,7 @@ theorem route_init : SFunc.selWalk 0x3357162b
 stack and memory and the `initialize` selector, to an `SSTORE` stops at a write of
 `KeysInit06` or of zero. -/
 theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    (hs : selWordV1 sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (hs : Blanc.Sevm.selector sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV1.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
@@ -392,9 +387,9 @@ theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT rfl (fun _ h => by cases h)).elim
   unfold ImplV1.t_000d_c0 at run
   iterate 7 rsx
-  have hs' : Bytes.toB256 [0xff, 0xff, 0xff, 0xff] &&&
-      (Sevm.dataWord sevm (Bytes.toB256 [0x00]) / Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) = 0x3357162b := hs
-  rw [hs'] at run
+  have word := (dispatchWord_eq_selector sevm).trans hs
+  unfold Proxy.dispatchWord at word
+  rw [word] at run
   obtain ⟨-, g, G1, hg, run⟩ := Reach.selWalk_inlS erase route_init run hT
   rw [show ImplV1.cert.prog[60]? = some ImplV1.t_0404_c60 from rfl] at hg
   cases hg

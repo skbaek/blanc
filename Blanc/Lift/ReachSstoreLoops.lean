@@ -1,4 +1,5 @@
 import Blanc.Lift.ReachWalkSstore
+import Blanc.Lift.CursorTreeNinst
 import Blanc.Lift.SolcStoragePayload
 import Blanc.Lift.SolcStorageClear
 import Blanc.Lift.SolcStorageReturn
@@ -155,7 +156,7 @@ macro "rsk" : tactic => `(tactic| (
 
 set_option hygiene false in
 /-- An `SLOAD` of a reach to an `SSTORE`: the loaded word is unnamed. -/
-macro "rsload" : tactic => `(tactic| (
+macro "rsld" : tactic => `(tactic| (
   have hnext := rs_next run hT
   clear run
   obtain ⟨_, hstep, run⟩ := hnext
@@ -164,8 +165,8 @@ macro "rsload" : tactic => `(tactic| (
   clear hstep))
 
 set_option hygiene false in
-/-- `rsd`, `rsx` or `rsload`: any step `stepR` or `SLOAD` names. -/
-macro "rsa" : tactic => `(tactic| first | rsd | rsx | rsload)
+/-- `rsd`, `rsx` or `rsld`: any step `stepR` or `SLOAD` names. -/
+macro "rsa" : tactic => `(tactic| first | rsd | rsx | rsld)
 
 /-! ## Calls and returns over the walk state -/
 
@@ -377,6 +378,35 @@ theorem Reach.withPot {P : Sevm → Devm → Ninst → Devm → Prop}
     | pcAt hp hr =>
       have p' := FreePtr.Pot.step hsg (hP hp) p
       exact ⟨.tail r (.pcAt ⟨hp, p, p'⟩ hr), p'⟩
+
+/-- **A raw `SSTORE` node of a certified frame, as a reach under the potential.** A node `N`
+under a frame `R` entered at pc `0` of certified bytes, without state gas, with empty stack and
+memory and gas below `2 ^ 256`, at an `SSTORE` is the end of a `PotStep (StepIn R)` reach from
+the entry tree over the entry walk state, at an `SSTORE`, holding `N`'s machine. -/
+theorem Reach.sstoreNode_pot {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {R N : Exec.Deriv} (hpc : R.pc = 0) (hcode : R.sevm.code = code)
+    (hsg : R.sevm.benvStat.rules.stateGas = none) (stack : R.devm.stack = [])
+    (memory : R.devm.memory = Mem.empty) (gas : R.devm.gasMeasure < 2 ^ 256)
+    (chain : Exec.Deriv.ParentPrefix R N) (hat : Ninst.At N.sevm.code N.pc (.reg .sstore)) :
+    ∃ T, Reach (FreePtr.PotStep (StepIn R)) c.prog R.sevm
+      ⟨St R.devm [] Mem.empty R.devm.gasLeft, (Cursor.start c).f, []⟩ T ∧ AtSstore T ∧
+      T.d = N.devm := by
+  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas hc hpc hcode hsg chain
+  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
+  have pot : FreePtr.Pot R.devm := by
+    unfold FreePtr.Pot
+    rw [memory]
+    exact gas
+  obtain ⟨r, -⟩ := Reach.withPot (fun h => StepIn.toRun h) hsg reach pot
+  have hK : (Cursor.start c).K = [] := by
+    unfold Cursor.start
+    split <;> rfl
+  have e : (Cursor.start c).conf R.devm =
+      ⟨St R.devm [] Mem.empty R.devm.gasLeft, (Cursor.start c).f, []⟩ := by
+    rw [← stack, ← memory, ← St.self' R.devm]
+    simp only [Cursor.conf, hK, List.map_nil]
+  rw [e] at r
+  exact ⟨_, r, ⟨g, hf⟩, rfl⟩
 
 /-! ## The payload copy loop -/
 

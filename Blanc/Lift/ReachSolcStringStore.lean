@@ -228,7 +228,7 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : 
   unfold helper at run
   rsd
   iterate 2 rsx
-  rsload
+  rsld
   iterate 18 rsx
   rw [scratch_word M slot] at run
   have k0 : SolcStorageReturn.Keeps (M.write 0 slot.toBytes)

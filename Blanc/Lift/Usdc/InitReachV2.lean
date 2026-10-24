@@ -58,7 +58,7 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   unfold ImplV2.t_35f6_c18 at run
   rsd
   rsx
-  rsload
+  rsld
   iterate 4 rsx
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim

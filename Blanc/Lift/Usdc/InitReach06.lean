@@ -496,7 +496,7 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
   rsd
   rsx
-  rsload
+  rsld
   repeat rsa
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT rfl (fun _ h => by cases h)).elim

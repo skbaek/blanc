@@ -96,7 +96,7 @@ theorem blacklist_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n 
   · exact absurd hw (by decide)
   rsd
   iterate 13 rsx
-  rsload
+  rsld
   iterate 2 rsx
   rsd
   iterate 17 rsx
@@ -248,7 +248,7 @@ theorem body22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
       Impl.t_2538_c55, []⟩ T) (hT : AtSstore T) : InitStore (BodyKeys sevm sL aP aL.toNat) T := by
   rsd
   rsx
-  rsload
+  rsld
   iterate 5 rsx
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim

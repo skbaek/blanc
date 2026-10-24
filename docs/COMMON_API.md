@@ -6587,16 +6587,18 @@ contract-neutral.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
-  (a `JUMPDEST`), `rsw` and `rsload` (over `run`, `hT`, `erase`); the loop principles
+  (a `JUMPDEST`), `rsw` and `rsld` (over `run`, `hT`, `erase`); the loop principles
   `reach_loop_measure` and `reach_loop_index`; `Reach.withPot` (the memory potential at
-  every step of a reach); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
+  every step of a reach); `Reach.sstoreNode_pot` (a raw `SSTORE` node under a fresh certified
+  frame as the end of such a reach from the entry tree; worked use: USDC
+  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
   (`ReachPayload.bodyR`/`headB`/`headJ`, `payloadB_reach`/`payloadJ_reach`: a store of the
   loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
   `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
   (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
-  without inverting it), `rsa` (`rsd`, `rsx` or `rsload`, for `repeat rsa`), `mapSlot_scratch`
+  without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`
   (a mapping slot from solc's scratch words at any closed offsets) and `Reach.selWalk_inlS` (a
   solc dispatcher's comparison walk). The
   solc 0.6 `string storage = string calldata` helper and the `f(string calldata)` external
