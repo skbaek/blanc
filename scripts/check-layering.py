@@ -153,12 +153,12 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
-SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissionSem",
+SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "LadderSemHist", "ContractAdmissionSem", "ExecutionAdmissionSem",
            "Lift.Basic", "Lift.Check", "Lift.CallEffects", "Lift.Transfer", "Lift.Sound", "Lift.Exact",
            "Lift.ExactWalk", "Lift.Silent", "Lift.BalSilent",
            "Lift.Hoare", "Lift.BookedSpec", "Lift.BookedSupportSpec"]
@@ -167,7 +167,7 @@ SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
@@ -317,6 +317,9 @@ SHARED += [
     "ExecutionOwnerFamilyPositional",
     "ExecutionRawFramesCodeImage",
     "ExecutionSettledCodeImage",
+    "ExecutionInCodeImage",
+    "ExecutionInOwnCode",
+    "ExecutionInCodeImageSafe",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",

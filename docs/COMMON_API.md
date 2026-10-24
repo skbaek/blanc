@@ -829,6 +829,53 @@ For every *raw* frame, rolled back or not, [`Blanc/ExecutionRawFramesCodeImage.l
 image through the admitted rungs (`*.rawFrames_codeImage` per wrapper, from the `*.stateInv_admitted_sem`
 message invariant) and `Exec.rawFrameRoots_codePreserve` inside each message. Worked uses: USDC
 (`Blanc/Lift/Usdc/HistorySlots.lean`, `HistoryFamily.lean`).
+For the In-carrier (`StagedBodyTrace` / `ConfiguredBlockTraceIn` /
+`ConfiguredHistoryTraceIn`), [`Blanc/ExecutionInCodeImage.lean`](../Blanc/ExecutionInCodeImage.lean):
+`…rawFrames_codeImageIn` per wrapper (and `_of_installedIn` for staged bodies,
+In-blocks and In-histories) carries the image through the In-rungs
+(`*.stateInv_admitted_semIn`, with the installed certificate and image
+identification the In-rungs demand; message and transaction levels are
+fork-free and reused). `ConfiguredHistoryTraceIn.settled_codeImageIn` follows
+through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bridge
+In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
+forest `settledFrames_parentIn`. No recipe is registered: use this branch and
+the named theorem.
+When no installed certificate exists (a proxy runtime that `DELEGATECALL`s),
+[`Blanc/ExecutionInCodeImageSafe.lean`](../Blanc/ExecutionInCodeImageSafe.lean):
+`…codeImage_of_safe` per wrapper (message, transaction, system / request
+stages, staged body, In-block) threads each entry world's `getCode wa = C`
+with the `…_of_safe` chain of `ExecutionNoDelSafeHistory` (same
+`SafeRawFrames wa` premise, plus `C.toList ≠ []` and `¬ isValidDelegation C`)
+and keeps it at every raw root by `Exec.rawFrameRoots_codePreserve`,
+ending in `ConfiguredHistoryTraceIn.rawFrames_codeImage_of_safe`
+(`R.devm.getCode wa = C` for every raw frame, rolled back or not) and
+`…settled_codeImage_of_safe` (`f.pre.getCode wa = C` for every settled frame)
+through the settled-to-raw bridge. No recipe is registered: use this branch
+and the named theorem.
+For installed code at settled frames of an In-history on a historical fork
+(where `CoveredFork` cannot hold),
+[`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
+`OwnCodeAtIn F ca C` (installed at start, pc `0`, selected domain `F`, no
+state gas, runs `C` at `ca`); per-level `…settledRoots_ownCodeIn` concluding
+it at every settled root with no cover premise (roots need no spawn
+classification); `OwnSpawnsIn` (fork-free spawn contract: state-gas absence
+in place of coverage) with `Exec.descendantFrames_ownCodeIn` (child `F`/gas
+via `step_spawn_child_benvStat`; create2 arm split on `op.create2`); and
+per-level `…settledFrames_ownCodeIn` ending in
+`ConfiguredHistoryTraceIn.settled_ownCodeIn` at every settled frame, no
+cover premise. No recipe is registered: use this branch and the named theorem.
+For the contract postcondition across a CALL on a historical fork (where
+`CoveredFork` cannot hold),
+[`Blanc/LadderSemHist.lean`](../Blanc/LadderSemHist.lean):
+`ContractSpecSem.post_of_call_self_withIn F` is the historical form of
+`ContractSpecSem.post_of_call_self_with` (`Blanc/LadderSem.lean`): the
+deeper-frame hypothesis is quantified over the selected fork-domain fact `F`
+instead of `CoveredFork`, with `stateGas = none` as the only rule premise.
+The access schedule (`.flat` / `.eip2929`) and the delegation flag are cased
+on, never assumed, so every premise discharges on `HistFork` with
+`HistFork.stateGas_none`. Worked consumer: the WETH9 `withdraw` self-CALL via
+`Weth9.withdraw_post_gen` (`Blanc/Lift/Weth9/Withdraw.lean`). No recipe is
+registered: use this branch and the named theorem.
 
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its
@@ -2231,6 +2278,28 @@ a protected target executing arbitrary code.
   `wa` is never targeted; block-level `createdAccounts` is empty at
   `initBenv`. Also `payRewards_getCode` and the shared
   `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
+  Every `…_of_installedCert` above is a wrapper over the safe-parametric chain
+  below, via its trace's `safeRawFrames_of_installedCert` bridge.
+- Safe-parametric no-deletion and code survival across configured In-histories:
+  [`Blanc/ExecutionNoDelSafeHistory.lean`](../Blanc/ExecutionNoDelSafeHistory.lean).
+  `ExecutionTrace.SafeRawFrames wa trace.rawFrames` says every node of every
+  listed frame's own execution (`Exec.rawNodes` of each `Exec.Deriv` in the
+  trace's own `rawFrames` enumeration) excludes decoded SELFDESTRUCT in the
+  executing storage context `wa`. The `…_of_safe` chain
+  (`RunFrame.invNoDel_of_safe`, `ProcessMessage` /
+  `ProcessCreateMessage.inv_noDel_of_safe`, the retained-trace
+  `ProcessMessageTrace` / `ProcessCreateMessageTrace.inv_noDel_of_safe`,
+  `MessageCallTrace.noDel_of_safe`, `TransactionTrace.noDel_of_safe`, system /
+  request stages, `StagedBodyTrace.noDel_of_safe`,
+  `ConfiguredBlockTraceIn.noDel_of_safe`,
+  `ConfiguredHistoryTraceIn.noDel_of_safe`) concludes what the installed-cert
+  version concludes (`…NoDelScheduled wa`, `getCode wa = C`) from that premise
+  plus the code facts the proofs actually use (`C.toList ≠ []`,
+  `¬ isValidDelegation C`); raw levels take an explicit retained run with its
+  slot equation instead. `Exec.safeNodes_of_installedCert` turns the
+  installed-cert producer into per-frame safety (`Exec.rawNodes` of a listed
+  frame sit inside the whole run's `Exec.rawNodes`). No recipe is registered:
+  use this branch and the named theorem.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the
@@ -3961,6 +4030,26 @@ consumer needs canonical interpreter ingress as one conjunct:
   every canonical system code; hoisted from the Beacon deposit contract, whose
   `not_mem_systemTargets_of_installed` now instantiates it). Worked use: the Curve 3pool history
   (curve-3pool-stableswap-v1).
+- To discharge the same per-frame gas/entry premises over a selected-domain
+  (`In`) carrier instead of a modern one: with `BodyStageCapabilities F`,
+  `ConfiguredHistoryTraceIn.rootEntryIn` (`root.pc = 0 ∧ F root.sevm.benvStat.fork`),
+  `ConfiguredHistoryTraceIn.gas_bound` (`< 2 ^ 64`),
+  `ConfiguredHistoryTraceIn.frameAdmitted_gas` and `ConfiguredHistoryTraceIn.rawFrame_gas`
+  ([`Blanc/ExecutionStagedFrameEnv.lean`](../Blanc/ExecutionStagedFrameEnv.lean)).
+  The entry chain is predicate-parametric (`RootEntryIn F`, every transport
+  rewrites a `benvStat` equality, no rule fact needed); the gas chain runs on
+  the `stateGas = none` twins (`TransactionTrace.msg_gas_noStateGas`,
+  `gas_le_remaining_noStateGas`, the `rawFrames_gasMeasure_le_noStateGas`
+  family, `header_gasLimit_lt_of_transition`, the modern statements unchanged
+  as wrappers). Bounds needing a numerical rule value arrive as explicit
+  fork-class hypotheses instead: `ConfiguredHistoryTraceIn.calldata_bound` /
+  `frameAdmitted_calldata` (and staged/block forms) take
+  `hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero`, and the strict
+  `rawFrames_gas_lt` chain (`TransactionTrace.msg_gas_succ_le_noStateGas`,
+  `intrinsicGas_bounds_noStateGas`, staged/block forms) takes
+  `hbase : ∀ f, F f → (Fork.ruleSet f).gas.txBase = 21000`; the `_hist`
+  corollaries discharge both for `HistFork` (`HistFork.dataNonZero_ge`,
+  `HistFork.txBase_eq`, each proved by `cases f <;> decide`).
 - To carry a trace-local premise over `trace.rawFrames` (such as "no CREATE frame targets `a`")
   to every frame below a raw frame: `ConfiguredHistoryTrace.rawFrames_closed` (the raw frames of
   a history are closed under descent, `RawFramesClosed`, layer by layer from
@@ -5925,6 +6014,47 @@ contract-neutral.
   `NoHaltSet`, `SFunc.RunP.not_halted`, `SFunc.RunP.not_halted_entry`), conditional gotos
   (`ric_branchTo`), internal calls (`ric_call`), `ri_sload` and
   `ri_log1` in [`Blanc/Lift/InvWalkWorld.lean`](../Blanc/Lift/InvWalkWorld.lean);
+  on a historical fork, where the access schedule may be flat (Istanbul, Muir Glacier)
+  rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
+  successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
+  unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`/
+  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH` and the storage-walk
+  steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
+  `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
+  `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
+  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the
+  frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
+  `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
+  `_covered` form recovers the modern statement, all in
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); invert a
+  `STATICCALL` to an arbitrary callee from `rules.stateGas = none` alone with
+  `ri_staticcall_boundedH`/`ri_staticcallH`/`rx_staticcallH` (answer `StaticAnsweredH`, code
+  resolution `CallCodeH` under the actual delegation flag), the step/run inversions
+  `of_step_staticcall_val_with_depth_frame_causeH`/`of_run_staticcall_val_with_depth_causeH`,
+  quiet steps with `Ninst.world_of_quietH`, static log preservation with
+  `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
+  committed post by `Execution.committedPost_of_okFact`), and the return-data bounds
+  `ReturnDataBound.staticcall_returnData_length_ltH`/`call_returnData_length_ltH`; the
+  `_covered`/`of_covered` forms recover the modern statements; the value-carrying `CALL`
+  inversions `of_step_call_val_with_depth_frameH`/`of_run_call_val_with_depth_frameH` and the
+  caller-visible `ri_call_postH`, all in
+  [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
+  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
+  [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
+  the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
+  `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
+  `cursor_branch_forwardH`, `cursor_next_call_occurrence_forwardH`, and the state cuts
+  `CursorStateAt.lineH`/`jumpH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/`callH`/
+  `retH`/`gotoH`) in
+  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean); source runs and
+  returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
+  (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
+  `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
+  (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
+  [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
+  and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
+  form there is the modern statement from `CoveredFork`;
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

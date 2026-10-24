@@ -41,12 +41,12 @@ open Jaune
 
 /-- A spawned frame's message opens on the spawning world: every code-bearing
 account keeps its storage, and no balance moves. -/
-theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
-    {f : Frame} {rsm : Resume} (hfork : CoveredFork sevm.benvStat.fork)
+theorem Xinst.step_spawn_world_noStateGas {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hfork : sevm.benvStat.rules.stateGas = none)
     (hs : Xinst.step sevm devm x = .spawn f rsm) {a : Adr} (ha : devm.getCode a ≠ .empty) :
     f.inner.benv.state.getStor a = devm.state.getStor a ∧
       f.inner.benv.state.bal = devm.state.bal := by
-  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hsh, -⟩ |
+  rcases Xinst.step_shapeNoStateGas sevm devm x hfork with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
@@ -87,18 +87,25 @@ theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
     all_goals obtain ⟨rfl, -⟩ := hs
     all_goals exact ⟨(hf.getStor a).symm, congrArg Jaune.State.bal hf.state.symm⟩
 
+theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
+    {f : Frame} {rsm : Resume} (hfork : CoveredFork sevm.benvStat.fork)
+    (hs : Xinst.step sevm devm x = .spawn f rsm) {a : Adr} (ha : devm.getCode a ≠ .empty) :
+    f.inner.benv.state.getStor a = devm.state.getStor a ∧
+      f.inner.benv.state.bal = devm.state.bal :=
+  Xinst.step_spawn_world_noStateGas hfork.rules_stateGas_none hs ha
+
 
 /-- A spawned child opens on its parent's world: every code-bearing account keeps
 its storage, and the world balance total does not grow. -/
-theorem Evm.step_spawn_child_world {pc : Nat} {sevm : Sevm} {devm : Devm}
+theorem Evm.step_spawn_child_world_noStateGas {pc : Nat} {sevm : Sevm} {devm : Devm}
     {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc') (he : f.enter = .run cevm)
     {a : Adr} (ha : devm.getCode a ≠ .empty) :
     cevm.dyna.state.getStor a = devm.state.getStor a ∧
       sum cevm.dyna.state.bal ≤ sum devm.state.bal := by
   obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
-  obtain ⟨hstor, hbal⟩ := Xinst.step_spawn_world hfork hx ha
+  obtain ⟨hstor, hbal⟩ := Xinst.step_spawn_world_noStateGas hfork hx ha
   obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv he
   have protection : State.Protected f.inner.benv.state a := by
     right
@@ -111,6 +118,15 @@ theorem Evm.step_spawn_child_world {pc : Nat} {sevm : Sevm} {devm : Devm}
   change sum benv.state.bal ≤ _
   rw [← hbal]
   exact h
+
+theorem Evm.step_spawn_child_world {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hs : Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc') (he : f.enter = .run cevm)
+    {a : Adr} (ha : devm.getCode a ≠ .empty) :
+    cevm.dyna.state.getStor a = devm.state.getStor a ∧
+      sum cevm.dyna.state.bal ≤ sum devm.state.bal :=
+  Evm.step_spawn_child_world_noStateGas hfork.rules_stateGas_none hs he ha
 
 /-- One same-frame edge does not grow the world balance total. -/
 theorem Exec.Deriv.ParentStep.balSum_le {next node : Exec.Deriv}

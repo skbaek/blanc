@@ -69,6 +69,7 @@ import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
 import Blanc.ExecutionDeletionSafety
 import Blanc.ExecutionNoDelProducer
+import Blanc.ExecutionNoDelSafeHistory
 import Blanc.ExecutionNoDelTransaction
 import Blanc.ExecutionNoDelHistory
 import Blanc.ExecutionHistoricalAdmission
@@ -87,6 +88,7 @@ import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSettledOrigin
 import Blanc.ExecutionStagedFrames
 import Blanc.ExecutionStagedAdmission
+import Blanc.ExecutionStagedFrameEnv
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
@@ -1554,6 +1556,10 @@ import Blanc.ExecutionOwnerFamily
 import Blanc.ExecutionOwnerFamilyPositional
 import Blanc.ExecutionRawFramesCodeImage
 import Blanc.ExecutionSettledCodeImage
+import Blanc.ExecutionInCodeImage
+import Blanc.ExecutionInOwnCode
+import Blanc.ExecutionInCodeImageSafe
+import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
 import Blanc.Lift.CheckChain
@@ -1713,3 +1719,10 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SyncLiveF
 import Blanc.Lift.UniswapV2Pair.SkimForwardKept
 import Blanc.Lift.Usdc.HistoryEnd
 import Blanc.Lift.Usdc.HistoryEndFoot
+
+import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistStaticCall
+import Blanc.Lift.HistStaticCallGuard
+import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistCursorCalls
