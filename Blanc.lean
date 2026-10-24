@@ -511,6 +511,8 @@ import Blanc.Lift.BeaconDeposit.HistSafeInsert
 import Blanc.Lift.BeaconDeposit.HistSafePubkeyRoot
 import Blanc.Lift.BeaconDeposit.HistSafeNode
 import Blanc.Lift.BeaconDeposit.HistSafeSignatureRoot
+import Blanc.Lift.BeaconDeposit.HistSafe
+import Blanc.Lift.BeaconDeposit.HistLadder
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
