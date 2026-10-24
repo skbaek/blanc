@@ -108,4 +108,58 @@ theorem implV2_initializeV2_short_zero_rawFrame
   subst pc ok
   exact implV2_initializeV2_short_zero run code hsg stack memory selector short separate zero
 
+/-- **V1 `initialize` leaves tracked rows non-increasing, step by step.** With the tracked keys
+`K` apart from the initializer's fixed slots and from the payload keys of its decoded strings
+(frame-local key separation), every store of a successful raw V1 `initialize` frame at a key of
+`K` does not raise it. Any string length is allowed. -/
+theorem implV1_initialize_rowNonInc_rawFrame
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K : B256 → Prop}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    {R : Exec.Deriv} (member : R ∈ history.rawFrames) {post : Devm}
+    (ok : R.exn = .ok post) (code : R.sevm.code = ImplV1.code)
+    (selector : Blanc.Sevm.selector R.sevm = 0x3357162b)
+    (fixedApart : ∀ key, K key → key ∉ fixedSlots)
+    (payloadApart : ∀ key, K key → ¬ OldInitializerV1Callee.PayloadKey R.sevm key) :
+    SProg.RunP (fun s d n d' => StepIn R s d n d' ∧ GuardObs K False s d n ∧ ∀ x, n ≠ .exec x)
+      ImplV1.cert.prog R.sevm R.devm post := by
+  refine SProg.RunP.mono ?_
+    (implV1_initialize_observed_rawFrame history capabilities member ok code selector)
+  intro s d n d' ⟨step, observed, noExec⟩
+  refine ⟨step, ?_, noExec⟩
+  intro store key value rest shape tracked
+  rcases observed store key value rest shape with fixed | zero | payload
+  · exact (fixedApart key tracked fixed).elim
+  · rw [zero]
+    exact Or.inr (Nat.zero_le _)
+  · exact (payloadApart key tracked payload).elim
+
+/-- **V2 `initializeV2` leaves tracked rows non-increasing, step by step.** With the tracked
+keys `K` apart from the fixed slots `4`, `15`, `18` and from the name's payload keys
+`keccak(4) + i` (frame-local key separation), every store of a successful raw V2
+`initializeV2` frame at a key of `K` does not raise it. Any name length is allowed. -/
+theorem implV2_initializeV2_rowNonInc_rawFrame
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K : B256 → Prop}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    {R : Exec.Deriv} (member : R ∈ history.rawFrames) {post : Devm}
+    (ok : R.exn = .ok post) (code : R.sevm.code = ImplV2.code)
+    (selector : Blanc.Sevm.selector R.sevm = 0xd608ea64)
+    (fixedApart : ∀ key, K key → key ∉ ([4, 15, 18] : List B256))
+    (payloadApart : ∀ i : Nat, ¬ K (((4 : B256).toBytes).keccak + i.toB256)) :
+    SProg.RunP (fun s d n d' => StepIn R s d n d' ∧ GuardObs K False s d n ∧ ∀ x, n ≠ .exec x)
+      ImplV2.cert.prog R.sevm R.devm post := by
+  refine SProg.RunP.mono ?_
+    (implV2_initializeV2_observed_rawFrame history capabilities member ok code selector)
+  intro s d n d' ⟨step, observed, noExec⟩
+  refine ⟨step, ?_, noExec⟩
+  intro store key value rest shape tracked
+  rcases observed store key value rest shape with fixed | zero | ⟨-, i, -, rfl⟩
+  · exact (fixedApart key tracked fixed).elim
+  · rw [zero]
+    exact Or.inr (Nat.zero_le _)
+  · exact (payloadApart i tracked).elim
+
 end Blanc.Lift.Usdc

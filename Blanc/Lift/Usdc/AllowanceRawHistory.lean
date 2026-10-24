@@ -120,6 +120,60 @@ def UsdcAllowException (pair : Adr) (G : Exec.Deriv) : Prop :=
     (G.sevm.code = ImplV2_1.code ∧ AllowedFrame selV2_1 pair (WriteSite.Env.root G.sevm)) ∨
     (G.sevm.code = Impl.code ∧ AllowedFrame selV2_2 pair (WriteSite.Env.root G.sevm))
 
+/-- The caller- and owner-keyed part of `AllowedFrame`: the Pair as caller of a caller-keyed
+entry point, or the Pair named by calldata word 4 of an owner-keyed one. -/
+def PairAllowedFrame (t : SelTable) (pair : Adr) (ε : WriteSite.Env) : Prop :=
+  (t.selT.eval ε ∈ t.callers ∧ ε.caller.toAdr = pair) ∨
+    (t.selT.eval ε ∈ t.owners ∧ ((Term.cd (.const 4)).eval ε).toAdr = pair)
+
+/-- **The Pair's own exception frames**: `UsdcAllowException` without the initializers. -/
+def UsdcPairException (pair : Adr) (G : Exec.Deriv) : Prop :=
+  (G.sevm.code = ImplV1.code ∧ PairAllowedFrame selV1 pair (WriteSite.Env.root G.sevm)) ∨
+    (G.sevm.code = ImplV2.code ∧ PairAllowedFrame selV2 pair (WriteSite.Env.root G.sevm)) ∨
+    (G.sevm.code = ImplV2_1.code ∧ PairAllowedFrame selV2_1 pair (WriteSite.Env.root G.sevm)) ∨
+    (G.sevm.code = Impl.code ∧ PairAllowedFrame selV2_2 pair (WriteSite.Env.root G.sevm))
+
+/-- **The initializer frames**: a frame running an implementation runtime under one of its
+version's initializer selectors (V1 `initialize`; V2 and V2_1 `initialize`, `initializeV2`;
+V2_2 `initialize`, `initializeV2`, `initializeV2_2`). V2_1's and V2_2's `initializeV2_1` is
+no exception of the law (`selV2_1`, `selV2_2`). -/
+def UsdcInitFrame (G : Exec.Deriv) : Prop :=
+  (G.sevm.code = ImplV1.code ∧ selV1.selT.eval (WriteSite.Env.root G.sevm) ∈ selV1.inits) ∨
+    (G.sevm.code = ImplV2.code ∧ selV2.selT.eval (WriteSite.Env.root G.sevm) ∈ selV2.inits) ∨
+    (G.sevm.code = ImplV2_1.code ∧
+      selV2_1.selT.eval (WriteSite.Env.root G.sevm) ∈ selV2_1.inits) ∨
+    (G.sevm.code = Impl.code ∧ selV2_2.selT.eval (WriteSite.Env.root G.sevm) ∈ selV2_2.inits)
+
+theorem usdcAllowException_split {pair : Adr} {G : Exec.Deriv}
+    (h : UsdcAllowException pair G) : UsdcPairException pair G ∨ UsdcInitFrame G := by
+  rcases h with ⟨c, a | a | a⟩ | ⟨c, a | a | a⟩ | ⟨c, a | a | a⟩ | ⟨c, a | a | a⟩
+  · exact .inl (.inl ⟨c, .inl a⟩)
+  · exact .inl (.inl ⟨c, .inr a⟩)
+  · exact .inr (.inl ⟨c, a⟩)
+  · exact .inl (.inr (.inl ⟨c, .inl a⟩))
+  · exact .inl (.inr (.inl ⟨c, .inr a⟩))
+  · exact .inr (.inr (.inl ⟨c, a⟩))
+  · exact .inl (.inr (.inr (.inl ⟨c, .inl a⟩)))
+  · exact .inl (.inr (.inr (.inl ⟨c, .inr a⟩)))
+  · exact .inr (.inr (.inr (.inl ⟨c, a⟩)))
+  · exact .inl (.inr (.inr (.inr ⟨c, .inl a⟩)))
+  · exact .inl (.inr (.inr (.inr ⟨c, .inr a⟩)))
+  · exact .inr (.inr (.inr (.inr ⟨c, a⟩)))
+
+/-- **Initializer writes at the Pair's rows (stated, node level).** At every raw node of an
+initializer frame at `P`, a successful `SSTORE` at a tracked Pair row does not raise it. The
+initializers' writes are fixed slots, literal zero or payload keys of their decoded strings or
+arrays (`V1InitializerWriteClass`, `V2InitializerWriteClass`); with those keys apart from the
+tracked rows this is what the run-level classifiers give for a successful frame
+(`implV1_initialize_rowNonInc_rawFrame`,
+`implV2_initializeV2_rowNonInc_rawFrame`). The node-level form also
+covers reverting initializer frames, which no classifier reaches. -/
+def InitRowWritesNonInc (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : Prop :=
+  ∀ G ∈ frames, G.sevm.currentTarget = P → UsdcInitFrame G →
+    ∀ m, Exec.Deriv.ParentPrefix G m → ∀ w : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? m = some w → (∃ g, Tr g ∧ allowSlot pair g = w.key) →
+        w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat
+
 section History
 
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -197,9 +251,10 @@ theorem ConfiguredHistoryTraceIn.usdc_rowChange_attributed
     refine ⟨b₁, b₂, m, G, w, split, hG, chain, ?_, found, owner, key, value⟩
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain]; exact target
 
-/-- **P1 over the actual history.** With no exception frame at `P`, every tracked
-allowance row of the Pair is at most its checkpoint word at every raw node of the history
-and at the future. -/
+/-- **P1 over the actual history.** With no Pair exception frame at `P` (the Pair never
+approves through a caller- or owner-keyed entry point) and the initializers' writes at the
+tracked rows non-increasing (`InitRowWritesNonInc`), every tracked allowance row of the Pair
+is at most its checkpoint word at every raw node of the history and at the future. -/
 theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
@@ -207,8 +262,9 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
     (upgrades : UpgradesWithin P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcRowSep P pair Tr history.rawFrames)
-    (noException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
-      ¬ UsdcAllowException pair G)
+    (noPairException : ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P →
+      ¬ UsdcPairException pair G)
+    (initRows : InitRowWritesNonInc P pair Tr history.rawFrames)
     {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
     (∀ n ∈ history.rawNodes,
         ((n.devm.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat) ∧
@@ -220,11 +276,14 @@ theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease
       Exec.Deriv.successfulSstore? m = some w → w.owner = P → w.key = k →
       w.value.toNat ≤ ((m.devm.getStor P).get k).toNat := by
     intro m hm w found owner key
-    obtain ⟨G, hG, -, gTarget, cls⟩ := ConfiguredHistoryTraceIn.usdc_rawRowWrite history
+    obtain ⟨G, hG, chain, gTarget, cls⟩ := ConfiguredHistoryTraceIn.usdc_rawRowWrite history
       capabilities bal world upgrades apartSlot proxyApart rowSep hm found owner (key ▸ tracked)
+    rw [← key]
     rcases cls with exc | le
-    · exact (noException G hG gTarget exc).elim
-    · rw [← key]; exact le
+    · rcases usdcAllowException_split exc with pairExc | init
+      · exact (noPairException G hG gTarget pairExc).elim
+      · exact initRows G hG gTarget init m chain w found (key ▸ tracked)
+    · exact le
   have nodes : ∀ n ∈ history.rawNodes,
       ((n.devm.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat := by
     refine List.forall_mem_of_positional fun before n after split ih => ?_
