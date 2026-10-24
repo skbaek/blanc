@@ -12,9 +12,29 @@ def lpMintCreditBase (sevm : Sevm) (b : Devm) (toWord value credited : B256) : D
   (afterSstore sevm b (transferBalanceSlot toWord.toAdr) credited).addLog
     ⟨sevm.currentTarget, [transferTopic, 0, toWord.toAdr.toB256], value.toBytes⟩
 
+def lpMintCreditBaseH (sevm : Sevm) (b : Devm) (toWord value credited : B256) : Devm :=
+  (afterSstoreH sevm b (transferBalanceSlot toWord.toAdr) credited).addLog
+    ⟨sevm.currentTarget, [transferTopic, 0, toWord.toAdr.toB256], value.toBytes⟩
+
+theorem lpMintCreditBaseH_of_covered {sevm : Sevm} {b : Devm} {toWord value credited : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintCreditBaseH sevm b toWord value credited = lpMintCreditBase sevm b toWord value credited := by
+  unfold lpMintCreditBaseH lpMintCreditBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def lpMintCreditPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (toWord value credited : B256) (G : Nat) : Devm :=
   St (lpMintCreditBase sevm b toWord value credited) R (lpMintMemory M toWord value) G
+
+def lpMintCreditPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (toWord value credited : B256) (G : Nat) : Devm :=
+  St (lpMintCreditBaseH sevm b toWord value credited) R (lpMintMemory M toWord value) G
+
+theorem lpMintCreditPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {toWord value credited : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintCreditPostH sevm b R M toWord value credited G = lpMintCreditPost sevm b R M toWord value credited G := by
+  unfold lpMintCreditPostH lpMintCreditPost
+  simp only [lpMintCreditBaseH_of_covered fork]
 
 theorem lpMintScratch_ptr {M : Mem} (mem : PtrMem 128 192 M) (toWord : B256) :
     PtrMem 128 192 ((M.write 0 toWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes) := by
@@ -119,13 +139,13 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_pop ?_
   exact rx_ret
 
-/-- A successful literal continuation determines the complete recipient-store/log image. -/
-theorem lpMint_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem lpMint_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {toWord value credited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run fs sevm (St b (credited :: value :: toWord :: ρ :: R) M G) t_2915_c62 o) :
     sevm.isStatic = false ∧
-      ∃ residual, o = .returned (lpMintCreditPost sevm b R M toWord value credited residual) := by
+      ∃ residual, o = .returned (lpMintCreditPostH sevm b R M toWord value credited residual) := by
   have m1 := lpMintScratch_ptr mem toWord
   have m2 := lpMintMemory_ptr mem toWord value
   have hash := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 toWord.toAdr.toB256 1)
@@ -197,8 +217,8 @@ theorem lpMint_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -269,11 +289,40 @@ theorem lpMint_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
+/-- A successful literal continuation determines the complete recipient-store/log image. -/
+theorem lpMint_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {toWord value credited ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.Run fs sevm (St b (credited :: value :: toWord :: ρ :: R) M G) t_2915_c62 o) :
+    sevm.isStatic = false ∧
+      ∃ residual, o = .returned (lpMintCreditPost sevm b R M toWord value credited residual) := by
+  simpa only [lpMintCreditPostH_of_covered fork] using
+    lpMint_credit_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
 def lpMintSupplyBase (sevm : Sevm) (b : Devm) (supply : B256) : Devm :=
   afterSstore sevm b 0 supply
 
+def lpMintSupplyBaseH (sevm : Sevm) (b : Devm) (supply : B256) : Devm :=
+  afterSstoreH sevm b 0 supply
+
+theorem lpMintSupplyBaseH_of_covered {sevm : Sevm} {b : Devm} {supply : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintSupplyBaseH sevm b supply = lpMintSupplyBase sevm b supply := by
+  unfold lpMintSupplyBaseH lpMintSupplyBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def lpMintRecipientWord (sevm : Sevm) (b : Devm) (toWord supply : B256) : B256 :=
   (lpMintSupplyBase sevm b supply).getStorVal sevm.currentTarget (transferBalanceSlot toWord.toAdr)
+
+def lpMintRecipientWordH (sevm : Sevm) (b : Devm) (toWord supply : B256) : B256 :=
+  (lpMintSupplyBaseH sevm b supply).getStorVal sevm.currentTarget (transferBalanceSlot toWord.toAdr)
+
+theorem lpMintRecipientWordH_of_covered {sevm : Sevm} {b : Devm} {toWord supply : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintRecipientWordH sevm b toWord supply = lpMintRecipientWord sevm b toWord supply := by
+  unfold lpMintRecipientWordH lpMintRecipientWord
+  simp only [lpMintSupplyBaseH_of_covered fork]
 
 def lpMintSupplyPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (toWord value supply : B256) (G : Nat) : Devm :=
@@ -281,6 +330,19 @@ def lpMintSupplyPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (afterSload sevm (lpMintSupplyBase sevm b supply) (transferBalanceSlot toWord.toAdr)) R
     ((M.write 0 toWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
     toWord value (lpMintRecipientWord sevm b toWord supply + value) G
+
+def lpMintSupplyPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (toWord value supply : B256) (G : Nat) : Devm :=
+  lpMintCreditPostH sevm
+    (afterSloadH sevm (lpMintSupplyBaseH sevm b supply) (transferBalanceSlot toWord.toAdr)) R
+    ((M.write 0 toWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
+    toWord value (lpMintRecipientWordH sevm b toWord supply + value) G
+
+theorem lpMintSupplyPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {toWord value supply : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintSupplyPostH sevm b R M toWord value supply G = lpMintSupplyPost sevm b R M toWord value supply G := by
+  unfold lpMintSupplyPostH lpMintSupplyPost
+  simp only [lpMintCreditPostH_of_covered fork, lpMintRecipientWordH_of_covered fork, lpMintSupplyBaseH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- The literal supply store precedes the recipient load, including raw alias at slot zero. -/
 theorem lpMint_supply_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -348,14 +410,14 @@ theorem lpMint_supply_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (add72_exact nowrap (by simp only [List.length_cons]; omega)) ?_
   exact lpMint_credit_exact fork m1 creditEq creditSentry nonstatic room
 
-/-- Inverse derives non-static execution and recipient no-wrap after the supply store. -/
-theorem lpMint_supply_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem lpMint_supply_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {toWord value supply ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run cert.prog sevm (St b (supply :: value :: toWord :: ρ :: R) M G) t_28dd_c62 o) :
     sevm.isStatic = false ∧
-      (lpMintRecipientWord sevm b toWord supply).toNat + value.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (lpMintSupplyPost sevm b R M toWord value supply residual) := by
+      (lpMintRecipientWordH sevm b toWord supply).toNat + value.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (lpMintSupplyPostH sevm b R M toWord value supply residual) := by
   have m1 := lpMintScratch_ptr mem toWord
   have hash := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 toWord.toAdr.toB256 1)
   have h := run.cut
@@ -371,8 +433,8 @@ theorem lpMint_supply_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
@@ -413,7 +475,7 @@ theorem lpMint_supply_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m1.read_self (by decide : 0 + 64 ≤ 192), hash] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x29, 0x15] = (10517 : B256) from by decide] at hd
@@ -437,16 +499,38 @@ theorem lpMint_supply_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨nowrap, _, eq⟩ := add72_inv checked
     cases eq
-    obtain ⟨_, residual, result⟩ := lpMint_credit_inv fork m1 tail.uncut
+    obtain ⟨_, residual, result⟩ := lpMint_credit_invH stateGas bal m1 tail.uncut
     exact ⟨nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, eq⟩ := add72_inv checked
     cases eq
+
+/-- Inverse derives non-static execution and recipient no-wrap after the supply store. -/
+theorem lpMint_supply_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {toWord value supply ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.Run cert.prog sevm (St b (supply :: value :: toWord :: ρ :: R) M G) t_28dd_c62 o) :
+    sevm.isStatic = false ∧
+      (lpMintRecipientWord sevm b toWord supply).toNat + value.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (lpMintSupplyPost sevm b R M toWord value supply residual) := by
+  simpa only [lpMintRecipientWordH_of_covered fork, lpMintSupplyPostH_of_covered fork] using
+    lpMint_supply_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 def lpMintSupplyWord (sevm : Sevm) (b : Devm) : B256 := b.getStorVal sevm.currentTarget 0
 
 def lpMintPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (toWord value : B256) (G : Nat) : Devm :=
   lpMintSupplyPost sevm (afterSload sevm b 0) R M toWord value (lpMintSupplyWord sevm b + value) G
+
+def lpMintPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (toWord value : B256) (G : Nat) : Devm :=
+  lpMintSupplyPostH sevm (afterSloadH sevm b 0) R M toWord value (lpMintSupplyWord sevm b + value) G
+
+theorem lpMintPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintPostH sevm b R M toWord value G = lpMintPost sevm b R M toWord value G := by
+  unfold lpMintPostH lpMintPost
+  simp only [lpMintSupplyPostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- Entry62 follows both checked additions and all four actual storage charges. -/
 theorem lpMint62_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -492,15 +576,15 @@ theorem lpMint62_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   exact lpMint_supply_exact fork mem supplyEq loadEq creditEq supplySentry creditSentry
     nonstatic recipientNoWrap room
 
-/-- No source endpoint is assumed: the successful bytecode run derives both guards and full post. -/
-theorem lpMint62_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem lpMint62_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {toWord value ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run cert.prog sevm (St b (value :: toWord :: ρ :: R) M G) t_28ca_c62 o) :
     (lpMintSupplyWord sevm b).toNat + value.toNat < 2 ^ 256 ∧ sevm.isStatic = false ∧
-      (lpMintRecipientWord sevm (afterSload sevm b 0) toWord
+      (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
         (lpMintSupplyWord sevm b + value)).toNat + value.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (lpMintPost sevm b R M toWord value residual) := by
+      ∃ residual, o = .returned (lpMintPostH sevm b R M toWord value residual) := by
   have h := run.cut
   unfold t_28ca_c62 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -509,7 +593,7 @@ theorem lpMint62_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x28, 0xdd] = (0x28dd : B256) from by decide] at hd
@@ -533,28 +617,52 @@ theorem lpMint62_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨supplyNoWrap, _, eq⟩ := add72_inv checked
     cases eq
-    obtain ⟨nonstatic, recipientNoWrap, residual, result⟩ := lpMint_supply_inv fork mem tail.uncut
+    obtain ⟨nonstatic, recipientNoWrap, residual, result⟩ := lpMint_supply_invH stateGas bal mem tail.uncut
     exact ⟨supplyNoWrap, nonstatic, recipientNoWrap, residual, result⟩
   · obtain ⟨_, _, eq⟩ := add72_inv checked
     cases eq
+
+/-- No source endpoint is assumed: the successful bytecode run derives both guards and full post. -/
+theorem lpMint62_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {toWord value ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.Run cert.prog sevm (St b (value :: toWord :: ρ :: R) M G) t_28ca_c62 o) :
+    (lpMintSupplyWord sevm b).toNat + value.toNat < 2 ^ 256 ∧ sevm.isStatic = false ∧
+      (lpMintRecipientWord sevm (afterSload sevm b 0) toWord
+        (lpMintSupplyWord sevm b + value)).toNat + value.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (lpMintPost sevm b R M toWord value residual) := by
+  simpa only [lpMintPostH_of_covered fork, lpMintRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    lpMint62_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 def lpMintAccepts (sevm : Sevm) (b : Devm) (toWord value : B256) : Prop :=
   (lpMintSupplyWord sevm b).toNat + value.toNat < 2 ^ 256 ∧ sevm.isStatic = false ∧
     (lpMintRecipientWord sevm (afterSload sevm b 0) toWord
       (lpMintSupplyWord sevm b + value)).toNat + value.toNat < 2 ^ 256
 
-/-- Actual fee caller retains its instruction relation and literal continuation. -/
-theorem lpMint_fee_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+def lpMintAcceptsH (sevm : Sevm) (b : Devm) (toWord value : B256) : Prop :=
+  (lpMintSupplyWord sevm b).toNat + value.toNat < 2 ^ 256 ∧ sevm.isStatic = false ∧
+    (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
+      (lpMintSupplyWord sevm b + value)).toNat + value.toNat < 2 ^ 256
+
+theorem lpMintAcceptsH_of_covered {sevm : Sevm} {b : Devm} {toWord value : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpMintAcceptsH sevm b toWord value = lpMintAccepts sevm b toWord value := by
+  unfold lpMintAcceptsH lpMintAccepts
+  simp only [lpMintRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
+theorem lpMint_fee_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {L D N bWord aWord KWord w feeOn r1 r0 feeρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M G) t_284f_c68 r) :
     ∃ mintGas residual,
       SFunc.RunP P cert.prog sevm (St b (L :: w :: 0x2858 :: L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M mintGas)
-        t_28ca_c62 (.returned (lpMintPost sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual)) ∧
-      lpMintAccepts sevm b w L ∧
-      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual) t_2858_c68 r := by
+        t_28ca_c62 (.returned (lpMintPostH sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual)) ∧
+      lpMintAcceptsH sevm b w L ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPostH sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual) t_2858_c68 r := by
   have h := run
   unfold t_284f_c68 at h
   obtain ⟨d, hd, h⟩ := ric_nextP h
@@ -577,7 +685,7 @@ theorem lpMint_fee_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
     exact ⟨_, residual, callee, ⟨supplyGuard, nonstatic, recipientGuard⟩, continuation⟩
   | callHalt d lookup pop callee =>
@@ -585,21 +693,37 @@ theorem lpMint_fee_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨_, _, _, _, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨_, _, _, _, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
 
-/-- Actual minimum caller retains its instruction relation and literal continuation. -/
-theorem lpMint_minimum_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+/-- Actual fee caller retains its instruction relation and literal continuation. -/
+theorem lpMint_fee_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {L D N bWord aWord KWord w feeOn r1 r0 feeρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M G) t_284f_c68 r) :
+    ∃ mintGas residual,
+      SFunc.RunP P cert.prog sevm (St b (L :: w :: 0x2858 :: L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M mintGas)
+        t_28ca_c62 (.returned (lpMintPost sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual)) ∧
+      lpMintAccepts sevm b w L ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (L :: D :: N :: bWord :: aWord :: KWord :: w :: feeOn :: r1 :: r0 :: feeρ :: R) M w L residual) t_2858_c68 r := by
+  simpa only [lpMintAcceptsH_of_covered fork, lpMintPostH_of_covered fork] using
+    lpMint_fee_caller_invH project fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
+theorem lpMint_minimum_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {liquidity supplyWord f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord extρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (liquidity :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: extρ :: R) M G) t_125c_c41 r) :
     ∃ mintGas residual,
       SFunc.RunP P cert.prog sevm (St b (1000 :: 0 :: 0x126b :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M mintGas)
-        t_28ca_c62 (.returned (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual)) ∧
-      lpMintAccepts sevm b 0 1000 ∧
-      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual) t_126b_c41 r := by
+        t_28ca_c62 (.returned (lpMintPostH sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual)) ∧
+      lpMintAcceptsH sevm b 0 1000 ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPostH sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual) t_126b_c41 r := by
   have h := run
   unfold t_125c_c41 at h
   obtain ⟨_, h⟩ := ric_destP h
@@ -632,7 +756,7 @@ theorem lpMint_minimum_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
     exact ⟨_, residual, callee, ⟨supplyGuard, nonstatic, recipientGuard⟩, continuation⟩
   | callHalt d lookup pop callee =>
@@ -640,21 +764,37 @@ theorem lpMint_minimum_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨_, _, _, _, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨_, _, _, _, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
 
-/-- Actual recipient caller retains its instruction relation and literal continuation. -/
-theorem lpMint_recipient_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+/-- Actual minimum caller retains its instruction relation and literal continuation. -/
+theorem lpMint_minimum_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {liquidity supplyWord f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (liquidity :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: extρ :: R) M G) t_125c_c41 r) :
+    ∃ mintGas residual,
+      SFunc.RunP P cert.prog sevm (St b (1000 :: 0 :: 0x126b :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M mintGas)
+        t_28ca_c62 (.returned (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual)) ∧
+      lpMintAccepts sevm b 0 1000 ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M 0 1000 residual) t_126b_c41 r := by
+  simpa only [lpMintAcceptsH_of_covered fork, lpMintPostH_of_covered fork] using
+    lpMint_minimum_caller_invH project fork.rules_stateGas_none fork.rules_bal_none mem run
+
+
+theorem lpMint_recipient_caller_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {supplyWord f amount1 amount0 b1 b0 r1 r0 liquidity toWord extρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M G) t_1326_c11 r) :
     ∃ mintGas residual,
       SFunc.RunP P cert.prog sevm (St b (liquidity :: toWord :: 0x1330 :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M mintGas)
-        t_28ca_c62 (.returned (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual)) ∧
-      lpMintAccepts sevm b toWord liquidity ∧
-      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual) t_1330_c11 r := by
+        t_28ca_c62 (.returned (lpMintPostH sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual)) ∧
+      lpMintAcceptsH sevm b toWord liquidity ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPostH sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual) t_1330_c11 r := by
   have h := run
   unfold t_1326_c11 at h
   obtain ⟨_, h⟩ := ric_destP h
@@ -678,7 +818,7 @@ theorem lpMint_recipient_caller_inv {P : Sevm → Devm → Ninst → Devm → Pr
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨supplyGuard, nonstatic, recipientGuard, residual, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
     exact ⟨_, residual, callee, ⟨supplyGuard, nonstatic, recipientGuard⟩, continuation⟩
   | callHalt d lookup pop callee =>
@@ -686,7 +826,23 @@ theorem lpMint_recipient_caller_inv {P : Sevm → Devm → Ninst → Devm → Pr
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨_, _, _, _, result⟩ := lpMint62_inv fork mem (callee.mono project)
+    obtain ⟨_, _, _, _, result⟩ := lpMint62_invH stateGas bal mem (callee.mono project)
     cases result
+
+/-- Actual recipient caller retains its instruction relation and literal continuation. -/
+theorem lpMint_recipient_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {supplyWord f amount1 amount0 b1 b0 r1 r0 liquidity toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M G) t_1326_c11 r) :
+    ∃ mintGas residual,
+      SFunc.RunP P cert.prog sevm (St b (liquidity :: toWord :: 0x1330 :: supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M mintGas)
+        t_28ca_c62 (.returned (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual)) ∧
+      lpMintAccepts sevm b toWord liquidity ∧
+      SFunc.RunCutP P cert.prog sevm C (lpMintPost sevm b (supplyWord :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: extρ :: R) M toWord liquidity residual) t_1330_c11 r := by
+  simpa only [lpMintAcceptsH_of_covered fork, lpMintPostH_of_covered fork] using
+    lpMint_recipient_caller_invH project fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 end Blanc.Lift.UniswapV2Pair

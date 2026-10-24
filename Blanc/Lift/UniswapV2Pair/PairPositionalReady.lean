@@ -134,19 +134,27 @@ theorem pair_admitted_view_supply {U : WriterKey → Prop}
   PairAdmittedSupplyH.covered (pair_admitted_view_supplyH inj apart view)
 
 
+/-- The Mint entry's admitted supply from the historical rule facts alone. -/
+theorem pair_admitted_mint_supplyH {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
+    (image : sem.image = some code.toList) :
+    PairAdmittedSupplyH U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842) := by
+  intro current invocation sevm b post G run K codeEq installed stateGas bal freshOutput
+    representable selector good sub rep
+  have inside := writerExtend_universe sub good.mint
+  obtain ⟨result⟩ := mint_positional_canonicalH invocation rep sem image
+    (by rw [installed]; exact image.symm) codeEq stateGas bal selector run
+    (writerInj_restrict inj inside) (writerApart_restrict apart inside)
+    (MintRootWorldsH.historical _ b)
+  exact pairStepOutcome_with (Consumes := PairAdmittedConsumesH) inj apart sub rep good.mint
+    (PairEntryAt.mint selector) ⟨result.positional, result.admission LockedAuthH⟩
+    rfl result.output.symm result.grown result.storage
+
 theorem pair_admitted_mint_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
-    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842) := by
-  intro current invocation sevm b post G run K codeEq installed fork freshOutput
-    representable selector good sub rep
-  have inside := writerExtend_universe sub good.mint
-  obtain ⟨result⟩ := mint_positional_canonical invocation rep sem image
-    (by rw [installed]; exact image.symm) codeEq fork selector run
-    (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep good.mint
-    (PairEntryAt.mint selector) ⟨result.positional, result.admission LockedAuth⟩
-    rfl result.output.symm result.grown result.storage
+    PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842) :=
+  PairAdmittedSupplyH.covered (pair_admitted_mint_supplyH inj apart sem image)
 
 
 /-- The Sync entry's admitted supply from the historical rule facts alone. -/

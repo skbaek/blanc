@@ -97,6 +97,48 @@ theorem WriterRep.mint_locked_worldH {K : WriterKey → Prop} {st : State} {sevm
   rw [mintLockedWorldH, afterSstoreH_getStor_self, afterSloadH_getStor]
   exact rep.mint_lock_store
 
+theorem mintReservePrefix_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {toWord ρ : B256} {seg : Seg}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (toWord :: ρ :: R) M G) t_1011_c41 seg) :
+    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧ ∃ gas,
+      let locked := mintLockedWorldH sevm b
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (afterSloadH sevm locked 8)
+          (reserveTimestampRead (locked.getStorVal sevm.currentTarget 8) ::
+           reserve1Read (locked.getStorVal sevm.currentTarget 8) ::
+           reserve0Read (locked.getStorVal sevm.currentTarget 8) ::
+           0 :: 0 :: 0 :: toWord :: ρ :: R) M gas) t_1094_c41 seg := by
+  obtain ⟨unlocked, _, run⟩ := mintLockGuard_invH bal run
+  unfold t_1084_c41 at run
+  obtain ⟨_, run⟩ := ric_destP run
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run
+  have nonstatic := ri_sstore_nonstaticH stateGas (StepIn.toRun hs)
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  cases run with
+  | callHalt d hk pop callee =>
+      rw [show cert.prog[56]? = some t_0d90_c56 from rfl] at hk
+      cases hk
+      have callee' := (St.of_pop1 pop).2 ▸ callee
+      obtain ⟨_, impossible⟩ := reserves_callee_invH bal (callee'.mono StepIn.toRun)
+      cases impossible
+  | callRet d hk pop callee body =>
+      rw [show cert.prog[56]? = some t_0d90_c56 from rfl] at hk
+      cases hk
+      have callee' := (St.of_pop1 pop).2 ▸ callee
+      obtain ⟨gas, returned⟩ := reserves_callee_invH bal (callee'.mono StepIn.toRun)
+      cases returned
+      exact ⟨unlocked, nonstatic, gas, body⟩
+
 /-- The first mint internal call caches all three packed reserve fields. -/
 theorem mintReservePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {toWord ρ : B256} {seg : Seg}
@@ -111,33 +153,9 @@ theorem mintReservePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
            reserve1Read (locked.getStorVal sevm.currentTarget 8) ::
            reserve0Read (locked.getStorVal sevm.currentTarget 8) ::
            0 :: 0 :: 0 :: toWord :: ρ :: R) M gas) t_1094_c41 seg := by
-  obtain ⟨unlocked, _, run⟩ := mintLockGuard_inv fork run
-  unfold t_1084_c41 at run
-  obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  have nonstatic := ri_sstore_nonstatic fork (StepIn.toRun hs)
-  obtain ⟨_, rfl⟩ := ri_sstore fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  cases run with
-  | callHalt d hk pop callee =>
-      rw [show cert.prog[56]? = some t_0d90_c56 from rfl] at hk
-      cases hk
-      have callee' := (St.of_pop1 pop).2 ▸ callee
-      obtain ⟨_, impossible⟩ := reserves_callee_inv fork (callee'.mono StepIn.toRun)
-      cases impossible
-  | callRet d hk pop callee body =>
-      rw [show cert.prog[56]? = some t_0d90_c56 from rfl] at hk
-      cases hk
-      have callee' := (St.of_pop1 pop).2 ▸ callee
-      obtain ⟨gas, returned⟩ := reserves_callee_inv fork (callee'.mono StepIn.toRun)
-      cases returned
-      exact ⟨unlocked, nonstatic, gas, body⟩
+  simpa only [mintLockedWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    mintReservePrefix_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 /-- Selected lock-store and reserve-read costs compose with the real getter56. -/
 theorem mintReservePrefix_exact {sevm : Sevm} {b : Devm} {R : List B256}
@@ -173,19 +191,18 @@ theorem mintReservePrefix_exact {sevm : Sevm} {b : Devm} {R : List B256}
     (reserves_callee_exact fork reserveEq (by simp only [List.length_cons]; omega))
   exact body
 
-/-- Literal first request and code guard derive the token0 target before its STATICCALL. -/
-theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem mintFirstRequest_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {timestamp r1 r0 toWord ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
       (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: ρ :: R) M G)
       t_1094_c41 seg) :
     let token := (b.getStorVal sevm.currentTarget 6).toAdr.toB256
-    let loaded := afterSload sevm b 6
+    let loaded := afterSloadH sevm b 6
     (loaded.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
       SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St (temporalAccountAccessBase loaded token.toAdr)
+        (St (accountAccessH sevm loaded token.toAdr)
           (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
            token :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
           (balanceRequestMemory M sevm.currentTarget) gas) t_110e_c41 seg := by
@@ -201,7 +218,7 @@ theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨d, hs, run⟩ := ric_nextP run
@@ -272,7 +289,7 @@ theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
@@ -280,9 +297,9 @@ theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, body⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_110a_c41.noOk = true))
   · have zero := eq_zero_of_iszero_ne_zero accepted
-    change B256.eqCheck (((afterSload sevm b 6).getCode
+    change B256.eqCheck (((afterSloadH sevm b 6).getCode
       (b.getStorVal sevm.currentTarget 6).toAdr.toB256.toAdr).size.toB256) 0 = 0 at zero
-    have nonzero : ((afterSload sevm b 6).getCode
+    have nonzero : ((afterSloadH sevm b 6).getCode
         (b.getStorVal sevm.currentTarget 6).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
       intro hz
       rw [hz, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
@@ -296,6 +313,26 @@ theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
       balanceRequestMemory, balanceOfSelectorWord] using body
+
+/-- Literal first request and code guard derive the token0 target before its STATICCALL. -/
+theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
+    {timestamp r1 r0 toWord ρ : B256} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: ρ :: R) M G)
+      t_1094_c41 seg) :
+    let token := (b.getStorVal sevm.currentTarget 6).toAdr.toB256
+    let loaded := afterSload sevm b 6
+    (loaded.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (temporalAccountAccessBase loaded token.toAdr)
+          (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+           token :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+          (balanceRequestMemory M sevm.currentTarget) gas) t_110e_c41 seg := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
+    mintFirstRequest_invH fork.rules_bal_none mem run
+
 
 /-- The two literal balanceOf call sites in public mint. -/
 inductive MintBalanceSite
@@ -452,19 +489,18 @@ theorem mintBalanceDecode_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (balanceReplyMemory_ptr out mem).read_self (by decide : 128 + 32 ≤ 192)] at eq
   subst d
   exact ⟨gas, run⟩
-/-- Literal second request and code guard derive the token1 target before its STATICCALL. -/
-theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem mintSecondRequest_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {balance0 r1 r0 toWord ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
       (St b (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M G)
       MintBalanceSite.first.afterDecodeTree seg) :
     let token := (b.getStorVal sevm.currentTarget 7).toAdr.toB256
-    let loaded := afterSload sevm b 7
+    let loaded := afterSloadH sevm b 7
     (loaded.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
       SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St (temporalAccountAccessBase loaded token.toAdr)
+        (St (accountAccessH sevm loaded token.toAdr)
           (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
            token :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
           (balanceRequestMemory M sevm.currentTarget) gas) t_11b1_c41 seg := by
@@ -478,7 +514,7 @@ theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
   change SFunc.RunCutP _ _ _ _ _ (.next (.push [7] _) _) _ at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨d, hs, run⟩ := ric_nextP run
@@ -546,7 +582,7 @@ theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
@@ -554,9 +590,9 @@ theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, body⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_11ad_c41.noOk = true))
   · have zero := eq_zero_of_iszero_ne_zero accepted
-    change B256.eqCheck (((afterSload sevm b 7).getCode
+    change B256.eqCheck (((afterSloadH sevm b 7).getCode
       (b.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256) 0 = 0 at zero
-    have nonzero : ((afterSload sevm b 7).getCode
+    have nonzero : ((afterSloadH sevm b 7).getCode
         (b.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
       intro hz
       rw [hz, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
@@ -570,6 +606,26 @@ theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
       balanceRequestMemory, balanceOfSelectorWord] using body
+
+/-- Literal second request and code guard derive the token1 target before its STATICCALL. -/
+theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
+    {balance0 r1 r0 toWord ρ : B256} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
+      (St b (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M G)
+      MintBalanceSite.first.afterDecodeTree seg) :
+    let token := (b.getStorVal sevm.currentTarget 7).toAdr.toB256
+    let loaded := afterSload sevm b 7
+    (loaded.getCode token.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
+      SFunc.RunCutP (StepIn D) cert.prog sevm C
+        (St (temporalAccountAccessBase loaded token.toAdr)
+          (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+           token :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+          (balanceRequestMemory M sevm.currentTarget) gas) t_11b1_c41 seg := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
+    mintSecondRequest_invH fork.rules_bal_none mem run
+
 
 /-- From the real locked mint entry, extract both token answers before checked amounts. -/
 theorem mintBalancePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -1823,6 +1879,26 @@ theorem mintPricedPost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem
   rw [show memExtSize 192 160 32 = 192 from by decide] at c
   simpa only [St,Devm.memory_setMach,mintEventMemory] using c
 
+theorem mintPricedPost_machineH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {residual gas : Nat}
+    (mem : PtrMem 128 192 M) :
+    (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).stack =
+      liquidity :: R ∧
+    PtrMem 128 192
+      (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).memory ∧
+    (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).gasLeft = gas := by
+  rw [mintPricedPost_imageH]
+  refine ⟨rfl,?_,rfl⟩
+  have lp : PtrMem 128 192 (mintLPBuffer M toWord liquidity) :=
+    lpMintMemory_ptr (lpMintScratch_ptr mem toWord) toWord liquidity
+  have updated := mintUpdateMemory_ptrH (sevm := sevm) (b := mintLPWorldH sevm b toWord liquidity)
+    (r0 := r0) (r1 := r1) (b0 := b0) (b1 := b1) lp
+  have a := updated.write 128 amount0 (Or.inr (by decide))
+  rw [show memExtSize 192 128 32 = 192 from by decide] at a
+  have c := a.write 160 amount1 (Or.inr (by decide))
+  rw [show memExtSize 192 160 32 = 192 from by decide] at c
+  simpa only [St,Devm.memory_setMach,mintEventMemory] using c
+
 /-- Both pricing arms derive the actual liquidity stack and memory needed by the ABI return. -/
 theorem MintAfterFeeEnv.post_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {f toWord amount0 amount1 b0 b1 r0 r1 ρ : B256} {G : Nat}
@@ -1914,6 +1990,18 @@ private theorem mintPricedResult_return_machine {sevm : Sevm} {b : Devm} {R : Li
     (toWord := toWord) (ρ := ρ) (residual := residual) (gas := gas) mem
   exact ⟨_,returned,machine.1,machine.2.1⟩
 
+private theorem mintPricedResult_return_machineH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
+    (mem : PtrMem 128 192 M)
+    (result : MintPricedResultH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o) :
+    ∃ d : Devm, o = .returned d ∧ d.stack = liquidity :: R ∧ PtrMem 128 192 d.memory := by
+  obtain ⟨positive,accept,bound0,bound1,mintGas,residual,gas,callee,returned⟩ := result
+  have machine := mintPricedPost_machineH (sevm := sevm) (b := b) (R := R)
+    (supply := supply) (f := f) (amount1 := amount1) (amount0 := amount0)
+    (b1 := b1) (b0 := b0) (r1 := r1) (r0 := r0) (liquidity := liquidity)
+    (toWord := toWord) (ρ := ρ) (residual := residual) (gas := gas) mem
+  exact ⟨_,returned,machine.1,machine.2.1⟩
+
 /-- Successful pricing derives the actual normal return carrier on either supply arm. -/
 theorem mintAfterFeeResult_return_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {f amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
@@ -1928,6 +2016,20 @@ theorem mintAfterFeeResult_return_machine {sevm : Sevm} {b : Devm} {R : List B25
     exact ⟨_,mintPricedResult_return_machine (mintLPPost_ptr mem) priced⟩
   · obtain ⟨product0,nonzero0,product1,nonzero1,priced⟩ := result
     exact ⟨_,mintPricedResult_return_machine mem priced⟩
+
+theorem mintAfterFeeResult_return_machineH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {f amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
+    (mem : PtrMem 128 192 M)
+    (result : MintAfterFeeResultH sevm b R M f amount1 amount0 b1 b0 r1 r0 toWord ρ o) :
+    ∃ liquidity : B256, ∃ d : Devm,
+      o = .returned d ∧ d.stack = liquidity :: R ∧ PtrMem 128 192 d.memory := by
+  unfold MintAfterFeeResultH at result
+  dsimp only [] at result
+  split at result
+  · obtain ⟨product,cover,minimumGas,residual,callee,accepted,priced⟩ := result
+    exact ⟨_,mintPricedResult_return_machineH (mintLPPost_ptrH mem) priced⟩
+  · obtain ⟨product0,nonzero0,product1,nonzero1,priced⟩ := result
+    exact ⟨_,mintPricedResult_return_machineH mem priced⟩
 
 /-- The actual callee run derives a normal liquidity return and its ABI memory carrier. -/
 theorem mintPrefix_return_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}

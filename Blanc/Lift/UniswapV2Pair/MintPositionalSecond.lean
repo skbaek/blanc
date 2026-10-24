@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorSourceRun
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
@@ -57,6 +59,21 @@ def mintSecondGuardLine : List Ninst := [
   .reg .iszero,
   .push [0x11, 0xb1] (by decide)]
 
+theorem mint_second_code_guardH {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root MintBalanceSite.first.afterDecodeTree b
+      (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
+    (mem : PtrMem 128 192 M) :
+    ((afterSloadH root.sevm b 7).getCode
+      (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
+  obtain ⟨outcome, source⟩ := cut.placed.sourceRunH cert_check
+    (cut.exn_eq.trans success) (cut.sevm_eq ▸ stateGas)
+  obtain ⟨G, state⟩ := cut.state
+  rw [cut.sevm_eq, state, cut.tree] at source
+  exact (mintSecondRequest_invH bal mem (SFunc.runP_iff_runCutP_nil.mp source)).1
+
 /-- The actual successful request suffix supplies its own token code guard. -/
 theorem mint_second_code_guard {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
@@ -66,26 +83,24 @@ theorem mint_second_code_guard {root : Exec.Deriv} {b post : Devm}
     (mem : PtrMem 128 192 M) :
     ((afterSload root.sevm b 7).getCode
       (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0 := by
-  obtain ⟨outcome, source⟩ := cut.placed.sourceRun cert_check
-    (cut.exn_eq.trans success) (cut.sevm_eq ▸ fork)
-  obtain ⟨G, state⟩ := cut.state
-  rw [cut.sevm_eq, state, cut.tree] at source
-  exact (mintSecondRequest_inv fork mem (SFunc.runP_iff_runCutP_nil.mp source)).1
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    mint_second_code_guardH cut success fork.rules_stateGas_none fork.rules_bal_none mem
 
-/-- Mint's second request staging retains the actual full world, request memory and cursor. -/
-theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+
+theorem mint_second_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
     (cut : CursorStateAt code cert root MintBalanceSite.first.afterDecodeTree b
       (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (mem : PtrMem 128 192 M) :
     let token := (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256
     Nonempty (CursorStateAt code cert root t_11b1_c41
-      (temporalAccountAccessBase (afterSload root.sevm b 7) token.toAdr)
+      (accountAccessH root.sevm (afterSloadH root.sevm b 7) token.toAdr)
       (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
         token :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
       (balanceRequestMemory M root.sevm.currentTarget) K) := by
-  have nonzero := mint_second_code_guard cut success fork mem
+  have nonzero := mint_second_code_guardH cut success stateGas bal mem
   let sevm := root.sevm
   have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
   have same0 : (M.read 64 32).2 = M := mem.read_self (by decide)
@@ -95,12 +110,12 @@ theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
   have same2 : ((balanceRequestMemory M sevm.currentTarget).read 64 32).2 =
       balanceRequestMemory M sevm.currentTarget := mem2.read_self (by decide)
   simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
-  obtain ⟨guard⟩ := cut.line cert_check success fork mintSecondGuardLine (by rfl)
+  obtain ⟨guard⟩ := cut.lineH cert_check success stateGas mintSecondGuardLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [mintSecondGuardLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
-    (b' := temporalAccountAccessBase (afterSload sevm b 7)
+    (b' := accountAccessH sevm (afterSloadH sevm b 7)
       (b.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr)
     (S' := 0x11b1 :: 1 :: 0 :: (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
       128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
@@ -110,7 +125,7 @@ theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
       intro g d line
       dsimp only [mintSecondGuardLine] at line
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
-      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hs
+      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
       obtain ⟨d, hs, line⟩ := Line.of_run_cons line
@@ -178,7 +193,7 @@ theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesize fork hs
+      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero hs
@@ -195,6 +210,23 @@ theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
         show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
         balanceRequestMemory, balanceOfSelectorWord] using state⟩)
-  exact guard.branchSucc cert_check success fork (by decide)
+  exact guard.branchSuccH cert_check success stateGas (by decide)
+
+/-- Mint's second request staging retains the actual full world, request memory and cursor. -/
+theorem mint_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {balance0 r1 r0 toWord extρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root MintBalanceSite.first.afterDecodeTree b
+      (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) :
+    let token := (b.getStorVal root.sevm.currentTarget 7).toAdr.toB256
+    Nonempty (CursorStateAt code cert root t_11b1_c41
+      (temporalAccountAccessBase (afterSload root.sevm b 7) token.toAdr)
+      (0 :: token :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+        token :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
+      (balanceRequestMemory M root.sevm.currentTarget) K) := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access] using
+    mint_second_guard_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
+
 
 end Blanc.Lift.UniswapV2Pair

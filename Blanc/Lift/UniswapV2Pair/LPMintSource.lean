@@ -76,6 +76,24 @@ theorem lpMint_source_reads {K : WriterKey → Prop} {st : State} {sevm : Sevm} 
   exact (extended.lpMint_supply_store (supply := st.totalSupply + value)).selected
     (.balance toWord.toAdr) tracked
 
+theorem lpMint_source_readsH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
+    {toWord value : B256} (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr)) :
+    lpMintSupplyWord sevm b = st.totalSupply ∧
+      lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
+        (lpMintSupplyWord sevm b + value) = st.balanceOf toWord.toAdr := by
+  have extended := rep.extend fresh
+  have tracked : WriterExtend K (lpMintTouched toWord.toAdr) (.balance toWord.toAdr) :=
+    .inr (List.mem_singleton.mpr rfl)
+  have supply : lpMintSupplyWord sevm b = st.totalSupply := rep.fixed.1
+  refine ⟨supply, ?_⟩
+  change ((lpMintSupplyBaseH sevm (afterSloadH sevm b 0)
+    (lpMintSupplyWord sevm b + value)).getStor sevm.currentTarget).get
+    (transferBalanceSlot toWord.toAdr) = _
+  rw [lpMintSupplyBaseH, afterSstoreH_getStor_self, afterSloadH_getStor, supply]
+  exact (extended.lpMint_supply_store (supply := st.totalSupply + value)).selected
+    (.balance toWord.toAdr) tracked
+
 theorem lpMintLP_accept {st : State} {recipient : Adr} {value : B256}
     (supply : st.totalSupply.toNat + value.toNat < 2 ^ 256)
     (balance : (st.balanceOf recipient).toNat + value.toNat < 2 ^ 256) :
@@ -146,6 +164,47 @@ theorem lpMintPost_facts {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
           [lpMintRawLog sevm.currentTarget toWord.toAdr value] = _
     simp only [afterSstore_logs, afterSload_logs, lpMintSupplyBase]
 
+theorem lpMintPost_factsH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {toWord value : B256} {G : Nat} :
+    (lpMintPostH sevm b R M toWord value G).getStor sevm.currentTarget =
+      ((b.getStor sevm.currentTarget).set 0 (lpMintSupplyWord sevm b + value)).set
+        (transferBalanceSlot toWord.toAdr)
+        (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
+          (lpMintSupplyWord sevm b + value) + value) ∧
+    (∀ a, a ≠ sevm.currentTarget →
+      (lpMintPostH sevm b R M toWord value G).getStor a = b.getStor a) ∧
+    (lpMintPostH sevm b R M toWord value G).logs = b.logs ++
+      [lpMintRawLog sevm.currentTarget toWord.toAdr value] ∧
+    (lpMintPostH sevm b R M toWord value G).gasLeft = G := by
+  have stor (a : Adr) : (lpMintPostH sevm b R M toWord value G).getStor a =
+      (lpMintCreditBaseH sevm
+        (afterSloadH sevm (lpMintSupplyBaseH sevm (afterSloadH sevm b 0)
+          (lpMintSupplyWord sevm b + value)) (transferBalanceSlot toWord.toAdr))
+        toWord value (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
+          (lpMintSupplyWord sevm b + value) + value)).getStor a := by
+    unfold lpMintPostH lpMintSupplyPostH lpMintCreditPostH
+    exact St_getStor _ _ _ _ _
+  have gas : (lpMintPostH sevm b R M toWord value G).gasLeft = G := by
+    unfold lpMintPostH lpMintSupplyPostH lpMintCreditPostH
+    exact St.gasLeft
+  refine ⟨?_, ?_, ?_, gas⟩
+  · rw [stor]
+    simp only [lpMintCreditBaseH, Devm.addLog_getStor, afterSstoreH_getStor_self,
+      afterSloadH_getStor, lpMintSupplyBaseH]
+  · intro a different
+    rw [stor]
+    simp only [lpMintCreditBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_ne _ _ _ _ _ different.symm, afterSloadH_getStor, lpMintSupplyBaseH]
+  · unfold lpMintPostH lpMintSupplyPostH lpMintCreditPostH
+    change (afterSstoreH sevm
+      (afterSloadH sevm (lpMintSupplyBaseH sevm (afterSloadH sevm b 0)
+        (lpMintSupplyWord sevm b + value)) (transferBalanceSlot toWord.toAdr))
+      (transferBalanceSlot toWord.toAdr)
+      (lpMintRecipientWordH sevm (afterSloadH sevm b 0) toWord
+        (lpMintSupplyWord sevm b + value) + value)).logs ++
+          [lpMintRawLog sevm.currentTarget toWord.toAdr value] = _
+    simp only [afterSstoreH_logs, afterSloadH_logs, lpMintSupplyBaseH]
+
 theorem WriterRep.lpMint_post {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -155,6 +214,17 @@ theorem WriterRep.lpMint_post {K : WriterKey → Prop} {st : State} {sevm : Sevm
       (lpMintSourceState st toWord.toAdr value) := by
   have reads := lpMint_source_reads (value := value) rep fresh
   rw [lpMintPost_facts.1, reads.2, reads.1]
+  exact rep.lpMint_store fresh
+
+theorem WriterRep.lpMint_postH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr)) :
+    WriterRep (WriterExtend K (lpMintTouched toWord.toAdr))
+      ((lpMintPostH sevm b R M toWord value G).getStor sevm.currentTarget)
+      (lpMintSourceState st toWord.toAdr value) := by
+  have reads := lpMint_source_readsH (value := value) rep fresh
+  rw [lpMintPost_factsH.1, reads.2, reads.1]
   exact rep.lpMint_store fresh
 
 /-- Supply is the only fixed word changed; all other whole words retain their upper bits. -/
@@ -175,6 +245,23 @@ theorem WriterRep.lpMint_fixed {K : WriterKey → Prop} {st : State} {sevm : Sev
     fun eq => apart (eq.symm ▸ fixed)
   rw [lpMintPost_facts.1, Stor.get_set_ne _ off, Stor.get_set_ne _ (Ne.symm nonzero)]
 
+theorem WriterRep.lpMint_fixedH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr)) :
+    ∀ n, n ∈ writerFixedSlots → n ≠ 0 →
+      ((lpMintPostH sevm b R M toWord value G).getStor sevm.currentTarget).get n =
+        (b.getStor sevm.currentTarget).get n := by
+  have extended := rep.extend fresh
+  have tracked : WriterExtend K (lpMintTouched toWord.toAdr) (.balance toWord.toAdr) :=
+    .inr (List.mem_singleton.mpr rfl)
+  have apart := extended.apart (.balance toWord.toAdr) tracked
+  change transferBalanceSlot toWord.toAdr ∉ writerFixedSlots at apart
+  intro n fixed nonzero
+  have off : transferBalanceSlot toWord.toAdr ≠ n :=
+    fun eq => apart (eq.symm ▸ fixed)
+  rw [lpMintPost_factsH.1, Stor.get_set_ne _ off, Stor.get_set_ne _ (Ne.symm nonzero)]
+
 /-- The source result is derived from incoming representation and the raw arithmetic guards. -/
 def LPMintSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
     (R : List B256) (M : Mem) (toWord value : B256) (G : Nat) : Prop :=
@@ -192,6 +279,28 @@ def LPMintSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : 
     [lpMintRawLog sevm.currentTarget toWord.toAdr value] ∧
   (lpMintPost sevm b R M toWord value G).gasLeft = G
 
+def LPMintSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
+    (R : List B256) (M : Mem) (toWord value : B256) (G : Nat) : Prop :=
+  st.mintLP toWord.toAdr value =
+    .ok (lpMintSourceState st toWord.toAdr value, [.transfer 0 toWord.toAdr value]) ∧
+  WriterRep (WriterExtend K (lpMintTouched toWord.toAdr))
+    ((lpMintPostH sevm b R M toWord value G).getStor sevm.currentTarget)
+    (lpMintSourceState st toWord.toAdr value) ∧
+  (∀ n, n ∈ writerFixedSlots → n ≠ 0 →
+    ((lpMintPostH sevm b R M toWord value G).getStor sevm.currentTarget).get n =
+      (b.getStor sevm.currentTarget).get n) ∧
+  (∀ a, a ≠ sevm.currentTarget →
+    (lpMintPostH sevm b R M toWord value G).getStor a = b.getStor a) ∧
+  (lpMintPostH sevm b R M toWord value G).logs = b.logs ++
+    [lpMintRawLog sevm.currentTarget toWord.toAdr value] ∧
+  (lpMintPostH sevm b R M toWord value G).gasLeft = G
+
+theorem LPMintSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {st : State} {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    LPMintSourceResultH K st sevm b R M toWord value G = LPMintSourceResult K st sevm b R M toWord value G := by
+  unfold LPMintSourceResultH LPMintSourceResult
+  simp only [lpMintPostH_of_covered fork]
+
 theorem lpMint_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -205,6 +314,21 @@ theorem lpMint_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
   have facts := lpMintPost_facts (sevm := sevm) (b := b) (R := R) (M := M)
     (toWord := toWord) (value := value) (G := G)
   exact ⟨lpMintLP_accept supply balance, rep.lpMint_post fresh, rep.lpMint_fixed fresh,
+    facts.2.1, facts.2.2.1, facts.2.2.2⟩
+
+theorem lpMint_source_resultH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {toWord value : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr))
+    (guards : lpMintAcceptsH sevm b toWord value) :
+    LPMintSourceResultH K st sevm b R M toWord value G := by
+  have reads := lpMint_source_readsH (value := value) rep fresh
+  obtain ⟨supply, _, balance⟩ := guards
+  rw [reads.1] at supply
+  rw [reads.2] at balance
+  have facts := lpMintPost_factsH (sevm := sevm) (b := b) (R := R) (M := M)
+    (toWord := toWord) (value := value) (G := G)
+  exact ⟨lpMintLP_accept supply balance, rep.lpMint_postH fresh, rep.lpMint_fixedH fresh,
     facts.2.1, facts.2.2.1, facts.2.2.2⟩
 
 /-- Selected charges keep the raw original/current/new values and warming order. -/

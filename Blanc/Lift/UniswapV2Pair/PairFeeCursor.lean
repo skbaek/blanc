@@ -46,20 +46,20 @@ def pairFeePreparationLine : List Ninst := [
   .reg (.dup 6),
   .reg (.dup 0)]
 
-/-- The original shared factory preparation line transports the full actual state. -/
-theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem pair_fee_preparation_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {r1 r0 ρ : B256} {K : List SFunc}
     (cut : CursorStateAt code cert root t_26ec_c68 b (r1 :: r0 :: ρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (mem : PtrMem 128 192 M) :
     Nonempty (CursorStateAt code cert root feeCodeGuardTree
-      (feeFactoryLoadWorld root.sevm b)
+      (feeFactoryLoadWorldH root.sevm b)
       (feeFactoryWord root.sevm b :: feeFactoryWord root.sevm b :: 128 :: 4 :: 128 :: 32 ::
         132 :: 0x017e7e58 :: feeFactoryWord root.sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
       (feeRequestMemory M) K) := by
   let sevm := root.sevm
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  exact opened.line cert_check success fork pairFeePreparationLine rfl
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  exact opened.lineH cert_check success stateGas pairFeePreparationLine rfl
     (by intro n member x equal; subst n
         simp only [pairFeePreparationLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (by
@@ -71,7 +71,7 @@ theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hs
       dsimp only [List.set] at line
-      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hs
+      obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hs
       dsimp only [List.set] at line
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
@@ -128,13 +128,38 @@ theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_dup rfl hs
       cases line
-      exact ⟨gas, by simpa only [feeFactoryLoadWorld, feeFactoryWord,
+      exact ⟨gas, by simpa only [feeFactoryLoadWorldH, feeFactoryWord,
         feeRequestMemory, show Bytes.toB256 [5] = (5 : B256) from rfl,
         show Bytes.toB256 [0] = (0 : B256) from rfl,
         show Bytes.toB256 [32] = (32 : B256) from rfl,
         show Bytes.toB256 [1,126,126,88] = (0x017e7e58 : B256) from rfl,
         show Bytes.toB256 [4] + (128 : B256) = 132 from by decide,
         show (132 : B256) - 128 = 4 from by decide] using state⟩)
+
+/-- The original shared factory preparation line transports the full actual state. -/
+theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {r1 r0 ρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root t_26ec_c68 b (r1 :: r0 :: ρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) :
+    Nonempty (CursorStateAt code cert root feeCodeGuardTree
+      (feeFactoryLoadWorld root.sevm b)
+      (feeFactoryWord root.sevm b :: feeFactoryWord root.sevm b :: 128 :: 4 :: 128 :: 32 ::
+        132 :: 0x017e7e58 :: feeFactoryWord root.sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
+      (feeRequestMemory M) K) := by
+  simpa only [feeFactoryLoadWorldH_of_covered fork] using
+    pair_fee_preparation_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none mem
+
+
+theorem pair_fee_code_cursor_stateH {root : Exec.Deriv} {b post : Devm}
+    {S : List B256} {M : Mem} {factory : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root feeCodeGuardTree b (factory :: S) M K)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none) :
+    (b.getCode factory.toAdr).size.toB256 ≠ 0 ∧
+      Nonempty (CursorStateAt code cert root t_2757_c68
+        (accountAccessH root.sevm b factory.toAdr) (0 :: S) M K) := by
+  exact pair_code_guard_cursor_stateH cut success stateGas bal [0x27,0x57] (by decide) rfl (by decide)
 
 /-- The same successful code-guard cursor proves factory code exists and retains its warming. -/
 theorem pair_fee_code_cursor_state {root : Exec.Deriv} {b post : Devm}
@@ -144,6 +169,8 @@ theorem pair_fee_code_cursor_state {root : Exec.Deriv} {b post : Devm}
     (b.getCode factory.toAdr).size.toB256 ≠ 0 ∧
       Nonempty (CursorStateAt code cert root t_2757_c68
         (temporalAccountAccessBase b factory.toAdr) (0 :: S) M K) := by
-  exact pair_code_guard_cursor_state cut success fork [0x27,0x57] (by decide) rfl (by decide)
+  simpa only [accountAccessH_of_eip2929 fork.rules_access] using
+    pair_fee_code_cursor_stateH cut success fork.rules_stateGas_none fork.rules_bal_none
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -196,6 +196,13 @@ theorem afterSloadH_setMach {sevm : Sevm} {base : Devm} {mach : Mach} {key : B25
   · exact afterSload_setMach
   · rfl
 
+theorem afterSloadH_stateGas (sevm : Sevm) (base : Devm) (key : B256) :
+    (afterSloadH sevm base key).stateGas = base.stateGas := by
+  unfold afterSloadH
+  split
+  · simp only [afterSload_stateGas]
+  · rfl
+
 theorem afterSloadH_output (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSloadH sevm base key).output = base.output := by
   unfold afterSloadH

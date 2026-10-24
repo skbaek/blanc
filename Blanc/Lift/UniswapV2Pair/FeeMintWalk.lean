@@ -123,6 +123,14 @@ def feeKLastWord (sevm : Sevm) (b : Devm) : B256 := b.getStorVal sevm.currentTar
 
 def feeKLastWorld (sevm : Sevm) (b : Devm) : Devm := afterSload sevm b 11
 
+def feeKLastWorldH (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm b 11
+
+theorem feeKLastWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeKLastWorldH sevm b = feeKLastWorld sevm b := by
+  unfold feeKLastWorldH feeKLastWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 def feeDecodedTree (w : B256) : SFunc :=
   if w.toAdr.toB256 = 0 then t_2864_c68 else t_27ab_c68
 
@@ -233,17 +241,26 @@ theorem feeDecoder_exact {sevm : Sevm} {b : Devm} {R : List B256}
 def feeOffWorld (sevm : Sevm) (b : Devm) (K : B256) : Devm :=
   if K = 0 then b else afterSstore sevm b 11 0
 
+def feeOffWorldH (sevm : Sevm) (b : Devm) (K : B256) : Devm :=
+  if K = 0 then b else afterSstoreH sevm b 11 0
+
+theorem feeOffWorldH_of_covered {sevm : Sevm} {b : Devm} {K : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeOffWorldH sevm b K = feeOffWorld sevm b K := by
+  unfold feeOffWorldH feeOffWorld
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def feeOffCharge (sevm : Sevm) (b : Devm) (K : B256) : Nat :=
   if K = 0 then 43 else 49 + sstoreCost sevm b 11 0
 
-/-- Both fee-off paths, including the real conditional slot11 clear and its static guard. -/
-theorem feeOff_inv {sevm : Sevm} {b : Devm} {R : List B256}
+theorem feeOff_invH {sevm : Sevm} {b : Devm} {R : List B256}
     {M : Mem} {G : Nat} {K w f r1 r0 ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_2864_c68 o) :
     (K ≠ 0 → sevm.isStatic = false) ∧
-      ∃ gas, o = .returned (St (feeOffWorld sevm b K) (f :: R) M gas) := by
+      ∃ gas, o = .returned (St (feeOffWorldH sevm b K) (f :: R) M gas) := by
   have h := run.cut
   unfold t_2864_c68 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -257,7 +274,7 @@ theorem feeOff_inv {sevm : Sevm} {b : Devm} {R : List B256}
     · exact (by decide : (1 : B256) ≠ 0) bad |>.elim
     · obtain ⟨gas, eq⟩ := feeReturn25_inv tail
       exact ⟨fun hn => (hn zeroK).elim, gas,
-        by simpa only [feeOffWorld, ite_eq_left zeroK] using Seg.done.inj eq⟩
+        by simpa only [feeOffWorldH, ite_eq_left zeroK] using Seg.done.inj eq⟩
   · simp only [B256.eqCheck, ite_eq_right zeroK] at h
     rcases ric_branchTo (g := t_2870_c25) (by decide : 25 ∉ []) rfl h with
       ⟨_, _, tail⟩ | ⟨bad, _, _⟩
@@ -267,12 +284,24 @@ theorem feeOff_inv {sevm : Sevm} {b : Devm} {R : List B256}
       rw [show Bytes.toB256 [0x0b] = (11 : B256) from by decide,
         show Bytes.toB256 [0x00] = (0 : B256) from by decide] at tail
       obtain ⟨_, hs, tail⟩ := ric_next tail
-      have nonstatic := ri_sstore_nonstatic fork hs
-      obtain ⟨_, rfl⟩ := ri_sstore fork hs
+      have nonstatic := ri_sstore_nonstaticH stateGas hs
+      obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
       obtain ⟨gas, eq⟩ := feeReturn25_inv tail
       exact ⟨fun _ => nonstatic, gas,
-        by simpa only [feeOffWorld, ite_eq_right zeroK] using Seg.done.inj eq⟩
+        by simpa only [feeOffWorldH, ite_eq_right zeroK] using Seg.done.inj eq⟩
     · exact (bad rfl).elim
+
+/-- Both fee-off paths, including the real conditional slot11 clear and its static guard. -/
+theorem feeOff_inv {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {K w f r1 r0 ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm
+      (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_2864_c68 o) :
+    (K ≠ 0 → sevm.isStatic = false) ∧
+      ∃ gas, o = .returned (St (feeOffWorld sevm b K) (f :: R) M gas) := by
+  simpa only [feeOffWorldH_of_covered fork] using
+    feeOff_invH fork.rules_stateGas_none fork.rules_bal_none run
+
 
 /-- Exact fee-off cost distinguishes the no-store path and genuine selected clear charge. -/
 theorem feeOff_exact {sevm : Sevm} {b : Devm} {R : List B256}
@@ -652,18 +681,29 @@ def feeLiquidityPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
   if N / D = 0 then St b (f :: R) M G
   else lpMintPost sevm b (f :: R) M w (N / D) G
 
+def feeLiquidityPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (w f N D : B256) (G : Nat) : Devm :=
+  if N / D = 0 then St b (f :: R) M G
+  else lpMintPostH sevm b (f :: R) M w (N / D) G
+
+theorem feeLiquidityPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {w f N D : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeLiquidityPostH sevm b R M w f N D G = feeLiquidityPost sevm b R M w f N D G := by
+  unfold feeLiquidityPostH feeLiquidityPost
+  simp only [lpMintPostH_of_covered fork]
+
 def feeLiquidityTree (N D : B256) : SFunc :=
   if N / D = 0 then t_2858_c68 else t_284f_c68
 
-/-- Actual floor DIV and liquidity branch derive genuine LP guards only on its positive arm. -/
-theorem feeLiquidity_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
+theorem feeLiquidity_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
     {M : Mem} {G : Nat} {N D z a K w f r1 r0 ρ : B256} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M) (h25 : 25 ∉ C)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M) (h25 : 25 ∉ C)
     (run : SFunc.RunCut cert.prog sevm C
       (St b (N :: D :: 0 :: D :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G)
       t_2845_c68 r) :
-    (N / D ≠ 0 → lpMintAccepts sevm b w (N / D)) ∧
-      ∃ gas, r = .done (.returned (feeLiquidityPost sevm b R M w f N D gas)) := by
+    (N / D ≠ 0 → lpMintAcceptsH sevm b w (N / D)) ∧
+      ∃ gas, r = .done (.returned (feeLiquidityPostH sevm b R M w f N D gas)) := by
   unfold t_2845_c68 at run
   obtain ⟨_, run⟩ := ric_dest run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_div hs
@@ -679,17 +719,30 @@ theorem feeLiquidity_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
     · exact (by decide : (1 : B256) ≠ 0) bad |>.elim
     · obtain ⟨gas, eq⟩ := feeReturn2858_inv h25 tail
       exact ⟨fun hn => (hn zeroL).elim, gas,
-        by simpa only [feeLiquidityPost, ite_eq_left zeroL] using eq⟩
+        by simpa only [feeLiquidityPostH, ite_eq_left zeroL] using eq⟩
   · simp only [B256.eqCheck, ite_eq_right zeroL] at run
     rcases ric_branch run with ⟨_, _, tail⟩ | ⟨bad, _, _⟩
     · obtain ⟨_, _, _, guards, continuation⟩ :=
-        lpMint_fee_caller_inv (fun h => h) fork mem tail
-      dsimp only [lpMintPost, lpMintSupplyPost, lpMintCreditPost] at continuation
+        lpMint_fee_caller_invH (fun h => h) stateGas bal mem tail
+      dsimp only [lpMintPostH, lpMintSupplyPostH, lpMintCreditPostH] at continuation
       obtain ⟨gas, eq⟩ := feeReturn2858_inv h25 continuation
       exact ⟨fun _ => guards, gas, by
-        simpa only [feeLiquidityPost, ite_eq_right zeroL,
-          lpMintPost, lpMintSupplyPost, lpMintCreditPost] using eq⟩
+        simpa only [feeLiquidityPostH, ite_eq_right zeroL,
+          lpMintPostH, lpMintSupplyPostH, lpMintCreditPostH] using eq⟩
     · exact (bad rfl).elim
+
+/-- Actual floor DIV and liquidity branch derive genuine LP guards only on its positive arm. -/
+theorem feeLiquidity_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
+    {M : Mem} {G : Nat} {N D z a K w f r1 r0 ρ : B256} {r : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M) (h25 : 25 ∉ C)
+    (run : SFunc.RunCut cert.prog sevm C
+      (St b (N :: D :: 0 :: D :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G)
+      t_2845_c68 r) :
+    (N / D ≠ 0 → lpMintAccepts sevm b w (N / D)) ∧
+      ∃ gas, r = .done (.returned (feeLiquidityPost sevm b R M w f N D gas)) := by
+  simpa only [feeLiquidityPostH_of_covered fork, lpMintAcceptsH_of_covered fork] using
+    feeLiquidity_invH fork.rules_stateGas_none fork.rules_bal_none mem h25 run
+
 
 /-- Literal floor-DIV/liquidity selection prefix costs30gas. -/
 theorem feeLiquidity_exact {sevm : Sevm} {b : Devm} {R : List B256}
@@ -898,22 +951,21 @@ theorem feeDenominatorMul_exact {sevm : Sevm} {b : Devm} {R : List B256}
   exact rx_callRet (g := t_21e8_c58) rfl
     (mul58_exact nowrap (by simp only [List.length_cons]; omega)) body
 
-/-- Numerator mul58 derives its independent overflow guard after the actual supply read. -/
-theorem feeNumerator_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
+theorem feeNumerator_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
     {M : Mem} {G : Nat} {Δ z a K w f r1 r0 ρ : B256} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCut cert.prog sevm C
       (St b (Δ :: 0x2813 :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G)
       t_2804_c68 r) :
     B256.Nofm (b.getStorVal sevm.currentTarget 0) Δ ∧ ∃ gas, SFunc.RunCut cert.prog sevm C
-      (St (afterSload sevm b 0)
+      (St (afterSloadH sevm b 0)
         ((b.getStorVal sevm.currentTarget 0 * Δ) :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_2813_c68 r := by
   unfold t_2804_c68 at run
   obtain ⟨_, run⟩ := ric_dest run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   rw [show Bytes.toB256 [0] = (0 : B256) from rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
@@ -926,6 +978,21 @@ theorem feeNumerator_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
     exact ⟨nowrap, _, tail⟩
   · obtain ⟨_, _, eq⟩ := mul58_inv callee
     cases eq
+
+/-- Numerator mul58 derives its independent overflow guard after the actual supply read. -/
+theorem feeNumerator_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
+    {M : Mem} {G : Nat} {Δ z a K w f r1 r0 ρ : B256} {r : Seg}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCut cert.prog sevm C
+      (St b (Δ :: 0x2813 :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G)
+      t_2804_c68 r) :
+    B256.Nofm (b.getStorVal sevm.currentTarget 0) Δ ∧ ∃ gas, SFunc.RunCut cert.prog sevm C
+      (St (afterSload sevm b 0)
+        ((b.getStorVal sevm.currentTarget 0 * Δ) :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
+      t_2813_c68 r := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    feeNumerator_invH fork.rules_bal_none run
+
 
 /-- Numerator caller24, selected supply load and the actual multiplier charge. -/
 theorem feeNumerator_exact {sevm : Sevm} {b : Devm} {R : List B256}
@@ -1012,10 +1079,52 @@ def feeGrowthAccepts (sevm : Sevm) (b : Devm) (w z a : B256) : Prop :=
     lpMintAccepts sevm (afterSload sevm b 0) w
       (feeNumeratorWord sevm b z a / feeDenominatorWord z a))
 
+def feeGrowthAcceptsH (sevm : Sevm) (b : Devm) (w z a : B256) : Prop :=
+  B256.Nofm (b.getStorVal sevm.currentTarget 0) (a - z) ∧
+  B256.Nofm a 5 ∧ (a * 5).toNat + z.toNat < 2 ^ 256 ∧
+  feeDenominatorWord z a ≠ 0 ∧
+  (feeNumeratorWord sevm b z a / feeDenominatorWord z a ≠ 0 →
+    lpMintAcceptsH sevm (afterSloadH sevm b 0) w
+      (feeNumeratorWord sevm b z a / feeDenominatorWord z a))
+
+theorem feeGrowthAcceptsH_of_covered {sevm : Sevm} {b : Devm} {w z a : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeGrowthAcceptsH sevm b w z a = feeGrowthAccepts sevm b w z a := by
+  unfold feeGrowthAcceptsH feeGrowthAccepts
+  simp only [lpMintAcceptsH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def feeGrowthPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (w f z a : B256) (G : Nat) : Devm :=
   feeLiquidityPost sevm (afterSload sevm b 0) R M w f
     (feeNumeratorWord sevm b z a) (feeDenominatorWord z a) G
+
+def feeGrowthPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (w f z a : B256) (G : Nat) : Devm :=
+  feeLiquidityPostH sevm (afterSloadH sevm b 0) R M w f
+    (feeNumeratorWord sevm b z a) (feeDenominatorWord z a) G
+
+theorem feeGrowthPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {w f z a : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeGrowthPostH sevm b R M w f z a G = feeGrowthPost sevm b R M w f z a G := by
+  unfold feeGrowthPostH feeGrowthPost
+  simp only [feeLiquidityPostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
+theorem feeGrowth_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {z a K w f r1 r0 ρ : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27f0_c68 o) :
+    z ≤ a ∧ feeGrowthAcceptsH sevm b w z a ∧
+      ∃ gas, o = .returned (feeGrowthPostH sevm b R M w f z a gas) := by
+  obtain ⟨cover, _, sub⟩ := feeGrowthSub_inv run.cut
+  obtain ⟨numerator, _, mul⟩ := feeNumerator_invH bal sub
+  obtain ⟨factor, _, add⟩ := feeDenominatorMul_inv mul
+  obtain ⟨denominator, _, guard⟩ := feeDenominatorAdd_inv add
+  obtain ⟨nonzero, _, divide⟩ := feeDenominatorGuard_inv guard
+  obtain ⟨mint, gas, result⟩ := feeLiquidity_invH stateGas bal mem (by decide : 25 ∉ []) divide
+  exact ⟨cover, ⟨numerator, factor, denominator, nonzero, mint⟩,
+    gas, Seg.done.inj result⟩
 
 /-- Complete actual growth suffix derives arithmetic/conditional LP acceptance and full poststate. -/
 theorem feeGrowth_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1025,14 +1134,9 @@ theorem feeGrowth_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       (St b (z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27f0_c68 o) :
     z ≤ a ∧ feeGrowthAccepts sevm b w z a ∧
       ∃ gas, o = .returned (feeGrowthPost sevm b R M w f z a gas) := by
-  obtain ⟨cover, _, sub⟩ := feeGrowthSub_inv run.cut
-  obtain ⟨numerator, _, mul⟩ := feeNumerator_inv fork sub
-  obtain ⟨factor, _, add⟩ := feeDenominatorMul_inv mul
-  obtain ⟨denominator, _, guard⟩ := feeDenominatorAdd_inv add
-  obtain ⟨nonzero, _, divide⟩ := feeDenominatorGuard_inv guard
-  obtain ⟨mint, gas, result⟩ := feeLiquidity_inv fork mem (by decide : 25 ∉ []) divide
-  exact ⟨cover, ⟨numerator, factor, denominator, nonzero, mint⟩,
-    gas, Seg.done.inj result⟩
+  simpa only [feeGrowthAcceptsH_of_covered fork, feeGrowthPostH_of_covered fork] using
+    feeGrowth_invH fork.rules_stateGas_none fork.rules_bal_none mem run
+
 
 /-- All checked growth staging costs365 plus actual numerator/load charges before division. -/
 theorem feeGrowthPrefix_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1067,12 +1171,59 @@ def feeOnAccepts (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) : Prop :=
   K ≠ 0 → feeLastRoot K < feeReserveRoot r0 r1 →
     feeGrowthAccepts sevm b w (feeLastRoot K) (feeReserveRoot r0 r1)
 
+def feeOnAcceptsH (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) : Prop :=
+  K ≠ 0 → feeLastRoot K < feeReserveRoot r0 r1 →
+    feeGrowthAcceptsH sevm b w (feeLastRoot K) (feeReserveRoot r0 r1)
+
+theorem feeOnAcceptsH_of_covered {sevm : Sevm} {b : Devm} {K w r0 r1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeOnAcceptsH sevm b K w r0 r1 = feeOnAccepts sevm b K w r0 r1 := by
+  unfold feeOnAcceptsH feeOnAccepts
+  simp only [feeGrowthAcceptsH_of_covered fork]
+
 def feeOnPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (K w f r0 r1 : B256) (G : Nat) : Devm :=
   if K = 0 then St b (f :: R) M G
   else if feeLastRoot K < feeReserveRoot r0 r1 then
     feeGrowthPost sevm b R M w f (feeLastRoot K) (feeReserveRoot r0 r1) G
   else St b (f :: R) M G
+
+def feeOnPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (K w f r0 r1 : B256) (G : Nat) : Devm :=
+  if K = 0 then St b (f :: R) M G
+  else if feeLastRoot K < feeReserveRoot r0 r1 then
+    feeGrowthPostH sevm b R M w f (feeLastRoot K) (feeReserveRoot r0 r1) G
+  else St b (f :: R) M G
+
+theorem feeOnPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {K w f r0 r1 : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeOnPostH sevm b R M K w f r0 r1 G = feeOnPost sevm b R M K w f r0 r1 G := by
+  unfold feeOnPostH feeOnPost
+  simp only [feeGrowthPostH_of_covered fork]
+
+theorem feeOnNonzeroFull_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {K w f r1 r0 ρ : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) (nonzero : K ≠ 0)
+    (run : SFunc.Run cert.prog sevm
+      (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27ab_c68 o) :
+    feeOnAcceptsH sevm b K w r0 r1 ∧
+      ∃ gas, o = .returned (feeOnPostH sevm b R M K w f r0 r1 gas) := by
+  obtain ⟨_, product⟩ := feeOnNonzero_inv nonzero (by decide : 24 ∉ []) run.cut
+  obtain ⟨_, root⟩ := feeReserveProduct_inv bound0 bound1 product
+  obtain ⟨_, last⟩ := feeRootK_inv root
+  obtain ⟨_, compare⟩ := feeRootKLast_inv last
+  rcases feeRootCompare_inv (by decide : 23 ∉ []) (by decide : 25 ∉ []) compare with
+    ⟨noGrowth, gas, result⟩ | ⟨growth, _, tail⟩
+  · exact ⟨fun _ h => (noGrowth h).elim, gas, by
+      simpa only [feeOnPostH, ite_eq_right nonzero,
+        ite_eq_right (show ¬ feeLastRoot K < feeReserveRoot r0 r1 from noGrowth)] using Seg.done.inj result⟩
+  · obtain ⟨_, accepts, gas, result⟩ := feeGrowth_invH stateGas bal mem tail.uncut
+    exact ⟨fun _ _ => accepts, gas, by
+      rw [feeOnPostH, ite_eq_right nonzero,
+        ite_eq_left (show feeLastRoot K < feeReserveRoot r0 r1 from growth)]
+      simpa only [feeLastRoot, feeReserveRoot] using result⟩
 
 /-- Actual nonzero-kLast route consumes both distinct roots and the complete growth suffix. -/
 theorem feeOnNonzeroFull_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1083,20 +1234,26 @@ theorem feeOnNonzeroFull_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27ab_c68 o) :
     feeOnAccepts sevm b K w r0 r1 ∧
       ∃ gas, o = .returned (feeOnPost sevm b R M K w f r0 r1 gas) := by
-  obtain ⟨_, product⟩ := feeOnNonzero_inv nonzero (by decide : 24 ∉ []) run.cut
-  obtain ⟨_, root⟩ := feeReserveProduct_inv bound0 bound1 product
-  obtain ⟨_, last⟩ := feeRootK_inv root
-  obtain ⟨_, compare⟩ := feeRootKLast_inv last
-  rcases feeRootCompare_inv (by decide : 23 ∉ []) (by decide : 25 ∉ []) compare with
-    ⟨noGrowth, gas, result⟩ | ⟨growth, _, tail⟩
-  · exact ⟨fun _ h => (noGrowth h).elim, gas, by
-      simpa only [feeOnPost, ite_eq_right nonzero,
-        ite_eq_right (show ¬ feeLastRoot K < feeReserveRoot r0 r1 from noGrowth)] using Seg.done.inj result⟩
-  · obtain ⟨_, accepts, gas, result⟩ := feeGrowth_inv fork mem tail.uncut
-    exact ⟨fun _ _ => accepts, gas, by
-      rw [feeOnPost, ite_eq_right nonzero,
-        ite_eq_left (show feeLastRoot K < feeReserveRoot r0 r1 from growth)]
-      simpa only [feeLastRoot, feeReserveRoot] using result⟩
+  simpa only [feeOnAcceptsH_of_covered fork, feeOnPostH_of_covered fork] using
+    feeOnNonzeroFull_invH fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1 nonzero run
+
+
+theorem feeOnFull_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {K w f r1 r0 ρ : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (run : SFunc.Run cert.prog sevm
+      (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27ab_c68 o) :
+    feeOnAcceptsH sevm b K w r0 r1 ∧
+      ∃ gas, o = .returned (feeOnPostH sevm b R M K w f r0 r1 gas) := by
+  by_cases zeroK : K = 0
+  · subst K
+    obtain ⟨gas, result⟩ := feeOnZero_inv run
+    exact ⟨fun hn => (hn rfl).elim, gas, by
+      rw [feeOnPostH, ite_eq_left (show (0 : B256) = 0 from rfl)]
+      exact result⟩
+  · exact feeOnNonzeroFull_invH stateGas bal mem bound0 bound1 zeroK run
 
 /-- All fee-on arms derive their guards and actual complete poststate, including kLast-zero. -/
 theorem feeOnFull_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1107,22 +1264,39 @@ theorem feeOnFull_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_27ab_c68 o) :
     feeOnAccepts sevm b K w r0 r1 ∧
       ∃ gas, o = .returned (feeOnPost sevm b R M K w f r0 r1 gas) := by
-  by_cases zeroK : K = 0
-  · subst K
-    obtain ⟨gas, result⟩ := feeOnZero_inv run
-    exact ⟨fun hn => (hn rfl).elim, gas, by
-      rw [feeOnPost, ite_eq_left (show (0 : B256) = 0 from rfl)]
-      exact result⟩
-  · exact feeOnNonzeroFull_inv fork mem bound0 bound1 zeroK run
+  simpa only [feeOnAcceptsH_of_covered fork, feeOnPostH_of_covered fork] using
+    feeOnFull_invH fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1 run
+
 
 def feeBranchAccepts (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) : Prop :=
   if w.toAdr.toB256 = 0 then K ≠ 0 → sevm.isStatic = false
   else feeOnAccepts sevm b K w r0 r1
 
+def feeBranchAcceptsH (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) : Prop :=
+  if w.toAdr.toB256 = 0 then K ≠ 0 → sevm.isStatic = false
+  else feeOnAcceptsH sevm b K w r0 r1
+
+theorem feeBranchAcceptsH_of_covered {sevm : Sevm} {b : Devm} {K w r0 r1 : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeBranchAcceptsH sevm b K w r0 r1 = feeBranchAccepts sevm b K w r0 r1 := by
+  unfold feeBranchAcceptsH feeBranchAccepts
+  simp only [feeOnAcceptsH_of_covered fork]
+
 def feeBranchPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (K w r0 r1 : B256) (G : Nat) : Devm :=
   if w.toAdr.toB256 = 0 then St (feeOffWorld sevm b K) (feeOnWord w :: R) M G
   else feeOnPost sevm b R M K w (feeOnWord w) r0 r1 G
+
+def feeBranchPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (K w r0 r1 : B256) (G : Nat) : Devm :=
+  if w.toAdr.toB256 = 0 then St (feeOffWorldH sevm b K) (feeOnWord w :: R) M G
+  else feeOnPostH sevm b R M K w (feeOnWord w) r0 r1 G
+
+theorem feeBranchPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {K w r0 r1 : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeBranchPostH sevm b R M K w r0 r1 G = feeBranchPost sevm b R M K w r0 r1 G := by
+  unfold feeBranchPostH feeBranchPost
+  simp only [feeOffWorldH_of_covered fork, feeOnPostH_of_covered fork]
 
 /-- All actual fee branches retain the caller locals and the allocated pointer, including LP scratch writes. -/
 theorem pairFeePost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1142,6 +1316,42 @@ theorem pairFeePost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         · exact ⟨rfl, lpMintMemory_ptr (lpMintScratch_ptr mem w) w _⟩
       · exact ⟨rfl, mem⟩
 
+theorem pairFeePost_machineH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {K w r0 r1 : B256} {G : Nat} (mem : PtrMem 128 192 M) :
+    (feeBranchPostH sevm b R M K w r0 r1 G).stack = feeOnWord w :: R ∧
+    PtrMem 128 192 (feeBranchPostH sevm b R M K w r0 r1 G).memory := by
+  unfold feeBranchPostH
+  split
+  · exact ⟨rfl, mem⟩
+  · unfold feeOnPostH
+    split
+    · exact ⟨rfl, mem⟩
+    · split
+      · unfold feeGrowthPostH feeLiquidityPostH
+        split
+        · exact ⟨rfl, mem⟩
+        · exact ⟨rfl, lpMintMemory_ptr (lpMintScratch_ptr mem w) w _⟩
+      · exact ⟨rfl, mem⟩
+
+theorem feeBranch_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {K w r1 r0 ρ : B256} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (run : SFunc.Run cert.prog sevm
+      (St b (K :: w :: feeOnWord w :: r1 :: r0 :: ρ :: R) M G) (feeDecodedTree w) o) :
+    feeBranchAcceptsH sevm b K w r0 r1 ∧
+      ∃ gas, o = .returned (feeBranchPostH sevm b R M K w r0 r1 gas) := by
+  by_cases zeroAddress : w.toAdr.toB256 = 0
+  · rw [feeDecodedTree, ite_eq_left zeroAddress] at run
+    obtain ⟨guard, gas, result⟩ := feeOff_invH stateGas bal run
+    exact ⟨by simpa only [feeBranchAcceptsH, ite_eq_left zeroAddress] using guard,
+      gas, by simpa only [feeBranchPostH, ite_eq_left zeroAddress] using result⟩
+  · rw [feeDecodedTree, ite_eq_right zeroAddress] at run
+    obtain ⟨guard, gas, result⟩ := feeOnFull_invH stateGas bal mem bound0 bound1 run
+    exact ⟨by simpa only [feeBranchAcceptsH, ite_eq_right zeroAddress] using guard,
+      gas, by simpa only [feeBranchPostH, ite_eq_right zeroAddress] using result⟩
+
 /-- All six decoded fee arms derive conditional guards and the full raw return state. -/
 theorem feeBranch_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {K w r1 r0 ρ : B256} {o : Outcome}
@@ -1151,15 +1361,9 @@ theorem feeBranch_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       (St b (K :: w :: feeOnWord w :: r1 :: r0 :: ρ :: R) M G) (feeDecodedTree w) o) :
     feeBranchAccepts sevm b K w r0 r1 ∧
       ∃ gas, o = .returned (feeBranchPost sevm b R M K w r0 r1 gas) := by
-  by_cases zeroAddress : w.toAdr.toB256 = 0
-  · rw [feeDecodedTree, ite_eq_left zeroAddress] at run
-    obtain ⟨guard, gas, result⟩ := feeOff_inv fork run
-    exact ⟨by simpa only [feeBranchAccepts, ite_eq_left zeroAddress] using guard,
-      gas, by simpa only [feeBranchPost, ite_eq_left zeroAddress] using result⟩
-  · rw [feeDecodedTree, ite_eq_right zeroAddress] at run
-    obtain ⟨guard, gas, result⟩ := feeOnFull_inv fork mem bound0 bound1 run
-    exact ⟨by simpa only [feeBranchAccepts, ite_eq_right zeroAddress] using guard,
-      gas, by simpa only [feeBranchPost, ite_eq_right zeroAddress] using result⟩
+  simpa only [feeBranchAcceptsH_of_covered fork, feeBranchPostH_of_covered fork] using
+    feeBranch_invH fork.rules_stateGas_none fork.rules_bal_none mem bound0 bound1 run
+
 
 /-- Actual fee68 success derives all branch guards from its same-D factory observation.
 The arbitrary complete reply, primitive post and both original continuations are retained. -/
