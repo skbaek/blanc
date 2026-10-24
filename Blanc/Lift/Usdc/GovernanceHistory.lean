@@ -15,16 +15,30 @@ that version's upgrader by `changeAdmin`, the upgrader to that implementation by
 and the upgrader back to the long-term admin by `changeAdmin`. There is no `upgradeToAndCall`
 row and no initializer row. The row literals are copied unchanged from the proposal.
 
-`UsdcGovernanceF2primeEntries P frames` states F2′ over the proxy entries among `frames`: the
-frames at `P` running the proxy runtime. Along a history it is applied to `rawFrames`, every
-frame the history enters, retained or rolled back.
+`UsdcGovernanceF2primeAtImplWrites P frames nodes` is the part of F2′ the derivation
+consumes, at the scope of `AdminUpgradesWithinFrom` itself: only a proxy frame at `P` that is a
+parent prefix of a node of `nodes` with a successful `SSTORE` at `(P, implSlot)`, whose caller is
+the admin word of its own pre-state and whose selector is `upgradeTo` or `upgradeToAndCall`,
+must be one of the nine rows. It is implied by F2′ over the proxy entries (every such frame is a
+proxy entry with an admin caller and an F2′ selector), so it is no stronger than the adopted
+input. A reverted admin call that writes no implementation slot, and every `changeAdmin` frame,
+are unconstrained: the derivation never needs to know who the admin is, only that an admin
+upgrade which does write the slot is one of the three `upgradeTo` rows. Since F2′ has no
+`upgradeToAndCall` row, an admin `upgradeToAndCall` frame that writes the slot is still excluded,
+as F2′ excludes it. Along a history it is applied to `rawFrames` and `rawNodes`, every frame and
+node the history enters, retained or rolled back; `AdminUpgradesWithinFrom` constrains rolled-back
+implementation writes too.
 
 `ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime` derives the headline premise
 `AdminUpgradesWithinFrom` (`ProxyWritesHistory.lean`) from F2′ and one ordering fact,
 `UpgradeTargetsDeployedFirst`: each of the three implementations F2′ may install has an
 account in `W`, and no successful `SSTORE` before that account's boundary stores its address
 at `(P, implSlot)`. F2′ names no time, so the order of a deployment and the upgrade to it is
-not a consequence of F2′; it is stated here.
+not a consequence of F2′; it is stated here. Nor does it follow from the proxy's `isContract` guard: that
+guard only shows the implementation has code at the upgrade, while an entry's boundary is any
+committed boundary after its deployment (`UsdcDeployedWorld` does not make it the first one),
+and a transaction that both creates an implementation and upgrades to it would write the slot
+before any boundary at which the implementation is listed.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -83,14 +97,19 @@ end F2prime
 
 open F2prime
 
-/-- **F2′ over proxy entries (stated; user-adopted D→B governance input).** Every frame of
-`frames` at `P` running the proxy runtime, whose caller is the admin word of its own pre-state
-and whose selector is `upgradeTo`, `upgradeToAndCall` or `changeAdmin`, is one of the nine
-rows. Non-admin callers and other selectors are unconstrained. -/
-def UsdcGovernanceF2primeEntries (P : Adr) (frames : List Exec.Deriv) : Prop :=
-  ∀ G ∈ frames, G.sevm.currentTarget = P → G.sevm.code = Proxy.code →
+/-- **F2′ at the implementation-slot writes (stated; implied by the user-adopted D→B
+governance input).** For every node `m` of `nodes` with a successful `SSTORE` at
+`(P, implSlot)`, every frame of `frames` that is a parent prefix of `m`, runs the proxy runtime
+at `P`, has the admin word of its own pre-state as caller and has selector `upgradeTo` or
+`upgradeToAndCall` is one of the nine rows. Frames that write no implementation slot,
+non-admin callers and `changeAdmin` are unconstrained. -/
+def UsdcGovernanceF2primeAtImplWrites (P : Adr) (frames nodes : List Exec.Deriv) : Prop :=
+  ∀ m ∈ nodes, ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? m = some w →
+    w.owner = P → w.key = implSlot →
+    ∀ G ∈ frames, Exec.Deriv.ParentPrefix G m →
+    G.sevm.currentTarget = P → G.sevm.code = Proxy.code →
     G.sevm.caller = adminOf G.devm.state P →
-    Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286, 0x8f283970] →
+    Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286] →
     AllowedAdminAsk G.sevm
 
 /-- **Each F2′ upgrade target is deployed before it is installed (stated).** For each
@@ -134,19 +153,21 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr} {W : List UsdcDeployedEntry}
 
-/-- **The admin's upgrades from F2′.** Along an In-history over the deployed world, F2′ over
-the history's proxy entries and the deployment-before-upgrade order of the three F2′
+/-- **The admin's upgrades from F2′.** Along an In-history over the deployed world, F2′ at
+the history's implementation-slot writes and the deployment-before-upgrade order of the three F2′
 implementations give `AdminUpgradesWithinFrom`. -/
 theorem ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
     (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (governance : UsdcGovernanceF2primeEntries P history.rawFrames)
+    (governance : UsdcGovernanceF2primeAtImplWrites P history.rawFrames history.rawNodes)
     (deployedFirst : UpgradeTargetsDeployedFirst P W) :
     AdminUpgradesWithinFrom P W history.rawFrames history.rawNodes := by
   intro b₁ m b₂ split w found owner key G hG chain target code sel caller
   have hsevm := Exec.Deriv.ParentPrefix.sevm_eq chain
-  have selMem : Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286, 0x8f283970] := by
+  have hm : m ∈ history.rawNodes := by
+    rw [split]; exact List.mem_append_right _ List.mem_cons_self
+  have selMem : Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286] := by
     rcases sel with h | h
     · rw [dispatchWord_eq_selector] at h
       rw [h]
@@ -154,11 +175,9 @@ theorem ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime
     · rw [dispatchWord_eq_selector] at h
       rw [h]
       decide
-  have allowed := governance G hG target code caller selMem
+  have allowed := governance m hm w found owner key G hG chain target code caller selMem
   obtain ⟨impl, implMem, hImpl⟩ := AllowedAdminAsk.upgradeArg allowed sel
   -- The written value is `G`'s upgrade argument.
-  have hm : m ∈ history.rawNodes := by
-    rw [split]; exact List.mem_append_right _ List.mem_cons_self
   have mTarget : m.sevm.currentTarget = P := by rw [hsevm]; exact target
   have mCode : m.sevm.code = Proxy.code := by rw [hsevm]; exact code
   obtain ⟨G', -, chain', -, -, cls⟩ :=

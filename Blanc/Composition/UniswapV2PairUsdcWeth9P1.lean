@@ -30,7 +30,7 @@ def PairTouchedSpenders (pair usdc : Adr) {cfg : ChainConfig} {checkpoint future
   (Usdc.Key.allow pair g) ∈ Usdc.historyTouchedKeys usdc trace
 
 /-- **P1 from the D→B history.** For a historical-domain history from `D` to `B` over the
-deployed world at `D`, F2′ over its proxy entries with the deployment-before-upgrade order of
+deployed world at `D`, F2′ at its implementation-slot writes with the deployment-before-upgrade order of
 the F2′ implementations, the D→B premises of the Pair allowance law for the spenders the
 post-B `trace` touches, and those rows zero at `D` (`seedZero`), the Pair's touched USDC
 allowance rows read zero at `B`. -/
@@ -40,7 +40,7 @@ theorem pairUsdcAllowQuiet_of_history {pair usdc : Adr} {cfgH cfg : ChainConfig}
     (trace : ConfiguredHistoryTrace cfg B future)
     {W : List UsdcDeployedEntry}
     (world : UsdcDeployedWorld history.BoundaryAt usdc W D.state)
-    (governance : UsdcGovernanceF2primeEntries usdc history.rawFrames)
+    (governance : UsdcGovernanceF2primeAtImplWrites usdc history.rawFrames history.rawNodes)
     (deployedFirst : UpgradeTargetsDeployedFirst usdc W)
     (apartSlot : ImplSlotApart usdc history.rawNodes)
     (slotsApart : ProxySlotsApart pair (PairTouchedSpenders pair usdc trace))
