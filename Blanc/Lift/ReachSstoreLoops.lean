@@ -4,6 +4,7 @@ import Blanc.Lift.SolcStorageClear
 import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.VyperCallee
+import Blanc.Lift.SelectorRoute
 
 /-!
 # Storage loops on a prefix reach to an `SSTORE`
@@ -119,7 +120,9 @@ set_option hygiene false in
 /-- One straight-line step of `run : Reach … ⟨St b S M G, .next n f, K⟩ T` toward
 `hT : AtSstore T`, with `erase` turning the step relation into `Ninst.Run`. -/
 macro "rsx" : tactic => `(tactic| (
-  obtain ⟨_, hstep, run⟩ := rs_next run hT
+  have hnext := rs_next run hT
+  clear run
+  obtain ⟨_, hstep, run⟩ := hnext
   obtain ⟨_, e⟩ := ri_stepR (erase hstep) rfl
   try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
   subst e
@@ -127,19 +130,149 @@ macro "rsx" : tactic => `(tactic| (
 
 set_option hygiene false in
 /-- A `JUMPDEST` of a reach to an `SSTORE` over the walk state. -/
-macro "rsd" : tactic => `(tactic| (obtain ⟨_, run⟩ := rs_dest run hT))
+macro "rsd" : tactic => `(tactic| (
+  have hnext := rs_dest run hT
+  clear run
+  obtain ⟨_, run⟩ := hnext))
 
 set_option hygiene false in
 /-- `rsd` or `rsx`. -/
 macro "rsw" : tactic => `(tactic| first | rsd | rsx)
 
 set_option hygiene false in
+/-- One step of a reach to an `SSTORE` taken without inverting it: the next machine is
+unnamed and re-read as its own walk state (`St.self'`). -/
+macro "rsk" : tactic => `(tactic| (
+  have hnext := rs_next run hT
+  clear run
+  obtain ⟨d', -, run⟩ := hnext
+  rw [St.self' d'] at run))
+
+set_option hygiene false in
 /-- An `SLOAD` of a reach to an `SSTORE`: the loaded word is unnamed. -/
 macro "rsload" : tactic => `(tactic| (
-  obtain ⟨_, hstep, run⟩ := rs_next run hT
+  have hnext := rs_next run hT
+  clear run
+  obtain ⟨_, hstep, run⟩ := hnext
   obtain ⟨_, _, _, e⟩ := SolcStorageReturn.ri_sload_any (erase hstep)
   subst e
   clear hstep))
+
+/-! ## Calls and returns over the walk state -/
+
+section CallRet
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+  {b : Devm} {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+
+/-- A `.ret` on a reach to an `SSTORE` pops the return tag into the innermost pending
+continuation. -/
+theorem rs_ret {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
+    (hT : AtSstore T) :
+    ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' S M' G', f, K'⟩ T := by
+  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
+  · obtain ⟨f', hx⟩ := hT
+    cases hx
+  · cases step with
+    | ret t' pop =>
+      obtain ⟨-, e⟩ := St.of_pop1 pop
+      exact ⟨_, _, _, _, _, rfl, e ▸ rest⟩
+
+/-- A `callNext` on a reach to an `SSTORE` enters the callee with its continuation pending. -/
+theorem rs_callIn {k : Nat} {f : SFunc} {t : B256}
+    (run : Reach P fs sevm ⟨St b (t :: S) M G, .callNext k f, K⟩ T) (hT : AtSstore T) :
+    ∃ g G', fs[k]? = some g ∧ Reach P fs sevm ⟨St b S M G', g, f :: K⟩ T := by
+  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
+  · obtain ⟨f', hx⟩ := hT
+    cases hx
+  · cases step with
+    | call t' hk pop =>
+      obtain ⟨-, e⟩ := St.of_pop1 pop
+      exact ⟨_, _, hk, e ▸ rest⟩
+
+/-- A `callNext` into an `SSTORE`-free callee on a reach to an `SSTORE`, from any machine:
+the callee returns and the reach continues from the continuation. -/
+theorem rs_callOverAny {E : List Nat} (hE : SstoreFreeSet fs E = true) {k : Nat} {f g : SFunc}
+    {d : Devm} (hk : fs[k]? = some g) (hkE : k ∈ E)
+    (run : Reach P fs sevm ⟨d, .callNext k f, K⟩ T) (hT : AtSstore T) :
+    ∃ D, Reach P fs sevm ⟨D, f, K⟩ T := by
+  obtain ⟨t, g', d', hk', pop, inside | ⟨D, -, rest⟩⟩ := Reach.callS run hT
+  · rw [hk] at hk'
+    cases hk'
+    obtain ⟨T', r', rfl⟩ := inside
+    exact (Reach.false_of_sstoreFree hE r' hT (SstoreFreeSet.lookup hE hkE hk)
+      (fun _ h => by cases h)).elim
+  · exact ⟨D, rest⟩
+
+end CallRet
+
+/-! ## A solc dispatcher on a reach to an `SSTORE` -/
+
+section Dispatch
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+  {b : Devm} {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf} {σ : B256}
+
+theorem rs_cmp_gt (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {f g : SFunc}
+    (run : Reach P fs sevm ⟨St b (σ :: S) M G,
+      .next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1)
+      (.next (.reg .gt) (.next (.push [d0, d1] l2) (.branch f g)))), K⟩ T)
+    (hT : AtSstore T) :
+    ∃ G', Reach P fs sevm ⟨St b (σ :: S) M G',
+      if B256.gtCheck (Bytes.toB256 [c0, c1, c2, c3]) σ = 0 then f else g, K⟩ T := by
+  iterate 4 rsx
+  rcases rs_branch run hT with ⟨zero, G', h⟩ | ⟨nonzero, G', h⟩
+  · rw [ite_eq_left zero]
+    exact ⟨G', h⟩
+  · rw [ite_eq_right nonzero]
+    exact ⟨G', h⟩
+
+theorem rs_cmp_eq_either (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {f : SFunc} {j : Nat}
+    (run : Reach P fs sevm ⟨St b (σ :: S) M G,
+      .next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1)
+      (.next (.reg .eq) (.next (.push [d0, d1] l2) (.branchTo f j)))), K⟩ T)
+    (hT : AtSstore T) :
+    (B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) σ = 0 ∧
+        ∃ G', Reach P fs sevm ⟨St b (σ :: S) M G', f, K⟩ T) ∨
+      (B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) σ ≠ 0 ∧
+        ∃ g G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b (σ :: S) M G', g, K⟩ T) := by
+  iterate 4 rsx
+  rcases rs_branchTo run hT with ⟨zero, G', h⟩ | ⟨nonzero, g, G', hg, h⟩
+  · exact .inl ⟨zero, G', h⟩
+  · exact .inr ⟨nonzero, g, G', hg, h⟩
+
+/-- **A reach to an `SSTORE` at the goto of the dispatcher's walk.** The selector word is the
+constant compared, and the reach continues from the goto's entry. -/
+theorem Reach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {c : B256}
+    {f : SFunc} {j : Nat} (hw : f.selWalk σ = .inl (c, j))
+    (run : Reach P fs sevm ⟨St b (σ :: S) M G, f, K⟩ T) (hT : AtSstore T) :
+    σ = c ∧ ∃ g G', fs[j]? = some g ∧ Reach P fs sevm ⟨St b (σ :: S) M G', g, K⟩ T := by
+  fun_induction SFunc.selWalk σ f generalizing G with
+  | case1 f ih =>
+      obtain ⟨G', r⟩ := rs_dest run hT
+      exact ih hw r
+  | case2 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := rs_cmp_gt erase run hT
+      rw [ite_eq_left h] at r
+      exact ih hw r
+  | case3 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := rs_cmp_gt erase run hT
+      rw [ite_eq_right h] at r
+      exact ih hw r
+  | case4 c0 c1 c2 c3 _ _ _ _ f j h ih =>
+      rcases rs_cmp_eq_either erase run hT with ⟨-, G', r⟩ | ⟨ne, -⟩
+      · exact ih hw r
+      · exact absurd h ne
+  | case5 c0 c1 c2 c3 _ _ _ _ f j h =>
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
+      rcases rs_cmp_eq_either erase run hT with ⟨zero, -⟩ | ⟨ne, r⟩
+      · exact absurd zero h
+      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+  | case6 => cases hw
+
+end Dispatch
 
 /-! ## Loops by a measure -/
 
@@ -457,7 +590,7 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {e t : B256} {S : List B256} {d : Devm} {key : B256} (hstack : d.stack = key :: e :: t :: S)
     (run : Reach P fs sevm ⟨d, SolcStorageClear.head back exit backBound exitBound k, K⟩ T)
     (hT : AtSstore T) :
-    ZeroAt T ∨ ∃ f K' D, K = f :: K' ∧ Reach P fs sevm ⟨D, f, K'⟩ T := by
+    ZeroAt T ∨ ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) M' G', f, K'⟩ T := by
   refine reach_loop_measure (fun d => ∃ key, d.stack = key :: e :: t :: S) (gap e) ?_ d
     ⟨key, hstack⟩ run
   intro d ⟨key, hstack⟩ run
@@ -488,11 +621,8 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   · unfold SolcStorageClear.exitTree at run
     rsd
     iterate 2 rsx
-    rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
-    · obtain ⟨f', hx⟩ := hT
-      cases hx
-    · cases step with
-      | ret t pop => exact .inl (.inr ⟨_, _, _, rfl, rest⟩)
+    obtain ⟨f, K', b', M', G', hK, rest⟩ := rs_ret run hT
+    exact .inl (.inr ⟨f, K', b', M', G', hK, rest⟩)
 
 /-- **The legacy clearing loop on a reach to an `SSTORE`.** As `clear_reach`, for the
 layout whose exit jumps through the shared return entry `j`. -/
@@ -503,7 +633,7 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     (hstack : d.stack = key :: e :: t :: u :: S)
     (run : Reach P fs sevm ⟨d, SolcStorageClear.legacyHead back exit backBound exitBound k j, K⟩ T)
     (hT : AtSstore T) :
-    ZeroAt T ∨ ∃ f K' D, K = f :: K' ∧ Reach P fs sevm ⟨D, f, K'⟩ T := by
+    ZeroAt T ∨ ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) M' G', f, K'⟩ T := by
   refine reach_loop_measure (fun d => ∃ key, d.stack = key :: e :: t :: u :: S) (gap e) ?_ d
     ⟨key, hstack⟩ run
   intro d ⟨key, hstack⟩ run
@@ -540,11 +670,8 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     unfold SolcStorageClear.legacyRet at run
     rsd
     rsx
-    rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
-    · obtain ⟨f', hx⟩ := hT
-      cases hx
-    · cases step with
-      | ret t pop => exact .inl (.inr ⟨_, _, _, rfl, rest⟩)
+    obtain ⟨f, K', b', M', G', hK, rest⟩ := rs_ret run hT
+    exact .inl (.inr ⟨f, K', b', M', G', hK, rest⟩)
 
 end ReachClear
 

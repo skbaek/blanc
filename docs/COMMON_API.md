@@ -6594,6 +6594,16 @@ contract-neutral.
   loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
   `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
   (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
+  Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
+  it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
+  without inverting it) and `Reach.selWalk_inlS` (a solc dispatcher's comparison walk). The
+  solc 0.6 `string storage = string calldata` helper and the `f(string calldata)` external
+  wrapper, as shapes over their jump tags (`StrStoreCd.helper`, `CdStrWrap.wrapper`), with
+  `StrStoreCd.reach` (a store writes the slot, zero, or `keccak(slot) + j` for
+  `j < (len + 31) / 32`) and `CdStrWrap.reach` (the reach lies in the body, entered with the
+  decoded length and data pointer, both below `2 ^ 32`), are in
+  [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean); worked use:
+  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`.
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region

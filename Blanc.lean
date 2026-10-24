@@ -1625,6 +1625,7 @@ import Blanc.Lift.SolcStringAllocation
 import Blanc.Lift.SolcAbiStringStaging
 import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.ReachSstoreLoops
+import Blanc.Lift.ReachSolcStringStore
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.SettledFramePositionsIn
@@ -1815,6 +1816,10 @@ import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.ReachWalkSstore
 import Blanc.Lift.Usdc.ProxySstoreH
 import Blanc.Lift.Usdc.ProxyWritesHistory
+import Blanc.Lift.Usdc.InitReach
+import Blanc.Lift.Usdc.InitReachV2
+import Blanc.Lift.Usdc.InitReachV2_1
+import Blanc.Lift.Usdc.InitReachV2_2
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk
