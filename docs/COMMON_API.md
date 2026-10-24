@@ -6255,11 +6255,12 @@ contract-neutral.
   [`Blanc/ExecutionStagedRootFacts.lean`](../Blanc/ExecutionStagedRootFacts.lean)
   `ConfiguredHistoryTraceIn.rawFrame_entryFacts` gives pc zero, the selected
   fork, `stateGas = none`, fresh stack and memory and `gasMeasure < 2 ^ 256`
-  from `BodyStageCapabilities` alone, and
-  [`Blanc/Lift/Usdc/OldInitializerHistory.lean`](../Blanc/Lift/Usdc/OldInitializerHistory.lean)
-  (`implV1_initialize_observed_rawFrame` and the V1 and V2
-  `_short_zero_rawFrame` forms) leaves only success, the running
-  implementation code and the selector. Raw frames include delegated children.
+  from `BodyStageCapabilities` alone. For historical initializer writes, use
+  `ConfiguredHistoryTraceIn.initFrame_sstore` and `initRowWritesNonInc` in
+  [`Blanc/Lift/Usdc/InitRowsHistory.lean`](../Blanc/Lift/Usdc/InitRowsHistory.lean):
+  the node-level classifier covers prefixes of raw frames, including delegated
+  children and reverted executions, with the explicit finite `InitRowsApart`
+  separation premise.
   [`Blanc/ExecutionStagedSstoreAttribution.lean`](../Blanc/ExecutionStagedSstoreAttribution.lean)
   `ConfiguredHistoryTraceIn.rawFrames_closed` (with the stage and staged-body
   forms) closes the raw frames under descent, and

@@ -1805,7 +1805,6 @@ import Blanc.Lift.Usdc.OldInitializerV1Payload
 import Blanc.Lift.Usdc.OldInitializerV1Staging
 import Blanc.Lift.Usdc.OldInitializerV1Callee
 import Blanc.Lift.Usdc.OldInitializerV1Root
-import Blanc.Lift.Usdc.OldInitializerHistory
 import Blanc.Lift.Usdc.AllowLocalityHistory
 import Blanc.Lift.WriteSiteReach
 import Blanc.Lift.WriteSiteReachHistory
