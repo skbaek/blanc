@@ -6148,6 +6148,16 @@ contract-neutral.
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
   [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
   form there is the modern statement from `CoveredFork`;
+  the remaining historical successor projections (`afterSloadH_getCode`/`_accessedAddresses`/
+  `_error`/`_createdAccounts`/`_accessedStorageKeys`, `afterSstoreH_getCode`/
+  `_accessedStorageKeys`, the `ite` form `getStor_afterSstoreH`) and the quiet frame theorem
+  `SFunc.Run.world_of_quietH` from `rules.stateGas = none` alone in
+  [`Blanc/Lift/HistAccessWalkFacts.lean`](../Blanc/Lift/HistAccessWalkFacts.lean);
+  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyH`,
+  `ShaReady.toH`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
+  `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
+  flag, and `ri_staticcall_shaH_covered`) in
+  [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
