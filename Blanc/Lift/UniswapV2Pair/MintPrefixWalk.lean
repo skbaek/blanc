@@ -72,6 +72,31 @@ theorem mintLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
 def mintLockedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 12) 12 0
 
+/-- `mintLockedWorld` under the frame's actual access and refund rules. -/
+def mintLockedWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b 12) 12 0
+
+theorem mintLockedWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    mintLockedWorldH sevm b = mintLockedWorld sevm b := by
+  unfold mintLockedWorldH mintLockedWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access,
+    afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
+/-- The historical lock world stores the same words as the modern one. -/
+theorem mintLockedWorldH_getStorVal (sevm : Sevm) (b : Devm) (k : B256) :
+    (mintLockedWorldH sevm b).getStorVal sevm.currentTarget k =
+      (mintLockedWorld sevm b).getStorVal sevm.currentTarget k := by
+  show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
+  unfold mintLockedWorld mintLockedWorldH
+  rw [afterSstore_getStor_self, afterSstoreH_getStor_self, afterSload_getStor, afterSloadH_getStor]
+
+theorem WriterRep.mint_locked_worldH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
+    WriterRep K ((mintLockedWorldH sevm b).getStor sevm.currentTarget) { st with unlocked := 0 } := by
+  rw [mintLockedWorldH, afterSstoreH_getStor_self, afterSloadH_getStor]
+  exact rep.mint_lock_store
+
 /-- The first mint internal call caches all three packed reserve fields. -/
 theorem mintReservePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {toWord ρ : B256} {seg : Seg}

@@ -48,6 +48,29 @@ theorem swap_prefix_source_invariant {K U : WriterKey → Prop} {sevm : Sevm} {b
     rw [afterSload_logs, afterSload_logs, afterSload_logs, afterSstore_logs, afterSload_logs,
       List.append_nil]
 
+theorem swap_prefix_source_invariantH {K U : WriterKey → Prop} {sevm : Sevm} {b : Devm}
+    {current : Checkpoint} {ctx : Context}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sub : ∀ k, K k → U k) :
+    SwapFrontState U sevm.currentTarget ctx current b
+      (swapLockedFrame current ctx (swapDecodedEntry sevm)) (swapPrefixWorldH sevm b) := by
+  have lockedRep := rep.mint_locked_worldH (sevm := sevm) (b := b)
+  refine ⟨rfl, ⟨K, sub, ?_, rfl⟩, ?_, ?_, ⟨[], [], ?_, ?_, rfl⟩, rfl⟩
+  · unfold swapPrefixWorldH
+    rw [afterSloadH_getStor, afterSloadH_getStor, afterSloadH_getStor]
+    exact lockedRep
+  · unfold swapPrefixWorldH mintLockedWorldH
+    rw [afterSloadH_getCode, afterSloadH_getCode, afterSloadH_getCode, afterSstoreH_getCode,
+      afterSloadH_getCode]
+  · unfold swapPrefixWorldH mintLockedWorldH
+    rw [afterSloadH_output, afterSloadH_output, afterSloadH_output, afterSstoreH_output,
+      afterSloadH_output]
+  · rw [List.append_nil]
+    rfl
+  · unfold swapPrefixWorldH mintLockedWorldH
+    rw [afterSloadH_logs, afterSloadH_logs, afterSloadH_logs, afterSstoreH_logs, afterSloadH_logs,
+      List.append_nil]
+
 theorem SwapFrontState.beginResume {U : WriterKey → Prop} {pair : Adr} {ctx : Context}
     {current : Checkpoint} {b : Devm} {F : Frame} {w : Devm}
     (h : SwapFrontState U pair ctx current b F w) (request : Request) :

@@ -50,6 +50,124 @@ structure SwapPositionalCanonicalResult (K : WriterKey → Prop) (current : Chec
   foreign : ∀ a, a ≠ root.sevm.currentTarget →
     post.getStor a = positions.balances.optional.callback.world.getStor a
 
+structure SwapPositionalCanonicalResultH (K : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (root : Exec.Deriv) (b post W : Devm) where
+  positions : SwapPhysicalResultH root b post W
+  entryFacts : SwapSourcePrefixH (WriterExtend K (swapTraceKeys root)) current invocation root.sevm b W
+  frontFrame : Frame
+  frontIndex : Nat
+  frontIndex_eq : frontIndex =
+    (if swapAmount0Out root.sevm = 0 then 0 else 1) +
+    (if swapAmount1Out root.sevm = 0 then 0 else 1) +
+    (if swapDataLength root.sevm = 0 then 0 else 1)
+  frontTranscript : Transcript → Transcript
+  frontReturns : List ChildReturn
+  queries : SwapBalancePairSourceH positions.balances (WriterExtend K (swapTraceKeys root))
+    (writerContext root.sevm invocation) current b frontFrame frontIndex
+  updated : SwapSourceUpdateH positions.balances queries
+  transcript : Transcript
+  transcript_eq : transcript = frontTranscript queries.transcript
+  result : RunResult
+  result_eq : result =
+    {status := .success [], frame := updated.finalFrame, remaining := .done,
+      childReturns := frontReturns ++ queries.childReturns}
+  admitted : AdmittedSourceConsumes LockedAuthH root root 0
+    (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
+    transcript result
+  checkpoint : result.frame.checkpoint = current
+  context : result.frame.context = writerContext root.sevm invocation
+  unlocked : result.frame.current.state.unlocked = 1
+  grown : ∀ k, updated.keys k → WriterExtend K (swapTraceKeys root) k
+  storage : WriterRep updated.keys (post.getStor root.sevm.currentTarget) result.frame.current.state
+  bound0 : positions.balances.balance0.toNat < 2 ^ 112
+  bound1 : positions.balances.balance1.toNat < 2 ^ 112
+  added : List PendingLog
+  raw : List Log
+  sourceLogs : result.frame.current.logs = current.logs ++ added
+  rawLogs : post.logs = b.logs ++ raw
+  images : added.map (PendingLog.rawWith (swapOwnedRaw root.sevm.currentTarget)) = raw.map some
+  output : post.output = []
+  actualOutput : result.status = .success post.output
+  remaining : result.remaining = .done
+  prefixForeign : ∀ a, a ≠ root.sevm.currentTarget → W.getStor a = b.getStor a
+  foreign : ∀ a, a ≠ root.sevm.currentTarget →
+    post.getStor a = positions.balances.optional.callback.world.getStor a
+
+/-- On a covered fork, `SwapPositionalCanonicalResultH` gives the modern `SwapPositionalCanonicalResult` with the same fields. -/
+def SwapPositionalCanonicalResultH.toCovered {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (fork : CoveredFork root.sevm.benvStat.fork)
+    (h : SwapPositionalCanonicalResultH K current invocation root b post (swapPrefixWorld root.sevm b)) :
+    SwapPositionalCanonicalResult K current invocation root b post where
+  positions := h.positions.toCovered fork
+  entryFacts := h.entryFacts.toCovered
+  frontFrame := h.frontFrame
+  frontIndex := h.frontIndex
+  frontIndex_eq := h.frontIndex_eq
+  frontTranscript := h.frontTranscript
+  frontReturns := h.frontReturns
+  queries := h.queries.toCovered fork
+  updated := h.updated.toCovered fork
+  transcript := h.transcript
+  transcript_eq := h.transcript_eq
+  result := h.result
+  result_eq := h.result_eq
+  admitted := AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
+    (fun _ _ _ covered auth => auth.toCovered covered) fork h.admitted
+  checkpoint := h.checkpoint
+  context := h.context
+  unlocked := h.unlocked
+  grown := h.grown
+  storage := h.storage
+  bound0 := h.bound0
+  bound1 := h.bound1
+  added := h.added
+  raw := h.raw
+  sourceLogs := h.sourceLogs
+  rawLogs := h.rawLogs
+  images := h.images
+  output := h.output
+  actualOutput := h.actualOutput
+  remaining := h.remaining
+  prefixForeign := h.prefixForeign
+  foreign := h.foreign
+
+/-- On a covered fork, the modern `SwapPositionalCanonicalResult` gives `SwapPositionalCanonicalResultH` with the same fields. -/
+def SwapPositionalCanonicalResult.toH {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapPositionalCanonicalResult K current invocation root b post) :
+    SwapPositionalCanonicalResultH K current invocation root b post (swapPrefixWorld root.sevm b) where
+  positions := h.positions.toH fork
+  entryFacts := h.entryFacts.toH
+  frontFrame := h.frontFrame
+  frontIndex := h.frontIndex
+  frontIndex_eq := h.frontIndex_eq
+  frontTranscript := h.frontTranscript
+  frontReturns := h.frontReturns
+  queries := h.queries.toH fork
+  updated := h.updated.toH fork
+  transcript := h.transcript
+  transcript_eq := h.transcript_eq
+  result := h.result
+  result_eq := h.result_eq
+  admitted := AdmittedSourceConsumes.mono_benvStat (P := fun stat => CoveredFork stat.fork)
+    (fun _ _ _ covered auth => auth.toH covered) fork h.admitted
+  checkpoint := h.checkpoint
+  context := h.context
+  unlocked := h.unlocked
+  grown := h.grown
+  storage := h.storage
+  bound0 := h.bound0
+  bound1 := h.bound1
+  added := h.added
+  raw := h.raw
+  sourceLogs := h.sourceLogs
+  rawLogs := h.rawLogs
+  images := h.images
+  output := h.output
+  actualOutput := h.actualOutput
+  remaining := h.remaining
+  prefixForeign := h.prefixForeign
+  foreign := h.foreign
+
 /-- The actual post-callback tail emits exactly the same observed Sync then Swap. -/
 theorem SwapPositionalCanonicalResult.terminal_logs {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
@@ -92,24 +210,23 @@ theorem SwapPositionalCanonicalResult.forget {K : WriterKey → Prop} {current :
       (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
       r.transcript r.result := r.positional.forget
 
-/-- The existing public successful-run premises produce one complete original-root
-Swap result, with recursively admitted actual queues and same-witness projections. -/
-theorem swap_positional_canonical {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem swap_positional_canonicalH {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post W : Devm} {G : Nat} (hW : W = swapPrefixWorldH sevm b)
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
     (freshOutput : b.output = [])
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
     (hashTInj : WriterInj (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
-    Nonempty (SwapPositionalCanonicalResult K current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post) := by
+    Nonempty (SwapPositionalCanonicalResultH K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post W) := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   let U := WriterExtend K (swapTraceKeys root)
   have sub : ∀ k, K k → U k := fun _ tracked => Or.inl tracked
@@ -123,18 +240,18 @@ theorem swap_positional_canonical {K : WriterKey → Prop} {current : Checkpoint
     rcases List.mem_append.mp touched with pairKey | viewKey
     · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).1 k pairKey)
     · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).2 k viewKey)
-  obtain ⟨positions⟩ := swap_physical_result codeEq fork selector run
-  obtain entryFacts := swap_source_prefix_of_success invocation rep sub codeEq fork selector run
+  obtain ⟨positions⟩ := swap_physical_resultH hW codeEq stateGas bal selector run
+  obtain entryFacts := swap_source_prefix_of_successH hW invocation rep sub codeEq stateGas bal selector run
   obtain ⟨frontFrame, frontT, frontReturns, inv, reach⟩ :=
-    swap_source_callbacks positions.balances.optional entryFacts hashTInj hashTApart
-      sem image installed fork lockedGood
+    swap_source_callbacksH positions.balances.optional entryFacts hashTInj hashTApart
+      sem image installed stateGas bal lockedGood
   let index := (if swapAmount0Out sevm = 0 then 0 else 1) +
     (if swapAmount1Out sevm = 0 then 0 else 1) +
     (if swapDataLength sevm = 0 then 0 else 1)
-  obtain ⟨queries⟩ := swap_balance_pair_source positions.balances index hashTInj hashTApart
-    sem image installed inv rfl rfl fork staticGood
-  obtain ⟨updated⟩ := swap_source_update positions.balances entryFacts queries positions.facts
-  have suffix := swap_source_suffix_admitted positions.balances entryFacts queries updated fork
+  obtain ⟨queries⟩ := swap_balance_pair_sourceH positions.balances index hashTInj hashTApart
+    sem image installed inv rfl rfl stateGas bal staticGood
+  obtain ⟨updated⟩ := swap_source_updateH positions.balances entryFacts queries positions.facts
+  have suffix := swap_source_suffix_admittedH positions.balances entryFacts queries updated stateGas
   have admitted := reach queries.transcript _ suffix
   obtain ⟨checkpoint, context, unlocked⟩ := updated.frame_facts
   obtain ⟨added, raw, sourceLogs, rawLogs, images⟩ := updated.logs entryFacts positions.facts
@@ -181,8 +298,31 @@ theorem swap_positional_canonical {K : WriterKey → Prop} {current : Checkpoint
     foreign := positions.foreign_storage
   }⟩
   intro a foreign
-  unfold swapPrefixWorld mintLockedWorld
-  rw [afterSload_getStor, afterSload_getStor, afterSload_getStor,
-    afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign), afterSload_getStor]
+  rw [hW]
+  unfold swapPrefixWorldH mintLockedWorldH
+  rw [afterSloadH_getStor, afterSloadH_getStor, afterSloadH_getStor,
+    afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm foreign), afterSloadH_getStor]
+
+/-- The existing public successful-run premises produce one complete original-root
+Swap result, with recursively admitted actual queues and same-witness projections. -/
+theorem swap_positional_canonical {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (hashTInj : WriterInj (WriterExtend K
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (hashTApart : WriterApart (WriterExtend K
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
+    Nonempty (SwapPositionalCanonicalResult K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post) := by
+  obtain ⟨h⟩ := swap_positional_canonicalH (swapPrefixWorldH_of_covered fork).symm invocation rep sem image installed freshOutput codeEq fork.rules_stateGas_none fork.rules_bal_none selector run hashTInj hashTApart
+  exact ⟨h.toCovered fork⟩
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -35,15 +35,14 @@ theorem swap_resume_observed_transfer {frame : Frame} {locals : SwapLocals} {out
   cases second <;> simp only [Bool.false_eq_true, ite_false, ite_true, resumeSegment, request,
     swap_observed_transfer_decoded entered accepted]
 
-/-- This supplied physical transfer determines its source request and full slot queue. -/
-theorem SwapTransferOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
+theorem SwapTransferOccurrence.sourceCallH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
     {caller : SFunc} {K : List SFunc}
     (r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K)
     (frame : Frame) (site : CallSite) (index : Nat)
     (staticContext : frame.context.isStatic = start.sevm.isStatic)
     (pair : frame.context.pair = start.sevm.currentTarget)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
+    (stateGas : start.sevm.benvStat.rules.stateGas = none) :
     ∃ observed : SourceCallAt root frame
         (requestFor site token.toAdr (.transfer toWord.toAdr amount))
         (swapObservedTransferReply r.step.returned.devm.returnData r.step.occurrence.slot.isSome) index,
@@ -65,12 +64,28 @@ theorem SwapTransferOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
   have flag : [1] <<+ r.step.returned.devm.stack := by
     rw [r.stack]; exact pref_append _ _
   obtain ⟨paths, queue⟩ := CallOccurrenceStep.sourceSlotQueue r.step frame.context.pair index
-  obtain ⟨observed, same, _⟩ := transfer_source_call_at (request := request)
+  obtain ⟨observed, same, _⟩ := transfer_source_call_atH (request := request)
     (reply := swapObservedTransferReply r.step.returned.devm.returnData r.step.occurrence.slot.isSome)
     r.step rfl rfl
     (by intro digest v rr ss impossible; cases impossible)
     (by rw [r.sevmEq]; exact staticContext) (by rw [r.sevmEq]; exact pair)
-    operands data flag rfl rfl rfl (by rw [r.sevmEq]; exact fork) queue
+    operands data flag rfl rfl rfl (by rw [r.sevmEq]; exact stateGas) queue
   exact ⟨observed, same⟩
+
+/-- This supplied physical transfer determines its source request and full slot queue. -/
+theorem SwapTransferOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
+    {L : List B256} {M : Mem} {p amount toWord token rho : B256}
+    {caller : SFunc} {K : List SFunc}
+    (r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K)
+    (frame : Frame) (site : CallSite) (index : Nat)
+    (staticContext : frame.context.isStatic = start.sevm.isStatic)
+    (pair : frame.context.pair = start.sevm.currentTarget)
+    (fork : CoveredFork start.sevm.benvStat.fork) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor site token.toAdr (.transfer toWord.toAdr amount))
+        (swapObservedTransferReply r.step.returned.devm.returnData r.step.occurrence.slot.isSome) index,
+      observed.call = r.step :=
+  SwapTransferOccurrence.sourceCallH r frame site index staticContext pair fork.rules_stateGas_none
+
 
 end Blanc.Lift.UniswapV2Pair

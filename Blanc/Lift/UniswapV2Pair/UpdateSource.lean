@@ -420,6 +420,42 @@ theorem updateWorld_account_frame {sevm : Sevm} {b : Devm} {old0 old1 balance0 b
     rw [store, afterSload_getAcct, store, afterSload_getAcct, afterSload_getAcct]
   · exact afterSload_getAcct _
 
+theorem updateWorld_account_frameH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
+    {a : Adr} (foreign : a ≠ sevm.currentTarget) :
+    (updateWorldH sevm b old0 old1 balance0 balance1).getAcct a = b.getAcct a := by
+  have store (base : Devm) (key value : B256) :
+      (afterSstoreH sevm base key value).getAcct a = base.getAcct a := by
+    unfold afterSstoreH Devm.getAcct
+    show (State.setStorVal _ _ _ _).get a = _
+    unfold State.setStorVal
+    dsimp only
+    have target : sevm.currentTarget ≠ a := Ne.symm foreign
+    split
+    · rw [State.get_setPresent_ne _ target]
+      unfold storageAccessH
+      split
+      · rfl
+      · split <;> rfl
+    · rw [State.get_set_ne _ target]
+      unfold storageAccessH
+      split
+      · rfl
+      · split <;> rfl
+  have load (base : Devm) (key : B256) : (afterSloadH sevm base key).getAcct a = base.getAcct a := by
+    unfold afterSloadH
+    split
+    · exact afterSload_getAcct _
+    · rfl
+  unfold updateWorldH updateSyncPost
+  rw [getAcct_addLog]
+  unfold updatePackedPostH
+  rw [store, load]
+  unfold updateOracleWorldH
+  split
+  · unfold updateAccumulatorPostH
+    rw [store, load, store, load, load]
+  · exact load _ _
+
 /-- The shared routine preserves the enclosing output field. -/
 theorem updateWorld_output (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) :
     (updateWorld sevm b old0 old1 balance0 balance1).output = b.output := by

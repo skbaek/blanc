@@ -5,15 +5,13 @@ import Blanc.Lift.AccountAccessState
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- A guarded callback keeps its own successful reply and actual code guard;
-its entered slot bit is not substituted for the guarded request's code bit. -/
-theorem SwapCallbackOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
+theorem SwapCallbackOccurrenceH.sourceCallH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
+    (r : SwapCallbackOccurrenceH root start b L M q toWord a0 a1 len dataStart K)
     (frame : Frame) (index : Nat)
     (staticContext : frame.context.isStatic = start.sevm.isStatic)
     (pair : frame.context.pair = start.sevm.currentTarget)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
+    (stateGas : start.sevm.benvStat.rules.stateGas = none) :
     ∃ observed : SourceCallAt root frame
         (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
           (start.sevm.data.sliceD dataStart.toNat len.toNat 0)))
@@ -37,15 +35,17 @@ theorem SwapCallbackOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
   have flag : [1] <<+ r.step.returned.devm.stack := by
     rw [r.stack]; exact pref_append _ _
   obtain ⟨paths, queue⟩ := CallOccurrenceStep.sourceSlotQueue r.step frame.context.pair index
-  obtain ⟨raw, same, _⟩ := transfer_source_call_at (request := unguarded)
+  obtain ⟨raw, same, _⟩ := transfer_source_call_atH (request := unguarded)
     (reply := swapObservedTransferReply r.step.returned.devm.returnData r.step.occurrence.slot.isSome)
     r.step rfl rfl
     (by intro digest v rr ss impossible; cases impossible)
     (by rw [r.sevmEq]; exact staticContext) (by rw [r.sevmEq]; exact pair)
-    operands data flag rfl rfl rfl (by rw [r.sevmEq]; exact fork) queue
+    operands data flag rfl rfl rfl (by rw [r.sevmEq]; exact stateGas) queue
   have present : (raw.call.occurrence.node.devm.getCode request.target).size.toB256 ≠ 0 := by
+    have keep : ∀ s a x, (accountAccessH s b a).getCode x = b.getCode x := fun s a x => by
+      simp only [Devm.getCode, Devm.getAcct, accountAccessH_state]
     rw [same, r.input]
-    simp only [St, Devm.getCode_setMach, Blanc.Lift.temporalAccountAccessBase_getCode]
+    simp only [St, Devm.getCode_setMach, keep]
     have guarded := r.codePresent
     rw [target, toAdr_toB256] at guarded
     exact guarded
@@ -80,5 +80,25 @@ theorem SwapCallbackOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
     childFrames := raw.childFrames
     partition := raw.partition
   }, same⟩
+
+/-- A guarded callback keeps its own successful reply and actual code guard;
+its entered slot bit is not substituted for the guarded request's code bit. -/
+theorem SwapCallbackOccurrence.sourceCall {root start : Exec.Deriv} {b : Devm}
+    {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
+    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
+    (frame : Frame) (index : Nat)
+    (staticContext : frame.context.isStatic = start.sevm.isStatic)
+    (pair : frame.context.pair = start.sevm.currentTarget)
+    (fork : CoveredFork start.sevm.benvStat.fork) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
+          (start.sevm.data.sliceD dataStart.toNat len.toNat 0)))
+        (swapCallbackReply r.step.returned.devm.returnData) index,
+      observed.call = r.step :=
+  SwapCallbackOccurrenceH.sourceCallH (r.toH (by
+    rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.step.sameFrame, r.sevmEq]
+    exact fork)) frame index staticContext pair
+    fork.rules_stateGas_none
+
 
 end Blanc.Lift.UniswapV2Pair

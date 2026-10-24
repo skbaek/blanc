@@ -65,28 +65,138 @@ structure SwapBalanceOccurrence (root start : Exec.Deriv) (b : Devm) (S : List B
     (swapBalanceReply M p start.sevm.currentTarget out) K
   pointer : PtrMem p (swapRequestSize (M.size) p) (swapBalanceReply M p start.sevm.currentTarget out)
 
-/-- The supplied staged balance query derives its actual code guard, reply
-flag, full bytes and word at the same moving pointer. -/
-theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
+structure SwapBalanceOccurrenceH (root start : Exec.Deriv) (b : Devm) (S : List B256)
+    (M : Mem) (p token : B256) (second : Bool) (K : List SFunc) where
+  step : CallOccurrenceStep root .staticcall
+  gas : Nat
+  gap : Exec.Deriv.ExecFreeUntil start step.occurrence.node
+  sevmEq : step.occurrence.node.sevm = start.sevm
+  codePresent : (b.getCode (swapTokenWord token).toAdr).size.toB256 ≠ 0
+  input : step.occurrence.node.devm = St (accountAccessH start.sevm b (swapTokenWord token).toAdr)
+    (gas.toB256 :: swapTokenWord token :: p :: 36 :: p :: 32 ::
+      (p + 36) :: 0x70a08231 :: swapTokenWord token :: S)
+    (swapBalanceRequest M p start.sevm.currentTarget) gas
+  out : Bytes
+  reply : StaticCallPost (accountAccessH start.sevm b (swapTokenWord token).toAdr)
+    step.returned.devm ((p + 36) :: 0x70a08231 :: swapTokenWord token :: S)
+    (swapBalanceRequest M p start.sevm.currentTarget) p 36 p 32 1 out
+  short : out.length < 2 ^ 256
+  long : 32 ≤ out.length
+  calldata : ((swapBalanceRequest M p start.sevm.currentTarget).read p.toNat 36).1 =
+    ExternalOperation.encode (.balanceOf start.sevm.currentTarget)
+  answered : StaticAnsweredH start.sevm (accountAccessH start.sevm b (swapTokenWord token).toAdr)
+    (swapTokenWord token).toAdr (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out
+  memory : step.returned.devm.memory = swapBalanceReply M p start.sevm.currentTarget out
+  replyCut : CursorStateAt code cert step.returned (swapBalanceReplyTree second)
+    step.returned.devm (1 :: (p + 36) :: 0x70a08231 :: swapTokenWord token :: S)
+    step.returned.devm.memory K
+  replyNode : replyCut.node = step.returned
+  tail : CursorStateAt code cert step.returned (swapBalanceDecodedTail second)
+    step.returned.devm (Bytes.toB256 (out.take 32) :: S)
+    (swapBalanceReply M p start.sevm.currentTarget out) K
+  pointer : PtrMem p (swapRequestSize (M.size) p) (swapBalanceReply M p start.sevm.currentTarget out)
+
+/-- On a covered fork, `SwapBalanceOccurrenceH` gives the modern `SwapBalanceOccurrence` with the same fields. -/
+def SwapBalanceOccurrenceH.toCovered {root start : Exec.Deriv} {b : Devm} {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapBalanceOccurrenceH root start b S M p token second K) :
+    SwapBalanceOccurrence root start b S M p token second K where
+  step := h.step
+  gas := h.gas
+  gap := h.gap
+  sevmEq := h.sevmEq
+  codePresent := h.codePresent
+  input := by
+    have field := h.input
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access] at field ⊢
+    exact field
+  out := h.out
+  reply := by
+    have field := h.reply
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access] at field ⊢
+    exact field
+  short := h.short
+  long := h.long
+  calldata := h.calldata
+  answered := by
+    have field := h.answered
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access, StaticAnsweredH_iff_of_covered startFork] at field ⊢
+    exact field
+  memory := h.memory
+  replyCut := h.replyCut
+  replyNode := h.replyNode
+  tail := h.tail
+  pointer := h.pointer
+
+/-- On a covered fork, the modern `SwapBalanceOccurrence` gives `SwapBalanceOccurrenceH` with the same fields. -/
+def SwapBalanceOccurrence.toH {root start : Exec.Deriv} {b : Devm} {S : List B256} {M : Mem} {p token : B256} {second : Bool} {K : List SFunc}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapBalanceOccurrence root start b S M p token second K) :
+    SwapBalanceOccurrenceH root start b S M p token second K where
+  step := h.step
+  gas := h.gas
+  gap := h.gap
+  sevmEq := h.sevmEq
+  codePresent := h.codePresent
+  input := by
+    have field := h.input
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access] at field ⊢
+    exact field
+  out := h.out
+  reply := by
+    have field := h.reply
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access] at field ⊢
+    exact field
+  short := h.short
+  long := h.long
+  calldata := h.calldata
+  answered := by
+    have field := h.answered
+    have startFork : CoveredFork start.sevm.benvStat.fork := by
+      rw [← h.sevmEq, Blanc.Exec.Deriv.ParentPrefix.sevm_eq h.step.sameFrame]
+      exact fork
+    simp only [accountAccessH_of_eip2929 startFork.rules_access, StaticAnsweredH_iff_of_covered startFork] at field ⊢
+    exact field
+  memory := h.memory
+  replyCut := h.replyCut
+  replyNode := h.replyNode
+  tail := h.tail
+  pointer := h.pointer
+
+theorem swap_balance_occurrenceH {root start : Exec.Deriv} {b post : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} {p token : B256} {second : Bool} {n : Nat}
     (cut : CursorStateAt code cert start (swapBalanceCodeTree second) b
       (swapTokenWord token :: swapTokenWord token :: p :: 36 :: p :: 32 ::
         (p + 36) :: 0x70a08231 :: swapTokenWord token :: S) (swapBalanceRequest M p start.sevm.currentTarget) K)
     (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
+    (stateGas : start.sevm.benvStat.rules.stateGas = none)
+    (bal : start.sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
-    Nonempty (SwapBalanceOccurrence root start b S M p token second K) := by
+    Nonempty (SwapBalanceOccurrenceH root start b S M p token second K) := by
   have startSuccess : start.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
-  obtain ⟨present, ⟨checked⟩⟩ := pair_code_guard_cursor_state cut startSuccess fork
+  obtain ⟨present, ⟨checked⟩⟩ := pair_code_guard_cursor_stateH cut startSuccess stateGas bal
     (swapBalanceCodeDestination second) (by cases second <;> decide) rfl
     (by cases second <;> decide)
   have callShape : swapBalanceCallTree second = .dest (.next (.reg .pop)
       (.next (.reg .gas) (.next (.exec .staticcall) (swapBalanceReplyTree second)))) := by
     cases second <;> rfl
   rw [callShape] at checked
-  obtain ⟨checked⟩ := checked.dest cert_check startSuccess fork
-  obtain ⟨gasCut⟩ := checked.line cert_check startSuccess fork [.reg .pop]
+  obtain ⟨checked⟩ := checked.destH cert_check startSuccess stateGas
+  obtain ⟨gasCut⟩ := checked.lineH cert_check startSuccess stateGas [.reg .pop]
     rfl
     (by intro n member x equal; subst n
         simp only [List.mem_singleton, reduceCtorEq] at member)
@@ -96,7 +206,7 @@ theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
         cases line
         exact ⟨gas', state⟩)
   obtain ⟨step, cursor, gas, gap, env, _, input, _, placed, tree, conts⟩ :=
-    gasCut.gasCall cert_check reached startSuccess fork
+    gasCut.gasCallH cert_check reached startSuccess stateGas
   have retEnv : step.returned.sevm = start.sevm :=
     (Cursor.parentStep_sevm step.edge).trans env
   have retSuccess : step.returned.exn = .ok post :=
@@ -107,14 +217,14 @@ theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
     rw [← env]
     simpa only [step.instruction, step.result] using step.occurrence.stepRun
   rw [input] at raw
-  obtain ⟨flag, out, reply, short, answered⟩ := ri_staticcall_bounded fork raw
+  obtain ⟨flag, out, reply, short, answered⟩ := ri_staticcall_boundedH stateGas raw
   let replyCut : CursorStateAt code cert step.returned (swapBalanceReplyTree second)
       step.returned.devm (flag :: (p + 36) :: 0x70a08231 :: swapTokenWord token :: S)
       step.returned.devm.memory K :=
     ⟨step.returned, cursor, .refl _, rfl, rfl, placed,
       (by rw [tree]), ⟨_, St.self reply.stack rfl⟩, conts⟩
-  obtain ⟨one, ⟨returnCut⟩⟩ := replyCut.callFlag cert_check retSuccess
-    (by rw [retEnv]; exact fork) (swapBalanceCallDestination second)
+  obtain ⟨one, ⟨returnCut⟩⟩ := replyCut.callFlagH cert_check retSuccess
+    (by rw [retEnv]; exact stateGas) (swapBalanceCallDestination second)
     (by cases second <;> decide) rfl reply.flag (by cases second <;> decide)
   subst flag
   have memory : step.returned.devm.memory = swapBalanceReply M p start.sevm.currentTarget out := reply.memory
@@ -123,10 +233,10 @@ theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
   have full : step.returned.devm.returnData.length < 2 ^ 256 := by
     rw [reply.returnData]
     exact short
-  obtain ⟨long, ⟨tail⟩⟩ := returnCut.returnWord
+  obtain ⟨long, ⟨tail⟩⟩ := returnCut.returnWordH
     (shortTree := swapBalanceShortTree second) (decodeTree := swapBalanceDecodeTree second)
     (tail := swapBalanceDecodedTail second) cert_check retSuccess
-    (by rw [retEnv]; exact fork) (swapBalanceReturnDestination second)
+    (by rw [retEnv]; exact stateGas) (swapBalanceReturnDestination second)
     (by cases second <;> decide) (by cases second <;> rfl)
     (by cases second <;> rfl) pointer' (by
       have cover := swapRequestSize_cover mem
@@ -141,6 +251,47 @@ theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
   exact ⟨⟨step, gas, gap, env, present, input, out, reply, short, long, calldata,
     answered', memory, replyCut, rfl, tail, pointer⟩⟩
 
+/-- The supplied staged balance query derives its actual code guard, reply
+flag, full bytes and word at the same moving pointer. -/
+theorem swap_balance_occurrence {root start : Exec.Deriv} {b post : Devm}
+    {S : List B256} {M : Mem} {K : List SFunc} {p token : B256} {second : Bool} {n : Nat}
+    (cut : CursorStateAt code cert start (swapBalanceCodeTree second) b
+      (swapTokenWord token :: swapTokenWord token :: p :: 36 :: p :: 32 ::
+        (p + 36) :: 0x70a08231 :: swapTokenWord token :: S) (swapBalanceRequest M p start.sevm.currentTarget) K)
+    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
+    (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    Nonempty (SwapBalanceOccurrence root start b S M p token second K) := by
+  obtain ⟨h⟩ := swap_balance_occurrenceH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
+  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
+
+
+theorem swap_first_balance_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 : B256} {n : Nat}
+    (cut : CursorStateAt code cert start t_09c3_c5 b (t1 :: t0 :: 0 :: 0 :: R) M K)
+    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
+    (stateGas : start.sevm.benvStat.rules.stateGas = none)
+    (bal : start.sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    Nonempty (SwapBalanceOccurrenceH root start b (t1 :: t0 :: 0 :: 0 :: R) M p t0 false K) := by
+  have startSuccess : start.exn = .ok post :=
+    (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
+  obtain ⟨cut⟩ := cut.destH cert_check startSuccess stateGas
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapRequestLine rfl
+    (by intro n member x equal; subst n
+        simp only [swapRequestLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    (swapRequestLine_inv mem lower width)
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapBalance0MaskLine rfl
+    (by intro n member x equal; subst n
+        simp only [swapBalance0MaskLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    swapBalance0MaskLine_inv
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas (swapStagePrepare false) rfl
+    (by intro n member x equal; subst n
+        simp only [swapStagePrepare, ite_false, List.mem_append, List.mem_cons,
+          List.not_mem_nil, reduceCtorEq, or_self] at member)
+    swapStagePrepare_inv
+  exact swap_balance_occurrenceH cut reached success stateGas bal mem lower width
+
 /-- The first balance request starts at the actual post-callback join. -/
 theorem swap_first_balance_cursor_state {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 : B256} {n : Nat}
@@ -149,23 +300,35 @@ theorem swap_first_balance_cursor_state {root start : Exec.Deriv} {b post : Devm
     (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     Nonempty (SwapBalanceOccurrence root start b (t1 :: t0 :: 0 :: 0 :: R) M p t0 false K) := by
+  obtain ⟨h⟩ := swap_first_balance_cursor_stateH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
+  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
+
+
+theorem swap_second_balance_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc} {p t1 t0 bal0 : B256} {n : Nat}
+    (cut : CursorStateAt code cert start (swapBalanceDecodedTail false) b
+      (bal0 :: t1 :: t0 :: 0 :: 0 :: R) M K)
+    (reached : Exec.Deriv.ParentPrefix root start) (success : root.exn = .ok post)
+    (stateGas : start.sevm.benvStat.rules.stateGas = none)
+    (bal : start.sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    Nonempty (SwapBalanceOccurrenceH root start b (t1 :: t0 :: 0 :: bal0 :: R) M p t1 true K) := by
   have startSuccess : start.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
-  obtain ⟨cut⟩ := cut.dest cert_check startSuccess fork
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapRequestLine rfl
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapRequestLine rfl
     (by intro n member x equal; subst n
         simp only [swapRequestLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (swapRequestLine_inv mem lower width)
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapBalance0MaskLine rfl
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapBalance1MaskLine rfl
     (by intro n member x equal; subst n
-        simp only [swapBalance0MaskLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    swapBalance0MaskLine_inv
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork (swapStagePrepare false) rfl
+        simp only [swapBalance1MaskLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    swapBalance1MaskLine_inv
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas (swapStagePrepare true) rfl
     (by intro n member x equal; subst n
-        simp only [swapStagePrepare, ite_false, List.mem_append, List.mem_cons,
+        simp only [swapStagePrepare, ite_true, List.mem_append, List.mem_cons,
           List.not_mem_nil, reduceCtorEq, or_self] at member)
     swapStagePrepare_inv
-  exact swap_balance_occurrence cut reached success fork mem lower width
+  exact swap_balance_occurrenceH cut reached success stateGas bal mem lower width
 
 /-- The second request starts after decoding the first actual reply. -/
 theorem swap_second_balance_cursor_state {root start : Exec.Deriv} {b post : Devm}
@@ -176,22 +339,9 @@ theorem swap_second_balance_cursor_state {root start : Exec.Deriv} {b post : Dev
     (fork : CoveredFork start.sevm.benvStat.fork) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     Nonempty (SwapBalanceOccurrence root start b (t1 :: t0 :: 0 :: bal0 :: R) M p t1 true K) := by
-  have startSuccess : start.exn = .ok post :=
-    (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapRequestLine rfl
-    (by intro n member x equal; subst n
-        simp only [swapRequestLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (swapRequestLine_inv mem lower width)
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapBalance1MaskLine rfl
-    (by intro n member x equal; subst n
-        simp only [swapBalance1MaskLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    swapBalance1MaskLine_inv
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork (swapStagePrepare true) rfl
-    (by intro n member x equal; subst n
-        simp only [swapStagePrepare, ite_true, List.mem_append, List.mem_cons,
-          List.not_mem_nil, reduceCtorEq, or_self] at member)
-    swapStagePrepare_inv
-  exact swap_balance_occurrence cut reached success fork mem lower width
+  obtain ⟨h⟩ := swap_second_balance_cursor_stateH cut reached success fork.rules_stateGas_none fork.rules_bal_none mem lower width
+  exact ⟨h.toCovered (by rw [← Blanc.Exec.Deriv.ParentPrefix.sevm_eq reached]; exact fork)⟩
+
 
 /-- The physically decoded first balance replaces its own cached local slot. -/
 def swapBalance1LocalsStack (sevm : Sevm) (b : Devm) (out0 : Bytes) : List B256 :=
@@ -210,6 +360,59 @@ structure SwapBalances (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
       optional.callback.next.sevm.currentTarget first.out)
     optional.transfers.second.ptr (swapInitialToken1 sevm b) true [t_0257_c99]
 
+structure SwapBalancesH (root : Exec.Deriv) (sevm : Sevm) (b W : Devm) where
+  optional : SwapCallbacksH root sevm b W
+  first : SwapBalanceOccurrenceH root optional.callback.next optional.callback.world
+    (swapRawLocalsStack sevm b) optional.callback.memory optional.transfers.second.ptr
+    (swapInitialToken0 sevm b) false [t_0257_c99]
+  second : SwapBalanceOccurrenceH root first.step.returned first.step.returned.devm
+    (swapBalance1LocalsStack sevm b first.out)
+    (swapBalanceReply optional.callback.memory optional.transfers.second.ptr
+      optional.callback.next.sevm.currentTarget first.out)
+    optional.transfers.second.ptr (swapInitialToken1 sevm b) true [t_0257_c99]
+
+/-- At the modern prefix world and on a covered fork, `SwapBalancesH` gives the modern
+`SwapBalances` with the same fields. -/
+def SwapBalancesH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
+    (fork : CoveredFork root.sevm.benvStat.fork)
+    (h : SwapBalancesH root sevm b (swapPrefixWorld sevm b)) : SwapBalances root sevm b where
+  optional := h.optional.toCovered fork
+  first := h.first.toCovered fork
+  second := h.second.toCovered fork
+
+/-- On a covered fork, the modern `SwapBalances` gives `SwapBalancesH` at the modern prefix
+world with the same fields. -/
+def SwapBalances.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SwapBalances root sevm b) :
+    SwapBalancesH root sevm b (swapPrefixWorld sevm b) where
+  optional := h.optional.toH fork
+  first := h.first.toH fork
+  second := h.second.toH fork
+
+theorem swap_balances_cursor_stateH {sevm : Sevm} {b post W : Devm} {G : Nat}
+    (hW : W = swapPrefixWorldH sevm b) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    Nonempty (SwapBalancesH ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b W) := by
+  obtain ⟨optional⟩ := swap_callback_cursor_stateH hW codeEq stateGas bal selector run
+  obtain ⟨n, mem⟩ := optional.callback.mem
+  have forkC : optional.callback.next.sevm.benvStat.rules.stateGas = none ∧ optional.callback.next.sevm.benvStat.rules.bal = none := by
+    rw [optional.callback.sevmEq, optional.transfers.second.sevmEq, optional.transfers.first.sevmEq]
+    exact ⟨stateGas, bal⟩
+  have cut := optional.callback.cut
+  dsimp only [swapRawLocalsStack, swapBodyStack] at cut
+  obtain ⟨first⟩ := swap_first_balance_cursor_stateH cut optional.callback.reached rfl forkC.1 forkC.2 mem
+    optional.transfers.secondLower (by have upper := optional.transfers.secondUpper; omega)
+  have fork0 : first.step.returned.sevm.benvStat.rules.stateGas = none ∧
+      first.step.returned.sevm.benvStat.rules.bal = none := by
+    rw [Cursor.parentStep_sevm first.step.edge, first.sevmEq]
+    exact forkC
+  obtain ⟨second⟩ := swap_second_balance_cursor_stateH first.tail
+    (first.step.sameFrame.snoc first.step.edge) rfl fork0.1 fork0.2 first.pointer
+    optional.transfers.secondLower (by have upper := optional.transfers.secondUpper; omega)
+  exact ⟨⟨optional, first, second⟩⟩
+
 /-- Both final balance calls are derived from the same original successful
 Swap; every full reply, decoder and gas is selected internally. -/
 theorem swap_balances_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -217,39 +420,34 @@ theorem swap_balances_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (SwapBalances ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b) := by
-  obtain ⟨optional⟩ := swap_callback_cursor_state codeEq fork selector run
-  obtain ⟨n, mem⟩ := optional.callback.mem
-  have forkC : CoveredFork optional.callback.next.sevm.benvStat.fork := by
-    rw [optional.callback.sevmEq, optional.transfers.second.sevmEq, optional.transfers.first.sevmEq]
-    exact fork
-  have cut := optional.callback.cut
-  dsimp only [swapRawLocalsStack, swapBodyStack] at cut
-  obtain ⟨first⟩ := swap_first_balance_cursor_state cut optional.callback.reached rfl forkC mem
-    optional.transfers.secondLower (by have upper := optional.transfers.secondUpper; omega)
-  have fork0 : CoveredFork first.step.returned.sevm.benvStat.fork := by
-    rw [Cursor.parentStep_sevm first.step.edge, first.sevmEq]
-    exact forkC
-  obtain ⟨second⟩ := swap_second_balance_cursor_state first.tail
-    (first.step.sameFrame.snoc first.step.edge) rfl fork0 first.pointer
-    optional.transfers.secondLower (by have upper := optional.transfers.secondUpper; omega)
-  exact ⟨⟨optional, first, second⟩⟩
+  obtain ⟨h⟩ := swap_balances_cursor_stateH (swapPrefixWorldH_of_covered fork).symm codeEq
+    fork.rules_stateGas_none fork.rules_bal_none selector run
+  exact ⟨h.toCovered fork⟩
 
-/-- The actual final reply's checked continuation and original stop entry
-exclude every later same-frame external instruction. -/
-theorem SwapBalances.noExecTail {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : SwapBalances root sevm b) (fork : CoveredFork root.sevm.benvStat.fork) :
+
+theorem SwapBalancesH.noExecTail {root : Exec.Deriv} {sevm : Sevm} {b W : Devm}
+    (r : SwapBalancesH root sevm b W) (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     ∀ N, Exec.Deriv.ParentPrefix r.second.step.returned N → ∀ x,
       ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
   have env : r.second.step.returned.sevm = root.sevm :=
     Blanc.Exec.Deriv.ParentPrefix.sevm_eq (r.second.step.sameFrame.snoc r.second.step.edge)
   rw [← r.second.replyNode]
-  apply r.second.replyCut.placed.noExecSuffix cert_check
-    (by rw [r.second.replyNode, env]; exact fork) (E := [6,7,8,9,18,19,20,21,22,58,59,60,65,66]) (by decide)
+  apply r.second.replyCut.placed.noExecSuffixH cert_check
+    (by rw [r.second.replyNode, env]; exact stateGas) (E := [6,7,8,9,18,19,20,21,22,58,59,60,65,66]) (by decide)
   · rw [r.second.replyCut.tree]; decide
   · intro f member
     rw [r.second.replyCut.continuations] at member
     simp only [List.mem_singleton] at member
     subst f
     decide
+
+/-- The actual final reply's checked continuation and original stop entry
+exclude every later same-frame external instruction. -/
+theorem SwapBalances.noExecTail {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    (r : SwapBalances root sevm b) (fork : CoveredFork root.sevm.benvStat.fork) :
+    ∀ N, Exec.Deriv.ParentPrefix r.second.step.returned N → ∀ x,
+      ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
+  SwapBalancesH.noExecTail (r.toH fork) fork.rules_stateGas_none
+
 
 end Blanc.Lift.UniswapV2Pair
