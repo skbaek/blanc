@@ -957,6 +957,17 @@ earlier attributed raw successful `SSTORE`), its invariant forms
 `msgNode_code`, `txNode_code`, `StagedBodyTrace.withdrawalCell_of_code`,
 `StagedBodyTrace.withdrawalCode_of_code`, `successfulSstore?_node_owner`.
 No recipe is registered: use this branch and the named theorem.
+For how each raw node of an In-history is reached (a message root running the
+code installed at its own target, a successor of an earlier node of its frame,
+or the root of a frame an earlier node spawned), with no premise beyond the
+trace, [`Blanc/ExecutionInRawNodeOrigin.lean`](../Blanc/ExecutionInRawNodeOrigin.lean):
+`ConfiguredHistoryTraceIn.rawNodes_origin` (`OriginList`, `RawOrigin`,
+`RootOwnCode`, `Exec.Deriv.SpawnedAt`), the level-zero
+`Exec.rawNodes_split_origin`, the per-level `…rawNodes_origin` lifts, and the
+message facts `MsgRootCode`, `MsgOwn`, `messageCallDelegation_own`,
+`messageCallExecutionMessage_rootCode`. It is the positional input of a strong
+induction over `rawNodes` that bounds the codes run in a storage context.
+No recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

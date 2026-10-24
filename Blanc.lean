@@ -1578,6 +1578,7 @@ import Blanc.ExecutionInRawNodes
 import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionHistoryCellProvenance
+import Blanc.ExecutionInRawNodeOrigin
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
@@ -1781,6 +1782,8 @@ import Blanc.Lift.WriteSiteReach
 import Blanc.Lift.WriteSiteReachHistory
 import Blanc.Lift.Usdc.AllowLocalitySstore
 import Blanc.Lift.Usdc.ProxySafeFrames
+import Blanc.Lift.Usdc.ProxyReachH
+import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk

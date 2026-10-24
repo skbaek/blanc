@@ -19,9 +19,11 @@ checkpoint is the code at `P` at every raw and settled frame (`rawFrame_proxyCod
 That code fact discharges the owner-code premise of the attributed-`SSTORE` allowance classes
 at the proxy (`retainedSstore_implV*_allowClass_proxy`).
 
-The `codes` premise (which code each raw frame in `P`'s context runs) remains the caller's
-obligation: it depends on the implementation slot's values along the history and on what the
-admin installs there, which no certificate decides.
+The `codes` premise (which code each raw frame in `P`'s context runs) depends on the
+implementation slot's values along the history and on what the admin installs there, which no
+certificate decides. `ProxyContextCodes.lean` proves it from the accounts installed at the
+checkpoint and two stated implementation-slot premises (`usdc_safeRawFrames_of_world`,
+`rawFrame_proxyCode_of_world`).
 -/
 
 namespace Blanc.Lift.Usdc
