@@ -127,9 +127,9 @@ and `fp` named the pointer word before it, then the symbol `memEff` returns name
 free-pointer store of a good value names the stored symbol, a write whose window provably misses
 `[64, 96)` keeps `fp`, and every other accepted instruction leaves the word alone.  The missing
 windows are `Nat` windows (`Miss64`): Jaune's memory never wraps. -/
-theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat} {n : Ninst}
+theorem memEff_fpWord_noStateGas {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat} {n : Ninst}
     {kv : List Nat} {gas : List Fact} {out : Pattern} {S rest : List B256} {sevm : Sevm}
-    {d d' : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    {d d' : Devm} (hsg : sevm.benvStat.rules.stateGas = none)
     (ht : ninstTransfer n (indexPattern kv.length) = some out)
     (he : memEff fs fp n kv = some (fp', gas)) (hf : AllHold ν fs)
     (hS : List.Forall₂ (fun s w => ν s = w) kv S) (hstack : d.stack = S ++ rest)
@@ -152,7 +152,7 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       · cases ht
       rw [fp_keep he rfl]
       rcases hS with _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, hS⟩⟩⟩⟩
-      rw [run_create2_memory hfork hstack run]
+      rw [run_create2_memory_noStateGas hsg hstack run]
       exact hw.extends _
     | call =>
       rcases kv with _ | ⟨g, _ | ⟨c, _ | ⟨v, _ | ⟨ii, _ | ⟨is, _ | ⟨o, _ | ⟨l, kv⟩⟩⟩⟩⟩⟩⟩
@@ -166,7 +166,7 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       simp only [memEff, Option.some.injEq, Prod.mk.injEq] at he
       obtain ⟨rfl, -⟩ := he
       rcases hS with _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, hS⟩⟩⟩⟩⟩⟩⟩
-      obtain ⟨ys, hl, hm⟩ := run_call_memory hfork hstack run
+      obtain ⟨ys, hl, hm⟩ := run_call_memory_noStateGas hsg hstack run
       rw [hm]
       split
       · exact (hw.extends _).write (miss_of_apartW hf ‹_› hl)
@@ -182,7 +182,7 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       simp only [memEff, Option.some.injEq, Prod.mk.injEq] at he
       obtain ⟨rfl, -⟩ := he
       rcases hS with _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, hS⟩⟩⟩⟩⟩⟩
-      obtain ⟨ys, hl, hm⟩ := run_delegatecall_memory hfork hstack run
+      obtain ⟨ys, hl, hm⟩ := run_delegatecall_memory_noStateGas hsg hstack run
       rw [hm]
       split
       · exact (hw.extends _).write (miss_of_apartW hf ‹_› hl)
@@ -198,7 +198,7 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       simp only [memEff, Option.some.injEq, Prod.mk.injEq] at he
       obtain ⟨rfl, -⟩ := he
       rcases hS with _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, _ | ⟨rfl, hS⟩⟩⟩⟩⟩⟩
-      obtain ⟨ys, hl, hm⟩ := run_staticcall_memory hfork hstack run
+      obtain ⟨ys, hl, hm⟩ := run_staticcall_memory_noStateGas hsg hstack run
       rw [hm]
       split
       · exact (hw.extends _).write (miss_of_apartW hf ‹_› hl)
@@ -223,7 +223,7 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       rw [fp_keep he rfl, run_extcodehash_memory run]
       exact hw
     case selfbalance =>
-      rw [fp_keep he rfl, ← (of_run_selfbalance hfork run).memory]
+      rw [fp_keep he rfl, run_selfbalance_memory run]
       exact hw
     case mstore =>
       rcases kv with _ | ⟨a, _ | ⟨v, kv⟩⟩
@@ -302,6 +302,17 @@ theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat}
       split
       · exact hw.write (miss_of_apartW hf ‹_› hl.le)
       · exact FpWord.none _ _
+
+/-- Covered-fork projection of free-pointer memory-effect soundness. -/
+theorem memEff_fpWord {ν : Nat → B256} {fs : List Fact} {fp fp' : Option Nat} {n : Ninst}
+    {kv : List Nat} {gas : List Fact} {out : Pattern} {S rest : List B256} {sevm : Sevm}
+    {d d' : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (ht : ninstTransfer n (indexPattern kv.length) = some out)
+    (he : memEff fs fp n kv = some (fp', gas)) (hf : AllHold ν fs)
+    (hS : List.Forall₂ (fun s w => ν s = w) kv S) (hstack : d.stack = S ++ rest)
+    (hw : FpWord ν fp d.memory) (run : Ninst.Run sevm d n d') :
+    FpWord ν fp' d'.memory :=
+  memEff_fpWord_noStateGas hfork.rules_stateGas_none ht he hf hS hstack hw run
 
 /-! ## Touched windows are bounded -/
 

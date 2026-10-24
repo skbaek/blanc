@@ -103,6 +103,7 @@ import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionTraceFrameEnv
 import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionSenderOccurrences
+import Blanc.ExecutionSenderRootCallers
 import Blanc.ExecutionDelegationEligibility
 import Blanc.ExecutionSystemDelegation
 import Blanc.ExecutionHistoryDelegationEligibility

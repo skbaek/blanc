@@ -5539,6 +5539,16 @@ supply delegation or old-contract ECRECOVER exclusions.
 The `admitted-sender-query-exclusion` recipe recognizes the three direct
 transaction, modern-history and selected-history `NoSenderAt` goal heads.
 
+[`Blanc/ExecutionSenderRootCallers.lean`](../Blanc/ExecutionSenderRootCallers.lean)
+projects the same admitted senders to actual settled message roots.
+`ConfiguredHistoryTraceIn.settledRoots_caller_ne_of_noSenderAt` combines
+`NoSenderAt a` with `a ≠ systemAddress`; its `of_senderQueries` counterpart
+consumes the exact recovery-query exclusion directly. Transaction roots retain
+the original checked sender, while optional system stages retain systemAddress.
+These results need no modern fork, code invariant or eligible-authority premise
+for caller identity. Mid-history root and sender-query suffix transport remain
+separate obligations.
+
 The following effects APIs consume the modern covered carrier:
 
 - Entering a block's body: `ExecutionTrace.ConfiguredBlockTrace.openingState`
@@ -6132,7 +6142,12 @@ contract-neutral.
   `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
   `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
   `EXTCODEHASH`, `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
-  `Mem.write_size_ge` (a write never shrinks memory).
+  `Mem.write_size_ge` (a write never shrinks memory). The
+  `run_call_memory_noStateGas`, `run_delegatecall_memory_noStateGas`,
+  `run_staticcall_memory_noStateGas` and `run_create2_memory_noStateGas`
+  variants consume the executing rules' `stateGas = none`; their covered-fork
+  counterparts are projections of the same proofs. `run_selfbalance_memory`
+  preserves memory from the actual successful instruction, without a fork premise.
 - For crossing solc's word-copy loop without knowing the copied bytes, use
   [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
   `copy_loop_keep` (under the memory potential the loop leaves every byte below
@@ -6140,7 +6155,9 @@ contract-neutral.
 - For the free-pointer checker's memory effect, use
   [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
   (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
-  `memEff_obs` and `memEff_mload_top`.
+  `memEff_obs` and `memEff_mload_top`. `memEff_fpWord_noStateGas` uses the
+  executing rules' state-gas absence with the same checker and memory-effect
+  proof; `memEff_fpWord` retains its original covered-fork interface.
 - For the static code an instruction reads, use
   [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
   `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),

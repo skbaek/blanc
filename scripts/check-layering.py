@@ -137,7 +137,7 @@ SHARED = ["Basic", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFact
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
-           "ExecutionSenderOccurrences", "ExecutionDelegationEligibility",
+           "ExecutionSenderOccurrences", "ExecutionSenderRootCallers", "ExecutionDelegationEligibility",
            "CodeReadInversion",
            "ExecutionSystemDelegation", "ExecutionHistoryDelegationEligibility",
            "Lift.RecoveryOccurrence",
