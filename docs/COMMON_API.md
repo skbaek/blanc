@@ -7330,7 +7330,16 @@ contract-neutral.
   `Blanc/Lift/Usdc/SignedPaths.lean` excludes successful Pair-owned calls for
   the canonical V2_2 permit selectors, preserving the actual execution and
   entry-world library/Pair code premises. Its dispatcher adaptation is shared
-  with the original covered endpoint. Retained-owner consumers remain separate.
+  with the original covered endpoint.
+  `Blanc/Composition/UniswapV2PairUsdcOwnersIn.lean` supplies
+  `mid_retained_owner_excluded` for the same actual retained V2_2 frame: library
+  code comes from the original full-world prefix, and Pair code from the
+  genuine mid-cut installation. It preserves that frame’s execution, entry
+  world and commitment; actual installation and world facts remain inputs.
+  Its `mid_retainedRowWrite_nonInc` removes the V2_2 owner residual from the
+  existing classifier while retaining the same root, frame, write and parent
+  prefix, and the original full-history R3/R4 populations. This is a local
+  retained-write inequality; complete-root zero transport is separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
