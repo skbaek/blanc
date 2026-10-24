@@ -14,11 +14,11 @@ its original fresh root, on any fork without state gas or block access lists
 (`NeutralFork`, every historical fork). The source clause retains each exact
 input and real owner comparison; this local successful producer is not a
 history census. -/
-theorem old_owner_query_nativeH {F : Exec.Deriv} {post : Devm}
+private theorem old_owner_query_nativeH_effective {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (version : (F.sevm.code = ImplV2.code ∧ Sevm.selector F.sevm ∈ selV2.owners) ∨
       (F.sevm.code = ImplV2_1.code ∧ Sevm.selector F.sevm ∈ selV2_1.owners))
-    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none)
     (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (R : Exec.Deriv) (original : CallOccurrenceStep R .staticcall)
       (origin : Exec.Deriv.ExecFreeUntil F R) (call : CallOccurrenceStep F .staticcall)
@@ -105,7 +105,7 @@ theorem old_owner_query_nativeH {F : Exec.Deriv} {post : Devm}
         paid,clean,childOutput,output,nonzero,returnData,suffix,suffixExn,suffixEnv,
         placed,tree,continuations,registers,epilogue,comparisonEnv,comparisonExn,
         comparisonPlaced,comparisonTree,comparisonK,comparisonStack,total⟩ :=
-        ownerV2_query_consumed pc code stack memory member nodeleg success fork
+        ownerV2_query_consumed_effective pc code stack memory member ready success fork
       refine ⟨R,call,origin,parent,child,gas,_,op.recoveryPointer.toNat,Q,next,
         callEnv,spawned,process,emptySlot,native,paid,clean,childOutput,output,nonzero,
         returnData,total,⟨_,comparisonStack⟩,Or.inl ?_⟩
@@ -115,7 +115,7 @@ theorem old_owner_query_nativeH {F : Exec.Deriv} {post : Devm}
       obtain ⟨R,call,parent,child,gas,Q,next,entryPc,origin,beforeSpan,callPc,callEnv,
         spawned,process,emptySlot,native,paid,clean,childOutput,output,nonzero,
         returnData,total,comparisonPlaced,comparisonTree,comparisonStack⟩ :=
-        permitV2_1_query_consumed pc code stack memory selector nodeleg success fork
+        permitV2_1_query_consumed_effective pc code stack memory selector ready success fork
       refine ⟨R,call,origin,parent,child,gas,_,450,Q,next,
         callEnv,spawned,process,emptySlot,native,paid,clean,childOutput,output,nonzero,
         returnData,total,comparisonStack,Or.inr ?_⟩
@@ -165,6 +165,64 @@ theorem old_owner_query_nativeH {F : Exec.Deriv} {post : Devm}
     childOutput,nonzero,returnData,
     call.occurrence.staticcall_observation call.instruction,routing,execution,
     nativeActual,settlement,resumed,answer,call.retained,total,comparisonStack,source⟩
+
+/-- Pure nondelegation retains the original actual-query interface. -/
+theorem old_owner_query_nativeH {F : Exec.Deriv} {post : Devm}
+    (pc : F.pc = 0) (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
+    (version : (F.sevm.code = ImplV2.code ∧ Sevm.selector F.sevm ∈ selV2.owners) ∨
+      (F.sevm.code = ImplV2_1.code ∧ Sevm.selector F.sevm ∈ selV2_1.owners))
+    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
+    ∃ (R : Exec.Deriv) (original : CallOccurrenceStep R .staticcall)
+      (origin : Exec.Deriv.ExecFreeUntil F R) (call : CallOccurrenceStep F .staticcall)
+      (parent child : Devm) (gas : Nat) (input : Bytes) (pointer : Nat)
+      (Q : Exec.Deriv) (next : Cursor),
+      let owner := (Sevm.dataWord F.sevm 4).toAdr
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      call = original.reRoot origin.1 ∧
+      call.occurrence.node = original.occurrence.node ∧
+      call.occurrence.instruction = original.occurrence.instruction ∧
+      call.occurrence.slot = original.occurrence.slot ∧
+      call.occurrence.stepResult = original.occurrence.stepResult ∧
+      call.returned = original.returned ∧ call.occurrence.node.sevm = F.sevm ∧
+      Ninst.step ⟨call.occurrence.node.pc,call.occurrence.node.sevm,call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent pointer 32) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧ call.occurrence.slot = .none ∧
+      msg.codeAddress = some 1 ∧ msg.disablePrecompiles = false ∧ gasEcrecover ≤ gas ∧
+      child.error.isSome = false ∧ child.output = owner.toB256.toBytes ∧
+      owner ≠ 0 ∧ call.returned.devm.returnData = owner.toB256.toBytes ∧
+      StaticcallObservation call.occurrence.node.pc call.occurrence.node.sevm
+        call.occurrence.node.devm call.occurrence.slot call.occurrence.stepResult ∧
+      StaticcallRouting msg call.occurrence.slot (.ok child) ∧
+      executeCode.enter msg = .inr (executePrecomp (initEvm msg) 1) ∧
+      (Frame.ofCall msg).enter = .done ((Frame.ofCall msg).settle
+        (executePrecomp (initEvm msg) 1)) ∧
+      (.ok child : Except (EvmError × State × AdrSet × Tra) Devm) =
+        (Frame.ofCall msg).settle (executePrecomp (initEvm msg) 1) ∧
+      (Resume.call parent pointer 32).run (.ok child) = call.occurrence.stepResult ∧
+      executeEcrecover (initEvm msg) = .ok gasEcrecover owner.toB256.toBytes ∧
+      (Execution.commits F.exn = true → call.occurrence.Retained) ∧
+      Exec.Deriv.ExecFreeUntil call.returned Q ∧
+      (∃ S, Q.devm.stack = owner.toB256 :: owner.toB256 :: S) ∧
+      ((F.sevm.code = ImplV2.code ∧ ∃ op : OwnerOpV2,
+          Sevm.selector F.sevm = op.selector ∧
+          input = (op.digest F).toBytes ++ (op.vWord F.sevm).toBytes ++
+            (op.rWord F.sevm).toBytes ++ (op.sWord F.sevm).toBytes ∧
+          pointer = op.recoveryPointer.toNat ∧ R.pc = 0x50a4 ∧
+          call.occurrence.node.pc = 0x50ef ∧
+          CursorOK ImplV2.code ImplV2.cert Q next ∧ next.f = op.comparison) ∨
+        (F.sevm.code = ImplV2_1.code ∧
+          input = (permitV2_1Digest F.sevm F.devm).toBytes ++
+            (Sevm.dataWord F.sevm 132 &&& 255).toBytes ++
+            (Sevm.dataWord F.sevm 164).toBytes ++ (Sevm.dataWord F.sevm 196).toBytes ∧
+          pointer = 450 ∧ R.pc = 0x4a2d ∧ call.occurrence.node.pc = 0x4a78 ∧
+          CursorOK ImplV2_1.code ImplV2_1.cert Q next ∧ next.f = ImplV2_1.t_421e_c71)) := by
+  have ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact old_owner_query_nativeH_effective pc stack memory version ready success fork
 
 
 /-- The registered V2/V2_1 owner routes produce one actual native answer at
@@ -275,11 +333,11 @@ def OldUsdcNativePairAnswer (F : Exec.Deriv) (pair : Adr) : Prop :=
 
 /-- Project the accepted actual query into the concrete Pair-answer API.
 All native facts come from the unchanged original-root theorem. -/
-theorem old_owner_pair_native {F : Exec.Deriv} {post : Devm} {pair : Adr}
+theorem old_owner_pair_native_effective {F : Exec.Deriv} {post : Devm} {pair : Adr}
     (pc : F.pc = 0) (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (version : (F.sevm.code = ImplV2.code ∧ Sevm.selector F.sevm ∈ selV2.owners) ∨
       (F.sevm.code = ImplV2_1.code ∧ Sevm.selector F.sevm ∈ selV2_1.owners))
-    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none)
     (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork)
     (owner : (Sevm.dataWord F.sevm 4).toAdr = pair) :
     OldUsdcNativePairAnswer F pair := by
@@ -288,7 +346,7 @@ theorem old_owner_pair_native {F : Exec.Deriv} {post : Devm} {pair : Adr}
     callEnv,spawned,process,emptySlot,address,enabled,paid,clean,childOutput,nonzero,
     returnData,observation,routing,execution,native,settlement,resumed,answer,retained,
     total,comparisonStack,source⟩ :=
-    old_owner_query_nativeH pc stack memory version nodeleg success fork
+    old_owner_query_nativeH_effective pc stack memory version ready success fork
   rw [owner] at childOutput nonzero returnData answer comparisonStack
   refine ⟨call,parent,child,gas,input,pointer,Q,next,owner,version,callEnv,spawned,
     process,emptySlot,address,enabled,paid,clean,childOutput,nonzero,returnData,
@@ -298,6 +356,20 @@ theorem old_owner_pair_native {F : Exec.Deriv} {post : Devm} {pair : Adr}
     ⟨code,inputEq,pointerEq,entryPc,callPc,placed,tree⟩
   · exact Or.inl ⟨code,op,selector,inputEq,pointerEq,callPc,placed,tree⟩
   · exact Or.inr ⟨code,inputEq,pointerEq,callPc,placed,tree⟩
+
+/-- Pure nondelegation retains the original actual-query interface. -/
+theorem old_owner_pair_native {F : Exec.Deriv} {post : Devm} {pair : Adr}
+    (pc : F.pc = 0) (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
+    (version : (F.sevm.code = ImplV2.code ∧ Sevm.selector F.sevm ∈ selV2.owners) ∨
+      (F.sevm.code = ImplV2_1.code ∧ Sevm.selector F.sevm ∈ selV2_1.owners))
+    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork)
+    (owner : (Sevm.dataWord F.sevm 4).toAdr = pair) :
+    OldUsdcNativePairAnswer F pair := by
+  have ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact old_owner_pair_native_effective pc stack memory version ready success fork owner
+
 
 /-- V1's same-run protected-write observations have only caller and initializer
 exceptions. The existing empty owner table requires no native premise. -/

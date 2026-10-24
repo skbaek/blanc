@@ -1464,11 +1464,11 @@ private theorem owner_return (op : OwnerOpV2) {N : Exec.Deriv} {κ : Cursor} {po
 /-- Existing owner-selector coverage produces the actual query/native answer and real owner comparison.
 Every native-consumer message/slot/payment/return conjunct is retained. Failed invocations and history
 are separate scopes; address1 nondelegation and NeutralFork are the explicit local premises. -/
-theorem ownerV2_query_consumed {F : Exec.Deriv} {post : Devm}
+theorem ownerV2_query_consumed_effective {F : Exec.Deriv} {post : Devm}
     (pc : F.pc = 0) (code : F.sevm.code = ImplV2.code)
     (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
     (member : Sevm.selector F.sevm ∈ selV2.owners)
-    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none)
     (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
     ∃ (op : OwnerOpV2) (R : Exec.Deriv) (call : CallOccurrenceStep R .staticcall)
       (parent child : Devm) (gas : Nat) (N : Exec.Deriv) (returned : Cursor)
@@ -1510,8 +1510,8 @@ theorem ownerV2_query_consumed {F : Exec.Deriv} {post : Devm}
   obtain ⟨call,parent,child,gas,adr,N,returned,callPc,beforeSpan,spawned,process,emptySlot,
     native,paid,clean,childOutput,output,nonzero,returnData,suffix,suffixExn,suffixEnv,
     finalPlaced,callerTree,callerK,callerStack⟩ :=
-    recoveryV2_consumes placed tree actualPc state ptr (by cases op <;> decide)
-      (by cases op <;> decide) (by rw [code1]; exact nodeleg) continuations
+    recoveryV2_consumes_effective placed tree actualPc state ptr (by cases op <;> decide)
+      (by cases op <;> decide) (by rw [sameEnv, code1]; exact ready) continuations
       (sameExn.trans success) (by rw [sameEnv]; exact fork)
   obtain ⟨Q,next,epilogue,comparisonEnv,comparisonExn,comparisonPlaced,comparisonTree,
     comparisonK,comparisonStack,ownerEq⟩ := owner_return op finalPlaced callerTree callerStack callerK
@@ -1532,5 +1532,49 @@ theorem ownerV2_query_consumed {F : Exec.Deriv} {post : Devm}
     suffix,suffixExn,suffixEnv,finalPlaced,callerTree,callerK,callerStack,
     epilogue,comparisonEnv,comparisonExn,comparisonPlaced,comparisonTree,comparisonK,comparisonStack,
     suffix.trans epilogue⟩
+
+/-- Pure nondelegation retains the original successful query interface. -/
+theorem ownerV2_query_consumed {F : Exec.Deriv} {post : Devm}
+    (pc : F.pc = 0) (code : F.sevm.code = ImplV2.code)
+    (stack : F.devm.stack = []) (memory : F.devm.memory = Mem.empty)
+    (member : Sevm.selector F.sevm ∈ selV2.owners)
+    (nodeleg : getDelegatedCodeAddress (F.devm.getCode 1) = none)
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
+    ∃ (op : OwnerOpV2) (R : Exec.Deriv) (call : CallOccurrenceStep R .staticcall)
+      (parent child : Devm) (gas : Nat) (N : Exec.Deriv) (returned : Cursor)
+      (Q : Exec.Deriv) (next : Cursor),
+      let owner := (Sevm.dataWord F.sevm 4).toAdr
+      let input := (op.digest F).toBytes ++ (op.vWord F.sevm).toBytes ++
+        (op.rWord F.sevm).toBytes ++ (op.sWord F.sevm).toBytes
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      Sevm.selector F.sevm = op.selector ∧
+      R.pc = 0x50a4 ∧ Exec.Deriv.ExecFreeUntil F R ∧ R.sevm = F.sevm ∧ R.exn = F.exn ∧
+      call.occurrence.node.pc = 0x50ef ∧ Exec.Deriv.ExecFreeUntil R call.occurrence.node ∧
+      call.occurrence.node.sevm = F.sevm ∧
+      Ninst.step ⟨call.occurrence.node.pc,call.occurrence.node.sevm,call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent op.recoveryPointer.toNat 32) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧ call.occurrence.slot = .none ∧
+      (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) ∧
+      gasEcrecover ≤ gas ∧ child.error.isSome = false ∧ child.output = owner.toB256.toBytes ∧
+      ecrecoverOutput input = owner.toB256.toBytes ∧ owner ≠ 0 ∧
+      call.returned.devm.returnData = owner.toB256.toBytes ∧
+      Exec.Deriv.ExecFreeUntil call.returned N ∧ N.exn = R.exn ∧ N.sevm = R.sevm ∧
+      CursorOK ImplV2.code ImplV2.cert N returned ∧ returned.f = ImplV2.t_4d93_c84 ∧
+      returned.K.map Cont.f = [op.comparison,op.internalReturn,op.returnTree] ∧
+      N.devm.stack = owner.toB256 :: op.digest F :: 0 :: 128 ::
+        op.sWord F.sevm :: op.rWord F.sevm :: op.vWord F.sevm :: op.queryDomain F ::
+        Bytes.toB256 [op.comparisonTag.1,op.comparisonTag.2] :: owner.toB256 :: op.savedStack F.sevm ∧
+      Exec.Deriv.ExecFreeUntil N Q ∧ Q.sevm = N.sevm ∧ Q.exn = N.exn ∧
+      CursorOK ImplV2.code ImplV2.cert Q next ∧ next.f = op.comparison ∧
+      next.K.map Cont.f = [op.internalReturn,op.returnTree] ∧
+      Q.devm.stack = owner.toB256 :: owner.toB256 :: op.savedStack F.sevm ∧
+      Exec.Deriv.ExecFreeUntil call.returned Q := by
+  have ready : F.sevm.benvStat.rules.delegatedCodeAddress (F.devm.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact ownerV2_query_consumed_effective pc code stack memory member ready success fork
 
 end Blanc.Lift.Usdc

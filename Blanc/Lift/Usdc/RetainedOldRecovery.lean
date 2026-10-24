@@ -81,7 +81,7 @@ end RetainedOldOwnerNativeQuery
 /-- Every retained V2 or V2_1 owner-route parent produces its actual Pair query
 at the supplied global position. Fresh entry is derived from the history;
 no tracked write, final-answer or local-query premise is supplied. -/
-theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at
+theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at_effective
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
@@ -92,7 +92,7 @@ theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at
     (version : (G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
       (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners))
     (owner : (Sevm.dataWord G.sevm 4).toAdr = pair)
-    (nodeleg : getDelegatedCodeAddress (G.pre.getCode 1) = none) :
+    (ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
     ∃ query : RetainedOldOwnerNativeQuery history P pair,
       query.parent = G ∧ query.before = before ∧ query.after = after ∧
       executeEcrecover query.actualEvm = .ok gasEcrecover pair.toB256.toBytes := by
@@ -110,7 +110,7 @@ theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at
       _, _, callEnv, spawned, process, emptySlot, address, enabled, paid, clean,
       childOutput, nonzero, returnData, observation, routing, execution, native,
       settlement, resumed, answer, retained, suffix, comparison, source⟩ :=
-    old_owner_pair_native pc fresh.1 fresh.2 version nodeleg success
+    old_owner_pair_native_effective pc fresh.1 fresh.2 version ready success
       ⟨stateGas, bal _ selected⟩ owner
   let message := callMsg call.occurrence.node.sevm parent gas 0
     call.occurrence.node.sevm.currentTarget 1 1 true true input
@@ -131,8 +131,47 @@ theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at
       address := address, enabled := enabled, native := execution }
   exact ⟨query, rfl, rfl, rfl, answer⟩
 
+/-- Pure nondelegation retains the original retained-query interface. -/
+theorem ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ f, F f → f.ruleSet.bal = none)
+    {P pair : Adr} {G : Exec.Frame} {before after : List Exec.Frame}
+    (position : history.settledFrames = before ++ G :: after)
+    (target : G.sevm.currentTarget = P)
+    (version : (G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+      (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners))
+    (owner : (Sevm.dataWord G.sevm 4).toAdr = pair)
+    (nodeleg : getDelegatedCodeAddress (G.pre.getCode 1) = none) :
+    ∃ query : RetainedOldOwnerNativeQuery history P pair,
+      query.parent = G ∧ query.before = before ∧ query.after = after ∧
+      executeEcrecover query.actualEvm = .ok gasEcrecover pair.toB256.toBytes := by
+  have ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at_effective history capabilities bal position target version owner ready
+
+
 /-- Membership-form projection, retaining an actual parent position in the
 returned query. Coverage is both checked old owner tables. -/
+theorem ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query_effective
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    {P pair : Adr} {G : Exec.Frame} (member : G ∈ history.settledFrames)
+    (target : G.sevm.currentTarget = P)
+    (version : (G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+      (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners))
+    (owner : (Sevm.dataWord G.sevm 4).toAdr = pair)
+    (ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
+    ∃ query : RetainedOldOwnerNativeQuery history P pair, query.parent = G ∧
+      executeEcrecover query.actualEvm = .ok gasEcrecover pair.toB256.toBytes := by
+  obtain ⟨before, after, position⟩ := List.append_of_mem member
+  obtain ⟨query, parent, _, _, answer⟩ := ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at_effective history capabilities bal
+    position target version owner ready
+  exact ⟨query, parent, answer⟩
+
+/-- Pure nondelegation retains the original retained-query interface. -/
 theorem ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -145,13 +184,32 @@ theorem ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query
     (nodeleg : getDelegatedCodeAddress (G.pre.getCode 1) = none) :
     ∃ query : RetainedOldOwnerNativeQuery history P pair, query.parent = G ∧
       executeEcrecover query.actualEvm = .ok gasEcrecover pair.toB256.toBytes := by
-  obtain ⟨before, after, position⟩ := List.append_of_mem member
-  obtain ⟨query, parent, _, _, answer⟩ := ConfiguredHistoryTraceIn.retained_old_owner_pair_query_at history capabilities bal
-    position target version owner nodeleg
-  exact ⟨query, parent, answer⟩
+  have ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query_effective history capabilities bal member target version owner ready
+
 
 /-- The approved retained-query exclusion rules out the Pair as calldata
 owner on either old owner table. It is applied only to this exact universe. -/
+theorem ConfiguredHistoryTraceIn.retained_old_owner_not_pair_effective
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    {P pair : Adr}
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    {G : Exec.Frame} (member : G ∈ history.settledFrames)
+    (target : G.sevm.currentTarget = P)
+    (version : (G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+      (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners))
+    (ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
+    (Sevm.dataWord G.sevm 4).toAdr ≠ pair := by
+  intro owner
+  obtain ⟨query, _, answer⟩ := ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query_effective
+    history capabilities bal member target version owner ready
+  exact excluded query answer
+
+/-- Pure nondelegation retains the original retained-query interface. -/
 theorem ConfiguredHistoryTraceIn.retained_old_owner_not_pair
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -165,9 +223,8 @@ theorem ConfiguredHistoryTraceIn.retained_old_owner_not_pair
       (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners))
     (nodeleg : getDelegatedCodeAddress (G.pre.getCode 1) = none) :
     (Sevm.dataWord G.sevm 4).toAdr ≠ pair := by
-  intro owner
-  obtain ⟨query, _, answer⟩ := ConfiguredHistoryTraceIn.retained_old_owner_has_pair_query
-    history capabilities bal member target version owner nodeleg
-  exact excluded query answer
+  have ready : G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact ConfiguredHistoryTraceIn.retained_old_owner_not_pair_effective history capabilities bal excluded member target version ready
 
 end Blanc.Lift.Usdc

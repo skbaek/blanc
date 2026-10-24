@@ -3683,9 +3683,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   retention under an actual settled root. `retained_old_owner_pair_query_at`
   reuses the successful old-owner producer for both V2 and V2_1, deriving fresh
   entry from history. `retained_old_owner_not_pair` applies exclusion only over
-  that retained universe. Domain capabilities, BAL absence and original code1
-  nondelegation remain explicit; this does not constrain discarded raw frames
-  or finish the complete allowance-history fold.
+  that retained universe. The corresponding `_effective` variants carry the
+  actual parent fork's `delegatedCodeAddress(code1) = none` readiness through
+  both recovery specializations, `ownerV2_query_consumed_effective` and
+  `permitV2_1_query_consumed_effective`, the shared old-owner backend and all
+  three retained endpoints (`pair_query_at`, `has_pair_query`, `not_pair`).
+  Original pure-nondelegation APIs project to that same implementation; the
+  independent query carrier is unchanged. Domain capabilities, BAL absence
+  and actual routing readiness remain explicit producer obligations. This
+  does not constrain discarded raw frames or finish the allowance-history fold.
   `Usdc.recoveryV2_consumes` in
   [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
@@ -5026,6 +5032,16 @@ headline `PositionalLadder.configuredHistory_at` (with `modelPositionalLadder_co
 every split `before ++ f :: after` of a configured history's settled frames gives a replay from the
 checkpoint to `f`'s entry that observes exactly `before`. Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairPositionalState.lean`, `PairHistoryShape.lean`).
+
+For mutable direct-child selectors alone, use `pair_replay_children_shape` in
+[`PairPositionalCalls.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalCalls.lean).
+It consumes the actual authentic connected replay and its observation equality,
+including re-entered Pair frames, to prove the child caller and transfer/callback
+selector. [`PairPositionalCallsIn.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalCallsIn.lean)
+supplies `pair_history_children_shapeHist` and `pair_mid_history_children_shapeHist`
+from the canonical historical replay producers. Installed code, initial
+`WriterRep` and finite touched-key freshness remain obligations; lock state,
+factory quietness and fixed token identities are unnecessary for this conclusion.
 
 When the owner's frames run a *family* of codes (a proxy's `DELEGATECALL` children run the
 implementation at the proxy's storage), use [`Blanc/ExecutionOwnerFamily.lean`](../Blanc/ExecutionOwnerFamily.lean):
