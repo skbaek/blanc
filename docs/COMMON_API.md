@@ -3619,6 +3619,12 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   relative to the actual entry; the theorem assumes no desired answer or gas
   budget. Direct `ReturnChecks` goals use the `ecrecover-return-layout` recipe;
   the existential semantic consumer is found here by name.
+  `EcrecoverCall.consumes_toward_sstore` instead uses an actual later same-frame
+  SSTORE to force the helper's return. It retains the original call slot,
+  native execution, paid gas, canonical nonzero answer and caller stack without
+  a successful final-frame premise. Local nondelegation, `NeutralFork`, entry
+  registers, pointer bounds and structural SSTORE-freedom remain obligations;
+  this generic theorem does not establish contract dispatcher coverage.
   The concrete `Usdc.recoveryV2_1_consumes` specialization in
   [`Blanc/Lift/Usdc/RecoveryV2_1.lean`](../Blanc/Lift/Usdc/RecoveryV2_1.lean)
   follows the actual checked V2_1 recovery entry to STATICCALL at PC `0x4a78`,
@@ -3628,6 +3634,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   nondelegation and `NeutralFork` premises remain local producer
   obligations. It does not enumerate flag-zero invocations or establish
   complete historical permit coverage.
+  For a later actual SSTORE with arbitrary final frame outcome,
+  `Usdc.permitV2_1_recovery_answer_toward_sstore` in
+  [`Blanc/Lift/Usdc/PermitRowRecoveryV2_1.lean`](../Blanc/Lift/Usdc/PermitRowRecoveryV2_1.lean)
+  follows the real recovery return through the `0x471c` epilogue to the
+  `0x421e` owner comparison, deriving that the native answer equals the saved
+  owner. Its companion `permitV2_1_owner_comparison_toward_sstore` excludes
+  the actual rejecting branch. Recovery-entry registers, pointer bounds,
+  continuations and nondelegation remain local premises; root-to-entry
+  coverage and pre-authentication nonce-slot separation are separate work.
   `Usdc.recoveryV2_consumes` in
   [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
@@ -6859,7 +6874,19 @@ contract-neutral.
   `cursor_call_occurrence_toward_sstore_noStateGas` in
   [`Blanc/Lift/CursorOccurrenceToward.lean`](../Blanc/Lift/CursorOccurrenceToward.lean).
   They preserve the original recursive slot and actual return/cursor edge;
-  they assert neither a success flag nor child commitment. Source runs and
+  they assert neither a success flag nor child commitment. For checked steps
+  and literal SSTORE-free lines forced by a later same-frame SSTORE, use
+  `cursor_step_toward_sstore_noStateGas` and
+  `cursor_line_toward_sstore_noStateGas` in
+  [`Blanc/Lift/CursorCutsToward.lean`](../Blanc/Lift/CursorCutsToward.lean).
+  `CursorOK.returnBeforeSstore_noStateGas` in
+  [`Blanc/Lift/CursorReturnToward.lean`](../Blanc/Lift/CursorReturnToward.lean)
+  crosses an SSTORE-free helper to its original caller and retains its
+  completed source run, including external calls. Its source-freedom and
+  closed-helper checks remain explicit; it needs no successful final outcome.
+  `Reach.false_of_sstoreFree_halting` in the same module excludes a later
+  SSTORE inside a halting, SSTORE-free branch with saved callers.
+  Source runs and
   returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
   (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
   `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
@@ -7629,6 +7656,18 @@ normalizes the physical transfer payload at a moving free pointer;
 binds it to the supplied root's actual call slot and returned cursor. Use the
 literal line inverses through `CursorStateAt.line`, and retain the occurrence
 carrier when subsequent consumers need raw child identity.
+For raw helper reaches to an external instruction, use
+`safeTransfer_raw_reach_call` in
+[`SafeTransferRawCall.lean`](../Blanc/Lift/UniswapV2Pair/SafeTransferRawCall.lean).
+From the actual local helper entry, pointer bounds and a primitive-run projection,
+it identifies the sole CALL, its seven operands and exact 68-byte transfer input.
+It assumes neither final success nor child commitment. Entry coverage from PC zero
+and callback exclusion remain separate obligations. Both raw and successful
+wrappers reuse `pair_transfer_initialize_line_state` and
+`pair_transfer_partial_line_state` in the existing cursor modules.
+The generic literal-line cut is `Reach.split_nexts` in
+[`Blanc/Lift/ReachLine.lean`](../Blanc/Lift/ReachLine.lean); it retains the shared
+endpoint between the completed non-external line and residual raw reach.
 `pair_transfer_reply_cursor_state` in
 [`PairTransferReplyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean)
 uses that supplied actual slot and returned cursor to derive the success flag,

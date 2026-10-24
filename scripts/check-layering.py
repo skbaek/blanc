@@ -243,7 +243,7 @@ SHARED += ["Lift.ChildFrameDepth"]
 SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorOccurrenceToward", "Lift.CursorOccurrenceNoStateGas", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachLine", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorOccurrenceToward", "Lift.CursorCutsToward", "Lift.CursorReturnToward", "Lift.CursorOccurrenceNoStateGas", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn", "Lift.CursorJump", "Lift.CursorOccurrenceRoots"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -537,6 +537,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapTransfer",
         "Lift.UniswapV2Pair.SwapUpdateWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",
+        "Lift.UniswapV2Pair.SafeTransferRawCall",
         "Lift.UniswapV2Pair.LPMintSource",
         "Lift.UniswapV2Pair.FeeMintArithmetic",
         "Lift.UniswapV2Pair.FeeMintCall",
@@ -1477,6 +1478,7 @@ CONTRACTS = {
         "Lift.Usdc.ModelControls",
         "Lift.Usdc.ModelLaws",
         "Lift.Usdc.PermitQueryV2_1",
+        "Lift.Usdc.PermitRowRecoveryV2_1",
         "Lift.Usdc.OwnerQueriesV2",
         "Lift.Usdc.OldRecoveryRelevance",
         "Lift.Usdc.Proxy.Cert",

@@ -12,6 +12,8 @@ import Blanc.Lift.RunPWalk
 import Blanc.Lift.CursorBalanceReply
 import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistEcrecover
+import Blanc.Lift.CursorReturnToward
+import Blanc.Lift.CursorCutsToward
 
 /-! One actual recovery request and return-consumption engine for checked source layouts. -/
 
@@ -549,6 +551,75 @@ private theorem recovery_call_cut
     exact ⟨_, line⟩
   · rw [node]; exact primitive
 
+private theorem recovery_call_cut_toward_sstore
+    (checked : Cert.check code c = true)
+    {F target : Exec.Deriv} {κ : Cursor} {b : Devm} {M : Mem} {G : Nat}
+    {placeholder s r v digest ret : B256} {S : List B256}
+    (ok : CursorOK code c F κ) (tree : κ.f = entry layout)
+    (state : F.devm = St b (placeholder :: s :: r :: v :: digest :: ret :: S) M G)
+    (path : Exec.Deriv.ParentPrefix F target)
+    (store : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (hsg : F.sevm.benvStat.rules.stateGas = none) :
+    ∃ (step : CallOccurrenceStep F .staticcall) (next : Cursor),
+      step.occurrence.node.pc = F.pc + 75 ∧
+      Exec.Deriv.ExecFreeUntil F step.occurrence.node ∧
+      Exec.Deriv.ParentPrefix step.returned target ∧
+      step.occurrence.node.sevm = F.sevm ∧
+      (∃ G', Line.Run F.sevm
+        (St b (placeholder :: s :: r :: v :: digest :: ret :: S) M G')
+        recoveryPrefix step.occurrence.node.devm) ∧
+      Ninst.RunWith (Cursor.DescOf step.occurrence.node)
+        step.occurrence.node.sevm step.occurrence.node.devm
+        (.exec .staticcall) step.returned.devm ∧
+      CursorOK code c step.returned next ∧
+      next.f = tail layout ∧ next.K = κ.K := by
+  change κ.f = .dest (recoveryPrefix.foldr SFunc.next
+    (.next (.exec .staticcall) (tail layout))) at tree
+  have decoded := ok.jumpdestAt_of_dest tree
+  obtain ⟨D, kd, edge, later, synthetic, _, placed⟩ :=
+    cursor_step_toward_sstore_noStateGas checked ok path store
+      (by intro f same; rw [tree] at same; cases same) hsg
+  obtain ⟨dpc, burn⟩ := of_jumpdest_run (Cursor.parentStep_jinst edge decoded)
+  have shape : kd.f = recoveryPrefix.foldr SFunc.next
+      (.next (.exec .staticcall) (tail layout)) ∧ kd.K = κ.K := by
+    rcases κ with ⟨f, pc, a, m, K⟩
+    dsimp only at tree
+    subst f
+    cases synthetic
+    exact ⟨rfl, rfl⟩
+  have dsevm := Cursor.parentStep_sevm edge
+  have prefixFree : ∀ n ∈ recoveryPrefix, n ≠ .reg .sstore := by
+    intro n member same
+    have checked : recoveryPrefix.all
+        (fun n => match n with | .reg .sstore => false | _ => true) = true := by rfl
+    have good := List.all_eq_true.mp checked n member
+    rw [same] at good
+    cases good
+  obtain ⟨C, kc, spanD, laterC, cpc, csevm, _, callPlaced, callTree, sameK, line, free⟩ :=
+    cursor_line_toward_sstore_noStateGas checked placed later store recoveryPrefix
+      (.next (.exec .staticcall) (tail layout)) shape.1 prefixFree (dsevm ▸ hsg)
+  have span := (Exec.Deriv.ExecFreeUntil.ofStep edge
+    (Blanc.Jinst.At.not_exec decoded)).trans (free recovery_prefix_free)
+  obtain ⟨step, next, node, returnedPath, _, primitive, crossed, _, returnedPlaced⟩ :=
+    cursor_call_occurrence_toward_sstore_noStateGas checked span.1 callPlaced callTree
+      laterC store (by rw [csevm, dsevm]; exact hsg)
+  have nextShape : next.f = tail layout ∧ next.K = kc.K := by
+    rcases kc with ⟨f, pc, a, m, K⟩
+    dsimp only at callTree
+    subst f
+    cases crossed
+    exact ⟨rfl, rfl⟩
+  refine ⟨step, next, ?_, ?_, returnedPath, ?_, ?_, ?_, returnedPlaced,
+    nextShape.1, nextShape.2.trans (sameK.trans shape.2)⟩
+  · rw [node, cpc, recovery_prefix_size, dpc]
+  · rw [node]; exact span
+  · rw [node]; exact csevm.trans dsevm
+  · rw [node]
+    rw [state] at burn
+    rw [dsevm, St.of_burn burn] at line
+    exact ⟨_, line⟩
+  · rw [node]; exact primitive
+
 private theorem recovery_tail_success
     (checks : ReturnChecks layout)
     {sevm : Sevm} {b D : Devm} {M : Mem} {G : Nat} {flag : B256} {S : List B256}
@@ -661,43 +732,29 @@ private theorem recovery_readback_return
     obtain ⟨_, state⟩ := rpw_ret accepted
     exact ⟨_, _, state⟩
 
-private theorem recovery_answer_consumer
-    (checked : Cert.check code c = true) (checks : ReturnChecks layout)
-    {F : Exec.Deriv} (call : CallOccurrenceStep F .staticcall) {cursor : Cursor}
-    {post b : Devm} {M : Mem} {G n : Nat}
+private theorem recovery_answer_of_return
+    (checks : ReturnChecks layout)
+    {F : Exec.Deriv} (call : CallOccurrenceStep F .staticcall)
+    {b D : Devm} {M : Mem} {G n : Nat}
     {p lastPtr placeholder s r v digest ret : B256} {S : List B256}
-    {caller : SFunc} {K : List SFunc}
     (state : call.occurrence.node.devm = St b
       (G.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
         lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) M G)
     (ptr : PtrMem (32 + p) n M) (zero : memWord M p.toNat = 0)
     (lower : 96 ≤ p.toNat) (space : p.toNat + 160 < 2 ^ 256)
     (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
-    (placed : CursorOK code c call.returned cursor)
-    (tree : cursor.f = (tail layout))
-    (continuations : cursor.K.map Cont.f = caller :: K)
-    (success : call.returned.exn = .ok post)
     (fork : NeutralFork call.occurrence.node.sevm.benvStat.fork)
     (primitive : Ninst.RunWith (Cursor.DescOf call.occurrence.node)
       call.occurrence.node.sevm call.occurrence.node.devm
-      (.exec .staticcall) call.returned.devm) :
-    ∃ (adr : Adr) (N : Exec.Deriv) (next : Cursor),
-      adr ≠ 0 ∧
+      (.exec .staticcall) call.returned.devm)
+    (returned : SFunc.Run c.prog call.occurrence.node.sevm call.returned.devm
+      (tail layout) (.returned D)) :
+    ∃ adr : Adr, adr ≠ 0 ∧
       ecrecoverOutput (M.read (32 + p).toNat 128).1 = adr.toB256.toBytes ∧
       call.returned.devm.returnData = adr.toB256.toBytes ∧
       call.returned.devm.stack = 1 :: lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S ∧
       StaticAnsweredH call.occurrence.node.sevm b 1
-        (M.read (32 + p).toNat 128).1 adr.toB256.toBytes ∧
-      Exec.Deriv.ExecFreeUntil call.returned N ∧
-      N.exn = call.returned.exn ∧ N.sevm = call.returned.sevm ∧
-      CursorOK code c N next ∧
-      next.f = caller ∧ next.K.map Cont.f = K ∧ N.devm.stack = adr.toB256 :: S := by
-  have sameEnv := Cursor.parentStep_sevm call.edge
-  have returnedFork : NeutralFork call.returned.sevm.benvStat.fork := by rw [sameEnv]; exact fork
-  obtain ⟨N, next, span, suffixEnv, suffixExn, finalPlaced, callerTree, callerK, returned⟩ :=
-    placed.quietReturnH checked success returnedFork.stateGas
-      (E := []) (by rfl) (by rfl) (by rw [tree]; exact checks.bodyFree) (by rw [tree]; exact checks.bodyNoHalt) continuations
-  rw [tree, sameEnv] at returned
+        (M.read (32 + p).toNat 128).1 adr.toB256.toBytes ∧ D.stack = adr.toB256 :: S := by
   have run := primitive.toRun
   rw [state] at run
   obtain ⟨flag, out, hpost, answered⟩ := ri_staticcallH fork.stateGas run
@@ -741,14 +798,110 @@ private theorem recovery_answer_consumer
       exact (Mem.memWord_write_word _ _ _).1
     obtain ⟨nonzero, M', G', endState⟩ :=
       recovery_readback_return checks space freeword readAddress accepted
-    refine ⟨adr, N, next, ?_, outEq.symm.trans address,
-      hpost.returnData.trans address, (by rw [hpost.stack, flagOne]), ?_, span, suffixExn, suffixEnv, finalPlaced, callerTree, callerK, ?_⟩
+    refine ⟨adr, ?_, outEq.symm.trans address,
+      hpost.returnData.trans address, (by rw [hpost.stack, flagOne]), ?_, ?_⟩
     · intro vanished
       subst adr
       exact nonzero (by rfl)
     · exact ⟨parent, child, xl, false, 1, b.getCode 1, gas, sameState,
         CallCodeH.of_nodeleg nodeleg, filled, process, clean, childOutput.trans address⟩
     · rw [endState, St.stack]
+
+private theorem recovery_answer_consumer
+    (checked : Cert.check code c = true) (checks : ReturnChecks layout)
+    {F : Exec.Deriv} (call : CallOccurrenceStep F .staticcall) {cursor : Cursor}
+    {post b : Devm} {M : Mem} {G n : Nat}
+    {p lastPtr placeholder s r v digest ret : B256} {S : List B256}
+    {caller : SFunc} {K : List SFunc}
+    (state : call.occurrence.node.devm = St b
+      (G.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
+        lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) M G)
+    (ptr : PtrMem (32 + p) n M) (zero : memWord M p.toNat = 0)
+    (lower : 96 ≤ p.toNat) (space : p.toNat + 160 < 2 ^ 256)
+    (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
+    (placed : CursorOK code c call.returned cursor)
+    (tree : cursor.f = (tail layout))
+    (continuations : cursor.K.map Cont.f = caller :: K)
+    (success : call.returned.exn = .ok post)
+    (fork : NeutralFork call.occurrence.node.sevm.benvStat.fork)
+    (primitive : Ninst.RunWith (Cursor.DescOf call.occurrence.node)
+      call.occurrence.node.sevm call.occurrence.node.devm
+      (.exec .staticcall) call.returned.devm) :
+    ∃ (adr : Adr) (N : Exec.Deriv) (next : Cursor),
+      adr ≠ 0 ∧
+      ecrecoverOutput (M.read (32 + p).toNat 128).1 = adr.toB256.toBytes ∧
+      call.returned.devm.returnData = adr.toB256.toBytes ∧
+      call.returned.devm.stack = 1 :: lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S ∧
+      StaticAnsweredH call.occurrence.node.sevm b 1
+        (M.read (32 + p).toNat 128).1 adr.toB256.toBytes ∧
+      Exec.Deriv.ExecFreeUntil call.returned N ∧
+      N.exn = call.returned.exn ∧ N.sevm = call.returned.sevm ∧
+      CursorOK code c N next ∧
+      next.f = caller ∧ next.K.map Cont.f = K ∧ N.devm.stack = adr.toB256 :: S := by
+  have sameEnv := Cursor.parentStep_sevm call.edge
+  have returnedFork : NeutralFork call.returned.sevm.benvStat.fork := by rw [sameEnv]; exact fork
+  obtain ⟨N, next, span, suffixEnv, suffixExn, finalPlaced, callerTree, callerK, returned⟩ :=
+    placed.quietReturnH checked success returnedFork.stateGas
+      (E := []) (by rfl) (by rfl) (by rw [tree]; exact checks.bodyFree) (by rw [tree]; exact checks.bodyNoHalt) continuations
+  rw [tree, sameEnv] at returned
+  obtain ⟨adr, nonzero, output, returnData, returnedStack, answered, callerStack⟩ :=
+    recovery_answer_of_return checks call state ptr zero lower space nodeleg fork primitive returned
+  exact ⟨adr, N, next, nonzero, output, returnData, returnedStack, answered, span,
+    suffixExn, suffixEnv, finalPlaced, callerTree, callerK, callerStack⟩
+
+private theorem actual_native_answer
+    {F : Exec.Deriv} (call : CallOccurrenceStep F .staticcall)
+    {g ii is oi os : B256} {xs : Stack} {input : Bytes} {adr : Adr}
+    (operands : (g :: 1 :: ii :: is :: oi :: os :: xs) <<+ call.occurrence.node.devm.stack)
+    (hsg : call.occurrence.node.sevm.benvStat.rules.stateGas = none)
+    (nodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none)
+    (flag : ∃ rest, call.returned.devm.stack = 1 :: rest)
+    (inputEq : (call.occurrence.node.devm.memory.read ii.toNat is.toNat).1 = input)
+    (answer : ecrecoverOutput input = adr.toB256.toBytes) :
+    ∃ (parent child : Devm) (gas : Nat),
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      Ninst.step ⟨call.occurrence.node.pc, call.occurrence.node.sevm, call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent oi.toNat os.toNat) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧ call.occurrence.slot = .none ∧
+      (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) ∧
+      gasEcrecover ≤ gas ∧ child.error.isSome = false ∧ child.output = adr.toB256.toBytes := by
+  have exactStep := call.occurrence.stepRun
+  rw [call.instruction, call.result] at exactStep
+  rcases of_step_staticcall_val_with_depth_frame_causeH operands call.occurrence.filled
+      exactStep hsg with failed | entered
+  · obtain ⟨rest, stack⟩ := flag
+    rw [stack] at failed
+    have impossible : (0 : B256) = 1 := pref_head_unique failed.1 (pref_append [1] _)
+    exact (show (0 : B256) ≠ 1 by decide) impossible |>.elim
+  · obtain ⟨parent, child, dp, na, code, avail, depth, parentStack, parentState,
+      parentMemory, parentLogs, parentOutput, delegation, filled, process, clean,
+      resumed, childState, childReturn, childMemory, childStack, spawned⟩ := entered
+    have direct : na = 1 ∧ code = call.occurrence.node.devm.getCode 1 ∧ dp = false :=
+      CallCodeH.direct_of_nodeleg (t := 1) nodeleg delegation
+    obtain ⟨rfl, rfl, rfl⟩ := direct
+    rw [show (1 : B256).toAdr = 1 from rfl, inputEq] at process spawned
+    obtain ⟨paid, childOutput⟩ := ecrecover_output_of_processMessage_cleanH
+      (ecrecover_activeH _) process clean hsg
+    let msg := callMsg call.occurrence.node.sevm parent
+      (min g.toNat (except64th avail)) 0 call.occurrence.node.sevm.currentTarget
+      1 1 true true input (call.occurrence.node.devm.getCode 1) false
+    have native : (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) := by
+      apply Frame.enter_eq_done_executePrecomp
+        (Msg.benvAfterTransfer_of_value_zero (by rfl)) (by rfl)
+      change decide (call.occurrence.node.sevm.benvStat.rules.isPrecomp 1) = true
+      exact ecrecover_activeH _
+    have emptySlot : call.occurrence.slot = .none := by
+      change RunFrame (Frame.ofCall msg) call.occurrence.slot (.ok child) at process
+      unfold RunFrame at process
+      rw [native] at process
+      exact process.1
+    exact ⟨parent, child, min g.toNat (except64th avail), spawned, process,
+      emptySlot, native, paid, clean, childOutput.trans answer⟩
 
 /-- A successful actual checked recovery return consumes the answer to its own
 address-1 invocation. The concrete entry registers, free pointer, nondelegation
@@ -809,57 +962,107 @@ theorem consumes
       digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes := by
     rw [callState, St.memory]
     exact recovery_memory_input ptr space
-  have exactStep := call.occurrence.stepRun
-  rw [call.instruction, call.result] at exactStep
   have operands : (Gc.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
       (32 + (32 + (32 + (32 + (32 + p))))) ::
       1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) <<+
       call.occurrence.node.devm.stack := by
     rw [callState, St.stack]
     simpa only [List.append_nil] using pref_append _ []
-  rcases of_step_staticcall_val_with_depth_frame_causeH operands call.occurrence.filled
-      exactStep callFork.stateGas with failed | entered
-  · have failedHead := failed.1
-    rw [returnedStack] at failedHead
-    have impossible : (0 : B256) = 1 := pref_head_unique failedHead (pref_append [1] _)
-    exact (show (0 : B256) ≠ 1 by decide) impossible |>.elim
-  · obtain ⟨parent, child, dp, na, code, avail, depth, parentStack, parentState,
-      parentMemory, parentLogs, parentOutput, delegation, filled, process, clean,
-      resumed, childState, childReturn, childMemory, childStack, spawned⟩ := entered
-    have localNodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none := by
-      rw [callState]
-      exact nodeleg
-    have direct : na = 1 ∧ code = call.occurrence.node.devm.getCode 1 ∧ dp = false :=
-      CallCodeH.direct_of_nodeleg (t := 1) localNodeleg delegation
-    obtain ⟨rfl, rfl, rfl⟩ := direct
-    rw [show (1 : B256).toAdr = 1 from rfl,
-      show (128 : B256).toNat = 128 from rfl, inputEq] at process spawned
-    obtain ⟨paid, childOutput⟩ := ecrecover_output_of_processMessage_cleanH
-      (ecrecover_activeH _) process clean callFork.stateGas
-    let msg := callMsg call.occurrence.node.sevm parent
-      (min Gc.toB256.toNat (except64th avail)) 0
-      call.occurrence.node.sevm.currentTarget 1 1 true true
-      (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes)
-      (call.occurrence.node.devm.getCode 1) false
-    have native : (Frame.ofCall msg).enter = .done
-        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) := by
-      apply Frame.enter_eq_done_executePrecomp
-        (Msg.benvAfterTransfer_of_value_zero (by rfl)) (by rfl)
-      change decide (call.occurrence.node.sevm.benvStat.rules.isPrecomp 1) = true
-      exact ecrecover_activeH _
-    have emptySlot : call.occurrence.slot = .none := by
-      change RunFrame (Frame.ofCall msg) call.occurrence.slot (.ok child) at process
-      unfold RunFrame at process
-      rw [native] at process
-      exact process.1
-    have outputEq : ecrecoverOutput
-        (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
-      rw [← recovery_memory_input ptr space]
-      exact output
-    refine ⟨call, parent, child, min Gc.toB256.toNat (except64th avail), adr,
-      N, next, callPc, span, spawned, process, emptySlot, native, paid, clean,
-      childOutput.trans outputEq, outputEq, nonzero, returnData, suffix,
-      (suffixExn.trans returnedOutcome).trans sameExn,
-      (suffixEnv.trans (Cursor.parentStep_sevm call.edge)).trans sameEnv, finalPlaced, callerTree, callerK, callerStack⟩
+  have localNodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none := by
+    rw [callState]
+    exact nodeleg
+  have outputEq : ecrecoverOutput
+      (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
+    rw [← recovery_memory_input ptr space]
+    exact output
+  obtain ⟨parent, child, gas, spawned, process, emptySlot, native, paid, clean, childOutput⟩ :=
+    actual_native_answer call operands callFork.stateGas localNodeleg ⟨_, returnedStack⟩ inputEq outputEq
+  exact ⟨call, parent, child, gas, adr, N, next, callPc, span, spawned, process,
+    emptySlot, native, paid, clean, childOutput, outputEq, nonzero, returnData, suffix,
+    (suffixExn.trans returnedOutcome).trans sameExn,
+    (suffixEnv.trans (Cursor.parentStep_sevm call.edge)).trans sameEnv,
+    finalPlaced, callerTree, callerK, callerStack⟩
+
+/-- An actual checked recovery helper before a later SSTORE returns a native
+answer into its original caller continuation. The final frame outcome is
+arbitrary. The structural SSTORE-freedom check concerns the helper source,
+including its rejected branches; it asserts no authentication fact. -/
+theorem consumes_toward_sstore
+    (checked : Cert.check code c = true) (checks : ReturnChecks layout)
+    {F target : Exec.Deriv} {κ : Cursor} {b : Devm} {M : Mem} {G n : Nat}
+    {p placeholder s r v digest ret : B256} {S : List B256}
+    {caller : SFunc} {K : List SFunc}
+    (ok : CursorOK code c F κ) (tree : κ.f = entry layout)
+    (state : F.devm = St b (placeholder :: s :: r :: v :: digest :: ret :: S) M G)
+    (ptr : PtrMem p n M) (lower : 96 ≤ p.toNat) (space : p.toNat + 160 < 2 ^ 256)
+    (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
+    (continuations : κ.K.map Cont.f = caller :: K)
+    (free : (entry layout).sstoreFreeIn [] = true)
+    (path : Exec.Deriv.ParentPrefix F target)
+    (store : Ninst.At target.sevm.code target.pc (.reg .sstore))
+    (fork : NeutralFork F.sevm.benvStat.fork) :
+    ∃ (call : CallOccurrenceStep F .staticcall) (parent child : Devm)
+      (gas : Nat) (adr : Adr) (N : Exec.Deriv) (next : Cursor),
+      let input := digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      call.occurrence.node.pc = F.pc + 75 ∧
+      Exec.Deriv.ExecFreeUntil F call.occurrence.node ∧
+      Exec.Deriv.ParentPrefix call.returned N ∧ Exec.Deriv.ParentPrefix N target ∧
+      Ninst.step ⟨call.occurrence.node.pc, call.occurrence.node.sevm, call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent p.toNat 32) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧ call.occurrence.slot = .none ∧
+      (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) ∧
+      gasEcrecover ≤ gas ∧ child.error.isSome = false ∧ child.output = adr.toB256.toBytes ∧
+      ecrecoverOutput input = adr.toB256.toBytes ∧ adr ≠ 0 ∧
+      call.returned.devm.returnData = adr.toB256.toBytes ∧
+      CursorOK code c N next ∧ next.f = caller ∧ next.K.map Cont.f = K ∧
+      N.devm.stack = adr.toB256 :: S := by
+  obtain ⟨call, cursor, callPc, span, callLater, sameEnv, ⟨G0, line⟩,
+      primitive, placed, tailTree, sameK⟩ :=
+    recovery_call_cut_toward_sstore checked ok tree state path store fork.stateGas
+  obtain ⟨Gc, nc, callState, callPtr⟩ := recovery_prefix_request ptr lower space line
+  have callFork : NeutralFork call.occurrence.node.sevm.benvStat.fork := by
+    rw [sameEnv]
+    exact fork
+  have returnedSg : call.returned.sevm.benvStat.rules.stateGas = none := by
+    rw [Cursor.parentStep_sevm call.edge]
+    exact callFork.stateGas
+  have tailFree : (tail layout).sstoreFreeIn [] = true := by
+    have same : (entry layout).sstoreFreeIn [] = (tail layout).sstoreFreeIn [] := by rfl
+    rw [same] at free
+    exact free
+  obtain ⟨N, next, returnSpan, later, finalPlaced, callerTree, callerK, returned⟩ :=
+    placed.returnBeforeSstore_noStateGas checked (E := []) rfl callLater store returnedSg
+      (by rw [tailTree]; exact tailFree) (by rw [sameK]; exact continuations)
+  rw [tailTree, Cursor.parentStep_sevm call.edge] at returned
+  obtain ⟨adr, nonzero, output, returnData, returnedStack, answered, callerStack⟩ :=
+    recovery_answer_of_return checks call callState callPtr (recovery_memory_zero ptr lower space)
+      lower space nodeleg callFork primitive returned
+  have inputEq : (call.occurrence.node.devm.memory.read (32 + p).toNat 128).1 =
+      digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes := by
+    rw [callState, St.memory]
+    exact recovery_memory_input ptr space
+  have operands : (Gc.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
+      (32 + (32 + (32 + (32 + (32 + p))))) ::
+      1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) <<+
+      call.occurrence.node.devm.stack := by
+    rw [callState, St.stack]
+    simpa only [List.append_nil] using pref_append _ []
+  have localNodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none := by
+    rw [callState]
+    exact nodeleg
+  have outputEq : ecrecoverOutput
+      (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
+    rw [← recovery_memory_input ptr space]
+    exact output
+  obtain ⟨parent, child, gas, spawned, process, emptySlot, native, paid, clean, childOutput⟩ :=
+    actual_native_answer call operands callFork.stateGas localNodeleg ⟨_, returnedStack⟩ inputEq outputEq
+  exact ⟨call, parent, child, gas, adr, N, next, callPc, span, returnSpan, later,
+    spawned, process, emptySlot, native, paid, clean, childOutput, outputEq,
+    nonzero, returnData, finalPlaced, callerTree, callerK, callerStack⟩
 
 end Blanc.Lift.EcrecoverCall

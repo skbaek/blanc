@@ -1206,6 +1206,9 @@ import Blanc.Lift.UniswapV2Pair.ModelControls
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.CursorOccurrenceToward
+import Blanc.Lift.CursorCutsToward
+import Blanc.Lift.ReachLine
+import Blanc.Lift.CursorReturnToward
 import Blanc.Lift.CursorTreeNinst
 import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.RecoveryOccurrence
@@ -1309,6 +1312,7 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalCanonical
 import Blanc.Lift.UniswapV2Pair.MintPositionalLogs
 import Blanc.Lift.UniswapV2Pair.MintPositionalRefinement
 import Blanc.Lift.UniswapV2Pair.PairTransferRequestCursor
+import Blanc.Lift.UniswapV2Pair.SafeTransferRawCall
 import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
@@ -1739,6 +1743,7 @@ import Blanc.Lift.SolcSignedQuery
 import Blanc.Lift.Usdc.RecoveryV2
 import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.PermitQueryV2_1
+import Blanc.Lift.Usdc.PermitRowRecoveryV2_1
 import Blanc.Lift.Usdc.OwnerQueriesV2
 import Blanc.Lift.Usdc.OldRecoveryRelevance
 import Blanc.Lift.Usdc.RefineAdmin
