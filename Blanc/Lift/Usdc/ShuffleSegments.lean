@@ -110,6 +110,23 @@ theorem seg_e8digest_check : shuffle cert.prog cert.entries [] (.callNext 79 t_4
 
 /-- **Walk step over entry 8 (`_permit`): the permit struct digest, from just after the nonce store
 to the call of entry 79 (the typed-data hash).** -/
+theorem ric_seg_e8digest_noStateGas {sevm : Sevm} {C : List Nat} {r : Seg}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (hstateGas : sevm.benvStat.rules.stateGas = none) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 : B256} {R : List
+        B256}
+    {b : Devm} {M : Mem} {G : Nat}
+    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
+        :: x9 :: x10 :: x11 :: R) M G) (SFunc.lineDrop 27 t_4738_c8) r) :
+    ∃ b' u0 M' G', b'.state = b.state ∧
+      SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x508b :: u0 :: x5 :: x6 :: x7 :: x8 :: x9 ::
+        x10 :: x11 :: R) M' G') (.callNext 79 t_47d3_c8) r := by
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
+      x10, x11]) hstateGas
+    (fun _ hk => absurd hk List.not_mem_nil) seg_e8digest_check rfl run
+  carried_out hY h
+  exact ⟨b', _, M', G', hs, h⟩
+
+/-- Covered-fork compatibility projection of the permit digest shuffle step. -/
 theorem ric_seg_e8digest {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 : B256} {R : List
@@ -120,11 +137,7 @@ theorem ric_seg_e8digest {sevm : Sevm} {C : List Nat} {r : Seg}
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x508b :: u0 :: x5 :: x6 :: x7 :: x8 :: x9 ::
         x10 :: x11 :: R) M' G') (.callNext 79 t_47d3_c8) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
-      x10, x11]) fork
-    (fun _ hk => absurd hk List.not_mem_nil) seg_e8digest_check rfl run
-  carried_out hY h
-  exact ⟨b', _, M', G', hs, h⟩
+  exact ric_seg_e8digest_noStateGas hP fork.rules_stateGas_none run
 
 /-- The shuffle check of entry 8: the ABI encoding of the signature check's calldata, from the
 return of entry 79 to the head of the signature-bytes copy loop. -/

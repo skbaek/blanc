@@ -7300,8 +7300,20 @@ contract-neutral.
   `LibSeam.lib_rejects_pairH` expose its fresh-frame interface. `LibRejectsAt`
   restricts rejection to actual children with the same `benvStat`;
   `LibRejects.at_of_covered` and `LibRejectsH.at_of_neutral` supply it without
-  converting the old global capability into a stronger one. Historical
-  implementation permit and retained-owner consumers remain separate.
+  converting the old global capability into a stronger one.
+  In `Blanc/Lift/Usdc/SignedSites.lean`, `tail3_false_nonstorage`,
+  `tail2_false_noStateGas` and `tail1_falseH` reuse the original result-word,
+  delegate-child and account-access tails with that same-environment capability.
+  `sx_nonstorage` orchestrates canonical nonstorage inversions;
+  `usdcLib_not_precompile_any` proves the fixed library address exclusion for
+  each actual fork. The original covered interfaces remain projections.
+  Selected permit consumers `ric_seg_e8digest_noStateGas` in
+  `Blanc/Lift/Usdc/ShuffleSegments.lean` and `ric_seg_w149_noStateGas` in
+  `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
+  checks. `skipP_78_noStateGas` and `skipP_79_noStateGas` in
+  `Blanc/Lift/Usdc/SignedPathsKit.lean` preserve the exact silent-call frames,
+  returned stacks and world-state equalities. Historical encoding, storage walks,
+  implementation permit endpoints and retained-owner consumers remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
