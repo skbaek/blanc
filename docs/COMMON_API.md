@@ -6169,6 +6169,22 @@ contract-neutral.
   `afterSloadH_refundCounter`, `afterSstoreH_accountsToDelete`, and
   `afterSstoreH_refundCounter_legacy` under the legacy `SSTORE` refund schedule for a nonzero
   write) in [`Blanc/Lift/HistAccessMeta.lean`](../Blanc/Lift/HistAccessMeta.lean);
+  a zero-value `CALL` into a known child under a flat (pre-Berlin) access schedule with delegation
+  disabled (`Xinst.step_call_zero_flat`, `Ninst.runCompiled_call_zero_child_flat`, the child
+  settled with its target's EIP-161 touch) and a top-level call message settled from its raw
+  execution (`processMessage_call_of_execH`) and the code-free sender of a historical admission
+  check (`checkTransaction_sender_code_emptyH`) in
+  [`Blanc/Lift/HistCallFlat.lean`](../Blanc/Lift/HistCallFlat.lean); the refund counter kept from
+  falling by a store whose slot started at zero or is non-zero now (`sstoreRefundH_ge`,
+  `afterSstoreH_refundCounter_ge`) in
+  [`Blanc/Lift/HistSstoreRefund.lean`](../Blanc/Lift/HistSstoreRefund.lean); the window kit from
+  rule facts (`prefixTransfer_runH`, `create2_run_resultH`, `window_trackH`,
+  `Xinst.step_call_spawn_stackH`, `Xinst.step_call_spawn_targetH`,
+  `Xinst.step_create2_spawn_unprotectedH`), with a successful `SWAP`'s length facts
+  (`List.swap_some_length`), every body of a window-checked certificate passing the edge check
+  (`Cert.windowOk_mem`) and dropping words from a pattern-over-rest match
+  (`matches_append_drop`), in
+  [`Blanc/Lift/HistWindow.lean`](../Blanc/Lift/HistWindow.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

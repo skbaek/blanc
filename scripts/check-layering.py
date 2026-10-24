@@ -167,7 +167,7 @@ SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistCreate", "Lift.HistAccessMeta"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistCallFlat", "Lift.HistSstoreRefund", "Lift.HistWindow"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
@@ -440,6 +440,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairHistory",
         "Lift.UniswapV2Pair.PairHistoryIn",
         "Lift.UniswapV2Pair.CreationTransaction",
+        "Lift.UniswapV2Pair.InitializeLiveH",
         "Lift.UniswapV2Pair.SwapForwardAccept",
         "Lift.UniswapV2Pair.MintForwardAccept",
         "Lift.UniswapV2Pair.PairHistoryLive",
@@ -1516,6 +1517,17 @@ CONTRACTS["uniswap-v2-pair"].extend([
 CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Factory.CallShape",
     "Lift.UniswapV2Factory.Window",
+])
+
+# The factory's createPair frame at Muir Glacier, its spawns and its transaction, and its call shape
+# from rule facts (weth9-pair-historical-extension-v1): Uniswap V2 family.
+CONTRACTS["uniswap-v2-pair"].extend([
+    "Lift.UniswapV2Factory.CallShapeH",
+    "Lift.UniswapV2Factory.CreatePairMemory",
+    "Lift.UniswapV2Factory.CreatePairWalk",
+    "Lift.UniswapV2Factory.CreatePairSpawns",
+    "Lift.UniswapV2Factory.CreatePairFrame",
+    "Lift.UniswapV2Factory.CreatePairTransaction",
 ])
 
 # The FrameSkip worked example over the Pair's code (usdc-weth9-pair-composition-v1): Pair family.

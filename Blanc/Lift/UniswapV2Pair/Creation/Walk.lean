@@ -289,26 +289,20 @@ theorem ctorCostH_covered {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
     afterSstoreH_of_eip2929 hfork.rules_access nm, afterSloadH_of_eip2929 hfork.rules_access,
     sstoreCostH_of_eip2929 hfork.rules_access nm, sloadCostH_of_eip2929 hfork.rules_access]
 
-/-- **The Pair constructor, gas-exact, from rule facts**: `rules.stateGas = none`, `CHAINID` and
-the shifts available, charged under the frame's actual storage schedule (`ctorCostH`). As `ctor_run`: from a fresh account (empty storage, zero call value)
-with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
-gas left, returning the runtime window, with the world's error unchanged and the constructor
-storage written. -/
-theorem ctor_runH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
-    (hchain : sevm.benvStat.rules.op.chainId = true) (hshifts : sevm.benvStat.rules.op.shifts = true)
-    (hstatic : sevm.isStatic = false) (hcode : sevm.code = code) (hvalue : sevm.value = 0)
-    {b : Devm} (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) (G : Nat) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCostH sevm b)) post ∧
-      post.output = runtimeWindow ∧ post.error = b.error ∧
-      Devm.getStor post sevm.currentTarget =
+/-- The constructor's final machine under historical rule facts: the `RETURN` of the runtime
+window from the last world `w4H`, with `G` gas left. -/
+def ctorPostH (sevm : Sevm) (b : Devm) (G : Nat) : Devm :=
+  returnPost (St (w4H sevm b) [0, 0x2c1d]
+    (m16 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256) G) 0 0x2c1d []
+
+/-- What the constructor's final machine holds: the runtime window as output, the world's error,
+the constructor storage over the frame's own, and `G` gas left. -/
+theorem ctorPostH_facts (sevm : Sevm) (b : Devm) (G : Nat) :
+    (ctorPostH sevm b G).output = runtimeWindow ∧ (ctorPostH sevm b G).error = b.error ∧
+      Devm.getStor (ctorPostH sevm b G) sevm.currentTarget =
         ctorStor sevm.benvStat.chainId.toB256 sevm.currentTarget sevm.caller
           (Devm.getStor b sevm.currentTarget) ∧
-      post.gasLeft = G := by
-  have hold5 : (w2H sevm b).getStorVal sevm.currentTarget 5 = 0 := by
-    show (Devm.getStor (w2H sevm b) sevm.currentTarget).get 5 = 0
-    rw [w2H, w1H, afterSstoreH_getStor_self, afterSstoreH_getStor_self, Stor.get_set_ite,
-      ite_eq_right (by decide), Stor.get_set_ite, ite_eq_right (by decide)]
-    exact hstor 5
+      (ctorPostH sevm b G).gasLeft = G := by
   have hout : ((m16 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256).read
       (0 : B256).toNat (0x2c1d : B256).toNat).1 = runtimeWindow := by
     obtain ⟨w15, r15⟩ := m15_reads sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256
@@ -317,19 +311,29 @@ theorem ctor_runH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
       (img15 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256) runtimeWindow 0
     rw [runtimeWindow_length] at h
     exact h
-  refine ⟨returnPost (St (w4H sevm b) [0, 0x2c1d]
-      (m16 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256) G) 0 0x2c1d [],
-    ⟨t_0000_c0, rfl, ?_⟩, ?_⟩
-  swap
-  · obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (w4H sevm b) [0, 0x2c1d]
-      (m16 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256) G) 0 0x2c1d []
-    refine ⟨?_, ?_, ?_, p4⟩
-    · rw [p1, St.memory]
-      exact hout
-    · rw [p2, St_error]
-      simp only [w4H, w3H, w2H, w1H, afterSstoreH_error, afterSloadH_error]
-    · rw [p3, St_getStor]
-      simp only [w4H, w3H, w2H, w1H, afterSstoreH_getStor_self, afterSloadH_getStor, ctorStor]
+  obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (w4H sevm b) [0, 0x2c1d]
+    (m16 sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256) G) 0 0x2c1d []
+  unfold ctorPostH
+  refine ⟨?_, ?_, ?_, p4⟩
+  · rw [p1, St.memory]
+    exact hout
+  · rw [p2, St_error]
+    simp only [w4H, w3H, w2H, w1H, afterSstoreH_error, afterSloadH_error]
+  · rw [p3, St_getStor]
+    simp only [w4H, w3H, w2H, w1H, afterSstoreH_getStor_self, afterSloadH_getStor, ctorStor]
+
+/-- The run of `ctor_runH`, ending at the named machine `ctorPostH`. -/
+theorem ctor_run_postH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
+    (hchain : sevm.benvStat.rules.op.chainId = true) (hshifts : sevm.benvStat.rules.op.shifts = true)
+    (hstatic : sevm.isStatic = false) (hcode : sevm.code = code) (hvalue : sevm.value = 0)
+    {b : Devm} (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) (G : Nat) :
+    SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCostH sevm b)) (ctorPostH sevm b G) := by
+  have hold5 : (w2H sevm b).getStorVal sevm.currentTarget 5 = 0 := by
+    show (Devm.getStor (w2H sevm b) sevm.currentTarget).get 5 = 0
+    rw [w2H, w1H, afterSstoreH_getStor_self, afterSstoreH_getStor_self, Stor.get_set_ite,
+      ite_eq_right (by decide), Stor.get_set_ite, ite_eq_right (by decide)]
+    exact hstor 5
+  refine ⟨t_0000_c0, rfl, ?_⟩
   rw [show G + ctorCostH sevm b = G + 3 + 2322 + 3 + 3 + 3 + 3 + sstoreCostH sevm (w3H sevm b) 5 sevm.caller.toB256 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCostH sevm (w2H sevm b) 5 + 3 + 3 + 2 + sstoreCostH sevm (w1H sevm b) 3 (domainSeparator sevm.benvStat.chainId.toB256 sevm.currentTarget) + 3 + 60 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 6 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 48 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 24 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 2 + 1 + 10 + 3 + 3 + 3 + 2 + sstoreCostH sevm b 12 1 + 3 + 3 + 12 + 3 + 3 by unfold ctorCostH; omega]
   unfold t_0000_c0
   refine rx_push (w := (0x80 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
@@ -513,6 +517,24 @@ theorem ctor_runH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
     rfl
   refine rx_push (w := (0x0 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   exact rx_return_any (S := []) rfl (by rw [St.extCost_eq (m16_size sevm.benvStat.chainId.toB256 sevm.currentTarget.toB256)]; decide)
+
+/-- **The Pair constructor, gas-exact, from rule facts**: `rules.stateGas = none`, `CHAINID` and
+the shifts available, charged under the frame's actual storage schedule (`ctorCostH`). As `ctor_run`: from a fresh account (empty storage, zero call value)
+with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
+gas left, returning the runtime window, with the world's error unchanged and the constructor
+storage written. -/
+theorem ctor_runH {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
+    (hchain : sevm.benvStat.rules.op.chainId = true) (hshifts : sevm.benvStat.rules.op.shifts = true)
+    (hstatic : sevm.isStatic = false) (hcode : sevm.code = code) (hvalue : sevm.value = 0)
+    {b : Devm} (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) (G : Nat) :
+    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCostH sevm b)) post ∧
+      post.output = runtimeWindow ∧ post.error = b.error ∧
+      Devm.getStor post sevm.currentTarget =
+        ctorStor sevm.benvStat.chainId.toB256 sevm.currentTarget sevm.caller
+          (Devm.getStor b sevm.currentTarget) ∧
+      post.gasLeft = G := by
+  exact ⟨ctorPostH sevm b G, ctor_run_postH hsg hchain hshifts hstatic hcode hvalue hstor G,
+    ctorPostH_facts sevm b G⟩
 
 /-- **The Pair constructor, gas-exact**: from a fresh account (empty storage, zero call value)
 with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`

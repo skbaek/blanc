@@ -1744,3 +1744,13 @@ import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.HistCreate
 import Blanc.Lift.HistAccessMeta
+import Blanc.Lift.HistCallFlat
+import Blanc.Lift.HistSstoreRefund
+import Blanc.Lift.HistWindow
+import Blanc.Lift.UniswapV2Pair.InitializeLiveH
+import Blanc.Lift.UniswapV2Factory.CreatePairMemory
+import Blanc.Lift.UniswapV2Factory.CreatePairWalk
+import Blanc.Lift.UniswapV2Factory.CreatePairSpawns
+import Blanc.Lift.UniswapV2Factory.CreatePairFrame
+import Blanc.Lift.UniswapV2Factory.CreatePairTransaction
+import Blanc.Lift.UniswapV2Factory.CallShapeH
