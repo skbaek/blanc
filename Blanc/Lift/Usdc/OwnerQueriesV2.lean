@@ -779,7 +779,7 @@ private theorem enter_validation (op : OwnerOpV2) (authorization : op ≠ .permi
       M [op.validationReturn,op.internalReturn,op.returnTree]) := by
   have shape : op.internalEntry = .dest
       (op.validationLine.foldr SFunc.next (.callNext 83 op.validationReturn)) := by
-    cases op <;> first | contradiction | rfl
+    cases op <;> first | exact (authorization rfl).elim | rfl
   rw [shape] at cut
   obtain ⟨opened⟩ := cut.destH ImplV2.cert_check success fork.stateGas
   obtain ⟨called⟩ := opened.lineH ImplV2.cert_check success fork.stateGas _ rfl
@@ -791,7 +791,7 @@ private theorem enter_validation (op : OwnerOpV2) (authorization : op ≠ .permi
       Bytes.toB256 [op.validationReturnTag.1,op.validationReturnTag.2] :: op.internalStack F.sevm)
     (by intro gas d run
         cases op <;> first
-        | contradiction
+        | exact (authorization rfl).elim
         | obtain ⟨_,step,run⟩ := Line.of_run_cons run
           obtain ⟨_,rfl⟩ := ri_push step
           obtain ⟨_,step,run⟩ := Line.of_run_cons run
