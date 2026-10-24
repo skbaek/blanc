@@ -6178,6 +6178,8 @@ contract-neutral.
   [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
   `copy_loop_keep` (under the memory potential the loop leaves every byte below
   the destination alone and exits with `len ≤ i'`).
+  `copy_loop_keep_nonstorage` shares that proof without a fork premise; the
+  original interface remains a compatibility projection.
 - For the free-pointer checker's memory effect, use
   [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
   (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
@@ -6308,6 +6310,8 @@ contract-neutral.
 - For crossing a silent internal call under any step relation, use
   [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
   of `ric_call_silent`, with a no-halt set so the callee must return.
+  `ricP_call_silent_noStateGas` consumes the executing rules' state-gas absence
+  and keeps the same state equality and returned stack.
 - For a callee that cannot return, use
   [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
   predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
@@ -7214,7 +7218,10 @@ contract-neutral.
 - Crossing code without walking it, the route-C skip theorems. A checked synthetic run never
   touches the stack below its frame, [`Blanc/Lift/FrameSkip.lean`](../Blanc/Lift/FrameSkip.lean): `FrameAt`,
   `SFunc.RunP.stack_below`, `SFunc.RunCutP.stack_below` (every stop satisfies `CutStop`),
-  `SFunc.RunP.entry_stack_below`, and `ric_call_silent`, which crosses any state-silent internal
+  and `SFunc.RunP.entry_stack_below`. The `FrameAt.next_noStateGas`,
+  `SFunc.RunP.stack_below_noStateGas` and `SFunc.RunP.entry_stack_below_noStateGas`
+  variants share the original induction with actual state-gas absence.
+  `ric_call_silent` crosses any state-silent internal
   call (hashing, ABI encoding, view-like helpers) with the continuation's stack
   `Y ++ S.drop e.frame.length`, `Y.length = e.rets` (worked example:
   `Blanc/Lift/UniswapV2Pair/FrameSkipExample.lean`, the Pair's `kLast()` getter). A silent
@@ -7279,7 +7286,9 @@ contract-neutral.
   `lib_run_cut_noStateGas` (the actual successful bytecode cut) and
   `lib_e8_invH` (the `isContract` branch with the executing rules' account-access
   successor). The shared nonstorage memory walks retain their modern interfaces;
-  the historical static-call tail and complete rejection endpoint remain separate.
+  the static-call tail uses actual `StaticAnsweredH` and silence restricted to
+  the same executing environment, preserving the old global silence interface.
+  The complete historical rejection endpoint remains separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).

@@ -15,9 +15,9 @@ namespace Blanc.Lift
 
 open Jaune
 
-theorem ricP_call_silent {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem ricP_call_silent_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {code : ByteArray} {c : Cert}
-    (hc : Cert.check code c = true) {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
+    (hc : Cert.check code c = true) {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
     {Sk Hk : List Nat} (hS : SilentSet c.prog Sk = true) (hH : NoHaltSet c.prog Hk = true)
     {k : Nat} (hkS : k ∈ Sk) (hkH : k ∈ Hk) {e : Entry} {g : SFunc}
     (he : c.entries[k]? = some e) (hg : c.prog[k]? = some g)
@@ -43,11 +43,25 @@ theorem ricP_call_silent {P : Sevm → Devm → Ninst → Devm → Prop}
     rw [hd] at callee
     have hstate : D.state = b.state :=
       SFunc.RunP.state_of_silent hP hS hgS.1 hgS.2 callee
-    obtain ⟨Y, hY, hlen⟩ := callee.entry_stack_below hP hc hfork he hg
+    obtain ⟨Y, hY, hlen⟩ := callee.entry_stack_below_noStateGas hP hc hsg he hg
       (List.take_append_drop _ _).symm hframe
     refine ⟨D, Y, D.memory, D.gasLeft, hstate, hlen, ?_⟩
     rw [St.stack] at hY
     rw [← St.self hY rfl]
     exact cont
+
+/-- Crossing a silent internal call on a covered fork. -/
+theorem ricP_call_silent {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
+    {Sk Hk : List Nat} (hS : SilentSet c.prog Sk = true) (hH : NoHaltSet c.prog Hk = true)
+    {k : Nat} (hkS : k ∈ Sk) (hkH : k ∈ Hk) {e : Entry} {g : SFunc}
+    (he : c.entries[k]? = some e) (hg : c.prog[k]? = some g)
+    {C : List Nat} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {dd ρ : B256} {f : SFunc}
+    {r : Seg} (run : SFunc.RunCutP P c.prog sevm C (St b (dd :: S) M G) (.callNext k f) r)
+    (hframe : FrameMatches ρ e.frame (S.take e.frame.length)) :
+    ∃ b' Y M' G', b'.state = b.state ∧ Y.length = e.rets ∧
+      SFunc.RunCutP P c.prog sevm C (St b' (Y ++ S.drop e.frame.length) M' G') f r :=
+  ricP_call_silent_noStateGas hP hc hfork.rules_stateGas_none hS hH hkS hkH he hg run hframe
 
 end Blanc.Lift

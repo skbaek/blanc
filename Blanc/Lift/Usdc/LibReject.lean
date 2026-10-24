@@ -487,16 +487,30 @@ theorem tail3 {sevm : Sevm} {b : Devm} {a c sig dig signer ret : B256} {S : List
   have _ := fork
   exact tail3_nonstorage hC h
 
+/-- Silence restricted to this library run's fixed environment. -/
+private def PairSilentAt (sevm : Sevm) : Prop :=
+  ∀ {b : Devm} {t : Adr} {input out : Bytes},
+    b.getCode t = UniswapV2Pair.code →
+    ¬ sevm.benvStat.rules.isPrecomp t →
+    (∀ e : Sevm, e.data = input → Blanc.Sevm.selector e = 0x1626ba7e) →
+    ¬ StaticAnsweredH sevm b t input out
+
+private theorem pairSilentAt_of_covered {sevm : Sevm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (silent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) : PairSilentAt sevm := by
+  intro b t input out code notPre selector answered
+  exact silent code notPre fork selector ((StaticAnsweredH_iff_of_covered fork).mp answered)
+
 /-- **The copy loop's exit and the `STATICCALL`** (entry 7's exit, then entries 3 and 4): the
 partial last word lands above the head word; the call data at the free pointer `E` begins with the
 selector word, so a Pair signer cannot answer (the `hsilent` hypothesis, amendment A11),
 the flag is `0`, and entry 10 returns `0`. -/
-theorem e7_exit {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w : B256}
+private theorem e7_exit_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w : B256}
     {S : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
+    (hsg : sevm.benvStat.rules.stateGas = none) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
     (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hsilent : PairSilentAt sevm)
     (hp : LibMem E M) (hw : (M.read E.toNat 32).1 = (selWord w).toBytes)
     (hE : 96 ≤ E.toNat) (hEb : E.toNat < 2 ^ 200) (hdst : E.toNat + 32 ≤ dst.toNat) (hL : 32 ≤ (L + E - E).toNat)
     (h : SFunc.RunCut cert.prog sevm (7 :: C) (St b
@@ -527,13 +541,13 @@ theorem e7_exit {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w
   have hx : (Mx.read E.toNat 32).1 = (selWord w).toBytes := by
     rw [← hMx, memRead_extend_fst, ← hMw, read_write_off wR (by omega), ← hRd, memRead_extend_fst, ← hRs, memRead_extend_fst, hw]
   obtain ⟨_, hd, h⟩ := ric_next h
-  obtain ⟨flag, out, post, hans⟩ := ri_staticcall fork hd
+  obtain ⟨flag, out, post, hans⟩ := ri_staticcallH hsg hd
   rw [post.eq_St] at h
   have hf0 : flag = 0 := by
     rcases post.flag with h0 | h1
     · exact h0
     · exfalso
-      refine hsilent hcode notPrecompile fork (fun e he => ?_) (hans h1)
+      refine hsilent hcode notPrecompile (fun e he => ?_) (hans h1)
       rw [read_split _ _ _ hL, hx] at he
       rw [sel_of_head he]
       exact selWord_shr w
@@ -560,7 +574,7 @@ theorem e7_exit {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w
     subst e
     lx h
     obtain ⟨_, h⟩ := ric_jump (List.not_mem_cons_of_ne_of_not_mem (by decide) hC3) rfl h
-    obtain ⟨b', G', e⟩ := tail3 fork (List.not_mem_cons_of_ne_of_not_mem (by decide) hC4) h
+    obtain ⟨b', G', e⟩ := tail3_nonstorage (List.not_mem_cons_of_ne_of_not_mem (by decide) hC4) h
     have pE : (Mp.read (Bytes.toB256 [64]).toNat 32).1.toB256 = E := by rw [lit64]; exact pMp.ptr
     rw [pE, lit64] at e
     exact ⟨b', _, _, G', (((pMp.extend _ _).set _).write _ _ hE).write _ _
@@ -568,18 +582,35 @@ theorem e7_exit {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w
   · unfold t_03c9_c7 at h
     ldest h
     iterate 3 lx h
-    obtain ⟨b', G', e⟩ := tail3 fork (List.not_mem_cons_of_ne_of_not_mem (by decide) hC4) h
+    obtain ⟨b', G', e⟩ := tail3_nonstorage (List.not_mem_cons_of_ne_of_not_mem (by decide) hC4) h
     exact ⟨b', E, Mp, G', pMp, e⟩
+
+/-- The original covered-fork tail interface, using silence at this same environment. -/
+theorem e7_exit {sevm : Sevm} {b : Devm} {sig dig signer ret F E L src dst len w : B256}
+    {S : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
+    (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hp : LibMem E M) (hw : (M.read E.toNat 32).1 = (selWord w).toBytes)
+    (hE : 96 ≤ E.toNat) (hEb : E.toNat < 2 ^ 200) (hdst : E.toNat + 32 ≤ dst.toNat) (hL : 32 ≤ (L + E - E).toNat)
+    (h : SFunc.RunCut cert.prog sevm (7 :: C) (St b
+        (src :: dst :: len :: L ::
+          (F + Bytes.toB256 [32]) :: E :: E :: F :: (maskAddr &&& signer) ::
+          Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+        M G) t_0369_c7 r) :
+    ∃ b' q M' G', LibMem q M' ∧ r = .done (.returned (St b' (0 :: S) M' G')) :=
+  e7_exit_actual fork.rules_stateGas_none hC3 hC4 hcode notPrecompile (pairSilentAt_of_covered fork hsilent) hp hw hE hEb hdst hL h
 
 /-- **The call-data copy loop** (entry 7, solc's copy of `bytes memory` into a call buffer at
 `E`): each iteration writes one word above the head word and keeps the free pointer `E`; the exit
 is `e7_exit`. -/
-theorem loop7 {sevm : Sevm} {b : Devm} {sig dig signer ret F E L w : B256} {S : List B256}
-    {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+private theorem loop7_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F E L w : B256} {S : List B256}
+    {C : List Nat} {r : Seg} (hsg : sevm.benvStat.rules.stateGas = none)
     (hC7 : 7 ∉ C) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
     (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hsilent : PairSilentAt sevm)
     (hE : 96 ≤ E.toNat) (hEb : E.toNat < 2 ^ 200) (hL : 32 ≤ (L + E - E).toNat)
     {src dst len : B256} {M : Mem} {G : Nat}
     (hp : LibMem E M) (hw : (M.read E.toNat 32).1 = (selWord w).toBytes)
@@ -617,9 +648,28 @@ theorem loop7 {sevm : Sevm} {b : Devm} {sig dig signer ret F E L w : B256} {S : 
       omega
     · rw [add_toNat_small (by rw [lit32]; omega), lit32, sub32_toNat l32]
       omega
-  · obtain ⟨b', q, M', G', pq, e⟩ := e7_exit fork hC3 hC4 hcode notPrecompile hsilent hp hw hE hEb hdst hL h
+  · obtain ⟨b', q, M', G', pq, e⟩ := e7_exit_actual hsg hC3 hC4 hcode notPrecompile hsilent hp hw hE hEb hdst hL h
     subst e
     exact ⟨b', q, M', G', pq, rfl⟩
+
+/-- The original covered-fork tail interface, using silence at this same environment. -/
+theorem loop7 {sevm : Sevm} {b : Devm} {sig dig signer ret F E L w : B256} {S : List B256}
+    {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+    (hC7 : 7 ∉ C) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
+    (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hE : 96 ≤ E.toNat) (hEb : E.toNat < 2 ^ 200) (hL : 32 ≤ (L + E - E).toNat)
+    {src dst len : B256} {M : Mem} {G : Nat}
+    (hp : LibMem E M) (hw : (M.read E.toNat 32).1 = (selWord w).toBytes)
+    (hdst : E.toNat + 32 ≤ dst.toNat) (hfit : dst.toNat + len.toNat < 2 ^ 200)
+    (run : SFunc.RunCut cert.prog sevm C (St b
+        (src :: dst :: len :: L ::
+          (F + Bytes.toB256 [32]) :: E :: E :: F :: (maskAddr &&& signer) ::
+          Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+        M G) t_032c_c7 r) :
+    ∃ b' q M' G', LibMem q M' ∧ r = .done (.returned (St b' (0 :: S) M' G')) :=
+  loop7_actual fork.rules_stateGas_none hC7 hC3 hC4 hcode notPrecompile (pairSilentAt_of_covered fork hsilent) hE hEb hL hp hw hdst hfit run
 
 theorem add_sub_cancel_toNat (a e : B256) : (a + e - e).toNat = a.toNat := by
   rw [B256.toNat_sub, B256.toNat_add]
@@ -630,12 +680,12 @@ theorem add_sub_cancel_toNat (a e : B256) : (a + e - e).toNat = a.toNat := by
 
 /-- **The call-data copy, from its first test** (entry 2's inline loop head): the encoding is at
 least a word long, so the first iteration copies the selector word to `E`, then the loop runs. -/
-theorem copy_first {sevm : Sevm} {b : Devm} {sig dig signer ret F E w : B256} {S : List B256}
-    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+private theorem copy_first_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F E w : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (hsg : sevm.benvStat.rules.stateGas = none)
     (hC7 : 7 ∉ C) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
     (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hsilent : PairSilentAt sevm)
     (hF : 128 ≤ F.toNat) (hEF : F.toNat + 132 ≤ E.toNat) (hE : E.toNat < 2 ^ 100)
     (hp : LibMem E M) (hw : (M.read (F + Bytes.toB256 [32]).toNat 32).1 = (selWord w).toBytes)
     (h : SFunc.RunCut cert.prog sevm C (St b
@@ -660,13 +710,30 @@ theorem copy_first {sevm : Sevm} {b : Devm} {sig dig signer ret F E w : B256} {S
   obtain ⟨_, h⟩ := ric_jump hC7 rfl h
   have hF32 : (F + Bytes.toB256 [32]).toNat = F.toNat + 32 := by
     rw [add_toNat_small (by rw [lit32]; omega), lit32]
-  refine loop7 (w := w) fork hC7 hC3 hC4 hcode notPrecompile hsilent (by omega) (by omega) (by rw [add_sub_cancel_toNat, hL]; omega)
+  refine loop7_actual (w := w) hsg hC7 hC3 hC4 hcode notPrecompile hsilent (by omega) (by omega) (by rw [add_sub_cancel_toNat, hL]; omega)
     ((hp.extend _ _).write _ _ (by omega)) ?_ ?_ ?_ h
   · rw [Mem.read_write_word_of_wf (wf_read hp.wf _ _), hw, B256.toB256_toBytes]
   · rw [add_toNat_small (by rw [lit32]; omega), lit32]
     omega
   · rw [add_toNat_small (by rw [lit32]; omega), lit32, sub32_toNat (by omega), hL]
     omega
+
+/-- The original covered-fork tail interface, using silence at this same environment. -/
+theorem copy_first {sevm : Sevm} {b : Devm} {sig dig signer ret F E w : B256} {S : List B256}
+    {M : Mem} {G : Nat} {C : List Nat} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+    (hC7 : 7 ∉ C) (hC3 : 3 ∉ C) (hC4 : 4 ∉ C)
+    (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hF : 128 ≤ F.toNat) (hEF : F.toNat + 132 ≤ E.toNat) (hE : E.toNat < 2 ^ 100)
+    (hp : LibMem E M) (hw : (M.read (F + Bytes.toB256 [32]).toNat 32).1 = (selWord w).toBytes)
+    (h : SFunc.RunCut cert.prog sevm C (St b
+        ((F + Bytes.toB256 [32]) :: E :: (E - F + wNeg32) :: (E - F + wNeg32) ::
+          (F + Bytes.toB256 [32]) :: E :: E :: F :: (maskAddr &&& signer) ::
+          Bytes.toB256 [96] :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: sig :: dig :: signer :: ret :: S)
+        M G) t_032c_c2 r) :
+    ∃ b' q M' G', LibMem q M' ∧ r = .done (.returned (St b' (0 :: S) M' G')) :=
+  copy_first_actual fork.rules_stateGas_none hC7 hC3 hC4 hcode notPrecompile (pairSilentAt_of_covered fork hsilent) hF hEF hE hp hw h
 
 theorem and31_le (x : B256) : (Bytes.toB256 [31] &&& x).toNat ≤ x.toNat := by
   rw [B256.toNat_and]
@@ -676,16 +743,16 @@ theorem and31_le (x : B256) : (Bytes.toB256 [31] &&& x).toNat ≤ x.toNat := by
 whatever the signature, the frame returns `false`.  The free pointer `F` lies above the signature
 length word at `sig`, and that length is at most `2 ^ 32` (the facts the library's own calldata
 decoder establishes). -/
-theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
-    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+private theorem e10_inv_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome} (hsg : sevm.benvStat.rules.stateGas = none)
     (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hsilent : PairSilentAt sevm)
     (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
     (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len) (hlen32 : len.toNat ≤ 2 ^ 32)
     (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0203_c10 o) :
     ∃ b' q M' G', LibMem q M' ∧ o = .returned (St b' (0 :: S) M' G') := by
-  obtain ⟨M1, G1, hp1, h⟩ := e10_pre fork hp hF hsig hlen run
+  obtain ⟨M1, G1, hp1, h⟩ := e10_pre_nonstorage hp hF hsig hlen run
   rw [t0257_eq] at h
   have hF36 : (Bytes.toB256 [36] + F).toNat = 36 + F.toNat := by
     rw [add_toNat_small (by rw [lit36_toNat]; omega), lit36_toNat]
@@ -700,7 +767,7 @@ theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
       F.toNat + 132 := by
     rw [add_toNat_small (by rw [lit32, hF100]; omega), lit32, hF100]
     omega
-  have key := loop12 (fun r => ∃ b' q M' G', LibMem q M' ∧ r = .done (.returned (St b' (0 :: S) M' G'))) fork
+  have key := loop12_nonstorage (fun r => ∃ b' q M' G', LibMem q M' ∧ r = .done (.returned (St b' (0 :: S) M' G')))
     (fun r ⟨b', q, M', G', _, e⟩ => ⟨_, e⟩) (by rw [hD]; omega) (by rw [hD]; omega) ?_ hp1
     (by simp only [show (Bytes.toB256 [0]).toNat = 0 by decide]; omega) h
   · obtain ⟨b', q, M', G', pq, e⟩ := key
@@ -722,16 +789,28 @@ theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : 
         (Bytes.toB256 [36] + F)))) - (Bytes.toB256 [31] &&& len)).toNat =
         len.toNat + (F.toNat + 132) - (Bytes.toB256 [31] &&& len).toNat := by
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by rw [hE0]; omega)), hE0]
-    obtain ⟨w, Me, G3, hpe, hwe, h⟩ := e2_head fork ((hp2.extend _ _).write _ _ (by omega)) hF h
+    obtain ⟨w, Me, G3, hpe, hwe, h⟩ := e2_head_nonstorage ((hp2.extend _ _).write _ _ (by omega)) hF h
     have hE1 : (Bytes.toB256 [32] + (len + (Bytes.toB256 [32] + (Bytes.toB256 [32] +
         (Bytes.toB256 [32] + (Bytes.toB256 [36] + F)))) - (Bytes.toB256 [31] &&& len))).toNat =
         32 + (len.toNat + (F.toNat + 132) - (Bytes.toB256 [31] &&& len).toNat) := by
       rw [add_toNat_small (by rw [lit32, hsub]; omega), lit32, hsub]
-    exact copy_first fork (by decide) (by decide) (by decide) hcode notPrecompile hsilent hF.1
+    exact copy_first_actual hsg (by decide) (by decide) (by decide) hcode notPrecompile hsilent hF.1
       (by rw [hE1]; omega) (by rw [hE1]; omega) hpe hwe h
-  · obtain ⟨w, Me, G3, hpe, hwe, h⟩ := e2_head fork hp2 hF h
-    exact copy_first fork (by decide) (by decide) (by decide) hcode notPrecompile hsilent hF.1
+  · obtain ⟨w, Me, G3, hpe, hwe, h⟩ := e2_head_nonstorage hp2 hF h
+    exact copy_first_actual hsg (by decide) (by decide) (by decide) hcode notPrecompile hsilent hF.1
       (by rw [hE0]; omega) (by rw [hE0]; omega) hpe hwe h
+
+/-- The original covered-fork tail interface, using silence at this same environment. -/
+theorem e10_inv {sevm : Sevm} {b : Devm} {sig dig signer ret F len : B256} {S : List B256}
+    {M : Mem} {G : Nat} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hcode : b.getCode (maskAddr &&& signer).toAdr = UniswapV2Pair.code)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (maskAddr &&& signer).toAdr)
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e)
+    (hp : LibMem F M) (hF : 128 ≤ F.toNat ∧ F.toNat < 2 ^ 40) (hsig : sig.toNat + 32 ≤ F.toNat + 36)
+    (hlen : Bytes.toB256 (M.read sig.toNat 32).1 = len) (hlen32 : len.toNat ≤ 2 ^ 32)
+    (run : SFunc.Run cert.prog sevm (St b (sig :: dig :: signer :: ret :: S) M G) t_0203_c10 o) :
+    ∃ b' q M' G', LibMem q M' ∧ o = .returned (St b' (0 :: S) M' G') :=
+  e10_inv_actual fork.rules_stateGas_none hcode notPrecompile (pairSilentAt_of_covered fork hsilent) hp hF hsig hlen hlen32 run
 
 /-- **Entry 8, `isContract(addr)`**: `extcodesize(addr) > 0`. -/
 theorem lib_e8_invH {sevm : Sevm} {b : Devm} {x ret : B256} {S : List B256} {M : Mem} {G : Nat}

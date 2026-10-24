@@ -77,7 +77,7 @@ theorem CutStop.weaken {a0 : List AVal} {r : Seg} (hr : AVal.ret ∈ a0 → AVal
   | .done (.returned _), h => exact ⟨hr h.1, h.2⟩
   | .done (.halted _), _ => trivial
 
-theorem FrameAt.next {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {n : Ninst}
+theorem FrameAt.next_noStateGas {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none) {n : Ninst}
     {f : SFunc} (h : FrameAt code c m pc a ρ R d (.next n f)) (run : Ninst.Run sevm d n d') :
     FrameNext code c m a ρ R d' f := by
   obtain ⟨hcheck, X, hst, hfr⟩ := h
@@ -87,8 +87,13 @@ theorem FrameAt.next {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {n :
   | none => simp only [habs, Bool.false_eq_true] at hrest
   | some a' =>
     simp only [habs] at hrest
-    obtain ⟨X', hst', hfr'⟩ := Cursor.absNinst_run_stack hfork habs hst hfr run
+    obtain ⟨X', hst', hfr'⟩ := Cursor.absNinst_run_stack_noStateGas hsg habs hst hfr run
     exact ⟨_, a', Cursor.ret_mem_of_absNinst habs, hrest, X', hst', hfr'⟩
+
+theorem FrameAt.next {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {n : Ninst}
+    {f : SFunc} (h : FrameAt code c m pc a ρ R d (.next n f)) (run : Ninst.Run sevm d n d') :
+    FrameNext code c m a ρ R d' f :=
+  FrameAt.next_noStateGas hfork.rules_stateGas_none h run
 
 theorem FrameAt.dest {f : SFunc} (h : FrameAt code c m pc a ρ R d (.dest f))
     (burn : Devm.Burn d d') : FrameNext code c m a ρ R d' f := by
@@ -292,8 +297,8 @@ variable {P : Sevm → Devm → Ninst → Devm → Prop} {code : ByteArray} {c :
 
 /-- **Stack-below preservation.**  A run of a checked node that returns leaves exactly `m` words
 above the untouched `R` (and the node's frame mentions its return address). -/
-theorem SFunc.RunP.stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
-    (hc : Cert.check code c = true) (hfork : CoveredFork sevm.benvStat.fork)
+theorem SFunc.RunP.stack_below_noStateGas (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (hc : Cert.check code c = true) (hsg : sevm.benvStat.rules.stateGas = none)
     {d : Devm} {f : SFunc} {o : Outcome} (run : SFunc.RunP P c.prog sevm d f o) :
     ∀ {m pc : Nat} {a : List AVal} {ρ : B256} {R : List B256},
       FrameAt code c m pc a ρ R d f → ∀ {D : Devm}, o = .returned D →
@@ -318,7 +323,7 @@ theorem SFunc.RunP.stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s 
   | last _ => intro m pc a ρ R _ D hD; cases hD
   | next hrun _ ih =>
     intro m pc a ρ R h D hD
-    obtain ⟨_, _, hr, h'⟩ := h.next hfork (hP hrun)
+    obtain ⟨_, _, hr, h'⟩ := h.next_noStateGas hsg (hP hrun)
     exact (ih h' hD).imp_left hr
   | dest burn _ ih =>
     intro m pc a ρ R h D hD
@@ -343,6 +348,15 @@ theorem SFunc.RunP.stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s 
     intro m pc a ρ R h D hD
     obtain ⟨_, _, hr, h'⟩ := h.pcAt hstep
     exact (ih h' hD).imp_left hr
+
+/-- Stack-below preservation on a covered fork. -/
+theorem SFunc.RunP.stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (hc : Cert.check code c = true) (hfork : CoveredFork sevm.benvStat.fork)
+    {d : Devm} {f : SFunc} {o : Outcome} (run : SFunc.RunP P c.prog sevm d f o) :
+    ∀ {m pc : Nat} {a : List AVal} {ρ : B256} {R : List B256},
+      FrameAt code c m pc a ρ R d f → ∀ {D : Devm}, o = .returned D →
+        AVal.ret ∈ a ∧ ∃ Y, D.stack = Y ++ R ∧ Y.length = m :=
+  run.stack_below_noStateGas hP hc hfork.rules_stateGas_none
 
 /-- **Stack-below preservation, cut form.**  Every stop of a checked node's cut run keeps the
 words below its frame: a cut entry is entered with its declared frame above `R`, and a return
@@ -399,13 +413,22 @@ theorem SFunc.RunCutP.stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run
 
 /-- An entry run from its declared frame above `R` that returns leaves `e.rets` words above
 `R`. -/
+theorem SFunc.RunP.entry_stack_below_noStateGas (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (hc : Cert.check code c = true) (hsg : sevm.benvStat.rules.stateGas = none)
+    {k : Nat} {e : Entry} {g : SFunc} (he : c.entries[k]? = some e) (hg : c.prog[k]? = some g)
+    {ρ : B256} {X R : List B256} {d D : Devm} (hst : d.stack = X ++ R)
+    (hfr : FrameMatches ρ e.frame X) (run : SFunc.RunP P c.prog sevm d g (.returned D)) :
+    ∃ Y, D.stack = Y ++ R ∧ Y.length = e.rets :=
+  (run.stack_below_noStateGas hP hc hsg ⟨cert_check_at hc k e g he hg, X, hst, hfr⟩ rfl).2
+
+/-- Stack-below preservation for an entry run on a covered fork. -/
 theorem SFunc.RunP.entry_stack_below (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (hc : Cert.check code c = true) (hfork : CoveredFork sevm.benvStat.fork)
     {k : Nat} {e : Entry} {g : SFunc} (he : c.entries[k]? = some e) (hg : c.prog[k]? = some g)
     {ρ : B256} {X R : List B256} {d D : Devm} (hst : d.stack = X ++ R)
     (hfr : FrameMatches ρ e.frame X) (run : SFunc.RunP P c.prog sevm d g (.returned D)) :
     ∃ Y, D.stack = Y ++ R ∧ Y.length = e.rets :=
-  (run.stack_below hP hc hfork ⟨cert_check_at hc k e g he hg, X, hst, hfr⟩ rfl).2
+  run.entry_stack_below_noStateGas hP hc hfork.rules_stateGas_none he hg hst hfr
 
 /-- **Crossing a silent internal call.**  A `callNext` into an entry of a `SilentSet` closure,
 from the walk state `St b (dd :: S) M G` whose top words match the callee's declared frame:
