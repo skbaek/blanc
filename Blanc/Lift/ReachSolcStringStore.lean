@@ -46,13 +46,13 @@ theorem scratch_word (M : Mem) (w : B256) :
       (Bytes.toB256 [32]).toNat).1 = w.toBytes :=
   Mem.read_write_zero M (ys := w.toBytes) (List.ne_nil_of_length_pos (by rw [B256.length_toBytes]; decide))
 
-namespace StrStoreCd
+namespace StrStore
 
 variable (τ : StrTags)
 
-/-- The copy loop head of the helper (inline and at entry `kLoop`). -/
-def loopHead : SFunc :=
-  ReachPayload.headJ (.reg .calldataload) [τ.back.1, τ.back.2] [τ.exit.1, τ.exit.2]
+/-- The copy loop head of the helper (inline and at entry `kLoop`), reading with `rd`. -/
+def loopHead (rd : Ninst) : SFunc :=
+  ReachPayload.headJ rd [τ.back.1, τ.back.2] [τ.exit.1, τ.exit.2]
     (len2 _ _) (len2 _ _) τ.kLoop τ.kExit
 
 /-- The clearing loop head (entry `kClrLoop`). -/
@@ -66,24 +66,31 @@ def exitTree : SFunc :=
     (.next (.reg .pop) (.next (tagPush τ.clr) (.callNext τ.kClr
       (.dest (.next (.reg .pop) (.next (.reg (.swap 0)) .ret))))))))))
 
-/-- The short-string arm. -/
-def shortArm : SFunc :=
+/-- The short-string arm of a `string calldata` source. -/
+def shortCd : SFunc :=
   .next (.reg (.dup 2)) (.next (.reg (.dup 0)) (.next (.reg .add) (.next (.push [0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00] (by decide))
     (.next (.reg (.dup 2)) (.next (.reg .calldataload) (.next (.reg .and) (.next (.reg .or)
     (.next (.reg (.dup 5)) (.next (.reg .sstore) (.next (tagPush τ.exit) (.jump τ.kExit)))))))))))
 
+/-- The short-string arm of a `string memory` source. -/
+def shortMem : SFunc :=
+  .next (.reg (.dup 0)) (.next (.reg .mload) (.next (.push [0xff] (by decide)) (.next (.reg .not)
+    (.next (.reg .and) (.next (.reg (.dup 3)) (.next (.reg (.dup 0)) (.next (.reg .add)
+    (.next (.reg .or) (.next (.reg (.dup 5)) (.next (.reg .sstore) (.next (tagPush τ.exit)
+    (.jump τ.kExit))))))))))))
+
 /-- The long-string arm: header, empty test, then the copy loop. -/
-def longArm : SFunc :=
+def longArm (rd : Ninst) : SFunc :=
   .dest (.next (.reg (.dup 2)) (.next (.reg (.dup 0)) (.next (.reg .add) (.next (.push [0x01]
     (by decide)) (.next (.reg .add) (.next (.reg (.dup 5)) (.next (.reg .sstore)
     (.next (.reg (.dup 2)) (.next (.reg .iszero) (.next (tagPush τ.exit)
-    (.branchTo (.next (.reg (.swap 1)) (.next (.reg (.dup 2)) (.next (.reg .add) (loopHead τ))))
+    (.branchTo (.next (.reg (.swap 1)) (.next (.reg (.dup 2)) (.next (.reg .add) (loopHead τ rd))))
       τ.kExit)))))))))))
 
-/-- The helper. -/
-def helper : SFunc :=
+/-- The helper over its copy loop's read `rd` and its short arm `sa`. -/
+def helper (rd : Ninst) (sa : SFunc) : SFunc :=
   .dest (.next (.reg (.dup 2)) (.next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [0x01]
     (by decide)) (.next (.reg (.dup 1)) (.next (.push [0x01] (by decide)) (.next (.reg .and)
     (.next (.reg .iszero) (.next (.push [0x01, 0x00] (by decide)) (.next (.reg .mul)
@@ -94,29 +101,46 @@ def helper : SFunc :=
     (.next (.reg .add) (.next (.push [0x20] (by decide)) (.next (.reg (.swap 0)) (.next (.reg .div)
     (.next (.reg (.dup 1)) (.next (.reg .add) (.next (.reg (.swap 2)) (.next (.reg (.dup 2))
     (.next (.push [0x1f] (by decide)) (.next (.reg .lt) (.next (tagPush τ.long)
-    (.branch (shortArm τ) (longArm τ))))))))))))))))))))))))))))))))))))
+    (.branch sa (longArm τ rd))))))))))))))))))))))))))))))))))))
 
 /-- The table entries the helper reaches. -/
-structure Entries (fs : List SFunc) : Prop where
+structure Entries (rd : Ninst) (fs : List SFunc) : Prop where
   exit : fs[τ.kExit]? = some (exitTree τ)
-  loop : fs[τ.kLoop]? = some (loopHead τ)
+  loop : fs[τ.kLoop]? = some (loopHead τ rd)
   clr : fs[τ.kClr]? = some (.dest (clrHead τ))
   clrLoop : fs[τ.kClrLoop]? = some (clrHead τ)
 
-/-- What a store of the helper writes: the slot, zero, or a payload word. -/
-def StoreAt (slot : B256) (len : Nat) (T : Conf) : Prop :=
+/-- What a store of the helper writes: the slot, zero, or a payload word below `n`. -/
+def StoreAt (slot : B256) (n : Nat) (T : Conf) : Prop :=
   ∃ key v S, T.d.stack = key :: v :: S ∧
-    (key = slot ∨ v = 0 ∨ ∃ j : Nat, j < (len + 31) / 32 ∧ key = slot.toBytes.keccak + j.toB256)
+    (key = slot ∨ v = 0 ∨ ∃ j : Nat, j < n ∧ key = slot.toBytes.keccak + j.toB256)
+
+theorem StoreAt.mono {slot : B256} {n m : Nat} {T : Conf} (h : n ≤ m) (s : StoreAt slot n T) :
+    StoreAt slot m T := by
+  obtain ⟨key, v, S, hs, hk | hv | ⟨j, hj, hk⟩⟩ := s
+  · exact ⟨key, v, S, hs, .inl hk⟩
+  · exact ⟨key, v, S, hs, .inr (.inl hv)⟩
+  · exact ⟨key, v, S, hs, .inr (.inr ⟨j, by omega, hk⟩)⟩
+
+/-- The copy loop's iteration count is at most the string's word count. -/
+theorem count_le (p len : Nat) :
+    SolcStoragePayload.count (p + len).toB256 p ≤ (len + 31) / 32 := by
+  unfold SolcStoragePayload.count
+  have h : ((p + len).toB256).toNat ≤ p + len := by
+    rw [B256.toNat_toB256]
+    exact Nat.mod_le _ _
+  exact Nat.div_le_div_right (by omega)
 
 variable {τ} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {T : Conf}
 
-theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : Entries τ fs)
+theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+    (E : Entries τ rd fs)
     {K : List SFunc} {b : Devm} {x y z w s0 s1 : B256} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach P fs sevm ⟨St b (x :: y :: z :: w :: s0 :: s1 :: S) M G, exitTree τ, K⟩ T)
     (hT : AtSstore T) :
-    ReachClear.ZeroAt T ∨ ∃ f K' b' M' G', K = f :: K' ∧
-      Reach P fs sevm ⟨St b' (s0 :: S) M' G', f, K'⟩ T := by
+    ReachClear.ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧
+      Reach P fs sevm ⟨St b' (s0 :: S) M G', f, K'⟩ T := by
   unfold exitTree at run
   rsd
   iterate 6 rsx
@@ -124,19 +148,81 @@ theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (
   rw [E.clr] at hg
   cases hg
   rsd
-  rcases ReachClear.clear_reach erase E.clrLoop rfl run hT with h | ⟨f, K', b', M', G', hK, run⟩
+  rcases ReachClear.clear_reach erase E.clrLoop rfl run hT with h | ⟨f, K', b', G', hK, run⟩
   · exact .inl h
   cases hK
   rsd
   iterate 2 rsx
-  exact .inr (rs_ret run hT)
+  exact .inr (rs_retM run hT)
 
-theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : Entries τ fs)
+theorem toB256_add (a b : Nat) : a.toB256 + b.toB256 = (a + b).toB256 := by
+  apply B256.toNat_inj
+  rw [B256.toNat_add, B256.toNat_toB256, B256.toNat_toB256, B256.toNat_toB256]
+  exact (Nat.add_mod _ _ _).symm
+
+/-- What a short arm owes: on the arm's entry stack, it stores at the slot (its fifth word) and
+leaves for the shared exit with the same stack under kept memory. -/
+def ShortOK (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List SFunc) (sevm : Sevm)
+    (τ : StrTags) (sa : SFunc) : Prop :=
+  ∀ {K : List SFunc} {b : Devm} {x y z w s0 r : B256} {S : List B256} {M : Mem} {G : Nat}
+    {T : Conf}, Reach P fs sevm ⟨St b (x :: y :: z :: w :: s0 :: r :: S) M G, sa, K⟩ T →
+    AtSstore T → (∃ v S', T.d.stack = s0 :: v :: S') ∨
+      ∃ b' M' G', SolcStorageReturn.Keeps M M' ∧
+        Reach P fs sevm ⟨St b' (x :: y :: z :: w :: s0 :: r :: S) M' G', exitTree τ, K⟩ T
+
+theorem shortCd_ok (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (hexit : fs[τ.kExit]? = some (exitTree τ)) : ShortOK P fs sevm τ (shortCd τ) := by
+  intro K b x y z w s0 r S M G T run hT
+  unfold shortCd at run
+  iterate 9 rsx
+  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
+  · exact .inl ⟨_, _, rfl⟩
+  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
+  subst e
+  clear hstep
+  rsx
+  obtain ⟨g, _, hg, run⟩ := rs_jump run hT
+  rw [hexit] at hg
+  cases hg
+  exact .inr ⟨_, _, _, SolcStorageReturn.Keeps.refl _, run⟩
+
+theorem shortMem_ok (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (hexit : fs[τ.kExit]? = some (exitTree τ)) : ShortOK P fs sevm τ (shortMem τ) := by
+  intro K b x y z w s0 r S M G T run hT
+  unfold shortMem at run
+  iterate 10 rsx
+  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
+  · exact .inl ⟨_, _, rfl⟩
+  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
+  subst e
+  clear hstep
+  rsx
+  obtain ⟨g, _, hg, run⟩ := rs_jump run hT
+  rw [hexit] at hg
+  cases hg
+  exact .inr ⟨_, _, _, SolcStorageReturn.Keeps.read _ _ _, run⟩
+
+/-- **The helper on a reach to an `SSTORE`.** Entered with `len :: p :: slot :: r :: S` (the
+string length, its data pointer and the slot), the reach stops at a store of the slot, of
+zero, or of a payload word `keccak(slot) + j` for `j` below the copy loop's iteration count;
+or the helper returns `slot :: S` into the pending continuation, with every byte of the entry
+memory but the scratch word at `0` kept. `rdStep` and `win` are the copy loop's read laws. -/
+theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+    (hrd : rd ≠ .reg .sstore)
+    (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
+      P sevm (St b (c :: S) M G) rd d →
+        ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M')
+    {sa : SFunc} (hsa : ShortOK P fs sevm τ sa) (E : Entries τ rd fs)
     {K : List SFunc} {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat} {len p : Nat}
-    {slot : B256} (bound : p + len + 32 ≤ 2 ^ 256)
-    (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G, helper τ, K⟩ T)
+    {slot : B256} (hp : p < 2 ^ 256)
+    (win : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
+      P sevm (St b (c :: S) M G) rd d → c.toNat < ((p + len).toB256).toNat →
+        c.toNat + 32 < 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G,
+      helper τ rd sa, K⟩ T)
     (hT : AtSstore T) :
-    StoreAt slot len T ∨ ∃ f K' b' M' G', K = f :: K' ∧
+    StoreAt slot (SolcStoragePayload.count (p + len).toB256 p) T ∨ ∃ f K' b' M' G',
+      K = f :: K' ∧ SolcStorageReturn.Keeps (M.write 0 slot.toBytes) M' ∧
       Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
   unfold helper at run
   rsd
@@ -144,22 +230,18 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : E
   rsload
   iterate 18 rsx
   rw [scratch_word M slot] at run
+  have k0 : SolcStorageReturn.Keeps (M.write 0 slot.toBytes)
+      ((M.write (Bytes.toB256 [0]).toNat slot.toBytes).read (Bytes.toB256 [0]).toNat
+        (Bytes.toB256 [32]).toNat).2 := SolcStorageReturn.Keeps.read _ _ _
+  generalize ((M.write (Bytes.toB256 [0]).toNat slot.toBytes).read (Bytes.toB256 [0]).toNat
+    (Bytes.toB256 [32]).toNat).2 = M1 at run k0
   iterate 13 rsx
-  rcases rs_branch run hT with ⟨hw, _, run⟩ | ⟨hw, _, run⟩
-  · unfold shortArm at run
-    iterate 9 rsx
-    rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-    · exact .inl ⟨_, _, _, rfl, .inl rfl⟩
-    obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
-    subst e
-    clear hstep
-    rsx
-    obtain ⟨g, _, hg, run⟩ := rs_jump run hT
-    rw [E.exit] at hg
-    cases hg
-    rcases exit_reach erase E run hT with ⟨x, S', h⟩ | h
-    · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
-    · exact .inr h
+  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · rcases hsa run hT with ⟨v, S', hk⟩ | ⟨b', M', G', hk, run⟩
+    · exact .inl ⟨_, _, _, hk, .inl rfl⟩
+    · rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
+      · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+      · exact .inr ⟨f, K', b'', _, G'', hK, k0.trans hk, run⟩
   · unfold longArm at run
     rsd
     iterate 6 rsx
@@ -171,29 +253,59 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : E
     iterate 3 rsx
     rcases rs_branchTo run hT with ⟨hz, _, run⟩ | ⟨_, g, _, hg, run⟩
     · iterate 3 rsx
-      rw [toB256_add_toB256 (by omega)] at run
-      have hfin : ((p + len).toB256).toNat = p + len := B256.toNat_toB256_of_lt (by omega)
-      rcases ReachPayload.payloadJ_reach erase (by intro h; cases h)
-          (ReachPayload.cdload_rdStep erase) (ReachPayload.cdload_win (by omega)) E.loop (i := 0) (fin := (p + len).toB256)
-          (base0 := slot.toBytes.keccak) (p := p)
+      rw [toB256_add] at run
+      rcases ReachPayload.payloadJ_reach erase hrd rdStep win E.loop (i := 0)
+          (fin := (p + len).toB256) (base0 := slot.toBytes.keccak) (p := p)
           (by
             refine ⟨Nat.zero_le _, by omega, ?_⟩
             rw [St.stack, Nat.mul_zero, Nat.add_zero, show ((0 : Nat).toB256) = 0 from rfl,
               B256.add_zero])
-          run hT with ⟨j, v, S', hj, h⟩ | ⟨i, g, b', M', G', -, hg, run⟩
-      · refine .inl ⟨_, _, _, h, .inr (.inr ⟨j, ?_, rfl⟩)⟩
-        unfold SolcStoragePayload.count at hj
-        omega
+          run hT with ⟨j, v, S', hj, h⟩ | ⟨i, g, b', M', G', -, hg, hk, run⟩
+      · exact .inl ⟨_, _, _, h, .inr (.inr ⟨j, hj, rfl⟩)⟩
       · rw [E.exit] at hg
         cases hg
-        rcases exit_reach erase E run hT with ⟨x, S', h⟩ | h
+        rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
         · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
-        · exact .inr h
+        · exact .inr ⟨f, K', b'', _, G'', hK, k0.trans hk, run⟩
     · rw [E.exit] at hg
       cases hg
-      rcases exit_reach erase E run hT with ⟨x, S', h⟩ | h
+      rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
       · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
-      · exact .inr h
+      · exact .inr ⟨f, K', b'', _, G'', hK, k0, run⟩
+
+end StrStore
+
+namespace StrStoreCd
+
+/-- The `string storage = string calldata` helper. -/
+abbrev helper (τ : StrTags) : SFunc := StrStore.helper τ (.reg .calldataload) (StrStore.shortCd τ)
+
+/-- Its table entries. -/
+abbrev Entries (τ : StrTags) (fs : List SFunc) : Prop := StrStore.Entries τ (.reg .calldataload) fs
+
+/-- What a store of the helper writes: the slot, zero, or a payload word. -/
+def StoreAt (slot : B256) (len : Nat) (T : Conf) : Prop :=
+  ∃ key v S, T.d.stack = key :: v :: S ∧
+    (key = slot ∨ v = 0 ∨ ∃ j : Nat, j < (len + 31) / 32 ∧ key = slot.toBytes.keccak + j.toB256)
+
+variable {τ : StrTags} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
+  {T : Conf}
+
+theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : Entries τ fs)
+    {K : List SFunc} {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat} {len p : Nat}
+    {slot : B256} (bound : p + len + 32 ≤ 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G, helper τ, K⟩ T)
+    (hT : AtSstore T) :
+    StoreAt slot len T ∨ ∃ f K' b' M' G', K = f :: K' ∧
+      Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
+  have hfin : ((p + len).toB256).toNat = p + len := B256.toNat_toB256_of_lt (by omega)
+  rcases StrStore.reach erase (by intro h; cases h) (ReachPayload.cdload_rdStep erase)
+      (StrStore.shortCd_ok erase E.exit) E (by omega)
+      (ReachPayload.cdload_win (by omega)) run hT with
+    s | ⟨f, K', b', M', G', hK, -, run⟩
+  · obtain ⟨key, v, S', hs, h⟩ := s.mono (StrStore.count_le p len)
+    exact .inl ⟨key, v, S', hs, h⟩
+  · exact .inr ⟨f, K', b', M', G', hK, run⟩
 
 end StrStoreCd
 

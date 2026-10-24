@@ -183,6 +183,18 @@ theorem rs_ret {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K�
       obtain ⟨-, e⟩ := St.of_pop1 pop
       exact ⟨_, _, _, _, _, rfl, e ▸ rest⟩
 
+/-- `rs_ret`, keeping the memory. -/
+theorem rs_retM {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
+    (hT : AtSstore T) :
+    ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' S M G', f, K'⟩ T := by
+  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
+  · obtain ⟨f', hx⟩ := hT
+    cases hx
+  · cases step with
+    | ret t' pop =>
+      obtain ⟨-, e⟩ := St.of_pop1 pop
+      exact ⟨_, _, _, _, rfl, e ▸ rest⟩
+
 /-- A `callNext` on a reach to an `SSTORE` enters the callee with its continuation pending. -/
 theorem rs_callIn {k : Nat} {f : SFunc} {t : B256}
     (run : Reach P fs sevm ⟨St b (t :: S) M G, .callNext k f, K⟩ T) (hT : AtSstore T) :
@@ -429,7 +441,8 @@ returns to the head with the next invariant. `rdStep` reads one word in place of
 theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (hrd : rd ≠ .reg .sstore)
     (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
-      P sevm (St b (c :: S) M G) rd d → ∃ v b' M' G', d = St b' (v :: S) M' G')
+      P sevm (St b (c :: S) M G) rd d →
+        ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M')
     (win : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
       P sevm (St b (c :: S) M G) rd d → c.toNat < fin.toNat → c.toNat + 32 < 2 ^ 256)
     {H : SFunc} (entry : fs[k]? = some H)
@@ -439,13 +452,14 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (run : Reach P fs sevm ⟨St b (fin :: (base0 + i.toB256) :: ((p + 32 * i).toB256) :: rest)
       M G, bodyR rd back bound k, K⟩ T) (hT : AtSstore T) :
     PayloadAt fin base0 p T ∨
-      ∃ d', Inv fin base0 p rest (i + 1) d' ∧ Reach P fs sevm ⟨d', H, K⟩ T := by
+      ∃ d', Inv fin base0 p rest (i + 1) d' ∧ SolcStorageReturn.Keeps M d'.memory ∧
+        Reach P fs sevm ⟨d', H, K⟩ T := by
   unfold bodyR at run
   rsx
   obtain ⟨_, hstep, run⟩ := rs_next run hT hrd
   have hwin := win hstep (by rw [B256.toNat_toB256_of_lt hnow]; exact hcur)
   rw [B256.toNat_toB256_of_lt hnow] at hwin
-  obtain ⟨v, b', M', G', rfl⟩ := rdStep hstep
+  obtain ⟨v, b', M', G', rfl, hkeep⟩ := rdStep hstep
   clear hstep
   rsx
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
@@ -457,7 +471,7 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨g, _, hg, run⟩ := rs_jump run hT
   rw [entry] at hg
   cases hg
-  refine .inr ⟨_, ⟨?_, ?_, ?_⟩, run⟩
+  refine .inr ⟨St _ _ _ _, ⟨?_, ?_, ?_⟩, hkeep, run⟩
   · unfold count at hlt ⊢; omega
   · omega
   · simp only [St.stack]
@@ -468,9 +482,9 @@ with room for the next cursor. -/
 theorem mload_rdStep (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
     (h : FreePtr.PotStep P sevm (St b (c :: S) M G) (.reg .mload) d) :
-    ∃ v b' M' G', d = St b' (v :: S) M' G' := by
+    ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M' := by
   obtain ⟨G', rfl⟩ := ri_mload (erase h.1)
-  exact ⟨_, _, _, _, rfl⟩
+  exact ⟨_, _, _, _, rfl, SolcStorageReturn.Keeps.read _ _ _⟩
 
 theorem mload_win (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
@@ -483,9 +497,9 @@ the next cursor comes from the end word. -/
 theorem cdload_rdStep (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
     (h : P sevm (St b (c :: S) M G) (.reg .calldataload) d) :
-    ∃ v b' M' G', d = St b' (v :: S) M' G' := by
+    ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M' := by
   obtain ⟨G', rfl⟩ := ri_calldataload (erase h)
-  exact ⟨_, _, _, _, rfl⟩
+  exact ⟨_, _, _, _, rfl, SolcStorageReturn.Keeps.refl _⟩
 
 theorem cdload_win (hfin : fin.toNat + 32 ≤ 2 ^ 256)
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256}
@@ -524,7 +538,8 @@ the inline exit `tail` at the last iteration. -/
 theorem payloadB_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (hrd : rd ≠ .reg .sstore)
     (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
-      P sevm (St b (c :: S) M G) rd d → ∃ v b' M' G', d = St b' (v :: S) M' G')
+      P sevm (St b (c :: S) M G) rd d →
+        ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M')
     (win : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
       P sevm (St b (c :: S) M G) rd d → c.toNat < fin.toNat → c.toNat + 32 < 2 ^ 256)
     {exit : Bytes} {ebound : exit.length ≤ 32} {tail : SFunc}
@@ -533,28 +548,32 @@ theorem payloadB_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
     (run : Reach P fs sevm ⟨d, headB rd back exit bound ebound k tail, K⟩ T)
     (hT : AtSstore T) :
     PayloadAt fin base0 p T ∨
-      ∃ i b M G, count fin p ≤ i ∧ Reach P fs sevm ⟨St b (fin :: (base0 + i.toB256) ::
+      ∃ i b M G, count fin p ≤ i ∧ SolcStorageReturn.Keeps d.memory M ∧
+        Reach P fs sevm ⟨St b (fin :: (base0 + i.toB256) ::
         ((p + 32 * i).toB256) :: rest) M G, tail, K⟩ T := by
-  refine reach_loop_index (Inv fin base0 p rest) (count fin p) (fun i d h => h.1) ?_ i d hinv run
-  intro i d hinv run
+  refine reach_loop_index (fun i d' => Inv fin base0 p rest i d' ∧
+    SolcStorageReturn.Keeps d.memory d'.memory) (count fin p) (fun i d h => h.1.1) ?_ i d
+    ⟨hinv, SolcStorageReturn.Keeps.refl _⟩ run
+  intro i d' ⟨hinv, hk0⟩ run
   obtain ⟨-, hnow, hstack⟩ := hinv
-  rw [St.self' d, hstack] at run
+  rw [St.self' d', hstack] at run
   unfold headB at run
   rsd
   iterate 5 rsx
   rcases rs_branch run hT with ⟨hw, _, run⟩ | ⟨hw, _, run⟩
   · obtain ⟨hcur, hlt⟩ := flag_store hnow hw
-    rcases body_reach erase hrd rdStep win entry hlt hnow hcur run hT with h | h
+    rcases body_reach erase hrd rdStep win entry hlt hnow hcur run hT with h | ⟨e, he, hk, run⟩
     · exact .inl (.inl h)
-    · exact .inr h
-  · exact .inl (.inr ⟨i, _, _, _, flag_exit hnow hw, run⟩)
+    · exact .inr ⟨e, ⟨he, hk0.trans hk⟩, run⟩
+  · exact .inl (.inr ⟨i, _, _, _, flag_exit hnow hw, hk0, run⟩)
 
 /-- **The copy loop with its exit through a goto, on a reach to an `SSTORE`.** As
 `payloadB_reach`, leaving through entry `j`. -/
 theorem payloadJ_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (hrd : rd ≠ .reg .sstore)
     (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
-      P sevm (St b (c :: S) M G) rd d → ∃ v b' M' G', d = St b' (v :: S) M' G')
+      P sevm (St b (c :: S) M G) rd d →
+        ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M')
     (win : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
       P sevm (St b (c :: S) M G) rd d → c.toNat < fin.toNat → c.toNat + 32 < 2 ^ 256)
     {exit : Bytes} {ebound : exit.length ≤ 32} {j : Nat}
@@ -563,21 +582,24 @@ theorem payloadJ_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
     (run : Reach P fs sevm ⟨d, headJ rd back exit bound ebound k j, K⟩ T)
     (hT : AtSstore T) :
     PayloadAt fin base0 p T ∨
-      ∃ i g b M G, count fin p ≤ i ∧ fs[j]? = some g ∧ Reach P fs sevm ⟨St b (fin ::
+      ∃ i g b M G, count fin p ≤ i ∧ fs[j]? = some g ∧ SolcStorageReturn.Keeps d.memory M ∧
+        Reach P fs sevm ⟨St b (fin ::
         (base0 + i.toB256) :: ((p + 32 * i).toB256) :: rest) M G, g, K⟩ T := by
-  refine reach_loop_index (Inv fin base0 p rest) (count fin p) (fun i d h => h.1) ?_ i d hinv run
-  intro i d hinv run
+  refine reach_loop_index (fun i d' => Inv fin base0 p rest i d' ∧
+    SolcStorageReturn.Keeps d.memory d'.memory) (count fin p) (fun i d h => h.1.1) ?_ i d
+    ⟨hinv, SolcStorageReturn.Keeps.refl _⟩ run
+  intro i d' ⟨hinv, hk0⟩ run
   obtain ⟨-, hnow, hstack⟩ := hinv
-  rw [St.self' d, hstack] at run
+  rw [St.self' d', hstack] at run
   unfold headJ at run
   rsd
   iterate 5 rsx
   rcases rs_branchTo run hT with ⟨hw, _, run⟩ | ⟨hw, g, _, hg, run⟩
   · obtain ⟨hcur, hlt⟩ := flag_store hnow hw
-    rcases body_reach erase hrd rdStep win entry hlt hnow hcur run hT with h | h
+    rcases body_reach erase hrd rdStep win entry hlt hnow hcur run hT with h | ⟨e, he, hk, run⟩
     · exact .inl (.inl h)
-    · exact .inr h
-  · exact .inl (.inr ⟨i, g, _, _, _, flag_exit hnow hw, hg, run⟩)
+    · exact .inr ⟨e, ⟨he, hk0.trans hk⟩, run⟩
+  · exact .inl (.inr ⟨i, g, _, _, _, flag_exit hnow hw, hg, hk0, run⟩)
 
 end ReachPayload
 
@@ -609,11 +631,12 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {e t : B256} {S : List B256} {d : Devm} {key : B256} (hstack : d.stack = key :: e :: t :: S)
     (run : Reach P fs sevm ⟨d, SolcStorageClear.head back exit backBound exitBound k, K⟩ T)
     (hT : AtSstore T) :
-    ZeroAt T ∨ ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) M' G', f, K'⟩ T := by
-  refine reach_loop_measure (fun d => ∃ key, d.stack = key :: e :: t :: S) (gap e) ?_ d
-    ⟨key, hstack⟩ run
-  intro d ⟨key, hstack⟩ run
-  rw [St.self' d, hstack] at run
+    ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) d.memory G', f, K'⟩ T := by
+  refine reach_loop_measure (fun d' => (∃ key, d'.stack = key :: e :: t :: S) ∧
+    d'.memory = d.memory) (gap e) ?_ d ⟨⟨key, hstack⟩, rfl⟩ run
+  intro d' ⟨⟨key, hstack⟩, hmem⟩ run
+  rw [← hmem]
+  rw [St.self' d', hstack] at run
   unfold SolcStorageClear.head at run
   rsd
   iterate 5 rsx
@@ -631,7 +654,7 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     obtain ⟨g, _, hg, run⟩ := rs_jump run hT
     rw [entry] at hg
     cases hg
-    refine .inr ⟨_, ⟨_, rfl⟩, ?_, run⟩
+    refine .inr ⟨St _ _ _ _, ⟨⟨_, rfl⟩, rfl⟩, ?_, run⟩
     unfold gap
     simp only [St.stack, List.headD_cons]
     rw [hstack, key_next hlt]
@@ -640,8 +663,8 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   · unfold SolcStorageClear.exitTree at run
     rsd
     iterate 2 rsx
-    obtain ⟨f, K', b', M', G', hK, rest⟩ := rs_ret run hT
-    exact .inl (.inr ⟨f, K', b', M', G', hK, rest⟩)
+    obtain ⟨f, K', b', G', hK, rest⟩ := rs_retM run hT
+    exact .inl (.inr ⟨f, K', b', G', hK, rest⟩)
 
 /-- **The legacy clearing loop on a reach to an `SSTORE`.** As `clear_reach`, for the
 layout whose exit jumps through the shared return entry `j`. -/
@@ -652,11 +675,12 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     (hstack : d.stack = key :: e :: t :: u :: S)
     (run : Reach P fs sevm ⟨d, SolcStorageClear.legacyHead back exit backBound exitBound k j, K⟩ T)
     (hT : AtSstore T) :
-    ZeroAt T ∨ ∃ f K' b' M' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) M' G', f, K'⟩ T := by
-  refine reach_loop_measure (fun d => ∃ key, d.stack = key :: e :: t :: u :: S) (gap e) ?_ d
-    ⟨key, hstack⟩ run
-  intro d ⟨key, hstack⟩ run
-  rw [St.self' d, hstack] at run
+    ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) d.memory G', f, K'⟩ T := by
+  refine reach_loop_measure (fun d' => (∃ key, d'.stack = key :: e :: t :: u :: S) ∧
+    d'.memory = d.memory) (gap e) ?_ d ⟨⟨key, hstack⟩, rfl⟩ run
+  intro d' ⟨⟨key, hstack⟩, hmem⟩ run
+  rw [← hmem]
+  rw [St.self' d', hstack] at run
   unfold SolcStorageClear.legacyHead at run
   rsd
   iterate 5 rsx
@@ -674,7 +698,7 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     obtain ⟨g, _, hg, run⟩ := rs_jump run hT
     rw [entry] at hg
     cases hg
-    refine .inr ⟨_, ⟨_, rfl⟩, ?_, run⟩
+    refine .inr ⟨St _ _ _ _, ⟨⟨_, rfl⟩, rfl⟩, ?_, run⟩
     unfold gap
     simp only [St.stack, List.headD_cons]
     rw [hstack, key_next hlt]
@@ -689,8 +713,8 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     unfold SolcStorageClear.legacyRet at run
     rsd
     rsx
-    obtain ⟨f, K', b', M', G', hK, rest⟩ := rs_ret run hT
-    exact .inl (.inr ⟨f, K', b', M', G', hK, rest⟩)
+    obtain ⟨f, K', b', G', hK, rest⟩ := rs_retM run hT
+    exact .inl (.inr ⟨f, K', b', G', hK, rest⟩)
 
 end ReachClear
 
