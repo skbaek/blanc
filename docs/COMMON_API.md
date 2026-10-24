@@ -969,6 +969,23 @@ message facts `MsgRootCode`, `MsgOwn`, `messageCallDelegation_own`,
 induction over `rawNodes` that bounds the codes run in a storage context;
 `List.forall_mem_of_positional` is that induction along list positions.
 No recipe is registered: use this branch and the named theorem.
+For the same provenance restarted at a committed boundary inside the
+history (a block-body start or the boundary after any transaction, e.g. for
+a contract deployed after the checkpoint; safety only of the raw nodes
+between the boundary and the node),
+[`Blanc/ExecutionHistoryCellProvenanceFrom.lean`](../Blanc/ExecutionHistoryCellProvenanceFrom.lean):
+the boundary predicates `BoundaryAt s pre` on `ApplyTransactionsTrace`,
+`StagedBodyTrace`, `ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn`,
+with `ConfiguredHistoryTraceIn.boundaryAt_checkpoint` and the per-level
+`BoundaryAt.prefix`; `ConfiguredHistoryTraceIn.rawNode_cellProvenance_from`
+(boundary value or an attributed raw successful `SSTORE` between),
+`rawNode_cellInv_from`, `rawFrame_entryCellInv_from`, the endpoint form
+`ConfiguredHistoryTraceIn.cellProv_post_from`; the per-level `cellProv_at_from`
+/ `cellProv_post_from` lifts, `ApplyTransactionsTrace.BoundaryAt.suffix`,
+`StagedBodyTrace.requests_cellProv_at` / `requests_cellProv_post` and
+`ConfiguredHistoryTraceIn.cellProv_attribution`. The checkpoint statement is
+the instance `boundaryAt_checkpoint`, `pre = []`. No recipe is registered:
+use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
@@ -1634,6 +1651,131 @@ configured blocks. Its lemmas `settledFrames` (base frames are a prefix),
 `rawFrames_mem`, `blockCount` (`trace.blockCount = base.blockCount + n`),
 `noSenderAt` and `noAuthorityAt` restrict an extension's retained frames and
 caller/authority exclusion premises to the history it extends.
+
+To concatenate two selected-domain (`In`) histories end to end, use
+`ExecutionTrace.ConfiguredHistoryTraceIn.append` in
+[`Blanc/ExecutionHistoryInAppend.lean`](../Blanc/ExecutionHistoryInAppend.lean):
+`append first second` joins D-to-P and P-to-B into D-to-B by induction on
+the second history's `.step` spine. Its lemmas `rawFrames_append` and
+`settledFrames_append` concatenate the frame lists in order, and
+`NoDelScheduled_append`, `RewardCreditsFunded_append` and
+`FrameAdmitted_append` split the per-block conjunction predicates across
+the join. To move a history across fork domains, `ConfiguredBlockTraceIn.map`
+and `ConfiguredHistoryTraceIn.map` re-predicate block and history along
+`∀ f, F f → G f` (raw and settlement-retained roots are kept by
+`map_rawFrames` / `map_settledFrames` at both levels); `toHistFork` at both
+levels specializes the re-predication along `CoveredFork.histFork`, and
+`ConfiguredHistoryTrace.toHistForkIn` chains the existing
+`ConfiguredHistoryTrace.toIn` with it, so a modern suffix joins a
+historical prefix through `append` with `toHistForkIn_rawFrames` /
+`toHistForkIn_settledFrames` identifying the kept roots. No premise assumes
+delegation, EIP-2929 access, or enabled optional passes.
+
+To start a selected-domain history in the middle of a block (a contract
+deployed by transaction `i` of block N), use
+[`Blanc/ExecutionMidHistoryIn.lean`](../Blanc/ExecutionMidHistoryIn.lean).
+`ExecutionTrace.ApplyTransactionsTrace.TxSplit trace i` cuts a retained
+transaction fold at `i` into `before`, the actual `head : TransactionTrace`
+and `after`, with `rawFrames_eq` / `settledFrames_eq`; `splitAt` builds one
+for every `i < txs.length`, `TxSplit.putIndex_eq` identifies `index` and `tx`
+on a decoded block list, and `afterBenv` is the boundary right after `i`.
+`ConfiguredBlockTraceIn.txSplit_stat`, `txSplit_notCreated` and
+`txSplit_bound` derive the selected fork, the empty created set and the
+withdrawal-inclusive no-wrap bound at the cut from the block.
+`MidHistoryTraceIn F cfg start future` has base `tail block cut` (the rest
+of block N) and `.step` whole blocks; it carries `rawFrames`,
+`settledFrames`, `FrameAdmitted` (`frameAdmitted_iff_rawFrames`),
+`RewardCreditsFunded`, `rawFrames_mem_block` (every raw root lies in some
+retained block, so block-level per-root facts transfer), and `append` with a
+`ConfiguredHistoryTraceIn` (frames, admission and funding split across it).
+`ConfiguredBlockTraceIn.rawFrames_txSplit` / `settledFrames_txSplit` split a
+block's frames at the cut and `FrameAdmitted.tail` restricts block
+admission to the base. Preservation: `ConfiguredBlockTraceIn.tail_stateInv_admitted_semIn`,
+`MidHistoryTraceIn.stateInv_admitted_semIn` / `stateInv_admittedIn`; the
+post-fold stages alone are `StagedBodyTrace.afterTransactions_stateInv_admitted_semIn`.
+The accounting rungs `afterTransactionsIn`, `configuredBlockTailIn` and
+`midHistoryIn` are in
+[`Blanc/ExecutionAccountingMidHistoryIn.lean`](../Blanc/ExecutionAccountingMidHistoryIn.lean).
+
+Fork-era schedule facts for historical extraction live in
+[`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
+`BerlinOnwards`, `PrePrague`, `PreCancun`, `PragueOnwards` (fork lists in
+activation order, each with a `DecidablePred` instance) and decision lemmas
+over `histForks` discharging per-fork premises — `HistFork.access_eip2929_of_berlinOnwards`,
+`HistFork.two_mem_precompiles`, `HistFork.delegationDisabled_of_prePrague`,
+the `sys.beaconRoots` / `sys.historyStorage` / `header.requestsHash` flag
+facts by era, `HistFork.preCancun_cancun_pragueOnwards`, and
+`PreCancun.toPrePrague`. To show a per-fork numeric or schedule property,
+follow the same `revert`-then-`cases f <;> decide` pattern (compare
+`HistFork.dataNonZero_ge`).
+
+Warmth of transaction frames along retained `In`-histories is in
+[`Blanc/ExecutionHistoryInWarmth.lean`](../Blanc/ExecutionHistoryInWarmth.lean):
+`ConfiguredHistoryTraceIn.txRawFrames` projects the transaction frames, and
+`txRawFrames_warmIn` (with per-transaction, per-list, per-body and per-block
+rungs) shows every transaction frame starts with every active precompile
+warm, from the history's own `BodyStageCapabilities` plus an explicit
+per-fork EIP-2929 access hypothesis and per-fork precompile membership —
+flat-access forks get no claim. `txRawFrames_warm_hist` discharges both for
+`0x02` on a Berlin-onwards `HistFork` domain by decision.
+
+Empty code at one address along retained `In`-histories is in
+[`Blanc/ExecutionHistoryInCodeAt.lean`](../Blanc/ExecutionHistoryInCodeAt.lean):
+neutral (`stateGas = none`) twins of the interpreter core
+(`Xinst.step_spawn_create_codeAddress_noStateGas`,
+`Xinst.codeAt_effectRecAvoid_noStateGas`, `Evm.step_codeAt_noStateGas`,
+`Exec.codeAt_avoid_noStateGas` through `Xinst.step_shapeNoStateGas` with
+child environments by `Evm.step_spawn_child_benvStat`), the message and
+transaction rungs, and the staged body, block and history levels.
+EIP-7702 authority is a disjunct beside the no-authority premise from the
+message level up (`..._noStateGas` lemmas), cased per fork at history level
+from an explicit per-fork disabled-delegation hypothesis plus
+`ConfiguredHistoryTraceIn.NoAuthorityAt` (new `In` definition); fully
+pre-Prague histories use `codeAt_empty_prePrague` with no authority premise
+at all. `sweepTouchedAccounts_getCode_empty` keeps empty code through the
+sweep.
+
+System frames along retained `In`-histories by fork era are in
+[`Blanc/ExecutionHistoryInSystemFrames.lean`](../Blanc/ExecutionHistoryInSystemFrames.lean):
+`StagedBodyTrace.systemRawFrames` and the block/history `systemRawFrames`
+projections, the era-indexed `installedAt` set (`[]` before Cancun, beacon
+roots only on Cancun, all four from Prague) with decision
+characterizations, and per-stage target facts feeding
+`StagedBodyTrace.systemRawFrames_target_of_spawnFree` (all four targets),
+`ConfiguredBlockTraceIn.systemFrames_target_inEra`, and
+`ConfiguredHistoryTraceIn.systemFrames_target_inEra` (each frame targets its
+own block fork's installed set). State preservation is complete before
+Cancun (`systemFrames_installed_preCancun`, `SystemCodeInstalledAt.of_preCancun`,
+both vacuous) and through every system message
+(`SystemMessageTrace.installed_keep_noStateGas`); preservation through
+transactions on Cancun and later eras goes through the neutral non-deletion
+chain in
+[`Blanc/ExecutionHistoryInNoDel.lean`](../Blanc/ExecutionHistoryInNoDel.lean):
+neutral (`stateGas = none` plus EIP-6780 flag) twins of the interpreter core
+(`Evm.step_effect_noStateGas`, `Exec.effect_neutralSchedule`,
+`Exec.inv_noDel_noStateGas`), the message/create/call preservation twins
+(`processMessageCall_accountsToDelete_ne_noStateGas`), the settlement-form
+twin (`TransactionTrace.exists_finalStateForm_noStateGas` with explicit
+refund-quotient/touched-sweep hypotheses), and the transaction(-list) keep
+twins (`TransactionTrace.codeAt_keep_noStateGas`,
+`ApplyTransactionsTrace.codeAt_keep_noStateGas`). Era schedule facts
+(`CancunOnwards`, EIP-6780/refund-quotient/touched-sweep decisions,
+`HistFork.pragueOnwards_covered`) are in
+[`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean).
+Installed-code preservation through staged bodies, blocks, and histories is in
+[`Blanc/ExecutionHistoryInSystemCodeKeep.lean`](../Blanc/ExecutionHistoryInSystemCodeKeep.lean):
+`StagedBodyTrace.codeAt_keep_noStateGas` threads one canonical (nonempty,
+non-delegating) code through beacon, history-storage, transaction,
+withdrawal, request, and reward stages;
+`ConfiguredBlockTraceIn.systemFrames_installed_keep` preserves each block fork's
+own installed set, era-split by `HistFork.preCancun_cancunOnwards` (vacuous
+before Cancun, keep from Cancun on, per-address facts via
+`mem_systemContracts_of_mem_installedAt` and `systemContracts_facts`);
+`ConfiguredHistoryTraceIn.codeAt_keep_of_cancunOnwards` threads one canonical
+code along every all-Cancun-onwards history
+(`ConfiguredHistoryTraceIn.AllCancunOnwards`), with
+`ConfiguredHistoryTraceIn.beaconRootsCode_keep_of_cancunOnwards` discharging the
+beacon-roots character facts once and for all.
 
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
@@ -4628,6 +4770,39 @@ core. Static observation emptiness is independent of the balance bound.
 entry balance bound from an actual transferred, run-ready message. Neither
 bridge supplies a contract-specific deposit classification or entry premise.
 
+Over a selected historical fork domain `F` instead of `CoveredFork`, use the
+In twins: [`Blanc/ExecutionAccountingStepsIn.lean`](../Blanc/ExecutionAccountingStepsIn.lean)
+(`Xinst.targetBalanceMono_of_none_noStateGas`,
+`Ninst.targetBalanceMono_of_none_noStateGas`, the fork-free
+`Ninst.foreignNone_getStor_eq'`, and
+`xinstForeignSome_observed_noStateGas` at both carrier levels, all taking only
+`sevm.benvStat.rules.stateGas = none`) and
+[`Blanc/ExecutionAccountingCoreIn.lean`](../Blanc/ExecutionAccountingCoreIn.lean)
+(`Exec.CoreAccountingIn F`, `Exec.coreAccountingIn` with
+`hsgF : ∀ {f}, F f → (Fork.ruleSet f).stateGas = none`, and the `rfl` control
+`Exec.CoreAccounting.eq_coveredFork`). `messageRoot_facts` is fork-free and
+reused unchanged; discharge `hsgF` on `HistFork` with `HistFork.stateGas_none`.
+
+The message/transaction rungs over `F` live in
+[`Blanc/ExecutionAccountingAdmissionIn.lean`](../Blanc/ExecutionAccountingAdmissionIn.lean):
+`AccountingLadderAdmittedIn F` (with `AccountingLadderAdmitted.toIn` and
+`AccountingLadderAdmittedIn.mono`), `processMessageIn`, `processCreateMessageIn`,
+`messageCallIn`, `transactionMessageIn` (all routing `F` through entry
+preparation, the settlement equations through their `_noStateGas` twins),
+`transactionIn` (selected chronology, `InstalledCert` NoDel, the deletion fold
+plus the touched sweep via `sweepTouchedAccounts_get_of_code_nonempty`), and
+`transactionListIn`.
+
+The staged-body, block and history rungs over `F` continue in
+[`Blanc/ExecutionAccountingHistoryIn.lean`](../Blanc/ExecutionAccountingHistoryIn.lean):
+`systemMessageIn`, `requestsIn`, the optional stage rungs `beaconStageIn`,
+`historyStageIn`, `requestStageIn` (skipped arm is the identity), the
+carrier-level `processWithdrawals_observed` and `payRewards_observed`
+(generalised over carrier, observation, append and tag), `stagedBody` (with
+the `beaconHistoryReplayIn` and `transactionsWithdrawalsRequestsReplayIn`
+junctions, at most two nested appends each), `configuredBlockIn`, and
+`configuredHistoryIn`.
+
 Two consumers exist. The beacon deposit contract observes deposit nodes
 (`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
 ordered writer invocations of its settlement-committed frames, with the storage
@@ -4709,7 +4884,13 @@ observation of its committed frames) plus `SpawnKinds`;
 (`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
 the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
-its step can name the committed frame. Worked use: the Uniswap V2 pair
+its step can name the committed frame. Over a selected fork domain `F`, the In forms
+live in [`Blanc/ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean):
+`SpawnKindsIn F`, `spawnChildIn`, `staticObservedNilIn`/`staticFrameIn`,
+`WholeFrameReplayIn F` (same binder order as `WholeFrameReplay`, so the Mac's
+`pair_wholeFrameReplayWithIn` fits), and `wholeFrameLadderIn` producing
+`AccountingLadderAdmittedIn F` (takes `hsgF`, `kinds`, `whole` and In `preserves`;
+`messageRoot_facts` reused). Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplayWith`, `pairLadderWith`,
 `pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
 `PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
@@ -4793,6 +4974,14 @@ has at most one child, which heads its descendants), and
 `ConfiguredHistoryTrace.settled_mem_rawFrames` (a settled frame's root derivation is a raw frame;
 the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`). Worked
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
+Over a selected fork domain `F`, the In forms live in
+[`Blanc/Lift/SettledFramePositionsIn.lean`](../Blanc/Lift/SettledFramePositionsIn.lean):
+`parentLadderIn` (the same one-rung construction over `AccountingLadderAdmittedIn F`,
+reusing `parentCarrier`/`parentObservation`) and
+`ConfiguredHistoryTraceIn.settledFrames_parent_of_codeAddress` (via
+`configuredHistoryIn`, admission from `frameAdmitted_iff_rawFrames`; takes
+`capabilities`, `rewards`, `inv`, `K` and `image`).
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -6607,6 +6796,18 @@ contract-neutral.
   [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean); the world facts
   `afterSloadH_state` and `afterSstoreH_state`/`afterSstoreH_getCode` in
   [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
+  form there is the modern statement from `CoveredFork`;
+  the remaining historical successor projections (`afterSloadH_getCode`/`_accessedAddresses`/
+  `_error`/`_createdAccounts`/`_accessedStorageKeys`, `afterSstoreH_getCode`/
+  `_accessedStorageKeys`, the `ite` form `getStor_afterSstoreH`) and the quiet frame theorem
+  `SFunc.Run.world_of_quietH` from `rules.stateGas = none` alone in
+  [`Blanc/Lift/HistAccessWalkFacts.lean`](../Blanc/Lift/HistAccessWalkFacts.lean);
+  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyH`,
+  `ShaReady.toH`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
+  `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
+  flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
+  `ric_copy_shaH`, `ric_pack_shaH`) in
+  [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).

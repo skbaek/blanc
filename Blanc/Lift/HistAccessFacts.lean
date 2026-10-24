@@ -1,4 +1,5 @@
 import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistAccessWalkFacts
 
 /-!
 # World facts of the historical `SLOAD`/`SSTORE` successors
@@ -42,15 +43,5 @@ private theorem withRefund_setStorVal_getCode (devm : Devm) (rc : Int) (target :
     rfl
   · rw [State.setStorVal_get_ne _ h]
     rfl
-
-/-- An `SSTORE` under the actual access schedule and refund regime changes no account's code. -/
-theorem afterSstoreH_getCode (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr) :
-    (afterSstoreH sevm base key value).getCode address = base.getCode address := by
-  unfold afterSstoreH storageAccessH
-  split
-  · exact withRefund_setStorVal_getCode base _ _ _ _ _
-  · split
-    · exact withRefund_setStorVal_getCode base _ _ _ _ _
-    · exact (withRefund_setStorVal_getCode _ _ _ _ _ _).trans rfl
 
 end Blanc.Lift

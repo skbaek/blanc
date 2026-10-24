@@ -43,7 +43,11 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       LAKE_CACHE_DIR: ${{ github.workspace }}/.lake/cache
-    timeout-minutes: 60
+    # 300, like CI (user decision blanc-ci-cold-timeout-300-20261024, extended to
+    # the canary on the user's 2026-10-24 request to fix canary failures): when
+    # Jaune main's library differs from the pin, every Blanc module rebuilds
+    # (about 2 h 45 min cold), and the 60 min limit cancelled run 39794368848.
+    timeout-minutes: 300
 
     steps:
       - uses: actions/checkout@v6
@@ -83,8 +87,21 @@ jobs:
           sh elan-init.sh -y --default-toolchain "$(cat lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      - name: Build blanc against jaune HEAD and run the axiom audit
+      - name: Build blanc against jaune HEAD
         run: |
           lake update jaune          # re-resolve the manifest to the re-pinned HEAD
           lake exe cache get || true  # mathlib olean cache (best effort)
-          scripts/check.sh            # lake build + the union axiom walk (AxiomCheck.lean) + the leaf search
+          lake build
+
+      # actions/cache saves only when the whole job succeeds; save the build now
+      # so a later failure (a real Jaune incompatibility in the audit) or a
+      # timeout does not throw away a cold rebuild.
+      - name: Save the built .lake cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ./.lake
+          key: canary-lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ steps.jaune-head.outputs.sha }}-${{ github.sha }}
+
+      - name: Run the axiom audit against jaune HEAD
+        run: scripts/check.sh            # lake build (now warm) + the union axiom walk + the leaf search

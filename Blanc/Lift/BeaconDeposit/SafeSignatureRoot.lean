@@ -11,7 +11,7 @@ open Jaune
 
 /-- **The slice helper (entry 13), inverted**: with both bound checks passing, every run
 returns `en - st :: st + x` over the caller's stack. -/
-private theorem ri_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+theorem ri_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {x len st en ret dv av : B256} {S : List B256} {o : Outcome}
     (h1 : B256.gtCheck st en = 0) (h2 : B256.gtCheck en len = 0)
     (hd : en - st = dv) (ha : st + x = av)
@@ -58,7 +58,7 @@ private theorem ri_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   exact ⟨G', Seg.done.inj hr⟩
 
 /-- The slice helper's call site, inverted: the continuation runs from the helper's return. -/
-private theorem ric_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
+theorem ric_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
     {dd x len st en ret dv av : B256} {S : List B256}
     (h1 : B256.gtCheck st en = 0) (h2 : B256.gtCheck en len = 0)
     (hd : en - st = dv) (ha : st + x = av)

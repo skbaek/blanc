@@ -37,8 +37,16 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
+import Blanc.ExecutionHistoryInAppend
+import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionHistoryInCodeAt
+import Blanc.ExecutionHistoryInForkFacts
+import Blanc.ExecutionHistoryInNoDel
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryInStateTrace
+import Blanc.ExecutionHistoryInSystemCodeKeep
+import Blanc.ExecutionHistoryInSystemFrames
+import Blanc.ExecutionHistoryInWarmth
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionFrameTime
@@ -55,9 +63,15 @@ import Blanc.ExecutionAccountingStoragePrefix
 import Blanc.ExecutionAccountingLadder
 import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
+import Blanc.ExecutionAccountingStepsIn
+import Blanc.ExecutionAccountingCoreIn
+import Blanc.ExecutionAccountingAdmissionIn
+import Blanc.ExecutionAccountingHistoryIn
+import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionModelAccounting
 import Blanc.ExecutionWholeFrameAccounting
+import Blanc.ExecutionWholeFrameAccountingIn
 import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticcallObservation
@@ -509,6 +523,15 @@ import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.Lift.BeaconDeposit.Liveness
+import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.BeaconDeposit.HistSafeGuards
+import Blanc.Lift.BeaconDeposit.HistSafeCount
+import Blanc.Lift.BeaconDeposit.HistSafeInsert
+import Blanc.Lift.BeaconDeposit.HistSafePubkeyRoot
+import Blanc.Lift.BeaconDeposit.HistSafeNode
+import Blanc.Lift.BeaconDeposit.HistSafeSignatureRoot
+import Blanc.Lift.BeaconDeposit.HistSafe
+import Blanc.Lift.BeaconDeposit.HistLadder
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
@@ -1579,6 +1602,7 @@ import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
+import Blanc.ExecutionHistoryCellProvenanceFrom
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
@@ -1601,6 +1625,7 @@ import Blanc.Lift.SolcAbiStringStaging
 import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
+import Blanc.Lift.SettledFramePositionsIn
 import Blanc.Lift.ShuffleSkip
 import Blanc.Lift.SpawnExact
 import Blanc.Lift.StaticOnlyPrefix
@@ -1798,3 +1823,5 @@ import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.HistAccessFacts
 import Blanc.Lift.HistEcrecover
+import Blanc.Lift.HistAccessWalkFacts
+import Blanc.Lift.HistShaWalk

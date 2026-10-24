@@ -1,4 +1,4 @@
-# Blanc: A Verification Stack for EVM Bytecode in Lean 4
+# Blanc: A Verification Stack for EVM Smart Contracts in Lean 4
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
@@ -9,7 +9,7 @@ which premises; the Blanc language and its contracts; and what none of it claims
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.
 
-Blanc is a verification stack for EVM bytecode, built in Lean 4 on Jaune's
+Blanc is a verification stack for EVM smart contracts, built in Lean 4 on Jaune's
 executable EVM semantics. It proves theorems about Ethereum bytecode as it is
 deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the
 EIP-7002 system contract — with exact gas, liveness, and no axioms beyond
@@ -1011,9 +1011,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 2. **the axiom audit** below, which is stricter than Jaune's own gates: one
    from-scratch walk over every constant of the library fails on any axiom
    outside `propext`, `Classical.choice` and `Quot.sound`, and the leaf search
-   finds the 1537 leaf results — theorems no other
+   finds the 1575 leaf results — theorems no other
    theorem uses — that this one walk covers.
-   Run `scripts/check.sh --no-build`; its `1537 leaf results` summary belongs to
+   Run `scripts/check.sh --no-build`; its `1575 leaf results` summary belongs to
    the source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -1042,7 +1042,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)): one
 union walk over every constant of the library, then a leaf search that finds
-the **1537** leaf results — theorems no other theorem
+the **1575** leaf results — theorems no other theorem
 uses, each covered by that walk. The leaf search is the authority on
 membership and its number is the generated
 [`scripts/leaf-count.json`](scripts/leaf-count.json), never edited by hand; run
