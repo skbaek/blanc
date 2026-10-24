@@ -5,6 +5,7 @@ import Blanc.Lift.SolcStorageReturn
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.VyperCallee
 import Blanc.Lift.SelectorRoute
+import Blanc.Lift.InvWalkStep
 
 /-!
 # Storage loops on a prefix reach to an `SSTORE`
@@ -158,6 +159,10 @@ macro "rsload" : tactic => `(tactic| (
   subst e
   clear hstep))
 
+set_option hygiene false in
+/-- `rsd`, `rsx` or `rsload`: any step `stepR` or `SLOAD` names. -/
+macro "rsa" : tactic => `(tactic| first | rsd | rsx | rsload)
+
 /-! ## Calls and returns over the walk state -/
 
 section CallRet
@@ -273,6 +278,20 @@ theorem Reach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d
   | case6 => cases hw
 
 end Dispatch
+
+/-! ## Scratch hashes -/
+
+/-- solc's mapping slot from its two scratch words, with the offsets as any closed words of the
+right value: `mstore(0, key); mstore(32, base); keccak256(0, 64)`. -/
+theorem mapSlot_scratch (μ : Mem) (key base : B256) {o0 o1 o2 n : B256} (h0 : o0.toNat = 0)
+    (h1 : o1.toNat = 32) (h2 : o2.toNat = 0) (hn : n.toNat = 64) :
+    (((μ.write o0.toNat key.toBytes).write o1.toNat base.toBytes).read o2.toNat n.toNat).1.keccak =
+      mapSlot key base := by
+  have h := keccak_scratch μ key base
+  rw [show (Bytes.toB256 [0]).toNat = 0 by decide, show (Bytes.toB256 [32]).toNat = 32 by decide,
+    show (Bytes.toB256 [64]).toNat = 64 by decide] at h
+  rw [h0, h1, h2, hn]
+  exact h
 
 /-! ## Loops by a measure -/
 

@@ -6596,7 +6596,9 @@ contract-neutral.
   (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
-  without inverting it) and `Reach.selWalk_inlS` (a solc dispatcher's comparison walk). The
+  without inverting it), `rsa` (`rsd`, `rsx` or `rsload`, for `repeat rsa`), `mapSlot_scratch`
+  (a mapping slot from solc's scratch words at any closed offsets) and `Reach.selWalk_inlS` (a
+  solc dispatcher's comparison walk). The
   solc 0.6 `string storage = string calldata` helper and the `f(string calldata)` external
   wrapper, as shapes over their jump tags (`StrStoreCd.helper`, `CdStrWrap.wrapper`), with
   `StrStoreCd.reach` (a store writes the slot, zero, or `keccak(slot) + j` for
