@@ -89,6 +89,14 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt
   | "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt" =>
       return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt
+  | "goal-shape:recovery-invocation" =>
+      -- Only a direct Nonempty whose direct argument has this exact head.
+      -- No unfolding, context search, or general Nonempty advice.
+      match target.consumeMData with
+      | .app (.const name _) argument =>
+          return name == `Nonempty &&
+            proofRecipeHeadName? argument == some `Blanc.Lift.RecoveryInvocation
+      | _ => return false
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>

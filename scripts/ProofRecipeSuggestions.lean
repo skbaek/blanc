@@ -37,6 +37,7 @@ import Blanc.DeploymentTouch
 import Blanc.StaticcallObservation
 import Blanc.StaticcallOperands
 import Blanc.Lift.EcrecoverCall
+import Blanc.Lift.RecoveryOccurrence
 
 namespace Blanc
 
@@ -1682,5 +1683,34 @@ example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
   expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
   expect_no_recipe_offered "lift-node-no-state-gas"
   exact modern
+
+-- EXPECT: actual-recovery-invocation
+example {root : Exec.Deriv} (step : Lift.CallOccurrenceStep root .staticcall)
+    {g ii is oi os : B256} {xs : Stack}
+    (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork)
+    (operands : (g :: 1 :: ii :: is :: oi :: os :: xs) <<+
+      step.occurrence.node.devm.stack)
+    (undelegated : getDelegatedCodeAddress (step.occurrence.node.devm.getCode 1) = none)
+    (success : ∃ flag rest, step.returned.devm.stack = flag :: rest ∧ flag ≠ 0) :
+    Nonempty (Lift.RecoveryInvocation step g ii is oi os) := by
+  expect_recipe_trigger "goal-shape:recovery-invocation"
+  expect_recipe_offered "actual-recovery-invocation"
+  blanc_suggest
+  exact Lift.recoveryInvocation_of_successFlag step fork operands undelegated success
+
+-- Nonempty alone and a different dependent argument must not offer this recipe.
+example : Nonempty Nat := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  expect_no_recipe_offered "actual-recovery-invocation"
+  exact ⟨0⟩
+
+example (layout : Lift.EcrecoverCall.ReturnLayout) :
+    Nonempty Lift.EcrecoverCall.ReturnLayout := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  exact ⟨layout⟩
+
+example : True := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  trivial
 
 end Blanc

@@ -3456,6 +3456,22 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   historical scope, ancestor settlement and attribution of arbitrary retained
   SSTORE occurrences remain separate obligations.
   Discovery is manual for these concrete source-specific consumers.
+- At an actual reached STATICCALL, use
+  [`Blanc/Lift/RecoveryOccurrence.lean`](../Blanc/Lift/RecoveryOccurrence.lean).
+  `recoveryInvocation_of_callOccurrence` preserves the real failure cause or
+  supplies a `RecoveryInvocation` tied to the existing `CallOccurrenceStep`.
+  The successful invocation retains exact memory input, spawn, synchronous
+  `Frame.enter = .done`, absent child slot, paid gas, clean child, resumption
+  and parent return data. `recoveryInvocation_of_successFlag` selects that
+  branch from a proved nonzero returned flag; the answer can still be empty.
+  `RecoveryInvocation.executed` binds the actual entered EVM's recovery to
+  that return data, and `answer_ne_of_excluded` uses exclusion only for this
+  query. Modern coverage and address-1 nondelegation remain explicit local
+  premises. A failed flag can still follow an actual precompile invocation;
+  this is neither a full query census nor a retained-write relevance proof.
+  Concrete bytecode must separately prove consumption of an address answer.
+  The `actual-recovery-invocation` recipe recognizes only direct
+  `Nonempty (RecoveryInvocation ...)` goals.
 - For an exact eight-byte big-endian limb, use
   [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
   `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding

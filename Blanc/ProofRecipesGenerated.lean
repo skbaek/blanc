@@ -473,6 +473,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/Sound.lean", "declaration:Blanc.Lift.NodeClaim0NoStateGas", "declaration:Blanc.Lift.NodeClaimNoStateGas", "declaration:Blanc.Lift.node_soundM_noStateGas", "declaration:Blanc.Lift.lift_sound_inM_noStateGas", "declaration:Blanc.Lift.lift_sound_in_noStateGas", "declaration:Blanc.Lift.lift_soundM_noStateGas", "declaration:Blanc.Lift.lift_sound_noStateGas"]
     boundary := "Matches only these two direct capability-level recursion carriers, without unfolding aliases, forall goals, or the original modern NodeClaim0/NodeClaim carriers. The checked certificate, actual derivation, selected stateGas-none capability and successful node outcome remain explicit. This proves no opcode availability, liveness, gas equality, rollback commitment or no-deletion; outcome-independent prefixes use the separate cursor theorems."
   },
+  {
+    id := "actual-recovery-invocation"
+    status := "active"
+    triggers := ["goal-shape:recovery-invocation"]
+    preferredPath := "Apply recoveryInvocation_of_successFlag to an actual CallOccurrenceStep at STATICCALL with operand prefix g, address one, input/output offsets and sizes. Supply CoveredFork at the reached node, nondelegation of address one's code and the actual returned nonzero stack flag. The resulting RecoveryInvocation retains the synchronous precompile entry, paid gas, exact input and returned bytes; executed and answer_ne_of_excluded connect that one actual query to an excluded address answer."
+    symbols := ["module:Blanc/Lift/RecoveryOccurrence.lean", "declaration:Blanc.Lift.RecoveryInvocation", "declaration:Blanc.Lift.recoveryInvocation_of_successFlag", "declaration:Blanc.Lift.RecoveryInvocation.executed", "declaration:Blanc.Lift.RecoveryInvocation.answer_ne_of_excluded"]
+    boundary := "Only direct Nonempty with direct argument head Blanc.Lift.RecoveryInvocation matches; unrelated Nonempty and unfolded aliases do not. A successful invocation may return empty bytes. This does not prove that concrete old bytecode consumes an owner address, relevance, a full recovery-query census, root commitment, historical fork coverage or cryptographic exclusion. The concrete consumer must establish the actual success flag and operand/route premises; no invocation is inferred merely from empty returned bytes."
+  },
 ]
 
 end Blanc.ProofRecipes

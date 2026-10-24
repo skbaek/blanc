@@ -636,3 +636,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/Sound.lean](../Blanc/Lift/Sound.lean) — `node_soundM_noStateGas`
 - Registered symbols: `module:Blanc/Lift/Sound.lean`, `declaration:Blanc.Lift.NodeClaim0NoStateGas`, `declaration:Blanc.Lift.NodeClaimNoStateGas`, `declaration:Blanc.Lift.node_soundM_noStateGas`, `declaration:Blanc.Lift.lift_sound_inM_noStateGas`, `declaration:Blanc.Lift.lift_sound_in_noStateGas`, `declaration:Blanc.Lift.lift_soundM_noStateGas`, `declaration:Blanc.Lift.lift_sound_noStateGas`
 - Review: `proof-infrastructure` on `2026-10-23`
+
+## `actual-recovery-invocation`
+
+- Status: `active`
+- Triggers: `goal-shape:recovery-invocation`
+- Preferred path: Apply recoveryInvocation_of_successFlag to an actual CallOccurrenceStep at STATICCALL with operand prefix g, address one, input/output offsets and sizes. Supply CoveredFork at the reached node, nondelegation of address one's code and the actual returned nonzero stack flag. The resulting RecoveryInvocation retains the synchronous precompile entry, paid gas, exact input and returned bytes; executed and answer_ne_of_excluded connect that one actual query to an excluded address answer.
+- Boundary: Only direct Nonempty with direct argument head Blanc.Lift.RecoveryInvocation matches; unrelated Nonempty and unfolded aliases do not. A successful invocation may return empty bytes. This does not prove that concrete old bytecode consumes an owner address, relevance, a full recovery-query census, root commitment, historical fork coverage or cryptographic exclusion. The concrete consumer must establish the actual success flag and operand/route premises; no invocation is inferred merely from empty returned bytes.
+- Owner module: [Blanc/Lift/RecoveryOccurrence.lean](../Blanc/Lift/RecoveryOccurrence.lean)
+- Canonical example: [Blanc/Lift/RecoveryOccurrence.lean](../Blanc/Lift/RecoveryOccurrence.lean) — `recoveryInvocation_of_successFlag`
+- Registered symbols: `module:Blanc/Lift/RecoveryOccurrence.lean`, `declaration:Blanc.Lift.RecoveryInvocation`, `declaration:Blanc.Lift.recoveryInvocation_of_successFlag`, `declaration:Blanc.Lift.RecoveryInvocation.executed`, `declaration:Blanc.Lift.RecoveryInvocation.answer_ne_of_excluded`
+- Review: `proof-infrastructure` on `2026-10-23`

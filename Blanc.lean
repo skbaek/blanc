@@ -1184,6 +1184,7 @@ import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.CursorTreeNinst
 import Blanc.Lift.CursorOccurrenceNoStateGas
+import Blanc.Lift.RecoveryOccurrence
 import Blanc.Lift.CursorExactLine
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorNoExecSuffix

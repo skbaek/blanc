@@ -709,7 +709,7 @@ JAUNE_DISPATCH_SURFACE = frozenset({
 # Names outside both namespaces that an arm may dispatch on. These are Lean core
 # and are not pinned by this repository at all, so they are stated here rather
 # than left to fall through whichever of the two checks happens to ignore them.
-CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne", "Except.ok"})
+CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne", "Except.ok", "Nonempty"})
 
 # Registered recipes with no case in ``scripts/ProofRecipeSuggestions.lean``,
 # each with what a case would have to exhibit.
@@ -743,6 +743,7 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-head:StaticcallObservation",
     "goal-head:StaticcallRouting",
     "goal-head:Lift.EcrecoverCall.ReturnChecks",
+    "goal-shape:recovery-invocation",
     "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt",
     "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt",
     "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt",
