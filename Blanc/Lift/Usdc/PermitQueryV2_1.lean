@@ -457,33 +457,10 @@ private theorem permit_call71 {F : Exec.Deriv} {post b : Devm} {M : Mem}
       M (ImplV2_1.t_322d_c24 :: K)) := by
   obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
   obtain ⟨args⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
-    [.push [0x32, 0x2d] (by decide), .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
-      .reg (.dup 9), .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
-      .push [0x41, 0x0c] (by decide)] rfl
+    (SolcSignedQuery.sevenArgsCallLine 0x32 0x2d 0x41 0x0c) rfl
     (by intro ni member xi same; subst ni
-        simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (by
-      intro gas d run
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_push step
-      cases run
-      exact ⟨_, rfl⟩)
+        simp only [SolcSignedQuery.sevenArgsCallLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    SolcSignedQuery.seven_args_call_line
   exact args.callH ImplV2_1.cert_check success fork.stateGas rfl
 
 private theorem permit_deadline_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
@@ -496,24 +473,10 @@ private theorem permit_deadline_guard {F : Exec.Deriv} {post b : Devm} {M : Mem}
         (s :: r :: v :: deadline :: S) M K) := by
   obtain ⟨opened⟩ := cut.destH ImplV2_1.cert_check success fork.stateGas
   obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
-    [.reg .timestamp, .reg (.dup 4), .reg .lt, .reg .iszero,
-      .push [0x41, 0x7b] (by decide)] rfl
+    (SolcSignedQuery.deadlineLine 0x41 0x7b) rfl
     (by intro ni member xi same; subst ni
-        simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (by
-      intro gas d run
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_timestamp step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_lt step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_iszero step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_push step
-      cases run
-      exact ⟨_, rfl⟩)
+        simp only [SolcSignedQuery.deadlineLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    SolcSignedQuery.deadline_line
   obtain ⟨gas, actualState⟩ := guard.state
   obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
     (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)
@@ -703,17 +666,10 @@ private theorem permit_recovery_cut {F : Exec.Deriv} {post b : Devm} {M : Mem}
   obtain ⟨flag, ⟨before⟩⟩ := permit_signature_cut cut success fork
   obtain ⟨opened⟩ := before.destH ImplV2_1.cert_check success fork.stateGas
   obtain ⟨guard⟩ := opened.lineH ImplV2_1.cert_check success fork.stateGas
-    [.reg .iszero, .push [0x4a, 0x2d] (by decide)] rfl
+    (SolcSignedQuery.iszeroJumpLine 0x4a 0x2d) rfl
     (by intro ni member xi same; subst ni
-        simp only [List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (by
-      intro gas d run
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_iszero step
-      obtain ⟨_, step, run⟩ := Line.of_run_cons run
-      obtain ⟨_, rfl⟩ := ri_push step
-      cases run
-      exact ⟨_, rfl⟩)
+        simp only [SolcSignedQuery.iszeroJumpLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
+    SolcSignedQuery.iszero_jump_line
   obtain ⟨gas, actualState⟩ := guard.state
   obtain ⟨outcome, actualRun⟩ := guard.placed.sourceRunH ImplV2_1.cert_check
     (guard.exn_eq.trans success) (by rw [guard.sevm_eq]; exact fork.stateGas)

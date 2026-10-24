@@ -243,7 +243,7 @@ SHARED += ["Lift.ChildFrameDepth"]
 SHARED += ["Lift.LogAddresses"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachLine", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorOccurrenceToward", "Lift.CursorCutsToward", "Lift.CursorReturnToward", "Lift.CursorOccurrenceNoStateGas", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachLine", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorOccurrenceToward", "Lift.CursorCutsToward", "Lift.CursorStateToward", "Lift.CursorReturnToward", "Lift.CursorOccurrenceNoStateGas", "Lift.CursorTreeNinst", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "Lift.StaticOnlyRoots", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn", "Lift.CursorJump", "Lift.CursorOccurrenceRoots"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -517,6 +517,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapCut",
         "Lift.UniswapV2Pair.SwapForward",
         "Lift.UniswapV2Pair.SwapFront",
+        "Lift.UniswapV2Pair.SwapRawRecipientH",
         "Lift.UniswapV2Pair.SwapFrontCanonical",
         "Lift.UniswapV2Pair.SwapFrontTurns",
         "Lift.UniswapV2Pair.SwapFrontTyped",
@@ -571,6 +572,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PermitRecoverySettlement",
         "Lift.UniswapV2Pair.PermitRecoveryPost",
         "Lift.UniswapV2Pair.PairDispatchCursor",
+        "Lift.UniswapV2Pair.PairRawDispatch",
         "Lift.UniswapV2Pair.PairNoCallEntries",
         "Lift.UniswapV2Pair.PairNoCallSource",
         "Lift.UniswapV2Pair.PairReservesCursor",
@@ -1479,6 +1481,8 @@ CONTRACTS = {
         "Lift.Usdc.ModelLaws",
         "Lift.Usdc.PermitQueryV2_1",
         "Lift.Usdc.PermitRowRecoveryV2_1",
+        "Lift.Usdc.PermitRowPrefixV2_1",
+        "Lift.Usdc.PermitRowNativeV2_1",
         "Lift.Usdc.OwnerQueriesV2",
         "Lift.Usdc.OldRecoveryRelevance",
         "Lift.Usdc.Proxy.Cert",

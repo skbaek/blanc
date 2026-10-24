@@ -1169,6 +1169,7 @@ import Blanc.Lift.UniswapV2Pair.SwapControls
 import Blanc.Lift.UniswapV2Pair.SwapCut
 import Blanc.Lift.UniswapV2Pair.SwapForward
 import Blanc.Lift.UniswapV2Pair.SwapFront
+import Blanc.Lift.UniswapV2Pair.SwapRawRecipientH
 import Blanc.Lift.UniswapV2Pair.SwapFrontCanonical
 import Blanc.Lift.UniswapV2Pair.SwapFrontTurns
 import Blanc.Lift.UniswapV2Pair.SwapFrontTyped
@@ -1207,6 +1208,7 @@ import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.CursorOccurrenceToward
 import Blanc.Lift.CursorCutsToward
+import Blanc.Lift.CursorStateToward
 import Blanc.Lift.ReachLine
 import Blanc.Lift.CursorReturnToward
 import Blanc.Lift.CursorTreeNinst
@@ -1226,6 +1228,7 @@ import Blanc.Lift.InvWalkGas
 import Blanc.Lift.ExactMustRun
 import Blanc.Lift.AccountAccessState
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
+import Blanc.Lift.UniswapV2Pair.PairRawDispatch
 import Blanc.Lift.UniswapV2Pair.PairNoCallEntries
 import Blanc.Lift.UniswapV2Pair.PairNoCallSource
 import Blanc.Lift.UniswapV2Pair.PairReservesCursor
@@ -1744,6 +1747,8 @@ import Blanc.Lift.Usdc.RecoveryV2
 import Blanc.Lift.Usdc.RecoveryV2_1
 import Blanc.Lift.Usdc.PermitQueryV2_1
 import Blanc.Lift.Usdc.PermitRowRecoveryV2_1
+import Blanc.Lift.Usdc.PermitRowPrefixV2_1
+import Blanc.Lift.Usdc.PermitRowNativeV2_1
 import Blanc.Lift.Usdc.OwnerQueriesV2
 import Blanc.Lift.Usdc.OldRecoveryRelevance
 import Blanc.Lift.Usdc.RefineAdmin

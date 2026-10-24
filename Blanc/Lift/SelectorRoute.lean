@@ -123,6 +123,31 @@ theorem eq_of_eqCheck_ne {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
   · assumption
   · exact absurd rfl h
 
+/-- A raw reach through the comparison walk retains its first non-comparison leaf. -/
+theorem Reach.selWalk_inr (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {σ : B256} {f t : SFunc} (hw : f.selWalk σ = .inr t) {b : Devm}
+    {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : Reach P fs sevm ⟨St b (σ :: S) M G, f, K⟩ T) (hT : AtExec T) :
+    ∃ G', Reach P fs sevm ⟨St b (σ :: S) M G', t, K⟩ T := by
+  fun_induction SFunc.selWalk σ f generalizing G with
+  | case1 f ih =>
+      obtain ⟨G', r⟩ := rr_dest run hT
+      exact ih hw r
+  | case2 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := rr_cmp_gt hP run hT
+      rw [ite_eq_left h] at r
+      exact ih hw r
+  | case3 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := rr_cmp_gt hP run hT
+      rw [ite_eq_right h] at r
+      exact ih hw r
+  | case4 c0 c1 c2 c3 _ _ _ _ f j h ih =>
+      rcases rr_cmp_eq_either hP run hT with ⟨-, G', r⟩ | ⟨ne, -⟩
+      · exact ih hw r
+      · exact absurd h ne
+  | case5 => cases hw
+  | case6 => cases hw; exact ⟨_, run⟩
+
 /-- **A reach at the goto of the walk.**  The selector word is the constant compared, and the reach
 continues from the goto's entry. -/
 theorem Reach.selWalk_inl (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {σ c : B256}

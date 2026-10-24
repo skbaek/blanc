@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SwapAbi
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.InvWalkBranchToP
+import Blanc.Lift.HistAccessWalk
 
 /-! The literal swap body prefix: the lock test and lock store, the output-amount guard,
 the internal `getReserves` call, the liquidity guards, the token loads and the recipient
@@ -228,15 +229,16 @@ def swapTokenLoadLine : List Ninst := [
   .reg (.swap 0),
   .push [0x08, 0x54] (by decide)]
 
-theorem swapTokenLoadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+/-- The two actual token reads under the frame's historical access schedule. -/
+theorem swapTokenLoadLine_invH {sevm : Sevm} {b d : Devm} {S : List B256}
     {r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (line : Line.Run sevm (St b (r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTokenLoadLine d) :
-    ∃ G', d = St (afterSload sevm (afterSload sevm b (Bytes.toB256 [0x06])) (Bytes.toB256 [0x07]))
+    ∃ G', d = St (afterSloadH sevm (afterSloadH sevm b (Bytes.toB256 [0x06])) (Bytes.toB256 [0x07]))
       ((Bytes.toB256 [0x08, 0x54]) ::
        (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) ::
        (B256.eqCheck (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) 0) ::
-       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& ((afterSload sevm b (Bytes.toB256 [0x06])).getStorVal sevm.currentTarget (Bytes.toB256 [0x07]))) ::
+       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& ((afterSloadH sevm b (Bytes.toB256 [0x06])).getStorVal sevm.currentTarget (Bytes.toB256 [0x07]))) ::
        ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) ::
        (Bytes.toB256 [0x00]) ::
        (Bytes.toB256 [0x00]) ::
@@ -250,9 +252,9 @@ theorem swapTokenLoadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
        rho :: S) M G' := by
   dsimp only [swapTokenLoadLine] at line
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal step
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal step
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
   obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
@@ -277,6 +279,29 @@ theorem swapTokenLoadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
   cases line
   dsimp only [List.set] at state
   exact ⟨gas, state⟩
+
+theorem swapTokenLoadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (line : Line.Run sevm (St b (r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTokenLoadLine d) :
+    ∃ G', d = St (afterSload sevm (afterSload sevm b (Bytes.toB256 [0x06])) (Bytes.toB256 [0x07]))
+      ((Bytes.toB256 [0x08, 0x54]) ::
+       (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) ::
+       (B256.eqCheck (B256.eqCheck ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) (toWord &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))) 0) ::
+       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& ((afterSload sevm b (Bytes.toB256 [0x06])).getStorVal sevm.currentTarget (Bytes.toB256 [0x07]))) ::
+       ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) &&& (b.getStorVal sevm.currentTarget (Bytes.toB256 [0x06]))) ::
+       (Bytes.toB256 [0x00]) ::
+       (Bytes.toB256 [0x00]) ::
+       r1 ::
+       r0 ::
+       len ::
+       start ::
+       toWord ::
+       a1 ::
+       a0 ::
+       rho :: S) M G' := by
+  have state := swapTokenLoadLine_invH fork.rules_bal_none line
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using state
 
 /-- Literal Swap recipient1 line shared by the inverse and original cursor. -/
 def swapRecipient1Line : List Ninst := [

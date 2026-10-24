@@ -420,16 +420,19 @@ def nonceLine (base : UInt8) : List Ninst :=
    .reg (.swap 1),
    .reg .sstore]
 
-theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+/-- The nonce calculation and increment operands, immediately before SSTORE. -/
+def nonceHeadLine (base : UInt8) : List Ninst := (nonceLine base).dropLast
+
+/-- Invert the actual nonce prefix without crossing its final write. -/
+theorem nonce_head_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
     {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
     (ptr : PtrMem 128 96 M) (fork : NeutralFork sevm.benvStat.fork)
     (run : Line.Run sevm (St b
       (s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
-      (nonceLine base) d) :
+      (nonceHeadLine base) d) :
     let nonce := b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))
-    ∃ G', d = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
-      (mapSlot owner.toB256 (Bytes.toB256 [base])) (nonce + 1))
-      (nonce :: 32 :: 64 :: owner.toB256 ::
+    ∃ G', d = St (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+      (mapSlot owner.toB256 (Bytes.toB256 [base]) :: (nonce + 1) :: nonce :: 32 :: 64 :: owner.toB256 ::
         (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
         s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
       ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
@@ -494,9 +497,27 @@ theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
   obtain ⟨_, rfl⟩ := ri_swap rfl step
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_swap rfl step
-  obtain ⟨_, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_sstoreH fork.stateGas fork.bal step
   cases run
+  exact ⟨_, rfl⟩
+
+theorem nonce_line {base : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {s r v deadline value : B256} {spender owner : Adr} {S : List B256}
+    (ptr : PtrMem 128 96 M) (fork : NeutralFork sevm.benvStat.fork)
+    (run : Line.Run sevm (St b
+      (s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S) M G)
+      (nonceLine base) d) :
+    let nonce := b.getStorVal sevm.currentTarget (mapSlot owner.toB256 (Bytes.toB256 [base]))
+    ∃ G', d = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot owner.toB256 (Bytes.toB256 [base])))
+      (mapSlot owner.toB256 (Bytes.toB256 [base])) (nonce + 1))
+      (nonce :: 32 :: 64 :: owner.toB256 ::
+        (0xffffffffffffffffffffffffffffffffffffffff : B256) ::
+        s :: r :: v :: deadline :: value :: spender.toB256 :: owner.toB256 :: S)
+      ((M.write 0 owner.toB256.toBytes).write 32 (Bytes.toB256 [base]).toBytes) G' := by
+  obtain ⟨middle, headRun, suffix⟩ := of_run_append (nonceHeadLine base) run
+  obtain ⟨_, rfl⟩ := nonce_head_line ptr fork headRun
+  obtain ⟨_, step, suffix⟩ := Line.of_run_cons suffix
+  obtain ⟨_, rfl⟩ := ri_sstoreH fork.stateGas fork.bal step
+  cases suffix
   exact ⟨_, rfl⟩
 
 def structHeadMemory (tag : B256) (M : Mem) (owner : Adr) : Mem :=
@@ -2098,5 +2119,81 @@ theorem guardSucc_pc {code : ByteArray} {c : Cert} {F : Exec.Deriv} {post b : De
   exact ⟨taken,⟨N,next,cut.free.trans (Exec.Deriv.ExecFreeUntil.ofStep edge
     (Blanc.Jinst.At.not_exec decoded)),(Cursor.parentStep_sevm edge).trans cut.sevm_eq,
     sameExn.trans cut.exn_eq,placed,shape.1,shape.2.2,shape.2.1⟩,actualPc⟩
+
+
+/-- The seven duplicated arguments for a Solidity internal call. -/
+def sevenArgsCallLine (r0 r1 d0 d1 : UInt8) : List Ninst :=
+  [.push [r0,r1] (by simp only [List.length_cons,List.length_nil]; decide),
+   .reg (.dup 9), .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
+   .reg (.dup 9), .reg (.dup 9), .reg (.dup 9),
+   .push [d0,d1] (by simp only [List.length_cons,List.length_nil]; decide)]
+
+theorem seven_args_call_line {r0 r1 d0 d1 : UInt8} {sevm : Sevm} {b d : Devm}
+    {M : Mem} {G : Nat} {s r v deadline value spender owner : B256} {S : List B256}
+    (run : Line.Run sevm (St b
+      (spender :: owner :: s :: r :: v :: deadline :: value :: spender :: owner :: S) M G)
+      (sevenArgsCallLine r0 r1 d0 d1) d) :
+    ∃ G', d = St b
+      (Bytes.toB256 [d0,d1] :: s :: r :: v :: deadline :: value :: spender :: owner ::
+       Bytes.toB256 [r0,r1] :: spender :: owner :: s :: r :: v :: deadline :: value ::
+       spender :: owner :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  exact ⟨_, rfl⟩
+
+/-- Timestamp/deadline guard operands, with the real destination bytes. -/
+def deadlineLine (d0 d1 : UInt8) : List Ninst :=
+  [.reg .timestamp, .reg (.dup 4), .reg .lt, .reg .iszero,
+   .push [d0,d1] (by simp only [List.length_cons,List.length_nil]; decide)]
+
+theorem deadline_line {d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {s r v deadline : B256} {S : List B256}
+    (run : Line.Run sevm (St b (s :: r :: v :: deadline :: S) M G) (deadlineLine d0 d1) d) :
+    ∃ G', d = St b (Bytes.toB256 [d0,d1] :: B256.eqCheck
+      (B256.ltCheck deadline sevm.benvStat.time) 0 :: s :: r :: v :: deadline :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_timestamp step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_lt step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  exact ⟨_, rfl⟩
+
+/-- An ISZERO guard followed by the actual jump destination constant. -/
+def iszeroJumpLine (d0 d1 : UInt8) : List Ninst :=
+  [.reg .iszero, .push [d0,d1] (by simp only [List.length_cons,List.length_nil]; decide)]
+
+theorem iszero_jump_line {d0 d1 : UInt8} {sevm : Sevm} {b d : Devm} {M : Mem} {G : Nat}
+    {flag : B256} {S : List B256}
+    (run : Line.Run sevm (St b (flag :: S) M G) (iszeroJumpLine d0 d1) d) :
+    ∃ G', d = St b (Bytes.toB256 [d0,d1] :: B256.eqCheck flag 0 :: S) M G' := by
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run
+  exact ⟨_, rfl⟩
 
 end Blanc.Lift.SolcSignedQuery

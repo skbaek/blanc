@@ -3643,6 +3643,25 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   the actual rejecting branch. Recovery-entry registers, pointer bounds,
   continuations and nondelegation remain local premises; root-to-entry
   coverage and pre-authentication nonce-slot separation are separate work.
+  The actual original-frame producer is
+  `Usdc.permitV2_1_root_recovery_toward_sstore` in
+  [`Blanc/Lift/Usdc/PermitRowPrefixV2_1.lean`](../Blanc/Lift/Usdc/PermitRowPrefixV2_1.lean).
+  From the fresh PC-zero permit frame and an observed later SSTORE, it derives
+  the actual recovery entry, original prefix, calldata-derived owner/signature
+  words, pointer geometry and preservation of address-1 code. It assumes no
+  successful final outcome. The target stack head and explicit inequality
+  between its key and the calldata owner's nonce slot remain premises of this
+  local producer; the history consumer must discharge finite separation.
+  `Usdc.permitV2_1_tracked_sstore_native` in
+  [`Blanc/Lift/Usdc/PermitRowNativeV2_1.lean`](../Blanc/Lift/Usdc/PermitRowNativeV2_1.lean)
+  discharges that inequality from the existing finite `RowSep.other` nonce site.
+  For an actual successful tracked-row SSTORE with calldata owner equal to the
+  Pair, it derives the original call occurrence, native execution/payment and
+  Pair answer, preserving node, slot, result and return through `reRoot`.
+  Address-1 nondelegation and `NeutralFork` remain explicit local premises;
+  no enclosing-frame success or preselected recovery query is assumed.
+  The actual query bytes remain existential; this theorem does not claim
+  complete old-version coverage or the historical absence of Pair signatures.
   `Usdc.recoveryV2_consumes` in
   [`Blanc/Lift/Usdc/RecoveryV2.lean`](../Blanc/Lift/Usdc/RecoveryV2.lean)
   specializes the same engine at V2's actual `0x50a4` entry and `0x50ef` call.
@@ -3661,6 +3680,12 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   here is `NeutralFork` (no state gas, no block access list), so the storage
   lines state their successor over `afterSloadH`/`afterSstoreH` under the
   frame's actual access schedule.
+  `nonce_head_line` exposes the exact key and increment operands immediately
+  before SSTORE; its source is `nonceLine.dropLast`, with the original literal
+  and complete `nonce_line` interface preserved. `seven_args_call_line`,
+  `deadline_line` and `iszero_jump_line` share the argument shuffle and guard
+  inversions between successful and raw cursor producers, with actual PUSH
+  destination bytes as parameters.
   `mapped_byte_read_line` takes the actual indexed stack equality and proves
   the mapping read for that depth; the original `blacklist_read_line` is its
   permit specialization. `wrapper_line`, `selector_line`, `compare_gt_line`
@@ -6679,7 +6704,7 @@ contract-neutral.
   later node decodes another, from the decidable checks `ExecSilent`/`SFunc.nodesSatisfy` and
   `SFunc.contsIn`; `Reach.conts_silent`) in [`Blanc/Lift/ReachSilentTail.lean`](../Blanc/Lift/ReachSilentTail.lean); the route
   of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
-  kernel for a concrete selector; `Reach.selWalk_inl`, `SFunc.RunCut.selWalk_inl`/`_inr`,
+  kernel for a concrete selector; `Reach.selWalk_inl`/`_inr`, `SFunc.RunCut.selWalk_inl`/`_inr`,
   `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
   wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean); and the
   reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
@@ -6886,6 +6911,13 @@ contract-neutral.
   closed-helper checks remain explicit; it needs no successful final outcome.
   `Reach.false_of_sstoreFree_halting` in the same module excludes a later
   SSTORE inside a halting, SSTORE-free branch with saved callers.
+  For state-shaped producers, `CursorStateToward` in
+  [`Blanc/Lift/CursorStateToward.lean`](../Blanc/Lift/CursorStateToward.lean)
+  extends the existing `CursorStateAt` with the actual remaining prefix to the
+  observed SSTORE. Its line, branch, destination, internal call and return cuts
+  retain both spans. Guards exclude actual halting SSTORE-free branches; the
+  single-primitive cut requires a distinct target node, allowing an earlier
+  write only after the producer proves its separation from the tracked write.
   Source runs and
   returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
   (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
@@ -7627,7 +7659,16 @@ the original literal-branch interface is preserved.
 The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
 [`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)
 retains the actual root state before either selector comparison route; the
-existing upper-comparison wrapper projects it. The parameterized quiet-entry
+existing upper-comparison wrapper projects it. Its pure `pair_initial_line_state`,
+`pair_size_line_state` and `pair_selector_line_state` inverses also serve raw
+routing without final success. `pair_raw_reach_call_selector` in
+[`PairRawDispatch.lean`](../Blanc/Lift/UniswapV2Pair/PairRawDispatch.lean)
+starts at the actual PC-zero source entry and routes any reached external
+instruction through one of the six call-capable wrappers, retaining its selector,
+world, initialized memory and remaining reach. It excludes fallback and quiet
+entries using checked source regions. It does not classify the wrappers' calls
+or establish callback-to-token exclusion.
+The parameterized quiet-entry
 cuts and checked closed regions in
 [`PairNoCallEntries.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallEntries.lean)
 derive `PairNoCallEntry.root_noExec` from that same supplied successful root.
@@ -7680,6 +7721,16 @@ The already reached optional-bool decoder is inverted by
 [`SafeTransferWalk.lean`](../Blanc/Lift/UniswapV2Pair/SafeTransferWalk.lean).
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
+
+For the historical raw Swap token/recipient segment,
+`swap_raw_recipient_guardsH` in
+[`SwapRawRecipientH.lean`](../Blanc/Lift/UniswapV2Pair/SwapRawRecipientH.lean)
+derives both recipient-versus-token inequalities and the actual remaining reach
+at the optimistic-transfer branch. It keeps the cached token words and the
+successor state after the two historical SLOADs, requiring only BAL absence for
+those reads and no final success or assumed guard. The common literal owner is
+`swapTokenLoadLine_invH` in `SwapFront.lean`; the existing modern inverse
+projects it. Root-to-body coverage and callback classification remain separate.
 
 For the original Swap prefix, `swap_prefix_cursor_state` in
 [`SwapPositionalPrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalPrefix.lean)
