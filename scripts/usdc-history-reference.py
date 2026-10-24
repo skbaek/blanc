@@ -100,6 +100,62 @@ def fork_at(block: int, timestamp: int) -> str:
     return name
 
 
+# V1's initializer: the successful `initialize` call through the proxy (tx index 22
+# of block 6082473), recorded from public RPC reads with the qualifications listed;
+# the reads are not a Lean execution, a consensus inclusion proof, or a sender recovery.
+V1_INITIALIZER = {
+    "selector": "0x3357162b",
+    "signature": "initialize(string,string,string,uint8,address,address,address,address)",
+    "arguments": {
+        "_name": "USD//C",
+        "_symbol": "USDC",
+        "_currency": "USD",
+        "_decimals": 6,
+        "_masterMinter": "0x1500a138523709ce66c8b9abe678abc1b6c5a7b7",
+        "_pauser": "0xe8e13e1b6d363c270ef3a5ab466ebad8326311bb",
+        "_blacklister": "0x063d13783a0a2ce65b1ca00d9e897e6c8b1ec86b",
+        "_owner": "0xa61e278899a8553d93d14eb19ba2791e05069e87"
+    },
+    "invocation": {
+        "chain_id": 1,
+        "block": 6082473,
+        "block_hash": "0xeb6be828f7b55c563d95f75d016bf5636a69f97385513797e9e6c0c5434936ba",
+        "timestamp": 1533324630,
+        "fork": "Byzantium",
+        "tx": "0xe152b8a0d9e83ddaa0158d7ca9beb0636d66e53e9498e5deb5a25aa3a324fba7",
+        "transaction_index": 22,
+        "from": "0x95ba4cf87d6723ad9c0db21737d862be80e93911",
+        "to": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "value": "0x0",
+        "status": "0x1",
+        "input_bytes": 452,
+        "input_sha256": "fcc379d33a2421a24b135fac07d8e63ca39eb3c3f50e66c6a8410e8cd0f925ae",
+        "input": "0x3357162b00000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000060000000000000000000000001500a138523709ce66c8b9abe678abc1b6c5a7b7000000000000000000000000e8e13e1b6d363c270ef3a5ab466ebad8326311bb000000000000000000000000063d13783a0a2ce65b1ca00d9e897e6c8b1ec86b000000000000000000000000a61e278899a8553d93d14eb19ba2791e05069e8700000000000000000000000000000000000000000000000000000000000000065553442f2f4300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004555344430000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000035553440000000000000000000000000000000000000000000000000000000000",
+        "operators": [
+            "drpc",
+            "tenderly",
+            "blastapi"
+        ],
+        "internal_call": {
+            "operator": "drpc",
+            "type": "DELEGATECALL",
+            "trace_address": [
+                0
+            ],
+            "implementation": "0x0882477e7895bdc5cea7cb1552ed914ab157fe56",
+            "same_input": True
+        },
+        "evidence": "Plans evidence/mac-l3-v1-initializer-20261022/",
+        "qualifications": [
+            "Numeric block tag; no EIP1898 request",
+            "No receipt/header trie or consensus authentication",
+            "No cryptographic sender recovery or signed transaction hash reconstruction",
+            "Internal call tree is dRPC-only data, not Lean execution",
+            "Bounded trace_filter reports three entries; no unbounded global first-occurrence proof"
+        ]
+    }
+}
+
 # The implementations.  `live` is [first block, last block] with the address in
 # the proxy's implementation word; `read_blocks` are the archive reads that
 # must return the committed bytes (first live block, last live block, and the
@@ -112,7 +168,7 @@ IMPLEMENTATIONS = [
         "creation": {"tx": "0xa40b41d5a00b8b1a1d591dc60882521942f5b98b277bb3e8ba6e0edda0a2e550", "block": 6_082_458},
         "live": [6_082_465, 10_743_413], "read_blocks": [6_082_465, 10_008_355, 10_743_413],
         "source_tag": {"tag": "v1.0.0", "commit": "19cb665ee89a419063adfa89baa9f568194417f2"},
-        "initializer": None,
+        "initializer": V1_INITIALIZER,
         "hex": "usdc-impl-v1-runtime.hex", "lifted": False,
     },
     {

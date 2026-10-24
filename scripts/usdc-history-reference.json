@@ -270,7 +270,58 @@
         "tx": "0xa40b41d5a00b8b1a1d591dc60882521942f5b98b277bb3e8ba6e0edda0a2e550"
       },
       "id": "usdc-impl-v1",
-      "initializer": null,
+      "initializer": {
+        "arguments": {
+          "_blacklister": "0x063d13783a0a2ce65b1ca00d9e897e6c8b1ec86b",
+          "_currency": "USD",
+          "_decimals": 6,
+          "_masterMinter": "0x1500a138523709ce66c8b9abe678abc1b6c5a7b7",
+          "_name": "USD//C",
+          "_owner": "0xa61e278899a8553d93d14eb19ba2791e05069e87",
+          "_pauser": "0xe8e13e1b6d363c270ef3a5ab466ebad8326311bb",
+          "_symbol": "USDC"
+        },
+        "invocation": {
+          "block": 6082473,
+          "block_hash": "0xeb6be828f7b55c563d95f75d016bf5636a69f97385513797e9e6c0c5434936ba",
+          "chain_id": 1,
+          "evidence": "Plans evidence/mac-l3-v1-initializer-20261022/",
+          "fork": "Byzantium",
+          "from": "0x95ba4cf87d6723ad9c0db21737d862be80e93911",
+          "input": "0x3357162b00000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000140000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000060000000000000000000000001500a138523709ce66c8b9abe678abc1b6c5a7b7000000000000000000000000e8e13e1b6d363c270ef3a5ab466ebad8326311bb000000000000000000000000063d13783a0a2ce65b1ca00d9e897e6c8b1ec86b000000000000000000000000a61e278899a8553d93d14eb19ba2791e05069e8700000000000000000000000000000000000000000000000000000000000000065553442f2f4300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004555344430000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000035553440000000000000000000000000000000000000000000000000000000000",
+          "input_bytes": 452,
+          "input_sha256": "fcc379d33a2421a24b135fac07d8e63ca39eb3c3f50e66c6a8410e8cd0f925ae",
+          "internal_call": {
+            "implementation": "0x0882477e7895bdc5cea7cb1552ed914ab157fe56",
+            "operator": "drpc",
+            "same_input": true,
+            "trace_address": [
+              0
+            ],
+            "type": "DELEGATECALL"
+          },
+          "operators": [
+            "drpc",
+            "tenderly",
+            "blastapi"
+          ],
+          "qualifications": [
+            "Numeric block tag; no EIP1898 request",
+            "No receipt/header trie or consensus authentication",
+            "No cryptographic sender recovery or signed transaction hash reconstruction",
+            "Internal call tree is dRPC-only data, not Lean execution",
+            "Bounded trace_filter reports three entries; no unbounded global first-occurrence proof"
+          ],
+          "status": "0x1",
+          "timestamp": 1533324630,
+          "to": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "transaction_index": 22,
+          "tx": "0xe152b8a0d9e83ddaa0158d7ca9beb0636d66e53e9498e5deb5a25aa3a324fba7",
+          "value": "0x0"
+        },
+        "selector": "0x3357162b",
+        "signature": "initialize(string,string,string,uint8,address,address,address,address)"
+      },
       "lifted": false,
       "live": [
         6082465,
