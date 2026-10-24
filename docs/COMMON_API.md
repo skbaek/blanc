@@ -4366,6 +4366,39 @@ core. Static observation emptiness is independent of the balance bound.
 entry balance bound from an actual transferred, run-ready message. Neither
 bridge supplies a contract-specific deposit classification or entry premise.
 
+Over a selected historical fork domain `F` instead of `CoveredFork`, use the
+In twins: [`Blanc/ExecutionAccountingStepsIn.lean`](../Blanc/ExecutionAccountingStepsIn.lean)
+(`Xinst.targetBalanceMono_of_none_noStateGas`,
+`Ninst.targetBalanceMono_of_none_noStateGas`, the fork-free
+`Ninst.foreignNone_getStor_eq'`, and
+`xinstForeignSome_observed_noStateGas` at both carrier levels, all taking only
+`sevm.benvStat.rules.stateGas = none`) and
+[`Blanc/ExecutionAccountingCoreIn.lean`](../Blanc/ExecutionAccountingCoreIn.lean)
+(`Exec.CoreAccountingIn F`, `Exec.coreAccountingIn` with
+`hsgF : ∀ {f}, F f → (Fork.ruleSet f).stateGas = none`, and the `rfl` control
+`Exec.CoreAccounting.eq_coveredFork`). `messageRoot_facts` is fork-free and
+reused unchanged; discharge `hsgF` on `HistFork` with `HistFork.stateGas_none`.
+
+The message/transaction rungs over `F` live in
+[`Blanc/ExecutionAccountingAdmissionIn.lean`](../Blanc/ExecutionAccountingAdmissionIn.lean):
+`AccountingLadderAdmittedIn F` (with `AccountingLadderAdmitted.toIn` and
+`AccountingLadderAdmittedIn.mono`), `processMessageIn`, `processCreateMessageIn`,
+`messageCallIn`, `transactionMessageIn` (all routing `F` through entry
+preparation, the settlement equations through their `_noStateGas` twins),
+`transactionIn` (selected chronology, `InstalledCert` NoDel, the deletion fold
+plus the touched sweep via `sweepTouchedAccounts_get_of_code_nonempty`), and
+`transactionListIn`.
+
+The staged-body, block and history rungs over `F` continue in
+[`Blanc/ExecutionAccountingHistoryIn.lean`](../Blanc/ExecutionAccountingHistoryIn.lean):
+`systemMessageIn`, `requestsIn`, the optional stage rungs `beaconStageIn`,
+`historyStageIn`, `requestStageIn` (skipped arm is the identity), the
+carrier-level `processWithdrawals_observed` and `payRewards_observed`
+(generalised over carrier, observation, append and tag), `stagedBody` (with
+the `beaconHistoryReplayIn` and `transactionsWithdrawalsRequestsReplayIn`
+junctions, at most two nested appends each), `configuredBlockIn`, and
+`configuredHistoryIn`.
+
 Two consumers exist. The beacon deposit contract observes deposit nodes
 (`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
 ordered writer invocations of its settlement-committed frames, with the storage
@@ -4447,7 +4480,13 @@ observation of its committed frames) plus `SpawnKinds`;
 (`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
 the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
-its step can name the committed frame. Worked use: the Uniswap V2 pair
+its step can name the committed frame. Over a selected fork domain `F`, the In forms
+live in [`Blanc/ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean):
+`SpawnKindsIn F`, `spawnChildIn`, `staticObservedNilIn`/`staticFrameIn`,
+`WholeFrameReplayIn F` (same binder order as `WholeFrameReplay`, so the Mac's
+`pair_wholeFrameReplayWithIn` fits), and `wholeFrameLadderIn` producing
+`AccountingLadderAdmittedIn F` (takes `hsgF`, `kinds`, `whole` and In `preserves`;
+`messageRoot_facts` reused). Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplayWith`, `pairLadderWith`,
 `pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
 `PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
@@ -4531,6 +4570,14 @@ has at most one child, which heads its descendants), and
 `ConfiguredHistoryTrace.settled_mem_rawFrames` (a settled frame's root derivation is a raw frame;
 the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settledFrames`). Worked
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
+
+Over a selected fork domain `F`, the In forms live in
+[`Blanc/Lift/SettledFramePositionsIn.lean`](../Blanc/Lift/SettledFramePositionsIn.lean):
+`parentLadderIn` (the same one-rung construction over `AccountingLadderAdmittedIn F`,
+reusing `parentCarrier`/`parentObservation`) and
+`ConfiguredHistoryTraceIn.settledFrames_parent_of_codeAddress` (via
+`configuredHistoryIn`, admission from `frameAdmitted_iff_rawFrames`; takes
+`capabilities`, `rewards`, `inv`, `K` and `image`).
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
