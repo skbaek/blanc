@@ -1,4 +1,4 @@
-# Blanc: A Verification Stack for EVM Bytecode in Lean 4
+# Blanc: A Verification Stack for EVM Smart Contracts in Lean 4
 
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
@@ -9,7 +9,7 @@ which premises; the Blanc language and its contracts; and what none of it claims
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.
 
-Blanc is a verification stack for EVM bytecode, built in Lean 4 on Jaune's
+Blanc is a verification stack for EVM smart contracts, built in Lean 4 on Jaune's
 executable EVM semantics. It proves theorems about Ethereum bytecode as it is
 deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the
 EIP-7002 system contract — with exact gas, liveness, and no axioms beyond
