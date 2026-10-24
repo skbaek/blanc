@@ -1573,6 +1573,7 @@ import Blanc.ExecutionSettledCodeImage
 import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionInOwnCode
 import Blanc.ExecutionInCodeImageSafe
+import Blanc.ExecutionSafeRawFramesCodes
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
@@ -1775,6 +1776,7 @@ import Blanc.Lift.Usdc.AllowLocalityHistory
 import Blanc.Lift.WriteSiteReach
 import Blanc.Lift.WriteSiteReachHistory
 import Blanc.Lift.Usdc.AllowLocalitySstore
+import Blanc.Lift.Usdc.ProxySafeFrames
 import Blanc.Lift.WriteSiteZero
 
 import Blanc.Lift.HistAccessWalk

@@ -896,6 +896,14 @@ ending in `ConfiguredHistoryTraceIn.rawFrames_codeImage_of_safe`
 `…settled_codeImage_of_safe` (`f.pre.getCode wa = C` for every settled frame)
 through the settled-to-raw bridge. No recipe is registered: use this branch
 and the named theorem.
+To produce that `SafeRawFrames wa` premise from the codes run in `wa`'s storage
+context, use [`Blanc/ExecutionSafeRawFramesCodes.lean`](../Blanc/ExecutionSafeRawFramesCodes.lean):
+`SafeRawFrames.of_entryCodes` (any descent-closed raw-root list) and
+`ConfiguredHistoryTraceIn.safeRawFrames_of_codes` take a code family whose
+members each have a checked certificate with `noSelfdestruct = true` and the
+fact that every raw frame in context `wa` runs a family code;
+`…rawFrames_codeImage_of_codes` and `…settled_codeImage_of_codes` compose it
+with the code image above. Which codes run in `wa`'s context stays a premise.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
