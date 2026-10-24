@@ -742,7 +742,7 @@ private theorem recovery_answer_of_return
         lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) M G)
     (ptr : PtrMem (32 + p) n M) (zero : memWord M p.toNat = 0)
     (lower : 96 ≤ p.toNat) (space : p.toNat + 160 < 2 ^ 256)
-    (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
+    (ready : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress (b.getCode 1) = none)
     (fork : NeutralFork call.occurrence.node.sevm.benvStat.fork)
     (primitive : Ninst.RunWith (Cursor.DescOf call.occurrence.node)
       call.occurrence.node.sevm call.occurrence.node.devm
@@ -767,7 +767,7 @@ private theorem recovery_answer_of_return
   obtain ⟨parent, child, xl, dp, na, code, gas, sameState, delegation, filled,
     process, clean, childOutput⟩ := answered
   have direct : na = 1 ∧ code = b.getCode 1 ∧ dp = false :=
-    CallCodeH.direct_of_nodeleg nodeleg delegation
+    CallCodeH.direct_of_effective ready delegation
   obtain ⟨rfl, rfl, rfl⟩ := direct
   obtain ⟨paid, actualOutput⟩ := ecrecover_output_of_processMessage_cleanH
     (ecrecover_activeH _) process clean fork.stateGas
@@ -804,7 +804,7 @@ private theorem recovery_answer_of_return
       subst adr
       exact nonzero (by rfl)
     · exact ⟨parent, child, xl, false, 1, b.getCode 1, gas, sameState,
-        CallCodeH.of_nodeleg nodeleg, filled, process, clean, childOutput.trans address⟩
+        CallCodeH.of_effective ready, filled, process, clean, childOutput.trans address⟩
     · rw [endState, St.stack]
 
 private theorem recovery_answer_consumer
@@ -818,7 +818,7 @@ private theorem recovery_answer_consumer
         lastPtr :: 1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) M G)
     (ptr : PtrMem (32 + p) n M) (zero : memWord M p.toNat = 0)
     (lower : 96 ≤ p.toNat) (space : p.toNat + 160 < 2 ^ 256)
-    (nodeleg : getDelegatedCodeAddress (b.getCode 1) = none)
+    (ready : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress (b.getCode 1) = none)
     (placed : CursorOK code c call.returned cursor)
     (tree : cursor.f = (tail layout))
     (continuations : cursor.K.map Cont.f = caller :: K)
@@ -845,7 +845,7 @@ private theorem recovery_answer_consumer
       (E := []) (by rfl) (by rfl) (by rw [tree]; exact checks.bodyFree) (by rw [tree]; exact checks.bodyNoHalt) continuations
   rw [tree, sameEnv] at returned
   obtain ⟨adr, nonzero, output, returnData, returnedStack, answered, callerStack⟩ :=
-    recovery_answer_of_return checks call state ptr zero lower space nodeleg fork primitive returned
+    recovery_answer_of_return checks call state ptr zero lower space ready fork primitive returned
   exact ⟨adr, N, next, nonzero, output, returnData, returnedStack, answered, span,
     suffixExn, suffixEnv, finalPlaced, callerTree, callerK, callerStack⟩
 
@@ -854,7 +854,8 @@ private theorem actual_native_answer
     {g ii is oi os : B256} {xs : Stack} {input : Bytes} {adr : Adr}
     (operands : (g :: 1 :: ii :: is :: oi :: os :: xs) <<+ call.occurrence.node.devm.stack)
     (hsg : call.occurrence.node.sevm.benvStat.rules.stateGas = none)
-    (nodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none)
+    (ready : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress
+      (call.occurrence.node.devm.getCode 1) = none)
     (flag : ∃ rest, call.returned.devm.stack = 1 :: rest)
     (inputEq : (call.occurrence.node.devm.memory.read ii.toNat is.toNat).1 = input)
     (answer : ecrecoverOutput input = adr.toB256.toBytes) :
@@ -881,7 +882,7 @@ private theorem actual_native_answer
       parentMemory, parentLogs, parentOutput, delegation, filled, process, clean,
       resumed, childState, childReturn, childMemory, childStack, spawned⟩ := entered
     have direct : na = 1 ∧ code = call.occurrence.node.devm.getCode 1 ∧ dp = false :=
-      CallCodeH.direct_of_nodeleg (t := 1) nodeleg delegation
+      CallCodeH.direct_of_effective (t := 1) ready delegation
     obtain ⟨rfl, rfl, rfl⟩ := direct
     rw [show (1 : B256).toAdr = 1 from rfl, inputEq] at process spawned
     obtain ⟨paid, childOutput⟩ := ecrecover_output_of_processMessage_cleanH
@@ -904,9 +905,92 @@ private theorem actual_native_answer
       emptySlot, native, paid, clean, childOutput.trans answer⟩
 
 /-- A successful actual checked recovery return consumes the answer to its own
-address-1 invocation. The concrete entry registers, free pointer, nondelegation
+address-1 invocation. The concrete entry registers, free pointer, effective readiness
 and checked caller are local producer obligations; they are not final history
 or environmental hypotheses. This theorem does not enumerate flag-zero calls. -/
+theorem consumes_effective
+    (checked : Cert.check code c = true) (layout : ReturnLayout) (checks : ReturnChecks layout)
+    {F : Exec.Deriv} {κ : Cursor} {post b : Devm} {M : Mem} {G n : Nat}
+    {p placeholder s r v digest ret : B256} {S : List B256}
+    {caller : SFunc} {K : List SFunc}
+    (ok : CursorOK code c F κ)
+    (tree : κ.f = entry layout)
+    (state : F.devm = St b (placeholder :: s :: r :: v :: digest :: ret :: S) M G)
+    (ptr : PtrMem p n M) (lower : 96 ≤ p.toNat)
+    (space : p.toNat + 160 < 2 ^ 256)
+    (ready : F.sevm.benvStat.rules.delegatedCodeAddress (b.getCode 1) = none)
+    (continuations : κ.K.map Cont.f = caller :: K)
+    (success : F.exn = .ok post) (fork : NeutralFork F.sevm.benvStat.fork) :
+    ∃ (call : CallOccurrenceStep F .staticcall) (parent child : Devm)
+      (gas : Nat) (adr : Adr) (N : Exec.Deriv) (next : Cursor),
+      let input := digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes
+      let msg := callMsg call.occurrence.node.sevm parent gas 0
+        call.occurrence.node.sevm.currentTarget 1 1 true true input
+        (call.occurrence.node.devm.getCode 1) false
+      call.occurrence.node.pc = F.pc + 75 ∧
+      Exec.Deriv.ExecFreeUntil F call.occurrence.node ∧
+      Ninst.step ⟨call.occurrence.node.pc, call.occurrence.node.sevm, call.occurrence.node.devm⟩
+        (.exec .staticcall) = .spawn (Frame.ofCall msg)
+          (Resume.call parent p.toNat 32) (call.occurrence.node.pc + 1) ∧
+      ProcessMessage msg call.occurrence.slot (.ok child) ∧
+      call.occurrence.slot = .none ∧
+      (Frame.ofCall msg).enter = .done
+        ((Frame.ofCall msg).settle (executePrecomp (initEvm (msg.withBenv msg.benv)) 1)) ∧
+      gasEcrecover ≤ gas ∧ child.error.isSome = false ∧
+      child.output = adr.toB256.toBytes ∧
+      ecrecoverOutput input = adr.toB256.toBytes ∧ adr ≠ 0 ∧
+      call.returned.devm.returnData = adr.toB256.toBytes ∧
+      Exec.Deriv.ExecFreeUntil call.returned N ∧
+      N.exn = F.exn ∧ N.sevm = F.sevm ∧
+      CursorOK code c N next ∧
+      next.f = caller ∧ next.K.map Cont.f = K ∧ N.devm.stack = adr.toB256 :: S := by
+  obtain ⟨call, cursor, callPc, span, sameEnv, sameExn, ⟨G0, line⟩,
+    primitive, placed, tailTree, sameK⟩ :=
+    recovery_call_cut checked ok tree state success fork
+  obtain ⟨Gc, nc, callState, callPtr⟩ := recovery_prefix_request ptr lower space line
+  have callFork : NeutralFork call.occurrence.node.sevm.benvStat.fork := by rw [sameEnv]; exact fork
+  have callReady : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress
+      (b.getCode 1) = none := by
+    rw [sameEnv]
+    exact ready
+  have returnedOutcome : call.returned.exn = call.occurrence.node.exn := by
+    have edge := call.edge
+    generalize call.returned = R at edge ⊢
+    generalize call.occurrence.node = C at edge ⊢
+    cases edge <;> rfl
+  obtain ⟨adr, N, next, nonzero, output, returnData, returnedStack, answered,
+    suffix, suffixExn, suffixEnv, finalPlaced, callerTree, callerK, callerStack⟩ :=
+    recovery_answer_consumer checked checks call callState callPtr (recovery_memory_zero ptr lower space)
+      lower space callReady placed tailTree (by rw [sameK]; exact continuations)
+      ((returnedOutcome.trans sameExn).trans success) callFork primitive
+  have inputEq : (call.occurrence.node.devm.memory.read (32 + p).toNat 128).1 =
+      digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes := by
+    rw [callState, St.memory]
+    exact recovery_memory_input ptr space
+  have operands : (Gc.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
+      (32 + (32 + (32 + (32 + (32 + p))))) ::
+      1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) <<+
+      call.occurrence.node.devm.stack := by
+    rw [callState, St.stack]
+    simpa only [List.append_nil] using pref_append _ []
+  have localReady : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress
+      (call.occurrence.node.devm.getCode 1) = none := by
+    rw [callState]
+    exact callReady
+  have outputEq : ecrecoverOutput
+      (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
+    rw [← recovery_memory_input ptr space]
+    exact output
+  obtain ⟨parent, child, gas, spawned, process, emptySlot, native, paid, clean, childOutput⟩ :=
+    actual_native_answer call operands callFork.stateGas localReady ⟨_, returnedStack⟩ inputEq outputEq
+  exact ⟨call, parent, child, gas, adr, N, next, callPc, span, spawned, process,
+    emptySlot, native, paid, clean, childOutput, outputEq, nonzero, returnData, suffix,
+    (suffixExn.trans returnedOutcome).trans sameExn,
+    (suffixEnv.trans (Cursor.parentStep_sevm call.edge)).trans sameEnv,
+    finalPlaced, callerTree, callerK, callerStack⟩
+
+/-- Pure nondelegation projects to effective readiness under the actual rules.
+The original successful consumer retains its public interface. -/
 theorem consumes
     (checked : Cert.check code c = true) (layout : ReturnLayout) (checks : ReturnChecks layout)
     {F : Exec.Deriv} {κ : Cursor} {post b : Devm} {M : Mem} {G n : Nat}
@@ -943,45 +1027,10 @@ theorem consumes
       N.exn = F.exn ∧ N.sevm = F.sevm ∧
       CursorOK code c N next ∧
       next.f = caller ∧ next.K.map Cont.f = K ∧ N.devm.stack = adr.toB256 :: S := by
-  obtain ⟨call, cursor, callPc, span, sameEnv, sameExn, ⟨G0, line⟩,
-    primitive, placed, tailTree, sameK⟩ :=
-    recovery_call_cut checked ok tree state success fork
-  obtain ⟨Gc, nc, callState, callPtr⟩ := recovery_prefix_request ptr lower space line
-  have callFork : NeutralFork call.occurrence.node.sevm.benvStat.fork := by rw [sameEnv]; exact fork
-  have returnedOutcome : call.returned.exn = call.occurrence.node.exn := by
-    have edge := call.edge
-    generalize call.returned = R at edge ⊢
-    generalize call.occurrence.node = C at edge ⊢
-    cases edge <;> rfl
-  obtain ⟨adr, N, next, nonzero, output, returnData, returnedStack, answered,
-    suffix, suffixExn, suffixEnv, finalPlaced, callerTree, callerK, callerStack⟩ :=
-    recovery_answer_consumer checked checks call callState callPtr (recovery_memory_zero ptr lower space)
-      lower space nodeleg placed tailTree (by rw [sameK]; exact continuations)
-      ((returnedOutcome.trans sameExn).trans success) callFork primitive
-  have inputEq : (call.occurrence.node.devm.memory.read (32 + p).toNat 128).1 =
-      digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes := by
-    rw [callState, St.memory]
-    exact recovery_memory_input ptr space
-  have operands : (Gc.toB256 :: 1 :: (32 + p) :: 128 :: p :: 32 ::
-      (32 + (32 + (32 + (32 + (32 + p))))) ::
-      1 :: 0 :: placeholder :: s :: r :: v :: digest :: ret :: S) <<+
-      call.occurrence.node.devm.stack := by
-    rw [callState, St.stack]
-    simpa only [List.append_nil] using pref_append _ []
-  have localNodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none := by
-    rw [callState]
-    exact nodeleg
-  have outputEq : ecrecoverOutput
-      (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
-    rw [← recovery_memory_input ptr space]
-    exact output
-  obtain ⟨parent, child, gas, spawned, process, emptySlot, native, paid, clean, childOutput⟩ :=
-    actual_native_answer call operands callFork.stateGas localNodeleg ⟨_, returnedStack⟩ inputEq outputEq
-  exact ⟨call, parent, child, gas, adr, N, next, callPc, span, spawned, process,
-    emptySlot, native, paid, clean, childOutput, outputEq, nonzero, returnData, suffix,
-    (suffixExn.trans returnedOutcome).trans sameExn,
-    (suffixEnv.trans (Cursor.parentStep_sevm call.edge)).trans sameEnv,
-    finalPlaced, callerTree, callerK, callerStack⟩
+  have ready : F.sevm.benvStat.rules.delegatedCodeAddress (b.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
+  exact consumes_effective checked layout checks ok tree state ptr lower space ready
+    continuations success fork
 
 /-- An actual checked recovery helper before a later SSTORE returns a native
 answer into its original caller continuation. The final frame outcome is
@@ -1028,6 +1077,9 @@ theorem consumes_toward_sstore
   have callFork : NeutralFork call.occurrence.node.sevm.benvStat.fork := by
     rw [sameEnv]
     exact fork
+  have callReady : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress
+      (b.getCode 1) = none := by
+    simp only [ForkRules.delegatedCodeAddress, nodeleg, ite_self]
   have returnedSg : call.returned.sevm.benvStat.rules.stateGas = none := by
     rw [Cursor.parentStep_sevm call.edge]
     exact callFork.stateGas
@@ -1041,7 +1093,7 @@ theorem consumes_toward_sstore
   rw [tailTree, Cursor.parentStep_sevm call.edge] at returned
   obtain ⟨adr, nonzero, output, returnData, returnedStack, answered, callerStack⟩ :=
     recovery_answer_of_return checks call callState callPtr (recovery_memory_zero ptr lower space)
-      lower space nodeleg callFork primitive returned
+      lower space callReady callFork primitive returned
   have inputEq : (call.occurrence.node.devm.memory.read (32 + p).toNat 128).1 =
       digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes := by
     rw [callState, St.memory]
@@ -1052,15 +1104,16 @@ theorem consumes_toward_sstore
       call.occurrence.node.devm.stack := by
     rw [callState, St.stack]
     simpa only [List.append_nil] using pref_append _ []
-  have localNodeleg : getDelegatedCodeAddress (call.occurrence.node.devm.getCode 1) = none := by
+  have localReady : call.occurrence.node.sevm.benvStat.rules.delegatedCodeAddress
+      (call.occurrence.node.devm.getCode 1) = none := by
     rw [callState]
-    exact nodeleg
+    exact callReady
   have outputEq : ecrecoverOutput
       (digest.toBytes ++ (255 &&& v).toBytes ++ r.toBytes ++ s.toBytes) = adr.toB256.toBytes := by
     rw [← recovery_memory_input ptr space]
     exact output
   obtain ⟨parent, child, gas, spawned, process, emptySlot, native, paid, clean, childOutput⟩ :=
-    actual_native_answer call operands callFork.stateGas localNodeleg ⟨_, returnedStack⟩ inputEq outputEq
+    actual_native_answer call operands callFork.stateGas localReady ⟨_, returnedStack⟩ inputEq outputEq
   exact ⟨call, parent, child, gas, adr, N, next, callPc, span, returnSpan, later,
     spawned, process, emptySlot, native, paid, clean, childOutput, outputEq,
     nonzero, returnData, finalPlaced, callerTree, callerK, callerStack⟩

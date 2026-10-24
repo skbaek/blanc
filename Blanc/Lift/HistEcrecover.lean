@@ -118,4 +118,31 @@ theorem CallCodeH.of_nodeleg {deleg : Bool} {s : Devm} {t : Adr}
     rw [CallCodeH_enabled]
     exact .inl ⟨nodeleg, rfl, rfl, rfl⟩
 
+/-- Effective lookup-none routes directly under the selected rules, including when
+those rules disable delegation regardless of the target's code bytes. -/
+theorem CallCodeH.direct_of_effective {rules : ForkRules} {s : Devm} {t na : Adr}
+    {code : ByteArray} {dp : Bool}
+    (ready : rules.delegatedCodeAddress (s.getCode t) = none)
+    (h : CallCodeH rules.delegationEnabled s t na code dp) :
+    na = t ∧ code = s.getCode t ∧ dp = false := by
+  cases enabled : rules.delegationEnabled with
+  | false =>
+    rw [enabled] at h
+    exact h
+  | true =>
+    have nodeleg : getDelegatedCodeAddress (s.getCode t) = none :=
+      (rules.delegatedCodeAddress_enabled enabled _).symm.trans ready
+    exact CallCodeH.direct_of_nodeleg nodeleg h
+
+/-- Effective lookup-none supplies direct call-code resolution under the selected rules. -/
+theorem CallCodeH.of_effective {rules : ForkRules} {s : Devm} {t : Adr}
+    (ready : rules.delegatedCodeAddress (s.getCode t) = none) :
+    CallCodeH rules.delegationEnabled s t t (s.getCode t) false := by
+  cases enabled : rules.delegationEnabled with
+  | false => exact ⟨rfl, rfl, rfl⟩
+  | true =>
+    have nodeleg : getDelegatedCodeAddress (s.getCode t) = none :=
+      (rules.delegatedCodeAddress_enabled enabled _).symm.trans ready
+    exact CallCodeH.of_nodeleg nodeleg
+
 end Blanc.Lift

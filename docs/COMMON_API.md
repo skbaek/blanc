@@ -3618,7 +3618,11 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   [`Blanc/Lift/EcrecoverCall.lean`](../Blanc/Lift/EcrecoverCall.lean).
   `EcrecoverCall.entry` exposes its exact source calling convention through
   `ReturnLayout`; `ReturnChecks` records the four structural return checks.
-  `EcrecoverCall.consumes` takes the actual code/certificate, source cursor,
+  `EcrecoverCall.consumes_effective` takes direct-routing readiness at the
+  actual entry rules, `rules.delegatedCodeAddress(code1) = none`. Disabled
+  delegation needs no code-byte restriction; enabled delegation still needs
+  an actual readiness producer. The existing `EcrecoverCall.consumes` projects
+  pure nondelegation to that same engine and takes the actual code/certificate, source cursor,
   entry registers, pointer, nondelegation, successful execution and a
   `NeutralFork` (no state gas, no block access list: every `HistFork`). It derives
   the real query, native call and paid gas, canonical nonzero answer, original
@@ -7015,7 +7019,9 @@ contract-neutral.
   `ecrecover_output_of_processMessage_cleanH` (from `rules.stateGas = none`; its `_covered`
   form is the modern statement) reads a clean address-1 child's output, while
   `CallCodeH.direct_of_nodeleg`/`CallCodeH.of_nodeleg` resolve a non-delegated callee's code
-  under either delegation flag, in
+  under either delegation flag. `CallCodeH.direct_of_effective`/`CallCodeH.of_effective`
+  use the selected rules' effective lookup-none result, including arbitrary
+  code bytes when delegation is disabled. These helpers live in
   [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean); the world facts
   `afterSloadH_state` and `afterSstoreH_state`/`afterSstoreH_getCode` in
   [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
