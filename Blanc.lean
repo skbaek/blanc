@@ -38,6 +38,7 @@ import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryInAppend
+import Blanc.ExecutionMidHistoryIn
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInForkFacts
 import Blanc.ExecutionHistoryInNoDel

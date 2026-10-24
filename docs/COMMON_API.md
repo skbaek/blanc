@@ -1584,6 +1584,29 @@ historical prefix through `append` with `toHistForkIn_rawFrames` /
 `toHistForkIn_settledFrames` identifying the kept roots. No premise assumes
 delegation, EIP-2929 access, or enabled optional passes.
 
+To start a selected-domain history in the middle of a block (a contract
+deployed by transaction `i` of block N), use
+[`Blanc/ExecutionMidHistoryIn.lean`](../Blanc/ExecutionMidHistoryIn.lean).
+`ExecutionTrace.ApplyTransactionsTrace.TxSplit trace i` cuts a retained
+transaction fold at `i` into `before`, the actual `head : TransactionTrace`
+and `after`, with `rawFrames_eq` / `settledFrames_eq`; `splitAt` builds one
+for every `i < txs.length`, `TxSplit.putIndex_eq` identifies `index` and `tx`
+on a decoded block list, and `afterBenv` is the boundary right after `i`.
+`ConfiguredBlockTraceIn.txSplit_stat`, `txSplit_notCreated` and
+`txSplit_bound` derive the selected fork, the empty created set and the
+withdrawal-inclusive no-wrap bound at the cut from the block.
+`MidHistoryTraceIn F cfg start future` has base `tail block cut` (the rest
+of block N) and `.step` whole blocks; it carries `rawFrames`,
+`settledFrames`, `FrameAdmitted` (`frameAdmitted_iff_rawFrames`),
+`RewardCreditsFunded`, `rawFrames_mem_block` (every raw root lies in some
+retained block, so block-level per-root facts transfer), and `append` with a
+`ConfiguredHistoryTraceIn` (frames, admission and funding split across it).
+`ConfiguredBlockTraceIn.rawFrames_txSplit` / `settledFrames_txSplit` split a
+block's frames at the cut and `FrameAdmitted.tail` restricts block
+admission to the base. Preservation: `ConfiguredBlockTraceIn.tail_stateInv_admitted_semIn`,
+`MidHistoryTraceIn.stateInv_admitted_semIn` / `stateInv_admittedIn`; the
+post-fold stages alone are `StagedBodyTrace.afterTransactions_stateInv_admitted_semIn`.
+
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
 `BerlinOnwards`, `PrePrague`, `PreCancun`, `PragueOnwards` (fork lists in
