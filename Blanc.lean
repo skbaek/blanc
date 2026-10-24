@@ -1205,6 +1205,7 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 import Blanc.Lift.UniswapV2Pair.ModelControls
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
+import Blanc.Lift.CursorOccurrenceToward
 import Blanc.Lift.CursorTreeNinst
 import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.RecoveryOccurrence
@@ -1632,6 +1633,7 @@ import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.SettledFramePositionsIn
 import Blanc.Lift.ShuffleSkip
 import Blanc.Lift.SpawnExact
+import Blanc.Lift.HistSpawnExact
 import Blanc.Lift.StaticOnlyPrefix
 import Blanc.Lift.Token.CoreW
 import Blanc.Lift.Token.FamilyReplay
@@ -1811,6 +1813,7 @@ import Blanc.Lift.WriteSiteReachHistory
 import Blanc.Lift.Usdc.AllowLocalitySstore
 import Blanc.Lift.Usdc.ProxySafeFrames
 import Blanc.Lift.Usdc.ProxyReachH
+import Blanc.Lift.Usdc.ProxyRawCallers
 import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.ReachWalkSstore

@@ -644,7 +644,20 @@ spawn/resume equations at the consumer:
   child, and `Resume.call_run_inv` the resumed parent (flag `1`, the child's output and world on a
   clean success; flag `0` otherwise). Worked uses: `Blanc/Lift/QuietDelegateSkip.lean`,
   `Blanc/Lift/Usdc/ProxyForward.lean`, `Blanc/Lift/Usdc/ImplSpawns.lean`.
-- `AcceptedCallerPayout` in the same module: the entered, clean, success-consumed value
+- For historical caller/context inheritance from a known operand stack, use
+  `Xinst.step_delegatecall_spawn_St_noStateGas` in
+  [`Blanc/Lift/HistSpawnExact.lean`](../Blanc/Lift/HistSpawnExact.lean). It needs only
+  `stateGas = none` and the actual spawning step: the child retains target,
+  caller, value and staticness and reads the exact physical input window. It
+  does not fix the code address or assume commitment, BAL, access or delegation
+  settings. The raw USDC proxy consumer
+  [`Blanc/Lift/Usdc/ProxyRawCallers.lean`](../Blanc/Lift/Usdc/ProxyRawCallers.lean)
+  proves `Proxy.proxy_rawChild_inheritsH` and `proxy_rawChild_caller_selectorH`:
+  a child called by an address apart from the proxy target must inherit the
+  proxy caller through DELEGATECALL. Exact calldata/selector equality also
+  uses the calldata word bound, supplied for historical raw frames by
+  `ConfiguredHistoryTraceIn.calldata_bound_hist`.
+- `AcceptedCallerPayout` in `Blanc/Lift/SpawnExact.lean`: the entered, clean, success-consumed value
   `CALL` to `sevm.caller` (gas word, 7-operand stack, `PopBurn [1]` guard, exact
   `ProcessMessage (callMsg …)` child, `Resume.call` and post projections) — the shape
   `of_run_call_val_with_depth_frame`'s entered arm yields for a payout.  Contracts keep a
@@ -6840,7 +6853,13 @@ contract-neutral.
   `cursor_branch_forwardH`, `cursor_next_call_occurrence_forwardH`, and the state cuts
   `CursorStateAt.lineH`/`jumpH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/`callH`/
   `retH`/`gotoH`) in
-  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean); source runs and
+  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean). For an actual
+  call return before a later same-frame SSTORE, without a successful final
+  outcome, use `cursor_call_occurrence_of_parentStep_noStateGas` or
+  `cursor_call_occurrence_toward_sstore_noStateGas` in
+  [`Blanc/Lift/CursorOccurrenceToward.lean`](../Blanc/Lift/CursorOccurrenceToward.lean).
+  They preserve the original recursive slot and actual return/cursor edge;
+  they assert neither a success flag nor child commitment. Source runs and
   returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
   (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
   `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
