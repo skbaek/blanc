@@ -154,7 +154,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
            "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
-           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix",
+           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.

@@ -4388,6 +4388,16 @@ preparation, the settlement equations through their `_noStateGas` twins),
 plus the touched sweep via `sweepTouchedAccounts_get_of_code_nonempty`), and
 `transactionListIn`.
 
+The staged-body, block and history rungs over `F` continue in
+[`Blanc/ExecutionAccountingHistoryIn.lean`](../Blanc/ExecutionAccountingHistoryIn.lean):
+`systemMessageIn`, `requestsIn`, the optional stage rungs `beaconStageIn`,
+`historyStageIn`, `requestStageIn` (skipped arm is the identity), the
+carrier-level `processWithdrawals_observed` and `payRewards_observed`
+(generalised over carrier, observation, append and tag), `stagedBody` (with
+the `beaconHistoryReplayIn` and `transactionsWithdrawalsRequestsReplayIn`
+junctions, at most two nested appends each), `configuredBlockIn`, and
+`configuredHistoryIn`.
+
 Two consumers exist. The beacon deposit contract observes deposit nodes
 (`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
 ordered writer invocations of its settlement-committed frames, with the storage
