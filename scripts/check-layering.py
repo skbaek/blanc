@@ -167,7 +167,7 @@ SHARED += ["LadderBase", "LadderReached", "MessageDelegationGas", "LadderSem", "
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistCreate"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistCreate", "Lift.HistAccessMeta"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
@@ -246,7 +246,7 @@ SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessAr
            "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk", "Lift.NodeWalkFrames", "Lift.KernelBatch"]
 # Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
 # V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
-SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
+SHARED += ["Lift.WitnessBoundary", "TransactionForward", "TransactionForwardH"]
 # The system-call envelope over a successful raw frame of canonical system code
 # (eip7002-system-paths): contract-neutral.
 SHARED += ["SystemCallForward"]
@@ -1162,7 +1162,7 @@ CONTRACTS = {
                             "ProrataWethVaultViews"],
     "weth": ["Weth", "WethCode", "Solvent", "WethLive", "WethGas"],
     # The deployed solc 0.4.19 WETH9 runtime, lifted from its bytes.
-    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.TerminalSafety", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.LiveApprove", "Lift.Weth9.LiveDeposit", "Lift.Weth9.LiveTransfer", "Lift.Weth9.LiveWithdraw", "Lift.Weth9.LiveWriters", "Lift.Weth9.LiveModel", "Lift.Weth9.LiveHistory", "Lift.Weth9.LiveTx", "Lift.Weth9.PrefixTx", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.HistoricalCredits", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.DeployHistory", "Lift.Weth9.FootPrefix", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.CommittedHistoryIn", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.DeployInit", "Lift.Weth9.Creation.Walk"],
+    "weth9": ["Lift.Weth9.Cert", "Lift.Weth9.Check", "Lift.Weth9.TerminalSafety", "Lift.Weth9.Lift", "Lift.Weth9.Spec", "Lift.Weth9.Jumps", "Lift.Weth9.Words", "Lift.Weth9.Step", "Lift.Weth9.Walks", "Lift.Weth9.Booked", "Lift.Weth9.Premise", "Lift.Weth9.Shape", "Lift.Weth9.Contract", "Lift.Weth9.Deposit", "Lift.Weth9.Withdraw", "Lift.Weth9.Approve", "Lift.Weth9.TransferFrom", "Lift.Weth9.Frame", "Lift.Weth9.Solvency", "Lift.Weth9.Live", "Lift.Weth9.LiveApprove", "Lift.Weth9.LiveDeposit", "Lift.Weth9.LiveTransfer", "Lift.Weth9.LiveWithdraw", "Lift.Weth9.LiveWriters", "Lift.Weth9.LiveModel", "Lift.Weth9.LiveHistory", "Lift.Weth9.LiveTx", "Lift.Weth9.PrefixTx", "Lift.Weth9.Init", "Lift.Weth9.Footprint", "Lift.Weth9.HistoricalCredits", "Lift.Weth9.FootFrame", "Lift.Weth9.FootHistory", "Lift.Weth9.DeployHistory", "Lift.Weth9.FootPrefix", "Lift.Weth9.Model", "Lift.Weth9.Ledger", "Lift.Weth9.Route", "Lift.Weth9.RouteCheck", "Lift.Weth9.Effects", "Lift.Weth9.WithdrawReach", "Lift.Weth9.CommittedReplay", "Lift.Weth9.CommittedSpawn", "Lift.Weth9.CommittedHistory", "Lift.Weth9.CommittedHistoryIn", "Lift.Weth9.DeployTransaction", "Lift.Weth9.DeployTransactionHistory", "Lift.Weth9.Creation.Cert", "Lift.Weth9.Creation.Check", "Lift.Weth9.Creation.Deploy", "Lift.Weth9.Creation.DeployInit", "Lift.Weth9.Creation.Walk"],
     "fmint": ["Fmint", "FmintCode", "Conserved", "FlashSpec", "FmintLive",
               "FmintReverts", "FmintGas", "FmintSettles"],
     "weth10": ["Weth10TemplateCode", "Weth10Core", "Weth10Backed", "Weth10Spec", "Weth10",

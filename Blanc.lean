@@ -107,6 +107,7 @@ import Blanc.CycleWriteFree
 import Blanc.ReachableExecFree
 import Blanc.ReachableExecFreeControl
 import Blanc.TransactionForward
+import Blanc.TransactionForwardH
 import Blanc.SystemCallForward
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
@@ -473,6 +474,8 @@ import Blanc.Lift.Weth9.CommittedReplay
 import Blanc.Lift.Weth9.CommittedSpawn
 import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.CommittedHistoryIn
+import Blanc.Lift.Weth9.DeployTransaction
+import Blanc.Lift.Weth9.DeployTransactionHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
@@ -1739,3 +1742,4 @@ import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.HistCreate
+import Blanc.Lift.HistAccessMeta

@@ -4686,6 +4686,16 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
 
+For rules outside the covered forks (any schedule with `rules.stateGas = none` and
+`rules.bal = none`, including the touched-sweep forks and refund quotient 2), use
+[`Blanc/TransactionForwardH.lean`](../Blanc/TransactionForwardH.lean):
+`processTransaction_of_stagesH` returns the settled state with the rules' own touched sweep and
+refund quotient (`txGasUsedQ`), `processMessageCall_create_of_message` settles a top-level
+creation with no collision over a successful `processCreateMessage`, and
+`settled_getCode_getStor_of_code_nonempty` carries an account with nonempty code through the
+credits, the deletion fold and the sweep. Worked use: `Blanc/Lift/Weth9/DeployTransaction.lean`
+(`weth9_creation_transaction_byzantium`).
+
 The raw `debit_get_self` account equation requires the sender nonce to differ
 from `UInt64.max`; transaction admission supplies this nonwrap fact.
 `debit_get_self_of_protected` is the same equation for a sender that is
@@ -6152,7 +6162,11 @@ contract-neutral.
   settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
   `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
   `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
-  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean);
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean); the bookkeeping fields a
+  settled frame reads across those steps (`afterSloadH_accountsToDelete`,
+  `afterSloadH_refundCounter`, `afterSstoreH_accountsToDelete`, and
+  `afterSstoreH_refundCounter_legacy` under the legacy `SSTORE` refund schedule for a nonzero
+  write) in [`Blanc/Lift/HistAccessMeta.lean`](../Blanc/Lift/HistAccessMeta.lean);
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
