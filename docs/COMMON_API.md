@@ -1519,6 +1519,86 @@ historical prefix through `append` with `toHistForkIn_rawFrames` /
 `toHistForkIn_settledFrames` identifying the kept roots. No premise assumes
 delegation, EIP-2929 access, or enabled optional passes.
 
+Fork-era schedule facts for historical extraction live in
+[`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
+`BerlinOnwards`, `PrePrague`, `PreCancun`, `PragueOnwards` (fork lists in
+activation order, each with a `DecidablePred` instance) and decision lemmas
+over `histForks` discharging per-fork premises — `HistFork.access_eip2929_of_berlinOnwards`,
+`HistFork.two_mem_precompiles`, `HistFork.delegationDisabled_of_prePrague`,
+the `sys.beaconRoots` / `sys.historyStorage` / `header.requestsHash` flag
+facts by era, `HistFork.preCancun_cancun_pragueOnwards`, and
+`PreCancun.toPrePrague`. To show a per-fork numeric or schedule property,
+follow the same `revert`-then-`cases f <;> decide` pattern (compare
+`HistFork.dataNonZero_ge`).
+
+Warmth of transaction frames along retained `In`-histories is in
+[`Blanc/ExecutionHistoryInWarmth.lean`](../Blanc/ExecutionHistoryInWarmth.lean):
+`ConfiguredHistoryTraceIn.txRawFrames` projects the transaction frames, and
+`txRawFrames_warmIn` (with per-transaction, per-list, per-body and per-block
+rungs) shows every transaction frame starts with every active precompile
+warm, from the history's own `BodyStageCapabilities` plus an explicit
+per-fork EIP-2929 access hypothesis and per-fork precompile membership —
+flat-access forks get no claim. `txRawFrames_warm_hist` discharges both for
+`0x02` on a Berlin-onwards `HistFork` domain by decision.
+
+Empty code at one address along retained `In`-histories is in
+[`Blanc/ExecutionHistoryInCodeAt.lean`](../Blanc/ExecutionHistoryInCodeAt.lean):
+neutral (`stateGas = none`) twins of the interpreter core
+(`Xinst.step_spawn_create_codeAddress_noStateGas`,
+`Xinst.codeAt_effectRecAvoid_noStateGas`, `Evm.step_codeAt_noStateGas`,
+`Exec.codeAt_avoid_noStateGas` through `Xinst.step_shapeNoStateGas` with
+child environments by `Evm.step_spawn_child_benvStat`), the message and
+transaction rungs, and the staged body, block and history levels.
+EIP-7702 authority is a disjunct beside the no-authority premise from the
+message level up (`..._noStateGas` lemmas), cased per fork at history level
+from an explicit per-fork disabled-delegation hypothesis plus
+`ConfiguredHistoryTraceIn.NoAuthorityAt` (new `In` definition); fully
+pre-Prague histories use `codeAt_empty_prePrague` with no authority premise
+at all. `sweepTouchedAccounts_getCode_empty` keeps empty code through the
+sweep.
+
+System frames along retained `In`-histories by fork era are in
+[`Blanc/ExecutionHistoryInSystemFrames.lean`](../Blanc/ExecutionHistoryInSystemFrames.lean):
+`StagedBodyTrace.systemRawFrames` and the block/history `systemRawFrames`
+projections, the era-indexed `installedAt` set (`[]` before Cancun, beacon
+roots only on Cancun, all four from Prague) with decision
+characterizations, and per-stage target facts feeding
+`StagedBodyTrace.systemRawFrames_target_of_spawnFree` (all four targets),
+`ConfiguredBlockTraceIn.systemFrames_target_inEra`, and
+`ConfiguredHistoryTraceIn.systemFrames_target_inEra` (each frame targets its
+own block fork's installed set). State preservation is complete before
+Cancun (`systemFrames_installed_preCancun`, `SystemCodeInstalledAt.of_preCancun`,
+both vacuous) and through every system message
+(`SystemMessageTrace.installed_keep_noStateGas`); preservation through
+transactions on Cancun and later eras goes through the neutral non-deletion
+chain in
+[`Blanc/ExecutionHistoryInNoDel.lean`](../Blanc/ExecutionHistoryInNoDel.lean):
+neutral (`stateGas = none` plus EIP-6780 flag) twins of the interpreter core
+(`Evm.step_effect_noStateGas`, `Exec.effect_neutralSchedule`,
+`Exec.inv_noDel_noStateGas`), the message/create/call preservation twins
+(`processMessageCall_accountsToDelete_ne_noStateGas`), the settlement-form
+twin (`TransactionTrace.exists_finalStateForm_noStateGas` with explicit
+refund-quotient/touched-sweep hypotheses), and the transaction(-list) keep
+twins (`TransactionTrace.codeAt_keep_noStateGas`,
+`ApplyTransactionsTrace.codeAt_keep_noStateGas`). Era schedule facts
+(`CancunOnwards`, EIP-6780/refund-quotient/touched-sweep decisions,
+`HistFork.pragueOnwards_covered`) are in
+[`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean).
+Installed-code preservation through staged bodies, blocks, and histories is in
+[`Blanc/ExecutionHistoryInSystemCodeKeep.lean`](../Blanc/ExecutionHistoryInSystemCodeKeep.lean):
+`StagedBodyTrace.codeAt_keep_noStateGas` threads one canonical (nonempty,
+non-delegating) code through beacon, history-storage, transaction,
+withdrawal, request, and reward stages;
+`ConfiguredBlockTraceIn.systemFrames_installed_keep` preserves each block fork's
+own installed set, era-split by `HistFork.preCancun_cancunOnwards` (vacuous
+before Cancun, keep from Cancun on, per-address facts via
+`mem_systemContracts_of_mem_installedAt` and `systemContracts_facts`);
+`ConfiguredHistoryTraceIn.codeAt_keep_of_cancunOnwards` threads one canonical
+code along every all-Cancun-onwards history
+(`ConfiguredHistoryTraceIn.AllCancunOnwards`), with
+`ConfiguredHistoryTraceIn.beaconRootsCode_keep_of_cancunOnwards` discharging the
+beacon-roots character facts once and for all.
+
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).

@@ -362,6 +362,17 @@ SHARED += [
     "ExecutionHistoryInAppend",
 ]
 
+# Fork-era schedule facts and historical environment facts for selected-domain
+# In-histories (beacon-deposit-historical-reach-v1): contract-neutral.
+SHARED += [
+    "ExecutionHistoryInForkFacts",
+    "ExecutionHistoryInNoDel",
+    "ExecutionHistoryInSystemCodeKeep",
+    "ExecutionHistoryInWarmth",
+    "ExecutionHistoryInCodeAt",
+    "ExecutionHistoryInSystemFrames",
+]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
