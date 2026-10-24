@@ -352,6 +352,7 @@ SHARED += [
     "Lift.SolcStringAllocation",
     "Lift.SolcAbiStringStaging",
     "Lift.SolcStorageReturn",
+    "Lift.ReachSstoreLoops",
     "Lift.SelectorRoute",
     "Lift.SettledFramePositions", "Lift.SettledFramePositionsIn",
     "Lift.ShuffleSkip",

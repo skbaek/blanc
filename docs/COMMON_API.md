@@ -6584,6 +6584,16 @@ contract-neutral.
   `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
   value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
   `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
+- Storage loops and straight-line steps on such a reach, in
+  [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
+  function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
+  (a `JUMPDEST`), `rsw` and `rsload` (over `run`, `hT`, `erase`); the loop principles
+  `reach_loop_measure` and `reach_loop_index`; `Reach.withPot` (the memory potential at
+  every step of a reach); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
+  (`ReachPayload.bodyR`/`headB`/`headJ`, `payloadB_reach`/`payloadJ_reach`: a store of the
+  loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
+  `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
+  (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
 - Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
   and the instruction inversions `ri_address`/`ri_dup_any` in
   [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region

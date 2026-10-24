@@ -1624,6 +1624,7 @@ import Blanc.Lift.SolcStoragePayload
 import Blanc.Lift.SolcStringAllocation
 import Blanc.Lift.SolcAbiStringStaging
 import Blanc.Lift.SolcStorageReturn
+import Blanc.Lift.ReachSstoreLoops
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.SettledFramePositions
 import Blanc.Lift.SettledFramePositionsIn
