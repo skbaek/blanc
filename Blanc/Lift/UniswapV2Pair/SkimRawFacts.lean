@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SkimSecondWalk
+import Blanc.Lift.HistAccessWalkFacts
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune

@@ -37,8 +37,16 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
+import Blanc.ExecutionHistoryInAppend
+import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionHistoryInCodeAt
+import Blanc.ExecutionHistoryInForkFacts
+import Blanc.ExecutionHistoryInNoDel
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryInStateTrace
+import Blanc.ExecutionHistoryInSystemCodeKeep
+import Blanc.ExecutionHistoryInSystemFrames
+import Blanc.ExecutionHistoryInWarmth
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionFrameTime
@@ -59,6 +67,7 @@ import Blanc.ExecutionAccountingStepsIn
 import Blanc.ExecutionAccountingCoreIn
 import Blanc.ExecutionAccountingAdmissionIn
 import Blanc.ExecutionAccountingHistoryIn
+import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionModelAccounting
 import Blanc.ExecutionModelAccountingIn
@@ -508,6 +517,15 @@ import Blanc.Lift.BeaconDeposit.Refines
 import Blanc.Lift.BeaconDeposit.CommittedHistory
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.Lift.BeaconDeposit.Liveness
+import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.BeaconDeposit.HistSafeGuards
+import Blanc.Lift.BeaconDeposit.HistSafeCount
+import Blanc.Lift.BeaconDeposit.HistSafeInsert
+import Blanc.Lift.BeaconDeposit.HistSafePubkeyRoot
+import Blanc.Lift.BeaconDeposit.HistSafeNode
+import Blanc.Lift.BeaconDeposit.HistSafeSignatureRoot
+import Blanc.Lift.BeaconDeposit.HistSafe
+import Blanc.Lift.BeaconDeposit.HistLadder
 
 -- The certificate cursor, the reentrancy-lock exclusion kit with its bytecode checker,
 -- owner discipline, and concrete-run evaluation (deployed-lido-vyper-v1): shared.
@@ -1571,6 +1589,11 @@ import Blanc.ExecutionSettledCodeImage
 import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionInOwnCode
 import Blanc.ExecutionInCodeImageSafe
+import Blanc.ExecutionInRawNodes
+import Blanc.ExecutionCellProvenance
+import Blanc.ExecutionInCellProvenance
+import Blanc.ExecutionHistoryCellProvenance
+import Blanc.ExecutionHistoryCellProvenanceFrom
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
@@ -1754,3 +1777,5 @@ import Blanc.Lift.UniswapV2Factory.CreatePairSpawns
 import Blanc.Lift.UniswapV2Factory.CreatePairFrame
 import Blanc.Lift.UniswapV2Factory.CreatePairTransaction
 import Blanc.Lift.UniswapV2Factory.CallShapeH
+import Blanc.Lift.HistAccessWalkFacts
+import Blanc.Lift.HistShaWalk

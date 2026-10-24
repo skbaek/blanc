@@ -55,13 +55,6 @@ theorem afterSloadH_getStor (sevm : Sevm) (base : Devm) (key : B256) (address : 
   · exact afterSload_getStor sevm base key address
   · rfl
 
-theorem afterSloadH_getCode (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    (afterSloadH sevm base key).getCode address = base.getCode address := by
-  unfold afterSloadH
-  split
-  · exact afterSload_getCode sevm base key address
-  · rfl
-
 theorem afterSloadH_logs (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSloadH sevm base key).logs = base.logs := by
   unfold afterSloadH
@@ -145,13 +138,6 @@ theorem afterSstoreH_logs (sevm : Sevm) (base : Devm) (key value : B256) :
 theorem afterSstoreH_output (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).output = base.output :=
   (storageAccessH_state sevm base key).2.2.1
-
-theorem afterSstoreH_getCode (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr) :
-    (afterSstoreH sevm base key value).getCode address = base.getCode address := by
-  unfold afterSstoreH
-  rw [Devm.setStorVal_getCode]
-  show ((storageAccessH sevm base key).state.get address).code = (base.state.get address).code
-  rw [(storageAccessH_state sevm base key).1]
 
 theorem afterSstoreH_error (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstoreH sevm base key value).error = base.error :=

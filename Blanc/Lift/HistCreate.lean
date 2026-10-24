@@ -1,6 +1,7 @@
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.Create2Deploy
+import Blanc.Lift.HistAccessWalkFacts
 
 /-!
 # Creation steps under historical rule facts
@@ -68,13 +69,6 @@ theorem sstoreCostH_of_eip2929 {sevm : Sevm} {devm : Devm} {key value : B256}
   rw [access, netMetering]
   by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ devm.accessedStorageKeys <;>
     simp only [hw, ite_true, ite_false] <;> split_ifs <;> omega
-
-theorem afterSloadH_error (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSloadH sevm base key).error = base.error := by
-  unfold afterSloadH
-  split
-  · exact afterSload_error sevm base key
-  · rfl
 
 theorem afterSloadH_state (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSloadH sevm base key).state = base.state := by

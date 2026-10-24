@@ -2100,7 +2100,8 @@ def _toolchain_lake_library(root: Path) -> Path:
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as error:
         raise Unresolvable(f"cannot locate the toolchain for the helper: {error}") from error
-    lake_library = Path(prefix) / "lib/lean/libLake_shared.so"
+    suffix = ".dylib" if sys.platform == "darwin" else ".dll" if sys.platform == "win32" else ".so"
+    lake_library = Path(prefix) / f"lib/lean/libLake_shared{suffix}"
     if not lake_library.is_file():
         raise Unresolvable(f"the toolchain has no Lake library at {lake_library}")
     return lake_library

@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.SwapCallback
 import Blanc.Lift.UniswapV2Pair.SwapFrontTyped
 import Blanc.Lift.UniswapV2Pair.LockedSupply
 import Blanc.Lift.UniswapV2Pair.SwapCallWorld
+import Blanc.Lift.HistAccessWalkFacts
 
 /-! The swap front's three optional external calls as source turns. Each actual CALL step of
 the same derivation is consumed by `mutable_call_turns` with the lock-free supply

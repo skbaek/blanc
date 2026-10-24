@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SkimPositionalSuffix
 import Blanc.Lift.CursorOccurrenceRoots
 import Blanc.Lift.TargetLogEvents
+import Blanc.Lift.HistAccessWalkFacts
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune

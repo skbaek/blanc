@@ -6,6 +6,7 @@ import Blanc.Lift.UniswapV2Pair.StaticSlotTurns
 import Blanc.Lift.CursorOccurrenceRoots
 import Blanc.Lift.UniswapV2Pair.SourceStaticSlotViews
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueEquality
+import Blanc.Lift.HistAccessWalkFacts
 
 /-!
 # Authentic permit recovery turns

@@ -83,13 +83,6 @@ theorem recordTouch_meta (rules : ForkRules) (cond : Bool) (adr : Adr) (d : Devm
     (d.recordTouch rules cond adr).gasLeft = d.gasLeft := ⟨rfl, rfl, rfl, rfl⟩
 
 
-theorem afterSloadH_createdAccounts (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSloadH sevm base key).createdAccounts = base.createdAccounts := by
-  unfold afterSloadH afterSload
-  split
-  · split <;> rfl
-  · rfl
-
 /-- A store at a created account never lowers the refund counter (its original storage is
 zero). -/
 theorem afterSstoreH_refund_ge_of_created {sevm : Sevm} {base : Devm} {key value : B256}
