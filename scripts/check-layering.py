@@ -231,7 +231,7 @@ SHARED += ["Lift.SoundSpan", "Lift.FrameWalkNode", "Lift.FrameWalkCut", "Lift.Me
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
-SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
+SHARED += ["Lift.CommittedLogs", "Lift.CommittedFrameLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
@@ -1425,6 +1425,8 @@ CONTRACTS = {
         "Lift.Usdc.ProxyContextCodes",
         "Lift.Usdc.AllowanceRawHistory",
         "Lift.Usdc.ProxySstoreH",
+        "Lift.Usdc.ProxyUpgradeLog",
+        "Lift.Usdc.ProxyCommittedUpgradeLog",
         "Lift.Usdc.ProxyWritesHistory",
         "Lift.Usdc.InitReach",
         "Lift.Usdc.InitReachV2",

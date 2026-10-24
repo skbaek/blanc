@@ -1816,6 +1816,8 @@ import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.ReachWalkSstore
 import Blanc.Lift.Usdc.ProxySstoreH
+import Blanc.Lift.Usdc.ProxyUpgradeLog
+import Blanc.Lift.Usdc.ProxyCommittedUpgradeLog
 import Blanc.Lift.Usdc.ProxyWritesHistory
 import Blanc.Lift.Usdc.InitReach
 import Blanc.Lift.Usdc.InitReachV2
@@ -1831,6 +1833,7 @@ import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.HistStaticCall
 import Blanc.Lift.HistStaticCallGuard
 import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.CommittedFrameLogs
 import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.HistAccessFacts

@@ -1941,6 +1941,13 @@ prefix plus those observations in the existing retained chronology. Its
 and complete settlement failure; failed subtrees are pruned and settlement
 boundaries never duplicate child logs.
 
+For inclusion from a retained frame into the root endpoint, use
+`Exec.committedFrame_logs_subset_noStateGas` in
+[`Blanc/Lift/CommittedFrameLogs.lean`](../Blanc/Lift/CommittedFrameLogs.lean).
+It needs root commitment, `stateGas = none`, and membership in
+`Exec.committedFrames`; delegation and access rules remain arbitrary. Complete
+failed settlement still discards the child subtree.
+
 To regroup the retained boundaries into exact nonempty chunks and compose a
 local source simulation, use
 [`Blanc/Lift/SegmentedReplay.lean`](../Blanc/Lift/SegmentedReplay.lean).
@@ -6583,6 +6590,19 @@ contract-neutral.
   `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
   value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
   `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
+  The shared `Proxy.proxy_sstoreCursorH` also retains the checked cursor and
+  continuation geometry. `Proxy.proxy_implSstore_emitsUpgraded` in
+  [`Blanc/Lift/Usdc/ProxyUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyUpgradeLog.lean)
+  follows that continuation to an actual retained `Upgraded` log for a committing
+  proxy frame (`stateGas = none`, `bal = none`). Its same-frame prefix identifies
+  an implementation-slot write; the result specifies address and topic with an
+  existential payload. It does not assert receipt correspondence or history-wide
+  implementation continuity. `ConfiguredHistoryTraceIn.implSlot_change_emitsUpgraded`
+  in [`Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean)
+  composes this with retained-write attribution and frame-log inclusion: a
+  committing raw frame changing the implementation slot yields that log at the
+  proxy address. Its premises include nonempty proxy code at the frame entry,
+  `ImplSlotApart`, and the history's body-stage capabilities and BAL restriction.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`

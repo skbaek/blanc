@@ -35,6 +35,20 @@ def upgradeArg (sevm : Sevm) : B256 :=
   Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& Sevm.dataWord sevm (Bytes.toB256 [0x04])
 
+/-- The same-frame suffix of an implementation write retains the internal return to
+`_upgradeTo` and enough stack words to execute its `Upgraded` log. -/
+def UpgradeStoreConf (x : B256) (T : Conf) : Prop :=
+  ∃ a b r y rest K,
+    T.d.stack = implSlot :: x :: a :: b :: r :: y :: rest ∧
+    T.f = .next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)) ∧
+    T.K = t_06e2_c9 :: K
+
+theorem UpgradeStoreConf.below {x : B256} {T : Conf} (h : UpgradeStoreConf x T)
+    (L : List SFunc) : UpgradeStoreConf x (T.below L) := by
+  obtain ⟨a, b, r, y, rest, K, stack, tree, cont⟩ := h
+  exact ⟨a, b, r, y, rest, K ++ L, stack, tree,
+    by simp only [Conf.below, cont, List.cons_append]⟩
+
 /-- What a proxy frame's `SSTORE` writes, read at the target configuration: the admin slot, or
 the implementation slot with `upgradeArg` below it, under an upgrade selector, for a caller
 equal to the admin word of the frame's entry state `b`. -/
@@ -42,7 +56,8 @@ def ProxySstoreConf (sevm : Sevm) (b : Devm) (T : Conf) : Prop :=
   (∃ rest, T.d.stack = adminSlot :: rest) ∨
     ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
       (dispatchWord sevm = upgradeToWord ∨ dispatchWord sevm = upgradeToAndCallWord) ∧
-      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr
+      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      UpgradeStoreConf (upgradeArg sevm) T
 
 theorem getters_sstoreFree : SstoreFreeSet prog getterEntries = true := by decide
 
@@ -91,7 +106,9 @@ theorem isContract_retH (bal : sevm.benvStat.rules.bal = none) {x r : B256} {D :
 /-- `_setImplementation(x)` (entry 25) writes only the implementation slot, with `x`. -/
 theorem setImpl_reachS (bal : sevm.benvStat.rules.bal = none) {x r : B256}
     (run : Reach P prog sevm ⟨St b (x :: r :: S) M G, t_0779_c25, []⟩ T) (hT : AtSstore T) :
-    ∃ rest, T.d.stack = implSlot :: x :: rest := by
+    T.d.stack = implSlot :: x :: implSlot :: x :: r :: S ∧
+      T.f = .next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)) ∧
+      T.K = [] := by
   unfold t_0779_c25 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -119,7 +136,7 @@ theorem setImpl_reachS (bal : sevm.benvStat.rules.bal = none) {x r : B256}
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   rcases Reach.sstoreS run with rfl | ⟨_, -, run⟩
-  · exact ⟨_, rfl⟩
+  · exact ⟨rfl, rfl, rfl⟩
   · exact (Reach.false_of_sstoreFree empty_sstoreFree run hT (by decide)
       (fun _ h => by cases h)).elim
 
@@ -219,7 +236,7 @@ theorem sel36_reachS {d : Devm}
 /-- `_upgradeTo(x)` (entry 9) writes only through `_setImplementation(x)`. -/
 theorem upgrade_reachS (bal : sevm.benvStat.rules.bal = none) {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_06d9_c9, []⟩ T) (hT : AtSstore T) :
-    ∃ rest, T.d.stack = implSlot :: x :: rest := by
+    ∃ rest, T.d.stack = implSlot :: x :: rest ∧ UpgradeStoreConf x T := by
   unfold t_06d9_c9 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -228,15 +245,17 @@ theorem upgrade_reachS (bal : sevm.benvStat.rules.bal = none) {x : B256}
   obtain ⟨_, T', inner, rfl⟩ := rs_callInto empty_sstoreFree (k := 25) rfl (by decide)
     (fun _ h => by cases h) run hT
   dsimp only at inner
-  obtain ⟨rest, hs⟩ := setImpl_reachS hP bal inner (AtSstore.below.mp hT)
-  exact ⟨rest, hs⟩
+  obtain ⟨hs, tree, cont⟩ := setImpl_reachS hP bal inner (AtSstore.below.mp hT)
+  refine ⟨_, hs, implSlot, x, _, x, S, [], hs, tree, ?_⟩
+  simp only [Conf.below, cont, List.nil_append]
 
 /-- `upgradeTo` (entry 33, wrapper of entry 1): it writes only on its admin side, through
 `_upgradeTo` of its decoded argument. -/
 theorem sel33_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_0077_c33, []⟩ T) (hT : AtSstore T) :
     ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
-      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      UpgradeStoreConf (upgradeArg sevm) T := by
   unfold t_0077_c33 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_callvalue (hP s)
@@ -281,7 +300,7 @@ theorem sel33_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
   dsimp only at inner
   replace run := inner
   replace hT : AtSstore T' := AtSstore.below.mp hT
-  show ∃ rest, T'.d.stack = _ ∧ _
+  show ∃ rest, T'.d.stack = _ ∧ _ ∧ _
   unfold t_0213_c1 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -308,8 +327,8 @@ theorem sel33_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
     obtain ⟨_, T'', inner9, rfl⟩ := rs_callInto free_sstoreFree (k := 9) rfl (by decide)
       (fun _ h => by cases h) run hT
     dsimp only at inner9
-    obtain ⟨rest, hs⟩ := upgrade_reachS hP bal inner9 (AtSstore.below.mp hT)
-    exact ⟨rest, hs, hadm⟩
+    obtain ⟨rest, hs, geometry⟩ := upgrade_reachS hP bal inner9 (AtSstore.below.mp hT)
+    exact ⟨rest, hs, hadm, (geometry.below _).below _⟩
   · unfold t_025c_c1 at run
     obtain ⟨_, run⟩ := rs_dest run hT
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -323,7 +342,8 @@ through `_upgradeTo` of its decoded address argument, before its self-call. -/
 theorem sel34_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_00ba_c34, []⟩ T) (hT : AtSstore T) :
     ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
-      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      UpgradeStoreConf (upgradeArg sevm) T := by
   unfold t_00ba_c34 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -377,7 +397,7 @@ theorem sel34_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
   dsimp only at inner
   replace run := inner
   replace hT : AtSstore T' := AtSstore.below.mp hT
-  show ∃ rest, T'.d.stack = _ ∧ _
+  show ∃ rest, T'.d.stack = _ ∧ _ ∧ _
   unfold t_0268_c2 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -404,8 +424,8 @@ theorem sel34_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
     obtain ⟨_, T'', inner9, rfl⟩ := rs_callInto free_sstoreFree (k := 9) rfl (by decide)
       (fun _ h => by cases h) run hT
     dsimp only at inner9
-    obtain ⟨rest, hs⟩ := upgrade_reachS hP bal inner9 (AtSstore.below.mp hT)
-    exact ⟨rest, hs, hadm⟩
+    obtain ⟨rest, hs, geometry⟩ := upgrade_reachS hP bal inner9 (AtSstore.below.mp hT)
+    exact ⟨rest, hs, hadm, (geometry.below _).below _⟩
   · unfold t_02fa_c2 at run
     obtain ⟨_, run⟩ := rs_dest run hT
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -444,8 +464,8 @@ theorem proxy_sstoreH (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     rcases rs_branchTo run hT with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_0077_c33 := Option.some.inj (hg.symm.trans rfl)
-      obtain ⟨rest, hs, hadm⟩ := sel33_reachS hP bal run hT
-      exact .inr ⟨rest, hs, .inl (eqCheck_ne_zero h).symm, hadm⟩
+      obtain ⟨rest, hs, hadm, geometry⟩ := sel33_reachS hP bal run hT
+      exact .inr ⟨rest, hs, .inl (eqCheck_ne_zero h).symm, hadm, geometry⟩
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -454,8 +474,8 @@ theorem proxy_sstoreH (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     rcases rs_branchTo run hT with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
-      obtain ⟨rest, hs, hadm⟩ := sel34_reachS hP bal run hT
-      exact .inr ⟨rest, hs, .inr (eqCheck_ne_zero h).symm, hadm⟩
+      obtain ⟨rest, hs, hadm, geometry⟩ := sel34_reachS hP bal run hT
+      exact .inr ⟨rest, hs, .inr (eqCheck_ne_zero h).symm, hadm, geometry⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -503,6 +523,23 @@ theorem proxy_sstoreH (bal : sevm.benvStat.rules.bal = none) {b : Devm}
 
 end Walk
 
+/-- The classified actual cursor at a historical proxy `SSTORE`, retaining
+its checked internal continuation for successful suffix reasoning. -/
+theorem proxy_sstoreCursorH {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec 0 sevm pre out) (codeEq : sevm.code = Proxy.code)
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none)
+    {N : Exec.Deriv} (chain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N)
+    (hat : Ninst.At N.sevm.code N.pc (.reg .sstore)) :
+    ∃ κ, CursorOK code cert N κ ∧ ProxySstoreConf sevm pre (κ.conf N.devm) := by
+  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas cert_check
+    (R := ⟨0, sevm, pre, out, run⟩) rfl codeEq hsg chain
+  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
+  have hT : AtSstore (κ.conf N.devm) := ⟨g, hf⟩
+  change Reach _ _ _ ⟨pre, t_0000_c0, []⟩ _ at reach
+  rw [show (⟨pre, t_0000_c0, []⟩ : Conf) =
+      ⟨St pre pre.stack pre.memory pre.gasLeft, t_0000_c0, []⟩ by rw [← St.self' pre]] at reach
+  exact ⟨κ, ok, proxy_sstoreH (fun h => StepIn.toRun h) bal reach hT⟩
+
 /-- **The `SSTORE`s of a proxy frame on a historical fork.** At a node of a pc-0 proxy frame
 without state gas decoding `SSTORE`, the key on the stack is the admin slot, or the
 implementation slot with `upgradeArg` below it, under an upgrade selector, for a caller equal
@@ -516,13 +553,9 @@ theorem proxy_sstoreNodeH {sevm : Sevm} {pre : Devm} {out : Execution} (run : Ex
       ∃ rest, N.devm.stack = implSlot :: upgradeArg sevm :: rest ∧
         (dispatchWord sevm = upgradeToWord ∨ dispatchWord sevm = upgradeToAndCallWord) ∧
         sevm.caller = (pre.getStorVal sevm.currentTarget adminSlot).toAdr := by
-  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas cert_check
-    (R := ⟨0, sevm, pre, out, run⟩) rfl codeEq hsg chain
-  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
-  have hT : AtSstore (κ.conf N.devm) := ⟨g, hf⟩
-  change Reach _ _ _ ⟨pre, t_0000_c0, []⟩ _ at reach
-  rw [show (⟨pre, t_0000_c0, []⟩ : Conf) =
-      ⟨St pre pre.stack pre.memory pre.gasLeft, t_0000_c0, []⟩ by rw [← St.self' pre]] at reach
-  exact proxy_sstoreH (fun h => StepIn.toRun h) bal reach hT
+  obtain ⟨κ, _, classified⟩ := proxy_sstoreCursorH run codeEq hsg bal chain hat
+  rcases classified with admin | ⟨rest, stack, selector, caller, _⟩
+  · exact .inl admin
+  · exact .inr ⟨rest, stack, selector, caller⟩
 
 end Blanc.Lift.Usdc.Proxy
