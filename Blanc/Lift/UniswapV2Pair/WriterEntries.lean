@@ -18,6 +18,17 @@ def approvePublicPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Na
     ((approveScratch M sevm.caller.toB256 (approveSpender sevm).toB256).write 128
       (approveAmount sevm).toBytes) 1 G
 
+def approvePublicPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
+  getterWordPost (approveCoreBaseH sevm b sevm.caller (approveSpender sevm) (approveAmount sevm)) R
+    ((approveScratch M sevm.caller.toB256 (approveSpender sevm).toB256).write 128
+      (approveAmount sevm).toBytes) 1 G
+
+theorem approvePublicPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (G : Nat) :
+    approvePublicPostH sevm b R M G = approvePublicPost sevm b R M G := by
+  unfold approvePublicPostH approvePublicPost
+  simp only [approveCoreBaseH_of_covered fork]
+
 theorem approve_decoder_exact {sevm : Sevm} {b : Devm} {M : Mem}
     {G c : Nat} {sel avail : B256}
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
@@ -73,11 +84,12 @@ theorem approve_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G c : Nat} {sel 
   refine rx_branch_succ (by decide) ?_
   exact approve_decoder_exact fork mem cost sentry nonstatic
 
-theorem approve_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem approve_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x034e, sel] M G) t_032b_c96 o) :
-    sevm.isStatic = false ∧ ∃ G', o = .halted (approvePublicPost sevm b [sel] M G') := by
+    sevm.isStatic = false ∧ ∃ G', o = .halted (approvePublicPostH sevm b [sel] M G') := by
   have outmem := getterWordMemory_ptr
     (approveScratch_ptr mem sevm.caller.toB256 (approveSpender sevm).toB256) (approveAmount sevm)
   have h := run.cut
@@ -106,19 +118,21 @@ theorem approve_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call (g := t_0de5_c51) (by rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨nonstatic, _, eq⟩ := approve51_inv fork mem hc
+  · obtain ⟨nonstatic, _, eq⟩ := approve51_invH stateGas bal mem hc
     cases eq
     obtain ⟨G', eq⟩ := writerBool_tail_inv outmem h.uncut
     exact ⟨nonstatic, G', eq⟩
-  · obtain ⟨_, _, eq⟩ := approve51_inv fork mem hc
+  · obtain ⟨_, _, eq⟩ := approve51_invH stateGas bal mem hc
     cases eq
 
-theorem approve_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
+
+theorem approve_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_0315_c96 o) :
     (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      ∃ G', o = .halted (approvePublicPost sevm b [sel] M G') := by
+      ∃ G', o = .halted (approvePublicPostH sevm b [sel] M G') := by
   have h := run.cut
   unfold t_0315_c96 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -155,7 +169,8 @@ theorem approve_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
         simp only [B256.ltCheck, lt_of_not_ge ne, ite_true]
       rw [flag] at nonzero
       exact nonzero (by decide)
-    exact ⟨guard, approve_decoder_inv fork mem h.uncut⟩
+    exact ⟨guard, approve_decoder_invH stateGas bal mem h.uncut⟩
+
 
 
 /-- The actual pc-zero selector route for approve consumes the guarded public entry. -/
@@ -247,21 +262,32 @@ theorem approve_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   exact approve_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (approve_entry_exact fork getterInitMemory_ptr guard cost sentry nonstatic)
 
-/-- The inverse retains the entire final state and derives the real acceptance guards. -/
-theorem approve_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem approve_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      ∃ G', post = approvePublicPost sevm b [0x095ea7b3] getterInitMemory G' := by
+      ∃ G', post = approvePublicPostH sevm b [0x095ea7b3] getterInitMemory G' := by
   obtain ⟨f, entry, run⟩ := run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := approve_selector_inv selector run
-  obtain ⟨guard, nonstatic, G', eq⟩ := approve_entry_inv fork getterInitMemory_ptr run
+  obtain ⟨guard, nonstatic, G', eq⟩ := approve_entry_invH stateGas bal getterInitMemory_ptr run
   exact ⟨value, size, guard, nonstatic, G', Outcome.halted.inj eq⟩
+
+
+theorem approve_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
+      ∃ G', post = approvePublicPostH sevm b [0x095ea7b3] getterInitMemory G' :=
+  approve_pc0_invH stateGas bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
 
 theorem approve_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -269,8 +295,10 @@ theorem approve_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      ∃ G', post = approvePublicPost sevm b [0x095ea7b3] getterInitMemory G' :=
-  approve_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
+      ∃ G', post = approvePublicPost sevm b [0x095ea7b3] getterInitMemory G' := by
+  simpa only [approvePublicPostH_of_covered fork] using
+    approve_bytecode_refines_rawH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 theorem approve_bytecode_live_raw {sevm : Sevm} {b : Devm} {G c : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)

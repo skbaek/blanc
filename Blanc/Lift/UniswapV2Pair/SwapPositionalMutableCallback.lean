@@ -5,11 +5,9 @@ import Blanc.Lift.UniswapV2Pair.SwapPositionalSourcePrefix
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The exact guarded callback retains its full events, same admitted children,
-checkpoint, finite representation and source/raw log images. -/
-structure SwapCallbackMutable {root start : Exec.Deriv} {b : Devm}
+structure SwapCallbackMutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
+    (r : SwapCallbackOccurrenceH root start b L M q toWord a0 a1 len dataStart K)
     (U : WriterKey → Prop) (ctx : Context) (current : Checkpoint) (base : Devm)
     (frame : Frame) (index : Nat) where
   observed : SourceCallAt root frame
@@ -25,59 +23,59 @@ structure SwapCallbackMutable {root start : Exec.Deriv} {b : Devm}
   queue : SourceSlotEvents observed.call frame.context.pair index events
   mappedPaths : events.filterMap Sum.getRight? = observed.paths
   mappedTurns : turns.map MutableTurn.event = events
-  during : AdmittedMutableTurns LockedAuth frame
+  during : AdmittedMutableTurns LockedAuthH frame
     (requestFor .swapCallback toWord.toAdr (.callback start.sevm.caller a0 a1
       (start.sevm.data.sliceD dataStart.toNat len.toNat 0))) 0 events
     (mutableTranscript turns .done)
     {complete := true, frame := {frame with current := checkpoint}, childReturns := rets}
   authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
-    LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested
+    LockedAuthH (Exec.Frame.rootDeriv located.frame) entry nested
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
 
-/-- The shared locked fold supplies the SAME guarded callback event queue. -/
-theorem swap_callback_mutable {root start : Exec.Deriv} {b : Devm}
+theorem swap_callback_mutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord a0 a1 len dataStart : B256} {K : List SFunc}
     {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
-    (r : SwapCallbackOccurrence root start b L M q toWord a0 a1 len dataStart K)
+    (r : SwapCallbackOccurrenceH root start b L M q toWord a0 a1 len dataStart K)
     (index : Nat) (inj : WriterInj U) (apart : WriterApart U)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (base.getCode root.sevm.currentTarget).toList = sem.image)
     (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
     (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
     (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
       F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    Nonempty (SwapCallbackMutable r U ctx current base frame index) := by
+    Nonempty (SwapCallbackMutableH r U ctx current base frame index) := by
   have env : start.sevm = root.sevm := r.sevmEq.symm.trans
     (Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.step.sameFrame)
-  obtain ⟨observed, same⟩ := r.sourceCall frame index
+  obtain ⟨observed, same⟩ := r.sourceCallH frame index
     (by rw [inv.context, env, nonstatic, rootNonstatic])
-    (by rw [inv.context, env]; exact pair) (by rw [env]; exact fork)
+    (by rw [inv.context, env]; exact pair) (by rw [env]; exact stateGas)
   have pairEq : frame.context.pair = root.sevm.currentTarget := inv.context ▸ pair
   have preCode : r.step.occurrence.node.devm.getCode root.sevm.currentTarget =
       base.getCode root.sevm.currentTarget := by
     rw [r.input]
-    change (temporalAccountAccessBase b
+    change (accountAccessH start.sevm b
       (0xffffffffffffffffffffffffffffffffffffffff &&& toWord).toAdr).getCode _ = _
-    rw [Blanc.Lift.temporalAccountAccessBase_getCode]
+    simp only [Devm.getCode, Devm.getAcct, accountAccessH_state]
     exact inv.code
   have preRep : LockedRep U frame.current.state
       (r.step.occurrence.node.devm.getStor root.sevm.currentTarget) := by
     rw [r.input]
-    change LockedRep U frame.current.state ((temporalAccountAccessBase b
+    change LockedRep U frame.current.state ((accountAccessH start.sevm b
       (0xffffffffffffffffffffffffffffffffffffffff &&& toWord).toAdr).getStor _)
-    rw [Blanc.Lift.temporalAccountAccessBase_getStor]
+    rw [accountAccessH_getStor]
     exact inv.rep
   obtain ⟨events, turns, c, added, rets, queue, mappedPaths, mappedTurns, during,
     authentic, afterRep, sourceLogs, rawLogs⟩ :=
-    locked_admitted_mutable_source_slot_turns inj apart sem image observed pairEq
+    locked_admitted_mutable_source_slot_turnsH inj apart sem image observed pairEq
       (by change (frame.context.isStatic || false) = false; rw [inv.context, nonstatic]; rfl)
       (by rw [same, preCode]; exact installed)
       (by rw [same]; exact preRep)
       (by rw [same, r.sevmEq, env, inv.context]; exact time)
-      (by rw [same, r.sevmEq, env]; exact fork) good
+      (by rw [same, r.sevmEq, env]; exact stateGas) (by rw [same, r.sevmEq, env]; exact bal) good
   rw [same] at afterRep rawLogs
   have nonemptyCode : (r.step.occurrence.node.devm.getCode root.sevm.currentTarget).toList ≠ [] := by
     intro empty
@@ -90,9 +88,10 @@ theorem swap_callback_mutable {root start : Exec.Deriv} {b : Devm}
   · rw [StepIn.codePreserve r.step.toStepIn _ nonemptyCode, preCode]
   · rw [sourceLogs, oldSource, List.append_assoc]
   · rw [newLogs, r.input]
-    simp only [St, Devm.setMach_logs, temporalAccountAccessBase_logs]
+    simp only [St, Devm.setMach_logs, accountAccessH_logs]
     rw [oldLogs, List.append_assoc]
   · rw [List.map_append, List.map_append, oldImages, newImages]
+
 
 def swapCallbackPhaseRequest (frame : Frame) (locals : SwapLocals) : Request :=
   requestFor .swapCallback locals.recipient
@@ -102,13 +101,11 @@ def swapBalancePhaseStart (frame : Frame) (locals : SwapLocals) : SegmentResult 
   .suspended frame (requestFor .swapBalance0 locals.token0 (.balanceOf frame.context.pair))
     (.swapBalance0 locals)
 
-/-- Optional callback admission shares the same selected children and result;
-the skipped branch consumes no instruction or source index. -/
-theorem swap_optional_callback_admitted {root start : Exec.Deriv} {b : Devm}
+theorem swap_optional_callback_admittedH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {q toWord len dataStart : B256} {K : List SFunc}
     {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm}
     {frame : Frame} {locals : SwapLocals}
-    (opt : SwapOptionalCallback root start b L M q toWord locals.amount0Out locals.amount1Out
+    (opt : SwapOptionalCallbackH root start b L M q toWord locals.amount0Out locals.amount1Out
       len dataStart K)
     (recipientEq : toWord.toAdr = locals.recipient)
     (dataEq : locals.data = start.sevm.data.sliceD dataStart.toNat len.toNat 0)
@@ -119,15 +116,16 @@ theorem swap_optional_callback_admitted {root start : Exec.Deriv} {b : Devm}
     (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
     (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
     (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
       F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
     ∃ (nextFrame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
       SwapFrontState U root.sevm.currentTarget ctx current base nextFrame opt.world ∧
       ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root opt.next (index + if len = 0 then 0 else 1)
+        AdmittedSourceConsumes LockedAuthH root opt.next (index + if len = 0 then 0 else 1)
           (swapBalancePhaseStart nextFrame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root start index (frame.afterSwapTransfer1 locals)
+        AdmittedSourceConsumes LockedAuthH root start index (frame.afterSwapTransfer1 locals)
           (T tail) {out with childReturns := rets ++ out.childReturns} := by
   have dataLen : locals.data.length = len.toNat := by
     rw [dataEq]
@@ -142,8 +140,8 @@ theorem swap_optional_callback_admitted {root start : Exec.Deriv} {b : Devm}
       rw [next, ite_eq_left zero, Nat.add_zero] at rest
       rw [skip]
       exact rest
-  · obtain ⟨selected⟩ := swap_callback_mutable actual index inj apart sem image installed
-      inv pair time nonstatic rootNonstatic fork good
+  · obtain ⟨selected⟩ := swap_callback_mutableH actual index inj apart sem image installed
+      inv pair time nonstatic rootNonstatic stateGas bal good
     let request := swapCallbackPhaseRequest frame locals
     let nextFrame : Frame := ({frame with current := selected.checkpoint} : Frame).beginResume request
     have callerEq : start.sevm.caller = frame.context.sender := by rw [inv.context, senderEq]
@@ -183,26 +181,26 @@ theorem swap_optional_callback_admitted {root start : Exec.Deriv} {b : Devm}
       refine AdmittedSourceConsumes.nextMutableCall observed ?_ queue rfl
         (fun impossible => by cases impossible) selected.mappedTurns selected.authentic during ?_
       · rw [obsSame]; exact actual.gap
-      · change AdmittedSourceConsumes LockedAuth root observed.call.returned (index + 1)
+      · change AdmittedSourceConsumes LockedAuthH root observed.call.returned (index + 1)
           (resumeSegment {frame with current := selected.checkpoint} request (.swapCallback locals)
             (swapCallbackReply actual.step.returned.devm.returnData)) tail out
         rw [obsSame]
         have resumed := swap_resume_callback
           (frame := ({frame with current := selected.checkpoint} : Frame)) (locals := locals)
           (out := actual.step.returned.devm.returnData)
-        exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuth root
+        exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuthH root
           actual.step.returned (index + 1) segment tail out) resumed) rest
 
-/-- All optional mutable calls compose from the original source entry, on the
-same physical chain and the same evolving admitted source checkpoint. -/
-theorem swap_source_callbacks {root : Exec.Deriv} {b : Devm}
+
+theorem swap_source_callbacksH {root : Exec.Deriv} {b W : Devm}
     {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    (r : SwapCallbacks root root.sevm b)
-    (entryFacts : SwapSourcePrefix U current invocation root.sevm b)
+    (r : SwapCallbacksH root root.sevm b W)
+    (entryFacts : SwapSourcePrefixH U current invocation root.sevm b W)
     (inj : WriterInj U) (apart : WriterApart U)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode root.sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
       F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
     let locals := swapFrontLocals root.sevm current.state
@@ -213,14 +211,14 @@ theorem swap_source_callbacks {root : Exec.Deriv} {b : Devm}
       SwapFrontState U root.sevm.currentTarget (writerContext root.sevm invocation)
         current b frame r.callback.world ∧
       ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root r.callback.next (count0 + count1 + countC)
+        AdmittedSourceConsumes LockedAuthH root r.callback.next (count0 + count1 + countC)
           (swapBalancePhaseStart frame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root root 0
+        AdmittedSourceConsumes LockedAuthH root root 0
           (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
           (T tail) {out with childReturns := rets ++ out.childReturns} := by
   intro locals count0 count1 countC
-  obtain ⟨F, T, R, inv, reach⟩ := swap_source_transfers r.transfers entryFacts inj apart
-    sem image installed fork good
+  obtain ⟨F, T, R, inv, reach⟩ := swap_source_transfersH r.transfers entryFacts inj apart
+    sem image installed stateGas bal good
   have env : r.transfers.second.next.sevm = root.sevm :=
     r.transfers.second.sevmEq.trans r.transfers.first.sevmEq
   have recipient : (swapRecipientWord root.sevm).toAdr = locals.recipient := by
@@ -229,13 +227,14 @@ theorem swap_source_callbacks {root : Exec.Deriv} {b : Devm}
       (swapDataStart root.sevm).toNat (swapDataLength root.sevm).toNat 0 := by rw [env]; rfl
   have sender : (writerContext root.sevm invocation).sender = r.transfers.second.next.sevm.caller := by
     rw [env]; rfl
-  obtain ⟨FC, TC, RC, invC, reachC⟩ := swap_optional_callback_admitted (locals := locals)
+  obtain ⟨FC, TC, RC, invC, reachC⟩ := swap_optional_callback_admittedH (locals := locals)
     r.callback recipient data sender (count0 + count1) inj apart sem image installed inv
-    rfl rfl entryFacts.nonstatic entryFacts.nonstatic fork good
+    rfl rfl entryFacts.nonstatic entryFacts.nonstatic stateGas bal good
   refine ⟨FC, fun tail => T (TC tail), R ++ RC, invC, ?_⟩
   intro tail out rest
   have callback := reachC tail out rest
   have prefixRun := reach (TC tail) _ callback
   simpa only [List.append_assoc] using prefixRun
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -1,5 +1,6 @@
 import Blanc.Lift.StaticCallGuard
 import Blanc.Lift.HistStaticCall
+import Blanc.ExecutionEntryAccounting
 
 /-!
 # Historical `STATICCALL` success guards
@@ -7,6 +8,10 @@ import Blanc.Lift.HistStaticCall
 `staticCallGuard_invPH` and `staticCallGuard_exactH` are `StaticCallGuard`'s call-success guard
 steps from `rules.stateGas = none` alone, through `ri_staticcall_boundedH`/`rx_staticcallH`;
 `staticCallGuard_invPH_covered` recovers the modern conclusion.
+
+A static child's entry under the two rule facts: `Evm.step_spawn_child_dataH` (short calldata,
+and the parent's rule facts in the child); the child's opening world is
+`Evm.step_spawn_child_world_noStateGas`.
 
 Nothing here mentions a contract.
 -/
@@ -124,3 +129,24 @@ theorem staticCallGuard_invPH_covered {P : Sevm → Devm → Ninst → Devm → 
   exact ⟨gw, callGas, d, out, tailGas, h1, h2, h3, h4.of_covered fork, h5⟩
 
 end Blanc.Lift
+
+namespace Blanc
+
+open Jaune
+
+/-- `ExecutionTrace.Evm.step_spawn_child_data` from the two historical rule facts: an entered
+child has short calldata and the parent's rule facts. -/
+theorem Evm.step_spawn_child_dataH {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hbal : sevm.benvStat.rules.bal = none)
+    (hs : Evm.step (⟨pc, sevm, pre⟩ : Evm) = .spawn f rsm pc')
+    {cevm : Evm} (henter : f.enter = .run cevm) :
+    cevm.sta.data.length < 2 ^ 256 ∧
+      (cevm.sta.benvStat.rules.stateGas = none ∧ cevm.sta.benvStat.rules.bal = none) := by
+  obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
+  have hstat : cevm.sta.benvStat = sevm.benvStat := by
+    rw [Frame.enter_run_benvStat henter, Xinst.step_spawn_benvStat hx]
+  obtain ⟨short, childStateGas⟩ := ExecutionTrace.Evm.step_spawn_child_data_noStateGas hsg hs henter
+  exact ⟨short, childStateGas, by rw [hstat]; exact hbal⟩
+
+end Blanc

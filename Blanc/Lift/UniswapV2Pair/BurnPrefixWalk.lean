@@ -10,24 +10,22 @@ import Blanc.Lift.InvWalkProvenance
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Burn's literal lock test creates both output temporaries and reads the entry
-lock before any write. The successful arm retains the original relation. -/
-theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem burnLockGuard_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {toWord extρ : B256} {seg : Seg}
     (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ ∃ gas,
       SFunc.RunCutP P cert.prog sevm C
-        (St (afterSload sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
+        (St (afterSloadH sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M gas) t_1469_c37 seg := by
   have h := run
   unfold t_13f5_c37 at h
   obtain ⟨_, h⟩ := ric_destP h
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sload fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sloadH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_eq (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
@@ -44,22 +42,38 @@ theorem burnLockGuard_inv {P : Sevm → Devm → Ninst → Devm → Prop}
 def burnLockedWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSstore sevm (afterSload sevm b 12) 12 0
 
-/-- Burn's actual lock write and getter56 call cache all three reserve fields
-before the two initial balance queries. No cached-reserve premise is added. -/
-theorem burnReservePrefix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+def burnLockedWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b 12) 12 0
+
+theorem burnLockedWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    burnLockedWorldH sevm b = burnLockedWorld sevm b := by
+  unfold burnLockedWorldH burnLockedWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
+/-- The historical Burn lock world stores the same words as the modern one. -/
+theorem burnLockedWorldH_getStorVal (sevm : Sevm) (b : Devm) (k : B256) :
+    (burnLockedWorldH sevm b).getStorVal sevm.currentTarget k =
+      (burnLockedWorld sevm b).getStorVal sevm.currentTarget k := by
+  show (Devm.getStor _ _).get _ = (Devm.getStor _ _).get _
+  unfold burnLockedWorld burnLockedWorldH
+  rw [afterSstore_getStor_self, afterSstoreH_getStor_self, afterSload_getStor, afterSloadH_getStor]
+
+theorem burnReservePrefix_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {toWord extρ : B256} {seg : Seg}
     (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.RunCutP P cert.prog sevm C (St b (toWord :: extρ :: R) M G) t_13f5_c37 seg) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧ ∃ gas,
-      let locked := burnLockedWorld sevm b
-      SFunc.RunCutP P cert.prog sevm C (St (afterSload sevm locked 8)
+      let locked := burnLockedWorldH sevm b
+      SFunc.RunCutP P cert.prog sevm C (St (afterSloadH sevm locked 8)
         (reserveTimestampRead (locked.getStorVal sevm.currentTarget 8) ::
          reserve1Read (locked.getStorVal sevm.currentTarget 8) ::
          reserve0Read (locked.getStorVal sevm.currentTarget 8) ::
          0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M gas) t_1479_c37 seg := by
-  obtain ⟨unlocked, _, h⟩ := burnLockGuard_inv project fork run
+  obtain ⟨unlocked, _, h⟩ := burnLockGuard_invH project bal run
   unfold t_1469_c37 at h
   obtain ⟨_, h⟩ := ric_destP h
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
@@ -67,8 +81,8 @@ theorem burnReservePrefix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h
-  have mutable := ri_sstore_nonstatic fork (project hd)
-  obtain ⟨_, rfl⟩ := ri_sstore fork (project hd)
+  have mutable := ri_sstore_nonstaticH stateGas (project hd)
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
@@ -78,7 +92,7 @@ theorem burnReservePrefix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨gas, returned⟩ := reserves_callee_inv fork (callee.mono project)
+    obtain ⟨gas, returned⟩ := reserves_callee_invH bal (callee.mono project)
     cases returned
     exact ⟨unlocked, mutable, gas, tail⟩
   | callHalt d lookup pop callee =>
@@ -86,30 +100,38 @@ theorem burnReservePrefix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨_, returned⟩ := reserves_callee_inv fork (callee.mono project)
+    obtain ⟨_, returned⟩ := reserves_callee_invH bal (callee.mono project)
     cases returned
+
 
 /-- Both token slots are cached before Burn's initial external observations. -/
 def burnTokensWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm (afterSload sevm b 6) 7
 
-/-- Literal Burn staging obtains the first token target from storage, preserves
-both cached token words, and passes the actual code guard into STATICCALL. -/
-theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+def burnTokensWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm (afterSloadH sevm b 6) 7
+
+theorem burnTokensWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    burnTokensWorldH sevm b = burnTokensWorld sevm b := by
+  unfold burnTokensWorldH burnTokensWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
+theorem burnInitialFirstRequest_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {timestamp r1 r0 toWord extρ : B256} {seg : Seg}
     (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.RunCutP P cert.prog sevm C
       (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
       t_1479_c37 seg) :
     let mask : B256 := 0xffffffffffffffffffffffffffffffffffffffff
     let t0 := mask &&& b.getStorVal sevm.currentTarget 6
-    let t1 := mask &&& (afterSload sevm b 6).getStorVal sevm.currentTarget 7
-    let loaded := burnTokensWorld sevm b
+    let t1 := mask &&& (afterSloadH sevm b 6).getStorVal sevm.currentTarget 7
+    let loaded := burnTokensWorldH sevm b
     (loaded.getCode t0.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
       SFunc.RunCutP P cert.prog sevm C
-        (St (temporalAccountAccessBase loaded t0.toAdr)
+        (St (accountAccessH sevm loaded t0.toAdr)
           (0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 ::
             0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
           (balanceRequestMemory M sevm.currentTarget) gas) t_14fb_c37 seg := by
@@ -124,9 +146,9 @@ theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Pr
   obtain ⟨_, h⟩ := ric_destP h
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sload fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sloadH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sload fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sloadH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_mload (project hd)
@@ -203,7 +225,7 @@ theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Pr
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_extcodesize fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
@@ -211,18 +233,18 @@ theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Pr
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨accepted, gas, tail⟩
   · exact (failed.false_of_noOk (by decide : t_14f7_c37.noOk = true)).elim
   · have zero := eq_zero_of_iszero_ne_zero accepted
-    have nonzero : ((burnTokensWorld sevm b).getCode
+    have nonzero : ((burnTokensWorldH sevm b).getCode
         ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
           b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
       intro eq
-      change B256.eqCheck (((burnTokensWorld sevm b).getCode
+      change B256.eqCheck (((burnTokensWorldH sevm b).getCode
         ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
           b.getStorVal sevm.currentTarget 6).toAdr).size.toB256) 0 = 0 at zero
       rw [eq, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
       exact (by decide : (1 : B256) ≠ 0) zero
     rw [zero] at tail
     refine ⟨nonzero, gas, ?_⟩
-    simpa only [burnTokensWorld, balanceRequestMemory, balanceOfSelectorWord,
+    simpa only [burnTokensWorldH, balanceRequestMemory, balanceOfSelectorWord,
       show Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255] =
         (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl,
@@ -233,6 +255,7 @@ theorem burnInitialFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Pr
       show Bytes.toB256 [112, 160, 130, 49] = (0x70a08231 : B256) from rfl,
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using tail
+
 
 inductive BurnInitialBalanceSite where
   | first
@@ -255,20 +278,18 @@ def BurnInitialBalanceSite.afterDecodeTree (site : BurnInitialBalanceSite) : SFu
   | .dest (.next _ (.next _ tail)) => tail
   | _ => .undefined
 
-/-- The first actual answer replaces its balance temporary; the second request
-uses the already cached token1 word and preserves token0 and the old reserves. -/
-theorem burnInitialSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem burnInitialSecondRequest_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {b0 token1 token0 r1 r0 toWord extρ : B256} {seg : Seg}
     (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.RunCutP P cert.prog sevm C
       (St b (b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
       BurnInitialBalanceSite.first.afterDecodeTree seg) :
     let t1 := token1 &&& 0xffffffffffffffffffffffffffffffffffffffff
     (b.getCode t1.toAdr).size.toB256 ≠ 0 ∧ ∃ gas,
       SFunc.RunCutP P cert.prog sevm C
-        (St (temporalAccountAccessBase b t1.toAdr)
+        (St (accountAccessH sevm b t1.toAdr)
           (0 :: t1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t1 ::
             0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
           (balanceRequestMemory M sevm.currentTarget) gas) t_1599_c37 seg := by
@@ -341,7 +362,7 @@ theorem burnInitialSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → P
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_extcodesize fork (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
@@ -368,11 +389,18 @@ theorem burnInitialSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → P
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using tail
 
+
 /-- The real lock store transports the entry representation into Burn's locked world. -/
 theorem WriterRep.burn_locked_world {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
     WriterRep K ((burnLockedWorld sevm b).getStor sevm.currentTarget) { st with unlocked := 0 } := by
   rw [burnLockedWorld, afterSstore_getStor_self, afterSload_getStor]
+  exact rep.mint_lock_store
+
+theorem WriterRep.burn_locked_worldH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
+    WriterRep K ((burnLockedWorldH sevm b).getStor sevm.currentTarget) { st with unlocked := 0 } := by
+  rw [burnLockedWorldH, afterSstoreH_getStor_self, afterSloadH_getStor]
   exact rep.mint_lock_store
 
 end Blanc.Lift.UniswapV2Pair

@@ -5,16 +5,15 @@ import Blanc.Lift.UniswapV2Pair.SourceAdmission
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Both initial balance suspensions consume their own original slots and full
-static-view queues before the same supplied fee continuation. -/
-theorem BurnThreeCalls.initialSource
+theorem BurnThreeCallsH.initialSource
     {Auth : Exec.Deriv → Entry → Transcript → Prop}
-    {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
+    {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm))
     {tail : Transcript} {out : RunResult} :
@@ -42,9 +41,9 @@ theorem BurnThreeCalls.initialSource
   let frame1 := frame0.beginResume request0
   let request1 := requestFor .burnInitialBalance1 current.state.token1 (.balanceOf sevm.currentTarget)
   obtain ⟨observed0, views0, same0, during0⟩ :=
-    r.initial.firstViews rep invocation sem image installed fork fresh
+    r.initial.firstViews rep invocation sem image installed stateGas bal fresh
   obtain ⟨observed1, views1, same1, during1⟩ :=
-    r.initial.secondViews rep invocation sem image installed fork fresh
+    r.initial.secondViews rep invocation sem image installed stateGas bal fresh
   have resume1 : resumeSegment frame1 request1
       (.burnInitialBalance1 (r.sourceObserved current).locals
         (Bytes.toB256 (r.initial.out0.take 32))) (feeObservedResult r.initial.out1) =
@@ -73,5 +72,6 @@ theorem BurnThreeCalls.initialSource
     (by intro absent; cases absent) during0
     (by simpa only [same0, feeObservedResult, ite_true] using second)
   exact ⟨views0, views1, first⟩
+
 
 end Blanc.Lift.UniswapV2Pair

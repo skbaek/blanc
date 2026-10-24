@@ -90,56 +90,56 @@ theorem swapSyncEvent_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     B256.and_comm reserveMask112 (packed / reserveDiv112)]
   rfl
 
-/-- The shared update routine at pointer `p`: the same guards, oracle, packed
-store and exact world as `update_inv`, with a pointer-preserving memory. -/
-theorem swapUpdate_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem swapUpdate_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G n : Nat} {p old0 old1 balance0 balance1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
     (run : SFunc.Run cert.prog sevm
       (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
     balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
       ∃ n' M' G', PtrMem p n' M' ∧
-        o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1) R M' G') := by
+        o = .returned (St (updateWorldH sevm b old0 old1 balance0 balance1) R M' G') := by
   obtain ⟨bound0, bound1, _, h⟩ := update_guards_inv run
-  obtain ⟨_, h⟩ := update_header_inv fork h
+  obtain ⟨_, h⟩ := update_header_invH bal h
   obtain ⟨_, h⟩ := update_oracle_reserve_inv h
   obtain ⟨_, h⟩ := update_oracle_route_inv h
   rw [update_oracle_flag_source] at h
-  clear * - h fork mem lower width bound0 bound1
+  clear * - h stateGas bal mem lower width bound0 bound1
   by_cases active : updateOracleActive sevm b old0 old1
   · change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
       old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0 at active
     rw [ite_eq_left active, ite_eq_right (by decide : (1 : B256) ≠ 0)] at h
     obtain ⟨_, _, h⟩ := update_price0_inv h
-    obtain ⟨_, _, _, h⟩ := update_accumulator0_inv fork h
-    obtain ⟨_, _, h⟩ := update_accumulator1_inv fork h
-    obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
+    obtain ⟨_, _, _, h⟩ := update_accumulator0_invH stateGas bal h
+    obtain ⟨_, _, h⟩ := update_accumulator1_invH stateGas bal h
+    obtain ⟨nonstatic, _, h⟩ := update_packed_store_invH stateGas bal h
     obtain ⟨n', M', g, ptr, eq⟩ := swapSyncEvent_inv mem lower width h
     refine ⟨bound0, bound1, nonstatic, n', M', g, ptr, ?_⟩
-    have oracleEq : updateOracleWorld sevm b old0 old1 =
-        updateAccumulatorPost sevm
-          (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
+    have oracleEq : updateOracleWorldH sevm b old0 old1 =
+        updateAccumulatorPostH sevm
+          (updateAccumulatorPostH sevm (afterSloadH sevm b 8) 9 (updatePriceWord old0 old1)
             (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time))
           10 (updatePriceWord old1 old0)
             (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time) := by
-      unfold updateOracleWorld
+      unfold updateOracleWorldH
       exact ite_eq_left active
     change o = .returned (St (updateSyncPost sevm
-      (updatePackedPost sevm (updateOracleWorld sevm b old0 old1) balance0 balance1
+      (updatePackedPostH sevm (updateOracleWorldH sevm b old0 old1) balance0 balance1
         (updateTimestampWord sevm.benvStat.time))
-      (updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
+      (updatePackedWord ((updateOracleWorldH sevm b old0 old1).getStorVal sevm.currentTarget 8)
         balance0 balance1 (updateTimestampWord sevm.benvStat.time))) R M' g)
     rw [oracleEq]
     exact eq
   · change ¬ (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
       old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0) at active
     simp only [active, ite_false, ite_true] at h
-    obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
+    obtain ⟨nonstatic, _, h⟩ := update_packed_store_invH stateGas bal h
     obtain ⟨n', M', g, ptr, eq⟩ := swapSyncEvent_inv mem lower width h
     refine ⟨bound0, bound1, nonstatic, n', M', g, ptr, ?_⟩
-    simpa only [updateWorld, updateFinalPackedWord, updateOracleWorld,
+    simpa only [updateWorldH, updateFinalPackedWordH, updateOracleWorldH,
       updateOracleActive, active, ite_false] using eq
+
 
 def swapEventTopic : B256 :=
   0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822
@@ -149,16 +149,16 @@ def swapEventLog (sevm : Sevm) (in0 in1 a0 a1 toW : B256) : Jaune.Log :=
   ⟨sevm.currentTarget, [swapEventTopic, sevm.caller.toB256, swapTokenWord toW],
     in0.toBytes ++ in1.toBytes ++ a0.toBytes ++ a1.toBytes⟩
 
-/-- `_update`, the `Swap` log, the unlock store and the body's return. -/
-theorem swapTail_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat}
+theorem swapTail_invH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat}
     {p adj1 adj0 in1 in0 bal1 bal0 r1 r0 len off toW a1 a0 ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
     (run : SFunc.RunCut cert.prog sevm []
       (St b (adj1 :: adj0 :: in1 :: in0 :: bal1 :: bal0 :: r1 :: r0 :: len :: off :: toW ::
         a1 :: a0 :: ρ :: S) M G) t_0cd6_c8 (.done o)) :
     bal0.toNat < 2 ^ 112 ∧ bal1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧ ∃ M' G',
-      o = .returned (St (afterSstore sevm ((updateWorld sevm b r0 r1 bal0 bal1).addLog
+      o = .returned (St (afterSstoreH sevm ((updateWorldH sevm b r0 r1 bal0 bal1).addLog
         (swapEventLog sevm in0 in1 a0 a1 toW)) 12 1) S M' G') := by
   have p32 : (p + Bytes.toB256 [0x20]).toNat = p.toNat + 32 := swapPtr_add (k := 32) (by omega)
   have p64 : (Bytes.toB256 [0x40] + p).toNat = p.toNat + 64 := by
@@ -177,10 +177,10 @@ theorem swapTail_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : N
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, ⟨D, callee, run⟩ | ⟨D, callee, _⟩⟩ := ric_call (g := t_22e0_c60) rfl run
   swap
-  · obtain ⟨_, _, _, _, _, _, _, returned⟩ := swapUpdate_inv fork mem lower width callee
+  · obtain ⟨_, _, _, _, _, _, _, returned⟩ := swapUpdate_invH stateGas bal mem lower width callee
     cases returned
   obtain ⟨bound0, bound1, nonstatic, n', M', g, ptr, returned⟩ :=
-    swapUpdate_inv fork mem lower width callee
+    swapUpdate_invH stateGas bal mem lower width callee
   cases returned
   refine ⟨bound0, bound1, nonstatic, ?_⟩
   have m1 := ptr.write p.toNat in0 (Or.inr (by omega))
@@ -259,7 +259,7 @@ theorem swapTail_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : N
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sstore fork hs
+  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
@@ -271,5 +271,20 @@ theorem swapTail_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : N
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨g', hg⟩ := ric_ret run
   exact ⟨_, g', Seg.done.inj hg⟩
+
+/-- `_update`, the `Swap` log, the unlock store and the body's return. -/
+theorem swapTail_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat}
+    {p adj1 adj0 in1 in0 bal1 bal0 r1 r0 len off toW a1 a0 ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (run : SFunc.RunCut cert.prog sevm []
+      (St b (adj1 :: adj0 :: in1 :: in0 :: bal1 :: bal0 :: r1 :: r0 :: len :: off :: toW ::
+        a1 :: a0 :: ρ :: S) M G) t_0cd6_c8 (.done o)) :
+    bal0.toNat < 2 ^ 112 ∧ bal1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧ ∃ M' G',
+      o = .returned (St (afterSstore sevm ((updateWorld sevm b r0 r1 bal0 bal1).addLog
+        (swapEventLog sevm in0 in1 a0 a1 toW)) 12 1) S M' G') := by
+  simpa only [updateWorldH_of_covered fork, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])] using
+    swapTail_invH fork.rules_stateGas_none fork.rules_bal_none mem lower width run
+
 
 end Blanc.Lift.UniswapV2Pair

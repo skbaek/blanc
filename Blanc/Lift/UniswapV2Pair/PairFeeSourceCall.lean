@@ -5,14 +5,13 @@ import Blanc.Lift.UniswapV2Pair.StaticSourceCall
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The fee source request names this same original factory slot and full reply. -/
-theorem PairFeeObservation.sourceCall {root start : Exec.Deriv} {b : Devm}
+theorem PairFeeObservationH.sourceCall {root start : Exec.Deriv} {b Wc : Devm}
     {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc}
     {frame : Frame} {target : Adr} {paths : List Exec.LocatedFrame}
-    (r : PairFeeObservation root start b M r1 r0 ρ R K) (site : CallSite) (index : Nat)
+    (r : PairFeeObservationH root start b Wc M r1 r0 ρ R K) (site : CallSite) (index : Nat)
     (word : feeFactoryWord start.sevm b = target.toB256)
     (pair : frame.context.pair = start.sevm.currentTarget)
-    (memory : Mem.Wf M) (fork : CoveredFork start.sevm.benvStat.fork)
+    (memory : Mem.Wf M) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (queue : SourceSlotQueue r.occurrence.call frame.context.pair index paths) :
     ∃ observed : SourceCallAt root frame (requestFor site target .feeTo)
         (feeObservedResult r.out) index,
@@ -33,9 +32,10 @@ theorem PairFeeObservation.sourceCall {root start : Exec.Deriv} {b : Devm}
     rw [r.occurrence.input]
     simp only [St, Devm.getCode_setMach]
     simpa only [word, toAdr_toB256] using r.occurrence.code_exists
-  exact static_source_call_at (request := request) r.occurrence.call rfl rfl
+  exact static_source_call_atH (request := request) r.occurrence.call rfl rfl
     (by intro digest v rr ss impossible; cases impossible) rfl
     (by rw [r.occurrence.sevm_eq]; exact pair) operands data flag rfl r.reply.returnData.symm rfl
-    guard (by rw [r.occurrence.sevm_eq]; exact fork) queue
+    guard (by rw [r.occurrence.sevm_eq]; exact stateGas) queue
+
 
 end Blanc.Lift.UniswapV2Pair

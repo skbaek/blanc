@@ -68,12 +68,12 @@ theorem AdmittedSourceConsumes.nextMutableCall
     .nextMutableCall observed gap queue present noCodeTurns duringProof restProof
       selectedTurns mapped rfl authentic admittedDuring admittedRest⟩
 
-/-- The original slot walk constructs recursive admission and same-queue entry
-authentication together, at the same incoming checkpoint and actual returned state. -/
-theorem admitted_source_slot_turns
+/-- The admitted slot-turns fold under the two historical rule facts of the calling frame in
+place of `CoveredFork`, from the historical supply. -/
+theorem admitted_source_slot_turnsH
     {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
     {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
-    (supply : PairFrameSupplyWith (AdmittedChildConsumes Auth) pair Rep Good Auth owned)
+    (supply : PairFrameSupplyWithH (AdmittedChildConsumes Auth) pair Rep Good Auth owned)
     (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
     (sem : CodeSem) (image : sem.image = some code.toList)
     {root : Exec.Deriv} {frame : Frame} {request : Request} {reply : ExternalResult} {index : Nat}
@@ -82,7 +82,8 @@ theorem admitted_source_slot_turns
     (installed : some (observed.call.occurrence.node.devm.getCode pair).toList = sem.image)
     (rep : Rep frame.current.state (observed.call.occurrence.node.devm.getStor pair))
     (time : frame.context.timestamp = observed.call.occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork observed.call.occurrence.node.sevm.benvStat.fork)
+    (stateGas : observed.call.occurrence.node.sevm.benvStat.rules.stateGas = none)
+    (bal : observed.call.occurrence.node.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = pair → Good F) :
     ∃ (events : List (Log ⊕ Exec.LocatedFrame)) (turns : List MutableTurn)
       (c : Checkpoint) (added : List PendingLog) (rets : List ChildReturn),
@@ -98,8 +99,18 @@ theorem admitted_source_slot_turns
       ∃ L : List Log,
         observed.call.returned.devm.logs = observed.call.occurrence.node.devm.logs ++ L ∧
         added.map (PendingLog.rawWith owned) = L.map some := by
-  exact mutable_source_slot_turns_with supply (sourceAdmittedMutableTurnRules Auth)
-    (sourceAdmittedMutableTurns_done Auth) repCongr sem image observed pairEq mutable
-    installed rep time fork good
+  exact mutable_source_slot_turns_withOn supply.on (sourceAdmittedMutableTurnRules Auth)
+    (sourceAdmittedMutableTurns_done Auth) repCongr sem image (fun _ admits => admits.1) observed
+    pairEq mutable installed rep time ⟨stateGas, bal⟩ good
+
+theorem AdmittedMutableTurns.mono_benvStat {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {P : BenvStat → Prop}
+    (weaken : ∀ D entry nested, P D.sevm.benvStat → Auth D entry nested → Auth' D entry nested)
+    {frame : Frame} {request : Request} {turn : Nat} {events : List (Log ⊕ Exec.LocatedFrame)}
+    {transcript : Transcript} {out : TurnsResult}
+    (inherited : ∀ located, Sum.inr located ∈ events → P located.frame.sevm.benvStat)
+    (admitted : AdmittedMutableTurns Auth frame request turn events transcript out) :
+    AdmittedMutableTurns Auth' frame request turn events transcript out :=
+  ⟨admitted.1, MutableAdmission.mono_benvStat weaken inherited admitted.2⟩
 
 end Blanc.Lift.UniswapV2Pair

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistStaticCallGuard
 import Blanc.Lift.UniswapV2Pair.UpdateSource
 import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.StaticCall
@@ -128,12 +129,10 @@ def SyncBalanceSite.returnDestination : SyncBalanceSite → Bytes
   | .first => [0x1e, 0xf1]
   | .second => [0x1f, 0x8e]
 
-/-- The actual call sites preserve the call's derivation provenance, derive its
-successful flag and full return-data bound, and retain the same continuation. -/
-theorem balanceCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem balanceCall_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
       (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M G)
       site.callTree seg) :
@@ -143,14 +142,15 @@ theorem balanceCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         (.exec .staticcall) d ∧
       StaticCallPost b d (a :: x :: y :: R) M 128 36 128 32 1 out ∧
       out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (M.read 128 36).1 out ∧
+      StaticAnsweredH sevm b token.toAdr (M.read 128 36).1 out ∧
       SFunc.RunCutP (StepIn D) cert.prog sevm C
         (St d (0 :: a :: x :: y :: R)
           ((M.extends [(128, 36), (128, 32)]).write 128 (out.take 32)) tailGas)
         site.returnTree seg := by
   cases site
-  · exact staticCallGuard_invP [0x1e, 0xf1] (by decide) rfl StepIn.toRun fork (by decide) run
-  · exact staticCallGuard_invP [0x1f, 0x8e] (by decide) rfl StepIn.toRun fork (by decide) run
+  · exact staticCallGuard_invPH [0x1e, 0xf1] (by decide) rfl StepIn.toRun stateGas (by decide) run
+  · exact staticCallGuard_invPH [0x1f, 0x8e] (by decide) rfl StepIn.toRun stateGas (by decide) run
+
 
 def SyncBalanceSite.shortTree : SyncBalanceSite → SFunc
   | .first => t_1f03_c31
@@ -175,12 +175,10 @@ theorem balanceReturn_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   · exact returnWidthGuard_invP [0x1f, 0x07] (by decide) rfl StepIn.toRun mem short (by decide) run
   · exact returnWidthGuard_invP [0x1f, 0xa4] (by decide) rfl StepIn.toRun mem short (by decide) run
 
-/-- A successful actual balance call consumes the overlapping request, derives
-both return-length guards, and reaches the decoder with full returndata retained. -/
-theorem balanceObservation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem balanceObservation_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
     (wf : Mem.Wf M)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
@@ -193,12 +191,12 @@ theorem balanceObservation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       StaticCallPost b d (a :: x :: y :: R) (balanceRequestMemory M sevm.currentTarget)
         128 36 128 32 1 out ∧
       32 ≤ out.length ∧ out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
+      StaticAnsweredH sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
       SFunc.RunCutP (StepIn D) cert.prog sevm C
         (St d (out.length.toB256 :: 128 :: R)
           (balanceReplyMemory M sevm.currentTarget out) tailGas) site.decodeTree seg := by
   obtain ⟨gw, callGas, d, out, _, call, post, bound, answered, tail⟩ :=
-    balanceCall_inv site fork run
+    balanceCall_invH site stateGas run
   have full : d.returnData.length < 2^256 := by rw [post.returnData]; exact bound
   change SFunc.RunCutP (StepIn D) cert.prog sevm C
     (St d (0 :: a :: x :: y :: R) (balanceReplyMemory M sevm.currentTarget out) _) _ _ at tail
@@ -207,6 +205,7 @@ theorem balanceObservation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   rw [post.returnData] at long decoded
   rw [balanceRequestMemory_read wf sevm.currentTarget] at answered
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, decoded⟩
+
 
 /-- Each literal call site has five gas before the actual callee step and
 22 gas after it; the callee premise supplies its actual result and remaining gas. -/
@@ -323,12 +322,10 @@ theorem balanceDecode_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (by omega)
   exact body
 
-/-- The actual balance observation reaches the source balance word, retaining
-its full output, precise request, actual call provenance and same continuation. -/
-theorem balanceRead_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem balanceRead_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {z token a x y : B256} {seg : Seg} (site : SyncBalanceSite)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
     (wf : Mem.Wf M)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
@@ -341,14 +338,15 @@ theorem balanceRead_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       StaticCallPost b d (a :: x :: y :: R) (balanceRequestMemory M sevm.currentTarget)
         128 36 128 32 1 out ∧
       32 ≤ out.length ∧ out.length < 2^256 ∧
-      StaticAnswered sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
+      StaticAnsweredH sevm b token.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out ∧
       SFunc.RunCutP (StepIn D) cert.prog sevm C
         (St d (Bytes.toB256 (out.take 32) :: R)
           (balanceReplyMemory M sevm.currentTarget out) tailGas) site.afterDecodeTree seg := by
   obtain ⟨gw, callGas, d, out, _, call, post, long, bound, answered, tail⟩ :=
-    balanceObservation_inv site fork mem wf run
+    balanceObservation_invH site stateGas mem wf run
   obtain ⟨tailGas, decoded⟩ := balanceDecode_inv site mem wf long tail
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, decoded⟩
+
 
 /-- Five local gas precede the callee and70 follow it through the actual MLOAD.
 The only external premises describe the actual primitive call's success, width and gas. -/

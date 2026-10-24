@@ -7,9 +7,7 @@ import Blanc.Lift.CursorOccurrenceRoots
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- One exact transfer's full event queue, admitted selected children and resulting
-finite source state remain tied to the same physical returned parent. -/
-structure SwapTransferMutable {root start : Exec.Deriv} {b : Devm}
+structure SwapTransferMutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
     {caller : SFunc} {K : List SFunc}
     (r : SwapTransferOccurrence root start b L M p amount toWord token rho caller K)
@@ -27,18 +25,16 @@ structure SwapTransferMutable {root start : Exec.Deriv} {b : Devm}
   queue : SourceSlotEvents observed.call frame.context.pair index events
   mappedPaths : events.filterMap Sum.getRight? = observed.paths
   mappedTurns : turns.map MutableTurn.event = events
-  during : AdmittedMutableTurns LockedAuth frame
+  during : AdmittedMutableTurns LockedAuthH frame
     (requestFor site token.toAdr (.transfer toWord.toAdr amount)) 0 events
     (mutableTranscript turns .done)
     {complete := true, frame := {frame with current := checkpoint}, childReturns := rets}
   authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
-    LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested
+    LockedAuthH (Exec.Frame.rootDeriv located.frame) entry nested
   invariant : SwapFrontState U root.sevm.currentTarget ctx current base
     {frame with current := checkpoint} r.step.returned.devm
 
-/-- The shared locked supply consumes this transfer's SAME original complete slot,
-retaining recursive admission and exact located-entry authentication. -/
-theorem swap_transfer_mutable {root start : Exec.Deriv} {b : Devm}
+theorem swap_transfer_mutableH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p amount toWord token rho : B256}
     {caller : SFunc} {K : List SFunc} {U : WriterKey → Prop}
     {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
@@ -49,15 +45,16 @@ theorem swap_transfer_mutable {root start : Exec.Deriv} {b : Devm}
     (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
     (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
     (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
       F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
-    Nonempty (SwapTransferMutable r U ctx current base frame site index) := by
+    Nonempty (SwapTransferMutableH r U ctx current base frame site index) := by
   have env : start.sevm = root.sevm := r.sevmEq.symm.trans
     (Blanc.Exec.Deriv.ParentPrefix.sevm_eq r.step.sameFrame)
-  obtain ⟨observed, same⟩ := r.sourceCall frame site index
+  obtain ⟨observed, same⟩ := r.sourceCallH frame site index
     (by rw [inv.context, env, nonstatic, rootNonstatic])
-    (by rw [inv.context, env]; exact pair) (by rw [env]; exact fork)
+    (by rw [inv.context, env]; exact pair) (by rw [env]; exact stateGas)
   have pairEq : frame.context.pair = root.sevm.currentTarget := inv.context ▸ pair
   have preCode : r.step.occurrence.node.devm.getCode root.sevm.currentTarget =
       base.getCode root.sevm.currentTarget := by
@@ -69,12 +66,12 @@ theorem swap_transfer_mutable {root start : Exec.Deriv} {b : Devm}
     simpa only [St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using inv.rep
   obtain ⟨events, turns, c, added, rets, queue, mappedPaths, mappedTurns, during,
     authentic, afterRep, sourceLogs, rawLogs⟩ :=
-    locked_admitted_mutable_source_slot_turns inj apart sem image observed pairEq
+    locked_admitted_mutable_source_slot_turnsH inj apart sem image observed pairEq
       (by change (frame.context.isStatic || false) = false; rw [inv.context, nonstatic]; rfl)
       (by rw [same, preCode]; exact installed)
       (by rw [same]; exact preRep)
       (by rw [same, r.sevmEq, env, inv.context]; exact time)
-      (by rw [same, r.sevmEq, env]; exact fork) good
+      (by rw [same, r.sevmEq, env]; exact stateGas) (by rw [same, r.sevmEq, env]; exact bal) good
   rw [same] at afterRep rawLogs
   have nonemptyCode : (r.step.occurrence.node.devm.getCode root.sevm.currentTarget).toList ≠ [] := by
     intro empty
@@ -91,6 +88,7 @@ theorem swap_transfer_mutable {root start : Exec.Deriv} {b : Devm}
     rw [oldLogs, List.append_assoc]
   · rw [List.map_append, List.map_append, oldImages, newImages]
 
+
 def swapTransferPhaseRequest (second : Bool) (locals : SwapLocals) : Request :=
   requestFor (if second then .swapTransfer1 else .swapTransfer0)
     (if second then locals.token1 else locals.token0)
@@ -105,9 +103,7 @@ def swapTransferPhaseStart (second : Bool) (frame : Frame) (locals : SwapLocals)
 def swapTransferPhaseEnd (second : Bool) (frame : Frame) (locals : SwapLocals) : SegmentResult :=
   if second then frame.afterSwapTransfer1 locals else frame.afterSwapTransfer0 locals
 
-/-- Both optional transfers compose their SAME admitted queue and resumed frame;
-only an executed instruction advances the original source index. -/
-theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
+theorem swap_optional_transfer_admittedH {root start : Exec.Deriv} {b : Devm}
     {L : List B256} {M : Mem} {p toWord token rho : B256} {caller : SFunc} {K : List SFunc}
     {U : WriterKey → Prop} {ctx : Context} {current : Checkpoint} {base : Devm} {frame : Frame}
     {locals : SwapLocals} (second : Bool)
@@ -121,16 +117,17 @@ theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
     (inv : SwapFrontState U root.sevm.currentTarget ctx current base frame b)
     (pair : ctx.pair = root.sevm.currentTarget) (time : ctx.timestamp = root.sevm.benvStat.time)
     (nonstatic : ctx.isStatic = false) (rootNonstatic : root.sevm.isStatic = false)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (good : ∀ F ∈ Exec.rawFrameRoots root.exc,
       F.sevm.currentTarget = root.sevm.currentTarget → LockedGood U F) :
     ∃ (nextFrame : Frame) (T : Transcript → Transcript) (rets : List ChildReturn),
       SwapFrontState U root.sevm.currentTarget ctx current base nextFrame opt.world ∧
       ∀ tail out,
-        AdmittedSourceConsumes LockedAuth root opt.next
+        AdmittedSourceConsumes LockedAuthH root opt.next
           (index + if (if second then locals.amount1Out else locals.amount0Out) = 0 then 0 else 1)
           (swapTransferPhaseEnd second nextFrame locals) tail out →
-        AdmittedSourceConsumes LockedAuth root start index
+        AdmittedSourceConsumes LockedAuthH root start index
           (swapTransferPhaseStart second frame locals) (T tail)
           {out with childReturns := rets ++ out.childReturns} := by
   rcases opt.choice with ⟨zero, next, world, _, _⟩ |
@@ -150,9 +147,9 @@ theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
       rw [next, ite_eq_left zero, Nat.add_zero] at rest
       rw [skip]
       exact rest
-  · obtain ⟨selected⟩ := swap_transfer_mutable actual
+  · obtain ⟨selected⟩ := swap_transfer_mutableH actual
       (if second then .swapTransfer1 else .swapTransfer0) index inj apart sem image installed
-      inv pair time nonstatic rootNonstatic fork good
+      inv pair time nonstatic rootNonstatic stateGas bal good
     let request := swapTransferPhaseRequest second locals
     let nextFrame : Frame := ({frame with current := selected.checkpoint} : Frame).beginResume request
     have requestEq : requestFor (if second then .swapTransfer1 else .swapTransfer0)
@@ -197,7 +194,7 @@ theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
         (fun missing => observed.noCodeMutableTranscript rfl queue mapped missing)
         mapped selected.authentic during ?_
       · rw [obsSame]; exact actual.gap
-      · change AdmittedSourceConsumes LockedAuth root observed.call.returned (index + 1)
+      · change AdmittedSourceConsumes LockedAuthH root observed.call.returned (index + 1)
           (resumeSegment {frame with current := selected.checkpoint} request
             (if second then .swapTransfer1 locals else .swapTransfer0 locals)
             (swapObservedTransferReply actual.step.returned.devm.returnData actual.step.occurrence.slot.isSome))
@@ -206,7 +203,8 @@ theorem swap_optional_transfer_admitted {root start : Exec.Deriv} {b : Devm}
         have resumed := swap_resume_observed_transfer
           (frame := ({frame with current := selected.checkpoint} : Frame))
           (locals := locals) second actual.step.occurrence.slot.isSome actual.accepted
-        exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuth root
+        exact Eq.mpr (congrArg (fun segment => AdmittedSourceConsumes LockedAuthH root
           actual.step.returned (index + 1) segment tail out) resumed) rest
+
 
 end Blanc.Lift.UniswapV2Pair

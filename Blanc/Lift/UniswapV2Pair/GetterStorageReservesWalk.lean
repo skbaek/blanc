@@ -19,8 +19,8 @@ theorem reserves_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   simpa only [StorageGetter.dispatchGas, StorageGetter.selector, StorageGetter.entryTree,
     Nat.add_assoc, Nat.reduceAdd] using getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) .getReserves value size selector body
 
-theorem reserves_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem reserves_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x0902f1ac)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
@@ -34,12 +34,13 @@ theorem reserves_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := getterStorage_selector_inv .getReserves selector run
-  obtain ⟨d, eq, out, stor, logs⟩ := reserves_entry_inv fork getterInitMemory_ptr run
+  obtain ⟨d, eq, out, stor, logs⟩ := reserves_entry_invH bal getterInitMemory_ptr run
   cases eq
   exact ⟨value, size, out, stor, logs⟩
 
-theorem getReserves_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem getReserves_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x0902f1ac)
     (slots : ReserveSlotMatches st sevm b)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -47,7 +48,7 @@ theorem getReserves_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st
       some post.output = getterResult st .getReserves ∧
       (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
   obtain ⟨value, size, out, stor, logs⟩ :=
-    reserves_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
+    reserves_pc0_invH bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
   refine ⟨value, size, ?_, stor, logs⟩
   rw [reserveSource_result slots, out]
 

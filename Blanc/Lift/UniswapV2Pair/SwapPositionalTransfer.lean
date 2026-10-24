@@ -40,27 +40,25 @@ structure SwapTransferOccurrence (root start : Exec.Deriv) (b : Devm)
   pointer : ∃ n', PtrMem (swapMovedPointer p step.returned.devm.returnData) n'
     (swapTransferMemory M p amount toWord step.returned.devm.returnData)
 
-/-- The shared transfer request/call/reply helpers classify this supplied
-actual invocation; no different equal-payload CALL or synthetic return is used. -/
-theorem swap_transfer_occurrence {root start : Exec.Deriv} {b post : Devm}
+theorem swap_transfer_occurrenceH {root start : Exec.Deriv} {b post : Devm}
     {L : List B256} {M : Mem} {K : List SFunc} {caller : SFunc}
     {p amount toWord token rho : B256} {n : Nat}
     (cut : CursorStateAt code cert start t_1fdb_c57 b
       (amount :: toWord :: token :: rho :: L) M (caller :: K))
     (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     Nonempty (SwapTransferOccurrence root start b L M p amount toWord token rho caller K) := by
   have startSuccess : start.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
   obtain ⟨callMem, ⟨gasCut⟩⟩ :=
-    pair_transfer_request_cursor_state cut startSuccess fork mem lower width
+    pair_transfer_request_cursor_stateH cut startSuccess stateGas mem lower width
   obtain ⟨step, cursor, gas, gap, env, _, input, _, placed, tree, conts⟩ :=
-    pair_transfer_call_of_gas_cursor gasCut reached startSuccess fork
+    pair_transfer_call_of_gas_cursorH gasCut reached startSuccess stateGas
   have fit := safeTransfer_dynamicCall_fit (amount := amount) (toWord := toWord) mem lower width
   obtain ⟨stack, memory, output, short, accepted, ⟨tail⟩⟩ :=
-    pair_transfer_reply_cursor_state step input placed tree conts success
-      (by rw [env]; exact fork) callMem lower width fit
+    pair_transfer_reply_cursor_stateH step input placed tree conts success
+      (by rw [env]; exact stateGas) callMem lower width fit
   have data := safeTransfer_dynamicCall_data (amount := amount) (toWord := toWord)
     mem.wf lower (by omega : p.toNat + 164 < 2 ^ 256)
   have tail' : CursorStateAt code cert step.returned caller step.returned.devm L
@@ -79,6 +77,7 @@ theorem swap_transfer_occurrence {root start : Exec.Deriv} {b post : Devm}
         (bytes := step.returned.devm.returnData) callMem
         (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)).1⟩
   exact ⟨⟨step, gas, gap, env, input, stack, memory, output, short, accepted, data, tail', pointer⟩⟩
+
 
 /-- A skipped transfer keeps its source position; an executed transfer keeps
 its exact occurrence and returned node. Both reach the same original caller. -/
@@ -128,15 +127,13 @@ def SwapOptionalTransfer.occurred {root start : Exec.Deriv} {b : Devm}
     actual.tail, actual.pointer,
     Or.inr ⟨actual, nonzero, rfl, rfl, rfl, rfl⟩⟩
 
-/-- Optional transfer0 follows its literal amount branch. A zero amount
-crosses a call-free span; a nonzero amount consumes its own physical CALL. -/
-theorem swap_transfer0_cursor_state {root start : Exec.Deriv} {b post : Devm}
+theorem swap_transfer0_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p : B256} {n : Nat}
     {t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
     (cut : CursorStateAt code cert start t_08bf_c4 b
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
     (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ 159) :
     let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
     ∃ result : SwapOptionalTransfer root start b L M p a0 toWord t0 0x8d0 t_08d0_c4 K,
@@ -144,15 +141,15 @@ theorem swap_transfer0_cursor_state {root start : Exec.Deriv} {b post : Devm}
   intro L
   have startSuccess : start.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
-  obtain ⟨cut⟩ := cut.dest cert_check startSuccess fork
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapTransfer0GuardLine rfl
+  obtain ⟨cut⟩ := cut.destH cert_check startSuccess stateGas
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapTransfer0GuardLine rfl
     (by
       intro n member x equal; subst n
       simp only [swapTransfer0GuardLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
     (fun line => swapTransfer0GuardLine_inv line)
   by_cases zero : a0 = 0
-  · obtain ⟨cut⟩ := cut.branchSucc cert_check startSuccess fork (by
+  · obtain ⟨cut⟩ := cut.branchSuccH cert_check startSuccess stateGas (by
       simp only [B256.eqCheck, zero, ite_true]
       decide)
     exact ⟨SwapOptionalTransfer.skipped reached zero cut mem, lower,
@@ -160,15 +157,15 @@ theorem swap_transfer0_cursor_state {root start : Exec.Deriv} {b post : Devm}
   · have flagZero : B256.eqCheck a0 0 = 0 := by
       simp only [B256.eqCheck, zero, ite_false]
     rw [flagZero] at cut
-    obtain ⟨cut⟩ := cut.branchZero cert_check startSuccess fork
-    obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapTransfer0SetupLine rfl
+    obtain ⟨cut⟩ := cut.branchZeroH cert_check startSuccess stateGas
+    obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapTransfer0SetupLine rfl
       (by
         intro n member x equal; subst n
         simp only [swapTransfer0SetupLine, List.mem_cons, List.not_mem_nil,
           reduceCtorEq, or_self] at member)
       (fun line => swapTransfer0SetupLine_inv line)
-    obtain ⟨cut⟩ := cut.call cert_check startSuccess fork rfl
-    obtain ⟨actual⟩ := swap_transfer_occurrence cut reached success fork mem lower (by omega)
+    obtain ⟨cut⟩ := cut.callH cert_check startSuccess stateGas rfl
+    obtain ⟨actual⟩ := swap_transfer_occurrenceH cut reached success stateGas mem lower (by omega)
     have layout := swapMovedPointer_layout actual.short (by omega : p.toNat + 2 ^ 161 < 2 ^ 256)
     refine ⟨SwapOptionalTransfer.occurred reached zero actual, ?_, ?_⟩
     · change 128 ≤ (swapMovedPointer p actual.step.returned.devm.returnData).toNat
@@ -177,15 +174,14 @@ theorem swap_transfer0_cursor_state {root start : Exec.Deriv} {b post : Devm}
       have short := actual.short
       omega
 
-/-- Optional transfer1 follows its literal amount branch. A zero amount
-crosses a call-free span; a nonzero amount consumes its own physical CALL. -/
-theorem swap_transfer1_cursor_state {root start : Exec.Deriv} {b post : Devm}
+
+theorem swap_transfer1_cursor_stateH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {p : B256} {n : Nat}
     {t1 t0 r1 r0 len dataStart toWord a1 a0 rho : B256}
     (cut : CursorStateAt code cert start t_08d0_c4 b
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R) M K)
     (reached : Exec.Deriv.ParentPrefix root start)
-    (success : root.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ 161) :
     let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: dataStart :: toWord :: a1 :: a0 :: rho :: R
     ∃ result : SwapOptionalTransfer root start b L M p a1 toWord t1 0x8e1 t_08e1_c4 K,
@@ -193,15 +189,15 @@ theorem swap_transfer1_cursor_state {root start : Exec.Deriv} {b post : Devm}
   intro L
   have startSuccess : start.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq reached).trans success
-  obtain ⟨cut⟩ := cut.dest cert_check startSuccess fork
-  obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapTransfer1GuardLine rfl
+  obtain ⟨cut⟩ := cut.destH cert_check startSuccess stateGas
+  obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapTransfer1GuardLine rfl
     (by
       intro n member x equal; subst n
       simp only [swapTransfer1GuardLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
     (fun line => swapTransfer1GuardLine_inv line)
   by_cases zero : a1 = 0
-  · obtain ⟨cut⟩ := cut.branchSucc cert_check startSuccess fork (by
+  · obtain ⟨cut⟩ := cut.branchSuccH cert_check startSuccess stateGas (by
       simp only [B256.eqCheck, zero, ite_true]
       decide)
     exact ⟨SwapOptionalTransfer.skipped reached zero cut mem, lower,
@@ -209,15 +205,15 @@ theorem swap_transfer1_cursor_state {root start : Exec.Deriv} {b post : Devm}
   · have flagZero : B256.eqCheck a1 0 = 0 := by
       simp only [B256.eqCheck, zero, ite_false]
     rw [flagZero] at cut
-    obtain ⟨cut⟩ := cut.branchZero cert_check startSuccess fork
-    obtain ⟨cut⟩ := cut.line cert_check startSuccess fork swapTransfer1SetupLine rfl
+    obtain ⟨cut⟩ := cut.branchZeroH cert_check startSuccess stateGas
+    obtain ⟨cut⟩ := cut.lineH cert_check startSuccess stateGas swapTransfer1SetupLine rfl
       (by
         intro n member x equal; subst n
         simp only [swapTransfer1SetupLine, List.mem_cons, List.not_mem_nil,
           reduceCtorEq, or_self] at member)
       (fun line => swapTransfer1SetupLine_inv line)
-    obtain ⟨cut⟩ := cut.call cert_check startSuccess fork rfl
-    obtain ⟨actual⟩ := swap_transfer_occurrence cut reached success fork mem lower (by omega)
+    obtain ⟨cut⟩ := cut.callH cert_check startSuccess stateGas rfl
+    obtain ⟨actual⟩ := swap_transfer_occurrenceH cut reached success stateGas mem lower (by omega)
     have layout := swapMovedPointer_layout actual.short (by omega : p.toNat + 2 ^ 161 < 2 ^ 256)
     refine ⟨SwapOptionalTransfer.occurred reached zero actual, ?_, ?_⟩
     · change 128 ≤ (swapMovedPointer p actual.step.returned.devm.returnData).toNat
@@ -225,6 +221,7 @@ theorem swap_transfer1_cursor_state {root start : Exec.Deriv} {b post : Devm}
     · change (swapMovedPointer p actual.step.returned.devm.returnData).toNat < 2 ^ 162
       have short := actual.short
       omega
+
 
 /-- Cached token0 word of the original Swap prefix. -/
 def swapInitialToken0 (sevm : Sevm) (b : Devm) : B256 :=
@@ -250,23 +247,46 @@ structure SwapTransfers (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
   secondLower : 128 ≤ second.ptr.toNat
   secondUpper : second.ptr.toNat < 2 ^ 162
 
-/-- Both optional transfers belong to the supplied original successful root.
-No physical call, gas, desired join state or pointer bound is a public premise. -/
-theorem swap_transfers_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+structure SwapTransfersH (root : Exec.Deriv) (sevm : Sevm) (b W : Devm) where
+  first : SwapOptionalTransfer root root W
+    (swapRawLocalsStack sevm b) getterInitMemory 128 (swapAmount0Out sevm)
+    (swapRecipientWord sevm) (swapInitialToken0 sevm b) 0x8d0 t_08d0_c4 [t_0257_c99]
+  firstLower : 128 ≤ first.ptr.toNat
+  firstUpper : first.ptr.toNat < 2 ^ 161
+  second : SwapOptionalTransfer root first.next first.world (swapRawLocalsStack sevm b)
+    first.memory first.ptr (swapAmount1Out sevm) (swapRecipientWord sevm)
+    (swapInitialToken1 sevm b) 0x8e1 t_08e1_c4 [t_0257_c99]
+  secondLower : 128 ≤ second.ptr.toNat
+  secondUpper : second.ptr.toNat < 2 ^ 162
+
+/-- At the modern prefix world, `SwapTransfersH` is `SwapTransfers` field for field. -/
+def SwapTransfersH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
+    (h : SwapTransfersH root sevm b (swapPrefixWorld sevm b)) : SwapTransfers root sevm b :=
+  ⟨h.first, h.firstLower, h.firstUpper, h.second, h.secondLower, h.secondUpper⟩
+
+/-- The modern `SwapTransfers` is `SwapTransfersH` at the modern prefix world. -/
+def SwapTransfers.toH {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
+    (h : SwapTransfers root sevm b) : SwapTransfersH root sevm b (swapPrefixWorld sevm b) :=
+  ⟨h.first, h.firstLower, h.firstUpper, h.second, h.secondLower, h.secondUpper⟩
+
+theorem swap_transfers_cursor_stateH {sevm : Sevm} {b post W : Devm} {G : Nat}
+    (hW : W = swapPrefixWorldH sevm b) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    Nonempty (SwapTransfers ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b) := by
-  obtain ⟨cut0⟩ := swap_prefix_cursor_state codeEq fork selector run
+    Nonempty (SwapTransfersH ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b W) := by
+  subst hW
+  obtain ⟨cut0⟩ := swap_prefix_cursor_stateH codeEq stateGas bal selector run
   dsimp only [swapRawLocalsStack, swapBodyStack] at cut0
-  obtain ⟨first, lower0, upper0⟩ := swap_transfer0_cursor_state cut0 (.refl _) rfl fork
+  obtain ⟨first, lower0, upper0⟩ := swap_transfer0_cursor_stateH cut0 (.refl _) rfl stateGas
     getterInitMemory_ptr (by decide) (by decide)
   obtain ⟨n1, mem1⟩ := first.mem
-  have fork1 : CoveredFork first.next.sevm.benvStat.fork := by
+  have fork1 : first.next.sevm.benvStat.rules.stateGas = none := by
     rw [first.sevmEq]
-    exact fork
-  obtain ⟨second, lower1, upper1⟩ := swap_transfer1_cursor_state first.cut first.reached
+    exact stateGas
+  obtain ⟨second, lower1, upper1⟩ := swap_transfer1_cursor_stateH first.cut first.reached
     rfl fork1 mem1 lower0 upper0
   exact ⟨⟨first, lower0, upper0, second, lower1, upper1⟩⟩
+
 
 end Blanc.Lift.UniswapV2Pair

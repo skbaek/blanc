@@ -6,19 +6,18 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The actual instruction reads the recovery request from its own memory. -/
-theorem PermitCallOccurrence.request_image {root : Exec.Deriv} {b : Devm}
-    (actual : PermitCallOccurrence root b) :
+theorem PermitCallOccurrenceH.request_image {root : Exec.Deriv} {b : Devm}
+    (actual : PermitCallOccurrenceH root b) :
     (actual.call.occurrence.node.devm.memory.read (482 : B256).toNat (128 : B256).toNat).1 =
-      ExternalOperation.encode (.recover (permitPublicDigest root.sevm b)
+      ExternalOperation.encode (.recover (permitPublicDigestH root.sevm b)
         (permitV root.sevm) (permitR root.sevm) (permitS root.sevm)) := by
   rw [actual.beforeMemory]
-  have request := (permitCallMemory_facts (sevm := root.sevm) (b := b)
+  have request := (permitCallMemory_factsH (sevm := root.sevm) (b := b)
     getterInitMemory_ptr (Mem.reads_data getterInitMemory) (permitOwner root.sevm)
     (permitSpender root.sevm) (permitValue root.sevm) (permitDeadline root.sevm)
     (permitV root.sevm) (permitR root.sevm) (permitS root.sevm)).2.1
-  change ((permitPublicCallMemory root.sevm b).read 482 128).1 =
-    ExternalOperation.encode (.recover (permitPublicDigest root.sevm b)
+  change ((permitPublicCallMemoryH root.sevm b).read 482 128).1 =
+    ExternalOperation.encode (.recover (permitPublicDigestH root.sevm b)
       (permitV root.sevm) (permitR root.sevm) (permitS root.sevm)) at request
   simpa only [show (482 : B256).toNat = 482 from rfl,
     show (128 : B256).toNat = 128 from rfl] using request
@@ -58,15 +57,72 @@ structure PermitRecoverySettlement {root : Exec.Deriv} {b : Devm}
   partition : Exec.descendantFramePaths [] 0 actual.call.occurrence.node.exc =
     childFrames ++ Exec.descendantFramePaths [] 1 actual.call.returned.exc
 
-/-- The actual successful recovery instruction supplies its exact processed slot,
-immediate entry or original runOk child, located queue, and returned output. -/
-theorem PermitCallOccurrence.settlement {root : Exec.Deriv} {b post : Devm}
-    (actual : PermitCallOccurrence root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (PermitRecoverySettlement actual) := by
-  have one := actual.flag_one success fork
+structure PermitRecoverySettlementH {root : Exec.Deriv} {b : Devm}
+    (actual : PermitCallOccurrenceH root b) where
+  message : Msg
+  parent : Devm
+  child : Devm
+  delegated : Bool
+  codeAddress : Adr
+  childCode : ByteArray
+  availableGas : Nat
+  messageEq : message = callMsg root.sevm parent
+    (min actual.gasWord.toNat (except64th availableGas)) 0 root.sevm.currentTarget
+    (1 : B256).toAdr codeAddress true true
+    (ExternalOperation.encode (.recover (permitPublicDigestH root.sevm b)
+      (permitV root.sevm) (permitR root.sevm) (permitS root.sevm))) childCode delegated
+  process : ProcessMessage message actual.call.occurrence.slot (.ok child)
+  clean : child.error.isSome = false
+  output : child.output = actual.out
+  resumed : (Resume.call parent 450 32).run (.ok child) = .ok actual.call.returned.devm
+  spawned : Evm.step ⟨actual.call.occurrence.node.pc, actual.call.occurrence.node.sevm,
+    actual.call.occurrence.node.devm⟩ =
+    .spawn (Jaune.Frame.ofCall message) (Resume.call parent 450 32)
+      (actual.call.occurrence.node.pc + 1)
+  entered : Bool
+  enteredEq : entered = actual.call.occurrence.slot.isSome
+  immediate : actual.call.occurrence.slot = .none →
+    (Jaune.Frame.ofCall message).enter = .done (.ok child) ∧
+      root.sevm.benvStat.rules.isPrecomp (1 : B256).toAdr
+  paths : List Exec.LocatedFrame
+  queue : SourceSlotQueue actual.call root.sevm.currentTarget 0 paths
+  childFrames : List Exec.LocatedFrame
+  partition : Exec.descendantFramePaths [] 0 actual.call.occurrence.node.exc =
+    childFrames ++ Exec.descendantFramePaths [] 1 actual.call.returned.exc
+
+/-- On a covered fork, `PermitRecoverySettlementH` gives the modern `PermitRecoverySettlement` with the same fields. -/
+def PermitRecoverySettlementH.toCovered {root : Exec.Deriv} {b : Devm} {actual : PermitCallOccurrenceH root b}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : PermitRecoverySettlementH actual) :
+    PermitRecoverySettlement (actual.toCovered fork) where
+  message := h.message
+  parent := h.parent
+  child := h.child
+  delegated := h.delegated
+  codeAddress := h.codeAddress
+  childCode := h.childCode
+  availableGas := h.availableGas
+  messageEq := by rw [← permitPublicDigestH_of_covered fork]; exact h.messageEq
+  process := h.process
+  clean := h.clean
+  output := h.output
+  resumed := h.resumed
+  spawned := h.spawned
+  entered := h.entered
+  enteredEq := h.enteredEq
+  immediate := h.immediate
+  paths := h.paths
+  queue := h.queue
+  childFrames := h.childFrames
+  partition := h.partition
+
+theorem PermitCallOccurrenceH.settlement {root : Exec.Deriv} {b post : Devm}
+    (actual : PermitCallOccurrenceH root b) (success : root.exn = .ok post)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none) :
+    Nonempty (PermitRecoverySettlementH actual) := by
+  have one := actual.flag_one success stateGas bal
   have operands : (actual.gasWord :: 1 :: 482 :: 128 :: 450 :: 32 ::
-      permitPublicCallStack root.sevm b 0xd505accf) <<+ actual.call.occurrence.node.devm.stack := by
+      permitPublicCallStackH root.sevm b 0xd505accf) <<+ actual.call.occurrence.node.devm.stack := by
     rw [actual.beforeState]
     exact pref_append _ []
   have primitive : Ninst.StepRun actual.call.occurrence.node.pc root.sevm
@@ -74,8 +130,8 @@ theorem PermitCallOccurrence.settlement {root : Exec.Deriv} {b post : Devm}
       (.ok actual.call.returned.devm) := by
     simpa only [actual.beforeSevm, actual.call.instruction, actual.call.result]
       using actual.call.occurrence.stepRun
-  rcases of_step_staticcall_val_with_depth_frame_cause operands actual.call.occurrence.filled
-      primitive fork with failed | called
+  rcases of_step_staticcall_val_with_depth_frame_causeH operands actual.call.occurrence.filled
+      primitive stateGas with failed | called
   · have zero := failed.1
     rw [actual.post.stack, one] at zero
     exact (by decide : (0 : B256) ≠ 1)
@@ -89,7 +145,7 @@ theorem PermitCallOccurrence.settlement {root : Exec.Deriv} {b post : Devm}
     have messageEq : message = callMsg root.sevm parent
         (min actual.gasWord.toNat (except64th avail)) 0 root.sevm.currentTarget
         (1 : B256).toAdr name true true
-        (ExternalOperation.encode (.recover (permitPublicDigest root.sevm b)
+        (ExternalOperation.encode (.recover (permitPublicDigestH root.sevm b)
           (permitV root.sevm) (permitR root.sevm) (permitS root.sevm))) childCode delegated := by
       exact congrArg (fun input => callMsg root.sevm parent
         (min actual.gasWord.toNat (except64th avail)) 0 root.sevm.currentTarget
@@ -121,7 +177,7 @@ theorem PermitCallOccurrence.settlement {root : Exec.Deriv} {b post : Devm}
           .none (.ok actual.call.returned.devm) := by
         have step := slot ▸ primitive
         simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.Run] using step
-      exact ⟨entered, Xinst.staticcall_none_precompile fork operands xrun
+      exact ⟨entered, Xinst.staticcall_none_precompileH stateGas operands xrun
         ⟨1, _, by simpa only [one] using actual.post.stack, by decide⟩⟩
     obtain ⟨childFrames, partition⟩ := Blanc.Exec.Deriv.ParentStep.descendantFramePaths_spawn_suffix
       actual.call.edge driverSpawn [] 0
@@ -153,6 +209,7 @@ theorem PermitCallOccurrence.settlement {root : Exec.Deriv} {b post : Devm}
         actual.call.occurrence.node.pc + 1, childRun, next, driverSpawn, entered,
         resumedRaw, slotEq, exactRun, ?_⟩
       simp only [commits, ite_true]
+
 
 
 end Blanc.Lift.UniswapV2Pair

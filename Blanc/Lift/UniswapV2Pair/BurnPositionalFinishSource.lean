@@ -4,16 +4,15 @@ import Blanc.Lift.UniswapV2Pair.BurnSource
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The same actual final answers produce the finite update, unlock and Burn
-event, and that exact source finisher represents the actual successful post. -/
-theorem BurnSevenCalls.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+theorem BurnSevenCallsH.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
     {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
+    (r : BurnSevenCallsH root sevm b w)
     (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (rep : WriterRep J (r.final1.call.returned.devm.getStor sevm.currentTarget) frame.current.state)
     (time : frame.context.timestamp = sevm.benvStat.time)
     (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork) :
+    (success : root.exn = .ok post) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
     let balance0 := Bytes.toB256 (r.final0.out.take 32)
     let balance1 := Bytes.toB256 (r.final1.out.take 32)
     let flag := feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32))
@@ -37,7 +36,7 @@ theorem BurnSevenCalls.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : 
          ⟨frame.context.pair, [burnEventTopic, frame.context.sender.toB256, recipient.toAdr.toB256],
           encodeWords [amount0, amount1]⟩] := by
   obtain ⟨bound0, bound1, _, N, next, gas, span, env, outcome, placed, tree, conts, full, output, stor, logs⟩ :=
-    r.finishRaw success fork
+    r.finishRaw success stateGas bal
   obtain ⟨reserve0, reserve1, _, _, _⟩ := r.five.four.three.initial.cache_targets incoming
   have cache0 : (burnInitialReserve0 sevm b).toNat = current.state.cachedReserves.reserve0.val := by
     rw [reserve0, B256.toNat_toB256_of_lt
@@ -48,7 +47,7 @@ theorem BurnSevenCalls.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : 
       (lt_trans current.state.reserve1.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
     rfl
   obtain ⟨updated, event, oracle, accepted, finished, represented, rawLogs, _⟩ :=
-    burnSuffix_source_result (frame := frame) (sevm := sevm)
+    burnSuffix_source_resultH (frame := frame) (sevm := sevm)
       (b := r.final1.call.returned.devm) (reserves := current.state.cachedReserves)
       (old0 := burnInitialReserve0 sevm b) (old1 := burnInitialReserve1 sevm b)
       (balance0 := Bytes.toB256 (r.final0.out.take 32))
@@ -60,5 +59,6 @@ theorem BurnSevenCalls.finishSource {root : Exec.Deriv} {sevm : Sevm} {b post : 
       rep time pair sender cache0 cache1 bound0 bound1
   exact ⟨updated, event, oracle, accepted, finished,
     (stor sevm.currentTarget).symm ▸ represented, output, logs.trans rawLogs⟩
+
 
 end Blanc.Lift.UniswapV2Pair

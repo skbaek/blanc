@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorCalls
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorGasCall
 import Blanc.Lift.UniswapV2Pair.PairTransferPreparation
 
@@ -14,15 +16,13 @@ def pairTransferAfterCallTree : SFunc :=
 
 def pairTransferGasTree : SFunc := .next (.reg .gas) (.next (.exec .call) pairTransferAfterCallTree)
 
-/-- The supplied actual GAS cursor produces this original-root CALL and its
-real filled slot, returned cursor and complete physical successor state. -/
-theorem pair_transfer_call_of_gas_cursor {root start : Exec.Deriv} {b post : Devm}
+theorem pair_transfer_call_of_gas_cursorH {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {token q inputSize endWord : B256}
     (cut : CursorStateAt code cert start pairTransferGasTree b
       (token :: 0 :: q :: inputSize :: q :: 0 :: endWord :: token :: R) M K)
     (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none) :
     ∃ (step : CallOccurrenceStep root .call) (cursor : Cursor) (gas : Nat),
       Exec.Deriv.ExecFreeUntil start step.occurrence.node ∧
       step.occurrence.node.sevm = start.sevm ∧ step.occurrence.node.exn = start.exn ∧
@@ -32,6 +32,7 @@ theorem pair_transfer_call_of_gas_cursor {root start : Exec.Deriv} {b post : Dev
         step.occurrence.node.devm (.exec .call) step.returned.devm ∧
       CursorOK code cert step.returned cursor ∧ cursor.f = pairTransferAfterCallTree ∧
       cursor.K.map Cont.f = K :=
-  cut.gasCall cert_check reached success fork
+  cut.gasCallH cert_check reached success stateGas
+
 
 end Blanc.Lift.UniswapV2Pair

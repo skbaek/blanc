@@ -6,17 +6,16 @@ import Blanc.Lift.UniswapV2Pair.SourceStaticSlotViews
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The first final query's source views retain the exact sixth slot and the
-supplied same-state frame from the second transfer. -/
-theorem BurnSevenCalls.final0Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+theorem BurnSevenCallsH.final0Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
+    (r : BurnSevenCallsH root sevm b w)
     (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (rep : WriterRep J (r.five.second.returned.devm.getStor sevm.currentTarget) frame.current.state)
     (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
     let request := burnFinalRequest0 frame (r.five.four.sourcePriced current)
@@ -41,37 +40,39 @@ theorem BurnSevenCalls.final0Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have inputStorage : r.final0.call.occurrence.node.devm.getStor sevm.currentTarget =
       r.five.second.returned.devm.getStor sevm.currentTarget := by
     rw [r.final0.input, St_getStor]
-    simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+    simp only [Devm.getStor, Devm.getAcct, r.five.four.three.worlds.2.2,
+      accountAccessH_state]
   have returnedStorage : r.final0.call.returned.devm.getStor sevm.currentTarget =
       r.five.second.returned.devm.getStor sevm.currentTarget := by
     rw [r.final0.reply.stor]
-    simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+    simp only [Devm.getStor, Devm.getAcct, r.five.four.three.worlds.2.2,
+      accountAccessH_state]
   have actualRep : WriterRep J (r.final0.call.occurrence.node.devm.getStor frame.context.pair)
       frame.current.state := by rw [pair, inputStorage]; exact rep
   obtain ⟨paths, views, queue, mapped, authentic, during⟩ :=
-    CallOccurrenceStep.staticSlotViews r.final0.call (frame := frame) (request := request) 5
+    CallOccurrenceStep.staticSlotViewsH r.final0.call (frame := frame) (request := request) 5
       sem image (by rw [pair]; exact actualInstalled) actualRep
       (by rw [r.final0.sevm_eq, env, context]; rfl)
-      (by rw [r.final0.sevm_eq, env]; exact fork)
+      (by rw [r.final0.sevm_eq, env]; exact stateGas) (by rw [r.final0.sevm_eq, env]; exact bal)
       (by intro F member target; exact fresh F member (target.trans pair))
-  obtain ⟨observed, same, samePaths⟩ := r.final0SourceCall (frame := frame) incoming pair fork queue
+  obtain ⟨observed, same, samePaths⟩ := r.final0SourceCall (frame := frame) incoming pair stateGas queue
   refine ⟨observed, views, same, ?_, ?_⟩
   · rw [samePaths]
     exact .staticViews views mapped authentic during
   · rw [returnedStorage]
     exact rep
 
-/-- The second final query's views retain the exact seventh slot and the
-first final query's full returned state. -/
-theorem BurnSevenCalls.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+
+theorem BurnSevenCallsH.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
     {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
+    (r : BurnSevenCallsH root sevm b w)
     (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (rep : WriterRep J (r.final0.call.returned.devm.getStor sevm.currentTarget) frame.current.state)
     (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
     let request := burnFinalRequest1 frame (r.five.four.sourcePriced current)
@@ -97,20 +98,22 @@ theorem BurnSevenCalls.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have inputStorage : r.final1.call.occurrence.node.devm.getStor sevm.currentTarget =
       r.final0.call.returned.devm.getStor sevm.currentTarget := by
     rw [r.final1.input, St_getStor]
-    simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+    simp only [Devm.getStor, Devm.getAcct, r.five.four.three.worlds.2.2,
+      accountAccessH_state]
   have returnedStorage : r.final1.call.returned.devm.getStor sevm.currentTarget =
       r.final0.call.returned.devm.getStor sevm.currentTarget := by
     rw [r.final1.reply.stor]
-    simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+    simp only [Devm.getStor, Devm.getAcct, r.five.four.three.worlds.2.2,
+      accountAccessH_state]
   have actualRep : WriterRep J (r.final1.call.occurrence.node.devm.getStor frame.context.pair)
       frame.current.state := by rw [pair, inputStorage]; exact rep
   obtain ⟨paths, views, queue, mapped, authentic, during⟩ :=
-    CallOccurrenceStep.staticSlotViews r.final1.call (frame := frame) (request := request) 6
+    CallOccurrenceStep.staticSlotViewsH r.final1.call (frame := frame) (request := request) 6
       sem image (by rw [pair]; exact actualInstalled) actualRep
       (by rw [r.final1.sevm_eq, env, context]; rfl)
-      (by rw [r.final1.sevm_eq, env]; exact fork)
+      (by rw [r.final1.sevm_eq, env]; exact stateGas) (by rw [r.final1.sevm_eq, env]; exact bal)
       (by intro F member target; exact fresh F member (target.trans pair))
-  obtain ⟨observed, same, samePaths⟩ := r.final1SourceCall (frame := frame) incoming pair fork queue
+  obtain ⟨observed, same, samePaths⟩ := r.final1SourceCall (frame := frame) incoming pair stateGas queue
   refine ⟨observed, views, same, ?_, ?_⟩
   · rw [samePaths]
     exact .staticViews views mapped authentic during
@@ -118,19 +121,19 @@ theorem BurnSevenCalls.final1Views {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     exact rep
 
 
-/-- The same second-transfer source frame consumes both original final slots
-and their full view queues, then the actual accepted update/unlock/output tail. -/
-theorem BurnSevenCalls.finalSourceData
+
+theorem BurnSevenCallsH.finalSourceData
     {Auth : Exec.Deriv → Entry → Transcript → Prop}
-    {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+    {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
     {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
+    (r : BurnSevenCallsH root sevm b w)
     (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (rep : WriterRep J (r.five.second.returned.devm.getStor sevm.currentTarget) frame.current.state)
     (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
     let priced := r.five.four.sourcePriced current
@@ -171,14 +174,14 @@ theorem BurnSevenCalls.finalSourceData
   let flag := feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32))
   let recipient := (Sevm.dataWord sevm 4).toAdr.toB256
   obtain ⟨observed0, views0, same0, during0, rep0⟩ :=
-    r.final0Views incoming rep invocation context sem image installed fork fresh
+    r.final0Views incoming rep invocation context sem image installed stateGas bal fresh
   obtain ⟨observed1, views1, same1, during1, rep1⟩ :=
-    r.final1Views (frame := frame1) incoming rep0 invocation context sem image installed fork fresh
+    r.final1Views (frame := frame1) incoming rep0 invocation context sem image installed stateGas bal fresh
   obtain ⟨updated, event, oracle, accepted, _, finalRep, output, logs⟩ :=
     r.finishSource (frame := frame2) incoming rep1
       (by change frame.context.timestamp = _; rw [context]; rfl)
       (by change frame.context.pair = _; rw [context]; rfl)
-      (by change frame.context.sender = _; rw [context]; rfl) success fork
+      (by change frame.context.sender = _; rw [context]; rfl) success stateGas bal
   let finished := burnFinishedFrame frame2 updated event oracle flag recipient
     priced.amount0 priced.amount1
   have terminal := AdmittedSourceConsumes.finished (Auth := Auth) (root := root)
@@ -215,5 +218,6 @@ theorem BurnSevenCalls.finalSourceData
   refine ⟨updated, event, oracle, views0, views1, accepted, ?_, finalRep, output, logs⟩
   simpa only [List.append_nil, feeObservedResult, priced, request0, frame1, request1, frame2,
     flag, recipient, finished] using first
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -10,8 +10,27 @@ def initializeToken0 (sevm : Sevm) : Adr := (Sevm.dataWord sevm 4).toAdr
 def initializeToken1 (sevm : Sevm) : Adr := (Sevm.dataWord sevm 36).toAdr
 def initializePublicBase (sevm : Sevm) (b : Devm) : Devm :=
   initializeCoreBase sevm b (initializeToken0 sevm) (initializeToken1 sevm)
+
+def initializePublicBaseH (sevm : Sevm) (b : Devm) : Devm :=
+  initializeCoreBaseH sevm b (initializeToken0 sevm) (initializeToken1 sevm)
+
+theorem initializePublicBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) :
+    initializePublicBaseH sevm b = initializePublicBase sevm b := by
+  unfold initializePublicBaseH initializePublicBase
+  simp only [initializeCoreBaseH_of_covered fork]
+
 def initializePublicPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
   St (initializePublicBase sevm b) R M G
+
+def initializePublicPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
+  St (initializePublicBaseH sevm b) R M G
+
+theorem initializePublicPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (G : Nat) :
+    initializePublicPostH sevm b R M G = initializePublicPost sevm b R M G := by
+  unfold initializePublicPostH initializePublicPost
+  simp only [initializePublicBaseH_of_covered fork]
 
 def initializeFactoryCharge (sevm : Sevm) (b : Devm) : Nat := sloadCost sevm b 5
 def initializeLoad0Charge (sevm : Sevm) (b : Devm) : Nat :=
@@ -81,12 +100,13 @@ theorem initialize_decoder_exact {sevm : Sevm} {b : Devm} {M : Mem}
     (initialize45_exact fork authorized rfl rfl rfl rfl rfl (by omega) (by omega) nonstatic (by simp only [List.length_cons, List.length_nil]; decide)) ?_
   exact initializeStop_exact
 
-theorem initialize_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem initialize_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x0257, sel] M G) t_0434_c90 o) :
     sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, o = .halted (initializePublicPost sevm b [sel] M residual) := by
+      ∃ residual, o = .halted (initializePublicPostH sevm b [sel] M residual) := by
   have h := run.cut
   unfold t_0434_c90 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -117,12 +137,13 @@ theorem initialize_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, call⟩ := ric_call (g := t_0f2c_c45) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
-  · obtain ⟨authorized, nonstatic, _, result⟩ := initialize45_inv fork core
+  · obtain ⟨authorized, nonstatic, _, result⟩ := initialize45_invH stateGas bal core
     cases result
     obtain ⟨residual, done⟩ := initializeStop_inv tail.uncut
     exact ⟨authorized, nonstatic, residual, done⟩
-  · obtain ⟨_, _, _, result⟩ := initialize45_inv fork core
+  · obtain ⟨_, _, _, result⟩ := initialize45_invH stateGas bal core
     cases result
+
 
 theorem initialize_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B256}
     (fork : CoveredFork sevm.benvStat.fork)
@@ -152,13 +173,14 @@ theorem initialize_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel
   refine rx_branch_succ (by decide) ?_
   exact initialize_decoder_exact fork authorized sentry0 sentry1 nonstatic
 
-theorem initialize_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem initialize_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_041e_c90 o) :
     (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, o = .halted (initializePublicPost sevm b [sel] M residual) := by
+      ∃ residual, o = .halted (initializePublicPostH sevm b [sel] M residual) := by
   have h := run.cut
   unfold t_041e_c90 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -195,7 +217,8 @@ theorem initialize_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
         simp only [B256.ltCheck, lt_of_not_ge ne, ite_true]
       rw [flag] at nonzero
       exact nonzero (by decide)
-    exact ⟨guard, initialize_decoder_inv fork h.uncut⟩
+    exact ⟨guard, initialize_decoder_invH stateGas bal h.uncut⟩
+
 
 
 theorem initialize_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
@@ -293,21 +316,34 @@ theorem initialize_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
   exact initialize_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (initialize_entry_exact fork guard authorized sentry0 sentry1 nonstatic)
 
-theorem initialize_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem initialize_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x485cc955)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, post = initializePublicPost sevm b [0x485cc955] getterInitMemory residual := by
+      ∃ residual, post = initializePublicPostH sevm b [0x485cc955] getterInitMemory residual := by
   obtain ⟨f, entry, run⟩ := run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := initialize_selector_inv selector run
-  obtain ⟨guard, authorized, nonstatic, residual, result⟩ := initialize_entry_inv fork run
+  obtain ⟨guard, authorized, nonstatic, residual, result⟩ := initialize_entry_invH stateGas bal run
   exact ⟨value, size, guard, authorized, nonstatic, residual, Outcome.halted.inj result⟩
+
+
+theorem initialize_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
+      sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
+      ∃ residual, post = initializePublicPostH sevm b [0x485cc955] getterInitMemory residual :=
+  initialize_pc0_invH stateGas bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
 
 theorem initialize_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -316,8 +352,10 @@ theorem initialize_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr ∧ sevm.isStatic = false ∧
-      ∃ residual, post = initializePublicPost sevm b [0x485cc955] getterInitMemory residual :=
-  initialize_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
+      ∃ residual, post = initializePublicPost sevm b [0x485cc955] getterInitMemory residual := by
+  simpa only [initializePublicPostH_of_covered fork] using
+    initialize_bytecode_refines_rawH codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 theorem initialize_bytecode_live_raw {sevm : Sevm} {b : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -339,48 +377,46 @@ def initializePublicStorage (sevm : Sevm) (b : Devm) : Stor :=
     (addressSlotWriteWord (b.getStorVal sevm.currentTarget 6) (initializeToken0 sevm).toB256)).set 7
     (addressSlotWriteWord (b.getStorVal sevm.currentTarget 7) (initializeToken1 sevm).toB256)
 
-/-- The exact storage image is two distinct fixed-slot updates, with no hash premise. -/
-theorem initializePublicBase_storstep {sevm : Sevm} {b : Devm} :
-    StorStep sevm b (initializePublicBase sevm b) (initializePublicStorage sevm b) := by
-  have word0 : initializeWord0 sevm (initializeFactoryBase sevm b) (initializeToken0 sevm) =
+theorem initializePublicBase_storstepH {sevm : Sevm} {b : Devm} :
+    StorStep sevm b (initializePublicBaseH sevm b) (initializePublicStorage sevm b) := by
+  have word0 : initializeWord0 sevm (initializeFactoryBaseH sevm b) (initializeToken0 sevm) =
       addressSlotWriteWord (b.getStorVal sevm.currentTarget 6) (initializeToken0 sevm).toB256 := by
-    unfold initializeWord0 initializeFactoryBase
-    rw [getStorVal_afterSload]
-  have word1 : initializeWord1 sevm (initializeFactoryBase sevm b)
+    unfold initializeWord0 initializeFactoryBaseH
+    rw [getStorVal_afterSloadH]
+  have word1 : initializeWord1H sevm (initializeFactoryBaseH sevm b)
       (initializeToken0 sevm) (initializeToken1 sevm) =
       addressSlotWriteWord (b.getStorVal sevm.currentTarget 7) (initializeToken1 sevm).toB256 := by
-    unfold initializeWord1 initializeStored0 initializeLoaded0
-    rw [getStorVal_afterStore, Stor.get_set_ne _ (by decide : (6 : B256) ≠ 7)]
-    change addressSlotWriteWord ((initializeFactoryBase sevm b).getStorVal sevm.currentTarget 7)
+    unfold initializeWord1H initializeStored0H initializeLoaded0H
+    rw [getStorVal_afterStoreH, Stor.get_set_ne _ (by decide : (6 : B256) ≠ 7)]
+    change addressSlotWriteWord ((initializeFactoryBaseH sevm b).getStorVal sevm.currentTarget 7)
       (initializeToken1 sevm).toB256 = _
-    unfold initializeFactoryBase
-    rw [getStorVal_afterSload]
-  have walk : StorStep sevm b (initializePublicBase sevm b)
+    unfold initializeFactoryBaseH
+    rw [getStorVal_afterSloadH]
+  have walk : StorStep sevm b (initializePublicBaseH sevm b)
       (((Devm.getStor b sevm.currentTarget).set 6
-        (initializeWord0 sevm (initializeFactoryBase sevm b) (initializeToken0 sevm))).set 7
-        (initializeWord1 sevm (initializeFactoryBase sevm b) (initializeToken0 sevm) (initializeToken1 sevm))) :=
-    (((((StorStep.refl sevm b).sload 5).sload 6).sstore 6
-      (initializeWord0 sevm (initializeFactoryBase sevm b) (initializeToken0 sevm))).sload 7).sstore 7
-      (initializeWord1 sevm (initializeFactoryBase sevm b) (initializeToken0 sevm) (initializeToken1 sevm))
+        (initializeWord0 sevm (initializeFactoryBaseH sevm b) (initializeToken0 sevm))).set 7
+        (initializeWord1H sevm (initializeFactoryBaseH sevm b) (initializeToken0 sevm) (initializeToken1 sevm))) :=
+    (((((StorStep.refl sevm b).sloadH 5).sloadH 6).sstoreH 6
+      (initializeWord0 sevm (initializeFactoryBaseH sevm b) (initializeToken0 sevm))).sloadH 7).sstoreH 7
+      (initializeWord1H sevm (initializeFactoryBaseH sevm b) (initializeToken0 sevm) (initializeToken1 sevm))
   simpa only [word0, word1, initializePublicStorage] using walk
 
-theorem initializePublicPost_storstep {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} :
-    StorStep sevm b (initializePublicPost sevm b R M G) (initializePublicStorage sevm b) := by
-  have step : StorStep sevm b (initializePublicBase sevm b) (initializePublicStorage sevm b) :=
-    initializePublicBase_storstep
+theorem initializePublicPost_storstepH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} :
+    StorStep sevm b (initializePublicPostH sevm b R M G) (initializePublicStorage sevm b) := by
+  have step : StorStep sevm b (initializePublicBaseH sevm b) (initializePublicStorage sevm b) :=
+    initializePublicBase_storstepH
   constructor
-  · simpa only [initializePublicPost, St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using step.self
+  · simpa only [initializePublicPostH, St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using step.self
   · intro a different
-    simpa only [initializePublicPost, St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using step.other a different
-  · simpa only [initializePublicPost, St, Devm.setMach_logs] using step.logs
+    simpa only [initializePublicPostH, St, Devm.getStor, Devm.getAcct, Devm.setMach_state] using step.other a different
+  · simpa only [initializePublicPostH, St, Devm.setMach_logs] using step.logs
 
-/-- STOP retains any incoming output; emptiness needs the genuine incoming-output premise. -/
-theorem initializePublicPost_output {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} :
-    (initializePublicPost sevm b R M G).output = b.output := by
-  rw [initializePublicPost, St, Devm.setMach_output]
-  simp only [initializePublicBase, initializeCoreBase, initializeWritesBase,
-    initializeLoaded1, initializeStored0, initializeLoaded0, initializeFactoryBase,
-    afterSstore_output, afterSload_output]
+theorem initializePublicPost_outputH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} :
+    (initializePublicPostH sevm b R M G).output = b.output := by
+  rw [initializePublicPostH, St, Devm.setMach_output]
+  simp only [initializePublicBaseH, initializeCoreBaseH, initializeWritesBaseH,
+    initializeLoaded1H, initializeStored0H, initializeLoaded0H, initializeFactoryBaseH,
+    afterSstoreH_output, afterSloadH_output]
 
 theorem initializePublicStorage_packed {sevm : Sevm} {b : Devm} :
     ((initializePublicStorage sevm b).get 6).toAdr = initializeToken0 sevm ∧

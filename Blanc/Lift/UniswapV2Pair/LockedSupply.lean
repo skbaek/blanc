@@ -71,6 +71,37 @@ def LockedAuth (D : Exec.Deriv) (entry : Entry) (nested : Transcript) : Prop :=
   (∃ view : StaticView, Blanc.Sevm.selector D.sevm = view.selector ∧
     entry = view.entry D.sevm ∧ nested = .done)
 
+/-- `LockedAuth` with the permit's recovery authenticated under the historical rule facts
+(`PermitRecoveryAuthH`); the other entries are authenticated as in `LockedAuth`. -/
+def LockedAuthH (D : Exec.Deriv) (entry : Entry) (nested : Transcript) : Prop :=
+  (Blanc.Sevm.selector D.sevm = 0xa9059cbb ∧ entry = transferDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x095ea7b3 ∧ entry = approveDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x23b872dd ∧ entry = transferFromDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x485cc955 ∧ entry = initializeDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0xd505accf ∧ entry = permitDecodedEntry D.sevm ∧
+    ∃ (out : Bytes) (entered : Bool) (views : List StaticViewTurn),
+      nested = .next (permitExternalResult out entered) (staticViewTranscript views .done) .done ∧
+      PermitRecoveryAuthH D out entered views) ∨
+  (∃ view : StaticView, Blanc.Sevm.selector D.sevm = view.selector ∧
+    entry = view.entry D.sevm ∧ nested = .done)
+
+/-- On a covered fork, the historical locked authentication gives `LockedAuth`. -/
+theorem LockedAuthH.toCovered {D : Exec.Deriv} {entry : Entry} {nested : Transcript}
+    (fork : CoveredFork D.sevm.benvStat.fork) (auth : LockedAuthH D entry nested) :
+    LockedAuth D entry nested := by
+  rcases auth with h | h | h | h | ⟨selector, entryEq, out, entered, views, nestedEq, recovery⟩ | h
+  · exact Or.inl h
+  · exact Or.inr (Or.inl h)
+  · exact Or.inr (Or.inr (Or.inl h))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl h)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl
+      ⟨selector, entryEq, out, entered, views, nestedEq, recovery.toCovered fork⟩))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
+
 theorem LockedRep.congr {U : WriterKey → Prop} {st : State} {s s' : Stor}
     (same : ∀ k, s'.get k = s.get k) (rep : LockedRep U st s) : LockedRep U st s' := by
   obtain ⟨K, sub, wrep, locked⟩ := rep
@@ -90,26 +121,27 @@ private theorem locked_extend {U K : WriterKey → Prop} {keys : List WriterKey}
     ∀ k, WriterExtend K keys k → U k := by
   exact Blanc.SlotFootprint.extendBy_subset sub good
 
-section Outcomes
+section OutcomesH
 
 variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
   {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
   {K : WriterKey → Prop}
   (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-  (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+  (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+  (bal : sevm.benvStat.rules.bal = none)
   (representable : sevm.data.length < 2 ^ 256) (sub : ∀ k, K k → U k)
   (wrep : WriterRep K (b.getStor sevm.currentTarget) current.state)
   (locked : current.state.unlocked = 0)
-include inj apart run codeEq fork representable sub wrep locked
+include inj apart run codeEq stateGas bal representable sub wrep locked
 
-private theorem locked_transfer_outcome (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+private theorem locked_transfer_outcomeH (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transfer_bytecode_exact_consumes
+  obtain ⟨_, _, _, _, result, consumed⟩ := transfer_bytecode_exact_consumesH
     (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
     selector run
   refine ⟨_, _, _, _, _, Or.inl ⟨selector, rfl, rfl⟩, consumed, ?_, result.sourceLogs,
     result.logs, rfl⟩
@@ -119,28 +151,28 @@ private theorem locked_transfer_outcome (selector : Blanc.Sevm.selector sevm = 0
   · rw [result.sourceState]
     exact locked
 
-private theorem locked_approve_outcome (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+private theorem locked_approve_outcomeH (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
   obtain ⟨_, _, _, _, ⟨_, representation, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩,
-      consumed⟩ := approve_bytecode_exact_consumes (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
+      consumed⟩ := approve_bytecode_exact_consumesH (invocation := invocation) wrep
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
     selector run
   refine ⟨_, _, _, _, _, Or.inr (Or.inl ⟨selector, rfl, rfl⟩), consumed, ?_, sourceLogs,
     rawLogs, rfl⟩
   exact ⟨_, locked_extend sub good, representation, locked⟩
 
-private theorem locked_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
+private theorem locked_transferFrom_outcomeH (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
     (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
       (transferFromRecipient sevm), U k) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transferFrom_bytecode_exact_consumes
+  obtain ⟨_, _, _, _, result, consumed⟩ := transferFrom_bytecode_exact_consumesH
     (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
+    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq stateGas bal
     selector run
   refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)), consumed, ?_,
     result.sourceLogs, result.logs, rfl⟩
@@ -154,13 +186,13 @@ private theorem locked_transferFrom_outcome (selector : Blanc.Sevm.selector sevm
     · exact locked
 
 omit inj apart in
-private theorem locked_initialize_outcome (freshOutput : b.output = [])
+private theorem locked_initialize_outcomeH (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
-  obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumes
-    (invocation := invocation) wrep representable freshOutput codeEq fork selector run
+  obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumesH
+    (invocation := invocation) wrep representable freshOutput codeEq stateGas bal selector run
   refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))), consumed,
     ?_, ?_, ?_, rfl⟩
   · refine ⟨K, sub, ?_, ?_⟩
@@ -171,12 +203,12 @@ private theorem locked_initialize_outcome (freshOutput : b.output = [])
   · rw [result.sourceCurrent, List.append_nil]
   · rw [result.logs, List.append_nil]
 
-private theorem locked_permit_outcome (sem : CodeSem) (image : sem.image = some code.toList)
+private theorem locked_permit_outcomeH (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : b.getCode sevm.currentTarget = code) (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
     (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
       ∀ k ∈ pairDecodedKeys F.sevm ++ staticViewDecodedKeys F.sevm, U k) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
   have touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k := by
@@ -188,24 +220,24 @@ private theorem locked_permit_outcome (sem : CodeSem) (image : sem.image = some 
       ite_eq_left selector]
     exact member
   obtain ⟨_, _, _, _, _, out, _, entered, views, auth, result, consumed, _⟩ :=
-    permit_bytecode_exact_turns (invocation := invocation) inj apart sub sem image wrep touched
-      (by rw [installed]; exact image.symm) representable codeEq fork selector freshOutput run
-      (fun F member target k viewKey => good F member target k (List.mem_append_right _ viewKey))
+    permit_bytecode_exact_turnsH (invocation := invocation) inj apart sub sem image wrep touched
+      (by rw [installed]; exact image.symm) representable codeEq stateGas bal selector freshOutput
+      run (fun F member target k viewKey => good F member target k (List.mem_append_right _ viewKey))
   obtain ⟨_, representation, _, _, _, _, _, _, sourceLogs, _, _, rawLogs, _⟩ := result
   refine ⟨_, _, _, _, _, Or.inr (Or.inr (Or.inr (Or.inr (Or.inl
     ⟨selector, rfl, out, entered, views, rfl, auth⟩)))), consumed, ?_, sourceLogs, rawLogs, rfl⟩
   exact ⟨_, locked_extend sub touched, representation, locked⟩
 
-private theorem locked_view_outcome (view : StaticView)
+private theorem locked_view_outcomeH (view : StaticView)
     (selector : Blanc.Sevm.selector sevm = view.selector)
     (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
-    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuth
+    PairFrameOutcome sevm.currentTarget (LockedRep U) LockedAuthH
       (lockedOwnedRaw sevm.currentTarget) current invocation
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm b post := by
   have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
   obtain ⟨_, _, _, storage, logs, _, _, consumed, frameCurrent, _, _⟩ :=
-    staticView_source_handler_selected (ctx := writerContext sevm invocation) wrep fresh
-      representable rfl codeEq fork view selector run
+    staticView_source_handler_selectedH (ctx := writerContext sevm invocation) wrep fresh
+      representable rfl codeEq stateGas bal view selector run
   refine ⟨_, _, _, [], [], Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
     ⟨view, selector, rfl, rfl⟩)))), consumed, ?_, ?_, ?_, rfl⟩
   · refine ⟨_, locked_extend sub good, ?_, ?_⟩
@@ -216,7 +248,7 @@ private theorem locked_view_outcome (view : StaticView)
   · rw [frameCurrent, List.append_nil]
   · rw [logs, List.append_nil]
 
-end Outcomes
+end OutcomesH
 
 private theorem pair_view_keys {sevm : Sevm} (transfer : Blanc.Sevm.selector sevm ≠ 0xa9059cbb)
     (approve : Blanc.Sevm.selector sevm ≠ 0x095ea7b3)
@@ -228,11 +260,12 @@ private theorem pair_view_keys {sevm : Sevm} (transfer : Blanc.Sevm.selector sev
 
 /-- While the Pair is locked, every committed root frame of the Pair is one exact invocation
 of a lock-free entry at the current checkpoint, extending the finite representation only
-by its actually decoded rows inside the separated universe `U`. -/
-theorem lockedPairSupply {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
+by its actually decoded rows inside the separated universe `U`; under the two historical rule
+facts of each frame, with the permit authenticated by `PermitRecoveryAuthH`. -/
+theorem lockedPairSupplyH {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
     (sem : CodeSem) (image : sem.image = some code.toList) (pair : Adr) :
-    PairFrameSupply pair (LockedRep U) (LockedGood U) LockedAuth (lockedOwnedRaw pair) := by
-  intro current invocation sevm b post G run target codeEq installedCode fork freshOutput
+    PairFrameSupplyH pair (LockedRep U) (LockedGood U) LockedAuthH (lockedOwnedRaw pair) := by
+  intro current invocation sevm b post G run target codeEq installedCode stateGas bal freshOutput
     representable roots rep
   subst target
   have roots : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
@@ -242,62 +275,74 @@ theorem lockedPairSupply {U : WriterKey → Prop} (inj : WriterInj U) (apart : W
   obtain ⟨K, sub, wrep, locked⟩ := rep
   have lockedRaw : b.getStorVal sevm.currentTarget 12 = 0 :=
     wrep.fixed.2.2.2.2.2.2.2.2.2.2.2.trans locked
-  have member := pair_bytecode_selector_inv codeEq fork run
+  have member := pair_bytecode_selector_invH codeEq stateGas run
   simp only [pairSelectors, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.address .token1)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.address .token1)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_permit_outcome inj apart run codeEq fork representable sub wrep locked sem image
+  · exact locked_permit_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked sem image
       installedCode freshOutput h roots
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.allowance) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.allowance) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact absurd ((pair_lockGuarded_unlocked codeEq fork (Or.inr (Or.inr (Or.inr (Or.inl h)))) run).symm.trans
+  · exact absurd ((pair_lockGuarded_unlockedH codeEq stateGas bal (Or.inr (Or.inr (Or.inr (Or.inl h)))) run).symm.trans
       lockedRaw) (by decide)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.constant .minimumLiquidity)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.constant .minimumLiquidity)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact absurd ((pair_lockGuarded_unlocked codeEq fork (Or.inr (Or.inr (Or.inr (Or.inr h)))) run).symm.trans
+  · exact absurd ((pair_lockGuarded_unlockedH codeEq stateGas bal (Or.inr (Or.inr (Or.inr (Or.inr h)))) run).symm.trans
       lockedRaw) (by decide)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.address .factory)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.address .factory)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.singleMapping .nonces) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.singleMapping .nonces) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact absurd ((pair_lockGuarded_unlocked codeEq fork (Or.inr (Or.inl h)) run).symm.trans
+  · exact absurd ((pair_lockGuarded_unlockedH codeEq stateGas bal (Or.inr (Or.inl h)) run).symm.trans
       lockedRaw) (by decide)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.string .symbol) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.string .symbol) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_transfer_outcome inj apart run codeEq fork representable sub wrep locked h
+  · exact locked_transfer_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked h
       (by rw [pairDecodedKeys, ite_eq_left h] at good; exact good)
-  · exact absurd ((pair_lockGuarded_unlocked codeEq fork (Or.inl h) run).symm.trans
+  · exact absurd ((pair_lockGuarded_unlockedH codeEq stateGas bal (Or.inl h) run).symm.trans
       lockedRaw) (by decide)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.singleMapping .balanceOf) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.singleMapping .balanceOf) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.stored .kLast)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.stored .kLast)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.stored .domainSeparator)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.stored .domainSeparator)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_initialize_outcome run codeEq fork representable sub wrep locked freshOutput h
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.stored .price0CumulativeLast)) (h.trans (by decide))
+  · exact locked_initialize_outcomeH run codeEq stateGas bal representable sub wrep locked freshOutput h
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.stored .price0CumulativeLast)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.stored .price1CumulativeLast)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.stored .price1CumulativeLast)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_transferFrom_outcome inj apart run codeEq fork representable sub wrep locked h
+  · exact locked_transferFrom_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked h
       (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_right (by rw [h]; decide), ite_eq_left h] at good
           exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.constant .permitTypehash)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.constant .permitTypehash)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.constant .decimals)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.constant .decimals)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_approve_outcome inj apart run codeEq fork representable sub wrep locked h
+  · exact locked_approve_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked h
       (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_left h] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.scalar (.address .token0)) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.scalar (.address .token0)) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.totalSupply) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.totalSupply) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact absurd ((pair_lockGuarded_unlocked codeEq fork (Or.inr (Or.inr (Or.inl h))) run).symm.trans
+  · exact absurd ((pair_lockGuarded_unlockedH codeEq stateGas bal (Or.inr (Or.inr (Or.inl h))) run).symm.trans
       lockedRaw) (by decide)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.string .name) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.string .name) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
-  · exact locked_view_outcome inj apart run codeEq fork representable sub wrep locked (.getReserves) (h.trans (by decide))
+  · exact locked_view_outcomeH inj apart run codeEq stateGas bal representable sub wrep locked (.getReserves) (h.trans (by decide))
       (by rw [pair_view_keys (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide) (by rw [h]; decide)] at good; exact good)
+
+/-- While the Pair is locked, every committed root frame of the Pair is one exact invocation
+of a lock-free entry at the current checkpoint, extending the finite representation only
+by its actually decoded rows inside the separated universe `U`. -/
+theorem lockedPairSupply {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
+    (sem : CodeSem) (image : sem.image = some code.toList) (pair : Adr) :
+    PairFrameSupply pair (LockedRep U) (LockedGood U) LockedAuth (lockedOwnedRaw pair) := by
+  intro current invocation sevm b post G run target codeEq installedCode fork freshOutput
+    representable roots rep
+  exact (lockedPairSupplyH inj apart sem image pair current invocation run target codeEq
+    installedCode fork.rules_stateGas_none fork.rules_bal_none freshOutput representable roots
+    rep).mono (fun _ _ auth => auth.toCovered fork)
 
 end Blanc.Lift.UniswapV2Pair

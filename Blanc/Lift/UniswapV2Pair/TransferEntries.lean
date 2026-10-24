@@ -11,6 +11,16 @@ def transferAmount (sevm : Sevm) : B256 := Sevm.dataWord sevm 36
 
 def transferLoadedBase (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm b (transferBalanceSlot sevm.caller)
+
+def transferLoadedBaseH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm b (transferBalanceSlot sevm.caller)
+
+theorem transferLoadedBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) :
+    transferLoadedBaseH sevm b = transferLoadedBase sevm b := by
+  unfold transferLoadedBaseH transferLoadedBase
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
+
 def transferDebitedWord (sevm : Sevm) (b : Devm) : B256 :=
   transferSourceWord sevm b sevm.caller - transferAmount sevm
 def transferDebitedBase (sevm : Sevm) (b : Devm) : Devm :=
@@ -18,6 +28,16 @@ def transferDebitedBase (sevm : Sevm) (b : Devm) : Devm :=
 def transferCreditWord (sevm : Sevm) (b : Devm) : B256 :=
   transferRecipientWord sevm (transferLoadedBase sevm b) sevm.caller (transferRecipient sevm)
     (transferDebitedWord sevm b)
+
+def transferCreditWordH (sevm : Sevm) (b : Devm) : B256 :=
+  transferRecipientWordH sevm (transferLoadedBaseH sevm b) sevm.caller (transferRecipient sevm)
+    (transferDebitedWord sevm b)
+
+theorem transferCreditWordH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) :
+    transferCreditWordH sevm b = transferCreditWord sevm b := by
+  unfold transferCreditWordH transferCreditWord
+  simp only [transferLoadedBaseH_of_covered fork, transferRecipientWordH_of_covered fork]
 
 def transferSourceCharge (sevm : Sevm) (b : Devm) : Nat :=
   sloadCost sevm b (transferBalanceSlot sevm.caller)
@@ -33,9 +53,22 @@ def transferCreditCharge (sevm : Sevm) (b : Devm) : Nat :=
 def transferCreditSafe (sevm : Sevm) (b : Devm) : Prop :=
   (transferCreditWord sevm b).toNat + (transferAmount sevm).toNat < 2 ^ 256
 
+def transferCreditSafeH (sevm : Sevm) (b : Devm) : Prop :=
+  (transferCreditWordH sevm b).toNat + (transferAmount sevm).toNat < 2 ^ 256
+
 def transferPublicPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
   getterWordPost (transferCoreBase sevm b sevm.caller (transferRecipient sevm) (transferAmount sevm)) R
     (transferCoreMemory M sevm.caller (transferRecipient sevm) (transferAmount sevm)) 1 G
+
+def transferPublicPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (G : Nat) : Devm :=
+  getterWordPost (transferCoreBaseH sevm b sevm.caller (transferRecipient sevm) (transferAmount sevm)) R
+    (transferCoreMemory M sevm.caller (transferRecipient sevm) (transferAmount sevm)) 1 G
+
+theorem transferPublicPostH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (R : List B256) (M : Mem) (G : Nat) :
+    transferPublicPostH sevm b R M G = transferPublicPost sevm b R M G := by
+  unfold transferPublicPostH transferPublicPost
+  simp only [transferCoreBaseH_of_covered fork]
 
 theorem transferCoreMemory_ptr {M : Mem} {owner recipient : Adr} {amount : B256}
     (mem : PtrMem 128 96 M) : PtrMem 128 160 (transferCoreMemory M owner recipient amount) := by
@@ -115,12 +148,13 @@ theorem transfer_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel :
   refine rx_branch_succ (by decide) ?_
   exact transfer_decoder_exact fork mem debitSentry creditSentry nonstatic cover nowrap
 
-theorem transfer_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
+theorem transfer_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel avail : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [avail, 4, 0x034e, sel] M G) t_0574_c85 o) :
     transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧ ∃ residual, o = .halted (transferPublicPost sevm b [sel] M residual) := by
+      transferCreditSafeH sevm b ∧ ∃ residual, o = .halted (transferPublicPostH sevm b [sel] M residual) := by
   have outmem := transferCoreMemory_ptr (owner := sevm.caller)
     (recipient := transferRecipient sevm) (amount := transferAmount sevm) mem
   have h := run.cut
@@ -149,20 +183,22 @@ theorem transfer_decoder_inv {sevm : Sevm} {b : Devm} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, call⟩ := ric_call (g := t_18cb_c40) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
-  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer40_inv fork mem core
+  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer40_invH stateGas bal mem core
     cases eq
     obtain ⟨residual, result⟩ := writerBool_tail_inv outmem tail.uncut
     exact ⟨cover, nonstatic, nowrap, residual, result⟩
-  · obtain ⟨_, _, _, _, eq⟩ := transfer40_inv fork mem core
+  · obtain ⟨_, _, _, _, eq⟩ := transfer40_invH stateGas bal mem core
     cases eq
 
-theorem transfer_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
+
+theorem transfer_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
     {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_055e_c85 o) :
     (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧ ∃ residual, o = .halted (transferPublicPost sevm b [sel] M residual) := by
+      transferCreditSafeH sevm b ∧ ∃ residual, o = .halted (transferPublicPostH sevm b [sel] M residual) := by
   have h := run.cut
   unfold t_055e_c85 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -199,7 +235,8 @@ theorem transfer_entry_inv {sevm : Sevm} {b : Devm} {M : Mem}
         simp only [B256.ltCheck, lt_of_not_ge ne, ite_true]
       rw [flag] at nonzero
       exact nonzero (by decide)
-    exact ⟨guard, transfer_decoder_inv fork mem h.uncut⟩
+    exact ⟨guard, transfer_decoder_invH stateGas bal mem h.uncut⟩
+
 
 theorem transfer_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
@@ -313,34 +350,38 @@ theorem transfer_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
   exact transfer_dispatch_exact (h_shifts := fork.rules_shifts) value size selector
     (transfer_entry_exact fork getterInitMemory_ptr guard debitSentry creditSentry nonstatic cover nowrap)
 
-theorem transfer_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem transfer_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧
-      ∃ residual, post = transferPublicPost sevm b [0xa9059cbb] getterInitMemory residual := by
+      transferCreditSafeH sevm b ∧
+      ∃ residual, post = transferPublicPostH sevm b [0xa9059cbb] getterInitMemory residual := by
   obtain ⟨f, entry, run⟩ := run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := transfer_selector_inv selector run
   obtain ⟨guard, cover, nonstatic, nowrap, residual, result⟩ :=
-    transfer_entry_inv fork getterInitMemory_ptr run
+    transfer_entry_invH stateGas bal getterInitMemory_ptr run
   exact ⟨value, size, guard, cover, nonstatic, nowrap, residual, Outcome.halted.inj result⟩
 
-theorem transfer_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem transfer_bytecode_refines_rawH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (64 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       transferAmount sevm ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      transferCreditSafe sevm b ∧
-      ∃ residual, post = transferPublicPost sevm b [0xa9059cbb] getterInitMemory residual :=
-  transfer_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
+      transferCreditSafeH sevm b ∧
+      ∃ residual, post = transferPublicPostH sevm b [0xa9059cbb] getterInitMemory residual :=
+  transfer_pc0_invH stateGas bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
+
 
 theorem transfer_bytecode_live_raw {sevm : Sevm} {b : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)

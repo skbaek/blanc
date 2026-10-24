@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.CursorNoExecSuffix
 import Blanc.Lift.UniswapV2Pair.StaticViewClassify
+import Blanc.Lift.HistCursorReturn
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -154,14 +155,13 @@ theorem PairNoCallComparison.line_inv {sevm : Sevm} {b d : Devm}
     cases run
     exact ⟨gas, by simpa only [PairNoCallComparison.compute, ite_eq_right gt] using state⟩
 
-/-- The literal comparison is traversed on the original checked cursor. -/
-theorem PairNoCallComparison.cut {root : Exec.Deriv} {b post : Devm}
+theorem PairNoCallComparison.cutH {root : Exec.Deriv} {b post : Devm}
     {S : List B256} {M : Mem} {K : List SFunc} (q : PairNoCallComparison) (sel : B256)
     (cut : CursorStateAt code cert root q.body b (sel :: S) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     Nonempty (CursorStateAt code cert root q.tail b
       (Bytes.toB256 q.target :: q.compute sel :: sel :: S) M K) := by
-  apply cut.line cert_check success fork q.line rfl
+  apply cut.lineH cert_check success stateGas q.line rfl
   · intro n member x equal
     subst n
     simp only [PairNoCallComparison.line, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member
@@ -248,11 +248,9 @@ theorem PairNoCallEntry.tree_free (entry : PairNoCallEntry) :
     entry.tree.execFreeIn entry.region = true := by
   cases entry <;> decide
 
-/-- The selected function is reached by an actual call-free prefix; all world,
-memory and continuation fields come from the same successful original root. -/
-theorem PairNoCallEntry.cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem PairNoCallEntry.cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     (entry : PairNoCallEntry) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = entry.selector)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
@@ -260,471 +258,469 @@ theorem PairNoCallEntry.cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       entry.tree b [entry.selector] getterInitMemory []) := by
   cases entry with
   | transfer =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0xa9059cbb] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0xa9059cbb cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 1 :: [0xa9059cbb]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cut 0xa9059cbb cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_00a3_c0 t_00d3_c0) b
       (0xd3 :: 0 :: [0xa9059cbb]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cut 0xa9059cbb cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00ae_c0 82) b
       (0x4d7 :: 0 :: [0xa9059cbb]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00ae.cut 0xa9059cbb cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00ae.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00b9_c0 83) b
       (0x50a :: 0 :: [0xa9059cbb]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00b9.cut 0xa9059cbb cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00b9.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00c4_c0 84) b
       (0x556 :: 0 :: [0xa9059cbb]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00c4.cut 0xa9059cbb cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00c4.cutH 0xa9059cbb cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00cf_c0 85) b
       (0x55e :: 1 :: [0xa9059cbb]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | approve =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x95ea7b3] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x95ea7b3 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x95ea7b3 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 1 :: [0x95ea7b3]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cut 0x95ea7b3 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cutH 0x95ea7b3 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0172_c0 t_0197_c0) b
       (0x197 :: 0 :: [0x95ea7b3]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cut 0x95ea7b3 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cutH 0x95ea7b3 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_017d_c0 96) b
       (0x315 :: 1 :: [0x95ea7b3]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | transferFrom =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x23b872dd] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x23b872dd cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x23b872dd cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x23b872dd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x23b872dd cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x23b872dd cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 1 :: [0x23b872dd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cut 0x23b872dd cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cutH 0x23b872dd cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_014c_c0 93) b
       (0x3ad :: 1 :: [0x23b872dd]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | «initialize» =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x485cc955] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x485cc955 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x485cc955 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x485cc955]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x485cc955 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x485cc955 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 0 :: [0x485cc955]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cut 0x485cc955 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cutH 0x485cc955 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_011b_c0 89) b
       (0x416 :: 0 :: [0x485cc955]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cut 0x485cc955 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cutH 0x485cc955 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0126_c0 90) b
       (0x41e :: 1 :: [0x485cc955]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | decimals =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x313ce567] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x313ce567 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x313ce567 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x313ce567]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x313ce567 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x313ce567 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 1 :: [0x313ce567]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cut 0x313ce567 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cutH 0x313ce567 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_014c_c0 93) b
       (0x3ad :: 0 :: [0x313ce567]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at014c.cut 0x313ce567 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at014c.cutH 0x313ce567 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0157_c0 94) b
       (0x3f0 :: 0 :: [0x313ce567]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0157.cut 0x313ce567 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0157.cutH 0x313ce567 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0162_c0 95) b
       (0x3f8 :: 1 :: [0x313ce567]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | minimumLiquidity =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0xba9a7a56] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0xba9a7a56 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0xba9a7a56 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 0 :: [0xba9a7a56]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cut 0xba9a7a56 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cutH 0xba9a7a56 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0041_c0 t_0071_c0) b
       (0x71 :: 1 :: [0xba9a7a56]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0071.cut 0xba9a7a56 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0071.cutH 0xba9a7a56 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_007d_c0 79) b
       (0x597 :: 1 :: [0xba9a7a56]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | permitTypehash =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x30adf81f] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x30adf81f cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x30adf81f cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x30adf81f]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x30adf81f cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x30adf81f cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 1 :: [0x30adf81f]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cut 0x30adf81f cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0140.cutH 0x30adf81f cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_014c_c0 93) b
       (0x3ad :: 0 :: [0x30adf81f]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at014c.cut 0x30adf81f cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at014c.cutH 0x30adf81f cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0157_c0 94) b
       (0x3f0 :: 1 :: [0x30adf81f]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | domainSeparator =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x3644e515] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x3644e515 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x3644e515 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x3644e515]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x3644e515 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x3644e515 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 0 :: [0x3644e515]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cut 0x3644e515 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cutH 0x3644e515 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_011b_c0 89) b
       (0x416 :: 1 :: [0x3644e515]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | price0CumulativeLast =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x5909c0d5] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x5909c0d5 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x5909c0d5 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x5909c0d5]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x5909c0d5 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x5909c0d5 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 0 :: [0x5909c0d5]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cut 0x5909c0d5 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cutH 0x5909c0d5 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_011b_c0 89) b
       (0x416 :: 0 :: [0x5909c0d5]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cut 0x5909c0d5 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cutH 0x5909c0d5 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0126_c0 90) b
       (0x41e :: 0 :: [0x5909c0d5]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0126.cut 0x5909c0d5 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0126.cutH 0x5909c0d5 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0131_c0 91) b
       (0x459 :: 1 :: [0x5909c0d5]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | price1CumulativeLast =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x5a3d5493] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 0 :: [0x5a3d5493]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0105.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0110_c0 t_0140_c0) b
       (0x140 :: 0 :: [0x5a3d5493]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0110.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_011b_c0 89) b
       (0x416 :: 0 :: [0x5a3d5493]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at011b.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0126_c0 90) b
       (0x41e :: 0 :: [0x5a3d5493]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0126.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0126.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0131_c0 91) b
       (0x459 :: 0 :: [0x5a3d5493]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0131.cut 0x5a3d5493 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0131.cutH 0x5a3d5493 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_013c_c0 92) b
       (0x461 :: 1 :: [0x5a3d5493]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | kLast =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0x7464fc3d] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0x7464fc3d cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0x7464fc3d cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 1 :: [0x7464fc3d]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cut 0x7464fc3d cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cutH 0x7464fc3d cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_00a3_c0 t_00d3_c0) b
       (0xd3 :: 1 :: [0x7464fc3d]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00d3.cut 0x7464fc3d cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00d3.cutH 0x7464fc3d cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00df_c0 86) b
       (0x469 :: 0 :: [0x7464fc3d]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00df.cut 0x7464fc3d cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00df.cutH 0x7464fc3d cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00ea_c0 87) b
       (0x49c :: 0 :: [0x7464fc3d]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00ea.cut 0x7464fc3d cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00ea.cutH 0x7464fc3d cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00f5_c0 88) b
       (0x4cf :: 1 :: [0x7464fc3d]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | factory =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0xc45a0155] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0xc45a0155 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0xc45a0155 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 0 :: [0xc45a0155]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cut 0xc45a0155 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cutH 0xc45a0155 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0041_c0 t_0071_c0) b
       (0x71 :: 1 :: [0xc45a0155]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0071.cut 0xc45a0155 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0071.cutH 0xc45a0155 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_007d_c0 79) b
       (0x597 :: 0 :: [0xc45a0155]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at007d.cut 0xc45a0155 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at007d.cutH 0xc45a0155 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0088_c0 80) b
       (0x59f :: 0 :: [0xc45a0155]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0088.cut 0xc45a0155 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0088.cutH 0xc45a0155 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0093_c0 81) b
       (0x5d2 :: 1 :: [0xc45a0155]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | token0 =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0xdfe1681] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0xdfe1681 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0xdfe1681 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 1 :: [0xdfe1681]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cut 0xdfe1681 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cutH 0xdfe1681 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0172_c0 t_0197_c0) b
       (0x197 :: 0 :: [0xdfe1681]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cut 0xdfe1681 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cutH 0xdfe1681 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_017d_c0 96) b
       (0x315 :: 0 :: [0xdfe1681]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at017d.cut 0xdfe1681 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at017d.cutH 0xdfe1681 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0188_c0 97) b
       (0x362 :: 1 :: [0xdfe1681]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | token1 =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0xd21220a7] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0xd21220a7 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0xd21220a7 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 0 :: [0xd21220a7]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cut 0xd21220a7 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cutH 0xd21220a7 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0041_c0 t_0071_c0) b
       (0x71 :: 0 :: [0xd21220a7]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0041.cut 0xd21220a7 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0041.cutH 0xd21220a7 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_004c_c0 75) b
       (0x5da :: 1 :: [0xd21220a7]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | name =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x6fdde03] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x6fdde03 cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x6fdde03 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 1 :: [0x6fdde03]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cut 0x6fdde03 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cutH 0x6fdde03 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0172_c0 t_0197_c0) b
       (0x197 :: 1 :: [0x6fdde03]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0197.cut 0x6fdde03 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0197.cutH 0x6fdde03 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_01a3_c0 99) b
       (0x1be :: 0 :: [0x6fdde03]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at01a3.cut 0x6fdde03 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at01a3.cutH 0x6fdde03 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_01ae_c0 100) b
       (0x259 :: 1 :: [0x6fdde03]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | symbol =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0x95d89b41] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0x95d89b41 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0x95d89b41 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 1 :: [0x95d89b41]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cut 0x95d89b41 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cutH 0x95d89b41 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_00a3_c0 t_00d3_c0) b
       (0xd3 :: 0 :: [0x95d89b41]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cut 0x95d89b41 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cutH 0x95d89b41 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00ae_c0 82) b
       (0x4d7 :: 0 :: [0x95d89b41]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00ae.cut 0x95d89b41 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00ae.cutH 0x95d89b41 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00b9_c0 83) b
       (0x50a :: 0 :: [0x95d89b41]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00b9.cut 0x95d89b41 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00b9.cutH 0x95d89b41 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00c4_c0 84) b
       (0x556 :: 1 :: [0x95d89b41]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | totalSupply =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x18160ddd] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x18160ddd cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x18160ddd cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 1 :: [0x18160ddd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cut 0x18160ddd cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cutH 0x18160ddd cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0172_c0 t_0197_c0) b
       (0x197 :: 0 :: [0x18160ddd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cut 0x18160ddd cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0172.cutH 0x18160ddd cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_017d_c0 96) b
       (0x315 :: 0 :: [0x18160ddd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at017d.cut 0x18160ddd cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at017d.cutH 0x18160ddd cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0188_c0 97) b
       (0x362 :: 0 :: [0x18160ddd]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0188.cut 0x18160ddd cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0188.cutH 0x18160ddd cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0193_c0 98) b
       (0x393 :: 1 :: [0x18160ddd]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | balanceOf =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0x70a08231] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0x70a08231 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0x70a08231 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 1 :: [0x70a08231]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cut 0x70a08231 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cutH 0x70a08231 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_00a3_c0 t_00d3_c0) b
       (0xd3 :: 1 :: [0x70a08231]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00d3.cut 0x70a08231 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00d3.cutH 0x70a08231 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00df_c0 86) b
       (0x469 :: 0 :: [0x70a08231]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00df.cut 0x70a08231 cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00df.cutH 0x70a08231 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00ea_c0 87) b
       (0x49c :: 1 :: [0x70a08231]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | nonces =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0x7ecebe00] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0x7ecebe00 cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0x7ecebe00 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 1 :: [0x7ecebe00]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cut 0x7ecebe00 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0097.cutH 0x7ecebe00 cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_00a3_c0 t_00d3_c0) b
       (0xd3 :: 0 :: [0x7ecebe00]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cut 0x7ecebe00 cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00a3.cutH 0x7ecebe00 cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_00ae_c0 82) b
       (0x4d7 :: 1 :: [0x7ecebe00]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | allowance =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_002b_c0 b [0xdd62ed3e] getterInitMemory [] at cut
-    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cut 0xdd62ed3e cut rfl fork
+    obtain ⟨guard⟩ := PairNoCallComparison.at002b.cutH 0xdd62ed3e cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0036_c0 t_0097_c0) b
       (0x97 :: 0 :: [0xdd62ed3e]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cut 0xdd62ed3e cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0036.cutH 0xdd62ed3e cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0041_c0 t_0071_c0) b
       (0x71 :: 0 :: [0xdd62ed3e]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0041.cut 0xdd62ed3e cut rfl fork
+    obtain ⟨cut⟩ := guard.branchZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0041.cutH 0xdd62ed3e cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_004c_c0 75) b
       (0x5da :: 0 :: [0xdd62ed3e]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at004c.cut 0xdd62ed3e cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at004c.cutH 0xdd62ed3e cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0057_c0 76) b
       (0x5e2 :: 0 :: [0xdd62ed3e]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0057.cut 0xdd62ed3e cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0057.cutH 0xdd62ed3e cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_0062_c0 77) b
       (0x640 :: 1 :: [0xdd62ed3e]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
   | getReserves =>
-    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_state codeEq fork selector run
+    obtain ⟨cut⟩ := pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
     change CursorStateAt code cert _ t_00f9_c0 b [0x902f1ac] getterInitMemory [] at cut
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cut 0x902f1ac cut rfl fork
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at00f9.cutH 0x902f1ac cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0105_c0 t_0166_c0) b
       (0x166 :: 1 :: [0x902f1ac]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cut 0x902f1ac cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0166.cutH 0x902f1ac cut rfl stateGas
     change CursorStateAt code cert _ (.branch t_0172_c0 t_0197_c0) b
       (0x197 :: 1 :: [0x902f1ac]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.branchSucc cert_check rfl fork (by decide)
-    obtain ⟨cut⟩ := cut.dest cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at0197.cut 0x902f1ac cut rfl fork
+    obtain ⟨cut⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+    obtain ⟨cut⟩ := cut.destH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at0197.cutH 0x902f1ac cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_01a3_c0 99) b
       (0x1be :: 0 :: [0x902f1ac]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at01a3.cut 0x902f1ac cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at01a3.cutH 0x902f1ac cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_01ae_c0 100) b
       (0x259 :: 0 :: [0x902f1ac]) getterInitMemory [] at guard
-    obtain ⟨cut⟩ := guard.toZero cert_check rfl fork
-    obtain ⟨guard⟩ := PairNoCallComparison.at01ae.cut 0x902f1ac cut rfl fork
+    obtain ⟨cut⟩ := guard.toZeroH cert_check rfl stateGas
+    obtain ⟨guard⟩ := PairNoCallComparison.at01ae.cutH 0x902f1ac cut rfl stateGas
     change CursorStateAt code cert _ (.branchTo t_01b9_c0 101) b
       (0x2d6 :: 1 :: [0x902f1ac]) getterInitMemory [] at guard
-    exact guard.toSucc cert_check rfl fork (by decide) rfl
+    exact guard.toSuccH cert_check rfl stateGas (by decide) rfl
 
-/-- The checked selected suffix and original prefix exclude every same-frame
-external instruction of this successful original bytecode execution. -/
-theorem PairNoCallEntry.root_noExec {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem PairNoCallEntry.root_noExecH {sevm : Sevm} {b post : Devm} {G : Nat}
     (entry : PairNoCallEntry) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = entry.selector)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ N →
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
-  obtain ⟨cut⟩ := entry.cursor_state codeEq fork selector run
-  have suffix := cut.placed.noExecSuffix cert_check (cut.sevm_eq ▸ fork)
+  obtain ⟨cut⟩ := entry.cursor_stateH codeEq stateGas selector run
+  have suffix := cut.placed.noExecSuffixH cert_check (cut.sevm_eq ▸ stateGas)
     entry.region_closed (by rw [cut.tree]; exact entry.tree_free)
     (by rw [cut.continuations]; simp only [List.not_mem_nil, false_implies, implies_true])
   intro N reached x decoded

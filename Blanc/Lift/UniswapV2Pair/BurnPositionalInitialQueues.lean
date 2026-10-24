@@ -5,14 +5,13 @@ import Blanc.Lift.UniswapV2Pair.SourceStaticSlotViews
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The first Burn source request obtains its complete queue and static views
-from the retained original occurrence at the exact locked entry frame. -/
-theorem BurnInitialPair.firstViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
+theorem BurnInitialPairH.firstViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
     let frame := burnSourceLockedFrame current (writerContext sevm invocation)
@@ -39,30 +38,30 @@ theorem BurnInitialPair.firstViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     exact installed
   have inputStorage : r.first.occurrence.node.devm.getStor sevm.currentTarget =
       r.first.returned.devm.getStor sevm.currentTarget := by
-    rw [r.first_input, r.first_reply.stor]
-    simp only [burnFirstCallInput, St_getStor, burnInitialWorld0, burnInitialToken0]
+    rw [r.first_input, burnFirstCallInputH_initial, r.first_reply.stor]
+    simp only [St_getStor, burnInitialWorld0H]
   have actualRep : WriterRep K (r.first.occurrence.node.devm.getStor frame.context.pair)
       frame.current.state := by
     change WriterRep K (r.first.occurrence.node.devm.getStor sevm.currentTarget)
       {current.state with unlocked := 0}
     rw [inputStorage, r.first_storage]
-    exact rep.burn_locked_world
+    exact rep.burn_locked_worldH
   obtain ⟨paths, views, queue, mapped, authentic, turns⟩ :=
-    CallOccurrenceStep.staticSlotViews r.first (frame := frame) (request := request) 0 sem image actualInstalled
-      actualRep (by rw [env]; rfl) (by rw [env]; exact fork) fresh
-  obtain ⟨observed, same, samePaths⟩ := r.firstSourceCall (frame := frame) rep rfl fork queue
+    CallOccurrenceStep.staticSlotViewsH r.first (frame := frame) (request := request) 0 sem image actualInstalled
+      actualRep (by rw [env]; rfl) (by rw [env]; exact stateGas) (by rw [env]; exact bal) fresh
+  obtain ⟨observed, same, samePaths⟩ := r.firstSourceCall (frame := frame) rep rfl stateGas queue
   refine ⟨observed, views, same, ?_⟩
   rw [samePaths]
   exact .staticViews views mapped authentic turns
 
-/-- The second Burn source request keeps the exact first-resume frame and
-obtains the complete queue from its retained second original slot. -/
-theorem BurnInitialPair.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
+
+theorem BurnInitialPairH.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
     let frame0 := burnSourceLockedFrame current (writerContext sevm invocation)
@@ -91,29 +90,31 @@ theorem BurnInitialPair.secondViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have inputStorage : r.second.occurrence.node.devm.getStor sevm.currentTarget =
       r.second.returned.devm.getStor sevm.currentTarget := by
     rw [r.second_input, r.second_reply.stor]
-    simp only [burnInitialSecondInput, St_getStor]
+    simp only [burnInitialSecondInputH, St_getStor]
   have actualRep : WriterRep K (r.second.occurrence.node.devm.getStor frame.context.pair)
       frame.current.state := by
     change WriterRep K (r.second.occurrence.node.devm.getStor sevm.currentTarget)
       {current.state with unlocked := 0}
     rw [inputStorage, r.second_storage]
-    exact rep.burn_locked_world
+    exact rep.burn_locked_worldH
   obtain ⟨paths, views, queue, mapped, authentic, turns⟩ :=
-    CallOccurrenceStep.staticSlotViews r.second (frame := frame) (request := request) 1 sem image actualInstalled
-      actualRep (by rw [r.second_sevm]; rfl) (by rw [r.second_sevm]; exact fork) fresh
-  obtain ⟨observed, same, samePaths⟩ := r.secondSourceCall (frame := frame) rep rfl fork queue
+    CallOccurrenceStep.staticSlotViewsH r.second (frame := frame) (request := request) 1 sem image actualInstalled
+      actualRep (by rw [r.second_sevm]; rfl) (by rw [r.second_sevm]; exact stateGas) (by rw [r.second_sevm]; exact bal) fresh
+  obtain ⟨observed, same, samePaths⟩ := r.secondSourceCall (frame := frame) rep rfl stateGas queue
   refine ⟨observed, views, same, ?_⟩
   rw [samePaths]
   exact .staticViews views mapped authentic turns
 
+
 /-- The factory request's views and paths are extracted from the same third
 original slot at the frame obtained by resuming both initial requests. -/
-theorem BurnThreeCalls.feeViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
+theorem BurnThreeCallsH.feeViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
     let frame0 := burnSourceLockedFrame current (writerContext sevm invocation)
@@ -141,32 +142,34 @@ theorem BurnThreeCalls.feeViews {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     rw [(Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode r.fee.occurrence.call.sameFrame).2
       sevm.currentTarget nonempty]
     exact installed
-  have env : r.initial.second.returned.sevm = sevm :=
-    (Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm
-  have reply := r.fee.reply
-  simp only [env] at reply
-  have burnRep : WriterRep K ((feeBurnWorld sevm r.initial.second.returned.devm).getStor
-      sevm.currentTarget) {current.state with unlocked := 0} := by
-    rw [feeBurnWorld, afterSload_getStor]
+  have env : r.initial.second.returned.sevm = sevm := r.initial.returned_sevm
+  have envT : r.initial.second.returned.sevm.currentTarget = sevm.currentTarget := by rw [env]
+  have burnRep : WriterRep K ((feeBurnWorldH r.initial.second.returned.sevm
+      r.initial.second.returned.devm).getStor r.initial.second.returned.sevm.currentTarget)
+      {current.state with unlocked := 0} := by
+    rw [feeBurnWorldH, afterSloadH_getStor, envT]
     exact r.initial.fee_entry_rep rep
-  have postRep := burnRep.fee_factory_post reply
-  rw [feeKLastWorld, afterSload_getStor] at postRep
+  have postRep := burnRep.fee_factory_postW r.fee.reply (r.worlds.2.1 _ _ env)
+  rw [feeKLastWorldH, afterSloadH_getStor] at postRep
+  simp only [envT] at postRep
   have actualRep : WriterRep K (r.fee.occurrence.call.occurrence.node.devm.getStor
       frame.context.pair) frame.current.state := by
     change WriterRep K (r.fee.occurrence.call.occurrence.node.devm.getStor sevm.currentTarget)
       {current.state with unlocked := 0}
     rw [r.fee.occurrence.input]
-    simp only [St_getStor, env]
-    rw [← reply.stor]
+    simp only [St_getStor]
+    rw [← r.fee.reply.stor]
     exact postRep
   obtain ⟨paths, views, queue, mapped, authentic, turns⟩ :=
-    CallOccurrenceStep.staticSlotViews r.fee.occurrence.call (frame := frame) (request := request) 2
+    CallOccurrenceStep.staticSlotViewsH r.fee.occurrence.call (frame := frame) (request := request) 2
       sem image actualInstalled actualRep
       (by rw [r.fee.occurrence.sevm_eq, env]; rfl)
-      (by rw [r.fee.occurrence.sevm_eq, env]; exact fork) fresh
-  obtain ⟨observed, same, samePaths⟩ := r.feeSourceCall (frame := frame) rep rfl fork queue
+      (by rw [r.fee.occurrence.sevm_eq, env]; exact stateGas)
+      (by rw [r.fee.occurrence.sevm_eq, env]; exact bal) fresh
+  obtain ⟨observed, same, samePaths⟩ := r.feeSourceCall (frame := frame) rep rfl stateGas queue
   refine ⟨observed, views, same, ?_⟩
   rw [samePaths]
   exact .staticViews views mapped authentic turns
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -11,9 +11,30 @@ def MintPositionalQueues.transcript {root : Exec.Deriv} {b : Devm}
     (.next (feeObservedResult r.out1) (staticViewTranscript q.views1 .done)
       (.next (feeObservedResult r.fee.out) (staticViewTranscript q.viewsF .done) .done))
 
+def MintPositionalQueuesH.transcript {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
+    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositionsH root b W1 A2 F}
+    (q : MintPositionalQueuesH current invocation r) : Transcript :=
+  .next (feeObservedResult r.out0) (staticViewTranscript q.views0 .done)
+    (.next (feeObservedResult r.out1) (staticViewTranscript q.views1 .done)
+      (.next (feeObservedResult r.fee.out) (staticViewTranscript q.viewsF .done) .done))
+
 def MintPositionalQueues.childReturns {root : Exec.Deriv} {b : Devm}
     {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositions root b}
     (q : MintPositionalQueues current invocation r) : List ChildReturn :=
+  staticViewChildReturns
+    (mintSourceLockedFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr)
+    (requestFor .mintBalance0 current.state.token0 (.balanceOf root.sevm.currentTarget)) 0 q.views0 ++
+  (staticViewChildReturns
+    ((mintSourceLockedFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr).beginResume
+      (requestFor .mintBalance0 current.state.token0 (.balanceOf root.sevm.currentTarget)))
+    (requestFor .mintBalance1 current.state.token1 (.balanceOf root.sevm.currentTarget)) 0 q.views1 ++
+  (staticViewChildReturns
+    (mintSourceFeeFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr)
+    (requestFor .mintFeeTo current.state.factory .feeTo) 0 q.viewsF ++ []))
+
+def MintPositionalQueuesH.childReturns {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
+    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositionsH root b W1 A2 F}
+    (q : MintPositionalQueuesH current invocation r) : List ChildReturn :=
   staticViewChildReturns
     (mintSourceLockedFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr)
     (requestFor .mintBalance0 current.state.token0 (.balanceOf root.sevm.currentTarget)) 0 q.views0 ++
@@ -77,50 +98,146 @@ structure MintPositionalCanonicalResult (K : WriterKey → Prop) (current : Chec
         (Bytes.toB256 (positions.out0.take 32) - mintRootReserve0 root b).toBytes ++
         (Bytes.toB256 (positions.out1.take 32) - mintRootReserve1 root b).toBytes⟩]
 
-/-- Every successful original Mint root supplies one correlated canonical
-result. Its requests, full reply queues, finite state and output are all those
-of the same actual three-call certificate at the supplied incoming checkpoint. -/
-theorem mint_positional_canonical {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
+/-- `MintPositionalCanonicalResult` over `MintRootCallPositionsH`, generic in its call worlds. -/
+structure MintPositionalCanonicalResultH (K : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (root : Exec.Deriv) (b post W1 : Devm) (A2 F : Sevm → Devm → Devm) where
+  positions : MintRootCallPositionsH root b W1 A2 F
+  queues : MintPositionalQueuesH current invocation positions
+  value : root.sevm.value = 0
+  nonstatic : root.sevm.isStatic = false
+  feeNode : Exec.Deriv
+  feeGas : Nat
+  feeFree : Exec.Deriv.ExecFreeUntil positions.fee.occurrence.call.returned feeNode
+  sourceFee : FeeMintSourceResultH K {current.state with unlocked := 0} root.sevm
+    (mintPositionalFeeBaseH positions) (mintPositionalLocalsH positions) (mintPositionalFeeMemoryH positions)
+    (mintPositionalFeeWordH positions) (mintRootReserve0 root b) (mintRootReserve1 root b) feeGas
+  feeState : feeNode.devm = feeBranchPostH root.sevm (mintPositionalFeeBaseH positions)
+    (mintPositionalLocalsH positions) (mintPositionalFeeMemoryH positions) current.state.kLast
+    (mintPositionalFeeWordH positions) (mintRootReserve0 root b) (mintRootReserve1 root b) feeGas
+  final : Frame
+  liquidity : Nat
+  keys : WriterKey → Prop
+  footprint : keys = (if (mintPositionalFeeResultH current positions).state.totalSupply = 0 then
+    WriterExtend (WriterExtend (mintPositionalFeeKeysH K current positions) (lpMintTouched (0 : B256).toAdr))
+      (lpMintTouched (Sevm.dataWord root.sevm 4).toAdr)
+    else WriterExtend (mintPositionalFeeKeysH K current positions) (lpMintTouched (Sevm.dataWord root.sevm 4).toAdr))
+  typedFinished :
+    (mintSourceAfterFeeFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr).mintAfterFee
+      (mintBalanceObserved current.state (Sevm.dataWord root.sevm 4).toAdr
+        (Bytes.toB256 (positions.out0.take 32)) (Bytes.toB256 (positions.out1.take 32)))
+      (mintPositionalFeeResultH current positions) = .finished final (encodeWords [liquidity.toB256])
+  positional : PositionalConsumes root root 0
+    (startTyped current (writerContext root.sevm invocation) (.mint (Sevm.dataWord root.sevm 4).toAdr))
+    queues.transcript
+    {status := .success (encodeWords [liquidity.toB256]), frame := final,
+      remaining := .done, childReturns := queues.childReturns}
+  admission : ∀ Auth : Exec.Deriv → Entry → Transcript → Prop,
+    SourceAdmission Auth positional
+  checkpoint : final.checkpoint = current
+  context : final.context = writerContext root.sevm invocation
+  unlocked : final.current.state.unlocked = 1
+  grown : ∀ k, keys k → WriterExtend K (mintTraceKeys root) k
+  storage : WriterRep keys (post.getStor root.sevm.currentTarget) final.current.state
+  output : post.output = encodeWords [liquidity.toB256]
+  logs : post.logs = feeNode.devm.logs ++
+    (if (mintPositionalFeeResultH current positions).state.totalSupply = 0 then
+      [lpMintRawLog root.sevm.currentTarget (0 : B256).toAdr 1000] else []) ++
+    [lpMintRawLog root.sevm.currentTarget (Sevm.dataWord root.sevm 4).toAdr liquidity.toB256,
+      ⟨root.sevm.currentTarget, [updateSyncTopic],
+        encodeWords [Bytes.toB256 (positions.out0.take 32), Bytes.toB256 (positions.out1.take 32)]⟩,
+      ⟨root.sevm.currentTarget, [mintEventTopic, root.sevm.caller.toB256],
+        (Bytes.toB256 (positions.out0.take 32) - mintRootReserve0 root b).toBytes ++
+        (Bytes.toB256 (positions.out1.take 32) - mintRootReserve1 root b).toBytes⟩]
+
+/-- At the modern call worlds and on a covered fork, `MintPositionalCanonicalResultH` gives the
+modern `MintPositionalCanonicalResult` with the same fields. -/
+def MintPositionalCanonicalResultH.toCovered {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (fork : CoveredFork root.sevm.benvStat.fork)
+    (h : MintPositionalCanonicalResultH K current invocation root b post (mintRootFirstWorld root b)
+      mintSecondWorldOf feeFactoryCallWorld) :
+    MintPositionalCanonicalResult K current invocation root b post where
+  positions := h.positions.toCovered fork
+  queues := h.queues.toCovered fork
+  value := h.value
+  nonstatic := h.nonstatic
+  feeNode := h.feeNode
+  feeGas := h.feeGas
+  feeFree := h.feeFree
+  sourceFee := by
+    rw [← FeeMintSourceResultH_of_covered fork, ← mintPositionalFeeBaseH_of_covered fork,
+      ← mintPositionalLocalsH_of_covered fork, ← mintPositionalFeeMemoryH_of_covered fork,
+      ← mintPositionalFeeWordH_of_covered fork]
+    exact h.sourceFee
+  feeState := by
+    rw [← feeBranchPostH_of_covered fork, ← mintPositionalFeeBaseH_of_covered fork,
+      ← mintPositionalLocalsH_of_covered fork, ← mintPositionalFeeMemoryH_of_covered fork,
+      ← mintPositionalFeeWordH_of_covered fork]
+    exact h.feeState
+  final := h.final
+  liquidity := h.liquidity
+  keys := h.keys
+  footprint := by
+    rw [← mintPositionalFeeKeysH_of_covered fork, ← mintPositionalFeeResultH_of_covered fork]
+    exact h.footprint
+  typedFinished := by
+    rw [← mintPositionalFeeResultH_of_covered fork]
+    exact h.typedFinished
+  positional := h.positional
+  admission := h.admission
+  checkpoint := h.checkpoint
+  context := h.context
+  unlocked := h.unlocked
+  grown := h.grown
+  storage := h.storage
+  output := h.output
+  logs := by
+    rw [← mintPositionalFeeResultH_of_covered fork]
+    exact h.logs
+
+theorem mint_positional_canonicalH {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post W1 : Devm} {A2 F : Sevm → Devm → Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x6a627842)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
     (inj : WriterInj
       (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (apart : WriterApart
-      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
-    Nonempty (MintPositionalCanonicalResult K current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post) := by
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (worlds : MintRootWorldsH ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b W1 A2 F) :
+    Nonempty (MintPositionalCanonicalResultH K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post W1 A2 F) := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-  obtain ⟨r⟩ := mint_three_occurrences_of_success codeEq fork selector run
+  obtain ⟨r⟩ := mint_three_occurrences_of_successH codeEq stateGas bal selector run worlds
   have fresh : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm) := by
     intro F member target
     exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart
       (fun _ tracked => Or.inl tracked)
       (fun k touched => Or.inr (mintTraceKeys_frame member target k touched))
-  obtain ⟨q⟩ := mint_positional_queues run r rep invocation sem image installed fork fresh
+  obtain ⟨q⟩ := mint_positional_queuesH run r rep invocation sem image installed stateGas bal fresh
   obtain ⟨value, nonstatic, handlers⟩ :=
-    mint_positional_balance_handlers run r rep invocation codeEq fork selector
+    mint_positional_balance_handlersH run r rep invocation codeEq stateGas bal selector
   obtain ⟨feeN, feeGas, free, sourceFee, feeState, frameResult⟩ :=
-    mint_positional_source_finish run r rep invocation fork inj apart
+    mint_positional_source_finishH run r rep invocation stateGas bal inj apart
   obtain ⟨liquidity, keys, final, d, footprint, typedFinished, storage,
     halted, output, logs⟩ := frameResult
   have dPost : post = d := Outcome.halted.inj halted
   subst dPost
   have feeFinished := (r.feeResume rep invocation sourceFee).trans typedFinished
-  have positional := q.positionalConsumes fork handlers feeFinished
+  have positional := q.positionalConsumes stateGas handlers feeFinished
   obtain ⟨checkpoint, context, unlocked⟩ := mintAfterFee_finished_shape typedFinished
   have sub : ∀ k, K k → WriterExtend K (mintTraceKeys root) k := fun _ tracked => Or.inl tracked
   have feeRow : WriterExtend K (mintTraceKeys root)
-      (.balance (mintPositionalFeeWord r).toAdr) := Or.inr (r.feeReplyKey fork)
-  have feeKeys : ∀ k, mintPositionalFeeKeys K current r k → WriterExtend K (mintTraceKeys root) k :=
+      (.balance (mintPositionalFeeWordH r).toAdr) := Or.inr (r.feeReplyKey stateGas)
+  have feeKeys : ∀ k, mintPositionalFeeKeysH K current r k → WriterExtend K (mintTraceKeys root) k :=
     mint_feeKeys_sub sub feeRow {current.state with unlocked := 0} sevm
-      (mintPositionalFeeBase r) (mintRootReserve0 root b) (mintRootReserve1 root b)
+      (mintPositionalFeeBaseH r) (mintRootReserve0 root b) (mintRootReserve1 root b)
   have zeroRows : ∀ k ∈ lpMintTouched (0 : B256).toAdr,
       WriterExtend K (mintTraceKeys root) k := by
     intro k member
@@ -155,11 +272,35 @@ theorem mint_positional_canonical {K : WriterKey → Prop} {current : Checkpoint
     feeNode := feeN, feeGas := feeGas, feeFree := free, sourceFee := sourceFee,
     feeState := feeState, final := final, liquidity := liquidity, keys := keys,
     footprint := ?_, typedFinished := typedFinished, positional := positional,
-    admission := fun Auth => (q.admittedConsumes (Auth := Auth) fork handlers feeFinished).choose_spec,
+    admission := fun Auth => (q.admittedConsumes (Auth := Auth) stateGas handlers feeFinished).choose_spec,
     checkpoint := checkpoint, context := context, unlocked := unlocked,
     grown := grown, storage := storage, output := output, logs := ?_}⟩
   · simpa only [toAdr_toB256] using footprint
   · simpa only [toAdr_toB256, framePair, frameSender] using logs
+
+/-- Every successful original Mint root supplies one correlated canonical
+result. Its requests, full reply queues, finite state and output are all those
+of the same actual three-call certificate at the supplied incoming checkpoint. -/
+theorem mint_positional_canonical {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (inj : WriterInj
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (apart : WriterApart
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
+    Nonempty (MintPositionalCanonicalResult K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post) := by
+  obtain ⟨h⟩ := mint_positional_canonicalH invocation rep sem image installed codeEq
+    fork.rules_stateGas_none fork.rules_bal_none selector run inj apart
+    (MintRootWorldsH.of_covered fork)
+  exact ⟨h.toCovered fork⟩
+
 
 /-- Erasure retains the same transcript, final model frame and successful bytes. -/
 theorem MintPositionalCanonicalResult.exactConsumes {K : WriterKey → Prop}

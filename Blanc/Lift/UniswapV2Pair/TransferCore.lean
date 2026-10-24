@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.WriterMemory
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.HistAccessWalk
 
 /-! Actual transfer cuts preserve the debit-before-credit storage and metadata chain. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -17,9 +18,25 @@ def transferCreditBase (sevm : Sevm) (b : Devm) (owner recipient : Adr)
   (afterSstore sevm b (transferBalanceSlot recipient) credited).addLog
     ⟨sevm.currentTarget, [transferTopic, owner.toB256, recipient.toB256], amount.toBytes⟩
 
+def transferCreditBaseH (sevm : Sevm) (b : Devm) (owner recipient : Adr)
+    (amount credited : B256) : Devm :=
+  (afterSstoreH sevm b (transferBalanceSlot recipient) credited).addLog
+    ⟨sevm.currentTarget, [transferTopic, owner.toB256, recipient.toB256], amount.toBytes⟩
+
+theorem transferCreditBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner recipient : Adr) (amount credited : B256) :
+    transferCreditBaseH sevm b owner recipient amount credited = transferCreditBase sevm b owner recipient amount credited := by
+  unfold transferCreditBaseH transferCreditBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def transferCreditPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount credited : B256) (G : Nat) : Devm :=
   St (transferCreditBase sevm b owner recipient amount credited) R
+    ((transferScratch M recipient.toB256).write 128 amount.toBytes) G
+
+def transferCreditPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount credited : B256) (G : Nat) : Devm :=
+  St (transferCreditBaseH sevm b owner recipient amount credited) R
     ((transferScratch M recipient.toB256).write 128 amount.toBytes) G
 
 /-- The literal credit continuation retains the actual incoming storage metadata. -/
@@ -120,16 +137,16 @@ theorem transfer_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_pop ?_
   exact rx_ret
 
-/-- Any completed credit continuation returns its entire store/log/memory image. -/
-theorem transfer_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {owner recipient : Adr}
     {amount credited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run fs sevm
       (St b (credited :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_2683_c61 o) :
     sevm.isStatic = false ∧
-      ∃ residual, o = .returned (transferCreditPost sevm b R M owner recipient amount credited residual) := by
+      ∃ residual, o = .returned (transferCreditPostH sevm b R M owner recipient amount credited residual) := by
   have m1 := transferScratch_ptr mem recipient.toB256
   have m2 := getterWordMemory_ptr m1 amount
   have hash := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 recipient.toB256 1)
@@ -201,8 +218,8 @@ theorem transfer_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -269,13 +286,34 @@ theorem transfer_credit_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
+
 def transferDebitBase (sevm : Sevm) (b : Devm) (owner : Adr) (debited : B256) : Devm :=
   afterSstore sevm b (transferBalanceSlot owner) debited
+
+def transferDebitBaseH (sevm : Sevm) (b : Devm) (owner : Adr) (debited : B256) : Devm :=
+  afterSstoreH sevm b (transferBalanceSlot owner) debited
+
+theorem transferDebitBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner : Adr) (debited : B256) :
+    transferDebitBaseH sevm b owner debited = transferDebitBase sevm b owner debited := by
+  unfold transferDebitBaseH transferDebitBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 def transferRecipientWord (sevm : Sevm) (b : Devm) (owner recipient : Adr)
     (debited : B256) : B256 :=
   (transferDebitBase sevm b owner debited).getStorVal sevm.currentTarget
     (transferBalanceSlot recipient)
+
+def transferRecipientWordH (sevm : Sevm) (b : Devm) (owner recipient : Adr)
+    (debited : B256) : B256 :=
+  (transferDebitBaseH sevm b owner debited).getStorVal sevm.currentTarget
+    (transferBalanceSlot recipient)
+
+theorem transferRecipientWordH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner recipient : Adr) (debited : B256) :
+    transferRecipientWordH sevm b owner recipient debited = transferRecipientWord sevm b owner recipient debited := by
+  unfold transferRecipientWordH transferRecipientWord
+  simp only [transferDebitBaseH_of_covered fork]
 
 def transferDebitPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount debited : B256) (G : Nat) : Devm :=
@@ -283,6 +321,13 @@ def transferDebitPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (afterSload sevm (transferDebitBase sevm b owner debited) (transferBalanceSlot recipient))
     R ((transferScratch M owner.toB256).write 0 recipient.toB256.toBytes)
     owner recipient amount (transferRecipientWord sevm b owner recipient debited + amount) G
+
+def transferDebitPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount debited : B256) (G : Nat) : Devm :=
+  transferCreditPostH sevm
+    (afterSloadH sevm (transferDebitBaseH sevm b owner debited) (transferBalanceSlot recipient))
+    R ((transferScratch M owner.toB256).write 0 recipient.toB256.toBytes)
+    owner recipient amount (transferRecipientWordH sevm b owner recipient debited + amount) G
 
 /-- The recipient load is evaluated after the actual debit store, including physical aliases. -/
 theorem transfer_debit_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -377,16 +422,16 @@ theorem transfer_debit_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (add72_exact nowrap (by simp only [List.length_cons]; omega)) ?_
   exact transfer_credit_exact fork m2 creditEq creditSentry nonstatic room
 
-/-- Successful debit continuation derives credit safety from the actual post-debit load. -/
-theorem transfer_debit_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount debited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (debited :: amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G)
       t_2641_c61 o) :
     sevm.isStatic = false ∧
-      (transferRecipientWord sevm b owner recipient debited).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferDebitPost sevm b R M owner recipient amount debited residual) := by
+      (transferRecipientWordH sevm b owner recipient debited).toNat + amount.toNat < 2 ^ 256 ∧
+      ∃ residual, o = .returned (transferDebitPostH sevm b R M owner recipient amount debited residual) := by
   have m1 := transferScratch_ptr mem owner.toB256
   have m2 := m1.write 0 recipient.toB256 (Or.inl (by decide))
   rw [show memExtSize 96 0 32 = 96 from by decide] at m2
@@ -452,8 +497,8 @@ theorem transfer_debit_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -473,7 +518,7 @@ theorem transfer_debit_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m2.read_self (by decide : 0 + 64 ≤ 96), hash2] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x26, 0x83] = (9859 : B256) from by decide] at hd
@@ -496,10 +541,11 @@ theorem transfer_debit_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨nowrap, _, eq⟩ := add72_inv checked
     cases eq
-    obtain ⟨_, residual, result⟩ := transfer_credit_inv fork m2 tail.uncut
+    obtain ⟨_, residual, result⟩ := transfer_credit_invH stateGas bal m2 tail.uncut
     exact ⟨nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, eq⟩ := add72_inv checked
     cases eq
+
 
 def transferSourceWord (sevm : Sevm) (b : Devm) (owner : Adr) : B256 :=
   b.getStorVal sevm.currentTarget (transferBalanceSlot owner)
@@ -512,6 +558,20 @@ def transferCoreBase (sevm : Sevm) (b : Devm) (owner recipient : Adr) (amount : 
     (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot owner)) owner recipient
       (transferSourceWord sevm b owner - amount) + amount)
 
+def transferCoreBaseH (sevm : Sevm) (b : Devm) (owner recipient : Adr) (amount : B256) : Devm :=
+  transferCreditBaseH sevm
+    (afterSloadH sevm (transferDebitBaseH sevm (afterSloadH sevm b (transferBalanceSlot owner))
+      owner (transferSourceWord sevm b owner - amount)) (transferBalanceSlot recipient))
+    owner recipient amount
+    (transferRecipientWordH sevm (afterSloadH sevm b (transferBalanceSlot owner)) owner recipient
+      (transferSourceWord sevm b owner - amount) + amount)
+
+theorem transferCoreBaseH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (b : Devm) (owner recipient : Adr) (amount : B256) :
+    transferCoreBaseH sevm b owner recipient amount = transferCoreBase sevm b owner recipient amount := by
+  unfold transferCoreBaseH transferCoreBase
+  simp only [transferCreditBaseH_of_covered fork, transferDebitBaseH_of_covered fork, transferRecipientWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
+
 def transferCoreMemory (M : Mem) (owner recipient : Adr) (amount : B256) : Mem :=
   (transferScratch
     ((transferScratch (transferScratch M owner.toB256) owner.toB256).write 0 recipient.toB256.toBytes)
@@ -520,6 +580,11 @@ def transferCoreMemory (M : Mem) (owner recipient : Adr) (amount : B256) : Mem :
 def transferCorePost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
   St (transferCoreBase sevm b owner recipient amount) R
+    (transferCoreMemory M owner recipient amount) G
+
+def transferCorePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (owner recipient : Adr) (amount : B256) (G : Nat) : Devm :=
+  St (transferCoreBaseH sevm b owner recipient amount) R
     (transferCoreMemory M owner recipient amount) G
 
 /-- The literal transfer core consumes checked subtraction before its sequential debit/credit tail. -/
@@ -596,16 +661,16 @@ theorem transfer61_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   exact transfer_debit_exact fork m1 debitEq loadEq creditEq debitSentry creditSentry
     nonstatic nowrap room
 
-/-- Successful transfer derives owner cover and recipient safety from both checked callees. -/
-theorem transfer61_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {owner recipient : Adr} {amount ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (amount :: recipient.toB256 :: owner.toB256 :: ρ :: R) M G) t_260b_c61 o) :
     amount ≤ transferSourceWord sevm b owner ∧ sevm.isStatic = false ∧
-      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot owner))
+      (transferRecipientWordH sevm (afterSloadH sevm b (transferBalanceSlot owner))
         owner recipient (transferSourceWord sevm b owner - amount)).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transferCorePost sevm b R M owner recipient amount residual) := by
+      ∃ residual, o = .returned (transferCorePostH sevm b R M owner recipient amount residual) := by
   have m1 := transferScratch_ptr mem owner.toB256
   have hash1 := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 owner.toB256 1)
   dsimp only [transferScratch] at m1
@@ -657,7 +722,7 @@ theorem transfer61_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m1.read_self (by decide : 0 + 64 ≤ 96), hash1] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x26, 0x41] = (9793 : B256) from by decide] at hd
@@ -680,14 +745,20 @@ theorem transfer61_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨cover, _, eq⟩ := sub59_inv checked
     cases eq
-    obtain ⟨nonstatic, nowrap, residual, result⟩ := transfer_debit_inv fork m1 tail.uncut
+    obtain ⟨nonstatic, nowrap, residual, result⟩ := transfer_debit_invH stateGas bal m1 tail.uncut
     exact ⟨cover, nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
 
+
 def transfer40Post (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (recipient : Adr) (amount : B256) (G : Nat) : Devm :=
   St (transferCoreBase sevm b sevm.caller recipient amount) (1 :: R)
+    (transferCoreMemory M sevm.caller recipient amount) G
+
+def transfer40PostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (recipient : Adr) (amount : B256) (G : Nat) : Devm :=
+  St (transferCoreBaseH sevm b sevm.caller recipient amount) (1 :: R)
     (transferCoreMemory M sevm.caller recipient amount) G
 
 /-- The actual immediate body supplies CALLER and returns the true word. -/
@@ -736,16 +807,16 @@ theorem transfer40_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
   exact checked_return_exact
 
-/-- Immediate successful transfer obtains acceptance from the literal core, including its halt exclusion. -/
-theorem transfer40_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem transfer40_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {recipient : Adr} {amount ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm
       (St b (amount :: recipient.toB256 :: ρ :: R) M G) t_18cb_c40 o) :
     amount ≤ transferSourceWord sevm b sevm.caller ∧ sevm.isStatic = false ∧
-      (transferRecipientWord sevm (afterSload sevm b (transferBalanceSlot sevm.caller))
+      (transferRecipientWordH sevm (afterSloadH sevm b (transferBalanceSlot sevm.caller))
         sevm.caller recipient (transferSourceWord sevm b sevm.caller - amount)).toNat + amount.toNat < 2 ^ 256 ∧
-      ∃ residual, o = .returned (transfer40Post sevm b R M recipient amount residual) := by
+      ∃ residual, o = .returned (transfer40PostH sevm b R M recipient amount residual) := by
   have h := run.cut
   unfold t_18cb_c40 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -763,7 +834,7 @@ theorem transfer40_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, call⟩ := ric_call (g := t_260b_c61) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
-  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_inv fork mem core
+  · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
     unfold t_0df2_c40 at tail
     obtain ⟨_, tail⟩ := ric_dest tail
@@ -773,7 +844,8 @@ theorem transfer40_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     obtain ⟨_, rfl⟩ := ri_push hd
     obtain ⟨residual, result⟩ := checked_return_inv tail.uncut
     exact ⟨cover, nonstatic, nowrap, residual, result⟩
-  · obtain ⟨_, _, _, _, eq⟩ := transfer61_inv fork mem core
+  · obtain ⟨_, _, _, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
+
 
 end Blanc.Lift.UniswapV2Pair

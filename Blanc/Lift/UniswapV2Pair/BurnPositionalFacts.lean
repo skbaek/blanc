@@ -4,46 +4,44 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalSeven
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The retained first static reply preserves this entry's locked storage. -/
-theorem BurnInitialPair.first_storage {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnInitialPair root sevm b) (a : Adr) :
-    r.first.returned.devm.getStor a = (burnLockedWorld sevm b).getStor a := by
+theorem BurnInitialPairH.first_storage {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    (r : BurnInitialPairH root sevm b) (a : Adr) :
+    r.first.returned.devm.getStor a = (burnLockedWorldH sevm b).getStor a := by
   rw [r.first_reply.stor]
-  simp only [burnInitialWorld0, Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
-  change (burnTokensWorld sevm (burnInitialReserveWorld sevm b)).getStor a = _
-  rw [burnTokensWorld, afterSload_getStor, afterSload_getStor,
-    burnInitialReserveWorld, afterSload_getStor]
+  simp only [burnInitialWorld0H, Devm.getStor, Devm.getAcct, accountAccessH_state]
+  change (burnTokensWorldH sevm (burnInitialReserveWorldH sevm b)).getStor a = _
+  rw [burnTokensWorldH, afterSloadH_getStor, afterSloadH_getStor,
+    burnInitialReserveWorldH, afterSloadH_getStor]
   rfl
 
-/-- The second retained static reply advances the same full returned world. -/
-theorem BurnInitialPair.second_storage {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnInitialPair root sevm b) (a : Adr) :
-    r.second.returned.devm.getStor a = (burnLockedWorld sevm b).getStor a := by
+theorem BurnInitialPairH.second_storage {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    (r : BurnInitialPairH root sevm b) (a : Adr) :
+    r.second.returned.devm.getStor a = (burnLockedWorldH sevm b).getStor a := by
   rw [r.second_reply.stor]
-  simpa only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+  simpa only [Devm.getStor, Devm.getAcct, accountAccessH_state]
     using r.first_storage a
 
-/-- Finite incoming storage is transported through these two actual slots. -/
-theorem BurnInitialPair.fee_entry_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
+theorem BurnInitialPairH.fee_entry_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     WriterRep K (r.second.returned.devm.getStor sevm.currentTarget)
       { current.state with unlocked := 0 } := by
   rw [r.second_storage]
-  exact rep.burn_locked_world
+  exact rep.burn_locked_worldH
 
-/-- The retained storage reads fix the two reserves and all initial request targets. -/
-theorem BurnInitialPair.cache_targets {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
+theorem BurnInitialPairH.cache_targets {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     burnInitialReserve0 sevm b = current.state.reserve0.val.toB256 ∧
     burnInitialReserve1 sevm b = current.state.reserve1.val.toB256 ∧
     (burnInitialToken0 sevm b).toAdr = current.state.token0 ∧
     (burnInitialToken1 sevm b).toAdr = current.state.token1 ∧
-    (feeFactoryWord sevm (feeBurnWorld sevm r.second.returned.devm)).toAdr =
+    (feeFactoryWord sevm (feeBurnWorldH sevm r.second.returned.devm)).toAdr =
       current.state.factory := by
   have locked := rep.burn_locked_world (sevm := sevm)
-  rcases locked.fixed with ⟨_, _, factory, token0, token1, cache0, cache1, _, _, _, _, _⟩
+  have lockedH := rep.burn_locked_worldH (sevm := sevm)
+  rcases locked.fixed with ⟨_, _, _, token0, token1, cache0, cache1, _, _, _, _, _⟩
+  rcases lockedH.fixed with ⟨_, _, factory, _, _, _, _, _, _, _, _, _⟩
   refine ⟨cache0, cache1, ?_, ?_, ?_⟩
   · rw [burnInitialToken0,
       show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide,
@@ -58,14 +56,13 @@ theorem BurnInitialPair.cache_targets {root : Exec.Deriv} {sevm : Sevm} {b : Dev
       sevm.currentTarget).get 7).toAdr = _
     rw [afterSload_getStor, afterSload_getStor]
     exact token1
-  · rw [feeFactoryWord, toAdr_toB256, feeBurnWorld]
-    change (((afterSload sevm r.second.returned.devm _).getStor sevm.currentTarget).get 5).toAdr = _
-    rw [afterSload_getStor, r.second_storage]
+  · rw [feeFactoryWord, toAdr_toB256, feeBurnWorldH]
+    change (((afterSloadH sevm r.second.returned.devm _).getStor sevm.currentTarget).get 5).toAdr = _
+    rw [afterSloadH_getStor, r.second_storage]
     exact factory
 
-/-- The actual pre-fee sample names the incoming pair LP balance. -/
-theorem BurnInitialPair.sampled_liquidity {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPair root sevm b)
+theorem BurnInitialPairH.sampled_liquidity {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnInitialPairH root sevm b)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (tracked : K (.balance sevm.currentTarget)) :
     feeBurnLiquidity sevm r.second.returned.devm = current.state.balanceOf sevm.currentTarget := by

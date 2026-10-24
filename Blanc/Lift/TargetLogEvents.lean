@@ -5,6 +5,7 @@ import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionNoninterference
 import Blanc.Lift.Sound
+import Blanc.Lift.HistStaticCall
 
 /-!
 # Retained target frames interleaved with actual foreign LOGs
@@ -227,13 +228,6 @@ theorem Evm.step_cont_getStor_foreign_noStateGas {pc pc' : Nat} {sevm : Sevm} {p
               exact ((Ninst.exchange_instructionFrame_effectRec
                 (xl := .none) trivial nrun).getStor ca).symm
 
-theorem Evm.step_cont_getStor_foreign {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
-    {ca : Adr} (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (foreign : sevm.currentTarget ≠ ca) :
-    Devm.getStor post ca = Devm.getStor pre ca :=
-  Evm.step_cont_getStor_foreign_noStateGas fork.rules_stateGas_none step foreign
-
 /-- A childless message preserves storage at each structurally protected owner. -/
 theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume}
@@ -374,23 +368,6 @@ theorem Evm.step_run_getStor_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter 
       (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   exact Xinst.spawn_run_getStor_noStateGas fork spawn entered child resumed nonempty
-
-theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (entered : frame.enter = .run childEvm)
-    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
-    (resumed : resume.run (frame.settle raw) = .ok inter)
-    {ca : Adr} (nonempty : pre.getCode ca ≠ .empty) :
-    (∀ settles : Frame.settlementCommits frame raw = true, ∀ key,
-      (Devm.getStor inter ca).get key =
-        (Devm.getStor (Execution.committedPost raw
-          (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
-    (¬ Frame.settlementCommits frame raw = true → ∀ key,
-      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) :=
-  Evm.step_run_getStor_noStateGas fork.rules_stateGas_none step entered child resumed
-    nonempty
 
 /-- A CALL or STATICCALL child of any frame runs the installed image of `ca` when it
 executes at `ca`. -/
@@ -695,23 +672,6 @@ theorem CodeSem.At.spawnChild_noStateGas {sem : CodeSem} {ca : Adr}
   · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv enter
     rfl
 
-theorem CodeSem.At.spawnChild {sem : CodeSem} {ca : Adr}
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {callee : Jaune.Frame} {resume : Resume} {child : Evm}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn callee resume pc')
-    (enter : callee.enter = .run child)
-    (installed : sem.At ca pc sevm pre) (foreign : sevm.currentTarget ≠ ca)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    sem.At ca child.pc child.sta child.dyna ∧
-      Devm.getStor child.dyna ca = Devm.getStor pre ca ∧
-      (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty ∧ child.dyna.output = []) ∧
-      child.sta.data.length < 2 ^ 256 ∧ child.sta.benvStat = sevm.benvStat ∧
-      CoveredFork child.sta.benvStat.fork := by
-  obtain ⟨installed', storage, machine, short, statEq⟩ :=
-    CodeSem.At.spawnChild_noStateGas step enter installed foreign fork.rules_stateGas_none
-  obtain ⟨_, childFork⟩ := Blanc.ExecutionTrace.Evm.step_spawn_child_data fork step enter
-  exact ⟨installed', storage, machine, short, statEq, childFork⟩
-
 /-- A lifted instruction step, with its actual child if any, keeps every nonempty code. -/
 theorem Lift.StepIn.codePreserve {R : Exec.Deriv} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (step : Lift.StepIn R sevm pre n post) : Devm.CodePreserve pre post := by
@@ -1010,6 +970,33 @@ theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
     · exact Or.inl ⟨nameEq, dpEq⟩
     · exact Or.inr dpEq
 
+/-- `Xinst.staticcall_none_precompile` from `rules.stateGas = none` alone, under the frame's
+actual delegation flag (`CallCodeH`). -/
+theorem Xinst.staticcall_none_precompileH {sevm : Sevm} {s sf : Devm}
+    {g t ii is oi os : B256} {xs : List B256}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (operands : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (run : Xinst.Run sevm s .staticcall .none (.ok sf))
+    (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
+    sevm.benvStat.rules.isPrecomp t.toAdr := by
+  have stepRun : Ninst.StepRun 0 sevm s Ninst.staticcall .none (.ok sf) := by
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+    exact run
+  rcases of_step_staticcall_val_with_depth_frame_causeH operands
+      (show Xlot.Filled .none from trivial) stepRun stateGas with
+    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
+      _, process, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · apply callMsg_none_precompile (process := process)
+    unfold CallCodeH at routing
+    split at routing
+    · rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
+      · exact Or.inl ⟨nameEq, dpEq⟩
+      · exact Or.inr dpEq
+    · exact Or.inl ⟨routing.1, routing.2.2⟩
+
 /-- A successful STATICCALL with a nonzero flag and no interpreted child ran
 an enabled precompile at its target. The inversion preserves the supplied empty slot. -/
 theorem Xinst.staticcall_none_precompile {sevm : Sevm} {s sf : Devm}
@@ -1018,20 +1005,7 @@ theorem Xinst.staticcall_none_precompile {sevm : Sevm} {s sf : Devm}
     (operands : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (run : Xinst.Run sevm s .staticcall .none (.ok sf))
     (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
-    sevm.benvStat.rules.isPrecomp t.toAdr := by
-  have stepRun : Ninst.StepRun 0 sevm s Ninst.staticcall .none (.ok sf) := by
-    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
-    exact run
-  rcases of_step_staticcall_val_with_depth_frame_cause operands
-      (show Xlot.Filled .none from trivial) stepRun fork with
-    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
-      _, process, _⟩
-  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
-    rw [flagStack] at failed
-    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
-  · apply callMsg_none_precompile (process := process)
-    rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
-    · exact Or.inl ⟨nameEq, dpEq⟩
-    · exact Or.inr dpEq
+    sevm.benvStat.rules.isPrecomp t.toAdr :=
+  Xinst.staticcall_none_precompileH fork.rules_stateGas_none operands run flag
 
 end Blanc

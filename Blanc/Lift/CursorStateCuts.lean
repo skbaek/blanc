@@ -98,18 +98,6 @@ theorem CursorStateAt.dest {f : SFunc}
   cases step with
   | dest burn => exact ⟨rfl, rfl, _, St.of_burn burn⟩
 
-/-- The actual zero branch is selected by its concrete stack flag. -/
-theorem CursorStateAt.branchZero {f g : SFunc} {target : B256}
-    (cut : CursorStateAt code c start (.branch f g) b (target :: 0 :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code c start f b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpiAt_of_branch cut.tree)
-  intro G d f' K' step
-  cases step with
-  | zero _ pop => exact ⟨rfl, rfl, _, (St.of_pop2 pop).2.2⟩
-  | succ _ _ nonzero pop => exact (nonzero (St.of_pop2 pop).2.1.symm).elim
-
 /-- The actual taken branch is selected by its concrete nonzero flag. -/
 theorem CursorStateAt.branchSucc {f g : SFunc} {target flag : B256}
     (cut : CursorStateAt code c start (.branch f g) b (target :: flag :: S) M K)
@@ -122,32 +110,6 @@ theorem CursorStateAt.branchSucc {f g : SFunc} {target flag : B256}
   | zero _ pop => exact (nonzero (St.of_pop2 pop).2.1).elim
   | succ _ _ _ pop => exact ⟨rfl, rfl, _, (St.of_pop2 pop).2.2⟩
 
-/-- An untaken referenced branch retains the actual fallthrough cursor. -/
-theorem CursorStateAt.toZero {f : SFunc} {k : Nat} {target : B256}
-    (cut : CursorStateAt code c start (.branchTo f k) b (target :: 0 :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code c start f b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpiAt_of_branchTo cut.tree)
-  intro G d f' K' step
-  cases step with
-  | toZero _ pop => exact ⟨rfl, rfl, _, (St.of_pop2 pop).2.2⟩
-  | toSucc _ _ nonzero _ pop => exact (nonzero (St.of_pop2 pop).2.1.symm).elim
-
-/-- A taken referenced branch uses its checked lookup and actual flag. -/
-theorem CursorStateAt.toSucc {f g : SFunc} {k : Nat} {target flag : B256}
-    (cut : CursorStateAt code c start (.branchTo f k) b (target :: flag :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (nonzero : flag ≠ 0)
-    (lookup : c.prog[k]? = some g) :
-    Nonempty (CursorStateAt code c start g b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpiAt_of_branchTo cut.tree)
-  intro G d f' K' step
-  cases step with
-  | toZero _ pop => exact (nonzero (St.of_pop2 pop).2.1).elim
-  | toSucc _ _ _ entry pop =>
-      exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop2 pop).2.2⟩
-
 /-- An internal call retains its actual suspended continuation tree. -/
 theorem CursorStateAt.call {f g : SFunc} {k : Nat} {target : B256}
     (cut : CursorStateAt code c start (.callNext k f) b (target :: S) M K)
@@ -159,18 +121,6 @@ theorem CursorStateAt.call {f g : SFunc} {k : Nat} {target : B256}
   cases step with
   | call _ entry pop =>
       exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
-
-/-- An actual internal return uses its real pending continuation and preserves
-all machine fields except the residual gas charged by the return. -/
-theorem CursorStateAt.ret {f : SFunc} {target : B256}
-    (cut : CursorStateAt code c start .ret b (target :: S) M (f :: K))
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code c start f b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpAt_of_ret cut.tree)
-  intro G d f' K' step
-  cases step with
-  | ret _ pop => exact ⟨rfl, rfl, _, (St.of_pop1 pop).2⟩
 
 end ControlCuts
 

@@ -4,57 +4,54 @@ import Blanc.Lift.CursorSourceRun
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Liquidity sampling preserves the same incoming locked finite state. -/
-theorem BurnThreeCalls.fee_before_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
+theorem BurnThreeCallsH.fee_before_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     WriterRep K
-      ((feeBurnWorld r.initial.second.returned.sevm r.initial.second.returned.devm).getStor
+      ((feeBurnWorldH r.initial.second.returned.sevm r.initial.second.returned.devm).getStor
         r.initial.second.returned.sevm.currentTarget) {current.state with unlocked := 0} := by
   have env : r.initial.second.returned.sevm = sevm :=
     (Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm
-  rw [env, feeBurnWorld, afterSload_getStor]
+  rw [env, feeBurnWorldH, afterSloadH_getStor]
   exact r.initial.fee_entry_rep rep
 
-/-- The same physical factory reply supplies the represented kLast branch input. -/
-theorem BurnThreeCalls.fee_branch_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
+theorem BurnThreeCallsH.fee_branch_rep {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     WriterRep K
-      ((feeKLastWorld r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm).getStor
+      ((feeKLastWorldH r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm).getStor
         r.initial.second.returned.sevm.currentTarget) {current.state with unlocked := 0} := by
-  exact (r.fee_before_rep rep).fee_factory_post r.fee.reply
+  exact (r.fee_before_rep rep).fee_factory_postW r.fee.reply
+    (r.worlds.2.1 _ _ r.initial.returned_sevm)
 
-/-- The retained branch's kLast read is fixed by that same incoming representation. -/
-theorem BurnThreeCalls.fee_last_word {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCalls root sevm b)
+theorem BurnThreeCallsH.fee_last_word {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnThreeCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm =
       current.state.kLast := by
   rcases (r.fee_branch_rep rep).fixed with ⟨_, _, _, _, _, _, _, _, _, _, last, _⟩
-  rw [feeKLastWorld, afterSload_getStor] at last
+  rw [feeKLastWorldH, afterSloadH_getStor] at last
   exact last
 
-/-- The actual pricing node is the finite fee result of this same physical reply. -/
-theorem BurnFourCalls.fee_source_result {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnFourCalls root sevm b)
+theorem BurnFourCallsH.fee_source_result {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnFourCallsH root sevm b w)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (fresh : FeeMintFresh K {current.state with unlocked := 0}
       r.three.initial.second.returned.sevm
-      (feeKLastWorld r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
+      (feeKLastWorldH r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
       (Bytes.toB256 (r.three.fee.out.take 32))
       (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b)) :
     ∃ gas,
-      r.pricing.devm = feeBranchPost r.three.initial.second.returned.sevm
-        (feeKLastWorld r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
+      r.pricing.devm = feeBranchPostH r.three.initial.second.returned.sevm
+        (feeKLastWorldH r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
         r.three.feeReturnLocals
         (feeReplyMemory
           (feeBurnMemory (burnInitialReplyMemory sevm r.three.initial.out0 r.three.initial.out1)
             r.three.initial.second.returned.sevm.currentTarget) r.three.fee.out)
         current.state.kLast (Bytes.toB256 (r.three.fee.out.take 32))
         (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) gas ∧
-      FeeMintSourceResult K {current.state with unlocked := 0} r.three.initial.second.returned.sevm
-        (feeKLastWorld r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
+      FeeMintSourceResultH K {current.state with unlocked := 0} r.three.initial.second.returned.sevm
+        (feeKLastWorldH r.three.initial.second.returned.sevm r.three.fee.occurrence.call.returned.devm)
         r.three.feeReturnLocals
         (feeReplyMemory
           (feeBurnMemory (burnInitialReplyMemory sevm r.three.initial.out0 r.three.initial.out1)
@@ -76,6 +73,6 @@ theorem BurnFourCalls.fee_source_result {root : Exec.Deriv} {sevm : Sevm} {b : D
   obtain ⟨gas, state⟩ := r.pricing_data.state
   rw [last] at state
   exact ⟨gas, state,
-    feeBranch_source_result (r.three.fee_branch_rep rep) bound0 bound1 guards fresh⟩
+    feeBranch_source_resultH (r.three.fee_branch_rep rep) bound0 bound1 guards fresh⟩
 
 end Blanc.Lift.UniswapV2Pair

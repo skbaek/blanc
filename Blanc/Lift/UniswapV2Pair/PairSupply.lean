@@ -389,6 +389,32 @@ def PairStepSupplyWith
     PairStepOutcomeWith Consumes Auth U current invocation K
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
 
+/-- `PairStepSupplyWith` from the two rule facts the Pair's inversions read, `rules.stateGas = none`
+and `rules.bal = none`, in place of `CoveredFork`. Every historical fork of the Pair's lifetime
+(flat-access Muir Glacier through BPO2) satisfies both; `PairStepSupplyWithH.covered` recovers the
+modern supply. -/
+def PairStepSupplyWithH
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (selected : Sevm → Prop) : Prop :=
+  ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) {K : WriterKey → Prop},
+    sevm.code = code → b.getCode sevm.currentTarget = code →
+    sevm.benvStat.rules.stateGas = none → sevm.benvStat.rules.bal = none →
+    b.output = [] → sevm.data.length < 2 ^ 256 → selected sevm →
+    PairGood U ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
+    (∀ k, K k → U k) → WriterRep K (b.getStor sevm.currentTarget) current.state →
+    PairStepOutcomeWith Consumes Auth U current invocation K
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
+
+theorem PairStepSupplyWithH.covered
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
+    {selected : Sevm → Prop} (supply : PairStepSupplyWithH Consumes Auth U selected) :
+    PairStepSupplyWith Consumes Auth U selected := by
+  intro current invocation sevm b post G run K codeEq installed fork
+  exact supply current invocation run codeEq installed fork.rules_stateGas_none fork.rules_bal_none
+
 /-- One operation producer per family, all selecting the same outcome relation.
 The dispatcher below owns the selector inversion; this record supplies no alternative witness. -/
 structure PairSupplyRules
@@ -407,70 +433,83 @@ structure PairSupplyRules
   views : ∀ view : StaticView, PairStepSupplyWith Consumes Auth U
     (fun sevm => Blanc.Sevm.selector sevm = view.selector)
 
-/-- The single Pair selector dispatch, parameterized by the operation producers. -/
-theorem pairSupplyWith
-    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
-    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
-    (rules : PairSupplyRules Consumes Auth U) :
-    PairStepSupplyWith Consumes Auth U (fun _ => True) := by
-  intro current invocation sevm b post G run K codeEq installedCode fork freshOutput representable
-    _ good sub wrep
-  have member := pair_bytecode_selector_inv codeEq fork run
+/-- Selector inversion as a case split: a run whose selector lies in `pairSelectors` is handled by
+whichever family property `R` holds for its selector. -/
+theorem pair_selector_dispatch {sevm : Sevm} {Goal : Prop} {R : (Sevm → Prop) → Prop}
+    (member : Blanc.Sevm.selector sevm ∈ pairSelectors)
+    (use : ∀ {selected : Sevm → Prop}, R selected → selected sevm → Goal)
+    (transfer : R (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb))
+    (approve : R (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3))
+    (transferFrom : R (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd))
+    (initializeEntry : R (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955))
+    (permit : R (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf))
+    (mint : R (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842))
+    (sync : R (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9))
+    (skim : R (fun sevm => Blanc.Sevm.selector sevm = 0xbc25cf77))
+    (swap : R (fun sevm => Blanc.Sevm.selector sevm = 0x022c0d9f))
+    (burn : R (fun sevm => Blanc.Sevm.selector sevm = 0x89afcb44))
+    (views : ∀ view : StaticView, R (fun sevm => Blanc.Sevm.selector sevm = view.selector)) :
+    Goal := by
   simp only [pairSelectors, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
-  · exact rules.views (.scalar (.address .token1)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.permit current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.allowance) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.sync current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.scalar (.constant .minimumLiquidity)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.skim current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.scalar (.address .factory)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.singleMapping .nonces) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.burn current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.string .symbol) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.transfer current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.mint current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.singleMapping .balanceOf) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.scalar (.stored .kLast)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.scalar (.stored .domainSeparator)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.initializeEntry current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.scalar (.stored .price0CumulativeLast)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.scalar (.stored .price1CumulativeLast)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.transferFrom current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.scalar (.constant .permitTypehash)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.scalar (.constant .decimals)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.approve current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.scalar (.address .token0)) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.totalSupply) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.swap current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep
-  · exact rules.views (.string .name) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
-  · exact rules.views (.getReserves) current invocation run codeEq installedCode fork freshOutput
-      representable (h.trans (by decide)) good sub wrep
+  · exact use (views (.scalar (.address .token1))) (h.trans (by decide))
+  · exact use permit h
+  · exact use (views (.allowance)) (h.trans (by decide))
+  · exact use sync h
+  · exact use (views (.scalar (.constant .minimumLiquidity))) (h.trans (by decide))
+  · exact use skim h
+  · exact use (views (.scalar (.address .factory))) (h.trans (by decide))
+  · exact use (views (.singleMapping .nonces)) (h.trans (by decide))
+  · exact use burn h
+  · exact use (views (.string .symbol)) (h.trans (by decide))
+  · exact use transfer h
+  · exact use mint h
+  · exact use (views (.singleMapping .balanceOf)) (h.trans (by decide))
+  · exact use (views (.scalar (.stored .kLast))) (h.trans (by decide))
+  · exact use (views (.scalar (.stored .domainSeparator))) (h.trans (by decide))
+  · exact use initializeEntry h
+  · exact use (views (.scalar (.stored .price0CumulativeLast))) (h.trans (by decide))
+  · exact use (views (.scalar (.stored .price1CumulativeLast))) (h.trans (by decide))
+  · exact use transferFrom h
+  · exact use (views (.scalar (.constant .permitTypehash))) (h.trans (by decide))
+  · exact use (views (.scalar (.constant .decimals))) (h.trans (by decide))
+  · exact use approve h
+  · exact use (views (.scalar (.address .token0))) (h.trans (by decide))
+  · exact use (views (.totalSupply)) (h.trans (by decide))
+  · exact use swap h
+  · exact use (views (.string .name)) (h.trans (by decide))
+  · exact use (views (.getReserves)) (h.trans (by decide))
+
+/-- `PairSupplyRules` from the historical rule facts: one `PairStepSupplyWithH` producer per family. -/
+structure PairSupplyRulesH
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop) : Prop where
+  transfer : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb)
+  approve : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3)
+  transferFrom : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd)
+  initializeEntry : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955)
+  permit : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf)
+  mint : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842)
+  sync : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9)
+  skim : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xbc25cf77)
+  swap : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x022c0d9f)
+  burn : PairStepSupplyWithH Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x89afcb44)
+  views : ∀ view : StaticView, PairStepSupplyWithH Consumes Auth U
+    (fun sevm => Blanc.Sevm.selector sevm = view.selector)
+
+/-- The Pair selector dispatch from the historical rule facts. -/
+theorem pairSupplyWithH
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
+    (rules : PairSupplyRulesH Consumes Auth U) :
+    PairStepSupplyWithH Consumes Auth U (fun _ => True) := by
+  intro current invocation sevm b post G run K codeEq installedCode stateGas bal freshOutput
+    representable _ good sub wrep
+  exact pair_selector_dispatch (R := PairStepSupplyWithH Consumes Auth U)
+    (pair_bytecode_selector_invH codeEq stateGas run)
+    (fun supply chosen => supply current invocation run codeEq installedCode stateGas bal freshOutput
+      representable chosen good sub wrep)
+    rules.transfer rules.approve rules.transferFrom rules.initializeEntry rules.permit rules.mint
+    rules.sync rules.skim rules.swap rules.burn rules.views
 
 end Blanc.Lift.UniswapV2Pair

@@ -5,15 +5,14 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalFresh
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The typed fee handler consumes this certificate's physical factory reply. -/
-theorem MintRootCallPositions.feeResume {root : Exec.Deriv} {b : Devm}
+theorem MintRootCallPositionsH.feeResume {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
     {K : WriterKey → Prop} {current : Checkpoint} {G : Nat}
-    (r : MintRootCallPositions root b)
+    (r : MintRootCallPositionsH root b W1 A2 F)
     (rep : WriterRep K (b.getStor root.sevm.currentTarget) current.state)
     (invocation : List Nat)
-    (sourceFee : FeeMintSourceResult K {current.state with unlocked := 0} root.sevm
-      (mintPositionalFeeBase r) (mintPositionalLocals r) (mintPositionalFeeMemory r)
-      (mintPositionalFeeWord r) (mintRootReserve0 root b) (mintRootReserve1 root b) G) :
+    (sourceFee : FeeMintSourceResultH K {current.state with unlocked := 0} root.sevm
+      (mintPositionalFeeBaseH r) (mintPositionalLocalsH r) (mintPositionalFeeMemoryH r)
+      (mintPositionalFeeWordH r) (mintRootReserve0 root b) (mintRootReserve1 root b) G) :
     let ctx := writerContext root.sevm invocation
     let recipient := (Sevm.dataWord root.sevm 4).toAdr
     let observed := mintBalanceObserved current.state recipient
@@ -22,7 +21,7 @@ theorem MintRootCallPositions.feeResume {root : Exec.Deriv} {b : Devm}
       (requestFor .mintFeeTo current.state.factory .feeTo) (.mintFee observed)
       (feeObservedResult r.fee.out) =
       (mintSourceAfterFeeFrame current ctx recipient).mintAfterFee observed
-        (mintPositionalFeeResult current r) := by
+        (mintPositionalFeeResultH current r) := by
   dsimp only
   obtain ⟨cache0, cache1, _, _, _⟩ := r.cache_targets rep
   have nat0 : (mintRootReserve0 root b).toNat = current.state.reserve0.val := by
@@ -32,7 +31,7 @@ theorem MintRootCallPositions.feeResume {root : Exec.Deriv} {b : Devm}
     rw [cache1, B256.toNat_toB256_of_lt
       (lt_trans current.state.reserve1.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
   have accept := sourceFee.1
-  simp only [nat0, nat1, mintPositionalFeeWord] at accept
+  simp only [nat0, nat1, mintPositionalFeeWordH] at accept
   have state : (mintSourceFeeFrame current (writerContext root.sevm invocation)
       (Sevm.dataWord root.sevm 4).toAdr).current.state = {current.state with unlocked := 0} := rfl
   have reserve0 : (mintBalanceObserved current.state (Sevm.dataWord root.sevm 4).toAdr
@@ -45,12 +44,10 @@ theorem MintRootCallPositions.feeResume {root : Exec.Deriv} {b : Devm}
   simp only [Frame.beginResume, state, reserve0, reserve1, accept]
   rfl
 
-/-- Exact source consumption follows all three actual calls in order, carries
-those full queues, and stops only after this certificate's final call-free suffix. -/
-theorem MintPositionalQueues.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {root : Exec.Deriv} {b : Devm}
-    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositions root b}
-    (q : MintPositionalQueues current invocation r) {finished : Frame} {bytes : Bytes}
-    (fork : CoveredFork root.sevm.benvStat.fork)
+theorem MintPositionalQueuesH.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
+    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositionsH root b W1 A2 F}
+    (q : MintPositionalQueuesH current invocation r) {finished : Frame} {bytes : Bytes}
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
     (handlers : MintBalanceHandlerResult current (writerContext root.sevm invocation)
       (Sevm.dataWord root.sevm 4).toAdr r.out0 r.out1)
     (fee : resumeSegment
@@ -82,7 +79,7 @@ theorem MintPositionalQueues.admittedConsumes {Auth : Exec.Deriv → Entry → T
   have terminal : AdmittedSourceConsumes Auth root r.fee.occurrence.call.returned 3
       (.finished finished bytes) .done
       {status := .success bytes, frame := finished, remaining := .done, childReturns := []} :=
-    .finished finished bytes (r.final_no_exec fork)
+    .finished finished bytes (r.final_no_exec stateGas)
   rw [← fee] at terminal
   have last := AdmittedSourceConsumes.nextCall (start := r.second.call.returned)
     (continuation := .mintFee (mintBalanceObserved current.state (Sevm.dataWord root.sevm 4).toAdr
@@ -111,11 +108,11 @@ theorem MintPositionalQueues.admittedConsumes {Auth : Exec.Deriv → Entry → T
   exact first
 
 
-/-- Compatibility projects the same admitted source composition. -/
-theorem MintPositionalQueues.positionalConsumes {root : Exec.Deriv} {b : Devm}
-    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositions root b}
-    (q : MintPositionalQueues current invocation r) {finished : Frame} {bytes : Bytes}
-    (fork : CoveredFork root.sevm.benvStat.fork)
+
+theorem MintPositionalQueuesH.positionalConsumes {root : Exec.Deriv} {b : Devm} {W1 : Devm} {A2 F : Sevm → Devm → Devm}
+    {current : Checkpoint} {invocation : List Nat} {r : MintRootCallPositionsH root b W1 A2 F}
+    (q : MintPositionalQueuesH current invocation r) {finished : Frame} {bytes : Bytes}
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
     (handlers : MintBalanceHandlerResult current (writerContext root.sevm invocation)
       (Sevm.dataWord root.sevm 4).toAdr r.out0 r.out1)
     (fee : resumeSegment
@@ -141,6 +138,7 @@ theorem MintPositionalQueues.positionalConsumes {root : Exec.Deriv} {b : Devm}
           (staticViewChildReturns
             (mintSourceFeeFrame current (writerContext root.sevm invocation) (Sevm.dataWord root.sevm 4).toAdr)
             (requestFor .mintFeeTo current.state.factory .feeTo) 0 q.viewsF ++ []))} := by
-  exact (q.admittedConsumes (Auth := fun _ _ _ => True) fork handlers fee).positional
+  exact (q.admittedConsumes (Auth := fun _ _ _ => True) stateGas handlers fee).positional
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -4,9 +4,7 @@ import Blanc.ExecutionPathLocator
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- An ordinary code-guarded source request is bound to the supplied original
-STATICCALL, its exact slot, full physical reply and per-spawn partition. -/
-theorem static_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Request}
+theorem static_source_call_atH {root : Exec.Deriv} {frame : Frame} {request : Request}
     {reply : ExternalResult} {index : Nat} {g ii is oi os : B256} {S : List B256}
     {paths : List Exec.LocatedFrame}
     (call : CallOccurrenceStep root
@@ -21,7 +19,7 @@ theorem static_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Req
     (success : reply.success = true) (bytes : reply.returndata = call.returned.devm.returnData)
     (codeBit : reply.codeExists = true)
     (guard : (call.occurrence.node.devm.getCode request.target).size.toB256 ≠ 0)
-    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
+    (stateGas : call.occurrence.node.sevm.benvStat.rules.stateGas = none)
     (queue : SourceSlotQueue call frame.context.pair index paths) :
     ∃ observed : SourceCallAt root frame request reply index,
       observed.call = call ∧ observed.paths = paths := by
@@ -30,7 +28,7 @@ theorem static_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Req
   have primitive : Ninst.StepRun call.occurrence.node.pc call.occurrence.node.sevm
       call.occurrence.node.devm Ninst.staticcall call.occurrence.slot (.ok call.returned.devm) := by
     simpa only [instruction, call.result] using call.occurrence.stepRun
-  rcases of_step_staticcall_val_with_depth_frame_cause operands call.occurrence.filled primitive fork
+  rcases of_step_staticcall_val_with_depth_frame_causeH operands call.occurrence.filled primitive stateGas
     with failed | entered
   · have impossible : (0 : B256) = 1 := pref_head_unique failed.1 flag
     exact False.elim ((by decide : (0 : B256) ≠ 1) impossible)
@@ -80,5 +78,6 @@ theorem static_source_call_at {root : Exec.Deriv} {frame : Frame} {request : Req
       childFrames := childFrames
       partition := partition
     }, rfl, rfl⟩
+
 
 end Blanc.Lift.UniswapV2Pair

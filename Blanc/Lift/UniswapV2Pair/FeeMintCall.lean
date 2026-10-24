@@ -1,3 +1,4 @@
+import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.StaticCallGuard
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.WalkSteps
@@ -189,6 +190,14 @@ def feeFactoryWord (sevm : Sevm) (b : Devm) : B256 :=
   (b.getStorVal sevm.currentTarget 5).toAdr.toB256
 
 def feeFactoryLoadWorld (sevm : Sevm) (b : Devm) : Devm := afterSload sevm b 5
+
+def feeFactoryLoadWorldH (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm b 5
+
+theorem feeFactoryLoadWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeFactoryLoadWorldH sevm b = feeFactoryLoadWorld sevm b := by
+  unfold feeFactoryLoadWorldH feeFactoryLoadWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
 
 def feeCodeGuardTree : SFunc :=
   .next (.reg .extcodesize) (.next (.reg .iszero) (.next (.reg (.dup 0))
@@ -390,6 +399,15 @@ theorem feePreparation_exact {sevm : Sevm} {b : Devm} {R : List B256}
 
 def feeFactoryCallWorld (sevm : Sevm) (b : Devm) : Devm :=
   temporalAccountAccessBase (feeFactoryLoadWorld sevm b) (feeFactoryWord sevm b).toAdr
+
+def feeFactoryCallWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  accountAccessH sevm (feeFactoryLoadWorldH sevm b) (feeFactoryWord sevm b).toAdr
+
+theorem feeFactoryCallWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeFactoryCallWorldH sevm b = feeFactoryCallWorld sevm b := by
+  unfold feeFactoryCallWorldH feeFactoryCallWorld
+  simp only [feeFactoryLoadWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access]
 
 /-- The actual fee68 prefix produces the selected feeTo observation and original decoder continuation. -/
 theorem feeFactoryObservation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}

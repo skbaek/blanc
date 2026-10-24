@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransfers
 import Blanc.Lift.CursorGasCall
 
@@ -9,15 +11,13 @@ def burnFinalAfterCallTree (site : BurnFinalBalanceSite) : SFunc :=
   | .dest (.next _ (.next _ (.next _ tail))) => tail
   | _ => .undefined
 
-/-- Each final site produces its original-root occurrence from the supplied
-request cursor; the gap starts at the preceding actual returned parent. -/
-theorem burn_final_call_of_request_cursor {root start : Exec.Deriv}
+theorem burn_final_call_of_request_cursorH {root start : Exec.Deriv}
     {b post : Devm} {R : List B256} {M : Mem} {K : List SFunc}
     {p token a x y : B256} (site : BurnFinalBalanceSite)
     (cut : CursorStateAt code cert start site.callTree b
       (0 :: token :: p :: 36 :: p :: 32 :: a :: x :: y :: R) M K)
     (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none) :
     ∃ (step : CallOccurrenceStep root .staticcall) (cursor : Cursor) (gas : Nat),
       Exec.Deriv.ExecFreeUntil start step.occurrence.node ∧
       step.occurrence.node.sevm = start.sevm ∧
@@ -32,8 +32,8 @@ theorem burn_final_call_of_request_cursor {root start : Exec.Deriv}
       (.next (.reg .gas) (.next (.exec .staticcall) (burnFinalAfterCallTree site)))) := by
     cases site <;> rfl
   rw [shape] at cut
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨beforeGas⟩ := opened.line cert_check success fork [.reg .pop] rfl
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨beforeGas⟩ := opened.lineH cert_check success stateGas [.reg .pop] rfl
     (by intro n member x equal; subst n
         simp only [List.mem_singleton, reduceCtorEq] at member)
     (by intro g d line
@@ -41,6 +41,7 @@ theorem burn_final_call_of_request_cursor {root start : Exec.Deriv}
         obtain ⟨g', state⟩ := ri_pop pop
         cases line
         exact ⟨g', state⟩)
-  exact beforeGas.gasCall cert_check reached success fork
+  exact beforeGas.gasCallH cert_check reached success stateGas
+
 
 end Blanc.Lift.UniswapV2Pair

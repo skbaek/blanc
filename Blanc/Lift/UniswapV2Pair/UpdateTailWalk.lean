@@ -1,3 +1,4 @@
+import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.UniswapV2Pair.UpdateArithmetic
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkMemory
@@ -53,6 +54,16 @@ def updateSyncTree : SFunc := (.next (.push [0x40] (by decide))
 def updatePackedPost (sevm : Sevm) (b : Devm) (balance0 balance1 timestamp : B256) : Devm :=
   afterSstore sevm (afterSload sevm b 8) 8
     (updatePackedWord (b.getStorVal sevm.currentTarget 8) balance0 balance1 timestamp)
+
+def updatePackedPostH (sevm : Sevm) (b : Devm) (balance0 balance1 timestamp : B256) : Devm :=
+  afterSstoreH sevm (afterSloadH sevm b 8) 8
+    (updatePackedWord (b.getStorVal sevm.currentTarget 8) balance0 balance1 timestamp)
+
+theorem updatePackedPostH_of_covered {sevm : Sevm} {b : Devm} {balance0 balance1 timestamp : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    updatePackedPostH sevm b balance0 balance1 timestamp = updatePackedPost sevm b balance0 balance1 timestamp := by
+  unfold updatePackedPostH updatePackedPost
+  simp only [afterSloadH_of_eip2929 fork.rules_access, afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
 
 
 /-- The actual three masks/ORs perform one slot8 store, with selected primitive
@@ -115,14 +126,14 @@ theorem update_packed_store_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
   apply rx_sstoreC fork storeCharge sentry static
   exact body
 
-/-- Successful bytecode derives its mutable frame and exact sole packed store. -/
-theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem update_packed_store_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run cert.prog sevm
       (St b (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G) t_2492_c22 o) :
     sevm.isStatic = false ∧ ∃ G', SFunc.Run cert.prog sevm
-      (St (updatePackedPost sevm b b0 b1 ts)
+      (St (updatePackedPostH sevm b b0 b1 ts)
         (reserveDiv112 :: reserveMask112 ::
           updatePackedWord (b.getStorVal sevm.currentTarget 8) b0 b1 ts ::
           dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') updateSyncTree o := by
@@ -131,7 +142,7 @@ theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
@@ -143,7 +154,7 @@ theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_or hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  clear * - h fork
+  clear * - h stateGas bal
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
@@ -156,7 +167,7 @@ theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_or hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  clear * - h fork
+  clear * - h stateGas bal
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
@@ -167,11 +178,12 @@ theorem update_packed_store_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  clear * - h fork
+  clear * - h stateGas bal
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨g, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨g, rfl⟩ := ri_sstoreH stateGas bal hd
   exact ⟨nonstatic, g, h.uncut⟩
+
 
 
 def updateSyncTopic : B256 :=

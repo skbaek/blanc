@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.SyncWalk
 
@@ -83,15 +84,15 @@ theorem pair_selector_line_state {sevm : Sevm} {b d : Devm} {G : Nat} {sel : B25
 
 /-- The selected upper or lower comparison is reached by an actual frame-free prefix.
 Its full world and initialized memory are retained; residual gas is derived. -/
-theorem pair_dispatch_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem pair_dispatch_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
+    {sel : B256} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = sel)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
       (if B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
         then t_002b_c0 else t_00f9_c0) b [sel] getterInitMemory []) := by
-  obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
+  obtain ⟨f, entry, lifted⟩ := lift_sound_in_noStateGas cert_check codeEq stateGas run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨paid, size, _, _⟩ := syncGuards_inv lifted
@@ -99,33 +100,33 @@ theorem pair_dispatch_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : N
   let initial : CursorStateAt code cert root t_0000_c0 b [] Mem.empty [] :=
     ⟨root, Cursor.start cert, .refl root, rfl, rfl,
       cursor_start cert_check rfl codeEq, rfl, ⟨G, rfl⟩, rfl⟩
-  obtain ⟨guard⟩ := initial.line cert_check rfl fork pairInitialLine (by rfl)
+  obtain ⟨guard⟩ := initial.lineH cert_check rfl stateGas pairInitialLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairInitialLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [16, 1, 0]) (M' := getterInitMemory) (by
       intro g d line
       obtain ⟨g', state⟩ := pair_initial_line_state line
       exact ⟨g', by simpa only [root, paid, show B256.eqCheck (0 : B256) 0 = 1 from by decide] using state⟩)
-  obtain ⟨opened⟩ := guard.branchSucc cert_check rfl fork (by decide)
-  obtain ⟨entry⟩ := opened.dest cert_check rfl fork
-  obtain ⟨sizeGuard⟩ := entry.line cert_check rfl fork pairSizeLine (by rfl)
+  obtain ⟨opened⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+  obtain ⟨entry⟩ := opened.destH cert_check rfl stateGas
+  obtain ⟨sizeGuard⟩ := entry.lineH cert_check rfl stateGas pairSizeLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairSizeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x1b9, 0]) (M' := getterInitMemory) (by
       intro g d line
       obtain ⟨g', state⟩ := pair_size_line_state line
       exact ⟨g', by simpa only [root, ltCheck_zero_of_le size] using state⟩)
-  obtain ⟨lead⟩ := sizeGuard.branchZero cert_check rfl fork
-  obtain ⟨comparison⟩ := lead.line cert_check rfl fork pairSelectorLine (by rfl)
+  obtain ⟨lead⟩ := sizeGuard.branchZeroH cert_check rfl stateGas
+  obtain ⟨comparison⟩ := lead.lineH cert_check rfl stateGas pairSelectorLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairSelectorLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0xf9, B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel, sel]) (M' := getterInitMemory) (by
       intro g d line
       exact pair_selector_line_state selector line)
   by_cases high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
   · rw [high] at comparison
-    obtain ⟨compareA⟩ := comparison.branchZero cert_check rfl fork
+    obtain ⟨compareA⟩ := comparison.branchZeroH cert_check rfl stateGas
     exact ⟨by simpa only [high, ite_true] using compareA⟩
-  · obtain ⟨compareA⟩ := comparison.branchSucc cert_check rfl fork high
+  · obtain ⟨compareA⟩ := comparison.branchSuccH cert_check rfl stateGas high
     exact ⟨by simpa only [high, ite_false] using compareA⟩
 
 /-- Compatibility projection of the actual upper comparison prefix. -/
-theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem pair_dispatch_comparison_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
+    {sel : B256} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = sel)
     (high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -133,6 +134,6 @@ theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G :
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
       t_002b_c0 b [sel] getterInitMemory []) := by
   simpa only [high, ite_true] using
-    pair_dispatch_selector_cursor_state codeEq fork selector run
+    pair_dispatch_selector_cursor_stateH codeEq stateGas selector run
 
 end Blanc.Lift.UniswapV2Pair

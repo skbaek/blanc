@@ -23,12 +23,11 @@ def SkimBalanceSite.afterDecodeTree (site : SkimBalanceSite) : SFunc :=
     (.next (.push [0x22, 0x6e] (by decide)) (.next (.reg .and)
       (.callNext 59 (match site with | .first => t_1a26_c34 | .second => t_1a26_c67)))))
 
-/-- Both checked contexts decode at the supplied actual returned cursor. -/
-theorem skim_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
+theorem skim_actual_reply_cursorH {F : Exec.Deriv} {κ : Cursor}
     {post : Devm} {R : List B256} {M : Mem} {flag a x y p : B256} {n : Nat}
     (site : SkimBalanceSite) (placed : CursorOK code cert F κ)
     (tree : κ.f = site.afterCallTree) (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork)
+    (stateGas : F.sevm.benvStat.rules.stateGas = none)
     (state : F.devm = St F.devm (flag :: a :: x :: y :: R) M F.devm.gasLeft)
     (flag01 : flag = 0 ∨ flag = 1) (mem : PtrMem p n M)
     (fit : p.toNat + 32 ≤ n) (bound : F.devm.returnData.length < 2 ^ 256) :
@@ -42,20 +41,21 @@ theorem skim_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
       F.devm (0 :: a :: x :: y :: R) M (κ.K.map Cont.f)) := by
     cases site with
     | first =>
-      exact cut.callFlag (failedTree := t_19f9_c34) (returnTree := t_1a02_c34)
-        cert_check success fork [0x1a, 0x02] (by decide) rfl flag01 (by decide)
+      exact cut.callFlagH (failedTree := t_19f9_c34) (returnTree := t_1a02_c34)
+        cert_check success stateGas [0x1a, 0x02] (by decide) rfl flag01 (by decide)
     | second =>
-      exact cut.callFlag (failedTree := t_19f9_c67) (returnTree := t_1a02_c67)
-        cert_check success fork [0x1a, 0x02] (by decide) rfl flag01 (by decide)
+      exact cut.callFlagH (failedTree := t_19f9_c67) (returnTree := t_1a02_c67)
+        cert_check success stateGas [0x1a, 0x02] (by decide) rfl flag01 (by decide)
   obtain ⟨one, ⟨returned⟩⟩ := guarded
   refine ⟨one, ?_⟩
   cases site with
   | first =>
-    exact returned.returnWord (shortTree := t_1a14_c34) (decodeTree := t_1a18_c34)
-      cert_check success fork [0x1a, 0x18] (by decide) rfl rfl mem fit bound (by decide)
+    exact returned.returnWordH (shortTree := t_1a14_c34) (decodeTree := t_1a18_c34)
+      cert_check success stateGas [0x1a, 0x18] (by decide) rfl rfl mem fit bound (by decide)
   | second =>
-    exact returned.returnWord (shortTree := t_1a14_c67) (decodeTree := t_1a18_c67)
-      cert_check success fork [0x1a, 0x18] (by decide) rfl rfl mem fit bound (by decide)
+    exact returned.returnWordH (shortTree := t_1a14_c67) (decodeTree := t_1a18_c67)
+      cert_check success stateGas [0x1a, 0x18] (by decide) rfl rfl mem fit bound (by decide)
+
 
 structure SkimFirstObservation (root : Exec.Deriv) (b : Devm)
     (toWord : B256) (R : List B256) where
@@ -93,37 +93,146 @@ structure SkimFirstObservation (root : Exec.Deriv) (b : Devm)
     (Bytes.toB256 (out.take 32) :: (skimFirstBalanceRest root.sevm b toWord R).tail.tail.tail)
     (balanceReplyMemory getterInitMemory root.sevm.currentTarget out) []
 
-/-- The observation and physical decoding come from the same first occurrence. -/
-theorem skim_first_observation_of_prefix {root : Exec.Deriv} {b post : Devm}
+structure SkimFirstObservationH (root : Exec.Deriv) (b : Devm)
+    (toWord : B256) (R : List B256) where
+  call : CallOccurrenceStep root .staticcall
+  cursor : Cursor
+  gas : Nat
+  out : Bytes
+  nonstatic : root.sevm.isStatic = false
+  codeGuard : ((skimCachedWorldH root.sevm b).getCode (skimToken0 root.sevm b).toAdr).size.toB256 ≠ 0
+  gap : Exec.Deriv.ExecFreeUntil root call.occurrence.node
+  sevm : call.occurrence.node.sevm = root.sevm
+  exn : call.occurrence.node.exn = root.exn
+  input : call.occurrence.node.devm = St
+    (accountAccessH root.sevm (skimCachedWorldH root.sevm b) (skimToken0 root.sevm b).toAdr)
+    (gas.toB256 :: skimToken0 root.sevm b :: 128 :: 36 :: 128 :: 32 ::
+      skimFirstBalanceRest root.sevm b toWord R)
+    (balanceRequestMemory getterInitMemory root.sevm.currentTarget) gas
+  primitive : Ninst.RunWith (Cursor.DescOf call.occurrence.node) root.sevm
+    call.occurrence.node.devm (.exec .staticcall) call.returned.devm
+  placed : CursorOK code cert call.returned cursor
+  tree : cursor.f = skimFirstAfterCallTree
+  continuations : cursor.K.map Cont.f = []
+  reply : StaticCallPost
+    (accountAccessH root.sevm (skimCachedWorldH root.sevm b) (skimToken0 root.sevm b).toAdr)
+    call.returned.devm (skimFirstBalanceRest root.sevm b toWord R)
+    (balanceRequestMemory getterInitMemory root.sevm.currentTarget) 128 36 128 32 1 out
+  long : 32 ≤ out.length
+  bound : out.length < 2 ^ 256
+  answered : StaticAnsweredH root.sevm
+    (accountAccessH root.sevm (skimCachedWorldH root.sevm b) (skimToken0 root.sevm b).toAdr)
+    (skimToken0 root.sevm b).toAdr
+    (ExternalOperation.encode (.balanceOf root.sevm.currentTarget)) out
+  decoded : CursorStateAt code cert call.returned SkimBalanceSite.first.afterDecodeTree
+    call.returned.devm
+    (Bytes.toB256 (out.take 32) :: (skimFirstBalanceRest root.sevm b toWord R).tail.tail.tail)
+    (balanceReplyMemory getterInitMemory root.sevm.currentTarget out) []
+
+/-- On a covered fork, `SkimFirstObservationH` gives the modern `SkimFirstObservation` with the same fields. -/
+def SkimFirstObservationH.toCovered {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimFirstObservationH root b toWord R) :
+    SkimFirstObservation root b toWord R where
+  call := h.call
+  cursor := h.cursor
+  gas := h.gas
+  out := h.out
+  nonstatic := h.nonstatic
+  codeGuard := by
+    have field := h.codeGuard
+    simp only [skimCachedWorldH_of_covered fork] at field ⊢
+    exact field
+  gap := h.gap
+  sevm := h.sevm
+  exn := h.exn
+  input := by
+    have field := h.input
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access] at field ⊢
+    exact field
+  primitive := h.primitive
+  placed := h.placed
+  tree := h.tree
+  continuations := h.continuations
+  reply := by
+    have field := h.reply
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access] at field ⊢
+    exact field
+  long := h.long
+  bound := h.bound
+  answered := by
+    have field := h.answered
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access, StaticAnsweredH_iff_of_covered fork] at field ⊢
+    exact field
+  decoded := h.decoded
+
+/-- On a covered fork, the modern `SkimFirstObservation` gives `SkimFirstObservationH` with the same fields. -/
+def SkimFirstObservation.toH {root : Exec.Deriv} {b : Devm} {toWord : B256} {R : List B256}
+    (fork : CoveredFork root.sevm.benvStat.fork) (h : SkimFirstObservation root b toWord R) :
+    SkimFirstObservationH root b toWord R where
+  call := h.call
+  cursor := h.cursor
+  gas := h.gas
+  out := h.out
+  nonstatic := h.nonstatic
+  codeGuard := by
+    have field := h.codeGuard
+    simp only [skimCachedWorldH_of_covered fork] at field ⊢
+    exact field
+  gap := h.gap
+  sevm := h.sevm
+  exn := h.exn
+  input := by
+    have field := h.input
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access] at field ⊢
+    exact field
+  primitive := h.primitive
+  placed := h.placed
+  tree := h.tree
+  continuations := h.continuations
+  reply := by
+    have field := h.reply
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access] at field ⊢
+    exact field
+  long := h.long
+  bound := h.bound
+  answered := by
+    have field := h.answered
+    simp only [skimCachedWorldH_of_covered fork, accountAccessH_of_eip2929 fork.rules_access, StaticAnsweredH_iff_of_covered fork] at field ⊢
+    exact field
+  decoded := h.decoded
+
+theorem skim_first_observation_of_prefixH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {toWord : B256}
-    (cut : CursorStateAt code cert root t_194f_c34 (afterSload root.sevm b 12)
+    (cut : CursorStateAt code cert root t_194f_c34 (afterSloadH root.sevm b 12)
       (toWord :: R) getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (SkimFirstObservation root b toWord R) := by
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none) :
+    Nonempty (SkimFirstObservationH root b toWord R) := by
   obtain ⟨nonstatic, codeGuard, step, cursor, gas, gap, env, outcome, input,
-    primitive, placed, tree, conts⟩ := skim_first_call_of_prefix cut success fork
+    primitive, placed, tree, conts⟩ := skim_first_call_of_prefixH cut success stateGas bal
   have envRet : step.returned.sevm = root.sevm := (Cursor.parentStep_sevm step.edge).trans env
   have successRet : step.returned.exn = .ok post := by
     exact (Blanc.Exec.Deriv.ParentPrefix.exn_eq (step.sameFrame.snoc step.edge)).trans success
   have call := primitive.toRun
   rw [input] at call
-  obtain ⟨flag, out, reply, bound, answered⟩ := ri_staticcall_bounded fork call
+  obtain ⟨flag, out, reply, bound, answered⟩ := ri_staticcall_boundedH stateGas call
   have mem := balanceReplyMemory_ptr out
     (balanceRequestMemory_ptr getterInitMemory_ptr root.sevm.currentTarget)
-  obtain ⟨one, long, ⟨decoded⟩⟩ := skim_actual_reply_cursor
+  obtain ⟨one, long, ⟨decoded⟩⟩ := skim_actual_reply_cursorH
     (M := balanceReplyMemory getterInitMemory root.sevm.currentTarget out)
     (p := 128) (n := 192) .first placed tree successRet
-    (by rw [envRet]; exact fork) reply.eq_St reply.flag mem (by decide) (by
+    (by rw [envRet]; exact stateGas) reply.eq_St reply.flag mem (by decide) (by
       rw [reply.returnData]; exact bound)
   rw [reply.returnData] at long
   rw [conts, show (128 : B256).toNat = 128 from rfl, balanceReplyMemory_word getterInitMemory_ptr.wf root.sevm.currentTarget out long]
     at decoded
   have accepted := answered one
-  change StaticAnswered root.sevm _ _
+  change StaticAnsweredH root.sevm _ _
     ((balanceRequestMemory getterInitMemory root.sevm.currentTarget).read 128 36).1 out at accepted
   rw [balanceRequestMemory_read getterInitMemory_ptr.wf] at accepted
   rw [one] at reply
   exact ⟨⟨step, cursor, gas, out, nonstatic, codeGuard, gap, env, outcome, input,
     primitive, placed, tree, conts, reply, long, bound, accepted, decoded⟩⟩
+
 
 end Blanc.Lift.UniswapV2Pair

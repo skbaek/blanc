@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorCuts
+import Blanc.Lift.HistCursorCalls
 import Blanc.Lift.CursorGasCall
 import Blanc.Lift.UniswapV2Pair.PairReservesCursor
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
@@ -29,6 +31,29 @@ structure MintBalanceOccurrence (root start : Exec.Deriv) (site : MintBalanceSit
   tree : cursor.f = site.afterCallTree
   continuations : cursor.K.map Cont.f = K
 
+theorem mint_balance_occurrence_of_request_cursorH {root start : Exec.Deriv}
+    {b post : Devm} {R : List B256} {M : Mem} {z token a x y : B256} {K : List SFunc}
+    (site : MintBalanceSite)
+    (cut : CursorStateAt code cert start site.callTree b
+      (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M K)
+    (reached : Exec.Deriv.ParentPrefix root start)
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none) :
+    Nonempty (MintBalanceOccurrence root start site b token (a :: x :: y :: R) M K) := by
+  have shape : site.callTree = .dest (.next (.reg .pop)
+    (.next (.reg .gas) (.next (.exec .staticcall) site.afterCallTree))) := by cases site <;> rfl
+  rw [shape] at cut
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨beforeGas⟩ := opened.lineH cert_check success stateGas [.reg .pop] rfl
+    (by intro n member xi equal; subst n; simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq] at member)
+    (by
+      intro gas d line
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line
+      cases line
+      exact ri_pop step)
+  obtain ⟨call, cursor, gas, free, env, outcome, input, primitive, placed, tree, K⟩ :=
+    beforeGas.gasCallH cert_check reached success stateGas
+  exact ⟨⟨call, cursor, gas, free, env, outcome, input, primitive, placed, tree, K⟩⟩
+
 /-- GAS uses the actual remaining gas before this actual filled STATICCALL slot. -/
 theorem mint_balance_occurrence_of_request_cursor {root start : Exec.Deriv}
     {b post : Devm} {R : List B256} {M : Mem} {z token a x y : B256} {K : List SFunc}
@@ -37,21 +62,9 @@ theorem mint_balance_occurrence_of_request_cursor {root start : Exec.Deriv}
       (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M K)
     (reached : Exec.Deriv.ParentPrefix root start)
     (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (MintBalanceOccurrence root start site b token (a :: x :: y :: R) M K) := by
-  have shape : site.callTree = .dest (.next (.reg .pop)
-    (.next (.reg .gas) (.next (.exec .staticcall) site.afterCallTree))) := by cases site <;> rfl
-  rw [shape] at cut
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨beforeGas⟩ := opened.line cert_check success fork [.reg .pop] rfl
-    (by intro n member xi equal; subst n; simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq] at member)
-    (by
-      intro gas d line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line
-      cases line
-      exact ri_pop step)
-  obtain ⟨call, cursor, gas, free, env, outcome, input, primitive, placed, tree, K⟩ :=
-    beforeGas.gasCall cert_check reached success fork
-  exact ⟨⟨call, cursor, gas, free, env, outcome, input, primitive, placed, tree, K⟩⟩
+    Nonempty (MintBalanceOccurrence root start site b token (a :: x :: y :: R) M K) :=
+  mint_balance_occurrence_of_request_cursorH site cut reached success fork.rules_stateGas_none
+
 
 /-- The successful original Mint root produces its first actual balance call.
 The complete request state and original slot are selected by that same execution. -/

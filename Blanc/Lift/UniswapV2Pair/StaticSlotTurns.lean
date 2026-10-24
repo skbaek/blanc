@@ -5,9 +5,7 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The SAME supplied STATICCALL slot supplies its actual ordered static turn
-queue. Entry/code/context are derived from its primitive and frame equations. -/
-theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
+theorem sync_static_slot_turns_invH {K : WriterKey → Prop} {frame : Frame}
     {request : Request} {path : List Nat} {root : Exec.Deriv}
     (occurrence : Exec.NinstOccurrence root)
     (instruction : occurrence.instruction = Ninst.staticcall)
@@ -24,7 +22,8 @@ theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
     (fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?,
       WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm))
     (time : frame.context.timestamp = occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork occurrence.node.sevm.benvStat.fork) :
+    (stateGas : occurrence.node.sevm.benvStat.rules.stateGas = none)
+    (bal : occurrence.node.sevm.benvStat.rules.bal = none) :
     occurrence.slot = .some ⟨childEvm, raw⟩ ∧
       ∃ views : List StaticViewTurn,
         views.map Prod.fst =
@@ -68,7 +67,7 @@ theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
           exact actualCode same (by rw [target]; exact nonempty)
             (by rw [target]; exact sem.not_delegation installed)
       exact ⟨(congrArg (fun bytes : ByteArray => some bytes.toList) childCode).trans installed, pcZero⟩
-  have storageEq := (Blanc.Evm.step_spawn_child_world fork step enter nonempty).1
+  have storageEq := (Evm.step_spawn_child_world_noStateGas stateGas step enter nonempty).1
   change childEvm.dyna.getStor frame.context.pair =
     occurrence.node.devm.getStor frame.context.pair at storageEq
   have childRep : WriterRep K (childEvm.dyna.getStor frame.context.pair) frame.current.state := by
@@ -77,23 +76,24 @@ theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
   have entry : childEvm.dyna.stack = [] ∧ childEvm.dyna.memory = Mem.empty := by
     obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv enter
     exact ⟨rfl, rfl⟩
-  obtain ⟨short, childFork⟩ := Blanc.ExecutionTrace.Evm.step_spawn_child_data fork step enter
+  obtain ⟨short, childFork⟩ := Evm.step_spawn_child_dataH stateGas bal step enter
   have childStatic := Blanc.Ninst.step_staticcall_run_isStatic primitiveSpawn enter
   have statEq : childEvm.sta.benvStat = occurrence.node.sevm.benvStat :=
     (Jaune.Frame.enter_run_benvStat enter).trans (Xinst.step_spawn_benvStat xspawn)
   refine ⟨slot, ?_⟩
-  apply staticView_raw_retained_turns_inv sem image childRun childInstalled childRep fresh
+  apply staticView_raw_retained_turns_invH sem image childRun childInstalled childRep fresh
     (fun _ => entry) short
   · rw [statEq]
     exact time
   · exact childStatic
-  · exact childFork
+  · exact childFork.1
+  · exact childFork.2
 
 
 
 
-/-- The existing filtered-slot fold at the supplied actual first occurrence. -/
-theorem sync_static_slot_filtered_turns_inv {K : WriterKey → Prop}
+
+theorem sync_static_slot_filtered_turns_invH {K : WriterKey → Prop}
     {frame : Frame} {request : Request} {path : List Nat} {root : Exec.Deriv}
     (occurrence : Exec.NinstOccurrence root) (returned : Exec.Deriv)
     (instruction : occurrence.instruction = Ninst.staticcall)
@@ -102,7 +102,8 @@ theorem sync_static_slot_filtered_turns_inv {K : WriterKey → Prop}
     (installed : some (occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
     (rep : WriterRep K (occurrence.node.devm.getStor frame.context.pair) frame.current.state)
     (time : frame.context.timestamp = occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork occurrence.node.sevm.benvStat.fork) :
+    (stateGas : occurrence.node.sevm.benvStat.rules.stateGas = none)
+    (bal : occurrence.node.sevm.benvStat.rules.bal = none) :
       ((occurrence.slot = .none ∧
           ExactTurns frame request 0 .done
             { complete := true, frame := frame, childReturns := [] }) ∨
@@ -162,13 +163,14 @@ theorem sync_static_slot_filtered_turns_inv {K : WriterKey → Prop}
           WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
         simpa only [ite_eq_left committed] using fresh
       obtain ⟨views, mapped, authentic, exactTurns⟩ :=
-        (sync_static_slot_turns_inv occurrence instruction slotEq spawn enter childRun
-          sem image installed rep selectedFresh time fork).2
+        (sync_static_slot_turns_invH occurrence instruction slotEq spawn enter childRun
+          sem image installed rep selectedFresh time stateGas bal).2
       exact ⟨views, by simpa only [ite_eq_left committed] using mapped, authentic, exactTurns⟩
     · refine ⟨[], ?_, ?_, ?_⟩
       · simp only [List.map_nil, ite_eq_right committed]
       · intro picked member
         cases member
       · exact ExactTurns.done _ _ _
+
 
 end Blanc.Lift.UniswapV2Pair

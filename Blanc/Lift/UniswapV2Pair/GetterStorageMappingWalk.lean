@@ -42,8 +42,8 @@ theorem singleMapping_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   rw [← s.storage_selector]
   exact getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) s.storageGetter value size sel body
 
-theorem singleMapping_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (s : SingleMappingGetter) (fork : CoveredFork sevm.benvStat.fork)
+theorem singleMapping_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (s : SingleMappingGetter) (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = s.selector)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
@@ -58,9 +58,23 @@ theorem singleMapping_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     rw [s.storage_selector]; exact selector
   obtain ⟨_, run⟩ := getterStorage_selector_inv s.storageGetter sel run
   rw [s.storage_entryTree, s.storage_selector] at run
-  obtain ⟨guard, d, eq, out, stor, logs⟩ := singleMapping_entry_inv s fork getterInitMemory_ptr run
+  obtain ⟨guard, d, eq, out, stor, logs⟩ := singleMapping_entry_invH s bal getterInitMemory_ptr run
   cases eq
   exact ⟨value, size, guard, out, stor, logs⟩
+
+theorem singleMapping_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
+    (s : SingleMappingGetter) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = s.selector) (slots : s.SlotMatches st sevm b)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
+      some post.output = getterResult st (s.entry (mappingOwner sevm)) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
+  obtain ⟨value, size, guard, out, stor, logs⟩ :=
+    singleMapping_pc0_invH s bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
+  refine ⟨value, size, guard, ?_, stor, logs⟩
+  rw [s.source_value slots, out]
 
 theorem singleMapping_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
     (s : SingleMappingGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -69,11 +83,8 @@ theorem singleMapping_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
       some post.output = getterResult st (s.entry (mappingOwner sevm)) ∧
-      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
-  obtain ⟨value, size, guard, out, stor, logs⟩ :=
-    singleMapping_pc0_inv s fork selector (lift_sound cert_check codeEq fork run)
-  refine ⟨value, size, guard, ?_, stor, logs⟩
-  rw [s.source_value slots, out]
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs :=
+  singleMapping_bytecode_refinesH s codeEq fork.rules_stateGas_none fork.rules_bal_none selector slots run
 
 theorem singleMapping_bytecode_live {sevm : Sevm} {b : Devm} {G c : Nat} {st : State}
     (s : SingleMappingGetter) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -170,8 +181,8 @@ theorem allowance_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
   exact getterStorage_dispatch_exact (h_shifts := fork.rules_shifts) .allowance value size selector
     (allowance_entry_exact fork getterInitMemory_ptr guard cost)
 
-theorem allowance_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+theorem allowance_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xdd62ed3e)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
@@ -183,13 +194,13 @@ theorem allowance_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
   obtain ⟨_, run⟩ := getterStorage_selector_inv .allowance selector run
-  obtain ⟨guard, d, eq, out, stor, logs⟩ := allowance_entry_inv fork getterInitMemory_ptr run
+  obtain ⟨guard, d, eq, out, stor, logs⟩ := allowance_entry_invH bal getterInitMemory_ptr run
   cases eq
   exact ⟨value, size, guard, out, stor, logs⟩
 
-/-- Exact actual nested mapping order, with no hash injectivity premise. -/
-theorem allowance_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem allowance_bytecode_refinesH {sevm : Sevm} {b post : Devm} {G : Nat} {st : State}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xdd62ed3e)
     (slot : st.allowance (mappingOwner sevm) (mappingSpender sevm) =
       b.getStorVal sevm.currentTarget (allowanceSlot sevm))
@@ -199,7 +210,7 @@ theorem allowance_bytecode_refines {sevm : Sevm} {b post : Devm} {G : Nat} {st :
       some post.output = getterResult st (.allowance (mappingOwner sevm) (mappingSpender sevm)) ∧
       (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs := by
   obtain ⟨value, size, guard, out, stor, logs⟩ :=
-    allowance_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
+    allowance_pc0_invH bal selector (lift_sound_noStateGas cert_check codeEq stateGas run)
   refine ⟨value, size, guard, ?_, stor, logs⟩
   simp only [getterResult, encodeWords, List.flatMap_cons, List.flatMap_nil,
     List.append_nil, slot, out]

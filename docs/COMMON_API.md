@@ -1717,6 +1717,11 @@ post-fold stages alone are `StagedBodyTrace.afterTransactions_stateInv_admitted_
 The accounting rungs `afterTransactionsIn`, `configuredBlockTailIn` and
 `midHistoryIn` are in
 [`Blanc/ExecutionAccountingMidHistoryIn.lean`](../Blanc/ExecutionAccountingMidHistoryIn.lean).
+The per-root block facts already transported to a mid history are in
+[`Blanc/ExecutionMidHistoryInFacts.lean`](../Blanc/ExecutionMidHistoryInFacts.lean):
+`MidHistoryTraceIn.rewardCreditsFunded` (every block, the cut block included, funds its reward
+credits under `BodyStageCapabilities F`), `rawFrames_entered` (any `EnteredCondition`),
+`rootEntryIn` and `calldata_bound`, each through `rawFrames_mem_block`.
 
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
@@ -2028,11 +2033,13 @@ target frames interleaved with each foreign frame's successful `Exec.logAt?`.
 `Exec.targetLogEventsFrom_frames` proves its frame projection equals
 `Exec.retainedTargetFramesFromAt`, with matching `_target`, `_halt`, `_cont`,
 `_doneOk` and `_runOk` equations. The same module transports one foreign step for
-arbitrary callee code: `Evm.step_cont_getStor_foreign` preserves a foreign owner's
+arbitrary callee code: `Evm.step_cont_getStor_foreign_noStateGas` preserves a foreign owner's
 storage without protection; `Evm.step_done_getStor` requires a protected owner
 for completed childless message settlement; `Xinst.spawn_run_getStor` and
-`Evm.step_run_getStor` transport code-bearing storage from the settled child's
-committed endpoint or rollback, pointwise. The actual-step helpers
+`Evm.step_run_getStor_noStateGas` transport code-bearing storage from the settled child's
+committed endpoint or rollback, pointwise. The `_noStateGas` forms take
+`rules.stateGas = none`; under a covered fork apply them to
+`CoveredFork.rules_stateGas_none`. The actual-step helpers
 `GenericCreate.step_done_getStor`, `GenericCall.step_done_getStor` and
 `Xinst.step_done_getStor`, in
 [`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean),
@@ -2042,7 +2049,7 @@ spawn and does not satisfy that actual-step premise. The module also transports
 logs (`Exec.cont_logs_eq`,
 `Exec.doneOk_logs_eq`, `Exec.runOk_logs_eq`, path-independent `Exec.committed_logs_at`,
 and `Xinst.call_run_logs`: a CALL/STATICCALL appends exactly its committed child's
-logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
+logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild_noStateGas`,
 `CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
 `Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
 `Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
@@ -2058,7 +2065,8 @@ For a successful nonzero-flag call with the actual recursive slot `.none`, use
 `Xinst.call_none_precompile` (seven operands) or `Xinst.staticcall_none_precompile`
 (six operands). They identify an enabled precompile at the original target;
 the STATICCALL form preserves the supplied slot through
-`of_step_staticcall_val_with_depth_frame_cause`. An empty retained view queue
+`of_step_staticcall_val_with_depth_frame_cause`; `Xinst.staticcall_none_precompileH` is the
+STATICCALL form from `rules.stateGas = none` alone. An empty retained view queue
 alone does not identify this route, since interpreted code can also retain no views.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
@@ -4611,10 +4619,11 @@ For bounded actual CALL input, the same pinned module provides
 Both require the seven actual CALL operands, `stateGas = none`, and
 `inputSize.toNat < 2^160`, and bound the complete reply below `2^160` on either
 child outcome. They require no parent gas/memory potential or output-copy-window
-bound. `pair_transfer_reply_cursor_state` in
+bound. `pair_transfer_reply_cursor_stateH` in
 `Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean` consumes the actual 68-byte
-input operands with `CoveredFork.rules_stateGas_none`; `BurnFourCalls.actualReply`
-and `BurnFiveCalls.actualReply` use it for the two actual Burn transfer replies.
+input operands and takes `stateGas = none` as a premise (`CoveredFork.rules_stateGas_none`
+supplies it under a covered fork); `BurnFourCallsH.actualReply`
+and `BurnFiveCallsH.actualReply` use it for the two actual Burn transfer replies.
 The accepted `swapTransferCall_replyShort` in
 `Blanc/Lift/UniswapV2Pair/SwapTransfer.lean` and `skim_raw_flag_inv` in
 `Blanc/Lift/UniswapV2Pair/SkimSecondWalk.lean` use the same literal 68-byte
@@ -4950,7 +4959,15 @@ children's replays using the ladder's lower-depth hypothesis and
 turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
 `Exec.Deriv.exists_firstExec_or_none` split a chain at its first external
 instruction. Worked use: WETH9,
-`Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`.
+`Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`. Over a selected fork
+domain `F` without state gas, for code whose frames spawn only by `CALL`/`STATICCALL`
+(`SpawnKindsIn F`), the In forms live in
+[`Blanc/ExecutionModelAccountingIn.lean`](../Blanc/ExecutionModelAccountingIn.lean):
+`Exec.spawn_seam_callsIn` (the seam of a call-family spawning step from
+`stateGas = none`; the create arm is excluded by the decoded instruction),
+`Exec.CoreAccountingIn.modelFrameIn`, `SpawnReplayIn F`, `spawnReplayTargetIn` and
+`ExecutionAccountingReplay.modelLadderIn` producing `AccountingLadderAdmittedIn F`.
+Worked use: `Blanc/Lift/Weth9/CommittedHistoryIn.lean` (`weth9_history_committedIn`).
 
 When the contract's own frame theorem already consumes the frame's *whole subtree* —
 re-entered frames of the same contract run inside the frame's own model transcript, so
@@ -5162,6 +5179,18 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
 
+For rules outside the covered forks (any schedule with `rules.stateGas = none` and
+`rules.bal = none`, including the touched-sweep forks and refund quotient 2), use
+[`Blanc/TransactionForwardH.lean`](../Blanc/TransactionForwardH.lean):
+`processTransaction_of_stagesH` returns the settled state with the rules' own touched sweep and
+refund quotient (`txGasUsedQ`), `processMessageCall_create_of_message` settles a top-level
+creation with no collision over a successful `processCreateMessage`, and
+`settled_getCode_getStor_of_code_nonempty` carries an account with nonempty code through the
+credits, the deletion fold and the sweep; `processTransaction_installed_of_stagesH` combines the
+two for an account the message installs and does not schedule for deletion. Worked uses:
+`Blanc/Lift/Weth9/DeployTransaction.lean` (`weth9_creation_transaction_byzantium`) and
+`Blanc/Lift/UniswapV2Pair/CreationTransaction.lean` (`pair_creation_transaction_settles_muirGlacier`).
+
 The raw `debit_get_self` account equation requires the sender nonce to differ
 from `UInt64.max`; transaction admission supplies this nonwrap fact.
 `debit_get_self_of_protected` is the same equation for a sender that is
@@ -5289,6 +5318,43 @@ Use
   arbitrary installed contract invariant through the wrapper.
 
 ### T5. The wrapper is a block body and the fact is about an installed contract
+
+For proof-of-work reward credits, use
+[`Blanc/ExecutionRewardCredits.lean`](../Blanc/ExecutionRewardCredits.lean).
+`fold_addBal_nat_preserves` threads a direct-credit law and proves the exact
+natural total through a list of credits under its pre-credit sum bound.
+`payRewards_preserves_and_sum` specializes it to Jaune's actual miner and
+ommer credits; `sum_payRewards_eq` gives the exact `ChainConfig.rewardTotal`
+mint. `RewardCreditsFunded.of_rewardTotal` (with `OmmerCreditsFunded.of_sum`)
+turns that natural budget into the historical per-credit premise
+`RewardCreditsFunded` of `Blanc/ExecutionHistoricalAdmission.lean`;
+`ContractSpecSem.StateInv.payRewards_of_rewardTotal` transports an existing
+semantic invariant through the fold under the budget, through that owner's
+`StateInv.payRewards`. `ExecutionTrace.StagedBodyTrace.rewardCreditsFunded_of_budget`,
+`ConfiguredBlockTraceIn.rewardCreditsFunded` (under `stateGas = none`) and
+`ConfiguredHistoryTraceIn.rewardCreditsFunded` (under `BodyStageCapabilities F`)
+discharge the `rewards` premise of the historical `stateInv_admitted_semIn`
+theorems from the retained reward-inclusive bound.
+`payRewards_getStor_of_protected` preserves a protected account's storage
+with no balance bound; `payRewards_balance_mono` additionally needs the exact
+reward budget. `ExecutionTrace.StagedBodyTrace.reward_preserves_and_sum`
+connects those laws to the retained body's actual reward endpoint and exact
+selected mint; `stateInv_of_requestState` and `reward_getStor_of_protected`
+provide its semantic-invariant and storage projections. Beneficiary collisions
+are permitted.
+
+For the balance budget before that reward stage, the retained system-message,
+beacon, history, transaction-fold and request carriers expose
+`sum_le_of_stateGas_none`, using the actual selected rule's `stateGas = none`
+without modern fork coverage. `ExecutionTrace.sum_processWithdrawalsState_eq`
+gives the exact enabled-withdrawal mint under its opening bound.
+`ExecutionTrace.StagedBodyTrace.request_sum_le` combines those actual stages;
+`request_budget` transports a body-entry withdrawal-plus-future-mint bound to
+the request endpoint. `ExecutionTrace.ConfiguredBlockTraceIn.request_reward_budget`
+derives the selected PoW budget from the retained configured pre-block bound;
+`reward_preserves_and_sum` reaches its actual post-state and `sum_post_le`
+includes the configured reward mint. Earlier historical contract-invariant
+preservation, authentication and deployment roots remain separate obligations.
 
 For a gas-derived bound on actual retained frame occurrences, use
 [`Blanc/ExecutionBodyGas.lean`](../Blanc/ExecutionBodyGas.lean).
@@ -6465,7 +6531,8 @@ contract-neutral.
   suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
   with `Cursor.DescOf`, `SStep`, `ConfStep` and successor `CursorOK`.
-  `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forward`
+  `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forwardH`
+  (from `rules.stateGas = none`; `cursor_branch_forwardH_covered` is the `CoveredFork` form)
   derives the faithful branch disjunction from the checked tree and literal
   abstract target, without choosing the branch as a premise.
   `cursor_nexts_line_forward` composes a literal instruction list into a real
@@ -6498,15 +6565,16 @@ contract-neutral.
   `CursorStateAt` carries a checked actual cursor, a call-free span, a complete
   `St` state with existential residual gas, and the mapped return continuation.
   Its `line` and `jump` methods apply source inverses to the actual primitive
-  line or `ConfStep`, deriving the successor state and tree. Its `call` and
-  `ret` methods retain and consume the actual mapped internal continuation,
+  line or `ConfStep`, deriving the successor state and tree. Its `call` method and
+  `CursorStateAt.retH` retain and consume the actual mapped internal continuation,
   preserving the complete non-gas state without requiring a gas schedule.
   `memory_eq` projects the symbolic memory without unfolding a concrete state.
 - To cross a checked referenced goto while preserving the complete actual
   state and return continuation, use
   [`Blanc/Lift/CursorJump.lean`](../Blanc/Lift/CursorJump.lean).
   `CursorOK.jumpAt_of_jump` derives the actual JUMP byte from the checked node;
-  `CursorStateAt.goto` consumes its actual `ConfStep` and checked lookup,
+  `CursorStateAt.gotoH` (`gotoH_covered` is the `CoveredFork` form) consumes its actual
+  `ConfStep` and checked lookup,
   retaining the full non-gas state and original K. The joint node/tree/lookup
   premises are discovered here; the existential result is not a reliable
   recipe trigger.
@@ -6877,18 +6945,21 @@ contract-neutral.
   rather than EIP-2929, invert `SLOAD` with `ri_sloadH` from `rules.bal = none` alone; its
   successor `afterSloadH` is `afterSload` under EIP-2929 (`afterSloadH_of_eip2929`) and the
   unchanged base under flat access, with `afterSloadH_getStor`/`afterSloadH_logs`/
-  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH` and the storage-walk
+  `afterSloadH_output`, `getStorVal_afterSloadH`/`getStorVal_afterStoreH`,
+  `getStor_afterStoreH`/`getStor_afterStore_neH`/`logs_afterStoreH` and the storage-walk
   steps `StorStep.sloadH`/`StorStep.sstoreH`; invert
   `SSTORE` with `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`) over
   `afterSstoreH`, whose refund is `sstoreRefundH` (legacy, flat net-metered, or EIP-2929) and
-  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`), and get the
+  which is `afterSstore` under EIP-2929 net metering (`afterSstoreH_of_eip2929`); get the
   frame's non-static flag from `ri_sstore_nonstaticH`; invert or run `EXTCODESIZE` with
   `ri_extcodesizeH`/`rx_extcodesizeH` over `accountAccessH` and `extcodesizeCostH`; each
   `_covered` form recovers the modern statement, all in
   [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); invert a
   `STATICCALL` to an arbitrary callee from `rules.stateGas = none` alone with
   `ri_staticcall_boundedH`/`ri_staticcallH`/`rx_staticcallH` (answer `StaticAnsweredH`, code
-  resolution `CallCodeH` under the actual delegation flag), the step/run inversions
+  resolution `CallCodeH` under the actual delegation flag; on a covered fork
+  `CallCodeH_iff_of_covered`, `StaticAnsweredH_iff_of_covered` and
+  `CoveredFork.rules_delegationEnabled`), the step/run inversions
   `of_step_staticcall_val_with_depth_frame_causeH`/`of_run_staticcall_val_with_depth_causeH`,
   quiet steps with `Ninst.world_of_quietH`, static log preservation with
   `Exec.logs_eq_of_static_okH` (any fact about every successful outcome transfers to the
@@ -6898,7 +6969,8 @@ contract-neutral.
   inversions `of_step_call_val_with_depth_frameH`/`of_run_call_val_with_depth_frameH` and the
   caller-visible `ri_call_postH`, all in
   [`Blanc/Lift/HistStaticCall.lean`](../Blanc/Lift/HistStaticCall.lean); the call-success guard
-  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` in
+  steps `staticCallGuard_invPH`/`staticCallGuard_exactH` and a static child's entry
+  (`Evm.step_spawn_child_dataH`; its opening world is `Evm.step_spawn_child_world_noStateGas`) in
   [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
   the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
   `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
@@ -6947,7 +7019,33 @@ contract-neutral.
   [`Blanc/Lift/HistEcrecover.lean`](../Blanc/Lift/HistEcrecover.lean); the world facts
   `afterSloadH_state` and `afterSstoreH_state`/`afterSstoreH_getCode` in
   [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
-  form there is the modern statement from `CoveredFork`;
+  the forward creation kit under
+  historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with the
+  `sloadCostH_of_eip2929` equation and their `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
+  settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
+  `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
+  `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean); the bookkeeping fields a
+  settled frame reads across those steps (`afterSloadH_accountsToDelete`,
+  `afterSloadH_refundCounter`, `afterSstoreH_accountsToDelete`, and
+  `afterSstoreH_refundCounter_legacy` under the legacy `SSTORE` refund schedule for a nonzero
+  write) in [`Blanc/Lift/HistAccessMeta.lean`](../Blanc/Lift/HistAccessMeta.lean);
+  a zero-value `CALL` into a known child under a flat (pre-Berlin) access schedule with delegation
+  disabled (`Xinst.step_call_zero_flat`, `Ninst.runCompiled_call_zero_child_flat`, the child
+  settled with its target's EIP-161 touch) and a top-level call message settled from its raw
+  execution (`processMessage_call_of_execH`) and the code-free sender of a historical admission
+  check (`checkTransaction_sender_code_emptyH`) in
+  [`Blanc/Lift/HistCallFlat.lean`](../Blanc/Lift/HistCallFlat.lean); the refund counter kept from
+  falling by a store whose slot started at zero or is non-zero now (`sstoreRefundH_ge`,
+  `afterSstoreH_refundCounter_ge`) in
+  [`Blanc/Lift/HistSstoreRefund.lean`](../Blanc/Lift/HistSstoreRefund.lean); the window kit from
+  rule facts (`prefixTransfer_runH`, `create2_run_resultH`, `window_trackH`,
+  `Xinst.step_call_spawn_stackH`, `Xinst.step_call_spawn_targetH`,
+  `Xinst.step_create2_spawn_unprotectedH`), with a successful `SWAP`'s length facts
+  (`List.swap_some_length`), every body of a window-checked certificate passing the edge check
+  (`Cert.windowOk_mem`) and dropping words from a pattern-over-rest match
+  (`matches_append_drop`), in
+  [`Blanc/Lift/HistWindow.lean`](../Blanc/Lift/HistWindow.lean);
   the remaining historical successor projections (`afterSloadH_getCode`/`_accessedAddresses`/
   `_error`/`_createdAccounts`/`_accessedStorageKeys`, `afterSstoreH_getCode`/
   `_accessedStorageKeys`, the `ite` form `getStor_afterSstoreH`) and the quiet frame theorem
@@ -7575,6 +7673,15 @@ contract-neutral.
 There is no recipe: the entry points are whole-contract theorems, not goal
 shapes a trigger could match.
 
+The Pair cursor, source-call and positional statements named below are the
+historical `H` forms, which take `rules.stateGas = none` (and `rules.bal = none`
+where it appears) as premises instead of `CoveredFork`. The `CoveredFork` forms
+were removed as unconsumed. Under a covered fork recover one by applying the `H`
+form to `CoveredFork.rules_stateGas_none` and `CoveredFork.rules_bal_none`,
+bridging the world argument with the `…H_of_covered` equations (for example
+`swapPrefixWorldH_of_covered`) and converting an `H` carrier back with its
+`toCovered` conversion (for example `SwapCallbacksH.toCovered`).
+
 Shared Pair adapters retain their supplied original-bytecode cursor and actual
 world rather than selecting a call through a source run. The reusable fee
 request/reply carrier in
@@ -7587,7 +7694,7 @@ caller and outer continuations; `returnCutExact` retains `cut.node = N` for
 consumers which sample storage from the returned world. `returnCutData` also
 retains the fee guards and full physical `feeBranchPost` at that exact node;
 `returnCutExact` and `returnCut` project the same witness. The ordinary guarded
-static-call adapter `static_source_call_at`
+static-call adapter `static_source_call_atH`
 in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
 binds the supplied occurrence to the request, reply and original per-spawn
 partition through its actual slot queue. These are registry entries: their
@@ -7614,7 +7721,7 @@ LP-row freshness.
 [`PairTraceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairTraceKeys.lean) owns the
 unchanged `mintReplyRow`, `mintFeeReplyKeys`, `mintTraceKeys`,
 `mintTraceKeys_frame` and `mintTraceKeys_rows` definitions and laws.
-`mint_feeReply_mem` places the supplied actual fee primitive's own reply row
+`mint_feeReply_memH` places the supplied actual fee primitive's own reply row
 in that trace, covering entered child roots and synchronous precompile answers.
 The original names remain available through Mint's imports. The actual Burn
 consumer applies this only to the primitive projected from its retained slot;
@@ -7653,22 +7760,22 @@ with actual output and represented state. `pairAdmittedSupplyRules` and
 assemble all eleven concrete families through the existing selector dispatcher,
 without an additional supply premise for callers.
 
-`transfer_source_call_at` in
+`transfer_source_call_atH` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
 binds an ordinary transfer request to the supplied actual CALL, its complete
 slot queue and per-spawn partition. Its entered bit is the actual slot's
 `isSome`; the selected-step CALL inverse derives the same message, process,
 spawn and resume. It does not select a different model call.
-`pair_code_guard_cursor_state` in
+`pair_code_guard_cursor_stateH` in
 [`PairCodeGuardCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCodeGuardCursor.lean)
 advances the supplied actual code-size guard, derives code presence from its
 successful branch and retains the full warmed world and K. The existing fee
 cursor theorem delegates to this same proof.
-For a checked referenced branch, `pair_code_guard_to_cursor_state` retains
+For a checked referenced branch, `pair_code_guard_to_cursor_stateH` retains
 the same guard data and advances to the certificate-selected successor;
 the original literal-branch interface is preserved.
 
-The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
+The shared dispatcher entry `pair_dispatch_selector_cursor_stateH` in
 [`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)
 retains the actual root state before either selector comparison route; the
 existing upper-comparison wrapper projects it. Its pure `pair_initial_line_state`,
@@ -7691,7 +7798,7 @@ supply callback target exclusion.
 The parameterized quiet-entry
 cuts and checked closed regions in
 [`PairNoCallEntries.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallEntries.lean)
-derive `PairNoCallEntry.root_noExec` from that same supplied successful root.
+derive `PairNoCallEntry.root_noExecH` from that same supplied successful root.
 [`PairNoCallSource.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallSource.lean)
 consumes this raw certificate to couple the selected source frame to the
 empty actual child queue; it does not assume a caller-provided no-call suffix.
@@ -7709,10 +7816,10 @@ and [`PairTransferPreparation.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferPre
 their actual cursor consumers are
 [`PairTransferCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCursor.lean)
 and [`PairTransferCopyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCopyCursor.lean).
-`pair_transfer_request_cursor_state` in
+`pair_transfer_request_cursor_stateH` in
 [`PairTransferRequestCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferRequestCursor.lean)
 normalizes the physical transfer payload at a moving free pointer;
-`pair_transfer_call_of_gas_cursor` in
+`pair_transfer_call_of_gas_cursorH` in
 [`PairTransferCallCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCallCursor.lean)
 binds it to the supplied root's actual call slot and returned cursor. Use the
 literal line inverses through `CursorStateAt.line`, and retain the occurrence
@@ -7729,7 +7836,7 @@ wrappers reuse `pair_transfer_initialize_line_state` and
 The generic literal-line cut is `Reach.split_nexts` in
 [`Blanc/Lift/ReachLine.lean`](../Blanc/Lift/ReachLine.lean); it retains the shared
 endpoint between the completed non-external line and residual raw reach.
-`pair_transfer_reply_cursor_state` in
+`pair_transfer_reply_cursor_stateH` in
 [`PairTransferReplyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean)
 uses that supplied actual slot and returned cursor to derive the success flag,
 unchanged parent memory/output, the operand-derived full-reply bound, optional
@@ -7745,8 +7852,7 @@ selecting an external call; the original whole-helper inverse delegates to it.
 The same file's `safeTransfer_call_invH`, `safeTransfer_dynamicCall_post_invH`,
 `safeTransfer_dynamicReply_invH` and `safeTransfer_dynamicReturned_invH` require
 only state-gas absence for the actual CALL, full reply and physical return image.
-The existing modern inverses project these shared bodies with unchanged public
-statements. No BAL, access schedule or delegation premise is added; helper entry,
+The remaining modern inverses project these shared bodies. No BAL, access schedule or delegation premise is added; helper entry,
 pointer geometry and an actual successful helper continuation remain explicit.
 
 For the historical raw Swap token/recipient segment,
@@ -7756,10 +7862,9 @@ derives both recipient-versus-token inequalities and the actual remaining reach
 at the optimistic-transfer branch. It keeps the cached token words and the
 successor state after the two historical SLOADs, requiring only BAL absence for
 those reads and no final success or assumed guard. The common literal owner is
-`swapTokenLoadLine_invH` in `SwapFront.lean`; the existing modern inverse
-projects it. Root-to-body coverage and callback classification remain separate.
+`swapTokenLoadLine_invH` in `SwapFront.lean`. Root-to-body coverage and callback classification remain separate.
 
-For the original Swap prefix, `swap_prefix_cursor_state` in
+For the original Swap prefix, `swap_prefix_cursor_stateH` in
 [`SwapPositionalPrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalPrefix.lean)
 derives the selector, ABI, lock/write, packed-reserve return, liquidity and
 recipient route from original code, fork, selector and successful PC-zero
@@ -7777,7 +7882,7 @@ They preserve the supplied physical free pointer and identify the decoded
 word; the original whole-read inverse and actual final reply cursor share
 these facts.
 
-`swap_transfers_cursor_state` in
+`swap_transfers_cursor_stateH` in
 [`SwapPositionalTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalTransfer.lean)
 composes both optional optimistic transfers from those same original public
 premises. `SwapTransfers` retains each real amount branch, original-root CALL
@@ -7787,7 +7892,7 @@ amount retains an actual call-free gap; an executed CALL with an absent child
 slot still has its physical occurrence. The shared transfer request/call/reply
 cursors supply each occurrence rather than searching by an equal payload.
 
-`swap_callback_cursor_state` in
+`swap_callback_cursor_stateH` in
 [`SwapPositionalCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCallback.lean)
 adds the optional callback to that same original-root chain. `SwapCallbacks`
 starts its callback at transfer1's actual result; the executed branch retains
@@ -7796,7 +7901,7 @@ reply and checked caller join. The empty-data branch selects no CALL. Pointer
 and ABI length bounds are derived internally. Callback preparation and join
 lines are shared with the unchanged legacy callback inverses.
 
-`swap_balances_cursor_state` in
+`swap_balances_cursor_stateH` in
 [`SwapPositionalBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalBalance.lean)
 adds both required observations to the same optional-call carrier, from the
 same four original premises. Each `SwapBalanceOccurrence` keeps its own guarded
@@ -7863,13 +7968,13 @@ is projected from the carried representation and original root universe.
 
 [`SwapPositionalMutableCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableCallback.lean)
 retains the same guarded callback's complete events and recursively admitted
-children. `swap_source_callbacks` composes all optional mutable calls from the
+children. `swap_source_callbacksH` composes all optional mutable calls from the
 original decoded source entry to the same actual post-callback node and frame.
 
 [`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
 retains each transfer's same complete event queue, mapped selected turns,
 recursively admitted children, checkpoint, finite locked representation and log
-images. `swap_optional_transfer_admitted` shares both optional-transfer source
+images. `swap_optional_transfer_admittedH` shares both optional-transfer source
 phases and composes only `nextMutableCall` with the same selected queue; its
 source index increases exactly when that external instruction executes.
 
@@ -7885,22 +7990,53 @@ child's positional consumption and committed output.
 For recursive entry admission on that same selected proof, use
 `AdmittedSourceConsumes` and `SourceAdmission` in
 [`SourceAdmission.lean`](../Blanc/Lift/UniswapV2Pair/SourceAdmission.lean),
-then `admitted_source_slot_turns` and `AdmittedMutableTurns` in
+then `admitted_source_slot_turnsH` and `AdmittedMutableTurns` in
 [`AdmittedMutableFold.lean`](../Blanc/Lift/UniswapV2Pair/AdmittedMutableFold.lean).
 These acyclic adapters parameterize child authentication, retain the complete
 actual slot event queue and its selected turns, and index each recursive
 admission by the same child consumption proof. The Pair endpoint
 `PairAdmittedConsumes` uses `PairSourceAdmission` in
 [`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
-For actual locked children, `lockedPairAdmittedSupply` and
-`locked_admitted_mutable_source_slot_turns` in
+For actual locked children, `lockedPairAdmittedSupplyH` and
+`locked_admitted_mutable_source_slot_turnsH` in
 [`MutablePositionalLockedSupply.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalLockedSupply.lean)
 retain the same child selector admission, positional proof, committed output,
 incoming representation and complete mutable event/turn queues.
 `AdmittedSourceConsumes.nextMutableCall` in `AdmittedMutableFold.lean`
 composes that same selected turn proof and its recursive admission.
 
-For a retained factory fee observation, `PairFeeObservation.sourceCall` in
+Under the historical rule facts (`rules.stateGas = none`, `rules.bal = none`)
+in place of `CoveredFork`: the fold is proved once over any admitted block
+rules that rule out state gas (`PairFrameSupplyWithOn`,
+`mutable_selected_root_withOn`, `mutable_retained_fold_inv_withOn`,
+`mutable_source_slot_turns_withOn`); the modern `_with` forms are its
+`CoveredFork` instance. The historical supplies are `PairFrameSupplyH` and
+`PairFrameSupplyWithH` (`PairFrameSupplyWithH.on`), with
+`PairFrameOutcome.mono` to weaken a frame's authentication; the slot fold is
+`admitted_source_slot_turnsH`. For locked children, `LockedAuthH` (the permit
+authenticated by `PermitRecoveryAuthH`; `LockedAuthH.toCovered` recovers
+`LockedAuth`), `lockedPairSupplyH`, `lockedPairAdmittedSupplyH` and
+`locked_admitted_mutable_source_slot_turnsH` in `LockedSupply.lean` and
+`MutablePositionalLockedSupply.lean`. Every frame admitted below a root runs at
+the root's block statics (`SourceSlotEvents.located_benvStat`, from the generic
+`Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Exec.frameAdmitted_benvStat`),
+so `SourceAdmission.mono_benvStat` and `MutableAdmission.mono_benvStat` in
+`SourceAdmission.lean` weaken the authentication wherever it holds under a
+predicate of those statics. The Pair endpoint under the historical facts is
+`PairAdmittedConsumesH` (`LockedAuthH` admission) with `PairAdmittedSupplyH`;
+`PairAdmittedConsumesH.covered` and `PairAdmittedSupplyH.covered` recover the
+modern forms under `CoveredFork`. The same weakening for one retained fold or
+queue is `AdmittedSourceConsumes.mono_benvStat`,
+`AdmittedMutableTurns.mono_benvStat` (`AdmittedMutableFold.lean`),
+`SourceSlotEvents.located_inherits` and `SourceSlotEvents.turns_mono_benvStat`;
+`LockedAuthH.toCovered` and `PermitRecoveryAuthH.toCovered` convert the
+historical authentication to the covered one under a covered fork. Skim's historical supply is
+`pair_admitted_skim_supplyH` in `PairPositionalSkim.lean`, over
+`skim_positional_canonicalH`; the cached token and reserve words read storage
+only, so `skimToken0_eqH`, `skimToken1_eqH` and `skimReserve0_eqH` in
+`SkimWalk.lean` restate them over the historical lock world without a fork fact.
+
+For a retained factory fee observation, `PairFeeObservationH.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
 binds the supplied original slot, complete physical reply, literal feeTo
 request and code guard to the supplied model frame and full path queue.
@@ -7979,6 +8115,6 @@ changing foreign logs. The original Burn source donor imports the same proofs.
 
 [`SwapPositionalSourcePrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourcePrefix.lean)
 derives the initial source guards, cached words and starting segment from the
-original successful execution. `swap_source_transfers` composes both optional
+original successful execution. `swap_source_transfersH` composes both optional
 transfers from that same physical chain and the same admitted queue witnesses;
 only executed calls advance the source index.

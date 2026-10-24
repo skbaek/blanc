@@ -1,3 +1,5 @@
+import Blanc.Lift.HistCursorReturn
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorCuts
 import Blanc.ExecutionPathLocator
 import Blanc.Lift.UniswapV2Pair.SyncWalk
@@ -13,10 +15,9 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The initial seven raw instructions place the same actual execution at
-its first guard branch. Every cut starts from the root-derived cursor. -/
-theorem sync_root_guard_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_guard_cursor_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
@@ -38,11 +39,11 @@ theorem sync_root_guard_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : 
   let tail : SFunc := .next (.push [0x00, 0x10] (by decide))
     (.branch t_000c_c0 t_0010_c0)
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome, beforeOk, beforeTree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check ok ns tail (by rfl) (by rfl) fork
-  have beforeFork : CoveredFork before.sevm.benvStat.fork := by
-    rw [beforeSevm]; exact fork
+    cursor_nexts_line_cont_free_forwardH cert_check ok ns tail (by rfl) (by rfl) stateGas
+  have beforeFork : before.sevm.benvStat.rules.stateGas = none ∧ before.sevm.benvStat.rules.bal = none := by
+    rw [beforeSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨node, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree beforeOutcome beforeFork
+    cursor_next_forwardH cert_check beforeOk beforeTree beforeOutcome beforeFork.1
   have actualLine : Line.Run sevm (St b [] Mem.empty G) ns before.devm := line
   let init : List Ninst := [.push [0x80] (by decide), .push [0x40] (by decide), .reg .mstore]
   have splitLine : Line.Run sevm (St b [] Mem.empty G)
@@ -153,10 +154,10 @@ theorem sync_root_guard_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : 
       subst abstract
       exact ⟨a, rfl⟩
 
-/-- The root-derived guard cursor crosses its actual decoded JUMPI. The
-successor shape is produced by the checked cursor, without choosing a branch. -/
-theorem sync_root_guard_jump_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_guard_jump_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
@@ -171,12 +172,12 @@ theorem sync_root_guard_jump_memory_parent {sevm : Sevm} {b post : Devm} {G : Na
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree, guardStorage, guardMemory, guardK, guardStack, guardLogs, guardOutput⟩ :=
-    sync_root_guard_cursor_memory_parent codeEq fork run
-  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
-    rw [sameSevm]; exact fork
+    sync_root_guard_cursor_memory_parentH codeEq stateGas bal run
+  have guardFork : guard.sevm.benvStat.rules.stateGas = none ∧ guard.sevm.benvStat.rules.bal = none := by
+    rw [sameSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨a, top⟩ := stack
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check ok tree top success guardFork
+    cursor_branch_forwardH cert_check ok tree top success guardFork.1
   have frame := Blanc.Jinst.run_instructionFrame
     ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
   rw [jumped] at frame
@@ -221,17 +222,17 @@ theorem sync_root_guard_jump_memory_parent {sevm : Sevm} {b post : Devm} {G : Na
     have literal : (Bytes.toB256 [0x00, 0x10]).toNat = 16 := by decide +kernel
     exact nextPc.trans literal
 
-/-- The Pair's concrete zero-length REVERT tail has no successful raw run. -/
-theorem sync_revert_guard_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
+
+theorem sync_revert_guard_no_okH {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     (ok : CursorOK code cert node cursor) (tree : cursor.f = t_000c_c0)
-    (success : node.exn = .ok post) (fork : CoveredFork node.sevm.benvStat.fork) :
+    (success : node.exn = .ok post) (stateGas : node.sevm.benvStat.rules.stateGas = none) :
     False := by
   let ns : List Ninst := [.push [0x00] (by decide), .reg (.dup 0)]
   have lead : cursor.f = ns.foldr SFunc.next (.last .revert) := by
     simpa only [ns, List.foldr_cons, List.foldr_nil, t_000c_c0] using tree
   obtain ⟨terminal, lastCursor, suffix, terminalPc, terminalSevm,
     terminalOutcome, lastOk, lastTree⟩ :=
-    cursor_nexts_forward cert_check ok ns (.last .revert) lead success fork
+    cursor_nexts_forwardH cert_check ok ns (.last .revert) lead success stateGas
   have opcode : byteAt code lastCursor.pc = some (Linst.toUInt8 .revert) := by
     have check := lastOk.check
     rw [lastTree] at check
@@ -256,9 +257,10 @@ theorem sync_revert_guard_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : De
       | error e => rw [charged] at closed; cases closed
       | ok paid => rw [charged] at closed; cases closed
 
-/-- A successful root run cannot take the first guard's actual REVERT tail. -/
-theorem sync_root_guard_open_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_guard_open_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
@@ -271,18 +273,18 @@ theorem sync_root_guard_open_memory_parent {sevm : Sevm} {b post : Devm} {G : Na
       cursor.K = [] ∧ sevm.value = 0 ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨node, cursor, path, sameSevm, success, ok, branch, actualFree, storage, memory, emptyK, valueZero, logs, output⟩ :=
-    sync_root_guard_jump_memory_parent codeEq fork run
+    sync_root_guard_jump_memory_parentH codeEq stateGas bal run
   rcases branch with ⟨tree, pc⟩ | ⟨tree, pc⟩
-  · have nodeFork : CoveredFork node.sevm.benvStat.fork := by
-      rw [sameSevm]; exact fork
-    exact (sync_revert_guard_no_ok ok tree success nodeFork).elim
+  · have nodeFork : node.sevm.benvStat.rules.stateGas = none ∧ node.sevm.benvStat.rules.bal = none := by
+      rw [sameSevm]; exact ⟨stateGas, bal⟩
+    exact (sync_revert_guard_no_okH ok tree success nodeFork.1).elim
   · exact ⟨node, cursor, path, pc, sameSevm, success, tree, ok, actualFree, storage, memory, emptyK, valueZero pc, logs, output⟩
 
+
 open scoped LogOutputHinv in
-/-- The successful root reaches the calldata-size guard through its actual
-DEST and linear prelude, preserving the literal branch target. -/
-theorem sync_root_size_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_size_cursor_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
@@ -296,14 +298,14 @@ theorem sync_root_size_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : N
       cursor.K = [] ∧ sevm.value = 0 ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome, destTree, destOk, rootFree, destStorage, destMemory, initialK, valueZero, destLogs, destOutput⟩ :=
-    sync_root_guard_open_memory_parent codeEq fork run
+    sync_root_guard_open_memory_parentH codeEq stateGas bal run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
-  have destFork : CoveredFork dest.sevm.benvStat.fork := by
-    rw [destSevm]; exact fork
+  have destFork : dest.sevm.benvStat.rules.stateGas = none ∧ dest.sevm.benvStat.rules.bal = none := by
+    rw [destSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨afterDest, afterCursor, destEdge, jumped, destSynthetic, destStateful, afterOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome destFork
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome destFork.1
   have destFrame := Blanc.Jinst.run_instructionFrame
     ⟨dest.pc, dest.sevm, dest.devm⟩ .jumpdest
   rw [jumped] at destFrame
@@ -345,15 +347,15 @@ theorem sync_root_size_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : N
     dsimp only [t_0010_c0] at destSynthetic
     cases destSynthetic
     rfl
-  have afterFork : CoveredFork afterDest.sevm.benvStat.fork := by
-    rw [afterSevm]; exact fork
+  have afterFork : afterDest.sevm.benvStat.rules.stateGas = none ∧ afterDest.sevm.benvStat.rules.bal = none := by
+    rw [afterSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome, beforeOk, beforeTree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check afterOk ns tail afterTree afterOutcome afterFork
-  have beforeFork : CoveredFork before.sevm.benvStat.fork := by
+    cursor_nexts_line_cont_free_forwardH cert_check afterOk ns tail afterTree afterOutcome afterFork.1
+  have beforeFork : before.sevm.benvStat.rules.stateGas = none ∧ before.sevm.benvStat.rules.bal = none := by
     rw [beforeSevm]; exact afterFork
   obtain ⟨node, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree
-      (beforeOutcome.trans afterOutcome) beforeFork
+    cursor_next_forwardH cert_check beforeOk beforeTree
+      (beforeOutcome.trans afterOutcome) beforeFork.1
   have storeLine : afterDest.devm.getStor = before.devm.getStor :=
     Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
   have storePush : before.devm.getStor = node.devm.getStor :=
@@ -428,10 +430,11 @@ theorem sync_root_size_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : N
       subst abstract
       exact ⟨a, rfl⟩
 
-/-- The Pair's fallback DEST enters the same concrete REVERT tail. -/
-theorem sync_fallback_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
+
+theorem sync_fallback_no_okH {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     (ok : CursorOK code cert node cursor) (tree : cursor.f = t_01b9_c0)
-    (success : node.exn = .ok post) (fork : CoveredFork node.sevm.benvStat.fork) :
+    (success : node.exn = .ok post) (stateGas : node.sevm.benvStat.rules.stateGas = none)
+    (bal : node.sevm.benvStat.rules.bal = none) :
     False := by
   have check := ok.check
   rw [tree] at check
@@ -444,7 +447,7 @@ theorem sync_fallback_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     rw [ok.code_eq, ok.pc_eq]
     exact byteAt_jinst_at opcode
   obtain ⟨next, afterCursor, edge, jumped, synthetic, stateful, placed⟩ :=
-    cursor_jinst_forward cert_check ok instruction success fork
+    cursor_jinst_forwardH cert_check ok instruction success stateGas
   have afterTree : afterCursor.f = t_000c_c0 := by
     rcases cursor with ⟨f, pc, a, m, K⟩
     dsimp only at tree
@@ -453,14 +456,14 @@ theorem sync_fallback_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     cases synthetic
     rfl
   have unchanged : next.exn = node.exn := by cases edge <;> rfl
-  have nextFork : CoveredFork next.sevm.benvStat.fork := by
-    rw [Cursor.parentStep_sevm edge]; exact fork
-  exact sync_revert_guard_no_ok placed afterTree (unchanged.trans success) nextFork
+  have nextFork : next.sevm.benvStat.rules.stateGas = none ∧ next.sevm.benvStat.rules.bal = none := by
+    rw [Cursor.parentStep_sevm edge]; exact ⟨stateGas, bal⟩
+  exact sync_revert_guard_no_okH placed afterTree (unchanged.trans success) nextFork.1
 
-/-- Raw success excludes the size guard's actual fallback, placing the root
-at the selector prelude without assuming which branch was taken. -/
-theorem sync_root_size_open_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_size_open_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
@@ -472,12 +475,12 @@ theorem sync_root_size_open_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat
       cursor.K = [] ∧ sevm.value = 0 ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree, guardStorage, guardMemory, guardK, valueZero, guardLogs, guardOutput⟩ :=
-    sync_root_size_cursor_memory_parent codeEq fork run
-  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
-    rw [sameSevm]; exact fork
+    sync_root_size_cursor_memory_parentH codeEq stateGas bal run
+  have guardFork : guard.sevm.benvStat.rules.stateGas = none ∧ guard.sevm.benvStat.rules.bal = none := by
+    rw [sameSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨a, top⟩ := stack
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check ok tree top success guardFork
+    cursor_branch_forwardH cert_check ok tree top success guardFork.1
   have frame := Blanc.Jinst.run_instructionFrame
     ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
   rw [jumped] at frame
@@ -512,9 +515,10 @@ theorem sync_root_size_open_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat
   rcases branch with ⟨nextTree, nextPc⟩ | ⟨nextTree, nextPc⟩
   · rw [pc] at nextPc
     exact ⟨node, cursor, path.snoc edge, nextPc, nodeSevm, sameOutcome, nextTree, placed, actualFree, storage, memory, emptyK, valueZero, logs, output⟩
-  · have nodeFork : CoveredFork node.sevm.benvStat.fork := by
-      rw [nodeSevm]; exact fork
-    exact (sync_fallback_no_ok placed nextTree sameOutcome nodeFork).elim
+  · have nodeFork : node.sevm.benvStat.rules.stateGas = none ∧ node.sevm.benvStat.rules.bal = none := by
+      rw [nodeSevm]; exact ⟨stateGas, bal⟩
+    exact (sync_fallback_no_okH placed nextTree sameOutcome nodeFork.1 nodeFork.2).elim
+
 
 /-- The literal selector prelude appearing at pc26 in the Pair certificate. -/
 def syncSelectorLead : List Ninst :=
@@ -553,10 +557,9 @@ theorem syncSelectorLead_inv {sevm : Sevm} {b d : Devm} {S : List B256}
   cases run
   exact ⟨gas, hd⟩
 
-/-- The sync selector's first comparison follows the actual raw fallthrough;
-the condition is computed from calldata, not chosen as an input premise. -/
-theorem sync_root_selector_first_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_selector_first_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -569,24 +572,24 @@ theorem sync_root_selector_first_memory_parent {sevm : Sevm} {b post : Devm} {G 
       cursor.K = [] ∧ sevm.value = 0 ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨entry, atEntry, rootPath, entryPc, entrySevm, entryOutcome, entryTree, entryOk, rootFree, entryStorage, entryMemory, entryK, valueZero, entryLogs, entryOutput⟩ :=
-    sync_root_size_open_memory_parent codeEq fork run
+    sync_root_size_open_memory_parentH codeEq stateGas bal run
   let tail : SFunc := .next (.push [0x00, 0xf9] (by decide)) (.branch t_002b_c0 t_00f9_c0)
   have lead : atEntry.f = syncSelectorLead.foldr SFunc.next tail := by
     simpa only [syncSelectorLead, List.foldr_cons, List.foldr_nil, tail, t_001a_c0] using entryTree
-  have entryFork : CoveredFork entry.sevm.benvStat.fork := by
-    rw [entrySevm]; exact fork
+  have entryFork : entry.sevm.benvStat.rules.stateGas = none ∧ entry.sevm.benvStat.rules.bal = none := by
+    rw [entrySevm]; exact ⟨stateGas, bal⟩
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome, beforeOk, beforeTree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk syncSelectorLead tail lead entryOutcome entryFork
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk syncSelectorLead tail lead entryOutcome entryFork.1
   have line' : Line.Run sevm
       (St entry.devm entry.devm.stack entry.devm.memory entry.devm.gasLeft)
       syncSelectorLead before.devm := by
     rw [← St.self rfl rfl, ← entrySevm]
     exact line
   obtain ⟨gas, beforeState⟩ := syncSelectorLead_inv selector line'
-  have beforeFork : CoveredFork before.sevm.benvStat.fork := by
+  have beforeFork : before.sevm.benvStat.rules.stateGas = none ∧ before.sevm.benvStat.rules.bal = none := by
     rw [beforeSevm]; exact entryFork
   obtain ⟨guard, atGuard, pushEdge, pushPc, primitive, pushSynthetic, pushStateful, guardOk⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree (beforeOutcome.trans entryOutcome) beforeFork
+    cursor_next_forwardH cert_check beforeOk beforeTree (beforeOutcome.trans entryOutcome) beforeFork.1
   have pushRun := primitive.toRun
   rw [beforeState] at pushRun
   obtain ⟨guardGas, guardState⟩ := ri_push pushRun
@@ -629,11 +632,11 @@ theorem sync_root_selector_first_memory_parent {sevm : Sevm} {b post : Devm} {G 
     exact unchanged.trans (beforeOutcome.trans entryOutcome)
   have guardSevm : guard.sevm = sevm :=
     (Cursor.parentStep_sevm pushEdge).trans (beforeSevm.trans entrySevm)
-  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
-    rw [guardSevm]; exact fork
+  have guardFork : guard.sevm.benvStat.rules.stateGas = none ∧ guard.sevm.benvStat.rules.bal = none := by
+    rw [guardSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨a, top⟩ := top
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check guardOk guardTree top guardOutcome guardFork
+    cursor_branch_forwardH cert_check guardOk guardTree top guardOutcome guardFork.1
   have storeLine : entry.devm.getStor = before.devm.getStor :=
     Line.of_inv Devm.getStor (by dsimp only [syncSelectorLead]; line_inv) line
   have storePush : before.devm.getStor = guard.devm.getStor :=
@@ -706,6 +709,7 @@ theorem sync_root_selector_first_memory_parent {sevm : Sevm} {b post : Devm} {G 
     exact unchanged.trans guardOutcome
   exact ⟨node, cursor, rootPath.trans (path.snoc pushEdge |>.snoc edge), fall.1,
     (Cursor.parentStep_sevm edge).trans guardSevm, sameOutcome, finalTree, fall.2, placed, actualFree, storage, memory, emptyK, valueZero, logs, output⟩
+
 
 /-- Only the six literal comparison rows remaining on the sync selector route. -/
 inductive SyncComparison
@@ -808,13 +812,12 @@ theorem SyncComparison.line_inv {sevm : Sevm} {b d : Devm} {S : List B256}
     cases run
     exact ⟨gas, result⟩
 
-/-- One of the six actual Pair comparison rows retains its real prefix and
-selector stack while the concrete sync operands determine the successor. -/
-theorem SyncComparison.cursor_forward_memory_parent (q : SyncComparison)
+theorem SyncComparison.cursor_forward_memory_parentH (q : SyncComparison)
     {F : Exec.Deriv} {κ : Cursor} {post : Devm} {S : List B256}
     (ok : CursorOK code cert F κ) (tree : κ.f = q.body) (pc : F.pc = q.pc)
     (stack : F.devm.stack = 0xfff6cae9 :: S) (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
+    (stateGas : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none) :
     ∃ (N : Exec.Deriv) (κ' : Cursor), Exec.Deriv.ParentPrefix F N ∧
       N.pc = q.nextPc ∧ N.sevm = F.sevm ∧ N.exn = F.exn ∧
       κ'.f = q.after ∧ (∃ S', N.devm.stack = 0xfff6cae9 :: S') ∧
@@ -824,7 +827,7 @@ theorem SyncComparison.cursor_forward_memory_parent (q : SyncComparison)
       κ'.K = κ.K ∧ N.devm.logs = F.devm.logs ∧ N.devm.output = F.devm.output := by
   have lead : κ.f = q.line.foldr SFunc.next q.tail := tree.trans q.body_eq
   obtain ⟨guard, atGuard, path, guardPc, guardSevm, guardOutcome, guardOk, guardTree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check ok q.line q.tail lead success fork
+    cursor_nexts_line_cont_free_forwardH cert_check ok q.line q.tail lead success stateGas
   have line' : Line.Run F.sevm
       (St F.devm (0xfff6cae9 :: S) F.devm.memory F.devm.gasLeft) q.line guard.devm := by
     rw [← St.self stack rfl]
@@ -835,10 +838,10 @@ theorem SyncComparison.cursor_forward_memory_parent (q : SyncComparison)
   have instruction : Jinst.At guard.sevm.code guard.pc .jumpi := by
     rw [guardOk.code_eq, guardPc, pc]
     exact q.jumpAt
-  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
-    rw [guardSevm]; exact fork
+  have guardFork : guard.sevm.benvStat.rules.stateGas = none ∧ guard.sevm.benvStat.rules.bal = none := by
+    rw [guardSevm]; exact ⟨stateGas, bal⟩
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed⟩ :=
-    cursor_jinst_forward cert_check guardOk instruction (guardOutcome.trans success) guardFork
+    cursor_jinst_forwardH cert_check guardOk instruction (guardOutcome.trans success) guardFork.1
   have storeLine : F.devm.getStor = guard.devm.getStor :=
     Line.of_inv Devm.getStor (by
       cases q <;> dsimp only [SyncComparison.line, SyncComparison.op] <;> line_inv) line
@@ -931,10 +934,10 @@ theorem SyncComparison.cursor_forward_memory_parent (q : SyncComparison)
     (Cursor.parentStep_sevm edge).trans guardSevm, sameOutcome,
     finalShape.1, finalShape.2, placed, actualFree, storage, memory, retainedK, logs, output⟩
 
-/-- The six checked comparison rows are consumed on the root-derived sync
-route, yielding the actual public wrapper cursor and its retained selector. -/
-theorem sync_root_selector_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_selector_cursor_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -947,35 +950,35 @@ theorem sync_root_selector_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
       cursor.K = [] ∧ sevm.value = 0 ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨n0, k0, p0, pc0, sevm0, outcome0, tree0, ⟨s0, stack0⟩, ok0, free0, store0, mem0, initialK, valueZero, logs0, output0⟩ :=
-    sync_root_selector_first_memory_parent codeEq fork selector run
+    sync_root_selector_first_memory_parentH codeEq stateGas bal selector run
   obtain ⟨n1, k1, p1, pc1, same1, equal1, tree1, ⟨s1, stack1⟩, ok1, free1, store1, mem1, sameK1, logs1, output1⟩ :=
-    SyncComparison.cursor_forward_memory_parent .gt0 ok0 tree0 pc0 stack0 outcome0
-      (by rw [sevm0]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .gt0 ok0 tree0 pc0 stack0 outcome0
+      (by rw [sevm0]; exact stateGas) (by rw [sevm0]; exact bal)
   have sevm1 : n1.sevm = sevm := same1.trans sevm0
   have outcome1 : n1.exn = .ok post := equal1.trans outcome0
   obtain ⟨n2, k2, p2, pc2, same2, equal2, tree2, ⟨s2, stack2⟩, ok2, free2, store2, mem2, sameK2, logs2, output2⟩ :=
-    SyncComparison.cursor_forward_memory_parent .gt1 ok1 tree1 pc1 stack1 outcome1
-      (by rw [sevm1]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .gt1 ok1 tree1 pc1 stack1 outcome1
+      (by rw [sevm1]; exact stateGas) (by rw [sevm1]; exact bal)
   have sevm2 : n2.sevm = sevm := same2.trans sevm1
   have outcome2 : n2.exn = .ok post := equal2.trans outcome1
   obtain ⟨n3, k3, p3, pc3, same3, equal3, tree3, ⟨s3, stack3⟩, ok3, free3, store3, mem3, sameK3, logs3, output3⟩ :=
-    SyncComparison.cursor_forward_memory_parent .eq0 ok2 tree2 pc2 stack2 outcome2
-      (by rw [sevm2]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .eq0 ok2 tree2 pc2 stack2 outcome2
+      (by rw [sevm2]; exact stateGas) (by rw [sevm2]; exact bal)
   have sevm3 : n3.sevm = sevm := same3.trans sevm2
   have outcome3 : n3.exn = .ok post := equal3.trans outcome2
   obtain ⟨n4, k4, p4, pc4, same4, equal4, tree4, ⟨s4, stack4⟩, ok4, free4, store4, mem4, sameK4, logs4, output4⟩ :=
-    SyncComparison.cursor_forward_memory_parent .eq1 ok3 tree3 pc3 stack3 outcome3
-      (by rw [sevm3]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .eq1 ok3 tree3 pc3 stack3 outcome3
+      (by rw [sevm3]; exact stateGas) (by rw [sevm3]; exact bal)
   have sevm4 : n4.sevm = sevm := same4.trans sevm3
   have outcome4 : n4.exn = .ok post := equal4.trans outcome3
   obtain ⟨n5, k5, p5, pc5, same5, equal5, tree5, ⟨s5, stack5⟩, ok5, free5, store5, mem5, sameK5, logs5, output5⟩ :=
-    SyncComparison.cursor_forward_memory_parent .eq2 ok4 tree4 pc4 stack4 outcome4
-      (by rw [sevm4]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .eq2 ok4 tree4 pc4 stack4 outcome4
+      (by rw [sevm4]; exact stateGas) (by rw [sevm4]; exact bal)
   have sevm5 : n5.sevm = sevm := same5.trans sevm4
   have outcome5 : n5.exn = .ok post := equal5.trans outcome4
   obtain ⟨n6, k6, p6, pc6, same6, equal6, tree6, ⟨s6, stack6⟩, ok6, free6, store6, mem6, sameK6, logs6, output6⟩ :=
-    SyncComparison.cursor_forward_memory_parent .eq3 ok5 tree5 pc5 stack5 outcome5
-      (by rw [sevm5]; exact fork)
+    SyncComparison.cursor_forward_memory_parentH .eq3 ok5 tree5 pc5 stack5 outcome5
+      (by rw [sevm5]; exact stateGas) (by rw [sevm5]; exact bal)
   have sevm6 : n6.sevm = sevm := same6.trans sevm5
   have outcome6 : n6.exn = .ok post := equal6.trans outcome5
   have storage : n6.devm.getStor = b.getStor :=
@@ -992,10 +995,10 @@ theorem sync_root_selector_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
     pc6, sevm6, outcome6, tree6, ⟨s6, stack6⟩, ok6,
     free0.trans (free1.trans (free2.trans (free3.trans (free4.trans (free5.trans free6))))), storage, memory, emptyK, valueZero, logs, output⟩
 
-/-- The actual public sync wrapper enters its certified internal callee,
-retaining the real return stack and its pending wrapper continuation. -/
-theorem sync_root_callee_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_callee_cursor_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1010,12 +1013,12 @@ theorem sync_root_callee_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G :
       (∃ k : Cont, cursor.K = [k] ∧ k.f = t_0257_c78 ∧ k.tag = 0x0257) ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, ⟨S, destStack⟩, destOk, rootFree, destStorage, destMemory, destK, valueZero, destLogs, destOutput⟩ := sync_root_selector_cursor_memory_parent codeEq fork selector run
+    destTree, ⟨S, destStack⟩, destOk, rootFree, destStorage, destMemory, destK, valueZero, destLogs, destOutput⟩ := sync_root_selector_cursor_memory_parentH codeEq stateGas bal selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨entry, atEntry, destEdge, destJump, destSynthetic, destStateful, entryOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome (by rw [destSevm]; exact fork)
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome (by rw [destSevm]; exact stateGas)
   obtain ⟨destNext, burn⟩ := of_jumpdest_run destJump
   have entryPc : entry.pc = 0x067c := by rw [destPc] at destNext; exact destNext
   have entrySevm : entry.sevm = sevm := (Cursor.parentStep_sevm destEdge).trans destSevm
@@ -1041,8 +1044,8 @@ theorem sync_root_callee_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G :
       rfl
     exact unchanged.trans destK
   obtain ⟨before, atCall, path, beforePc, beforeSevm, beforeOutcome, beforeOk, beforeTree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk ns (.callNext 31 t_0257_c78) entryTree
-      entryOutcome (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk ns (.callNext 31 t_0257_c78) entryTree
+      entryOutcome (by rw [entrySevm]; exact stateGas)
   have beforeK : atCall.K = [] := sameK.trans entryK
   have line' : Line.Run entry.sevm
       (St entry.devm (0xfff6cae9 :: S) entry.devm.memory entry.devm.gasLeft) ns before.devm := by
@@ -1059,8 +1062,8 @@ theorem sync_root_callee_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G :
     rw [beforeOk.code_eq, beforePc, entryPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨node, cursor, callEdge, jumped, callSynthetic, callStateful, placed⟩ :=
-    cursor_jinst_forward cert_check beforeOk jumpAt (beforeOutcome.trans entryOutcome)
-      (by rw [beforeSevm, entrySevm]; exact fork)
+    cursor_jinst_forwardH cert_check beforeOk jumpAt (beforeOutcome.trans entryOutcome)
+      (by rw [beforeSevm, entrySevm]; exact stateGas)
   have entryStorage : entry.devm.getStor = b.getStor :=
     (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
   have storeLine : entry.devm.getStor = before.devm.getStor :=
@@ -1137,10 +1140,10 @@ theorem sync_root_callee_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G :
     (Cursor.parentStep_sevm callEdge).trans (beforeSevm.trans entrySevm),
     sameOutcome, callShape.1, ⟨S, calleeStack⟩, retained, placed, actualFree, storage, memory, valueZero, continuation, logs, output⟩
 
-/-- The concrete LOCKED failure line reaches its certified REVERT terminal. -/
-theorem sync_locked_failure_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
+
+theorem sync_locked_failure_no_okH {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     (ok : CursorOK code cert node cursor) (tree : cursor.f = t_1e00_c31)
-    (success : node.exn = .ok post) (fork : CoveredFork node.sevm.benvStat.fork) :
+    (success : node.exn = .ok post) (stateGas : node.sevm.benvStat.rules.stateGas = none) :
     False := by
   let ns : List Ninst := [.push [0x40] (by decide),
     .reg (.dup 0),
@@ -1175,7 +1178,7 @@ theorem sync_locked_failure_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : 
   have lead : cursor.f = ns.foldr SFunc.next (.last .revert) := by
     simpa only [ns, List.foldr_cons, List.foldr_nil, t_1e00_c31] using tree
   obtain ⟨terminal, lastCursor, path, pc, sameSevm, sameOutcome, lastOk, lastTree⟩ :=
-    cursor_nexts_forward cert_check ok ns (.last .revert) lead success fork
+    cursor_nexts_forwardH cert_check ok ns (.last .revert) lead success stateGas
   have opcode : byteAt code lastCursor.pc = some (Linst.toUInt8 .revert) := by
     have check := lastOk.check
     rw [lastTree] at check
@@ -1186,11 +1189,11 @@ theorem sync_locked_failure_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : 
   exact Linst.revert_not_ok
     ((terminal.exc.last_inv instruction).symm.trans (sameOutcome.trans success))
 
+
 open scoped LogOutputHinv in
-/-- Raw success excludes the actual LOCKED arm and places the root execution
-at the unlocked callee body before its lock write and first token read. -/
-theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_unlocked_cursor_memory_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1205,12 +1208,12 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
       (∃ k : Cont, cursor.K = [k] ∧ k.f = t_0257_c78 ∧ k.tag = 0x0257) ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, ⟨S, destStack⟩, continuation, destOk, rootFree, destStorage, destMemory, valueZero, exactContinuation, destLogs, destOutput⟩ := sync_root_callee_cursor_memory_parent codeEq fork selector run
+    destTree, ⟨S, destStack⟩, continuation, destOk, rootFree, destStorage, destMemory, valueZero, exactContinuation, destLogs, destOutput⟩ := sync_root_callee_cursor_memory_parentH codeEq stateGas bal selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨entry, atEntry, destEdge, destJump, destSynthetic, destStateful, entryOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome (by rw [destSevm]; exact fork)
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome (by rw [destSevm]; exact stateGas)
   obtain ⟨destNext, burn⟩ := of_jumpdest_run destJump
   have entryPc : entry.pc = 0x1df6 := by rw [destPc] at destNext; exact destNext
   have entrySevm : entry.sevm = sevm := (Cursor.parentStep_sevm destEdge).trans destSevm
@@ -1229,8 +1232,8 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
     cases destSynthetic
     exact ⟨rfl, rfl⟩
   obtain ⟨guard, atGuard, path, guardPc, guardSevm, guardOutcome, guardOk, guardTree, line, guardK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk ns (.branch t_1e00_c31 t_1e66_c31)
-      entryShape.1 entryOutcome (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk ns (.branch t_1e00_c31 t_1e66_c31)
+      entryShape.1 entryOutcome (by rw [entrySevm]; exact stateGas)
   have line' : Line.Run sevm
       (St entry.devm (0x0257 :: 0xfff6cae9 :: S) entry.devm.memory entry.devm.gasLeft)
       ns guard.devm := by
@@ -1240,7 +1243,7 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
   obtain ⟨d, h, line'⟩ := Line.of_run_cons line'
   obtain ⟨_, rfl⟩ := ri_push h
   obtain ⟨d, h, line'⟩ := Line.of_run_cons line'
-  obtain ⟨_, rfl⟩ := ri_sload fork h
+  obtain ⟨_, rfl⟩ := ri_sloadH bal h
   obtain ⟨d, h, line'⟩ := Line.of_run_cons line'
   obtain ⟨_, rfl⟩ := ri_push h
   obtain ⟨d, h, line'⟩ := Line.of_run_cons line'
@@ -1262,8 +1265,8 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
     rw [guardOk.code_eq, guardPc, entryPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed⟩ :=
-    cursor_jinst_forward cert_check guardOk jumpAt (guardOutcome.trans entryOutcome)
-      (by rw [guardSevm, entrySevm]; exact fork)
+    cursor_jinst_forwardH cert_check guardOk jumpAt (guardOutcome.trans entryOutcome)
+      (by rw [guardSevm, entrySevm]; exact stateGas)
   have entryStorage : entry.devm.getStor = b.getStor :=
     (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
   have storeLine : entry.devm.getStor = guard.devm.getStor :=
@@ -1311,7 +1314,7 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
     generalize hK : cursor.K.map Cont.f = K at stateful
     cases stateful with
     | zero t pop =>
-      exact (sync_locked_failure_no_ok placed hf nodeOutcome (by rw [nodeSevm]; exact fork)).elim
+      exact (sync_locked_failure_no_okH placed hf nodeOutcome (by rw [nodeSevm]; exact stateGas)).elim
     | succ t w nonzero pop =>
       obtain ⟨_, condition, result⟩ := St.of_pop2 pop
       have accepted : B256.eqCheck 1 (entry.devm.getStorVal sevm.currentTarget 12) ≠ 0 := by
@@ -1355,6 +1358,7 @@ theorem sync_root_unlocked_cursor_memory_parent {sevm : Sevm} {b post : Devm} {G
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans (path.snoc edge), finalPc,
     nodeSevm, nodeOutcome, shape.1, ⟨S, shape.2.2⟩, nodeContinuation, placed, actualFree, storage, memory, valueZero, entryUnlocked, finalContinuation, logs, output⟩
 
+
 /-- The exact Pair nexts through the first request and code-size flag;
 only the final literal branch target is left for its own real push cut. -/
 def syncFirstBeforeBranch : List Ninst := syncFirstRequestLine ++ [.reg .extcodesize,
@@ -1362,11 +1366,10 @@ def syncFirstBeforeBranch : List Ninst := syncFirstRequestLine ++ [.reg .extcode
   .reg (.dup 0),
   .reg .iszero]
 
-/-- The actual first request line contains the one lock store; its remaining
-literal instructions preserve the entire storage observation. -/
-theorem sync_first_lock_line_storage {sevm : Sevm} {b final : Devm}
+theorem sync_first_lock_line_storageH {sevm : Sevm} {b final : Devm}
     {S : List B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (run : Line.Run sevm (St b S M G) syncFirstBeforeBranch final) :
     final.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
   dsimp only [syncFirstBeforeBranch] at run
@@ -1377,20 +1380,20 @@ theorem sync_first_lock_line_storage {sevm : Sevm} {b final : Devm}
   obtain ⟨stored, step, run⟩ := Line.of_run_cons run
   rw [show Bytes.toB256 [0x0c] = (12 : B256) from by decide +kernel,
     show Bytes.toB256 [0x00] = (0 : B256) from by decide +kernel] at step
-  obtain ⟨gas, rfl⟩ := ri_sstore fork step
+  obtain ⟨gas, rfl⟩ := ri_sstoreH stateGas bal step
   have tailInv : Line.Inv Devm.getStor (syncFirstBeforeBranch.drop 3) := by
     dsimp only [syncFirstBeforeBranch, List.drop]
     line_inv
   have same := Line.of_inv Devm.getStor tailInv run
   rw [← same]
-  exact afterSstore_getStor_self sevm b 12 0
+  exact afterSstoreH_getStor_self sevm b 12 0
+
 
 
 open scoped LogOutputHinv in
-/-- The first actual token code guard cannot select its REVERT arm under
-raw success. Its retained continuation comes from the root wrapper. -/
-theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_first_guard_open_request_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1409,12 +1412,12 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
         node.devm.logs = b.logs ∧ node.devm.output = b.output ∧
         (node.devm.getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, stack, continuation, destOk, rootFree, destStorage, destMemory, valueZero, entryUnlocked, exactContinuation, destLogs, destOutput⟩ := sync_root_unlocked_cursor_memory_parent codeEq fork selector run
+    destTree, stack, continuation, destOk, rootFree, destStorage, destMemory, valueZero, entryUnlocked, exactContinuation, destLogs, destOutput⟩ := sync_root_unlocked_cursor_memory_parentH codeEq stateGas bal selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨entry, atEntry, destEdge, destJump, destSynthetic, destStateful, entryOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome (by rw [destSevm]; exact fork)
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome (by rw [destSevm]; exact stateGas)
   obtain ⟨destNext, burn⟩ := of_jumpdest_run destJump
   have entryPc : entry.pc = 0x1e67 := by rw [destPc] at destNext; exact destNext
   have entrySevm : entry.sevm = sevm := (Cursor.parentStep_sevm destEdge).trans destSevm
@@ -1432,11 +1435,11 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
     exact ⟨rfl, rfl⟩
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome,
     beforeOk, beforeTree, line, beforeK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk syncFirstBeforeBranch tail
-      entryShape.1 entryOutcome (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk syncFirstBeforeBranch tail
+      entryShape.1 entryOutcome (by rw [entrySevm]; exact stateGas)
   obtain ⟨guard, atGuard, pushEdge, pushPc, primitive, pushSynthetic, pushStateful, guardOk⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree (beforeOutcome.trans entryOutcome)
-      (by rw [beforeSevm, entrySevm]; exact fork)
+    cursor_next_forwardH cert_check beforeOk beforeTree (beforeOutcome.trans entryOutcome)
+      (by rw [beforeSevm, entrySevm]; exact stateGas)
   have guardPc : guard.pc = 0x1ed8 := by
     change before.pc = entry.pc + 110 at beforePc
     change guard.pc = before.pc + 3 at pushPc
@@ -1458,8 +1461,8 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
     exact same.trans (beforeOutcome.trans entryOutcome)
   obtain ⟨a, top⟩ := pushShape.2.1
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check guardOk pushShape.1 top guardOutcome
-      (by rw [guardSevm]; exact fork)
+    cursor_branch_forwardH cert_check guardOk pushShape.1 top guardOutcome
+      (by rw [guardSevm]; exact stateGas)
   have entryStorage : entry.devm.getStor = b.getStor :=
     (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
   have actualLine : Line.Run sevm
@@ -1478,11 +1481,11 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
     exact line
   obtain ⟨requestPost, requestPrefix, flags⟩ := Blanc.of_run_append syncFirstRequestLine requestLine
   obtain ⟨mutable, requestGas, requestState⟩ :=
-    syncFirstRequestLine_inv fork getterInitMemory_ptr requestPrefix
-  have tokenSlot : (afterSstore sevm entry.devm 12 0).getStorVal sevm.currentTarget 6 =
+    syncFirstRequestLine_invH stateGas bal getterInitMemory_ptr requestPrefix
+  have tokenSlot : (afterSstoreH sevm entry.devm 12 0).getStorVal sevm.currentTarget 6 =
       b.getStorVal sevm.currentTarget 6 := by
-    change ((afterSstore sevm entry.devm 12 0).getStor sevm.currentTarget).get 6 = _
-    rw [afterSstore_getStor_self, Stor.get_set_ne _ (by decide), entryStorage]
+    change ((afterSstoreH sevm entry.devm 12 0).getStor sevm.currentTarget).get 6 = _
+    rw [afterSstoreH_getStor_self, Stor.get_set_ne _ (by decide), entryStorage]
     rfl
   rw [tokenSlot] at requestState
   have beforeFacts : before.devm.memory = balanceRequestMemory getterInitMemory sevm.currentTarget ∧
@@ -1493,7 +1496,7 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
       z = B256.eqCheck (before.devm.getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 0 := by
     rw [requestState] at flags
     obtain ⟨_, first, flags⟩ := Line.of_run_cons flags
-    obtain ⟨_, rfl⟩ := ri_extcodesize fork first
+    obtain ⟨_, rfl⟩ := ri_extcodesizeH bal first
     obtain ⟨_, second, flags⟩ := Line.of_run_cons flags
     obtain ⟨_, rfl⟩ := ri_iszero second
     obtain ⟨_, third, flags⟩ := Line.of_run_cons flags
@@ -1504,11 +1507,11 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
     rw [state]
     refine ⟨rfl, _, _, rfl, ⟨0xfff6cae9 :: S, rfl⟩, ?_⟩
     change _ = B256.eqCheck
-      ((temporalAccountAccessBase (afterSload sevm (afterSstore sevm entry.devm 12 0) 6)
+      ((accountAccessH sevm (afterSloadH sevm (afterSstoreH sevm entry.devm 12 0) 6)
         (b.getStorVal sevm.currentTarget 6).toAdr.toB256.toAdr).getCode
         (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 0
-    simp only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state, toAdr_toB256]
-  have beforeStorage := sync_first_lock_line_storage fork actualLine
+    simp only [Devm.getCode, Devm.getAcct, accountAccessH_state, toAdr_toB256]
+  have beforeStorage := sync_first_lock_line_storageH stateGas bal actualLine
   rw [entryStorage] at beforeStorage
   have storePush : before.devm.getStor = guard.devm.getStor :=
     Ninst.Hinv.inv (f := Devm.getStor) primitive.toRun
@@ -1548,8 +1551,8 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
   have chosen : cursor.f = t_1edd_c31 ∧ node.pc = 0x1edd := by
     rcases branch with ⟨failedTree, failedPc⟩ | ⟨tree, pc⟩
     · have failedTree : cursor.f = t_000c_c0 := failedTree
-      exact (sync_revert_guard_no_ok placed failedTree nodeOutcome
-        (by rw [nodeSevm]; exact fork)).elim
+      exact (sync_revert_guard_no_okH placed failedTree nodeOutcome
+        (by rw [nodeSevm]; exact stateGas)).elim
     · exact ⟨tree, pc.trans (by decide +kernel)⟩
   have nodeK : cursor.K = atGuard.K := by
     rcases atGuard with ⟨f, pc, a, m, K⟩
@@ -1610,8 +1613,8 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
       Line.of_inv Devm.output (by line_inv) flags
     have requestOutput : requestPost.output = entry.devm.output := by
       rw [requestState]
-      change (afterSload sevm (afterSstore sevm entry.devm 12 0) 6).output = entry.devm.output
-      rw [afterSload_output, afterSstore_output]
+      change (afterSloadH sevm (afterSstoreH sevm entry.devm 12 0) 6).output = entry.devm.output
+      rw [afterSloadH_output, afterSstoreH_output]
     exact requestOutput.symm.trans flagsOutput
   have pushLogs : before.devm.logs = guard.devm.logs := Ninst.Hinv.inv (f := Devm.logs) primitive.toRun
   have pushOutput : before.devm.output = guard.devm.output := Ninst.Hinv.inv (f := Devm.output) primitive.toRun
@@ -1626,15 +1629,15 @@ theorem sync_root_first_guard_open_request_parent {sevm : Sevm} {b post : Devm} 
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans (path.snoc pushEdge |>.snoc edge),
     chosen.2, nodeSevm, nodeOutcome, chosen.1, nodeContinuation, placed, actualFree, storage, memory, T, stackFact, valueZero, entryUnlocked, finalContinuation, tailFact, logs, output, guarded⟩
 
+
 /-- The actual certified continuation immediately after sync's first STATICCALL. -/
 def syncFirstAfterCall : SFunc := .next (.reg .iszero) (.next (.reg (.dup 0))
   (.next (.reg .iszero) (.next (.push [0x1e, 0xf1] (by decide)) (.branch t_1ee8_c31 t_1ef1_c31))))
 
 open scoped LogOutputHinv in
-/-- Raw success reaches the actual first STATICCALL cursor in the root frame,
-with its complete pending wrapper continuation retained. -/
-theorem sync_root_first_static_cursor_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_first_static_cursor_request_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1654,12 +1657,12 @@ theorem sync_root_first_static_cursor_request_parent {sevm : Sevm} {b post : Dev
         node.devm.logs = b.logs ∧ node.devm.output = b.output ∧
         (node.devm.getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, continuation, destOk, rootFree, destStorage, destMemory, T, destStack, valueZero, entryUnlocked, exactContinuation, tailFact, destLogs, destOutput, destGuarded⟩ := sync_root_first_guard_open_request_parent codeEq fork selector run
+    destTree, continuation, destOk, rootFree, destStorage, destMemory, T, destStack, valueZero, entryUnlocked, exactContinuation, tailFact, destLogs, destOutput, destGuarded⟩ := sync_root_first_guard_open_request_parentH codeEq stateGas bal selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨entry, atEntry, destEdge, destJump, destSynthetic, destStateful, entryOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome (by rw [destSevm]; exact fork)
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome (by rw [destSevm]; exact stateGas)
   obtain ⟨destNext, burn⟩ := of_jumpdest_run destJump
   have entryPc : entry.pc = 0x1ede := by rw [destPc] at destNext; exact destNext
   have entrySevm : entry.sevm = sevm := (Cursor.parentStep_sevm destEdge).trans destSevm
@@ -1676,8 +1679,8 @@ theorem sync_root_first_static_cursor_request_parent {sevm : Sevm} {b post : Dev
     cases destSynthetic
     exact ⟨rfl, rfl⟩
   obtain ⟨node, cursor, path, nodePc, nodeSevm, nodeOutcome, placed, tree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk ns (.next (.exec .staticcall) syncFirstAfterCall)
-      entryShape.1 entryOutcome (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk ns (.next (.exec .staticcall) syncFirstAfterCall)
+      entryShape.1 entryOutcome (by rw [entrySevm]; exact stateGas)
   have storeLine : entry.devm.getStor = node.devm.getStor :=
     Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
   have storage : node.devm.getStor sevm.currentTarget =
@@ -1742,10 +1745,10 @@ theorem sync_root_first_static_cursor_request_parent {sevm : Sevm} {b post : Dev
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans path, finalPc,
     nodeSevm.trans entrySevm, nodeOutcome.trans entryOutcome, tree, nodeContinuation, placed, actualFree, storage, memory, g, T, stackFact, valueZero, entryUnlocked, finalContinuation, tailFact, logs, output, guarded⟩
 
-/-- The first actual STATICCALL is an authenticated raw occurrence in the
-root's own chronology, with the same supplied wrapper continuation. -/
-theorem sync_root_first_static_occurrence_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_first_static_occurrence_request_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1769,7 +1772,7 @@ theorem sync_root_first_static_occurrence_request_parent {sevm : Sevm} {b post :
         occurrence.node.devm.logs = b.logs ∧ occurrence.node.devm.output = b.output ∧
         (occurrence.node.devm.getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
   obtain ⟨node, cursor, path, pc, sameSevm, outcome, tree, continuation, placed, rootFree, storage, memory, g, T, stack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output, guarded⟩ :=
-    sync_root_first_static_cursor_request_parent codeEq fork selector run
+    sync_root_first_static_cursor_request_parentH codeEq stateGas bal selector run
   have operands := cursor_staticcall_operands placed tree
   have check := placed.check
   rw [tree] at check
@@ -1795,10 +1798,10 @@ theorem sync_root_first_static_occurrence_request_parent {sevm : Sevm} {b post :
   refine ⟨occurrence, cursor, ?_, ?_, ?_, ?_, instruction, tree, continuation, ?_, ?_, ?_, ?_, ?_⟩
   all_goals rw [sameNode]; assumption
 
-/-- Crossing the authenticated first occurrence fixes its actual primitive
-result and recursive slot to the real parent continuation. -/
-theorem sync_root_first_static_step_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_first_static_step_request_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -1824,9 +1827,9 @@ theorem sync_root_first_static_step_request_parent {sevm : Sevm} {b post : Devm}
         occurrence.node.devm.logs = b.logs ∧ occurrence.node.devm.output = b.output := by
   obtain ⟨occurrence, before, path, pc, sameSevm, outcome,
     instruction, tree, continuation, placed, operands, storage, memory, gw, T, stack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output, _⟩ :=
-    sync_root_first_static_occurrence_request_parent codeEq fork selector run
+    sync_root_first_static_occurrence_request_parentH codeEq stateGas bal selector run
   obtain ⟨node, cursor, edge, nextPc, primitive, synthetic, stateful, finalOk⟩ :=
-    cursor_next_forward cert_check placed tree outcome (by rw [sameSevm]; exact fork)
+    cursor_next_forwardH cert_check placed tree outcome (by rw [sameSevm]; exact stateGas)
   have nodeSevm : node.sevm = sevm := (Cursor.parentStep_sevm edge).trans sameSevm
   have nodeOutcome : node.exn = .ok post := by
     have same : node.exn = occurrence.node.exn := by
@@ -1863,11 +1866,10 @@ theorem sync_root_first_static_step_request_parent {sevm : Sevm} {b post : Devm}
   exact ⟨occurrence, node, cursor, ⟨path, pc, sameSevm, instruction, edge, nodePc,
     nodeSevm, nodeOutcome, result, witnessed, shape.1, retained, finalOk, operands⟩, storage, memory, gw, T, stack, valueZero, entryUnlocked, finalContinuation, tailFact, logs, output⟩
 
-/-- Either certified failed balance-call branch copies returndata then REVERTs,
-so it cannot belong to the successful root's same-frame suffix. -/
-theorem sync_balance_failed_call_no_ok (site : SyncBalanceSite) {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
+
+theorem sync_balance_failed_call_no_okH (site : SyncBalanceSite) {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
     (ok : CursorOK code cert node cursor) (tree : cursor.f = site.failureTree)
-    (success : node.exn = .ok post) (fork : CoveredFork node.sevm.benvStat.fork) : False := by
+    (success : node.exn = .ok post) (stateGas : node.sevm.benvStat.rules.stateGas = none) : False := by
   let ns : List Ninst := [.reg .returndatasize, .push [0x00] (by decide),
     .reg (.dup 0), .reg .returndatacopy, .reg .returndatasize, .push [0x00] (by decide)]
   have lead : cursor.f = ns.foldr SFunc.next (.last .revert) := by
@@ -1875,7 +1877,7 @@ theorem sync_balance_failed_call_no_ok (site : SyncBalanceSite) {node : Exec.Der
       simpa only [ns, List.foldr_cons, List.foldr_nil, SyncBalanceSite.failureTree,
         t_1ee8_c31, t_1f85_c31] using tree
   obtain ⟨terminal, lastCursor, path, pc, sameSevm, sameOutcome, lastOk, lastTree⟩ :=
-    cursor_nexts_forward cert_check ok ns (.last .revert) lead success fork
+    cursor_nexts_forwardH cert_check ok ns (.last .revert) lead success stateGas
   have opcode : byteAt code lastCursor.pc = some (Linst.toUInt8 .revert) := by
     have check := lastOk.check
     rw [lastTree] at check
@@ -1885,6 +1887,7 @@ theorem sync_balance_failed_call_no_ok (site : SyncBalanceSite) {node : Exec.Der
     exact byteAt_linst_at opcode
   exact Linst.revert_not_ok
     ((terminal.exc.last_inv instruction).symm.trans (sameOutcome.trans success))
+
 
 /-- The two literal successful flag tests have these actual raw branch PCs. -/
 def syncBalanceFlagPc : SyncBalanceSite → Nat
@@ -1897,13 +1900,11 @@ def syncBalanceAfterCall (site : SyncBalanceSite) : SFunc :=
     (.next (.push site.returnDestination (by cases site <;> decide))
       (.branch site.failureTree site.returnTree))))
 
-/-- Either concrete balance-call flag test crosses the actual parent suffix;
-raw success excludes its REVERT arm and preserves the same full continuation. -/
-theorem sync_balance_flag_cursor (site : SyncBalanceSite)
+theorem sync_balance_flag_cursorH (site : SyncBalanceSite)
     {F : Exec.Deriv} {κ : Cursor} {post : Devm}
     (ok : CursorOK code cert F κ) (tree : κ.f = syncBalanceAfterCall site)
     (location : F.pc + 6 = syncBalanceFlagPc site)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (stateGas : F.sevm.benvStat.rules.stateGas = none) :
     ∃ (guard node : Exec.Deriv) (cursor : Cursor),
       Exec.Deriv.ParentPrefix F guard ∧ guard.pc = syncBalanceFlagPc site ∧
       Line.Run F.sevm F.devm [.reg .iszero, .reg (.dup 0), .reg .iszero,
@@ -1920,11 +1921,11 @@ theorem sync_balance_flag_cursor (site : SyncBalanceSite)
   have lead : κ.f = ns.foldr SFunc.next tail := tree
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome,
     beforeOk, beforeTree, line, beforeK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check ok ns tail lead success
-      (by rw [sameSevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check ok ns tail lead success
+      (by rw [sameSevm]; exact stateGas)
   obtain ⟨guard, atGuard, pushEdge, pushPc, pushPrimitive, pushSynthetic, pushStateful, guardOk⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree (beforeOutcome.trans success)
-      (by rw [beforeSevm, sameSevm]; exact fork)
+    cursor_next_forwardH cert_check beforeOk beforeTree (beforeOutcome.trans success)
+      (by rw [beforeSevm, sameSevm]; exact stateGas)
   have guardPc : guard.pc = syncBalanceFlagPc site := by
     change before.pc = F.pc + 3 at beforePc
     have actualPushPc : guard.pc = before.pc + 3 := by cases site <;> exact pushPc
@@ -1947,8 +1948,8 @@ theorem sync_balance_flag_cursor (site : SyncBalanceSite)
     exact same.trans (beforeOutcome.trans success)
   obtain ⟨a, top⟩ := pushShape.2.1
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check guardOk pushShape.1 top guardOutcome
-      (by rw [guardSevm]; exact fork)
+    cursor_branch_forwardH cert_check guardOk pushShape.1 top guardOutcome
+      (by rw [guardSevm]; exact stateGas)
   have nodeSevm : node.sevm = sevm := (Cursor.parentStep_sevm edge).trans guardSevm
   have nodeOutcome : node.exn = .ok post := by
     have same : node.exn = guard.exn := by cases edge <;> rfl
@@ -1956,8 +1957,8 @@ theorem sync_balance_flag_cursor (site : SyncBalanceSite)
   have chosen : cursor.f = site.returnTree ∧
       node.pc = (Bytes.toB256 site.returnDestination).toNat := by
     rcases branch with ⟨failedTree, failedPc⟩ | ⟨tree, pc⟩
-    · exact (sync_balance_failed_call_no_ok site placed failedTree nodeOutcome
-        (by rw [nodeSevm]; exact fork)).elim
+    · exact (sync_balance_failed_call_no_okH site placed failedTree nodeOutcome
+        (by rw [nodeSevm]; exact stateGas)).elim
     · exact ⟨tree, pc⟩
   have nodeK : cursor.K = atGuard.K := by
     rcases atGuard with ⟨f, pc, a, m, K⟩
@@ -2005,11 +2006,10 @@ theorem sync_balance_flag_cursor (site : SyncBalanceSite)
   exact ⟨guard, node, cursor, path.snoc pushEdge, guardPc, wholeLine, actualJump,
     returnedFree, chosen.2, nodeSevm, nodeOutcome.trans success.symm, chosen.1, finalK, placed⟩
 
-/-- The actual first call's returned flag takes the successful guard arm.
-The original occurrence, recursive primitive and real flag-testing line remain
-available for the child-message inversion; no successful child is assumed. -/
-theorem sync_root_first_return_guard_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_first_return_guard_request_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -2040,12 +2040,12 @@ theorem sync_root_first_return_guard_request_parent {sevm : Sevm} {b post : Devm
         occurrence.node.devm.logs = b.logs ∧ occurrence.node.devm.output = b.output := by
   obtain ⟨occurrence, returned, afterCall, ⟨rootPath, callPc, callSevm, instruction,
     callEdge, returnedPc, returnedSevm, returnedOutcome, result, primitive,
-    returnedTree, continuation, returnedOk, operands⟩, storage, memory, gw, T, stack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩ := sync_root_first_static_step_request_parent codeEq fork selector run
+    returnedTree, continuation, returnedOk, operands⟩, storage, memory, gw, T, stack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩ := sync_root_first_static_step_request_parentH codeEq stateGas bal selector run
   have location : returned.pc + 6 = syncBalanceFlagPc .first := by rw [returnedPc]; rfl
   obtain ⟨guard, node, cursor, guardPath, guardPc, line, jumped, returnedFree,
     nodePc, nodeSevm, nodeOutcome, tree, sameK, placed⟩ :=
-    sync_balance_flag_cursor .first returnedOk returnedTree location returnedOutcome
-      (by rw [returnedSevm]; exact fork)
+    sync_balance_flag_cursorH .first returnedOk returnedTree location returnedOutcome
+      (by rw [returnedSevm]; exact stateGas)
   have retained : ∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78 := by
     rw [sameK]; exact continuation
   have actualPc : node.pc = 0x1ef1 := nodePc.trans (by decide +kernel)
@@ -2062,6 +2062,7 @@ theorem sync_root_first_return_guard_request_parent {sevm : Sevm} {b post : Devm
     returnedFree, returnedNextPc, rootPath.1.snoc callEdge |>.trans returnedFree.1,
     actualPc, nodeSevm.trans returnedSevm, nodeOutcome.trans returnedOutcome,
     tree, retained, placed, operands⟩, storage, memory, gw, T, stack, valueZero, entryUnlocked, finalContinuation, tailFact, logs, output⟩
+
 
 /-- The exact four-op first return guard can reach its certified successful
 arm only from a nonzero primitive return flag. -/
@@ -2094,11 +2095,9 @@ theorem sync_balance_return_flag_state (site : SyncBalanceSite) {sevm : Sevm}
     rw [zero] at condition
     exact nonzero condition.symm
 
-/-- The actual first occurrence reaches the tested successful arm with a
-set return flag, bounded returndata and an authentic successful static message.
-The supplied message slot is not yet identified with the occurrence slot here. -/
-theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem sync_root_first_static_answered_request_state_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -2116,7 +2115,7 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
       occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S ∧
       StaticCallPost occurrence.node.devm returned.devm S occurrence.node.devm.memory
         ii is oi os 1 out ∧ out.length < 2^256 ∧
-      StaticAnswered sevm occurrence.node.devm t.toAdr
+      StaticAnsweredH sevm occurrence.node.devm t.toAdr
         (occurrence.node.devm.memory.read ii.toNat is.toNat).1 out ∧
       (∃ (frame : Jaune.Frame) (resume : Resume),
         Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
@@ -2135,7 +2134,7 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
   obtain ⟨occurrence, returned, guard, node, cursor, ⟨path, pc, sameSevm, instruction,
     edge, result, primitive, guardPath, guardPc, line, jumped, returnedFree, returnedPc, nodePath, nodePc,
     nodeSevm, outcome, tree, continuation, placed, g, t, ii, is, oi, os, S, stack⟩, storage, memory, gw, T, requestStack, valueZero, entryUnlocked, exactContinuation, tailFact, preLogs, preOutput⟩ :=
-    sync_root_first_return_guard_request_parent codeEq fork selector run
+    sync_root_first_return_guard_request_parentH codeEq stateGas bal selector run
   have literalOperands := stack.symm.trans requestStack
   simp only [List.cons.injEq] at literalOperands
   obtain ⟨_, token, inputOffset, inputSize, outputOffset, outputSize, sameTail⟩ := literalOperands
@@ -2148,7 +2147,7 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
       (.exec .staticcall) returned.devm := by
     rw [← St.self stack rfl]
     exact primitive.toRun
-  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_bounded fork call
+  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_boundedH stateGas call
   have actualLine : Line.Run sevm
       (St returned.devm (flag :: S) returned.devm.memory returned.devm.gasLeft)
       [.reg .iszero, .reg (.dup 0), .reg .iszero, .push [0x1e, 0xf1] (by decide)] guard.devm := by
@@ -2189,7 +2188,7 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
   have driverSpawn : ∃ (frame : Jaune.Frame) (resume : Resume),
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn frame resume (occurrence.node.pc + 1) := by
-    rcases of_step_staticcall_val_with_depth_frame_cause hp occurrence.filled actualStep fork
+    rcases of_step_staticcall_val_with_depth_frame_causeH hp occurrence.filled actualStep stateGas
       with failed | success
     · have zero := failed.1
       rw [hpost.stack] at zero
@@ -2210,11 +2209,10 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
   exact ⟨    ⟨path, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc, nodePath, nodePc,
     nodeSevm, outcome, tree, continuation, placed, stack, hpost, bound, answered one, driverSpawn⟩, storage, memory, token, inputOffset, inputSize, outputOffset, outputSize⟩
 
-/-- The actual tested first STATICCALL processes the authenticated occurrence's
-supplied slot and resumes its clean child, preserving delegated-code resolution
-the exact machine spawn, and the genuine immediate or interpreted frame entry. -/
-theorem sync_root_first_static_settlement_request_state_parent {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem sync_root_first_static_settlement_request_state_parentH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -2239,10 +2237,7 @@ theorem sync_root_first_static_settlement_request_state_parent {sevm : Sevm} {b 
         parent.state = occurrence.node.devm.state ∧
         parent.memory = occurrence.node.devm.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
         parent.logs = occurrence.node.devm.logs ∧ parent.output = occurrence.node.devm.output ∧
-        ((getDelegatedCodeAddress (occurrence.node.devm.getCode t.toAdr) = none ∧
-            na = t.toAdr ∧ childCode = occurrence.node.devm.getCode t.toAdr ∧ dp = false) ∨
-          (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode t.toAdr) = some d ∧
-            na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+        (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm t.toAdr na childCode dp) ∧
         Xlot.Filled occurrence.slot ∧
         ProcessMessage
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
@@ -2312,14 +2307,14 @@ theorem sync_root_first_static_settlement_request_state_parent {sevm : Sevm} {b 
   obtain ⟨occurrence, returned, node, cursor, g, t, ii, is, oi, os, S, out,
     ⟨⟨path, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc, nodePath, nodePc,
     nodeSevm, outcome, tree, continuation, placed, stack, hpost, bound, answered, callSpawn⟩, storage, memory, token, inputOffset, inputSize, outputOffset, outputSize⟩, nodeStor, nodeMemory, nodeData, nodeStack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩ :=
-    sync_root_first_static_answered_request_state_parent codeEq fork selector run
+    sync_root_first_static_answered_request_state_parentH codeEq stateGas bal selector run
   have hp : (g :: t :: ii :: is :: oi :: os :: S) <<+ occurrence.node.devm.stack := by
     rw [stack]
     simpa only [List.append_nil] using pref_append (g :: t :: ii :: is :: oi :: os :: S) []
   have actualStep : Ninst.StepRun occurrence.node.pc sevm occurrence.node.devm
       Ninst.staticcall occurrence.slot (.ok returned.devm) := by
     simpa only [sameSevm, instruction, result] using occurrence.stepRun
-  rcases of_step_staticcall_val_with_depth_frame_cause hp occurrence.filled actualStep fork
+  rcases of_step_staticcall_val_with_depth_frame_causeH hp occurrence.filled actualStep stateGas
     with failed | success
   · have zero := failed.1
     rw [hpost.stack] at zero
@@ -2427,11 +2422,13 @@ theorem sync_root_first_static_settlement_request_state_parent {sevm : Sevm} {b 
             resumedRaw, next, exactRun⟩ }
       exact ⟨located, member, entering, rfl, HEq.rfl, rfl, rfl, rfl⟩
 
-theorem sync_root_first_static_finite_request_reply_state_parent {K : WriterKey → Prop}
+
+theorem sync_root_first_static_finite_request_reply_state_parentH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -2462,10 +2459,7 @@ theorem sync_root_first_static_finite_request_reply_state_parent {K : WriterKey 
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -2485,7 +2479,7 @@ theorem sync_root_first_static_finite_request_reply_state_parent {K : WriterKey 
       parentMemory, parentLogs, parentOutput, authentication, filled, process, clean,
       resumed, returnedState, returnedData, returnedMemory, returnedStack, spawned,
       driverSpawn, entry⟩, storage, memory, token, inputOffset, inputSize, outputOffset, outputSize⟩, nodeStor, nodeMemory, nodeData, nodeStack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩ :=
-    sync_root_first_static_settlement_request_state_parent codeEq fork selector run
+    sync_root_first_static_settlement_request_state_parentH codeEq stateGas bal selector run
   subst ii
   subst is
   subst oi
@@ -2533,19 +2527,18 @@ theorem sync_root_first_static_finite_request_reply_state_parent {K : WriterKey 
     rw [tokenAddress, calldata, ← pair] at driverSpawn
     exact driverSpawn
 
+
 /-- The two literal balance-return width guards share this non-executing line. -/
 def syncReturnWidthLine : List Ninst :=
   [.reg .pop, .reg .pop, .reg .pop, .reg .pop,
     .push [0x40] (by decide), .reg .mload, .reg .returndatasize,
     .push [0x20] (by decide), .reg (.dup 1), .reg .lt, .reg .iszero]
 
-/-- A real balance-return cursor crosses its checked width guard. Raw success
-excludes the concrete short-return REVERT; the same parent continuation and
-original child counter are preserved through every actual edge. -/
-theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
+theorem sync_balance_return_cursor_traceH (site : SyncBalanceSite)
     {F : Exec.Deriv} {κ : Cursor} {post : Devm}
     (ok : CursorOK code cert F κ) (tree : κ.f = site.returnTree)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork) :
+    (success : F.exn = .ok post) (stateGas : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none) :
     ∃ (N : Exec.Deriv) (κ' : Cursor),
       (Exec.Deriv.ExecFreeUntil F N ∧ N.sevm = F.sevm ∧ N.exn = F.exn ∧
       N.pc = (Bytes.toB256 site.decodeDestination).toNat ∧
@@ -2573,7 +2566,7 @@ theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
     rw [ok.code_eq, ok.pc_eq]
     exact byteAt_jinst_at opcode
   obtain ⟨entry, atEntry, destEdge, jumpedDest, syntheticDest, statefulDest, entryOk⟩ :=
-    cursor_jinst_forward cert_check ok instruction success fork
+    cursor_jinst_forwardH cert_check ok instruction success stateGas
   have entrySevm : entry.sevm = F.sevm := Cursor.parentStep_sevm destEdge
   have entryOutcome : entry.exn = F.exn := by cases destEdge <;> rfl
   have fits : site.decodeDestination.length ≤ 32 := by cases site <;> decide
@@ -2589,12 +2582,12 @@ theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
       cases syntheticDest <;> exact ⟨rfl, rfl⟩
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome,
     beforeOk, beforeTree, line, beforeK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk syncReturnWidthLine tail
-      entryShape.1 (entryOutcome.trans success) (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk syncReturnWidthLine tail
+      entryShape.1 (entryOutcome.trans success) (by rw [entrySevm]; exact stateGas)
   obtain ⟨guard, atGuard, pushEdge, pushPc, primitive, pushSynthetic, pushStateful, guardOk⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree
+    cursor_next_forwardH cert_check beforeOk beforeTree
       (beforeOutcome.trans (entryOutcome.trans success))
-      (by rw [beforeSevm, entrySevm]; exact fork)
+      (by rw [beforeSevm, entrySevm]; exact stateGas)
   have pushShape : atGuard.f = .branch site.shortTree site.decodeTree ∧
       (∃ a, atGuard.a = .const (Bytes.toB256 site.decodeDestination) :: a) ∧
       atGuard.K = atPush.K := by
@@ -2623,8 +2616,8 @@ theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
       rw [guardOk.code_eq, guardOk.pc_eq]
       exact byteAt_jinst_at check.1.1
   obtain ⟨N, κ', edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check guardOk pushShape.1 top (guardOutcome.trans success)
-      (by rw [guardSevm]; exact fork)
+    cursor_branch_forwardH cert_check guardOk pushShape.1 top (guardOutcome.trans success)
+      (by rw [guardSevm]; exact stateGas)
   have nodeSevm : N.sevm = F.sevm := (Cursor.parentStep_sevm edge).trans guardSevm
   have nodeOutcome : N.exn = F.exn := by
     have same : N.exn = guard.exn := by cases edge <;> rfl
@@ -2634,8 +2627,8 @@ theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
     rcases branch with ⟨failedTree, failedPc⟩ | taken
     · have failedTree : κ'.f = t_000c_c0 := by
         cases site <;> exact failedTree
-      exact (sync_revert_guard_no_ok placed failedTree (nodeOutcome.trans success)
-        (by rw [nodeSevm]; exact fork)).elim
+      exact (sync_revert_guard_no_okH placed failedTree (nodeOutcome.trans success)
+        (by rw [nodeSevm]; exact stateGas)).elim
     · exact taken
   have nodeK : κ'.K = atGuard.K := by
     rcases atGuard with ⟨f, pc, a, m, K⟩
@@ -2697,11 +2690,10 @@ theorem sync_balance_return_cursor_trace (site : SyncBalanceSite)
     nodeK.trans (pushShape.2.2.trans (beforeK.trans entryShape.2)), placed⟩,
     entry, guard, destEdge, entryPc, jumpedDest, wholeLine, guardPc, edge, actualJump⟩
 
-/-- The second actual request and code guard are reached through the pending
-parent suffix, with no intervening child-producing instruction. -/
-theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}
+
+theorem sync_second_guard_from_decodedH {sevm : Sevm} {post : Devm}
     {F : Exec.Deriv} {atF : Cursor}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (pc : F.pc = 0x1f0a) (sameSevm : F.sevm = sevm) (outcome : F.exn = .ok post)
     (tree : atF.f = SyncBalanceSite.first.afterDecodeTree) (placed : CursorOK code cert F atF) :
     ∃ (codeInput before guard node : Exec.Deriv) (cursor : Cursor),
@@ -2722,16 +2714,16 @@ theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}
     rfl
   obtain ⟨codeInput, atInput, inputPath, inputPc, inputSevm, inputOutcome,
     inputOk, inputTree, requestLine, inputK, requestFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check placed syncSecondRequestLine
+    cursor_nexts_line_cont_free_forwardH cert_check placed syncSecondRequestLine
       (syncCodeGuardLine.foldr SFunc.next tail) requestShape outcome
-      (by rw [sameSevm]; exact fork)
+      (by rw [sameSevm]; exact stateGas)
   obtain ⟨before, atPush, path, beforePc, beforeSevm, beforeOutcome,
     beforeOk, beforeTree, guardLine, beforeK, guardFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check inputOk syncCodeGuardLine tail
-      inputTree (inputOutcome.trans outcome) (by rw [inputSevm, sameSevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check inputOk syncCodeGuardLine tail
+      inputTree (inputOutcome.trans outcome) (by rw [inputSevm, sameSevm]; exact stateGas)
   obtain ⟨guard, atGuard, pushEdge, pushPc, primitive, pushSynthetic, pushStateful, guardOk⟩ :=
-    cursor_next_forward cert_check beforeOk beforeTree (beforeOutcome.trans (inputOutcome.trans outcome))
-      (by rw [beforeSevm, inputSevm, sameSevm]; exact fork)
+    cursor_next_forwardH cert_check beforeOk beforeTree (beforeOutcome.trans (inputOutcome.trans outcome))
+      (by rw [beforeSevm, inputSevm, sameSevm]; exact stateGas)
   have guardPc : guard.pc = 0x1f75 := by
     change codeInput.pc = F.pc + 100 at inputPc
     change before.pc = codeInput.pc + 4 at beforePc
@@ -2755,8 +2747,8 @@ theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}
     exact same.trans (beforeOutcome.trans (inputOutcome.trans outcome))
   obtain ⟨a, top⟩ := pushShape.2.1
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, nodeOk, branch⟩ :=
-    cursor_branch_forward cert_check guardOk pushShape.1 top guardOutcome
-      (by rw [guardSevm]; exact fork)
+    cursor_branch_forwardH cert_check guardOk pushShape.1 top guardOutcome
+      (by rw [guardSevm]; exact stateGas)
   have requestSpan : Exec.Deriv.ExecFreeUntil F codeInput := by
     apply requestFree
     intro n member x equal
@@ -2789,8 +2781,8 @@ theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}
   have chosen : cursor.f = t_1f7a_c31 ∧ node.pc = 0x1f7a := by
     rcases branch with ⟨failedTree, failedPc⟩ | ⟨chosenTree, chosenPc⟩
     · have failedTree : cursor.f = t_000c_c0 := failedTree
-      exact (sync_revert_guard_no_ok nodeOk failedTree nodeOutcome
-        (by rw [nodeSevm]; exact fork)).elim
+      exact (sync_revert_guard_no_okH nodeOk failedTree nodeOutcome
+        (by rw [nodeSevm]; exact stateGas)).elim
     · exact ⟨chosenTree, chosenPc.trans (by decide +kernel)⟩
   have nodeK : cursor.K = atGuard.K := by
     rcases atGuard with ⟨f, pc, a, m, K⟩
@@ -2803,15 +2795,14 @@ theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}
   · simpa only [inputSevm] using guardLine
   · exact nodeK.trans (pushShape.2.2.trans (beforeK.trans inputK))
 
+
 /-- The actual certified continuation immediately after the second STATICCALL. -/
 def syncSecondAfterCall : SFunc := .next (.reg .iszero) (.next (.reg (.dup 0))
   (.next (.reg .iszero) (.next (.push [0x1f, 0x8e] (by decide)) (.branch t_1f85_c31 t_1f8e_c31))))
 
-/-- The second actual call is reached from the first supplied parent suffix;
-its occurrence is authenticated by the same root derivation and full cursor. -/
-theorem sync_second_static_occurrence_from_guard {sevm : Sevm} {post : Devm}
+theorem sync_second_static_occurrence_from_guardH {sevm : Sevm} {post : Devm}
     {root : Exec.Deriv} (first : Exec.NinstOccurrence root) (returned dest : Exec.Deriv)
-    (atDest : Cursor) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (atDest : Cursor) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (rootFree : Exec.Deriv.ExecFreeUntil root first.node) (firstPc : first.node.pc = 0x1ee0)
     (callEdge : Exec.Deriv.ParentStep returned first.node)
     (returnedPc : returned.pc = first.node.pc + 1) (result : first.stepResult = .ok returned.devm)
@@ -2850,7 +2841,7 @@ theorem sync_second_static_occurrence_from_guard {sevm : Sevm} {post : Devm}
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
   obtain ⟨entry, atEntry, destEdge, destJump, destSynthetic, destStateful, entryOk⟩ :=
-    cursor_jinst_forward cert_check destOk instruction destOutcome (by rw [destSevm]; exact fork)
+    cursor_jinst_forwardH cert_check destOk instruction destOutcome (by rw [destSevm]; exact stateGas)
   obtain ⟨destNext, burn⟩ := of_jumpdest_run destJump
   have entryPc : entry.pc = 0x1f7b := by rw [destPc] at destNext; exact destNext
   have entrySevm : entry.sevm = sevm := (Cursor.parentStep_sevm destEdge).trans destSevm
@@ -2867,8 +2858,8 @@ theorem sync_second_static_occurrence_from_guard {sevm : Sevm} {post : Devm}
     cases destSynthetic
     exact ⟨rfl, rfl⟩
   obtain ⟨node, cursor, path, nodePc, nodeSevm, nodeOutcome, placed, tree, line, sameK, linearFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check entryOk ns (.next (.exec .staticcall) syncSecondAfterCall)
-      entryShape.1 entryOutcome (by rw [entrySevm]; exact fork)
+    cursor_nexts_line_cont_free_forwardH cert_check entryOk ns (.next (.exec .staticcall) syncSecondAfterCall)
+      entryShape.1 entryOutcome (by rw [entrySevm]; exact stateGas)
   have linear : Exec.Deriv.ExecFreeUntil entry node := by
     apply linearFree
     intro n member x equal
@@ -2914,11 +2905,10 @@ theorem sync_second_static_occurrence_from_guard {sevm : Sevm} {post : Devm}
     destFree, sameK.trans entryShape.2, entry, destEdge, destJump, ?_⟩
   simpa only [entrySevm, destSevm, ns] using line
 
-/-- Crossing the second real occurrence preserves its supplied recursive
-slot and binds the result to the actual pending parent successor. -/
-theorem sync_second_static_step_from_occurrence {sevm : Sevm} {post : Devm}
+
+theorem sync_second_static_step_from_occurrenceH {sevm : Sevm} {post : Devm}
     {root : Exec.Deriv} (second : Exec.NinstOccurrence root) {before : Cursor}
-    (fork : CoveredFork sevm.benvStat.fork) (pc : second.node.pc = 0x1f7d)
+    (stateGas : sevm.benvStat.rules.stateGas = none) (pc : second.node.pc = 0x1f7d)
     (sameSevm : second.node.sevm = sevm) (outcome : second.node.exn = .ok post)
     (instruction : second.instruction = .exec .staticcall)
     (tree : before.f = .next (.exec .staticcall) syncSecondAfterCall)
@@ -2931,7 +2921,7 @@ theorem sync_second_static_step_from_occurrence {sevm : Sevm} {post : Devm}
         (.exec .staticcall) returned.devm ∧
       cursor.f = syncSecondAfterCall ∧ cursor.K = before.K ∧ CursorOK code cert returned cursor := by
   obtain ⟨returned, cursor, edge, nextPc, primitive, synthetic, stateful, finalOk⟩ :=
-    cursor_next_forward cert_check placed tree outcome (by rw [sameSevm]; exact fork)
+    cursor_next_forwardH cert_check placed tree outcome (by rw [sameSevm]; exact stateGas)
   have returnedSevm : returned.sevm = sevm := (Cursor.parentStep_sevm edge).trans sameSevm
   have returnedOutcome : returned.exn = .ok post := by
     have same : returned.exn = second.node.exn := by
@@ -2962,13 +2952,12 @@ theorem sync_second_static_step_from_occurrence {sevm : Sevm} {post : Devm}
   exact ⟨returned, cursor, edge, returnedPc, returnedSevm, returnedOutcome,
     result, witnessed, shape.1, shape.2, finalOk⟩
 
-/-- The second actual flag test reaches its successful arm and authenticates
-its nonzero return, retaining the original counter1 suffix and supplied slot. -/
-theorem sync_second_static_answered_from_step_observations {root : Exec.Deriv}
+
+theorem sync_second_static_answered_from_step_observationsH {root : Exec.Deriv}
     {sevm : Sevm} {post : Devm}
     (second : Exec.NinstOccurrence root) (returned : Exec.Deriv) (afterCall : Cursor)
     {g t ii is oi os : B256} {S : List B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (primitive : Ninst.RunWith (Cursor.DescOf second.node) sevm second.node.devm
       Ninst.staticcall returned.devm)
     (returnedPc : returned.pc = 0x1f7e) (returnedSevm : returned.sevm = sevm)
@@ -2982,7 +2971,7 @@ theorem sync_second_static_answered_from_step_observations {root : Exec.Deriv}
       cursor.K = afterCall.K ∧ CursorOK code cert node cursor ∧
       StaticCallPost second.node.devm returned.devm S second.node.devm.memory
         ii is oi os 1 out ∧ out.length < 2^256 ∧
-      StaticAnswered sevm second.node.devm t.toAdr
+      StaticAnsweredH sevm second.node.devm t.toAdr
         (second.node.devm.memory.read ii.toNat is.toNat).1 out ∧
       node.devm.getStor = second.node.devm.getStor ∧
       node.devm.memory =
@@ -2993,15 +2982,15 @@ theorem sync_second_static_answered_from_step_observations {root : Exec.Deriv}
   have location : returned.pc + 6 = syncBalanceFlagPc .second := by rw [returnedPc]; rfl
   obtain ⟨guard, node, cursor, guardPath, guardPc, line, jumped, returnedFree,
     nodePc, nodeSevm, nodeOutcome, tree, sameK, placed⟩ :=
-    sync_balance_flag_cursor .second returnedOk returnedTree location returnedOutcome
-      (by rw [returnedSevm]; exact fork)
+    sync_balance_flag_cursorH .second returnedOk returnedTree location returnedOutcome
+      (by rw [returnedSevm]; exact stateGas)
   have call : Ninst.Run sevm
       (St second.node.devm (g :: t :: ii :: is :: oi :: os :: S)
         second.node.devm.memory second.node.devm.gasLeft)
       (.exec .staticcall) returned.devm := by
     rw [← St.self stack rfl]
     exact primitive.toRun
-  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_bounded fork call
+  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_boundedH stateGas call
   have actualLine : Line.Run sevm
       (St returned.devm (flag :: S) returned.devm.memory returned.devm.gasLeft)
       [.reg .iszero, .reg (.dup 0), .reg .iszero,
@@ -3034,16 +3023,14 @@ theorem sync_second_static_answered_from_step_observations {root : Exec.Deriv}
     nodeOutcome.trans returnedOutcome, tree, sameK, placed, hpost, bound, answered one,
     nodeStor, nodeMemory, nodeData, nodeStack, logs, output⟩
 
-/-- The genuine second supplied slot yields its actual immediate or
-interpreted context. Conditional root commitment retains that same child at
-original path[1], using the derived ordered first-spawn suffix equation. -/
-theorem sync_second_static_settlement_from_occurrence
+
+theorem sync_second_static_settlement_from_occurrenceH
     {sevm : Sevm} {b post : Devm} {G : Nat}
     {run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)}
     (second : Exec.NinstOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
     (returned : Exec.Deriv)
     {g t ii is oi os : B256} {S : List B256} {out : Bytes}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (sameSevm : second.node.sevm = sevm)
     (instruction : second.instruction = Ninst.staticcall)
     (result : second.stepResult = .ok returned.devm)
@@ -3062,10 +3049,7 @@ theorem sync_second_static_settlement_from_occurrence
         parent.state = second.node.devm.state ∧
         parent.memory = second.node.devm.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
         parent.logs = second.node.devm.logs ∧ parent.output = second.node.devm.output ∧
-        ((getDelegatedCodeAddress (second.node.devm.getCode t.toAdr) = none ∧
-            na = t.toAdr ∧ childCode = second.node.devm.getCode t.toAdr ∧ dp = false) ∨
-          (∃ d, getDelegatedCodeAddress (second.node.devm.getCode t.toAdr) = some d ∧
-            na = d ∧ childCode = second.node.devm.getCode d ∧ dp = true)) ∧
+        (CallCodeH sevm.benvStat.rules.delegationEnabled second.node.devm t.toAdr na childCode dp) ∧
         Xlot.Filled second.slot ∧
         ProcessMessage
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
@@ -3127,7 +3111,7 @@ theorem sync_second_static_settlement_from_occurrence
   have actualStep : Ninst.StepRun second.node.pc sevm second.node.devm
       Ninst.staticcall second.slot (.ok returned.devm) := by
     simpa only [sameSevm, instruction, result] using second.stepRun
-  rcases of_step_staticcall_val_with_depth_frame_cause hp second.filled actualStep fork
+  rcases of_step_staticcall_val_with_depth_frame_causeH hp second.filled actualStep stateGas
     with failed | success
   · have zero := failed.1
     rw [hpost.stack] at zero
@@ -3233,12 +3217,14 @@ theorem sync_second_static_settlement_from_occurrence
       exact ⟨located, member, entering, rfl, HEq.rfl, rfl, rfl, rfl⟩
 
 
-theorem sync_root_first_static_slot_request_turns_from_occurrence {K : WriterKey → Prop}
+
+theorem sync_root_first_static_slot_request_turns_from_occurrenceH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     {run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)}
     (occurrence : Exec.NinstOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
     (returned : Exec.Deriv)
@@ -3294,19 +3280,21 @@ theorem sync_root_first_static_slot_request_turns_from_occurrence {K : WriterKey
     rw [sameSevm]
     exact time
   exact ⟨nodeInstalled, free.descendantFramePaths_eq [] 0,
-    sync_static_slot_filtered_turns_inv (frame := syncSourceLockedFrame current ctx)
+    sync_static_slot_filtered_turns_invH (frame := syncSourceLockedFrame current ctx)
       (request := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
       (path := [0]) occurrence returned instruction result sem image nodeInstalled nodeRep
-      callTime (by rw [sameSevm]; exact fork)⟩
+      callTime (by rw [sameSevm]; exact stateGas) (by rw [sameSevm]; exact bal)⟩
 
-theorem sync_root_first_static_finite_request_reply_turns_state_parent {K : WriterKey → Prop}
+
+theorem sync_root_first_static_finite_request_reply_turns_state_parentH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -3338,10 +3326,7 @@ theorem sync_root_first_static_finite_request_reply_turns_state_parent {K : Writ
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -3384,23 +3369,25 @@ theorem sync_root_first_static_finite_request_reply_turns_state_parent {K : Writ
       (∃ tail : List B256, S = [164, 0x70a08231, current.state.token0.toB256] ++ (0x1fd4 :: 0x0257 :: tail)) ∧
       node.devm.logs = b.logs ∧ node.devm.output = b.output := by
   obtain ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out, facts, nodeStor, nodeMemory, nodeData, nodeStack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩ :=
-    sync_root_first_static_finite_request_reply_state_parent pair rep codeEq fork selector run
+    sync_root_first_static_finite_request_reply_state_parentH pair rep codeEq stateGas bal selector run
   have kept := facts
   obtain ⟨free, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc,
     nodePath, nodePc, nodeSevm, outcome, tree, continuation, placed, nodeRep, memory,
     stack, calldata, hpost, bound, returnedData, childOutput, clean, filled, process,
     resumed, authentication, driverSpawn⟩ := facts
   obtain ⟨nodeInstalled, ordered, turns⟩ :=
-    sync_root_first_static_slot_request_turns_from_occurrence sem image installed time fork
+    sync_root_first_static_slot_request_turns_from_occurrenceH sem image installed time stateGas bal
       occurrence returned free sameSevm instruction result nodeRep
   exact ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out,
     ⟨kept, nodeInstalled, ordered, turns⟩, nodeStor, nodeMemory, nodeData, nodeStack, valueZero, entryUnlocked, exactContinuation, tailFact, logs, output⟩
 
-theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
+
+theorem sync_balance_reply_decoded_from_cursorH (site : SyncBalanceSite)
     {F : Exec.Deriv} {κ : Cursor} {post : Devm} {S : List B256} {out : Bytes}
     (ok : CursorOK code cert F κ) (tree : κ.f = site.returnTree)
     (pc : F.pc = (Bytes.toB256 site.returnDestination).toNat)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork)
+    (success : F.exn = .ok post) (stateGas : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none)
     (stack : F.devm.stack = 0 :: S) (data : F.devm.returnData = out)
     (bound : out.length < 2^256) (ptr : PtrMem 128 192 F.devm.memory)
     (readWord : 32 ≤ out.length →
@@ -3419,7 +3406,7 @@ theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
   obtain ⟨decoder, decoderCursor, ⟨suffix, decoderSevm, decoderOutcome, decoderPc, decoderTree,
     decoderK, decoderOk⟩, entry, guard, destEdge, entryPc, destRun, widthLine, guardPc,
     guardEdge, guardRun⟩ :=
-    sync_balance_return_cursor_trace site ok tree success fork
+    sync_balance_return_cursor_traceH site ok tree success stateGas bal
   have nodeSelf : F.devm = St F.devm (0 :: S) F.devm.memory F.devm.gasLeft :=
     St.self stack rfl
   have entryBurn := (of_jumpdest_run destRun).2
@@ -3502,8 +3489,8 @@ theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
     exact byteAt_jinst_at opcode
   obtain ⟨decodeEntry, decodeEntryCursor, decodeDestEdge, decodeDestRun,
     decodeSynthetic, decodeStateful, decodeEntryOk⟩ :=
-    cursor_jinst_forward cert_check decoderOk decoderDestAt
-      (decoderOutcome.trans success) (by rw [decoderSevm]; exact fork)
+    cursor_jinst_forwardH cert_check decoderOk decoderDestAt
+      (decoderOutcome.trans success) (by rw [decoderSevm]; exact stateGas)
   have decodeEntrySevm : decodeEntry.sevm = decoder.sevm := Cursor.parentStep_sevm decodeDestEdge
   have decodeEntryOutcome : decodeEntry.exn = decoder.exn := by cases decodeDestEdge <;> rfl
   have decodeShape : decodeEntryCursor.f =
@@ -3517,10 +3504,10 @@ theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
       cases decodeSynthetic <;> exact ⟨rfl, rfl⟩
   obtain ⟨decoded, decodedCursor, decodePath, decodedPc, decodedSevm, decodedOutcome,
     decodedOk, decodedTree, decodeLine, decodedK, decodeFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check decodeEntryOk [.reg .pop, .reg .mload]
+    cursor_nexts_line_cont_free_forwardH cert_check decodeEntryOk [.reg .pop, .reg .mload]
       site.afterDecodeTree decodeShape.1
       (decodeEntryOutcome.trans (decoderOutcome.trans success))
-      (by rw [decodeEntrySevm, decoderSevm]; exact fork)
+      (by rw [decodeEntrySevm, decoderSevm]; exact stateGas)
   have decodeBurn := (of_jumpdest_run decodeDestRun).2
   have decodeEntryPc := (of_jumpdest_run decodeDestRun).1
   rw [decoderState] at decodeBurn
@@ -3558,14 +3545,16 @@ theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
     decodedK.trans (decodeShape.2.trans decoderK), decodedOk, long, decodedStor,
     decodedMemory, decodedData, a, x, y, afterPop.stack, loadGas, tailEq, decodedImage⟩
 
-theorem sync_root_first_static_finite_request_reply_turns_decoded_parent {K : WriterKey → Prop}
+
+theorem sync_root_first_static_finite_request_reply_turns_decoded_parentH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -3597,10 +3586,7 @@ theorem sync_root_first_static_finite_request_reply_turns_decoded_parent {K : Wr
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -3655,8 +3641,8 @@ theorem sync_root_first_static_finite_request_reply_turns_decoded_parent {K : Wr
           (∃ tail : List B256, R = 0x1fd4 :: 0x0257 :: tail) ∧
           decoded.devm.logs = b.logs ∧ decoded.devm.output = b.output := by
   obtain ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out, core, nodeStor, nodeMemory, nodeData, nodeStack, valueZero, entryUnlocked, exactContinuation, tailFact, nodeLogs, nodeOutput⟩ :=
-    sync_root_first_static_finite_request_reply_turns_state_parent pair rep sem image installed time
-      codeEq fork selector run
+    sync_root_first_static_finite_request_reply_turns_state_parentH pair rep sem image installed time
+      codeEq stateGas bal selector run
   have kept := And.intro core (And.intro nodeStor (And.intro nodeMemory (And.intro nodeData nodeStack)))
   obtain ⟨primitiveFacts, nodeInstalled, ordered, turns⟩ := core
   obtain ⟨free, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc,
@@ -3674,8 +3660,8 @@ theorem sync_root_first_static_finite_request_reply_turns_decoded_parent {K : Wr
   obtain ⟨decoded, decodedCursor, decodedFree, decodedSevm, decodedOutcome, decodedPc,
     decodedTree, decodedK, decodedOk, long, preservedStor, preservedMemory, decodedData,
     a, x, y, R, gas, tailEq, decodedImage⟩ :=
-    sync_balance_reply_decoded_from_cursor .first placed tree
-      (by rw [nodePc]; rfl) outcome (by rw [nodeSevm]; exact fork)
+    sync_balance_reply_decoded_from_cursorH .first placed tree
+      (by rw [nodePc]; rfl) outcome (by rw [nodeSevm]; exact stateGas) (by rw [nodeSevm]; exact bal)
       nodeStack nodeData bound ptr actualReadWord
   have decodedStor : decoded.devm.getStor = occurrence.node.devm.getStor :=
     preservedStor.trans nodeStor
@@ -3699,14 +3685,16 @@ theorem sync_root_first_static_finite_request_reply_turns_decoded_parent {K : Wr
   rw [decodedImage]
   rfl
 
-theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
+
+theorem sync_root_second_static_finite_request_parentH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -3738,10 +3726,7 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -3829,8 +3814,8 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
     kept, decoded, decodedCursor, decodedFree, decodedPath, decodedPc, decodedSevm,
     decodedOutcome, decodedTree, decodedK, decodedOk, long, decodedRep, decodedStor,
     decodedMemory, decodedData, R, decodedStack, valueZero, entryUnlocked, exactContinuation, tailFact, decodedLogs, decodedOutput⟩ :=
-    sync_root_first_static_finite_request_reply_turns_decoded_parent pair rep sem image installed time
-      codeEq fork selector run
+    sync_root_first_static_finite_request_reply_turns_decoded_parentH pair rep sem image installed time
+      codeEq stateGas bal selector run
   have original := kept
   obtain ⟨⟨primitiveFacts, nodeInstalled, firstOrdered, turns⟩, nodeStor, nodeMemory, nodeData, nodeStack⟩ := kept
   obtain ⟨rootFree, firstPc, firstSevm, firstInstruction, firstEdge, firstResult, firstPrimitive,
@@ -3840,7 +3825,7 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
   obtain ⟨codeInput, before, guard, dest, atDest, requestLine, guardLine, pushEdge,
     pushed, branchEdge, jumped, guardPc, guardFree, destPc, destSevm, destOutcome,
     destTree, destK, destOk⟩ :=
-    sync_second_guard_from_decoded codeEq fork decodedPc decodedSevm decodedOutcome
+    sync_second_guard_from_decodedH codeEq stateGas decodedPc decodedSevm decodedOutcome
       decodedTree decodedOk
   have returnedDestFree : Exec.Deriv.ExecFreeUntil returned dest :=
     returnedFree.trans (decodedFree.trans guardFree)
@@ -3849,7 +3834,7 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
     exact continuation
   obtain ⟨second, atSecond, secondFacts, destSecondFree, secondK, entry, destEdge,
     destRun, callLine⟩ :=
-    sync_second_static_occurrence_from_guard occurrence returned dest atDest codeEq fork
+    sync_second_static_occurrence_from_guardH occurrence returned dest atDest codeEq stateGas
       rootFree firstPc firstEdge firstReturnedPc firstResult ⟨_, _, driverSpawn⟩
       returnedDestFree destPc destSevm destOutcome destTree destContinuation destOk
   obtain ⟨_, _, _, _, _, _, returnedSecondFree, secondPc, secondSevm, secondOutcome,
@@ -3857,7 +3842,7 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
   obtain ⟨secondReturned, secondCursor, secondEdge, secondReturnedPc, secondReturnedSevm,
     secondReturnedOutcome, secondResult, secondPrimitive, secondReturnedTree,
     secondReturnedK, secondReturnedOk⟩ :=
-    sync_second_static_step_from_occurrence second fork secondPc secondSevm secondOutcome
+    sync_second_static_step_from_occurrenceH second stateGas secondPc secondSevm secondOutcome
       secondInstruction secondTree secondOk
   have ptr : PtrMem 128 192 decoded.devm.memory := by
     rw [decodedMemory]
@@ -3866,24 +3851,24 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
       (Bytes.toB256 (out.take 32) :: R) decoded.devm.memory decoded.devm.gasLeft :=
     St.self decodedStack rfl
   rw [decodedSevm, initial] at requestLine
-  obtain ⟨requestGas, inputState⟩ := syncSecondRequestLine_inv fork ptr requestLine
+  obtain ⟨requestGas, inputState⟩ := syncSecondRequestLine_invH bal ptr requestLine
   have token1 : (decoded.devm.getStorVal sevm.currentTarget 7).toAdr = current.state.token1 := by
     have fixed := decodedRep.fixed.2.2.2.2.1
     change ((decoded.devm.getStor sevm.currentTarget).get 7).toAdr = _
     simpa only [pair] using fixed
   rw [token1] at inputState
   rw [decodedSevm, inputState] at guardLine
-  obtain ⟨guardGas, beforeState⟩ := syncCodeGuardLine_inv fork guardLine
+  obtain ⟨guardGas, beforeState⟩ := syncCodeGuardLine_invH bal guardLine
   have pushedRun := pushed.toRun
   rw [beforeState] at pushedRun
   obtain ⟨pushGas, guardState⟩ := ri_push pushedRun
   rw [guardState] at jumped
   have destState : ∃ gas, dest.devm =
-      St (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1)
+      St (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1)
         (0 :: current.state.token1.toB256 :: 128 :: 36 :: 128 :: 32 ::
           164 :: 0x70a08231 :: current.state.token1.toB256 :: Bytes.toB256 (out.take 32) :: R)
         (balanceRequestMemory decoded.devm.memory sevm.currentTarget) gas ∧
-        ((afterSload sevm decoded.devm 7).getCode current.state.token1).size.toB256 ≠ 0 := by
+        ((afterSloadH sevm decoded.devm 7).getCode current.state.token1).size.toB256 ≠ 0 := by
     rcases of_jumpi_run jumped with ⟨t, fallPc, popped⟩ |
       ⟨t, condition, takenPc, popped, legal, nonzero⟩
     · rw [guardPc, destPc] at fallPc
@@ -3909,7 +3894,7 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
   obtain ⟨g1, callGas, callState⟩ := ri_gas gasRun
   rw [callState] at empty
   have secondState : second.node.devm =
-      St (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1)
+      St (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1)
         (g1 :: current.state.token1.toB256 :: 128 :: 36 :: 128 :: 32 ::
           164 :: 0x70a08231 :: current.state.token1.toB256 :: Bytes.toB256 (out.take 32) :: R)
         (balanceRequestMemory decoded.devm.memory sevm.currentTarget) callGas := by
@@ -3918,11 +3903,11 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
     rfl
   have secondStor : second.node.devm.getStor = occurrence.node.devm.getStor := by
     rw [secondState]
-    change (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1).getStor = _
+    change (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1).getStor = _
     apply Eq.trans _ decodedStor
     funext a
-    unfold temporalAccountAccessBase
-    split <;> exact afterSload_getStor sevm decoded.devm 7 a
+    rw [accountAccessH_getStor]
+    exact afterSloadH_getStor sevm decoded.devm 7 a
   have secondRep : WriterRep K (second.node.devm.getStor ctx.pair) {current.state with unlocked := 0} := by
     rw [secondStor, ← decodedStor]
     exact decodedRep
@@ -3933,25 +3918,26 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
     rw [decodedMemory, ← pair]
   have secondData : second.node.devm.returnData = out := by
     rw [secondState]
-    change (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1).returnData = _
+    change (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1).returnData = _
     apply Eq.trans _ decodedData
-    unfold temporalAccountAccessBase
-    split <;> unfold afterSload <;> split <;> rfl
+    unfold accountAccessH afterSloadH
+    split <;> split <;> (try unfold temporalAccountAccessBase) <;> (try unfold afterSload) <;>
+      (repeat' split) <;> rfl
   have secondLogs : second.node.devm.logs = b.logs := by
     rw [secondState]
-    change (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1).logs = b.logs
-    rw [temporalAccountAccessBase_logs, afterSload_logs]
+    change (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1).logs = b.logs
+    rw [accountAccessH_logs, afterSloadH_logs]
     exact decodedLogs
   have secondOutput : second.node.devm.output = b.output := by
     rw [secondState]
-    change (temporalAccountAccessBase (afterSload sevm decoded.devm 7) current.state.token1).output = b.output
-    rw [temporalAccountAccessBase_output, afterSload_output]
+    change (accountAccessH sevm (afterSloadH sevm decoded.devm 7) current.state.token1).output = b.output
+    rw [accountAccessH_output, afterSloadH_output]
     exact decodedOutput
   have secondGuarded : (second.node.devm.getCode current.state.token1).size.toB256 ≠ 0 := by
     rw [secondState]
-    change ((temporalAccountAccessBase (afterSload sevm decoded.devm 7)
+    change ((accountAccessH sevm (afterSloadH sevm decoded.devm 7)
       current.state.token1).getCode current.state.token1).size.toB256 ≠ 0
-    simpa only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state] using destGuarded
+    simpa only [Devm.getCode, Devm.getAcct, accountAccessH_state] using destGuarded
   have secondStack : second.node.devm.stack = g1 :: current.state.token1.toB256 ::
       128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: current.state.token1.toB256 ::
       Bytes.toB256 (out.take 32) :: R := by rw [secondState]; rfl
@@ -3978,14 +3964,16 @@ theorem sync_root_second_static_finite_request_parent {K : WriterKey → Prop}
     secondReturnedOutcome, secondResult, secondPrimitive, secondReturnedTree, finalK,
     secondReturnedOk, ordered, valueZero, entryUnlocked, exactContinuation, tailFact, decodedLogs, decodedOutput, secondLogs, secondOutput, secondGuarded⟩
 
-theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : WriterKey → Prop}
+
+theorem sync_root_second_static_finite_request_reply_turns_decoded_parentH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -4017,10 +4005,7 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -4113,7 +4098,7 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
               CursorOK code cert secondNode secondAt ∧
               StaticCallPost second.node.devm secondReturned.devm secondTail second.node.devm.memory
                 128 36 128 32 1 out1 ∧ out1.length < 2^256 ∧
-              StaticAnswered sevm second.node.devm current.state.token1 secondRequest.calldata out1 ∧
+              StaticAnsweredH sevm second.node.devm current.state.token1 secondRequest.calldata out1 ∧
               secondReturned.devm.returnData = out1 ∧ child1.output = out1 ∧ child1.error.isSome = false ∧
               0 < sevm.depth ∧
               second.node.devm.stack = g1 :: current.state.token1.toB256 ::
@@ -4121,10 +4106,7 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
               parent1.state = second.node.devm.state ∧
               parent1.memory = second.node.devm.memory.extends [(128, 36), (128, 32)] ∧
               parent1.logs = second.node.devm.logs ∧ parent1.output = second.node.devm.output ∧
-              ((getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = none ∧
-                  na1 = current.state.token1 ∧ childCode1 = second.node.devm.getCode current.state.token1 ∧ dp1 = false) ∨
-                (∃ d, getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = some d ∧
-                  na1 = d ∧ childCode1 = second.node.devm.getCode d ∧ dp1 = true)) ∧
+              (CallCodeH sevm.benvStat.rules.delegationEnabled second.node.devm current.state.token1 na1 childCode1 dp1) ∧
               ProcessMessage msg1 second.slot (.ok child1) ∧
               (Resume.call parent1 128 32).run (.ok child1) = .ok secondReturned.devm ∧
               secondReturned.devm.state = child1.state ∧
@@ -4197,7 +4179,7 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
     secondInstruction, secondRep, secondStor, secondMemory, secondData, secondStack,
     secondCalldata, secondFilled, secondEdge, secondReturnedPc, secondReturnedSevm,
     secondReturnedOutcome, secondResult, secondPrimitive, secondTree, secondK, secondOk, ordered, valueZero, entryUnlocked, exactContinuation, tailFact, decodedLogs, decodedOutput, secondLogs, secondOutput, secondGuarded⟩ :=
-    sync_root_second_static_finite_request_parent pair rep sem image installed time codeEq fork selector run
+    sync_root_second_static_finite_request_parentH pair rep sem image installed time codeEq stateGas bal selector run
   let secondRequest := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
   let secondFrame := syncSourceSecondFrame current ctx
   let secondTail := [164, 0x70a08231, current.state.token1.toB256,
@@ -4207,13 +4189,13 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
   obtain ⟨secondNode, secondAt, out1, returnedNodeFree, secondNodePc, secondNodeSevm,
     secondNodeOutcome, secondNodeTree, secondNodeK, secondNodeOk, hpost1, bound1,
     answered1, nodeStor1, nodeMemory1, nodeData1, nodeStack1, secondNodeLogs, secondNodeOutput⟩ :=
-    sync_second_static_answered_from_step_observations second secondReturned secondCursor fork secondPrimitive
+    sync_second_static_answered_from_step_observationsH second secondReturned secondCursor stateGas secondPrimitive
       secondReturnedPc secondReturnedSevm secondReturnedOutcome secondTree secondOk actualStack
   obtain ⟨parent1, child1, dp1, na1, childCode1, avail1, depth1, childStack1,
     parentState1, parentMemory1, parentLogs1, parentOutput1, authentication1,
     filled1, process1, clean1, resumed1, returnedState1, returnedData1,
     returnedMemory1, returnedStack1, primitiveSpawn1, driverSpawn1, entry1⟩ :=
-    sync_second_static_settlement_from_occurrence second secondReturned fork secondSevm
+    sync_second_static_settlement_from_occurrenceH second secondReturned stateGas secondSevm
       secondInstruction secondResult actualStack hpost1 secondPath ordered
   let msg1 := callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 ctx.pair
     current.state.token1 na1 true true secondRequest.calldata childCode1 dp1
@@ -4232,9 +4214,9 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
       .spawn (Frame.ofCall msg1) (Resume.call parent1 128 32) (second.node.pc + 1) := by
     rw [actualMsg1] at driverSpawn1
     exact driverSpawn1
-  have actualAnswered1 : StaticAnswered sevm second.node.devm current.state.token1
+  have actualAnswered1 : StaticAnsweredH sevm second.node.devm current.state.token1
       secondRequest.calldata out1 := by
-    change StaticAnswered sevm second.node.devm current.state.token1.toB256.toAdr
+    change StaticAnsweredH sevm second.node.devm current.state.token1.toB256.toAdr
       (second.node.devm.memory.read 128 36).1 out1 at answered1
     rw [toAdr_toB256, secondCalldata] at answered1
     exact answered1
@@ -4258,9 +4240,9 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
     change ctx.timestamp = second.node.sevm.benvStat.time
     rw [secondSevm]
     exact time
-  have filtered := sync_static_slot_filtered_turns_inv (frame := secondFrame)
+  have filtered := sync_static_slot_filtered_turns_invH (frame := secondFrame)
     (request := secondRequest) (path := [1]) second secondReturned secondInstruction secondResult
-    sem image secondInstalled secondRep callTime (by rw [secondSevm]; exact fork)
+    sem image secondInstalled secondRep callTime (by rw [secondSevm]; exact stateGas) (by rw [secondSevm]; exact bal)
   have joined : ((second.slot = .none ∧ (Frame.ofCall msg1).enter = .done (.ok child1) ∧
       ExactTurns secondFrame secondRequest 0 .done
         { complete := true, frame := secondFrame, childReturns := [] }) ∨
@@ -4376,8 +4358,8 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
   obtain ⟨decoded1, decodedAt1, decodedFree1, decodedSevm1, decodedOutcome1, decodedPc1,
     decodedTree1, decodedK1, decodedOk1, long1, decodedStor1, decodedMemory1, decodedData1,
     a1, x1, y1, tail1, gas1, metadata1, decodedImage1⟩ :=
-    sync_balance_reply_decoded_from_cursor .second secondNodeOk secondNodeTree
-      (by rw [secondNodePc]; rfl) secondNodeOutcome (by rw [secondNodeSevm]; exact fork)
+    sync_balance_reply_decoded_from_cursorH .second secondNodeOk secondNodeTree
+      (by rw [secondNodePc]; rfl) secondNodeOutcome (by rw [secondNodeSevm]; exact stateGas) (by rw [secondNodeSevm]; exact bal)
       nodeStack1 nodeData1 bound1 replyPtr1 readWord1
   have actualTail1 : tail1 = Bytes.toB256 (out.take 32) :: R := by
     change (164 : B256) :: 0x70a08231 :: current.state.token1.toB256 ::
@@ -4435,6 +4417,7 @@ theorem sync_root_second_static_finite_request_reply_turns_decoded_parent {K : W
     finiteDecoded1, wholeDecodedStor1, wholeDecodedMemory1, decodedData1, wholeDecodedStack1, valueZero, entryUnlocked, exactContinuation, tailFact, decodedLogs, decodedOutput, secondLogs, secondOutput, secondGuarded, finalLogs, finalOutput, allK⟩
   simpa only [toAdr_toB256] using authentication1
 
+
 /-- The certified Sync parent suffix follows only these non-executing entries. -/
 def syncParentExecFreeEntries : List Nat := [19, 20, 21, 22, 60, 65, 66]
 
@@ -4446,13 +4429,14 @@ theorem syncParentAfterDecode_execFree :
     SyncBalanceSite.second.afterDecodeTree.execFreeIn syncParentExecFreeEntries = true := by
   decide +kernel
 
-theorem sync_decoded_parent_suffix_inv
+theorem sync_decoded_parent_suffix_invH
     {root decoded : Exec.Deriv} {atDecoded : Cursor} {post : Devm}
     {out0 out1 : Bytes} {tail : List B256}
     (path : Exec.Deriv.ParentPrefix root decoded)
     (ok : CursorOK code cert decoded atDecoded)
     (success : decoded.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (tree : atDecoded.f = SyncBalanceSite.second.afterDecodeTree)
     (continuation : ∃ k : Cont,
       atDecoded.K = [k] ∧ k.f = t_0257_c78 ∧ k.tag = 0x0257)
@@ -4466,8 +4450,8 @@ theorem sync_decoded_parent_suffix_inv
     ∃ (gas finalGas : Nat),
       let balance0 := Bytes.toB256 (out0.take 32)
       let balance1 := Bytes.toB256 (out1.take 32)
-      let called := St (syncResultWorld decoded.sevm decoded.devm balance0 balance1) tail
-        (syncResultMemory decoded.sevm decoded.devm decoded.devm.memory balance0 balance1) gas
+      let called := St (syncResultWorldH decoded.sevm decoded.devm balance0 balance1) tail
+        (syncResultMemoryH decoded.sevm decoded.devm decoded.devm.memory balance0 balance1) gas
       SFunc.RunP (StepIn root) cert.prog decoded.sevm decoded.devm
         SyncBalanceSite.second.afterDecodeTree (.returned called) ∧
       Nonempty (Exec (0x0257 : B256).toNat decoded.sevm called (.ok post)) ∧
@@ -4478,13 +4462,13 @@ theorem sync_decoded_parent_suffix_inv
       (∀ path index, Exec.descendantFramePaths path index decoded.exc = []) := by
   obtain ⟨k, sameK, pending, tag⟩ := continuation
   have sameSevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq path
-  have decodedFork : CoveredFork decoded.sevm.benvStat.fork := by
+  have decodedFork : decoded.sevm.benvStat.rules.stateGas = none ∧ decoded.sevm.benvStat.rules.bal = none := by
     rw [sameSevm]
-    exact fork
+    exact ⟨stateGas, bal⟩
   have noExec : ∀ N, Exec.Deriv.ParentPrefix decoded N →
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
     intro N reached
-    apply noExec_after_of_cursor cert_check path reached fork ok
+    apply noExec_after_of_cursorH cert_check path reached stateGas ok
       syncParentExecFreeEntries_closed
     · rw [tree]
       exact syncParentAfterDecode_execFree
@@ -4515,9 +4499,9 @@ theorem sync_decoded_parent_suffix_inv
   obtain ⟨S, base, frameStack, frame, _⟩ := ok.stack
   have check := ok.check
   rw [checkNode_eq_checkNodeM, ← ok.pc_eq] at check
-  have lifted := node_soundM (Cert.checkedM_of_check cert_check) root decoded
+  have lifted := node_soundM_noStateGas (Cert.checkedM_of_check cert_check) root decoded
     (fun r hr => List.mem_cons_of_mem _ (rawFrameDescendants_sub_of_prefix path r hr))
-    post success ok.code_eq decodedFork atDecoded.m atDecoded.a atDecoded.f
+    post success ok.code_eq decodedFork.1 atDecoded.m atDecoded.a atDecoded.f
     (Cont.tagOf atDecoded.K) S base [] check frameStack frame
     (memMatches_nil _ _)
   have rho : Cont.tagOf atDecoded.K = (0x0257 : B256) := by
@@ -4533,12 +4517,12 @@ theorem sync_decoded_parent_suffix_inv
       (Bytes.toB256 (out0.take 32)).toNat < 2^112 ∧
       (Bytes.toB256 (out1.take 32)).toNat < 2^112 ∧ decoded.sevm.isStatic = false ∧
       ∃ gas, o = .returned (St
-        (syncResultWorld decoded.sevm decoded.devm
+        (syncResultWorldH decoded.sevm decoded.devm
           (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))) tail
-        (syncResultMemory decoded.sevm decoded.devm decoded.devm.memory
+        (syncResultMemoryH decoded.sevm decoded.devm decoded.devm.memory
           (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))) gas) := by
     intro o run
-    apply syncUpdateUnlock_inv decodedFork mem
+    apply syncUpdateUnlock_invH decodedFork.1 decodedFork.2 mem
     conv => arg 3; rw [← St.self stack rfl]
     exact run.mono StepIn.toRun
   rw [tree, rho] at lifted
@@ -4549,9 +4533,9 @@ theorem sync_decoded_parent_suffix_inv
     have state := Outcome.returned.inj image
     subst called
     let called := St
-      (syncResultWorld decoded.sevm decoded.devm
+      (syncResultWorldH decoded.sevm decoded.devm
         (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))) tail
-      (syncResultMemory decoded.sevm decoded.devm decoded.devm.memory
+      (syncResultMemoryH decoded.sevm decoded.devm decoded.devm.memory
         (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))) gas
     let returning : Exec.Deriv := ⟨(0x0257 : B256).toNat, decoded.sevm, called,
       .ok post, actualReturn⟩
@@ -4577,14 +4561,16 @@ theorem sync_decoded_parent_suffix_inv
     exact ⟨bound0, bound1, static, gas, post.gasLeft, run, ⟨actualReturn⟩,
       finalImage, noExec, rawNil, pathsNil⟩
 
-theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop}
+
+theorem sync_root_second_static_parent_exact_consumptionH {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
     (rep : WriterRep K (b.getStor ctx.pair) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode ctx.pair).toList = sem.image)
     (time : ctx.timestamp = sevm.benvStat.time)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
     (valueRep : ctx.value = sevm.value) (staticRep : ctx.isStatic = sevm.isStatic)
@@ -4620,10 +4606,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
           current.state.token0 na true true request.calldata childCode dp)
         occurrence.slot (.ok child) ∧
       (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
-      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
-          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
-          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      (CallCodeH sevm.benvStat.rules.delegationEnabled occurrence.node.devm current.state.token0 na childCode dp) ∧
       Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
         .spawn (Frame.ofCall
           (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
@@ -4716,7 +4699,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
               CursorOK code cert secondNode secondAt ∧
               StaticCallPost second.node.devm secondReturned.devm secondTail second.node.devm.memory
                 128 36 128 32 1 out1 ∧ out1.length < 2^256 ∧
-              StaticAnswered sevm second.node.devm current.state.token1 secondRequest.calldata out1 ∧
+              StaticAnsweredH sevm second.node.devm current.state.token1 secondRequest.calldata out1 ∧
               secondReturned.devm.returnData = out1 ∧ child1.output = out1 ∧ child1.error.isSome = false ∧
               0 < sevm.depth ∧
               second.node.devm.stack = g1 :: current.state.token1.toB256 ::
@@ -4724,10 +4707,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
               parent1.state = second.node.devm.state ∧
               parent1.memory = second.node.devm.memory.extends [(128, 36), (128, 32)] ∧
               parent1.logs = second.node.devm.logs ∧ parent1.output = second.node.devm.output ∧
-              ((getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = none ∧
-                  na1 = current.state.token1 ∧ childCode1 = second.node.devm.getCode current.state.token1 ∧ dp1 = false) ∨
-                (∃ d, getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = some d ∧
-                  na1 = d ∧ childCode1 = second.node.devm.getCode d ∧ dp1 = true)) ∧
+              (CallCodeH sevm.benvStat.rules.delegationEnabled second.node.devm current.state.token1 na1 childCode1 dp1) ∧
               ProcessMessage msg1 second.slot (.ok child1) ∧
               (Resume.call parent1 128 32).run (.ok child1) = .ok secondReturned.devm ∧
               secondReturned.devm.state = child1.state ∧
@@ -4798,8 +4778,8 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
                   (views0 views1 : List StaticViewTurn),
                   let balance0 := Bytes.toB256 (out.take 32)
                   let balance1 := Bytes.toB256 (out1.take 32)
-                  let called := St (syncResultWorld sevm decoded1.devm balance0 balance1) tail
-                    (syncResultMemory sevm decoded1.devm decoded1.devm.memory balance0 balance1) gas
+                  let called := St (syncResultWorldH sevm decoded1.devm balance0 balance1) tail
+                    (syncResultMemoryH sevm decoded1.devm decoded1.devm.memory balance0 balance1) gas
                   let frame0 := syncSourceLockedFrame current ctx
                   let frame1 := syncSourceSecondFrame current ctx
                   let request0 := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
@@ -4882,7 +4862,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
     child, dp, na, childCode, avail,
     g, S, out, original, decoded,
     decodedCursor, parentFacts0⟩ :=
-    sync_root_second_static_finite_request_reply_turns_decoded_parent pair rep sem image installed time codeEq fork selector run
+    sync_root_second_static_finite_request_reply_turns_decoded_parentH pair rep sem image installed time codeEq stateGas bal selector run
   rcases parentFacts0 with ⟨decodedFree, decodedPath, decodedPc, decodedSevm, decodedOutcome,
     decodedTree, decodedK, decodedOk, long, decodedRep,
     decodedStor, decodedMemory, decodedData, R, decodedStack,
@@ -4927,7 +4907,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
     rw [wholeDecodedMemory1, pair]
   obtain ⟨bound0, bound1, nonstatic, gas, finalGas, suffix, returnedExec,
     postImage, noExec, rawNil, pathsNil⟩ :=
-    sync_decoded_parent_suffix_inv finalDecodedPath decodedOk1 finalDecodedOutcome fork
+    sync_decoded_parent_suffix_invH finalDecodedPath decodedOk1 finalDecodedOutcome stateGas bal
       decodedTree1 continuation actualStack actualMemory
   have finalNoExec : ∀ N, Exec.Deriv.ParentPrefix secondReturned N →
       ∀ x, ¬Ninst.At N.sevm.code N.pc (.exec x) := by
@@ -4938,8 +4918,8 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
   rw [finalDecodedSevm] at nonstatic suffix returnedExec postImage
   let balance0 := Bytes.toB256 (out.take 32)
   let balance1 := Bytes.toB256 (out1.take 32)
-  let called := St (syncResultWorld sevm decoded1.devm balance0 balance1) tail
-    (syncResultMemory sevm decoded1.devm decoded1.devm.memory balance0 balance1) gas
+  let called := St (syncResultWorldH sevm decoded1.devm balance0 balance1) tail
+    (syncResultMemoryH sevm decoded1.devm decoded1.devm.memory balance0 balance1) gas
   let frame0 := syncSourceLockedFrame current ctx
   let frame1 := syncSourceSecondFrame current ctx
   let request0 := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
@@ -4958,7 +4938,7 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
     ⟨finiteDecoded.fixed.2.2.2.2.2.1, finiteDecoded.fixed.2.2.2.2.2.2.1,
       finiteDecoded.fixed.2.2.2.2.2.2.2.1⟩
   obtain ⟨sourcePost, event, oracle, accepted, reserves, price0, price1, lock,
-    eventEq, logs⟩ := syncUpdateSource_result slots
+    eventEq, logs⟩ := syncUpdateSource_resultH slots
     finiteDecoded.fixed.2.2.2.2.2.2.2.2.1
     finiteDecoded.fixed.2.2.2.2.2.2.2.2.2.1 time pair bound0 bound1
   have source : current.state.update ctx balance0 balance1 current.state.reserve0.val
@@ -4980,9 +4960,9 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
     rw [slots.2.1, B256.toNat_toB256_of_lt
       (lt_trans current.state.reserve1.isLt (by decide : 2^112 < 2^256))]
     exact current.state.reserve1.isLt
-  have loadedRep : WriterRep K ((afterSload sevm decoded1.devm 8).getStor sevm.currentTarget)
+  have loadedRep : WriterRep K ((afterSloadH sevm decoded1.devm 8).getStor sevm.currentTarget)
       {current.state with unlocked := 0} := by
-    rw [afterSload_getStor]
+    rw [afterSloadH_getStor]
     exact finiteDecoded
   have updateAccepted : ({current.state with unlocked := 0} : State).update ctx balance0 balance1
       (reserve0Read (decoded1.devm.getStorVal sevm.currentTarget 8)).toNat
@@ -4992,13 +4972,13 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
       B256.toNat_toB256_of_lt (lt_trans current.state.reserve0.isLt (by decide : 2^112 < 2^256)),
       B256.toNat_toB256_of_lt (lt_trans current.state.reserve1.isLt (by decide : 2^112 < 2^256))]
     exact accepted
-  have updatedRep := loadedRep.mint_update time pair old0 old1 updateAccepted
+  have updatedRep := loadedRep.mint_updateH time pair old0 old1 updateAccepted
   have finalRep : WriterRep K (post.getStor ctx.pair) {sourcePost with unlocked := 1} := by
     rw [postImage, pair]
     dsimp only [St, Devm.setMach, Devm.getStor, Devm.getAcct, Devm.state]
-    change WriterRep K ((syncResultWorld sevm decoded1.devm balance0 balance1).getStor
+    change WriterRep K ((syncResultWorldH sevm decoded1.devm balance0 balance1).getStor
       sevm.currentTarget) {sourcePost with unlocked := 1}
-    rw [syncResultWorld, afterSstore_getStor_self]
+    rw [syncResultWorldH, afterSstoreH_getStor_self]
     exact updatedRep.mint_unlock_store
   have relativeLogs : post.logs = decoded1.devm.logs ++
       [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0,balance1]⟩] := by
@@ -5008,11 +4988,11 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
   have relativeOutput : post.output = decoded1.devm.output := by
     rw [postImage]
     dsimp only [St, Devm.setMach, Devm.output, balance0, balance1]
-    have worldOutput : (syncResultWorld sevm decoded1.devm
+    have worldOutput : (syncResultWorldH sevm decoded1.devm
         (Bytes.toB256 (out.take 32)) (Bytes.toB256 (out1.take 32))).output =
         decoded1.devm.output := by
-      rw [syncResultWorld, afterSstore_output, syncUpdatedWorld, updateWorld_output,
-        afterSload_output]
+      rw [syncResultWorldH, afterSstoreH_output, syncUpdatedWorldH, updateWorld_outputH,
+        afterSloadH_output]
     dsimp only [Devm.output] at worldOutput
     exact worldOutput
   have originalLogs : post.logs = b.logs ++
@@ -5201,5 +5181,6 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
     noRemainder, authentic0, authentic1, turns0, turns1, checkpoint, context, sourceState,
     consumed, originalLogs, originalOutput, paths0, paths1, mapped0, mapped1,
     branch0, branch1, finalNoExec⟩
+
 
 end Blanc.Lift.UniswapV2Pair

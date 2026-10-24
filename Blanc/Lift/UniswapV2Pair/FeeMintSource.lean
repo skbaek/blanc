@@ -53,6 +53,24 @@ theorem WriterRep.fee_factory_post {K : WriterKey → Prop} {st : State} {sevm :
     rw [feeFactoryLoadWorld, afterSload_getStor]
     exact rep
 
+theorem WriterRep.fee_factory_postH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b d : Devm} {S : List B256} {M : Mem} {out : Bytes}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (post : StaticCallPost (feeFactoryCallWorldH sevm b) d S M 128 4 128 32 1 out) :
+    WriterRep K ((feeKLastWorldH sevm d).getStor sevm.currentTarget) st := by
+  rw [feeKLastWorldH, afterSloadH_getStor, post.stor, feeFactoryCallWorldH, accountAccessH_getStor,
+    feeFactoryLoadWorldH, afterSloadH_getStor]
+  exact rep
+
+/-- `fee_factory_postH` at a call world given by an equation, for structures generic in it. -/
+theorem WriterRep.fee_factory_postW {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b d Wc : Devm} {S : List B256} {M : Mem} {out : Bytes}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (post : StaticCallPost Wc d S M 128 4 128 32 1 out) (world : Wc = feeFactoryCallWorldH sevm b) :
+    WriterRep K ((feeKLastWorldH sevm d).getStor sevm.currentTarget) st := by
+  subst world
+  exact rep.fee_factory_postH post
+
 /-- The two separately floored raw fee roots have their precise source Nat values. -/
 theorem feeRoots_source {r0 r1 K : B256}
     (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) :
@@ -72,6 +90,34 @@ theorem feeRoots_source {r0 r1 K : B256}
 and the exact floor-liquidity Nat, independently of reserve-size bounds. -/
 theorem feeGrowth_arithmetic_source {sevm : Sevm} {b : Devm} {w z a : B256}
     (cover : z ≤ a) (accepts : feeGrowthAccepts sevm b w z a) :
+    (b.getStorVal sevm.currentTarget 0).toNat * (a.toNat - z.toNat) < 2 ^ 256 ∧
+      a.toNat * 5 < 2 ^ 256 ∧ a.toNat * 5 + z.toNat < 2 ^ 256 ∧
+      (feeGrowthLiquidity sevm b z a).toNat =
+        (b.getStorVal sevm.currentTarget 0).toNat * (a.toNat - z.toNat) /
+          (a.toNat * 5 + z.toNat) := by
+  have numerator : (b.getStorVal sevm.currentTarget 0).toNat * (a.toNat - z.toNat) < 2 ^ 256 := by
+    have h := accepts.1
+    change (b.getStorVal sevm.currentTarget 0).toNat * (a - z).toNat < 2 ^ 256 at h
+    rw [B256.toNat_sub_eq_of_le a z cover] at h
+    exact h
+  have factor : a.toNat * 5 < 2 ^ 256 := by
+    have h := accepts.2.1
+    change a.toNat * (5 : B256).toNat < 2 ^ 256 at h
+    exact h
+  have factorWord : (a * 5).toNat = a.toNat * 5 :=
+    B256.toNat_mul_eq_of_nofm accepts.2.1
+  have denominator : a.toNat * 5 + z.toNat < 2 ^ 256 := by
+    have h := accepts.2.2.1
+    rw [factorWord] at h
+    exact h
+  refine ⟨numerator, factor, denominator, ?_⟩
+  rw [feeGrowthLiquidity, B256.toNat_div accepts.2.2.2.1,
+    feeNumeratorWord, B256.toNat_mul_eq_of_nofm accepts.1,
+    B256.toNat_sub_eq_of_le a z cover, feeDenominatorWord,
+    B256.toNat_add_eq_of_nof (a * 5) z accepts.2.2.1, factorWord]
+
+theorem feeGrowth_arithmetic_sourceH {sevm : Sevm} {b : Devm} {w z a : B256}
+    (cover : z ≤ a) (accepts : feeGrowthAcceptsH sevm b w z a) :
     (b.getStorVal sevm.currentTarget 0).toNat * (a.toNat - z.toNat) < 2 ^ 256 ∧
       a.toNat * 5 < 2 ^ 256 ∧ a.toNat * 5 + z.toNat < 2 ^ 256 ∧
       (feeGrowthLiquidity sevm b z a).toNat =
@@ -152,6 +198,52 @@ theorem feeGrowth_source_accept {K : WriterKey → Prop} {st : State} {sevm : Se
     rw [ite_eq_left positive, toB256_toNat, lpAccept, feeGrowthSourceFee, ite_eq_right zero]
     rfl
 
+theorem feeGrowth_source_acceptH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {w r0 r1 : B256}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (recipient : w.toAdr ≠ 0) (last : st.kLast ≠ 0)
+    (growth : feeLastRoot st.kLast < feeReserveRoot r0 r1)
+    (accepts : feeGrowthAcceptsH sevm b w (feeLastRoot st.kLast) (feeReserveRoot r0 r1))
+    (fresh : feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) ≠ 0 →
+      WriterFreshKeys K (lpMintTouched w.toAdr)) :
+    mintFee st w.toAdr r0.toNat r1.toNat = .ok
+      (feeGrowthSourceFee st w
+        (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1))) := by
+  have roots := feeRoots_source (K := st.kLast) bound0 bound1
+  have sourceGrowth : Nat.sqrt st.kLast.toNat < Nat.sqrt (r0.toNat * r1.toNat) := by
+    rw [B256.lt_iff_toNat_lt_toNat, roots.1, roots.2] at growth
+    exact growth
+  have arithmetic := feeGrowth_arithmetic_sourceH (le_of_lt growth) accepts
+  have supply : b.getStorVal sevm.currentTarget 0 = st.totalSupply := rep.fixed.1
+  rw [supply, roots.1, roots.2] at arithmetic
+  rw [mintFee, ite_eq_right recipient, ite_eq_right last, ite_eq_left sourceGrowth,
+    ite_eq_left arithmetic.1, ite_eq_left arithmetic.2.1, ite_eq_left arithmetic.2.2.1,
+    ← arithmetic.2.2.2]
+  by_cases zero : feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0
+  · have noMint : ¬ (feeGrowthLiquidity sevm b (feeLastRoot st.kLast)
+        (feeReserveRoot r0 r1)).toNat > 0 := by rw [zero]; decide
+    rw [ite_eq_right noMint, feeGrowthSourceFee, ite_eq_left zero]
+  · have positive : (feeGrowthLiquidity sevm b (feeLastRoot st.kLast)
+        (feeReserveRoot r0 r1)).toNat > 0 := by
+      have notZero : (feeGrowthLiquidity sevm b (feeLastRoot st.kLast)
+          (feeReserveRoot r0 r1)).toNat ≠ 0 :=
+        fun h => zero (B256.toNat_inj _ 0 h)
+      omega
+    have warmRep : WriterRep K ((afterSloadH sevm b 0).getStor sevm.currentTarget) st := by
+      rw [afterSloadH_getStor]
+      exact rep
+    have lp := lpMint_source_resultH (R := []) (M := Mem.empty) (G := 0)
+      warmRep (fresh zero) (accepts.2.2.2.2 zero)
+    have lpAccept : st.mintLP w.toAdr
+        (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)) =
+        .ok (lpMintSourceState st w.toAdr
+          (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)),
+          [.transfer 0 w.toAdr
+            (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1))]) := lp.1
+    rw [ite_eq_left positive, toB256_toNat, lpAccept, feeGrowthSourceFee, ite_eq_right zero]
+    rfl
+
 /-- The finite result follows the same address, kLast, growth and liquidity tests. -/
 def feeBranchSourceFee (st : State) (sevm : Sevm) (b : Devm) (w r0 r1 : B256) : FeeResult :=
   if w.toAdr = 0 then { state := feeClearState st, feeOn := false, minted := 0, events := [] }
@@ -161,12 +253,30 @@ def feeBranchSourceFee (st : State) (sevm : Sevm) (b : Devm) (w r0 r1 : B256) : 
       (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1))
   else { state := st, feeOn := true, minted := 0, events := [] }
 
+/-- The fee-growth liquidity reads only storage, so it agrees across the two sload schedules. -/
+theorem feeGrowthLiquidity_afterSloadH (sevm : Sevm) (d : Devm) (k z a : B256) :
+    feeGrowthLiquidity sevm (afterSloadH sevm d k) z a = feeGrowthLiquidity sevm (afterSload sevm d k) z a := by
+  simp only [feeGrowthLiquidity, feeNumeratorWord, getStorVal_afterSloadH, getStorVal_afterSload]
+
+theorem feeBranchSourceFee_kLastH (st : State) (sevm : Sevm) (d : Devm) (w r0 r1 : B256) :
+    feeBranchSourceFee st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      feeBranchSourceFee st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold feeBranchSourceFee feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
+
 /-- Freshness is requested only on the branch that actually writes the fee recipient. -/
 def FeeMintFresh (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
     (w r0 r1 : B256) : Prop :=
   w.toAdr ≠ 0 → st.kLast ≠ 0 → feeLastRoot st.kLast < feeReserveRoot r0 r1 →
     feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) ≠ 0 →
       WriterFreshKeys K (lpMintTouched w.toAdr)
+
+theorem FeeMintFresh_kLastH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (d : Devm)
+    (w r0 r1 : B256) :
+    FeeMintFresh K st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      FeeMintFresh K st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold FeeMintFresh feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
 
 /-- Source acceptance is a consequence of actual fee branch guards, not an inverse premise. -/
 theorem feeBranch_source_accept {K : WriterKey → Prop} {st : State} {sevm : Sevm}
@@ -196,6 +306,33 @@ theorem feeBranch_source_accept {K : WriterKey → Prop} {st : State} {sevm : Se
         rw [mintFee, ite_eq_right recipient, ite_eq_right last, ite_eq_right noGrowth,
           feeBranchSourceFee, ite_eq_right recipient, ite_eq_right last, ite_eq_right growth]
 
+theorem feeBranch_source_acceptH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {w r0 r1 : B256}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (guards : feeBranchAcceptsH sevm b st.kLast w r0 r1)
+    (fresh : FeeMintFresh K st sevm b w r0 r1) :
+    mintFee st w.toAdr r0.toNat r1.toNat = .ok (feeBranchSourceFee st sevm b w r0 r1) := by
+  by_cases recipient : w.toAdr = 0
+  · rw [mintFee, ite_eq_left recipient, feeBranchSourceFee, ite_eq_left recipient]
+    rfl
+  · have word : w.toAdr.toB256 ≠ 0 := fun h => recipient (Adr.toB256_inj h)
+    by_cases last : st.kLast = 0
+    · rw [mintFee, ite_eq_right recipient, ite_eq_left last,
+        feeBranchSourceFee, ite_eq_right recipient, ite_eq_left last]
+    · by_cases growth : feeLastRoot st.kLast < feeReserveRoot r0 r1
+      · rw [feeBranchSourceFee, ite_eq_right recipient, ite_eq_right last, ite_eq_left growth]
+        have accepts := (show feeOnAcceptsH sevm b st.kLast w r0 r1 from
+          by simpa only [feeBranchAcceptsH, ite_eq_right word] using guards) last growth
+        exact feeGrowth_source_acceptH rep bound0 bound1 recipient last growth accepts
+          (fresh recipient last growth)
+      · have roots := feeRoots_source (K := st.kLast) bound0 bound1
+        have noGrowth : ¬ Nat.sqrt st.kLast.toNat < Nat.sqrt (r0.toNat * r1.toNat) := by
+          rw [B256.lt_iff_toNat_lt_toNat, roots.1, roots.2] at growth
+          exact growth
+        rw [mintFee, ite_eq_right recipient, ite_eq_right last, ite_eq_right noGrowth,
+          feeBranchSourceFee, ite_eq_right recipient, ite_eq_right last, ite_eq_right growth]
+
 /-- Only an actual positive fee mint extends the finite tracked recipient universe. -/
 def feeBranchSourceKeys (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
     (w r0 r1 : B256) : WriterKey → Prop :=
@@ -205,6 +342,13 @@ def feeBranchSourceKeys (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b :
     if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then K
     else WriterExtend K (lpMintTouched w.toAdr)
   else K
+
+theorem feeBranchSourceKeys_kLastH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (d : Devm)
+    (w r0 r1 : B256) :
+    feeBranchSourceKeys K st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold feeBranchSourceKeys feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
 
 /-- The full raw branch post realizes the finite source state, including no-write branches. -/
 theorem WriterRep.feeBranch_post {K : WriterKey → Prop} {st : State} {sevm : Sevm}
@@ -258,6 +402,60 @@ theorem WriterRep.feeBranch_post {K : WriterKey → Prop} {st : State} {sevm : S
             rw [afterSload_getStor]
             exact rep
           exact warmRep.lpMint_post (fresh recipient last growth zero)
+      · simp only [ite_eq_right growth, St_getStor]
+        exact rep
+
+theorem WriterRep.feeBranch_postH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {w r0 r1 : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : FeeMintFresh K st sevm b w r0 r1) :
+    WriterRep (feeBranchSourceKeys K st sevm b w r0 r1)
+      ((feeBranchPostH sevm b R M st.kLast w r0 r1 G).getStor sevm.currentTarget)
+      (feeBranchSourceFee st sevm b w r0 r1).state := by
+  by_cases recipient : w.toAdr = 0
+  · have word : w.toAdr.toB256 = 0 := by rw [recipient]; rfl
+    simp only [feeBranchSourceKeys, feeBranchSourceFee, ite_eq_left recipient,
+      feeBranchPostH, ite_eq_left word, St_getStor]
+    by_cases last : st.kLast = 0
+    · rw [feeOffWorldH, ite_eq_left last]
+      have clear : feeClearState st = st := by unfold feeClearState; rw [← last]
+      rw [clear]
+      exact rep
+    · rw [feeOffWorldH, ite_eq_right last, afterSstoreH_getStor_self]
+      exact rep.fee_clear_store
+  · have word : w.toAdr.toB256 ≠ 0 := fun h => recipient (Adr.toB256_inj h)
+    simp only [feeBranchSourceKeys, feeBranchSourceFee, ite_eq_right recipient,
+      feeBranchPostH, ite_eq_right word]
+    by_cases last : st.kLast = 0
+    · simp only [feeOnPostH, ite_eq_left last, St_getStor]
+      exact rep
+    · simp only [feeOnPostH, ite_eq_right last]
+      by_cases growth : feeLastRoot st.kLast < feeReserveRoot r0 r1
+      · simp only [ite_eq_left growth]
+        by_cases zero : feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0
+        · simp only [ite_eq_left zero, feeGrowthSourceFee, feeGrowthPostH, feeLiquidityPostH]
+          change WriterRep K
+            ((if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then
+                St (afterSloadH sevm b 0) (feeOnWord w :: R) M G
+              else lpMintPostH sevm (afterSloadH sevm b 0) (feeOnWord w :: R) M w
+                (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)) G).getStor
+              sevm.currentTarget) st
+          rw [ite_eq_left zero, St_getStor, afterSloadH_getStor]
+          exact rep
+        · simp only [ite_eq_right zero, feeGrowthSourceFee, feeGrowthPostH, feeLiquidityPostH]
+          change WriterRep (WriterExtend K (lpMintTouched w.toAdr))
+            ((if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then
+                St (afterSloadH sevm b 0) (feeOnWord w :: R) M G
+              else lpMintPostH sevm (afterSloadH sevm b 0) (feeOnWord w :: R) M w
+                (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)) G).getStor
+              sevm.currentTarget)
+            (lpMintSourceState st w.toAdr
+              (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)))
+          rw [ite_eq_right zero]
+          have warmRep : WriterRep K ((afterSloadH sevm b 0).getStor sevm.currentTarget) st := by
+            rw [afterSloadH_getStor]
+            exact rep
+          exact warmRep.lpMint_postH (fresh recipient last growth zero)
       · simp only [ite_eq_right growth, St_getStor]
         exact rep
 
@@ -325,6 +523,69 @@ theorem feeBranchPost_facts {st : State} {sevm : Sevm} {b : Devm} {R : List B256
       · simp only [ite_eq_right growth]
         exact ⟨fun _ _ => St_getStor _ _ _ _ _, rfl, .inl ⟨True.intro, rfl⟩⟩
 
+theorem feeBranchPost_factsH {st : State} {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {w r0 r1 : B256} {G : Nat} :
+    (∀ a, a ≠ sevm.currentTarget →
+      (feeBranchPostH sevm b R M st.kLast w r0 r1 G).getStor a = b.getStor a) ∧
+    (feeBranchPostH sevm b R M st.kLast w r0 r1 G).gasLeft = G ∧
+    (((feeBranchSourceFee st sevm b w r0 r1).events = [] ∧
+      (feeBranchPostH sevm b R M st.kLast w r0 r1 G).logs = b.logs) ∨
+    ∃ L : B256, L ≠ 0 ∧
+      (feeBranchSourceFee st sevm b w r0 r1).events = [.transfer 0 w.toAdr L] ∧
+      (feeBranchPostH sevm b R M st.kLast w r0 r1 G).logs =
+        b.logs ++ [lpMintRawLog sevm.currentTarget w.toAdr L]) := by
+  by_cases recipient : w.toAdr = 0
+  · have word : w.toAdr.toB256 = 0 := by rw [recipient]; rfl
+    simp only [feeBranchSourceFee, ite_eq_left recipient, feeBranchPostH, ite_eq_left word]
+    by_cases last : st.kLast = 0
+    · simp only [feeOffWorldH, ite_eq_left last]
+      exact ⟨fun _ _ => St_getStor _ _ _ _ _, rfl, .inl ⟨True.intro, rfl⟩⟩
+    · simp only [feeOffWorldH, ite_eq_right last]
+      refine ⟨?_, rfl, .inl ⟨True.intro, ?_⟩⟩
+      · intro a different
+        rw [St_getStor, afterSstoreH_getStor_ne _ _ _ _ _ different.symm]
+      · change (afterSstoreH sevm b 11 0).logs = b.logs
+        exact afterSstoreH_logs sevm b 11 0
+  · have word : w.toAdr.toB256 ≠ 0 := fun h => recipient (Adr.toB256_inj h)
+    simp only [feeBranchSourceFee, ite_eq_right recipient, feeBranchPostH, ite_eq_right word]
+    by_cases last : st.kLast = 0
+    · simp only [feeOnPostH, ite_eq_left last]
+      exact ⟨fun _ _ => St_getStor _ _ _ _ _, rfl, .inl ⟨True.intro, rfl⟩⟩
+    · simp only [feeOnPostH, ite_eq_right last]
+      by_cases growth : feeLastRoot st.kLast < feeReserveRoot r0 r1
+      · simp only [ite_eq_left growth]
+        by_cases zero : feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0
+        · simp only [feeGrowthSourceFee, ite_eq_left zero]
+          have eq : feeGrowthPostH sevm b R M w (feeOnWord w)
+              (feeLastRoot st.kLast) (feeReserveRoot r0 r1) G =
+              St (afterSloadH sevm b 0) (feeOnWord w :: R) M G := by
+            change (if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then _ else _) = _
+            rw [ite_eq_left zero]
+          rw [eq]
+          refine ⟨?_, rfl, .inl ⟨True.intro, ?_⟩⟩
+          · intro a _
+            rw [St_getStor, afterSloadH_getStor]
+          · change (afterSloadH sevm b 0).logs = b.logs
+            exact afterSloadH_logs sevm b 0
+        · simp only [feeGrowthSourceFee, ite_eq_right zero]
+          have eq : feeGrowthPostH sevm b R M w (feeOnWord w)
+              (feeLastRoot st.kLast) (feeReserveRoot r0 r1) G =
+              lpMintPostH sevm (afterSloadH sevm b 0) (feeOnWord w :: R) M w
+                (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)) G := by
+            change (if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then _ else _) = _
+            rw [ite_eq_right zero]
+            rfl
+          rw [eq]
+          have lp := lpMintPost_factsH (sevm := sevm) (b := afterSloadH sevm b 0)
+            (R := feeOnWord w :: R) (M := M) (toWord := w)
+            (value := feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1)) (G := G)
+          refine ⟨?_, lp.2.2.2, .inr ⟨_, zero, rfl, ?_⟩⟩
+          · intro a different
+            rw [lp.2.1 a different, afterSloadH_getStor]
+          · rw [lp.2.2.1, afterSloadH_logs]
+      · simp only [ite_eq_right growth]
+        exact ⟨fun _ _ => St_getStor _ _ _ _ _, rfl, .inl ⟨True.intro, rfl⟩⟩
+
 /-- Finite acceptance, exact selected post-storage, event correspondence and residual gas. -/
 def FeeMintSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
     (R : List B256) (M : Mem) (w r0 r1 : B256) (G : Nat) : Prop :=
@@ -342,6 +603,28 @@ def FeeMintSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b :
     (feeBranchPost sevm b R M st.kLast w r0 r1 G).logs =
       b.logs ++ [lpMintRawLog sevm.currentTarget w.toAdr L])
 
+def FeeMintSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
+    (R : List B256) (M : Mem) (w r0 r1 : B256) (G : Nat) : Prop :=
+  mintFee st w.toAdr r0.toNat r1.toNat = .ok (feeBranchSourceFee st sevm b w r0 r1) ∧
+  WriterRep (feeBranchSourceKeys K st sevm b w r0 r1)
+    ((feeBranchPostH sevm b R M st.kLast w r0 r1 G).getStor sevm.currentTarget)
+    (feeBranchSourceFee st sevm b w r0 r1).state ∧
+  (∀ a, a ≠ sevm.currentTarget →
+    (feeBranchPostH sevm b R M st.kLast w r0 r1 G).getStor a = b.getStor a) ∧
+  (feeBranchPostH sevm b R M st.kLast w r0 r1 G).gasLeft = G ∧
+  (((feeBranchSourceFee st sevm b w r0 r1).events = [] ∧
+    (feeBranchPostH sevm b R M st.kLast w r0 r1 G).logs = b.logs) ∨
+  ∃ L : B256, L ≠ 0 ∧
+    (feeBranchSourceFee st sevm b w r0 r1).events = [.transfer 0 w.toAdr L] ∧
+    (feeBranchPostH sevm b R M st.kLast w r0 r1 G).logs =
+      b.logs ++ [lpMintRawLog sevm.currentTarget w.toAdr L])
+
+theorem FeeMintSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {st : State} {b : Devm} {R : List B256} {M : Mem} {w r0 r1 : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    FeeMintSourceResultH K st sevm b R M w r0 r1 G = FeeMintSourceResult K st sevm b R M w r0 r1 G := by
+  unfold FeeMintSourceResultH FeeMintSourceResult
+  simp only [feeBranchPostH_of_covered fork]
+
 theorem feeBranch_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {w r0 r1 : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -352,6 +635,17 @@ theorem feeBranch_source_result {K : WriterKey → Prop} {st : State} {sevm : Se
   have facts := feeBranchPost_facts (st := st) (sevm := sevm) (b := b) (R := R)
     (M := M) (w := w) (r0 := r0) (r1 := r1) (G := G)
   exact ⟨feeBranch_source_accept rep bound0 bound1 guards fresh, rep.feeBranch_post fresh, facts⟩
+
+theorem feeBranch_source_resultH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {w r0 r1 : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (guards : feeBranchAcceptsH sevm b st.kLast w r0 r1)
+    (fresh : FeeMintFresh K st sevm b w r0 r1) :
+    FeeMintSourceResultH K st sevm b R M w r0 r1 G := by
+  have facts := feeBranchPost_factsH (st := st) (sevm := sevm) (b := b) (R := R)
+    (M := M) (w := w) (r0 := r0) (r1 := r1) (G := G)
+  exact ⟨feeBranch_source_acceptH rep bound0 bound1 guards fresh, rep.feeBranch_postH fresh, facts⟩
 
 /-- The actual same-D factory observation and both continuations survive the source adapter. -/
 structure FeeMintSourceObservation (K : WriterKey → Prop) (st : State) (D : Exec.Deriv)
@@ -681,6 +975,15 @@ def feeBurnLiquidity (sevm : Sevm) (b : Devm) : B256 :=
 
 def feeBurnWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm b (transferBalanceSlot sevm.currentTarget)
+
+def feeBurnWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm b (transferBalanceSlot sevm.currentTarget)
+
+theorem feeBurnWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeBurnWorldH sevm b = feeBurnWorld sevm b := by
+  unfold feeBurnWorldH feeBurnWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
 
 def burnFeeLocals (L b1 b0 token1 token0 r1 r0 toWord extρ : B256) (R : List B256) : List B256 :=
   0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R

@@ -39,8 +39,8 @@ theorem mintTraceKeys_rows (root : Exec.Deriv) :
     simp only [mintTraceKeys, lpMintTouched, List.mem_append, List.mem_cons, List.not_mem_nil,
       or_false, true_or, or_true]
 
-theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S : List B256}
-    {M : Mem} {c : Nat} (fork : CoveredFork root.sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem mint_feeReply_memH {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S : List B256}
+    {M : Mem} {c : Nat} (stateGas : root.sevm.benvStat.rules.stateGas = none) (wf : Mem.Wf M)
     (call : Blanc.Lift.StepIn root root.sevm
       (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c) (.exec .staticcall) d)
     (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0) :
@@ -54,9 +54,9 @@ theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S
       obtain ⟨evm, exn⟩ := p
       obtain ⟨e, _⟩ := inRoots
       exact ⟨e⟩
-  rcases of_step_staticcall_val_with_depth_frame_cause (g := g) (t := t) (ii := 128) (is := 4)
+  rcases of_step_staticcall_val_with_depth_frame_causeH (g := g) (t := t) (ii := 128) (is := 4)
       (oi := oi) (os := os) (xs := S) (by simpa only [St.stack, List.append_nil] using
-        (pref_append (g :: t :: 128 :: 4 :: oi :: os :: S) [])) filled stepRun fork with
+        (pref_append (g :: t :: 128 :: 4 :: oi :: os :: S) [])) filled stepRun stateGas with
       ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, _, _,
         process, clean, _, _, returned, _, _, _⟩
   · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
@@ -82,5 +82,6 @@ theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S
       obtain ⟨childRun, roots⟩ := inRoots
       refine List.mem_append_left _ (List.mem_filterMap.mpr
         ⟨⟨evm.pc, evm.sta, evm.dyna, .ok body, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
+
 
 end Blanc.Lift.UniswapV2Pair

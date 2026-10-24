@@ -12,7 +12,7 @@ def pairTransferCopiedMemory (M : Mem) (p amount toWord : B256) : Mem :=
   C1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
 
 /-- The partial merge's complete state normalization, independent of final
-success and fork selection. Shared by the modern and raw control wrappers. -/
+success and fork selection. Shared by the historical cursor and raw control wrappers. -/
 theorem pair_transfer_partial_line_state {sevm : Sevm} {b d : Devm}
     {R : List B256} {M : Mem} {G : Nat}
     {p amount toWord tokenWord rho : B256} {n : Nat}
@@ -72,12 +72,12 @@ theorem pair_transfer_partial_line_state {sevm : Sevm} {b d : Devm}
 
 /-- The original moving initializer, both copy passes and partial merge reach
 this actual GAS cursor with the exact 68-byte transfer payload. -/
-theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
+theorem pair_transfer_request_cursor_stateH {start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {p amount toWord tokenWord rho : B256} {n : Nat}
     (cut : CursorStateAt code cert start t_1fdb_c57 b
       (amount :: toWord :: tokenWord :: rho :: R) M K)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     let V := safeTransfer_dynamicCallMemory M p amount toWord
     PtrMem (p + 164) V.size V ∧ Nonempty (CursorStateAt code cert start pairTransferGasTree b
@@ -92,12 +92,12 @@ theorem pair_transfer_request_cursor_state {start : Exec.Deriv} {b post : Devm}
   obtain ⟨adv96, adv128, adv164, adv196, length68⟩ := safeTransfer_stageAdvance width
   have read96 := safeTransfer_copyRead96 (amount := amount) (toWord := toWord) mem lower width
   have read128 := safeTransfer_copyRead128 (amount := amount) (toWord := toWord) mem lower width
-  obtain ⟨payloadMem, ⟨copy⟩⟩ := pair_transfer_initialize_cursor_state cut success fork mem lower width
-  obtain ⟨remaining⟩ := pair_transfer_copy68_cursor_state copy success fork
+  obtain ⟨payloadMem, ⟨copy⟩⟩ := pair_transfer_initialize_cursor_stateH cut success stateGas mem lower width
+  obtain ⟨remaining⟩ := pair_transfer_copy68_cursor_stateH copy success stateGas
   rw [read96, adv96, adv128, adv164, adv196, read128] at remaining
   have callMem := safeTransfer_callMemory_ptr (amount := amount) (toWord := toWord) mem lower width
-  obtain ⟨opened⟩ := remaining.dest cert_check success fork
-  obtain ⟨gas⟩ := opened.line cert_check success fork pairTransferPartialLine rfl
+  obtain ⟨opened⟩ := remaining.destH cert_check success stateGas
+  obtain ⟨gas⟩ := opened.lineH cert_check success stateGas pairTransferPartialLine rfl
     (by intro inst member x equal; subst inst; simp only [pairTransferPartialLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (pair_transfer_partial_line_state mem lower width)

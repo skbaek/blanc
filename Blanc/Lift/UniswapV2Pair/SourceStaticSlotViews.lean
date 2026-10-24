@@ -5,16 +5,15 @@ import Blanc.Lift.CursorOccurrenceRoots
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- The actual static occurrence supplies its exact slot queue, complete child
-paths, and source views. Root freshness is projected to that same child. -/
-theorem CallOccurrenceStep.staticSlotViews {root : Exec.Deriv}
+theorem CallOccurrenceStep.staticSlotViewsH {root : Exec.Deriv}
     (call : CallOccurrenceStep root .staticcall) {K : WriterKey → Prop}
     {frame : Frame} {request : Request} (index : Nat)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (call.occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
     (rep : WriterRep K (call.occurrence.node.devm.getStor frame.context.pair) frame.current.state)
     (time : frame.context.timestamp = call.occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork call.occurrence.node.sevm.benvStat.fork)
+    (stateGas : call.occurrence.node.sevm.benvStat.rules.stateGas = none)
+    (bal : call.occurrence.node.sevm.benvStat.rules.bal = none)
     (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = frame.context.pair →
       WriterFreshKeys K (staticViewDecodedKeys F.sevm)) :
     ∃ (paths : List Exec.LocatedFrame) (views : List StaticViewTurn),
@@ -23,8 +22,8 @@ theorem CallOccurrenceStep.staticSlotViews {root : Exec.Deriv}
       ExactTurns frame request 0 (staticViewTranscript views .done)
         {complete := true, frame := frame,
           childReturns := staticViewChildReturns frame request 0 views} := by
-  rcases sync_static_slot_filtered_turns_inv (path := [index]) call.occurrence call.returned
-      call.instruction call.result sem image installed rep time fork with none | some
+  rcases sync_static_slot_filtered_turns_invH (path := [index]) call.occurrence call.returned
+      call.instruction call.result sem image installed rep time stateGas bal with none | some
   · obtain ⟨slot, during⟩ := none
     exact ⟨[], [], Or.inl ⟨slot, rfl⟩, rfl,
       (fun _ member => (List.not_mem_nil member).elim), during⟩
@@ -51,5 +50,6 @@ theorem CallOccurrenceStep.staticSlotViews {root : Exec.Deriv}
     obtain ⟨chosen, mapped, authentic, during⟩ := views selectedFresh
     exact ⟨_, chosen, Or.inr ⟨evm, raw, callee, resume, pc, child, next, spawn, enter,
       resumed, slot, original, rfl⟩, mapped, authentic, during⟩
+
 
 end Blanc.Lift.UniswapV2Pair

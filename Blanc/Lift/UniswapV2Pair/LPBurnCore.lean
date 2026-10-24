@@ -9,9 +9,29 @@ def lpBurnSupplyBase (sevm : Sevm) (b : Devm) (fromWord value supply : B256) : D
   (afterSstore sevm b 0 supply).addLog
     ⟨sevm.currentTarget, [transferTopic, fromWord.toAdr.toB256, 0], value.toBytes⟩
 
+def lpBurnSupplyBaseH (sevm : Sevm) (b : Devm) (fromWord value supply : B256) : Devm :=
+  (afterSstoreH sevm b 0 supply).addLog
+    ⟨sevm.currentTarget, [transferTopic, fromWord.toAdr.toB256, 0], value.toBytes⟩
+
+theorem lpBurnSupplyBaseH_of_covered {sevm : Sevm} {b : Devm} {fromWord value supply : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnSupplyBaseH sevm b fromWord value supply = lpBurnSupplyBase sevm b fromWord value supply := by
+  unfold lpBurnSupplyBaseH lpBurnSupplyBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def lpBurnSupplyPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (fromWord value supply : B256) (G : Nat) : Devm :=
   St (lpBurnSupplyBase sevm b fromWord value supply) R (M.write 128 value.toBytes) G
+
+def lpBurnSupplyPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (fromWord value supply : B256) (G : Nat) : Devm :=
+  St (lpBurnSupplyBaseH sevm b fromWord value supply) R (M.write 128 value.toBytes) G
+
+theorem lpBurnSupplyPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {fromWord value supply : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnSupplyPostH sevm b R M fromWord value supply G = lpBurnSupplyPost sevm b R M fromWord value supply G := by
+  unfold lpBurnSupplyPostH lpBurnSupplyPost
+  simp only [lpBurnSupplyBaseH_of_covered fork]
 
 /-- The actual second store and Transfer(from,0,value) tail of LP burn 63. -/
 theorem lpBurn_supply_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -70,13 +90,13 @@ theorem lpBurn_supply_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_pop ?_
   exact rx_ret
 
-/-- Successful LP burn return derives the supply write and exact raw Transfer log. -/
-theorem lpBurn_supply_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {fromWord value supply ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run fs sevm (St b (supply :: value :: fromWord :: ρ :: R) M G) t_2a02_c63 o) :
     sevm.isStatic = false ∧
-      ∃ residual, o = .returned (lpBurnSupplyPost sevm b R M fromWord value supply residual) := by
+      ∃ residual, o = .returned (lpBurnSupplyPostH sevm b R M fromWord value supply residual) := by
   have m1 := mem.write 128 value (Or.inr (by decide))
   rw [show memExtSize 192 128 32 = 192 from by decide] at m1
   have ptr0 := mem.word
@@ -95,8 +115,8 @@ theorem lpBurn_supply_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
@@ -172,17 +192,48 @@ theorem lpBurn_supply_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
+
 def lpBurnBalanceBase (sevm : Sevm) (b : Devm) (fromWord debited : B256) : Devm :=
   afterSstore sevm b (transferBalanceSlot fromWord.toAdr) debited
 
+def lpBurnBalanceBaseH (sevm : Sevm) (b : Devm) (fromWord debited : B256) : Devm :=
+  afterSstoreH sevm b (transferBalanceSlot fromWord.toAdr) debited
+
+theorem lpBurnBalanceBaseH_of_covered {sevm : Sevm} {b : Devm} {fromWord debited : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnBalanceBaseH sevm b fromWord debited = lpBurnBalanceBase sevm b fromWord debited := by
+  unfold lpBurnBalanceBaseH lpBurnBalanceBase
+  simp only [afterSstoreH_of_eip2929 fork.rules_access (by rw [fork.rules_sstore])]
+
 def lpBurnSupplyWord (sevm : Sevm) (b : Devm) (fromWord debited : B256) : B256 :=
   (lpBurnBalanceBase sevm b fromWord debited).getStorVal sevm.currentTarget 0
+
+def lpBurnSupplyWordH (sevm : Sevm) (b : Devm) (fromWord debited : B256) : B256 :=
+  (lpBurnBalanceBaseH sevm b fromWord debited).getStorVal sevm.currentTarget 0
+
+theorem lpBurnSupplyWordH_of_covered {sevm : Sevm} {b : Devm} {fromWord debited : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnSupplyWordH sevm b fromWord debited = lpBurnSupplyWord sevm b fromWord debited := by
+  unfold lpBurnSupplyWordH lpBurnSupplyWord
+  simp only [lpBurnBalanceBaseH_of_covered fork]
 
 def lpBurnBalancePost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
     (fromWord value debited : B256) (G : Nat) : Devm :=
   lpBurnSupplyPost sevm (afterSload sevm (lpBurnBalanceBase sevm b fromWord debited) 0) R
     ((M.write 0 fromWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
     fromWord value (lpBurnSupplyWord sevm b fromWord debited - value) G
+
+def lpBurnBalancePostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (fromWord value debited : B256) (G : Nat) : Devm :=
+  lpBurnSupplyPostH sevm (afterSloadH sevm (lpBurnBalanceBaseH sevm b fromWord debited) 0) R
+    ((M.write 0 fromWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
+    fromWord value (lpBurnSupplyWordH sevm b fromWord debited - value) G
+
+theorem lpBurnBalancePostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {fromWord value debited : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnBalancePostH sevm b R M fromWord value debited G = lpBurnBalancePost sevm b R M fromWord value debited G := by
+  unfold lpBurnBalancePostH lpBurnBalancePost
+  simp only [lpBurnBalanceBaseH_of_covered fork, lpBurnSupplyPostH_of_covered fork, lpBurnSupplyWordH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- The balance store precedes the supply load, including a raw hash alias at slot zero. -/
 theorem lpBurn_balance_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -253,13 +304,13 @@ theorem lpBurn_balance_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (sub59_exact cover (by simp only [List.length_cons]; omega)) ?_
   exact lpBurn_supply_exact fork m1 supplyEq supplySentry nonstatic room
 
-/-- Inverse keeps the post-balance-write supply read and derives its checked debit. -/
-theorem lpBurn_balance_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {fromWord value debited ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run cert.prog sevm (St b (debited :: value :: fromWord :: ρ :: R) M G) t_29c8_c63 o) :
-    sevm.isStatic = false ∧ value ≤ lpBurnSupplyWord sevm b fromWord debited ∧
-      ∃ residual, o = .returned (lpBurnBalancePost sevm b R M fromWord value debited residual) := by
+    sevm.isStatic = false ∧ value ≤ lpBurnSupplyWordH sevm b fromWord debited ∧
+      ∃ residual, o = .returned (lpBurnBalancePostH sevm b R M fromWord value debited residual) := by
   have m1 := lpMintScratch_ptr mem fromWord
   have hash := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 fromWord.toAdr.toB256 1)
   have h := run.cut
@@ -320,10 +371,10 @@ theorem lpBurn_balance_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
-  have nonstatic := ri_sstore_nonstatic fork hd
-  obtain ⟨_, rfl⟩ := ri_sstore fork hd
+  have nonstatic := ri_sstore_nonstaticH stateGas hd
+  obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x2a, 0x02] = (0x2a02 : B256) from by decide] at hd
@@ -347,10 +398,11 @@ theorem lpBurn_balance_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨cover, _, eq⟩ := sub59_inv checked
     cases eq
-    obtain ⟨_, residual, result⟩ := lpBurn_supply_inv fork m1 tail.uncut
+    obtain ⟨_, residual, result⟩ := lpBurn_supply_invH stateGas bal m1 tail.uncut
     exact ⟨nonstatic, cover, residual, result⟩
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
+
 
 def lpBurnBalanceWord (sevm : Sevm) (b : Devm) (fromWord : B256) : B256 :=
   b.getStorVal sevm.currentTarget (transferBalanceSlot fromWord.toAdr)
@@ -360,6 +412,25 @@ def lpBurnPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
   lpBurnBalancePost sevm (afterSload sevm b (transferBalanceSlot fromWord.toAdr)) R
     ((M.write 0 fromWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
     fromWord value (lpBurnBalanceWord sevm b fromWord - value) G
+
+def lpBurnPostH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (fromWord value : B256) (G : Nat) : Devm :=
+  lpBurnBalancePostH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr)) R
+    ((M.write 0 fromWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes)
+    fromWord value (lpBurnBalanceWord sevm b fromWord - value) G
+
+/-- The historical LP-burn post leaves the same machine memory as the modern one. -/
+theorem lpBurnPostH_memory (sevm : Sevm) (b b' : Devm) (R : List B256) (M : Mem)
+    (fromWord value : B256) (G : Nat) :
+    (lpBurnPostH sevm b R M fromWord value G).memory = (lpBurnPost sevm b' R M fromWord value G).memory := by
+  simp only [lpBurnPostH, lpBurnPost, lpBurnBalancePostH, lpBurnBalancePost, lpBurnSupplyPostH,
+    lpBurnSupplyPost, St, Devm.memory_setMach]
+
+theorem lpBurnPostH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    lpBurnPostH sevm b R M fromWord value G = lpBurnPost sevm b R M fromWord value G := by
+  unfold lpBurnPostH lpBurnPost
+  simp only [lpBurnBalancePostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access]
 
 /-- Entry63 follows both checked subtractions with the actual sequential storage charges. -/
 theorem lpBurn63_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -435,15 +506,15 @@ theorem lpBurn63_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   exact lpBurn_balance_exact fork m1 balanceEq loadEq supplyEq balanceSentry supplySentry
     nonstatic supplyCover room
 
-/-- Successful entry63 derives both covers and its sequential raw world, without hash separation. -/
-theorem lpBurn63_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {fromWord value ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (run : SFunc.Run cert.prog sevm (St b (value :: fromWord :: ρ :: R) M G) t_2992_c63 o) :
     sevm.isStatic = false ∧ value ≤ lpBurnBalanceWord sevm b fromWord ∧
-      value ≤ lpBurnSupplyWord sevm (afterSload sevm b (transferBalanceSlot fromWord.toAdr))
+      value ≤ lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
         fromWord (lpBurnBalanceWord sevm b fromWord - value) ∧
-      ∃ residual, o = .returned (lpBurnPost sevm b R M fromWord value residual) := by
+      ∃ residual, o = .returned (lpBurnPostH sevm b R M fromWord value residual) := by
   have m1 := lpMintScratch_ptr mem fromWord
   have hash := congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 fromWord.toAdr.toB256 1)
   have h := run.cut
@@ -496,7 +567,7 @@ theorem lpBurn63_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m1.read_self (by decide : 0 + 64 ≤ 192), hash] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x29, 0xc8] = (0x29c8 : B256) from by decide] at hd
@@ -520,9 +591,10 @@ theorem lpBurn63_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases call with ⟨d, checked, tail⟩ | ⟨d, checked, _⟩
   · obtain ⟨balanceCover, _, eq⟩ := sub59_inv checked
     cases eq
-    obtain ⟨nonstatic, supplyCover, residual, result⟩ := lpBurn_balance_inv fork m1 tail.uncut
+    obtain ⟨nonstatic, supplyCover, residual, result⟩ := lpBurn_balance_invH stateGas bal m1 tail.uncut
     exact ⟨nonstatic, balanceCover, supplyCover, residual, result⟩
   · obtain ⟨_, _, eq⟩ := sub59_inv checked
     cases eq
+
 
 end Blanc.Lift.UniswapV2Pair

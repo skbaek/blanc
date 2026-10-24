@@ -54,8 +54,7 @@ theorem mintLaterAmount_source {amount0 amount1 supply r0 r1 : B256}
     exact h
 
 
-/-- Finite accounting for the actual recipient callee and the already derived full raw return. -/
-def MintPricedLPSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm)
+def MintPricedLPSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm)
     (b : Devm) (R : List B256) (M : Mem)
     (supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256) (o : Outcome) : Prop :=
   0 < liquidity.toNat ∧ b0.toNat < 2 ^ 112 ∧ b1.toNat < 2 ^ 112 ∧
@@ -63,44 +62,43 @@ def MintPricedLPSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm)
       SFunc.Run cert.prog sevm
         (St b (liquidity :: toWord :: 0x1330 :: supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 ::
           liquidity :: toWord :: ρ :: R) M mintGas) t_28ca_c62
-        (.returned (lpMintPost sevm b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 ::
+        (.returned (lpMintPostH sevm b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 ::
           liquidity :: toWord :: ρ :: R) M toWord liquidity residual)) ∧
-      LPMintSourceResult K st sevm b
+      LPMintSourceResultH K st sevm b
         (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R)
         M toWord liquidity residual ∧
-      o = .returned (mintPricedPost sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas)
+      o = .returned (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas)
 
-theorem mintPricedLP_source {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+theorem mintPricedLP_sourceH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem}
     {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr))
-    (observed : MintPricedResult sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o) :
-    MintPricedLPSourceResult K st sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o := by
+    (observed : MintPricedResultH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o) :
+    MintPricedLPSourceResultH K st sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o := by
   obtain ⟨positive, accepts, bound0, bound1, mintGas, residual, gas, callee, result⟩ := observed
   exact ⟨positive, bound0, bound1, mintGas, residual, gas, callee,
-    lpMint_source_result rep fresh accepts, result⟩
+    lpMint_source_resultH rep fresh accepts, result⟩
 
-/-- The actual update changes only fixed reserve/oracle words; the finite LP rows survive. -/
-theorem WriterRep.mint_update {K : WriterKey → Prop} {st post : State} {ctx : Context}
+theorem WriterRep.mint_updateH {K : WriterKey → Prop} {st post : State} {ctx : Context}
     {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256} {event : Event} {oracle : OracleUpdate}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
     (oldBound0 : old0.toNat < 2 ^ 112) (oldBound1 : old1.toNat < 2 ^ 112)
     (accepted : st.update ctx balance0 balance1 old0.toNat old1.toNat = .ok (post, event, oracle)) :
-    WriterRep K ((updateWorld sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget) post := by
+    WriterRep K ((updateWorldH sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget) post := by
   have slots : ReserveSlotMatches st sevm b := ⟨rep.fixed.2.2.2.2.2.1,
     rep.fixed.2.2.2.2.2.2.1, rep.fixed.2.2.2.2.2.2.2.1⟩
   have cum0 := rep.fixed.2.2.2.2.2.2.2.2.1
   have cum1 := rep.fixed.2.2.2.2.2.2.2.2.2.1
-  have correspondence := update_source_result_of_ok slots cum0 cum1 time pair oldBound0 oldBound1 accepted
+  have correspondence := update_source_result_of_okH slots cum0 cum1 time pair oldBound0 oldBound1 accepted
   obtain ⟨bound0,bound1⟩ := update_source_guards accepted
   unfold State.update at accepted
   rw [dite_eq_left bound0, dite_eq_left bound1] at accepted
   cases accepted
   have unchanged (k : B256) (off : k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10) :
-      ((updateWorld sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget).get k =
-        (b.getStor sevm.currentTarget).get k := updateWorld_storage_frame (.inr off)
+      ((updateWorldH sevm b old0 old1 balance0 balance1).getStor sevm.currentTarget).get k =
+        (b.getStor sevm.currentTarget).get k := updateWorld_storage_frameH (.inr off)
   refine ⟨rep.finite, ?_, ?_, rep.inj, rep.apart, ?_, ?_⟩
   · dsimp only [WriterFixedMatches]
     rw [unchanged 0 ⟨by decide,by decide,by decide⟩,
@@ -195,11 +193,11 @@ theorem WriterRep.mint_unlock_store {K : WriterKey → Prop} {s : Stor} {st : St
   · intro k outside
     cases k <;> exact rep.logicalZero _ outside
 
-theorem WriterRep.mint_conditional_last {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+theorem WriterRep.mint_conditional_lastH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {f : B256} (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
-    WriterRep K ((mintConditionalLastWorld sevm b f).getStor sevm.currentTarget)
+    WriterRep K ((mintConditionalLastWorldH sevm b f).getStor sevm.currentTarget)
       (if f = 0 then st else mintLastSourceState st) := by
-  unfold mintConditionalLastWorld
+  unfold mintConditionalLastWorldH
   by_cases zero : f = 0
   · simp only [ite_eq_left zero]
     exact rep
@@ -223,14 +221,14 @@ theorem WriterRep.mint_conditional_last {K : WriterKey → Prop} {st : State} {s
         B256.toNat_toB256_of_lt (lt_trans st.reserve0.isLt (by decide)),
         B256.toNat_toB256_of_lt (lt_trans st.reserve1.isLt (by decide)),
         B256.toNat_toB256_of_lt productBound]
-    rw [mintKLastWorld,afterSstore_getStor_self,afterSload_getStor,product]
+    rw [mintKLastWorldH,afterSstoreH_getStor_self,afterSloadH_getStor,product]
     exact rep.mint_last_store
 
-theorem WriterRep.mint_return {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+theorem WriterRep.mint_returnH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {amount0 amount1 : B256} (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
-    WriterRep K ((mintReturnWorld sevm b amount0 amount1).getStor sevm.currentTarget)
+    WriterRep K ((mintReturnWorldH sevm b amount0 amount1).getStor sevm.currentTarget)
       (mintUnlockedSourceState st) := by
-  rw [mintReturnWorld,afterSstore_getStor_self,Devm.addLog_getStor]
+  rw [mintReturnWorldH,afterSstoreH_getStor_self,Devm.addLog_getStor]
   exact rep.mint_unlock_store
 
 
@@ -238,15 +236,14 @@ theorem WriterRep.mint_return {K : WriterKey → Prop} {st : State} {sevm : Sevm
 def mintFinishedSourceState (st : State) (f : B256) : State :=
   mintUnlockedSourceState (if f = 0 then st else mintLastSourceState st)
 
-/-- The whole actual priced suffix yields source LP/update acceptance and finite final storage. -/
-theorem mintPriced_source_result {K : WriterKey → Prop} {st : State} {ctx : Context}
+theorem mintPriced_source_resultH {K : WriterKey → Prop} {st : State} {ctx : Context}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {o : Outcome}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr))
     (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
     (oldBound0 : r0.toNat < 2 ^ 112) (oldBound1 : r1.toNat < 2 ^ 112)
-    (observed : MintPricedResult sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o) :
+    (observed : MintPricedResultH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ o) :
     0 < liquidity.toNat ∧
     ∃ post event oracle residual gas,
       st.mintLP toWord.toAdr liquidity =
@@ -254,58 +251,57 @@ theorem mintPriced_source_result {K : WriterKey → Prop} {st : State} {ctx : Co
       (lpMintSourceState st toWord.toAdr liquidity).update ctx b0 b1 r0.toNat r1.toNat =
         .ok (post,event,oracle) ∧
       WriterRep (WriterExtend K (lpMintTouched toWord.toAdr))
-        ((mintPricedPost sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).getStor sevm.currentTarget)
+        ((mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).getStor sevm.currentTarget)
         (mintFinishedSourceState post f) ∧
       event = .sync b0.toNat b1.toNat ∧
-      o = .returned (mintPricedPost sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas) := by
+      o = .returned (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas) := by
   obtain ⟨positive,bound0,bound1,mintGas,residual,gas,callee,lp,result⟩ :=
-    mintPricedLP_source rep fresh observed
-  let base := lpMintPost sevm b
+    mintPricedLP_sourceH rep fresh observed
+  let base := lpMintPostH sevm b
     (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R)
     M toWord liquidity residual
   have lpRep : WriterRep (WriterExtend K (lpMintTouched toWord.toAdr))
       (base.getStor sevm.currentTarget) (lpMintSourceState st toWord.toAdr liquidity) := lp.2.1
   have slots : ReserveSlotMatches (lpMintSourceState st toWord.toAdr liquidity) sevm base :=
     ⟨lpRep.fixed.2.2.2.2.2.1,lpRep.fixed.2.2.2.2.2.2.1,lpRep.fixed.2.2.2.2.2.2.2.1⟩
-  obtain ⟨post,event,oracle,accepted,correspondence⟩ := update_source_result slots
+  obtain ⟨post,event,oracle,accepted,correspondence⟩ := update_source_resultH slots
     lpRep.fixed.2.2.2.2.2.2.2.2.1 lpRep.fixed.2.2.2.2.2.2.2.2.2.1
     time pair oldBound0 oldBound1 bound0 bound1
-  have updated := lpRep.mint_update time pair oldBound0 oldBound1 accepted
-  have finished := (updated.mint_conditional_last (f := f)).mint_return
+  have updated := lpRep.mint_updateH time pair oldBound0 oldBound1 accepted
+  have finished := (updated.mint_conditional_lastH (f := f)).mint_returnH
     (amount0 := amount0) (amount1 := amount1)
   refine ⟨positive,post,event,oracle,residual,gas,lp.1,accepted,?_,correspondence.2.2.2.1,result⟩
   change WriterRep (WriterExtend K (lpMintTouched toWord.toAdr))
-    ((mintReturnWorld sevm (mintConditionalLastWorld sevm
-      (updateWorld sevm base r0 r1 b0 b1) f) amount0 amount1).getStor sevm.currentTarget)
+    ((mintReturnWorldH sevm (mintConditionalLastWorldH sevm
+      (updateWorldH sevm base r0 r1 b0 b1) f) amount0 amount1).getStor sevm.currentTarget)
     (mintFinishedSourceState post f)
   exact finished
 
 
 
 
-/-- Exact chronological Transfer, Sync, Mint logs of the complete common suffix. -/
-theorem mintPricedPost_logs {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+theorem mintPricedPost_logsH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ : B256} {residual gas : Nat}
     (bound0 : b0.toNat < 2 ^ 112) (bound1 : b1.toNat < 2 ^ 112) :
-    (mintPricedPost sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).logs =
+    (mintPricedPostH sevm b R M supply f amount1 amount0 b1 b0 r1 r0 liquidity toWord ρ residual gas).logs =
       b.logs ++ [lpMintRawLog sevm.currentTarget toWord.toAdr liquidity,
         ⟨sevm.currentTarget,[updateSyncTopic],encodeWords [b0,b1]⟩,mintEventLog sevm amount0 amount1] := by
-  let base := lpMintPost sevm b
+  let base := lpMintPostH sevm b
     (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R)
     M toWord liquidity residual
-  have unchanged : (mintConditionalLastWorld sevm (updateWorld sevm base r0 r1 b0 b1) f).logs =
-      (updateWorld sevm base r0 r1 b0 b1).logs := by
-    unfold mintConditionalLastWorld
+  have unchanged : (mintConditionalLastWorldH sevm (updateWorldH sevm base r0 r1 b0 b1) f).logs =
+      (updateWorldH sevm base r0 r1 b0 b1).logs := by
+    unfold mintConditionalLastWorldH
     split
     · rfl
-    · rw [mintKLastWorld,afterSstore_logs,afterSload_logs]
-  change (mintReturnWorld sevm (mintConditionalLastWorld sevm
-    (updateWorld sevm base r0 r1 b0 b1) f) amount0 amount1).logs = _
-  rw [mintReturnWorld,afterSstore_logs]
-  change (mintConditionalLastWorld sevm (updateWorld sevm base r0 r1 b0 b1) f).logs ++
+    · rw [mintKLastWorldH,afterSstoreH_logs,afterSloadH_logs]
+  change (mintReturnWorldH sevm (mintConditionalLastWorldH sevm
+    (updateWorldH sevm base r0 r1 b0 b1) f) amount0 amount1).logs = _
+  rw [mintReturnWorldH,afterSstoreH_logs]
+  change (mintConditionalLastWorldH sevm (updateWorldH sevm base r0 r1 b0 b1) f).logs ++
     [mintEventLog sevm amount0 amount1] = _
-  rw [unchanged,updateWorld_logs bound0 bound1]
-  have transfer := (lpMintPost_facts (sevm := sevm) (b := b)
+  rw [unchanged,updateWorld_logsH bound0 bound1]
+  have transfer := (lpMintPost_factsH (sevm := sevm) (b := b)
     (R := supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R)
     (M := M) (toWord := toWord) (value := liquidity) (G := residual)).2.2.1
   change base.logs = b.logs ++ [lpMintRawLog sevm.currentTarget toWord.toAdr liquidity] at transfer
@@ -343,34 +339,33 @@ structure MintAfterFeeFresh (K : WriterKey → Prop) (st : State) (toWord : B256
     WriterFreshKeys (WriterExtend K (lpMintTouched (0 : B256).toAdr)) (lpMintTouched toWord.toAdr)
   later : st.totalSupply ≠ 0 → WriterFreshKeys K (lpMintTouched toWord.toAdr)
 
-/-- Both supply arms derive the complete finite source result from the SAME actual raw observations. -/
-theorem mintAfterFee_source_observed {K : WriterKey → Prop} {st : State} {ctx : Context}
+theorem mintAfterFee_source_observedH {K : WriterKey → Prop} {st : State} {ctx : Context}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {f amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (fresh : MintAfterFeeFresh K st toWord)
     (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
     (oldBound0 : r0.toNat < 2 ^ 112) (oldBound1 : r1.toNat < 2 ^ 112)
-    (observed : MintAfterFeeResult sevm b R M f amount1 amount0 b1 b0 r1 r0 toWord ρ o) :
+    (observed : MintAfterFeeResultH sevm b R M f amount1 amount0 b1 b0 r1 r0 toWord ρ o) :
     MintAfterFeeSourceResult K st ctx sevm b R f amount1 amount0 b1 b0 r1 r0 toWord o := by
   have supply : lpMintSupplyWord sevm b = st.totalSupply := rep.fixed.1
-  have loaded : WriterRep K ((afterSload sevm b 0).getStor sevm.currentTarget) st := by
-    rw [afterSload_getStor]
+  have loaded : WriterRep K ((afterSloadH sevm b 0).getStor sevm.currentTarget) st := by
+    rw [afterSloadH_getStor]
     exact rep
-  unfold MintAfterFeeResult at observed
+  unfold MintAfterFeeResultH at observed
   rw [supply] at observed
   by_cases zero : st.totalSupply = 0
   · rw [ite_eq_left zero] at observed
     obtain ⟨product,cover,minimumGas,minimumResidual,callee,minimumAccepts,priced⟩ := observed
     let liquidity := mintInitialLiquidity amount0 amount1
     let cache := st.totalSupply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: liquidity :: toWord :: ρ :: R
-    let base := lpMintPost sevm (afterSload sevm b 0) cache M 0 1000 minimumResidual
-    have minimum := lpMint_source_result (R := cache) (M := M) (G := minimumResidual)
+    let base := lpMintPostH sevm (afterSloadH sevm b 0) cache M 0 1000 minimumResidual
+    have minimum := lpMint_source_resultH (R := cache) (M := M) (G := minimumResidual)
       loaded (fresh.initial zero).1 minimumAccepts
     have minimumRep : WriterRep (WriterExtend K (lpMintTouched (0 : B256).toAdr))
         (base.getStor sevm.currentTarget) (lpMintSourceState st (0 : B256).toAdr 1000) := minimum.2.1
     obtain ⟨positive,post,event,oracle,residual,gas,recipientAccepts,updated,final,eventEq,result⟩ :=
-      mintPriced_source_result minimumRep (fresh.initial zero).2 time pair oldBound0 oldBound1 priced
+      mintPriced_source_resultH minimumRep (fresh.initial zero).2 time pair oldBound0 oldBound1 priced
     refine ⟨liquidity.toNat,WriterExtend (WriterExtend K (lpMintTouched (0 : B256).toAdr))
       (lpMintTouched toWord.toAdr),lpMintSourceState st (0 : B256).toAdr 1000,
       lpMintSourceState (lpMintSourceState st (0 : B256).toAdr 1000) toWord.toAdr liquidity,
@@ -382,11 +377,11 @@ theorem mintAfterFee_source_observed {K : WriterKey → Prop} {st : State} {ctx 
       exact minimum.1
     · rw [toB256_toNat liquidity]
       exact recipientAccepts
-    · rw [toB256_toNat liquidity,mintPricedPost_logs priced.2.2.1 priced.2.2.2.1]
+    · rw [toB256_toNat liquidity,mintPricedPost_logsH priced.2.2.1 priced.2.2.2.1]
       have minimumLog := minimum.2.2.2.2.1
-      change base.logs = (afterSload sevm b 0).logs ++
+      change base.logs = (afterSloadH sevm b 0).logs ++
         [lpMintRawLog sevm.currentTarget (0 : B256).toAdr 1000] at minimumLog
-      rw [minimumLog,afterSload_logs,ite_eq_left zero]
+      rw [minimumLog,afterSloadH_logs,ite_eq_left zero]
       simp only [List.append_assoc,List.cons_append,List.nil_append]
       rfl
     · change liquidity :: R = liquidity.toNat.toB256 :: R
@@ -395,7 +390,7 @@ theorem mintAfterFee_source_observed {K : WriterKey → Prop} {st : State} {ctx 
     obtain ⟨product0,divisor0,product1,divisor1,priced⟩ := observed
     let liquidity := mintMinWord ((amount1 * st.totalSupply) / r1) ((amount0 * st.totalSupply) / r0)
     obtain ⟨positive,post,event,oracle,residual,gas,recipientAccepts,updated,final,eventEq,result⟩ :=
-      mintPriced_source_result loaded (fresh.later zero) time pair oldBound0 oldBound1 priced
+      mintPriced_source_resultH loaded (fresh.later zero) time pair oldBound0 oldBound1 priced
     refine ⟨liquidity.toNat,WriterExtend K (lpMintTouched toWord.toAdr),st,
       lpMintSourceState st toWord.toAdr liquidity,post,[],[.transfer 0 toWord.toAdr liquidity],
       event,oracle,_,(by simp only [ite_eq_right zero]),?_,?_,positive,?_,updated,final,eventEq,result,?_,?_⟩
@@ -403,16 +398,16 @@ theorem mintAfterFee_source_observed {K : WriterKey → Prop} {st : State} {ctx 
     · rw [ite_eq_right zero]
     · rw [toB256_toNat liquidity]
       exact recipientAccepts
-    · rw [toB256_toNat liquidity,mintPricedPost_logs priced.2.2.1 priced.2.2.2.1,
-        afterSload_logs,ite_eq_right zero,List.append_nil]
+    · rw [toB256_toNat liquidity,mintPricedPost_logsH priced.2.2.1 priced.2.2.2.1,
+        afterSloadH_logs,ite_eq_right zero,List.append_nil]
     · change liquidity :: R = liquidity.toNat.toB256 :: R
       rw [toB256_toNat liquidity]
 
-/-- The inverse extracts the pricing/callee observations from the successful actual1233 run. -/
-theorem mintAfterFee_source_inv {K : WriterKey → Prop} {st : State} {ctx : Context}
+theorem mintAfterFee_source_invH {K : WriterKey → Prop} {st : State} {ctx : Context}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (fresh : MintAfterFeeFresh K st toWord)
     (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
@@ -421,8 +416,9 @@ theorem mintAfterFee_source_inv {K : WriterKey → Prop} {st : State} {ctx : Con
       (St b (f :: 0 :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M G)
       t_1233_c41 o) :
     MintAfterFeeSourceResult K st ctx sevm b R f amount1 amount0 b1 b0 r1 r0 toWord o := by
-  exact mintAfterFee_source_observed rep fresh time pair oldBound0 oldBound1
-    (mintAfterFee_inv fork mem oldBound0 oldBound1 run)
+  exact mintAfterFee_source_observedH rep fresh time pair oldBound0 oldBound1
+    (mintAfterFee_invH stateGas bal mem oldBound0 oldBound1 run)
+
 
 
 
@@ -536,11 +532,11 @@ theorem mintAfterFee_source_frame {K : WriterKey → Prop} {frame : Frame} {obse
   · simpa only [cache.amount0,cache.amount1,mintAfterFeeFinishedFrame] using typed
   · simpa only [pair,sender,mintEventLog] using logs
 
-/-- Successful raw1233 derives its full typed continuation, rather than assuming a successful model endpoint. -/
-theorem mintAfterFee_frame_inv {K : WriterKey → Prop} {frame : Frame} {observed : MintObserved}
+theorem mintAfterFee_frame_invH {K : WriterKey → Prop} {frame : Frame} {observed : MintObserved}
     {fee : FeeResult} {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (rep : WriterRep K (b.getStor sevm.currentTarget) fee.state)
     (fresh : MintAfterFeeFresh K fee.state toWord)
     (cache : MintAfterFeeCache observed fee f amount1 amount0 b1 b0 r1 r0 toWord)
@@ -552,7 +548,8 @@ theorem mintAfterFee_frame_inv {K : WriterKey → Prop} {frame : Frame} {observe
       t_1233_c41 o) :
     MintAfterFeeFrameResult K frame observed fee sevm b R amount1 amount0 b1 b0 toWord o := by
   exact mintAfterFee_source_frame cache pair sender
-    (mintAfterFee_source_inv fork mem rep fresh time pair oldBound0 oldBound1 run)
+    (mintAfterFee_source_invH stateGas bal mem rep fresh time pair oldBound0 oldBound1 run)
+
 
 
 

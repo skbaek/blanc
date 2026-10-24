@@ -2,6 +2,9 @@ import Blanc.Lift.Weth9.FootFrame
 import Blanc.ContractAdmissionSem
 import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceAdmission
+import Blanc.ExecutionHistoricalLadder
+import Blanc.ExecutionRewardCredits
+import Blanc.Lift.Weth9.TerminalSafety
 
 /-!
 # WETH9 footprint history: trace-local hash premises only
@@ -144,5 +147,97 @@ theorem weth9_history_backed {ca : Adr} {cfg : ChainConfig}
   obtain ⟨-, -, hfoot⟩ := weth9_history_footprint_universe trace installed sumNof initial fresh
   exact ⟨hfoot.backed, fun a ha => hfoot.balance_le ha,
     fun a hfix hK => hfoot.balance_eq_zero hfix hK⟩
+
+/-! ## Selected fork domains
+
+The footprint frame contract over a fork domain `F` whose members disable state gas: the lifting
+theorem is `lift_sound_in_noStateGas`, the frame theorem `foot_frame_post_inIn`, and the frame
+ladder `ContractSpecSem.preserves_inv_admittedIn`. A frame's `benvStat.rules` is its fork's rule
+set, so `hF fork` is the frame's `rules.stateGas = none`. -/
+
+/-- **WETH9 frame soundness over a tracked universe and a selected fork domain.** -/
+theorem footSpec_soundAdmittedIn (F : Fork → Prop)
+    (hF : ∀ {f : Fork}, F f → f.ruleSet.stateGas = none) (ca : Adr) {U : Key → Prop}
+    (hinj : KeyInj U) :
+    (footSpec U).SoundAdmittedIn F ca (footEntry U) := by
+  intro sevm pre post fork execution hrun hca admitted ih _ hpre
+  subst hca
+  have hin := lift_sound_in_noStateGas cert_check hrun.1 (hF fork) execution
+  exact foot_frame_post_inIn hinj (R := ⟨0, sevm, pre, .ok post, execution⟩) (hF fork) fork hin
+    (admitted.root rfl) admitted ih hpre
+
+/-- **WETH9 frame preservation over a selected fork domain**, by the historical frame ladder. -/
+theorem footSpec_preservesAdmittedIn (F : Fork → Prop)
+    (hF : ∀ {f : Fork}, F f → f.ruleSet.stateGas = none) (ca : Adr) {U : Key → Prop}
+    (hinj : KeyInj U) :
+    (footSpec U).PreservesAdmittedIn F ca (footEntry U) :=
+  ContractSpecSem.preserves_inv_admittedIn F hF (footSpec U) ca (footEntry U)
+    (footSpec_soundAdmittedIn F hF ca hinj)
+
+/-- WETH9 frame preservation on the historical domain `HistFork`. -/
+theorem footSpec_preservesAdmittedHist (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
+    (footSpec U).PreservesAdmittedIn HistFork ca (footEntry U) :=
+  footSpec_preservesAdmittedIn HistFork HistFork.stateGas_none ca hinj
+
+/-- The keys the actual raw target entries of a selected-domain history may touch, including
+entries whose effects later roll back. -/
+def historyTouchedKeysIn {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (ca : Adr) (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) : List Key :=
+  trace.rawFrames.flatMap fun root =>
+    if root.sevm.currentTarget = ca then frameKeys root.sevm else []
+
+/-- The tracked universe of a selected-domain history: the initial keys together with every key a
+raw target entry may touch. -/
+def historyKeyUniverseIn {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (ca : Adr) (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (initialKeys : Key → Prop) : Key → Prop :=
+  Key.extend initialKeys (historyTouchedKeysIn ca trace)
+
+/-- **WETH9 history footprint over a selected fork domain (universe form).**  The counterpart of
+`weth9_history_footprint_universe` for a configured history whose blocks run on forks in `F`
+(with the body-stage capabilities): from one initial footprint `K₀` and the trace-local
+freshness of the touched keys, the future state carries the deployed code, `SumNof`, and the
+footprint over `K₀ ∪ touched`. Deletion exclusion comes from the installed checked runtime
+(`installedCert`), reward funding from each block's own reward-inclusive budget
+(`ConfiguredHistoryTraceIn.rewardCreditsFunded`). -/
+theorem weth9_history_footprint_universeIn {F : Fork → Prop}
+    (capabilities : BodyStageCapabilities F) {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeysIn ca trace)) :
+    some (future.state.getCode ca).toList = weth9Sem.image ∧ SumNof future.state.bal ∧
+      FootInv (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)
+        (future.state.bal ca) := by
+  let U := historyKeyUniverseIn ca trace K₀
+  have extended : FootInv U (checkpoint.state.getStor ca) (checkpoint.state.bal ca) :=
+    initial.extend fresh
+  have admitted : trace.FrameAdmitted ca (footEntry U) := by
+    apply (trace.frameAdmitted_iff_rawFrames ca _).2
+    intro root member target k hk
+    exact Or.inr (List.mem_flatMap.mpr ⟨root, member, by simpa only [target, ite_true] using hk⟩)
+  have start : (footSpec U).StateInv ca checkpoint.state :=
+    footSpec_stateInv_iff.mpr ⟨installed, sumNof, extended.support, extended.backed⟩
+  have finish := trace.stateInv_admitted_semIn
+    (footSpec_preservesAdmittedIn F capabilities.stateGas_none ca extended.inj)
+    capabilities admitted (trace.rewardCreditsFunded capabilities) start installedCert rfl
+  obtain ⟨hcode, hside, hsup, hback⟩ := footSpec_stateInv_iff.mp finish
+  exact ⟨hcode, hside, ⟨hsup, extended.inj, extended.apart, hback⟩⟩
+
+/-- `weth9_history_footprint_universeIn` on the historical domain `HistFork`. -/
+theorem weth9_history_footprint_universeHist {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeysIn ca trace)) :
+    some (future.state.getCode ca).toList = weth9Sem.image ∧ SumNof future.state.bal ∧
+      FootInv (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)
+        (future.state.bal ca) :=
+  weth9_history_footprint_universeIn BodyStageCapabilities.historical trace installed sumNof
+    initial fresh
 
 end Blanc.Lift.Weth9

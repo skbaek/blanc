@@ -96,17 +96,15 @@ def permitDeadlineLine : List Ninst := [
   (.push [0x1b, 0x7b] (by decide))]
 
 
-/-- The actual selected dispatcher reaches the public permit entry before any
-external instruction, with its original full world and initialized memory. -/
-theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem permit_dispatch_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
       t_05e2_c76 b [0xd505accf] getterInitMemory []) := by
-  obtain ⟨compareA⟩ := pair_dispatch_comparison_cursor_state codeEq fork selector (by decide) run
-  obtain ⟨compareBGuard⟩ := compareA.line cert_check rfl fork permitCompareALine (by rfl)
+  obtain ⟨compareA⟩ := pair_dispatch_comparison_cursor_stateH codeEq stateGas selector (by decide) run
+  obtain ⟨compareBGuard⟩ := compareA.lineH cert_check rfl stateGas permitCompareALine (by rfl)
     (by intro n member x equal; subst n; simp only [permitCompareALine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x97, 0, 0xd505accf]) (M' := getterInitMemory) (by
       intro g d line
       dsimp only [permitCompareALine] at line
@@ -117,8 +115,8 @@ theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨compareB⟩ := compareBGuard.branchZero cert_check rfl fork
-  obtain ⟨missGuard⟩ := compareB.line cert_check rfl fork permitCompareBLine (by rfl)
+  obtain ⟨compareB⟩ := compareBGuard.branchZeroH cert_check rfl stateGas
+  obtain ⟨missGuard⟩ := compareB.lineH cert_check rfl stateGas permitCompareBLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitCompareBLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x71, 0, 0xd505accf]) (M' := getterInitMemory) (by
       intro g d line
       dsimp only [permitCompareBLine] at line
@@ -129,8 +127,8 @@ theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨miss⟩ := missGuard.branchZero cert_check rfl fork
-  obtain ⟨hitGuard⟩ := miss.line cert_check rfl fork permitCompareMissLine (by rfl)
+  obtain ⟨miss⟩ := missGuard.branchZeroH cert_check rfl stateGas
+  obtain ⟨hitGuard⟩ := miss.lineH cert_check rfl stateGas permitCompareMissLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitCompareMissLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x5da, 0, 0xd505accf]) (M' := getterInitMemory) (by
       intro g d line
       dsimp only [permitCompareMissLine] at line
@@ -141,8 +139,8 @@ theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨hit⟩ := hitGuard.toZero cert_check rfl fork
-  obtain ⟨entryGuard⟩ := hit.line cert_check rfl fork permitCompareHitLine (by rfl)
+  obtain ⟨hit⟩ := hitGuard.toZeroH cert_check rfl stateGas
+  obtain ⟨entryGuard⟩ := hit.lineH cert_check rfl stateGas permitCompareHitLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitCompareHitLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x5e2, 1, 0xd505accf]) (M' := getterInitMemory) (by
       intro g d line
       dsimp only [permitCompareHitLine] at line
@@ -153,13 +151,14 @@ theorem permit_dispatch_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨result⟩ := entryGuard.toSucc cert_check rfl fork (by decide) (by rfl)
+  obtain ⟨result⟩ := entryGuard.toSuccH cert_check rfl stateGas (by decide) (by rfl)
   exact ⟨result⟩
 
 
-/-- ABI decoding and the deadline check are actual non-exec cursor cuts. -/
-theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem permit_body_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
@@ -168,10 +167,10 @@ theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       [permitS sevm, permitR sevm, (permitV sevm).toB256, permitDeadline sevm,
         permitValue sevm, (permitSpender sevm).toB256, (permitOwner sevm).toB256,
         0x0257, 0xd505accf] getterInitMemory [t_0257_c76]) := by
-  obtain ⟨_, _, abi, _, timely, _⟩ := permit_raw_in codeEq fork selector run
-  obtain ⟨entry⟩ := permit_dispatch_cursor_state codeEq fork selector run
-  obtain ⟨entry⟩ := entry.dest cert_check rfl fork
-  obtain ⟨guard⟩ := entry.line cert_check rfl fork permitAbiGuardLine (by rfl)
+  obtain ⟨_, _, abi, _, timely, _⟩ := permit_raw_inH codeEq stateGas bal selector run
+  obtain ⟨entry⟩ := permit_dispatch_cursor_stateH codeEq stateGas selector run
+  obtain ⟨entry⟩ := entry.destH cert_check rfl stateGas
+  obtain ⟨guard⟩ := entry.lineH cert_check rfl stateGas permitAbiGuardLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitAbiGuardLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := [0x05f8, 1, sevm.data.length.toB256 - 4, 4, 0x0257, 0xd505accf])
     (M' := getterInitMemory) (by
@@ -190,9 +189,9 @@ theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', by simpa only [show B256.eqCheck (0 : B256) 0 = 1 from by decide, show Bytes.toB256 [5, 248] = (0x05f8 : B256) from rfl, show Bytes.toB256 [4] = (4 : B256) from rfl, show Bytes.toB256 [2, 87] = (0x0257 : B256) from rfl] using state⟩)
-  obtain ⟨decode⟩ := guard.branchSucc cert_check rfl fork (by decide)
-  obtain ⟨decode⟩ := decode.dest cert_check rfl fork
-  obtain ⟨call⟩ := decode.line cert_check rfl fork permitDecodeLine (by rfl)
+  obtain ⟨decode⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
+  obtain ⟨decode⟩ := decode.destH cert_check rfl stateGas
+  obtain ⟨call⟩ := decode.lineH cert_check rfl stateGas permitDecodeLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitDecodeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := [0x1b0c, permitS sevm, permitR sevm, (permitV sevm).toB256,
       permitDeadline sevm, permitValue sevm, (permitSpender sevm).toB256,
@@ -245,9 +244,9 @@ theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
       cases line
       exact ⟨_, rfl⟩)
-  obtain ⟨deadline⟩ := call.call cert_check rfl fork (by rfl)
-  obtain ⟨deadline⟩ := deadline.dest cert_check rfl fork
-  obtain ⟨guard⟩ := deadline.line cert_check rfl fork permitDeadlineLine (by rfl)
+  obtain ⟨deadline⟩ := call.callH cert_check rfl stateGas (by rfl)
+  obtain ⟨deadline⟩ := deadline.destH cert_check rfl stateGas
+  obtain ⟨guard⟩ := deadline.lineH cert_check rfl stateGas permitDeadlineLine (by rfl)
     (by intro n member x equal; subst n; simp only [permitDeadlineLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := [0x1b7b, 1, permitS sevm, permitR sevm, (permitV sevm).toB256,
       permitDeadline sevm, permitValue sevm, (permitSpender sevm).toB256,
@@ -262,6 +261,7 @@ theorem permit_body_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', by simpa only [show B256.eqCheck (0 : B256) 0 = 1 from by decide, show Bytes.toB256 [27, 123] = (0x1b7b : B256) from rfl] using state⟩)
-  exact guard.branchSucc cert_check rfl fork (by decide)
+  exact guard.branchSuccH cert_check rfl stateGas (by decide)
+
 
 end Blanc.Lift.UniswapV2Pair

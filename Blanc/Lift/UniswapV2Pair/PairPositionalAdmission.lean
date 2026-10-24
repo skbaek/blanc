@@ -25,6 +25,36 @@ def PairAdmittedOutcome (U : WriterKey → Prop) (current : Checkpoint)
 def PairAdmittedSupply (U : WriterKey → Prop) (selected : Sevm → Prop) : Prop :=
   PairStepSupplyWith PairAdmittedConsumes PairEntryAuth U selected
 
+/-- `PairAdmittedConsumes` with every re-entered Pair frame authenticated by `LockedAuthH`
+(the permit by `PermitRecoveryAuthH`), as the historical rule facts supply. -/
+def PairAdmittedConsumesH (root : Exec.Deriv) (segment : SegmentResult)
+    (transcript : Transcript) (out : RunResult) : Prop :=
+  ∃ selected : PositionalConsumes root root 0 segment transcript out,
+    SourceAdmission LockedAuthH selected
+
+/-- Under the root's covered fork every admitted frame runs at a covered fork, where `LockedAuthH`
+is `LockedAuth`. -/
+theorem PairAdmittedConsumesH.covered {root : Exec.Deriv} {segment : SegmentResult}
+    {transcript : Transcript} {out : RunResult} (fork : CoveredFork root.sevm.benvStat.fork)
+    (admitted : PairAdmittedConsumesH root segment transcript out) :
+    PairAdmittedConsumes root segment transcript out :=
+  ⟨admitted.1, SourceAdmission.mono_benvStat (P := fun stat => CoveredFork stat.fork)
+    (fun _ _ _ covered auth => auth.toCovered covered) fork admitted.2⟩
+
+/-- `PairAdmittedSupply` from the historical rule facts (`PairStepSupplyWithH`), with
+`PairAdmittedConsumesH` consumption. -/
+def PairAdmittedSupplyH (U : WriterKey → Prop) (selected : Sevm → Prop) : Prop :=
+  PairStepSupplyWithH PairAdmittedConsumesH PairEntryAuth U selected
+
+theorem PairAdmittedSupplyH.covered {U : WriterKey → Prop} {selected : Sevm → Prop}
+    (supply : PairAdmittedSupplyH U selected) : PairAdmittedSupply U selected := by
+  intro current invocation sevm b post G run K codeEq installed fork freshOutput representable
+    chosen good sub rep
+  exact PairStepOutcomeWith.mono (fun _ _ _ consumed => consumed.covered fork)
+    (fun _ _ authentic => authentic)
+    (PairStepSupplyWithH.covered supply current invocation run codeEq installed fork freshOutput
+      representable chosen good sub rep)
+
 theorem PairAdmittedConsumes.positional {root : Exec.Deriv} {segment : SegmentResult}
     {transcript : Transcript} {out : RunResult}
     (admitted : PairAdmittedConsumes root segment transcript out) :

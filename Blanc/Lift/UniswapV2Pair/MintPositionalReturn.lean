@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalRoot
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
 
@@ -7,22 +8,21 @@ open Jaune
 
 theorem mintReturnEntries_noHalt : NoHaltSet cert.prog mintFinalExecFreeEntries = true := by decide
 
-/-- The actual fee reply, fee return, Mint return and public halt share one root.
-The source suffixes start at those very original continuation nodes. -/
-theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
-    (r : MintRootCallPositions root b) (success : root.exn = .ok post)
-    (fork : CoveredFork root.sevm.benvStat.fork) :
+theorem MintRootCallPositionsH.suffixes {root : Exec.Deriv} {b post W1 : Devm}
+    {A2 F : Sevm → Devm → Devm} (r : MintRootCallPositionsH root b W1 A2 F) (success : root.exn = .ok post)
+    (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none) :
     ∃ (feeN mintN : Exec.Deriv) (feeCursor mintCursor : Cursor) (feeGas : Nat),
       Exec.Deriv.ExecFreeUntil r.fee.occurrence.call.returned feeN ∧
       feeN.sevm = root.sevm ∧ feeN.exn = .ok post ∧
       CursorOK code cert feeN feeCursor ∧ feeCursor.f = t_1233_c41 ∧
       feeCursor.K.map Cont.f = [t_039b_c86] ∧
-      feeBranchAccepts root.sevm
-        (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
+      feeBranchAcceptsH root.sevm
+        (feeKLastWorldH root.sevm r.fee.occurrence.call.returned.devm)
         (feeKLastWord root.sevm r.fee.occurrence.call.returned.devm)
         (Bytes.toB256 (r.fee.out.take 32)) (mintRootReserve0 root b) (mintRootReserve1 root b) ∧
-      feeN.devm = feeBranchPost root.sevm
-        (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
+      feeN.devm = feeBranchPostH root.sevm
+        (feeKLastWorldH root.sevm r.fee.occurrence.call.returned.devm)
         (mintFeeLocals (Bytes.toB256 (r.out1.take 32) - mintRootReserve1 root b)
           (Bytes.toB256 (r.out0.take 32) - mintRootReserve0 root b)
           (Bytes.toB256 (r.out1.take 32)) (Bytes.toB256 (r.out0.take 32))
@@ -53,16 +53,16 @@ theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
     exact Nat.mod_lt _ (by decide)
   obtain ⟨feeN, feeCursor, spanFee, envFee, outcomeFee, placedFee, treeFee, contsFee,
       guards, feeGas, stateFee⟩ := r.fee.returnState outcome1
-    (by rw [env1]; exact fork) mem3 (low _) (low _)
+    (by rw [env1]; exact stateGas) (by rw [env1]; exact bal) mem3 (low _) (low _)
   have actualFeeEnv := envFee.trans env1
   obtain ⟨mintN, mintCursor, spanMint, envMint, outcomeMint, placedMint, treeMint,
-      contsMint, sourceMint⟩ := placedFee.quietReturn cert_check outcomeFee
-    (by rw [actualFeeEnv]; exact fork) mintFinalExecFreeEntries_closed mintReturnEntries_noHalt
+      contsMint, sourceMint⟩ := placedFee.quietReturnH cert_check outcomeFee
+    (by rw [actualFeeEnv]; exact stateGas) mintFinalExecFreeEntries_closed mintReturnEntries_noHalt
     (by rw [treeFee]; decide) (by rw [treeFee]; decide) contsFee
   have actualMintEnv := envMint.trans actualFeeEnv
   have actualMintOutcome := outcomeMint.trans outcomeFee
-  obtain halted | returned := placedMint.sourceRunReturn cert_check actualMintOutcome
-    (by rw [actualMintEnv]; exact fork)
+  obtain halted | returned := placedMint.sourceRunReturnH cert_check actualMintOutcome
+    (by rw [actualMintEnv]; exact stateGas)
   · rw [treeMint, actualMintEnv] at halted
     rw [treeFee, actualFeeEnv] at sourceMint
     refine ⟨feeN, mintN, feeCursor, mintCursor, feeGas,
@@ -75,5 +75,6 @@ theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
     have empty : mintCursor.K = [] := List.map_eq_nil_iff.mp contsMint
     rw [empty] at sameK
     cases sameK
+
 
 end Blanc.Lift.UniswapV2Pair

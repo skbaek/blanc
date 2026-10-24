@@ -22,4 +22,20 @@ def burnFirstCallInput (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
       t0 :: 0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
     (balanceRequestMemory M sevm.currentTarget) G
 
+def burnFirstCallInputH (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
+    (G : Nat) (r1 r0 toWord extρ : B256) : Devm :=
+  let mask : B256 := 0xffffffffffffffffffffffffffffffffffffffff
+  let t0 := mask &&& b.getStorVal sevm.currentTarget 6
+  let t1 := mask &&& (afterSloadH sevm b 6).getStorVal sevm.currentTarget 7
+  St (accountAccessH sevm (burnTokensWorldH sevm b) t0.toAdr)
+    (G.toB256 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+      t0 :: 0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+    (balanceRequestMemory M sevm.currentTarget) G
+
+theorem burnFirstCallInputH_of_covered {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {r1 r0 toWord extρ : B256}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    burnFirstCallInputH sevm b R M G r1 r0 toWord extρ = burnFirstCallInput sevm b R M G r1 r0 toWord extρ := by
+  unfold burnFirstCallInputH burnFirstCallInput
+  simp only [burnTokensWorldH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access, accountAccessH_of_eip2929 fork.rules_access]
+
 end Blanc.Lift.UniswapV2Pair

@@ -178,51 +178,6 @@ theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
     cursor_nexts_line_forward checked ok ns tail tree success fork
   exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree⟩
 
-/-- A checked branch supplies its decoded JUMPI and its actual successor;
-only the real step chooses which side survives. -/
-theorem cursor_branch_forward {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) {f g : SFunc} (tree : κ.f = .branch f g)
-    {t : B256} {a : List AVal} (top : κ.a = .const t :: a)
-    {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentStep N F ∧
-      Jinst.Run ⟨F.pc, F.sevm, F.devm⟩ .jumpi (.ok ⟨N.pc, N.devm⟩) ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf N.devm) ∧ CursorOK code c N κ' ∧
-      ((κ'.f = f ∧ N.pc = F.pc + 1) ∨ (κ'.f = g ∧ N.pc = t.toNat)) := by
-  rcases κ with ⟨body, pc, frame, m, K⟩
-  dsimp only at tree top
-  subst body
-  subst frame
-  cases a with
-  | nil =>
-    have check := ok.check
-    simp only [checkNode] at check
-    cases check
-  | cons v a =>
-    have opcode : byteAt code pc = some (Jinst.toUInt8 .jumpi) := by
-      have check := ok.check
-      simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at check
-      exact check.1.1
-    have instruction : Jinst.At F.sevm.code F.pc .jumpi := by
-      rw [ok.code_eq, ok.pc_eq]
-      exact byteAt_jinst_at opcode
-    obtain ⟨N, κ', edge, jumped, synthetic, stateful, placed⟩ :=
-      cursor_jinst_forward checked ok instruction success fork
-    refine ⟨N, κ', edge, jumped, synthetic, stateful, placed, ?_⟩
-    have actualPc := placed.pc_eq
-    have originalPc := ok.pc_eq
-    change F.pc = pc at originalPc
-    cases synthetic
-    · refine Or.inl ⟨rfl, ?_⟩
-      change N.pc = pc + 1 at actualPc
-      rw [← originalPc] at actualPc
-      exact actualPc
-    · exact Or.inr ⟨rfl, actualPc⟩
-
 /-- A checked STATICCALL cursor supplies its six actual stack operands,
 independently of the instruction's eventual child or parent outcome. -/
 theorem cursor_staticcall_operands {code : ByteArray} {c : Cert}

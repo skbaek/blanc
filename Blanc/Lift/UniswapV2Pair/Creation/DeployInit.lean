@@ -290,4 +290,132 @@ theorem pair_create2_initialize_live {sevm : Sevm} {b : Devm} {S : List B256} {M
   rw [htarget] at h ⊢
   exact h
 
+/-! ## Under historical rule facts
+
+`pair_initializedH` and `pair_create2_initializedH` are `pair_initialized` and
+`pair_create2_initialized` from the rule facts they read; `pair_create2_initialized_muirGlacier`
+discharges them at Muir Glacier, the fork `pair_deployment_fork` selects at the Pair's approved
+deployment coordinates. These are frame-level results: the `CREATE2` step of the factory frame and
+every successful `initialize` frame after it. Inclusion of that frame in the deployment
+transaction and block is not stated here. -/
+
+/-- `pair_initialized` from `rules.stateGas = none` alone. -/
+theorem pair_initializedH {chainWord : B256} {factory : Adr}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (hstor : Devm.getStor b sevm.currentTarget =
+      ctorStor chainWord sevm.currentTarget factory Stor.empty)
+    (representable : sevm.data.length < 2 ^ 256) (freshOutput : b.output = [])
+    (codeEq : sevm.code = Blanc.Lift.UniswapV2Pair.code)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.caller = factory ∧
+      InitializedCheckpoint (post.getStor sevm.currentTarget) factory
+        (domainSeparator chainWord sevm.currentTarget) (initializeToken0 sevm)
+        (initializeToken1 sevm) := by
+  have rep := ctorStor_rep chainWord sevm.currentTarget factory
+  rw [← hstor] at rep
+  obtain ⟨-, -, authorized, -, residual, result⟩ :=
+    initialize_bytecode_refines_sourceH (current := ⟨State.empty factory
+      (domainSeparator chainWord sevm.currentTarget), [], []⟩) (invocation := [])
+      rep representable freshOutput codeEq hsg (BenvStat.bal_none_of_stateGas_none hsg) selector run
+  exact ⟨authorized, result.representation⟩
+
+/-- **Deploy by `CREATE2`, then initialize, from rule facts.**  `pair_create2_initialized` under
+the rule facts of `pair_create2H` for the factory frame, and `rules.stateGas = none` for the
+`initialize` frame. -/
+theorem pair_create2_initializedH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {i sz salt : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hchain : sevm.benvStat.rules.op.chainId = true)
+    (hshifts : sevm.benvStat.rules.op.shifts = true)
+    (hflat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100)
+    (hcreate2 : sevm.benvStat.rules.op.create2 = true)
+    (hcodeMax : 11293 ≤ sevm.benvStat.rules.code.maxCodeSize)
+    (hinitMax : sevm.benvStat.rules.creation.initCodeLimit = true →
+      11636 ≤ sevm.benvStat.rules.code.maxInitCodeSize)
+    (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2ChargeH sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      ∀ {isevm : Sevm} {ib ipost : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) →
+        isevm.caller = sevm.currentTarget →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → isevm.benvStat.rules.stateGas = none →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        Exec 0 isevm (St ib [] Mem.empty iG) (.ok ipost) →
+        InitializedCheckpoint (ipost.getStor isevm.currentTarget) sevm.currentTarget
+          (domainSeparator sevm.benvStat.chainId.toB256
+            (create2NewAddress sevm.currentTarget salt code.toList))
+          (initializeToken0 isevm) (initializeToken1 isevm) := by
+  obtain ⟨post, hrun, hstack, hcode, hstor⟩ :=
+    pair_create2H hsg hchain hshifts hflat hcreate2 hcodeMax hinitMax hstatic hinit hnonce hdepth
+      hfresh hgas hroom
+  refine ⟨post, hrun, hstack, hcode, ?_⟩
+  intro isevm ib ipost iG htarget hpre _ representable freshOutput codeEq isg selector run
+  have hib : Devm.getStor ib isevm.currentTarget =
+      ctorStor sevm.benvStat.chainId.toB256 isevm.currentTarget sevm.currentTarget
+        Stor.empty := by
+    rw [hpre, hstor, htarget]
+  have h := (pair_initializedH hib representable freshOutput codeEq isg selector run).2
+  rw [htarget] at h ⊢
+  exact h
+
+/-- **Deploy by `CREATE2`, then initialize, at Muir Glacier**, the fork the mainnet schedule
+selects at the Pair's approved deployment coordinates (`pair_deployment_fork`): every rule fact of
+`pair_create2_initializedH` is discharged from the fork itself. -/
+theorem pair_create2_initialized_muirGlacier {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {i sz salt : B256}
+    (hfork : sevm.benvStat.fork = .muirGlacier) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2ChargeH sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      ∀ {isevm : Sevm} {ib ipost : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) →
+        isevm.caller = sevm.currentTarget →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → isevm.benvStat.fork = .muirGlacier →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        Exec 0 isevm (St ib [] Mem.empty iG) (.ok ipost) →
+        InitializedCheckpoint (ipost.getStor isevm.currentTarget) sevm.currentTarget
+          (domainSeparator sevm.benvStat.chainId.toB256
+            (create2NewAddress sevm.currentTarget salt code.toList))
+          (initializeToken0 isevm) (initializeToken1 isevm) := by
+  have rules : sevm.benvStat.rules = Fork.ruleSet .muirGlacier := by
+    rw [BenvStat.rules, hfork]
+  obtain ⟨post, hrun, hstack, hcode, hinitd⟩ := pair_create2_initializedH
+    (by rw [rules]; decide) (by rw [rules]; decide) (by rw [rules]; decide)
+    (fun g h => by
+      rw [rules, show (Fork.ruleSet .muirGlacier).access = .flat istanbulAccessGas from rfl] at h
+      cases h
+      decide)
+    (by rw [rules]; decide) (by rw [rules]; decide) (fun h => by rw [rules] at h ⊢; cases h)
+    hstatic hinit hnonce hdepth hfresh hgas hroom
+  refine ⟨post, hrun, hstack, hcode, ?_⟩
+  intro isevm ib ipost iG htarget hpre caller representable freshOutput codeEq ifork selector run
+  exact hinitd htarget hpre caller representable freshOutput codeEq
+    (by rw [BenvStat.rules, ifork]; decide) selector run
+
 end Blanc.Lift.UniswapV2Pair.Creation

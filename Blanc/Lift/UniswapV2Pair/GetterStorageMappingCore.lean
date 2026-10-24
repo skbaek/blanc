@@ -81,12 +81,12 @@ theorem singleMapping_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   exact rx_ret
 
-theorem singleMapping_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem singleMapping_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {key ρ : B256} {o : Outcome}
-    (s : SingleMappingGetter) (fork : CoveredFork sevm.benvStat.fork)
+    (s : SingleMappingGetter) (bal : sevm.benvStat.rules.bal = none)
     (mem : PtrMem 128 96 M)
     (run : SFunc.Run fs sevm (St b (key :: ρ :: R) M G) s.callee o) :
-    ∃ G', o = .returned (St (afterSload sevm b (mapSlot key s.base))
+    ∃ G', o = .returned (St (afterSloadH sevm b (mapSlot key s.base))
       (b.getStorVal sevm.currentTarget (mapSlot key s.base) :: ρ :: R)
       (s.memory M key) G') := by
   have h := run.cut
@@ -112,11 +112,10 @@ theorem singleMapping_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     Mem.read_two_word_writes_at_raw_right_first M 0 key s.base
   rw [(s.memory_ptr mem key).read_self (by decide), read] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
-
 
 def allowanceScratch1 (M : Mem) (owner : B256) : Mem :=
   (M.write 32 (2 : B256).toBytes).write 0 owner.toBytes
@@ -206,11 +205,11 @@ theorem allowance_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   exact rx_ret
 
-theorem allowance_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+theorem allowance_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} {owner spender ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run fs sevm (St b (spender :: owner :: ρ :: R) M G) t_1dd8_c30 o) :
-    ∃ G', o = .returned (St (afterSload sevm b (mapSlot spender (mapSlot owner 2)))
+    ∃ G', o = .returned (St (afterSloadH sevm b (mapSlot spender (mapSlot owner 2)))
       (b.getStorVal sevm.currentTarget (mapSlot spender (mapSlot owner 2)) :: ρ :: R)
       (allowanceScratch2 M owner spender) G') := by
   have h := run.cut
@@ -257,7 +256,7 @@ theorem allowance_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     Mem.read_two_word_writes_at_raw_right_first (allowanceScratch1 M owner) 0 spender (mapSlot owner 2)
   rw [(allowanceScratch2_ptr mem owner spender).read_self (by decide), read2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sload fork hd
+  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩

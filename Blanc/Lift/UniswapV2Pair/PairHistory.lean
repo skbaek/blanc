@@ -8,6 +8,10 @@ import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionTraceCalldata
 import Blanc.StorageOnlySpec
 import Blanc.Lift.Cursor
+import Blanc.ExecutionHistoricalLadder
+import Blanc.ExecutionStagedFrameEnv
+import Blanc.ExecutionRewardCredits
+import Blanc.Lift.UniswapV2Pair.TerminalSafety
 
 /-!
 # The Uniswap V2 Pair's configured history
@@ -818,5 +822,201 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
   pair_history_feeOn_product_with
     (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
     (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
+
+/-! ## Selected fork domains
+
+The frame contract over a fork domain `F` whose members satisfy the two neutral rule facts
+(`NeutralFork`: `stateGas = none`, `bal = none`), from the historical supply
+`PairStepSupplyWithH`. `HistFork.neutral` supplies the domain fact on `HistFork`; a frame's
+`benvStat.rules` is its fork's rule set, so `(hF fork).stateGas` is the frame's
+`rules.stateGas = none`. -/
+
+/-- **Pair frame soundness over a neutral fork domain, trace-admitted.** -/
+theorem pairSpec_soundAdmittedWithIn
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (F : Fork → Prop)
+    (hF : ∀ {f : Fork}, F f → NeutralFork f) (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWithH Consumes Auth U (fun _ => True)) :
+    (pairSpec U).SoundAdmittedIn F pair (pairEntry U) := by
+  intro sevm pre post fork run codeEq target admitted _ _ hpre
+  subst target
+  have entry := admitted.root rfl
+  obtain ⟨raw, _, good⟩ := pair_frame_raw run entry
+  obtain ⟨_, output, representable, _⟩ := entry
+  obtain ⟨st, K, sub, wrep⟩ :=
+    (ContractSpecSem.ofStorageOnly_preInv_iff (sem := pairSem)).mp hpre.inv
+  obtain ⟨_, _, _, _, K', _, _, _, _, _, inside, rep⟩ :=
+    supply { state := st, logs := [], updates := [] } []
+      raw codeEq (code_eq_of_toList hpre.code) (hF fork).stateGas (hF fork).bal output
+      representable trivial good sub wrep
+  exact ⟨trivial, ⟨_, K', inside, rep⟩⟩
+
+/-- **Pair frame preservation over a neutral fork domain**, by the historical frame ladder. -/
+theorem pairSpec_preservesAdmittedWithIn
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (F : Fork → Prop)
+    (hF : ∀ {f : Fork}, F f → NeutralFork f) (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWithH Consumes Auth U (fun _ => True)) :
+    (pairSpec U).PreservesAdmittedIn F pair (pairEntry U) :=
+  ContractSpecSem.preserves_inv_admittedIn F (fun h => (hF h).stateGas) (pairSpec U) pair
+    (pairEntry U) (pairSpec_soundAdmittedWithIn F hF pair supply)
+
+/-- The Pair frame contract on the historical domain `HistFork`. -/
+theorem pairSpec_preservesAdmittedHist (pair : Adr) {U : WriterKey → Prop}
+    (inj : WriterInj U) (apart : WriterApart U) :
+    (pairSpec U).PreservesAdmittedIn HistFork pair (pairEntry U) :=
+  pairSpec_preservesAdmittedWithIn HistFork HistFork.neutral pair
+    (pairAdmittedSupplyH inj apart pairSem pairSem_image)
+
+/-- **The whole-frame obligation of the Pair over a neutral fork domain**: the body of
+`Exec.CoreAccounting.WholeFrameReplay` with `F` in place of `CoveredFork`, from the historical
+supply. -/
+theorem pair_wholeFrameReplayWithIn
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (F : Fork → Prop)
+    (hF : ∀ {f : Fork}, F f → NeutralFork f) (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWithH Consumes Auth U (fun _ => True)) :
+    ∀ {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
+      Execution.commits (.ok post) = true →
+      pairSem.Run sevm pre post → sevm.currentTarget = pair → F sevm.benvStat.fork →
+      pairSem.At pair 0 sevm pre → Exec.FrameAdmitted pair (pairEntry U) run →
+      sum pre.state.bal < 2 ^ 256 → sevm.isStatic = false →
+      ∃ steps : List Exec.Frame,
+        PairReplayWith Consumes Auth pair U (pre.state.getStor pair).get steps
+          (post.state.getStor pair).get ∧
+        steps.flatMap (pairSubtreeFrames pair) =
+          (Exec.committedFrames run).flatMap (pairFrameObs pair) := by
+  intro sevm pre post run committed codeEq target fork installed admitted _ nonstatic
+  subst target
+  have entry := admitted.root rfl
+  obtain ⟨raw, rawEq, good⟩ := pair_frame_raw run entry
+  obtain ⟨_, output, representable, _⟩ := entry
+  refine ⟨[Exec.Frame.ofRun run committed], ?_, ?_⟩
+  · intro st K sub incoming
+    obtain ⟨s, view, wrep⟩ := incoming
+    have wrep' : WriterRep K (pre.getStor sevm.currentTarget) st :=
+      WriterRep.congr (fun k => (congrFun view k).symm) wrep
+    obtain ⟨entryE, nested, child, bytes, K', auth, consumed, success, outputEq, grows, inside, rep⟩ :=
+      supply { state := st, logs := [], updates := [] } []
+        raw codeEq (code_eq_of_toList installed.1) (hF fork).stateGas (hF fork).bal output
+        representable trivial good sub wrep'
+    rw [rawEq] at auth consumed
+    refine ⟨[⟨Exec.Frame.ofRun run committed, entryE, nested⟩], rfl, ?_, child.frame.current.state,
+      K', .cons consumed (by
+        simpa only [outputEq, Exec.Frame.post, Exec.Frame.ofRun, Execution.committedPost]
+          using success) (.nil _), grows, inside,
+      ⟨_, rfl, rep⟩⟩
+    intro s member
+    rw [List.mem_singleton] at member
+    subst member
+    exact ⟨rfl, committed, rfl, nonstatic, auth⟩
+  · rw [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+    rfl
+
+/-- HASH-T rows of a selected-domain history: the rows of every Pair frame entered below every raw
+Pair frame root of the trace, rolled-back frames included. -/
+noncomputable def pairHistoryTouchedKeysIn {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) : List WriterKey :=
+  trace.rawFrames.flatMap fun D => if D.sevm.currentTarget = pair then pairDerivKeys D else []
+
+/-- Every Pair frame root of a selected-domain history is admitted by `pairEntry` over a universe
+holding the history's touched rows; calldata is short on a domain whose nonzero calldata byte costs
+at least 16 gas. -/
+theorem pair_trace_admittedIn {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {pair : Adr} {U : WriterKey → Prop}
+    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+    (touched : ∀ k ∈ pairHistoryTouchedKeysIn pair trace, U k) :
+    trace.FrameAdmitted pair (pairEntry U) := by
+  apply (trace.frameAdmitted_iff_rawFrames pair _).2
+  intro root member target
+  refine ⟨trace.rawFrames_entered (E := Exec.FreshEntry) enteredCondition_fresh root member,
+    trace.rawFrames_entered (E := fun _ pre => pre.output = []) enteredCondition_output root member,
+    trace.calldata_bound capabilities hdata root member,
+    Exec.derivEntry_of_deriv (trace.rootEntryIn root member).1 (pairGood_of_keys ?_)⟩
+  intro k row
+  apply touched k
+  apply List.mem_flatMap.mpr
+  refine ⟨root, member, ?_⟩
+  rw [ite_eq_left target]
+  exact row
+
+/-- **The Pair storage stays represented through a selected-domain history.** In a configured
+history over a neutral fork domain `F` (with the body-stage capabilities and the calldata gas
+floor), from a checkpoint whose Pair storage represents `st₀` over `K₀` (the certified runtime
+installed), whose touched rows are fresh against `K₀`, the runtime is still installed and the
+future Pair storage represents some model state over rows of `K₀ ∪ touched`. -/
+theorem pair_history_representedIn_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWithH Consumes Auth U (fun _ => True))
+    {F : Fork → Prop} (hF : ∀ {f : Fork}, F f → NeutralFork f)
+    (capabilities : BodyStageCapabilities F)
+    (hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeysIn pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ (finish : State) (K' : WriterKey → Prop),
+      (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeysIn pair trace) k) ∧
+      WriterRep K' (future.state.getStor pair) finish := by
+  let U := WriterExtend K₀ (pairHistoryTouchedKeysIn pair trace)
+  have extended : WriterRep U (checkpoint.state.getStor pair) st₀ := initial.extend fresh
+  have admitted : trace.FrameAdmitted pair (pairEntry U) :=
+    pair_trace_admittedIn trace capabilities hdata (fun k row => Or.inr row)
+  have start : (pairSpec U).StateInv pair checkpoint.state :=
+    ⟨installed, trivial, ⟨st₀, K₀, fun _ h => Or.inl h, initial⟩⟩
+  have finish := trace.stateInv_admitted_semIn
+    (pairSpec_preservesAdmittedWithIn F hF pair (supplies U extended.inj extended.apart))
+    capabilities admitted (trace.rewardCreditsFunded capabilities) start installedCert
+    pairSem_image
+  obtain ⟨code, _, finish, K', inside, rep⟩ := finish
+  exact ⟨code, finish, K', inside, rep⟩
+
+/-- `pair_history_representedIn_with` on the historical domain `HistFork`, from the historical
+supply `pairAdmittedSupplyH`. -/
+theorem pair_history_representedHist {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeysIn pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ (finish : State) (K' : WriterKey → Prop),
+      (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeysIn pair trace) k) ∧
+      WriterRep K' (future.state.getStor pair) finish :=
+  pair_history_representedIn_with
+    (fun _ inj apart => pairAdmittedSupplyH inj apart pairSem pairSem_image)
+    HistFork.neutral BodyStageCapabilities.historical (fun _ hf => hf.dataNonZero_ge)
+    trace installed initial fresh
+
+/-- **The Pair storage from its initialized checkpoint, through a historical-domain history.**
+From the storage `Creation.pair_create2_initializedH` (or `_muirGlacier`) establishes after
+deployment by `factory` and `initialize`, with no initially tracked row: the runtime stays
+installed and the future Pair storage represents some model state over touched rows only. The
+replay identifying that state with `initializedState` advanced by the committed invocations is the
+committed-history ladder, not stated here. -/
+theorem pair_history_initializedHist {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeysIn pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ (finish : State) (K' : WriterKey → Prop),
+      (∀ k, K' k → k ∈ pairHistoryTouchedKeysIn pair trace) ∧
+      WriterRep K' (future.state.getStor pair) finish := by
+  obtain ⟨code, finish, K', inside, rep⟩ :=
+    pair_history_representedHist trace installed initial fresh
+  refine ⟨code, finish, K', fun k tracked => ?_, rep⟩
+  rcases inside k tracked with none | row
+  · exact none.elim
+  · exact row
 
 end Blanc.Lift.UniswapV2Pair

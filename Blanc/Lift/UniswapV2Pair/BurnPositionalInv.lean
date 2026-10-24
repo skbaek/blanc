@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.UniswapV2Pair.PairReservesCursor
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
@@ -30,13 +31,11 @@ local macro "burn_compare_nonexec" : tactic =>
       burnCompareHitLine, List.mem_cons, List.not_mem_nil, reduceCtorEq,
       or_self, or_false, false_or] at member))
 
-/-- The selected Burn comparison route preserves the actual root cursor,
-complete entry world, initialized memory and residual gas. -/
-theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_selector_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     (cut : CursorStateAt code cert root t_002b_c0 b [0x89afcb44] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none) :
     Nonempty (CursorStateAt code cert root t_050a_c83 b [0x89afcb44] getterInitMemory []) := by
-  obtain ⟨guardA⟩ := cut.line cert_check success fork burnCompareALine (by rfl)
+  obtain ⟨guardA⟩ := cut.lineH cert_check success stateGas burnCompareALine (by rfl)
     (by burn_compare_nonexec) (b' := b) (S' := [0x97, 1, 0x89afcb44])
     (M' := getterInitMemory) (by
       intro g d line
@@ -52,9 +51,9 @@ theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨compareB⟩ := guardA.branchSucc cert_check success fork (by decide)
-  obtain ⟨compareB⟩ := compareB.dest cert_check success fork
-  obtain ⟨guardB⟩ := compareB.line cert_check success fork burnCompareBLine (by rfl)
+  obtain ⟨compareB⟩ := guardA.branchSuccH cert_check success stateGas (by decide)
+  obtain ⟨compareB⟩ := compareB.destH cert_check success stateGas
+  obtain ⟨guardB⟩ := compareB.lineH cert_check success stateGas burnCompareBLine (by rfl)
     (by burn_compare_nonexec) (b' := b) (S' := [0xd3, 0, 0x89afcb44])
     (M' := getterInitMemory) (by
       intro g d line
@@ -70,8 +69,8 @@ theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨miss⟩ := guardB.branchZero cert_check success fork
-  obtain ⟨guardMiss⟩ := miss.line cert_check success fork burnCompareMissLine (by rfl)
+  obtain ⟨miss⟩ := guardB.branchZeroH cert_check success stateGas
+  obtain ⟨guardMiss⟩ := miss.lineH cert_check success stateGas burnCompareMissLine (by rfl)
     (by burn_compare_nonexec) (b' := b) (S' := [0x4d7, 0, 0x89afcb44])
     (M' := getterInitMemory) (by
       intro g d line
@@ -87,8 +86,8 @@ theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨hit⟩ := guardMiss.toZero cert_check success fork
-  obtain ⟨guardHit⟩ := hit.line cert_check success fork burnCompareHitLine (by rfl)
+  obtain ⟨hit⟩ := guardMiss.toZeroH cert_check success stateGas
+  obtain ⟨guardHit⟩ := hit.lineH cert_check success stateGas burnCompareHitLine (by rfl)
     (by burn_compare_nonexec) (b' := b) (S' := [0x50a, 1, 0x89afcb44])
     (M' := getterInitMemory) (by
       intro g d line
@@ -104,8 +103,9 @@ theorem burn_selector_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨entry⟩ := guardHit.toSucc cert_check success fork (by decide) (by rfl)
+  obtain ⟨entry⟩ := guardHit.toSuccH cert_check success stateGas (by decide) (by rfl)
   exact ⟨entry⟩
+
 
 /-- Burn's public ABI size guard follows from its successful source suffix. -/
 theorem burn_abi_size_of_source {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -135,18 +135,18 @@ theorem burn_abi_size_of_source {P : Sevm → Devm → Ninst → Devm → Prop}
       show B256.eqCheck (1 : B256) 0 = 0 from by decide] at accepted
     exact accepted rfl
 
-/-- Actual successful source execution derives all non-gas prefix guards. -/
-theorem burn_prefix_guards_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+theorem burn_prefix_guards_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
     (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
     (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
     b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ((burnTokensWorld sevm (afterSload sevm (burnLockedWorld sevm b) 8)).getCode
+    ((burnTokensWorldH sevm (afterSloadH sevm (burnLockedWorldH sevm b) 8)).getCode
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-        (afterSload sevm (burnLockedWorld sevm b) 8).getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
-  obtain ⟨f, lookup, source⟩ := lift_sound_in cert_check codeEq fork run
+        (afterSloadH sevm (burnLockedWorldH sevm b) 8).getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0 := by
+  obtain ⟨f, lookup, source⟩ := lift_sound_in_noStateGas cert_check codeEq stateGas run
   change some t_0000_c0 = some f at lookup
   cases Option.some.inj lookup
   obtain ⟨value, size, _, dispatched⟩ := syncGuards_inv source
@@ -154,22 +154,22 @@ theorem burn_prefix_guards_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
   have abiSize := burn_abi_size_of_source (fun h => StepIn.toRun h) abi
   obtain ⟨_, _, callee, _⟩ := burnAbi_caller_inv (fun h => StepIn.toRun h) abi
   obtain ⟨unlocked, nonstatic, _, reserves⟩ :=
-    burnReservePrefix_inv (fun h => StepIn.toRun h) fork (SFunc.runP_iff_runCutP_nil.mp callee)
-  obtain ⟨nonzero, _, _⟩ := burnInitialFirstRequest_inv (fun h => StepIn.toRun h)
-    fork getterInitMemory_ptr reserves
+    burnReservePrefix_invH (fun h => StepIn.toRun h) stateGas bal (SFunc.runP_iff_runCutP_nil.mp callee)
+  obtain ⟨nonzero, _, _⟩ := burnInitialFirstRequest_invH (fun h => StepIn.toRun h)
+    bal getterInitMemory_ptr reserves
   exact ⟨value, size, abiSize, unlocked, nonstatic, nonzero⟩
 
-/-- The actual successful public Burn root reaches its selected ABI entry,
-with no supplied gas schedule or reached-endpoint premise. -/
-theorem burn_public_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+
+theorem burn_public_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
       t_050a_c83 b [0x89afcb44] getterInitMemory []) := by
-  obtain ⟨comparison⟩ := pair_dispatch_comparison_cursor_state codeEq fork selector (by decide) run
-  exact burn_selector_cursor_state comparison rfl fork
+  obtain ⟨comparison⟩ := pair_dispatch_comparison_cursor_stateH codeEq stateGas selector (by decide) run
+  exact burn_selector_cursor_stateH comparison rfl stateGas
+
 
 def burnAbiGuardLine : List Ninst := [
   .push [0x05,0x3d] (by decide), .push [4] (by decide), .reg (.dup 0),
@@ -181,16 +181,15 @@ def burnAbiDecodeLine : List Ninst := [
   .push [255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255] (by decide),
   .reg .and, .push [0x13,0xf5] (by decide)]
 
-/-- The actual public ABI cursor calls Burn's selected internal entry. -/
-theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_abi_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     (cut : CursorStateAt code cert root t_050a_c83 b [0x89afcb44] getterInitMemory [])
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
     (abiSize : (32 : B256) ≤ root.sevm.data.length.toB256 - 4) :
     Nonempty (CursorStateAt code cert root t_13f5_c37 b
       [(Sevm.dataWord root.sevm 4).toAdr.toB256, 0x053d, 0x89afcb44]
       getterInitMemory [t_053d_c83]) := by
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨guard⟩ := opened.line cert_check success fork burnAbiGuardLine (by rfl)
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨guard⟩ := opened.lineH cert_check success stateGas burnAbiGuardLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [burnAbiGuardLine, List.mem_cons, List.not_mem_nil,
@@ -214,9 +213,9 @@ theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨decoded⟩ := guard.branchSucc cert_check success fork (by decide)
-  obtain ⟨decoded⟩ := decoded.dest cert_check success fork
-  obtain ⟨caller⟩ := decoded.line cert_check success fork burnAbiDecodeLine (by rfl)
+  obtain ⟨decoded⟩ := guard.branchSuccH cert_check success stateGas (by decide)
+  obtain ⟨decoded⟩ := decoded.destH cert_check success stateGas
+  obtain ⟨caller⟩ := decoded.lineH cert_check success stateGas burnAbiDecodeLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [burnAbiDecodeLine, List.mem_cons, List.not_mem_nil,
@@ -235,7 +234,8 @@ theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  exact caller.call cert_check success fork (by rfl)
+  exact caller.callH cert_check success stateGas (by rfl)
+
 
 def burnLockGuardLine : List Ninst := [
   .push [0] (by decide), .reg (.dup 0), .push [12] (by decide), .reg .sload,
@@ -246,29 +246,28 @@ def burnLockStoreLine : List Ninst := [
   .reg .sstore, .reg (.dup 0), .push [0x14,0x79] (by decide),
   .push [0x0d,0x90] (by decide)]
 
-/-- Actual successful Burn execution performs the lock write and calls the
-reserve helper without a prescribed residual gas or a caller sentry premise. -/
-theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_lock_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {toWord extρ : B256} {K : List SFunc}
     (cut : CursorStateAt code cert root t_13f5_c37 b (toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (unlocked : b.getStorVal root.sevm.currentTarget 12 = 1) :
-    Nonempty (CursorStateAt code cert root t_0d90_c56 (burnLockedWorld root.sevm b)
+    Nonempty (CursorStateAt code cert root t_0d90_c56 (burnLockedWorldH root.sevm b)
       (0x1479 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M (t_1479_c37 :: K)) := by
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨guard⟩ := opened.line cert_check success fork burnLockGuardLine (by rfl)
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨guard⟩ := opened.lineH cert_check success stateGas burnLockGuardLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [burnLockGuardLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
-    (b' := afterSload root.sevm b 12)
+    (b' := afterSloadH root.sevm b 12)
     (S' := 0x1469 :: 1 :: 0 :: 0 :: toWord :: extρ :: R) (M' := M) (by
       intro g d line
       dsimp only [burnLockGuardLine] at line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line
       have computation := ri_eq step
@@ -278,14 +277,14 @@ theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨store⟩ := guard.branchSucc cert_check success fork (by decide)
-  obtain ⟨store⟩ := store.dest cert_check success fork
-  obtain ⟨caller⟩ := store.line cert_check success fork burnLockStoreLine (by rfl)
+  obtain ⟨store⟩ := guard.branchSuccH cert_check success stateGas (by decide)
+  obtain ⟨store⟩ := store.destH cert_check success stateGas
+  obtain ⟨caller⟩ := store.lineH cert_check success stateGas burnLockStoreLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [burnLockStoreLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
-    (b' := burnLockedWorld root.sevm b)
+    (b' := burnLockedWorldH root.sevm b)
     (S' := 0x0d90 :: 0x1479 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) (M' := M) (by
       intro g d line
       dsimp only [burnLockStoreLine] at line
@@ -293,25 +292,26 @@ theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sstore fork step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  exact caller.call cert_check success fork (by rfl)
+  exact caller.callH cert_check success stateGas (by rfl)
 
-/-- The actual reserve helper returns the three cached reserve words through
-its supplied parent continuation, preserving the full world and memory. -/
-theorem burn_reserves_cursor_state {root : Exec.Deriv} {b post : Devm}
+
+theorem burn_reserves_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {ρ : B256} {K : List SFunc}
     (cut : CursorStateAt code cert root t_0d90_c56 b (ρ :: R) M (t_1479_c37 :: K))
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code cert root t_1479_c37 (afterSload root.sevm b 8)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none) :
+    Nonempty (CursorStateAt code cert root t_1479_c37 (afterSloadH root.sevm b 8)
       (reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
        reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
        reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) M K) := by
-  exact pair_reserves_cursor_state cut success fork
+  exact pair_reserves_cursor_stateH cut success stateGas bal
+
 
 def burnFirstGuardLine : List Ninst := [
   .reg .pop,
@@ -374,23 +374,22 @@ def burnFirstGuardLine : List Ninst := [
   .reg .iszero,
   .push [0x14, 0xfb] (by decide)]
 
-/-- Burn's first request staging follows the actual cursor and retains the
-physical request memory, token worlds and cached reserve words. -/
-theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_first_guard_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {timestamp r1 r0 toWord extρ : B256} {K : List SFunc}
     (cut : CursorStateAt code cert root t_1479_c37 b
       (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (mem : PtrMem 128 96 M)
-    (nonzero : ((burnTokensWorld root.sevm b).getCode
+    (nonzero : ((burnTokensWorldH root.sevm b).getCode
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
         b.getStorVal root.sevm.currentTarget 6).toAdr).size.toB256 ≠ 0) :
     let t0 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
       b.getStorVal root.sevm.currentTarget 6
     let t1 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-      (afterSload root.sevm b 6).getStorVal root.sevm.currentTarget 7
+      (afterSloadH root.sevm b 6).getStorVal root.sevm.currentTarget 7
     Nonempty (CursorStateAt code cert root t_14fb_c37
-      (temporalAccountAccessBase (burnTokensWorld root.sevm b) t0.toAdr)
+      (accountAccessH root.sevm (burnTokensWorldH root.sevm b) t0.toAdr)
       (0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 ::
         0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
       (balanceRequestMemory M root.sevm.currentTarget) K) := by
@@ -401,20 +400,20 @@ theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
   have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 := mem2.word
   have same2 := mem2.read_self (by decide : 64 + 32 ≤ 192)
   simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨guard⟩ := opened.line cert_check success fork burnFirstGuardLine (by rfl)
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨guard⟩ := opened.lineH cert_check success stateGas burnFirstGuardLine (by rfl)
     (by
       intro n member x equal; subst n
       simp only [burnFirstGuardLine, List.mem_cons, List.not_mem_nil,
         reduceCtorEq, or_self] at member)
-    (b' := temporalAccountAccessBase (burnTokensWorld root.sevm b)
+    (b' := accountAccessH root.sevm (burnTokensWorldH root.sevm b)
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
         b.getStorVal root.sevm.currentTarget 6).toAdr)
     (S' := 0x14fb :: 1 :: 0 ::
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) ::
       128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) :: 0 ::
-      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& (afterSload root.sevm b 6).getStorVal root.sevm.currentTarget 7) ::
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& (afterSloadH root.sevm b 6).getStorVal root.sevm.currentTarget 7) ::
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) ::
       r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
     (M' := balanceRequestMemory M root.sevm.currentTarget) (by
@@ -422,9 +421,9 @@ theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
       dsimp only [burnFirstGuardLine] at line
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
-      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
-      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, eq⟩ := ri_mload hd
@@ -501,11 +500,11 @@ theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesize fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesizeH bal hd
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line
       have computation := ri_iszero hd
       obtain ⟨_, rfl⟩ := ri_val (w := 0) (by
-        change B256.eqCheck ((burnTokensWorld root.sevm b).getCode
+        change B256.eqCheck ((burnTokensWorldH root.sevm b).getCode
           ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
             b.getStorVal root.sevm.currentTarget 6).toAdr).size.toB256 0 = 0
         simp only [B256.eqCheck, nonzero, ite_false]) computation
@@ -514,7 +513,7 @@ theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push hd
       cases line
       refine ⟨g', ?_⟩
-      simpa only [sevm, burnTokensWorld, balanceRequestMemory, balanceOfSelectorWord,
+      simpa only [sevm, burnTokensWorldH, balanceRequestMemory, balanceOfSelectorWord,
         show B256.eqCheck 0 0 = 1 from by decide,
         show Bytes.toB256 [0x14,0xfb] = (0x14fb : B256) from rfl,
         show Bytes.toB256 [255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255] = (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl,
@@ -525,6 +524,7 @@ theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [112,160,130,49] = (0x70a08231 : B256) from rfl,
         show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using state)
-  exact guard.branchSucc cert_check success fork (by decide)
+  exact guard.branchSuccH cert_check success stateGas (by decide)
+
 
 end Blanc.Lift.UniswapV2Pair

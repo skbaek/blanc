@@ -180,8 +180,8 @@ theorem reserves_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G c : Nat} {sel
     (reserves_callee_exact fork cost (by simp only [List.length_cons, List.length_nil]; decide)) ?_
   exact reserves_tail_exact clean0 clean1 cleant mem (by simp only [List.length_cons, List.length_nil]; decide)
 
-theorem reserves_entry_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+theorem reserves_entry_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (run : SFunc.Run cert.prog sevm (St b [sel] M G) t_02d6_c101 o) :
     ∃ d, o = .halted d ∧ d.output = encodeWords
       [reserve0Read (b.getStorVal sevm.currentTarget 8),
@@ -210,12 +210,12 @@ theorem reserves_entry_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call (show cert.prog[56]? = some t_0d90_c56 from rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
-  · obtain ⟨_, eq⟩ := reserves_callee_inv fork hc
+  · obtain ⟨_, eq⟩ := reserves_callee_invH bal hc
     cases eq
     obtain ⟨d, ho, out, stor, logs⟩ := reserves_tail_inv clean0 clean1 cleant mem h.uncut
-    exact ⟨d, ho, out, fun a => (stor a).trans (afterSload_getStor _ _ _ _),
-      logs.trans (afterSload_logs _ _ _)⟩
-  · obtain ⟨_, eq⟩ := reserves_callee_inv fork hc
+    exact ⟨d, ho, out, fun a => (stor a).trans (afterSloadH_getStor _ _ _ _),
+      logs.trans (afterSloadH_logs _ _ _)⟩
+  · obtain ⟨_, eq⟩ := reserves_callee_invH bal hc
     cases eq
 
 end Blanc.Lift.UniswapV2Pair

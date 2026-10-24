@@ -829,8 +829,9 @@ private theorem staticReject_t_05e2_c76 {sevm : Sevm} {d : Devm} {o : Outcome}
   | succ _ _ _ _ body => exact staticReject_t_05f8_c76 (SFunc.RunCut.uncut body)
 
 
-theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+theorem staticView_selector_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 96 M)
     (static : sevm.isStatic = true)
     (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
     ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector := by
@@ -983,7 +984,7 @@ theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o 
                     obtain ⟨_, impossible⟩ := ric_dest impossible
                     exact (getter_zeroRevert_impossible impossible).elim
               next hit =>
-                obtain ⟨_, _, nonstatic, _⟩ := transfer_entry_inv fork mem h.uncut
+                obtain ⟨_, _, nonstatic, _⟩ := transfer_entry_invH stateGas bal mem h.uncut
                 exact Bool.noConfusion (static.symm.trans nonstatic)
             next hit =>
               have equal : Bytes.toB256 [0x95, 0xd8, 0x9b, 0x41] = Blanc.Sevm.selector sevm := by
@@ -1100,7 +1101,7 @@ theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o 
                 exact hit zero
               exact ⟨.scalar (.stored .price0CumulativeLast), equal.symm⟩
           next hit =>
-            obtain ⟨_, _, nonstatic, _⟩ := initialize_entry_inv fork h.uncut
+            obtain ⟨_, _, nonstatic, _⟩ := initialize_entry_invH stateGas bal h.uncut
             exact Bool.noConfusion (static.symm.trans nonstatic)
         next hit =>
           have equal : Bytes.toB256 [0x36, 0x44, 0xe5, 0x15] = Blanc.Sevm.selector sevm := by
@@ -1151,7 +1152,7 @@ theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o 
               exact hit zero
             exact ⟨.scalar (.constant .permitTypehash), equal.symm⟩
         next hit =>
-          obtain ⟨_, _, _, nonstatic, _⟩ := transferFrom_entry_inv fork mem h.uncut
+          obtain ⟨_, _, _, nonstatic, _⟩ := transferFrom_entry_invH stateGas bal mem h.uncut
           exact Bool.noConfusion (static.symm.trans nonstatic)
     next greater =>
       unfold t_0166_c0 at h
@@ -1198,7 +1199,7 @@ theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o 
               exact hit zero
             exact ⟨.scalar (.address .token0), equal.symm⟩
         next hit =>
-          obtain ⟨_, nonstatic, _⟩ := approve_entry_inv fork mem h.uncut
+          obtain ⟨_, nonstatic, _⟩ := approve_entry_invH stateGas bal mem h.uncut
           exact Bool.noConfusion (static.symm.trans nonstatic)
       next greater =>
         unfold t_0197_c0 at h
@@ -1240,9 +1241,10 @@ theorem staticView_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o 
           exact Bool.noConfusion (static.symm.trans nonstatic)
 
 
-/-- Successful static certified pc-zero execution reaches an actual view selector. -/
-theorem staticView_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = true)
+
+theorem staticView_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (static : sevm.isStatic = true)
     (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
       ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector := by
@@ -1250,7 +1252,17 @@ theorem staticView_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
   obtain ⟨value, size, _, run⟩ := getter_guards_inv run
-  exact ⟨value, size, staticView_selector_inv fork getterInitMemory_ptr static run⟩
+  exact ⟨value, size, staticView_selector_invH stateGas bal getterInitMemory_ptr static run⟩
+
+
+theorem staticView_bytecode_invH {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (static : sevm.isStatic = true)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector := by
+  exact staticView_pc0_invH stateGas bal static (lift_sound_noStateGas cert_check codeEq stateGas run)
 
 /-- Actual raw operational success supplies the selector partition, without a selector premise. -/
 theorem staticView_bytecode_inv {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -1258,7 +1270,8 @@ theorem staticView_bytecode_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (static : sevm.isStatic = true)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector := by
-  exact staticView_pc0_inv fork static (lift_sound cert_check codeEq fork run)
+      ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector :=
+  staticView_bytecode_invH codeEq fork.rules_stateGas_none fork.rules_bal_none static run
+
 
 end Blanc.Lift.UniswapV2Pair

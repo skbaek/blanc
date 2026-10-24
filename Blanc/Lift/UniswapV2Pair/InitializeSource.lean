@@ -26,13 +26,13 @@ theorem initializeSourceState_value (st : State) (token0 token1 : Adr) (k : Writ
     k.value (initializeSourceState st token0 token1) = k.value st := by
   cases k <;> rfl
 
-theorem WriterRep.initialize_public_post {K : WriterKey → Prop} {current : Checkpoint}
+theorem WriterRep.initialize_public_postH {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state) :
     WriterRep K
-      ((initializePublicPost sevm b [0x485cc955] getterInitMemory G).getStor sevm.currentTarget)
+      ((initializePublicPostH sevm b [0x485cc955] getterInitMemory G).getStor sevm.currentTarget)
       (initializeSourceState current.state (initializeToken0 sevm) (initializeToken1 sevm)) := by
-  have step := initializePublicPost_storstep (sevm := sevm) (b := b)
+  have step := initializePublicPost_storstepH (sevm := sevm) (b := b)
     (R := [0x485cc955]) (M := getterInitMemory) (G := G)
   rw [step.self]
   have packed := initializePublicStorage_packed (sevm := sevm) (b := b)
@@ -138,23 +138,82 @@ structure InitializeSourceResult (K : WriterKey → Prop) (current : Checkpoint)
   upper1 : addressMask &&& post.getStorVal sevm.currentTarget 7 = addressMask &&& b.getStorVal sevm.currentTarget 7
   gas : post.gasLeft = residual
 
-theorem initialize_public_source_result {K : WriterKey → Prop} {current : Checkpoint}
+structure InitializeSourceResultH (K : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (sevm : Sevm) (b post : Devm) (residual : Nat) : Prop where
+  rawPost : post = initializePublicPostH sevm b [0x485cc955] getterInitMemory residual
+  representation : WriterRep K (post.getStor sevm.currentTarget)
+    (initializeSourceState current.state (initializeToken0 sevm) (initializeToken1 sevm))
+  sourceImmediate : startImmediate current (writerContext sevm invocation) (initializeDecodedEntry sevm) =
+    some (.finished (initializeSourceFrame current (writerContext sevm invocation)
+      (initializeToken0 sevm) (initializeToken1 sevm)) [])
+  sourceDone : drive 2 (startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm)) .done =
+    initializeSourceDone current (writerContext sevm invocation) (initializeToken0 sevm) (initializeToken1 sevm)
+  context : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).context = writerContext sevm invocation
+  entry : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).entry = initializeDecodedEntry sevm
+  checkpoint : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).checkpoint = current
+  sourceCurrent : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).current =
+      { current with state := initializeSourceState current.state (initializeToken0 sevm) (initializeToken1 sevm) }
+  segment : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).segment = 0
+  afterCall : (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)).afterCall = none
+  output : post.output = []
+  storage : post.getStor sevm.currentTarget = initializePublicStorage sevm b
+  logs : post.logs = b.logs
+  foreignStorage : ∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a
+  unchangedSlots : ∀ n, n ≠ 6 → n ≠ 7 → post.getStorVal sevm.currentTarget n = b.getStorVal sevm.currentTarget n
+  token0 : (post.getStorVal sevm.currentTarget 6).toAdr = initializeToken0 sevm
+  token1 : (post.getStorVal sevm.currentTarget 7).toAdr = initializeToken1 sevm
+  upper0 : addressMask &&& post.getStorVal sevm.currentTarget 6 = addressMask &&& b.getStorVal sevm.currentTarget 6
+  upper1 : addressMask &&& post.getStorVal sevm.currentTarget 7 = addressMask &&& b.getStorVal sevm.currentTarget 7
+  gas : post.gasLeft = residual
+
+theorem InitializeSourceResultH_of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork)
+    (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (b post : Devm) (residual : Nat) :
+    InitializeSourceResultH K current invocation sevm b post residual ↔ InitializeSourceResult K current invocation sevm b post residual := by
+  constructor <;> intro h <;>
+    exact ⟨by simpa only [initializePublicPostH_of_covered fork] using h.rawPost,
+      h.representation,
+      h.sourceImmediate,
+      h.sourceDone,
+      h.context,
+      h.entry,
+      h.checkpoint,
+      h.sourceCurrent,
+      h.segment,
+      h.afterCall,
+      h.output,
+      h.storage,
+      h.logs,
+      h.foreignStorage,
+      h.unchangedSlots,
+      h.token0,
+      h.token1,
+      h.upper0,
+      h.upper1,
+      h.gas⟩
+
+theorem initialize_public_source_resultH {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (freshOutput : b.output = []) (value : sevm.value = 0)
     (authorized : sevm.caller = current.state.factory) (nonstatic : sevm.isStatic = false) :
-    InitializeSourceResult K current invocation sevm b
-      (initializePublicPost sevm b [0x485cc955] getterInitMemory G) G := by
+    InitializeSourceResultH K current invocation sevm b
+      (initializePublicPostH sevm b [0x485cc955] getterInitMemory G) G := by
   have sourceFacts := initializeSourceFrame_prefix current (writerContext sevm invocation)
     (initializeToken0 sevm) (initializeToken1 sevm)
-  have step := initializePublicPost_storstep (sevm := sevm) (b := b)
+  have step := initializePublicPost_storstepH (sevm := sevm) (b := b)
     (R := [0x485cc955]) (M := getterInitMemory) (G := G)
   have packed := initializePublicStorage_packed (sevm := sevm) (b := b)
-  refine ⟨rfl, rep.initialize_public_post, initialize_startImmediate_done value authorized nonstatic,
+  refine ⟨rfl, rep.initialize_public_postH, initialize_startImmediate_done value authorized nonstatic,
     initialize_drive_done value authorized nonstatic, sourceFacts.1, sourceFacts.2.1, sourceFacts.2.2.1,
     sourceFacts.2.2.2.1, sourceFacts.2.2.2.2.1, sourceFacts.2.2.2.2.2, ?_, step.self, step.logs,
     step.other, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [initializePublicPost_output, freshOutput]
+  · rw [initializePublicPost_outputH, freshOutput]
   · intro n off6 off7
     rw [step.getStorVal n]
     exact initializePublicStorage_unchanged off6 off7
@@ -168,6 +227,24 @@ theorem initialize_public_source_result {K : WriterKey → Prop} {current : Chec
     exact packed.2.2.2
   · rfl
 
+theorem initialize_bytecode_refines_sourceH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (representable : sevm.data.length < 2 ^ 256) (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.caller = current.state.factory ∧
+      sevm.isStatic = false ∧ ∃ residual, InitializeSourceResultH K current invocation sevm b post residual := by
+  obtain ⟨value, size, guard, rawAuthorized, nonstatic, residual, result⟩ :=
+    initialize_bytecode_refines_rawH codeEq stateGas bal selector run
+  have authorized : sevm.caller = current.state.factory := rawAuthorized.trans rep.fixed.2.2.1
+  have length := (word_calldata_guards_iff (n := 64) representable (by decide)).mp ⟨size, guard⟩
+  refine ⟨value, length, authorized, nonstatic, residual, ?_⟩
+  rw [result]
+  exact initialize_public_source_resultH rep freshOutput value authorized nonstatic
+
 /-- A successful literal pc-zero run derives the existing handler's accepted result. -/
 theorem initialize_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -178,13 +255,38 @@ theorem initialize_bytecode_refines_source {K : WriterKey → Prop} {current : C
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.caller = current.state.factory ∧
       sevm.isStatic = false ∧ ∃ residual, InitializeSourceResult K current invocation sevm b post residual := by
-  obtain ⟨value, size, guard, rawAuthorized, nonstatic, residual, result⟩ :=
-    initialize_bytecode_refines_raw codeEq fork selector run
-  have authorized : sevm.caller = current.state.factory := rawAuthorized.trans rep.fixed.2.2.1
-  have length := (word_calldata_guards_iff (n := 64) representable (by decide)).mp ⟨size, guard⟩
-  refine ⟨value, length, authorized, nonstatic, residual, ?_⟩
-  rw [result]
-  exact initialize_public_source_result rep freshOutput value authorized nonstatic
+  simpa only [InitializeSourceResultH_of_covered fork] using
+    initialize_bytecode_refines_sourceH rep representable freshOutput codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
+
+theorem initialize_bytecode_exact_consumesH {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (representable : sevm.data.length < 2 ^ 256) (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.caller = current.state.factory ∧
+      sevm.isStatic = false ∧ ∃ residual, InitializeSourceResultH K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := initializeSourceFrame current (writerContext sevm invocation)
+              (initializeToken0 sevm) (initializeToken1 sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, length, authorized, nonstatic, residual, result⟩ :=
+    initialize_bytecode_refines_sourceH rep representable freshOutput codeEq stateGas bal selector run
+  have typed : startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm) =
+      .finished (initializeSourceFrame current (writerContext sevm invocation)
+        (initializeToken0 sevm) (initializeToken1 sevm)) post.output := by
+    unfold startTyped
+    rw [result.sourceImmediate]
+    dsimp only []
+    rw [← result.output]
+  refine ⟨value, length, authorized, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)) post.output
 
 /-- Successful raw pc0 execution derives exact consumption for the typed initialize entry. -/
 theorem initialize_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
@@ -201,18 +303,8 @@ theorem initialize_bytecode_exact_consumes {K : WriterKey → Prop} {current : C
             frame := initializeSourceFrame current (writerContext sevm invocation)
               (initializeToken0 sevm) (initializeToken1 sevm),
             remaining := .done, childReturns := [] } := by
-  obtain ⟨value, length, authorized, nonstatic, residual, result⟩ :=
-    initialize_bytecode_refines_source rep representable freshOutput codeEq fork selector run
-  have typed : startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm) =
-      .finished (initializeSourceFrame current (writerContext sevm invocation)
-        (initializeToken0 sevm) (initializeToken1 sevm)) post.output := by
-    unfold startTyped
-    rw [result.sourceImmediate]
-    dsimp only []
-    rw [← result.output]
-  refine ⟨value, length, authorized, nonstatic, residual, result, ?_⟩
-  rw [typed]
-  exact ExactConsumes.finished (initializeSourceFrame current (writerContext sevm invocation)
-    (initializeToken0 sevm) (initializeToken1 sevm)) post.output
+  simpa only [InitializeSourceResultH_of_covered fork] using
+    initialize_bytecode_exact_consumesH rep representable freshOutput codeEq fork.rules_stateGas_none fork.rules_bal_none selector run
+
 
 end Blanc.Lift.UniswapV2Pair

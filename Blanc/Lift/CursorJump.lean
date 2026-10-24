@@ -18,19 +18,4 @@ theorem CursorOK.jumpAt_of_jump {code : ByteArray} {c : Cert}
     exact check.1.1.1
   · cases check
 
-/-- A referenced goto retains the supplied actual full state and original K;
-its successor is fixed by the checked program lookup. -/
-theorem CursorStateAt.goto {code : ByteArray} {c : Cert} {start : Exec.Deriv}
-    {b post : Devm} {S : List B256} {M : Mem} {K : List SFunc}
-    {f : SFunc} {k : Nat} {target : B256}
-    (cut : CursorStateAt code c start (.jump k) b (target :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (lookup : c.prog[k]? = some f) :
-    Nonempty (CursorStateAt code c start f b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpAt_of_jump cut.tree)
-  intro G d f' K' step
-  cases step with
-  | jump _ entry pop =>
-      exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
-
 end Blanc.Lift

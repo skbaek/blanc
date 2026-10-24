@@ -29,4 +29,16 @@ theorem weth9_deploy_init_covered (f : Fork) (hf : CoveredFork f) :
     rw [hstor]
     exact FootInv.deployed deployedStor_metadata⟩
 
+/-- **The same under Byzantium**, the fork of the recorded deployment coordinates.  By
+`weth9_deploy_byzantium`. -/
+theorem weth9_deploy_init_byzantium :
+    weth9Address = computeContractAddress deployer 446 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork .byzantium) = .ok post ∧
+      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
+      ∀ b : B256, FootInv (fun _ => False) (Devm.getStor post weth9Address) b := by
+  obtain ⟨haddress, post, hpost, hcode, hstor⟩ := weth9_deploy_byzantium
+  exact ⟨haddress, post, hpost, hcode, fun b => by
+    rw [hstor]
+    exact FootInv.deployed deployedStor_metadata⟩
+
 end Blanc.Lift.Weth9.Creation

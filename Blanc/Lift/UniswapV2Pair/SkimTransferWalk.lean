@@ -437,11 +437,9 @@ theorem skimAddSub {x : B256} (fit : x.toNat + 68 < 2 ^ 256) : 68 + x - x = 68 :
   rw [show 2 ^ 256 + (68 + x.toNat) - x.toNat = 68 + 2 ^ 256 by omega, Nat.add_mod_right]
   rfl
 
-/-- The real helper57 CALL keeps the seven-operand frame below its pushed flag; a
-nonzero flag is an entered call whose parent memory and output settle literally. -/
-theorem skimTransferCallStep_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
+theorem skimTransferCallStep_invH {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
     {G : Nat} {forwarded token ptr inputSize endWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (callStep : Ninst.Run sevm
       (St b (forwarded :: token :: 0 :: ptr :: inputSize :: ptr :: 0 :: endWord :: token :: R)
         M G) (.exec .call) d) :
@@ -456,20 +454,20 @@ theorem skimTransferCallStep_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M :
     ⟨Or.inl rfl, Or.inl rfl, Or.inl rfl, Or.inl rfl, Or.inl rfl, Or.inl rfl,
       Or.inl rfl, matches_some_map rest⟩
   have transferred : AbstractStackSafety.Matches (none :: rest.map some) d.stack :=
-    ninstTransfer_run fork matched rfl callStep
+    ninstTransfer_run_noStateGas stateGas matched rfl callStep
   obtain ⟨flag, stack⟩ : ∃ flag, d.stack = flag :: rest := by
     cases eq : d.stack with
     | nil => rw [eq] at transferred; exact transferred.elim
     | cons flag tail =>
       rw [eq] at transferred
       exact ⟨flag, by rw [matches_some_map_eq transferred.2]⟩
-  refine ⟨flag, stack, ReturnDataBound.call_returnData_length_lt callStep fork, ?_⟩
+  refine ⟨flag, stack, ReturnDataBound.call_returnData_length_ltH callStep stateGas, ?_⟩
   intro nonzero
   have operands : (forwarded :: token :: 0 :: ptr :: inputSize :: ptr :: 0 :: rest) <<+
       (St b (forwarded :: token :: 0 :: ptr :: inputSize :: ptr :: 0 :: rest) M G).stack := by
     simpa only [List.append_nil, St.stack] using
       (pref_append (forwarded :: token :: 0 :: ptr :: inputSize :: ptr :: 0 :: rest) [])
-  rcases of_run_call_val_with_depth_frame operands callStep fork with failed | entered
+  rcases of_run_call_val_with_depth_frameH operands callStep stateGas with failed | entered
   · rw [stack] at failed
     exact (nonzero (pref_head_unique failed.1 (pref_append [flag] rest)).symm).elim
   · obtain ⟨parent, _, _, _, _, _, _, _, _, _, _, _, parentMemory, _, parentOutput, _, _, _,
@@ -477,6 +475,7 @@ theorem skimTransferCallStep_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M :
     refine ⟨?_, (Resume.call_output resume).trans parentOutput⟩
     rw [memory, parentMemory, returned]
     rfl
+
 
 
 /-- A window inside a zero-padded prefix slice reads the original prefix. -/
@@ -489,13 +488,11 @@ theorem skimSliceD_prefix (xs : Bytes) {n : Nat} (enough : 32 ≤ n) :
   have short := List.mem_range.mp hi
   rw [Bytes.getD_sliceD_of_lt _ _ _ _ (by omega), Nat.zero_add]
 
-/-- The helper57 CALL and reply tail at a memory whose free pointer word is `ptr`:
-the flag is nonzero, the call entered, and the reply passes the optional-bool rule. -/
-theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem skimTransferTail_flag_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {N : Mem} {G : Nat}
     {forwarded tokenM ptr endWord amount toWord tokenWord rho : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf (N.read 64 32).2)
+    (stateGas : sevm.benvStat.rules.stateGas = none) (wf : Mem.Wf (N.read 64 32).2)
     (word : Bytes.toB256 (N.read 64 32).1 = ptr)
     (low : 96 ≤ ptr.toNat) (high : ptr.toNat + 64 < 2 ^ 256)
     (run : SFunc.RunCutP P cert.prog sevm []
@@ -510,7 +507,7 @@ theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       ∃ M' residual, out = St d R M' residual := by
   obtain ⟨d, callP, h⟩ := ric_nextP run
-  obtain ⟨flag, stack, width, entered⟩ := skimTransferCallStep_inv fork (project callP)
+  obtain ⟨flag, stack, width, entered⟩ := skimTransferCallStep_invH stateGas (project callP)
   rw [St.self stack rfl] at h
   obtain ⟨_, h⟩ := skimTransferReply_inv project (by decide : 16 ∉ ([] : List Nat)) h
   obtain ⟨nonzero, outEq, accept⟩ := skimTransferDecode_inv project h
@@ -554,6 +551,7 @@ theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop
           (by rw [List.sliceD_eq_map, List.length_map, List.length_range, lenNat]; omega),
         Nat.sub_self, lenNat, skimSliceD_prefix _ enough] at head
       exact ⟨enough, head⟩
+
 
 
 /-- The memory the literal copy loop and CALL preparation leave before the CALL's
@@ -616,15 +614,11 @@ theorem skimCopyCallMemory_read {N : Mem} {src dst : B256} (wf : Mem.Wf N)
     ((rW3.extend (dst.toNat + 64) 32).write (wW3.extend (dst.toNat + 64) 32) _ _).read,
     ((rD2.extend (dst.toNat + 64) 32).write (wD2.extend (dst.toNat + 64) 32) _ _).read]
 
-/-- A returned pointer-generic helper57 run at a free pointer `p` carried by the actual
-memory (`PtrMem`): the SAME P-step CALL with canonical transfer calldata at `p+164`, its
-nonzero success flag, the optional-bool acceptance of its full reply, and the returned
-frame. Child effects stay opaque in `d`. -/
-theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem skimTransfer_flag_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat} {n : Nat}
     {p amount toWord tokenWord rho : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (low : 128 ≤ p.toNat) (high : p.toNat + 260 < 2 ^ 256)
     (run : SFunc.RunP P cert.prog sevm
       (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
@@ -702,8 +696,9 @@ theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   rw [hq, skimAddSub (by rw [nat164]; omega)] at state
   rw [state] at tail
   obtain ⟨d, call, flagged, output, width, accept, outEq⟩ :=
-    skimTransferTail_flag_inv project fork wq hq (by rw [nat164]; omega)
+    skimTransferTail_flag_invH project stateGas wq hq (by rw [nat164]; omega)
       (by rw [nat164]; omega) tail
   exact ⟨forwarded, callGas, _, d, call, calldata, flagged, output, width, accept, outEq⟩
+
 
 end Blanc.Lift.UniswapV2Pair

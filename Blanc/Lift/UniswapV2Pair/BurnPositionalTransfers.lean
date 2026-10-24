@@ -4,8 +4,8 @@ import Blanc.Lift.UniswapV2Pair.BurnBalanceWalk
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-theorem BurnFiveCalls.secondMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnFiveCalls root sevm b) :
+theorem BurnFiveCallsH.secondMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnFiveCallsH root sevm b w) :
     PtrMem (r.four.replyPointer + 164) r.four.secondTransferMemory.size r.four.secondTransferMemory ∧
       r.four.replyPointer.toNat + 260 ≤ r.four.secondTransferMemory.size := by
   obtain ⟨n, pointer⟩ := r.four.replyMem
@@ -24,15 +24,32 @@ def BurnFiveCalls.finalMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     Blanc.Lift.bytesArrayMemory r.four.secondTransferMemory (r.four.replyPointer + 164)
       r.second.returned.devm.returnData
 
+def BurnFiveCallsH.finalMemory {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnFiveCallsH root sevm b w) : Mem :=
+  if r.second.returned.devm.returnData = [] then r.four.secondTransferMemory else
+    Blanc.Lift.bytesArrayMemory r.four.secondTransferMemory (r.four.replyPointer + 164)
+      r.second.returned.devm.returnData
+
 def BurnFiveCalls.finalPointer {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (r : BurnFiveCalls root sevm b) : B256 :=
   burnSecondTransferPointer r.four.transfer.returned.devm.returnData r.second.returned.devm.returnData
 
-/-- The second actual CALL supplies its own full reply and checked final-query
-caller; the prior reply determines only its moving input pointer. -/
-theorem BurnFiveCalls.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnFiveCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
+def BurnFiveCallsH.finalPointer {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnFiveCallsH root sevm b w) : B256 :=
+  burnSecondTransferPointer r.four.transfer.returned.devm.returnData r.second.returned.devm.returnData
+
+theorem BurnFiveCallsH.finalMemory_toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) (r : BurnFiveCallsH root sevm b BurnSchedule.modern) :
+    (r.toCovered fork).finalMemory = r.finalMemory := by
+  unfold BurnFiveCallsH.finalMemory BurnFiveCalls.finalMemory
+  show (if r.second.returned.devm.returnData = [] then (r.four.toCovered fork).secondTransferMemory else
+    Blanc.Lift.bytesArrayMemory (r.four.toCovered fork).secondTransferMemory (r.four.replyPointer + 164)
+      r.second.returned.devm.returnData) = _
+  rw [BurnFourCallsH.secondTransferMemory_toCovered fork]
+
+theorem BurnFiveCallsH.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
+    (r : BurnFiveCallsH root sevm b w) (success : root.exn = .ok post)
+    (stateGas : sevm.benvStat.rules.stateGas = none) :
     r.second.returned.devm.stack = 1 :: (68 + (r.four.replyPointer + 164)) ::
       (burnInitialToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
       96 :: 0 :: r.four.three.amount1 r.four.pricing :: (Sevm.dataWord sevm 4).toAdr.toB256 ::
@@ -51,14 +68,13 @@ theorem BurnFiveCalls.actualReply {root : Exec.Deriv} {sevm : Sevm} {b post : De
     change 128 ≤ (burnFirstTransferPointer r.four.transfer.returned.devm.returnData).toNat
     omega
   have width : r.four.replyPointer.toNat + 260 < 2 ^ 256 := layout.2.2.2
-  simpa only [BurnFiveCalls.finalMemory] using
-    pair_transfer_reply_cursor_state r.second r.input r.placed r.tree r.conts success
-      (by rw [r.sevm_eq]; exact fork) r.secondMem.1 lower width r.secondMem.2
+  simpa only [BurnFiveCallsH.finalMemory] using
+    pair_transfer_reply_cursor_stateH r.second r.input r.placed r.tree r.conts success
+      (by rw [r.sevm_eq]; exact stateGas) r.secondMem.1 lower width r.secondMem.2
 
-/-- The final query pointer is the physical result of both actual allocations,
-with no stored zero-sentinel premise. -/
-theorem BurnFiveCalls.finalMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    (r : BurnFiveCalls root sevm b) : ∃ n, PtrMem r.finalPointer n r.finalMemory := by
+
+theorem BurnFiveCallsH.finalMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnFiveCallsH root sevm b w) : ∃ n, PtrMem r.finalPointer n r.finalMemory := by
   have layout := burnFirstTransferPointer_layout r.first_bound
   have width : r.four.replyPointer.toNat + 260 < 2 ^ 256 := layout.2.2.2
   have nat164 : (r.four.replyPointer + 164).toNat = r.four.replyPointer.toNat + 164 := by
@@ -66,14 +82,14 @@ theorem BurnFiveCalls.finalMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
       Nat.lo_eq_of_lt (by omega)]
   by_cases empty : r.second.returned.devm.returnData = []
   · exact ⟨r.four.secondTransferMemory.size,
-      by simpa only [BurnFiveCalls.finalMemory, BurnFiveCalls.finalPointer,
-        burnSecondTransferPointer, BurnFourCalls.replyPointer, empty, ite_true] using r.secondMem.1⟩
+      by simpa only [BurnFiveCallsH.finalMemory, BurnFiveCallsH.finalPointer,
+        burnSecondTransferPointer, BurnFourCallsH.replyPointer, empty, ite_true] using r.secondMem.1⟩
   · have image := Blanc.Lift.bytesArrayMemory_image (bytes := r.second.returned.devm.returnData)
       r.secondMem.1 (by rw [nat164]; have := layout.2.1; change 96 ≤ _; omega)
       (by rw [nat164]; have := r.secondMem.2; omega) (by rw [nat164]; omega)
     exact ⟨memExtSize r.four.secondTransferMemory.size (r.four.replyPointer + 164 + 32).toNat
       r.second.returned.devm.returnData.length,
-      by simpa only [BurnFiveCalls.finalMemory, BurnFiveCalls.finalPointer,
-        burnSecondTransferPointer, BurnFourCalls.replyPointer, ite_eq_right empty] using image.1⟩
+      by simpa only [BurnFiveCallsH.finalMemory, BurnFiveCallsH.finalPointer,
+        burnSecondTransferPointer, BurnFourCallsH.replyPointer, ite_eq_right empty] using image.1⟩
 
 end Blanc.Lift.UniswapV2Pair

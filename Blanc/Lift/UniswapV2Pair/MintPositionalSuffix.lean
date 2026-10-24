@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.CursorNoExecSuffix
 import Blanc.Lift.UniswapV2Pair.Check
 
@@ -12,17 +13,15 @@ def mintFinalExecFreeEntries : List Nat :=
 theorem mintFinalExecFreeEntries_closed :
     ExecFreeSet cert.prog mintFinalExecFreeEntries = true := by decide
 
-/-- The actual fee reply cursor and its original Mint continuations exclude
-every later same-frame external instruction, including the public return. -/
-theorem mint_fee_suffix_no_exec {F : Exec.Deriv} {κ : Cursor}
+theorem mint_fee_suffix_no_execH {F : Exec.Deriv} {κ : Cursor}
     (placed : CursorOK code cert F κ)
     (tree : κ.f = .next (.reg .iszero) (.next (.reg (.dup 0)) (.next (.reg .iszero)
       (.next (.push [0x27,0x6b] (by decide)) (.branch t_2762_c68 t_276b_c68)))))
     (continuations : κ.K.map Cont.f = [t_1233_c41, t_039b_c86])
-    (fork : CoveredFork F.sevm.benvStat.fork) :
+    (stateGas : F.sevm.benvStat.rules.stateGas = none) :
     ∀ N, Exec.Deriv.ParentPrefix F N → ∀ x,
       ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
-  apply placed.noExecSuffix cert_check fork mintFinalExecFreeEntries_closed
+  apply placed.noExecSuffixH cert_check stateGas mintFinalExecFreeEntries_closed
   · rw [tree]
     decide
   · intro f member
@@ -31,5 +30,6 @@ theorem mint_fee_suffix_no_exec {F : Exec.Deriv} {κ : Cursor}
     rcases member with rfl | rfl
     · decide
     · decide
+
 
 end Blanc.Lift.UniswapV2Pair

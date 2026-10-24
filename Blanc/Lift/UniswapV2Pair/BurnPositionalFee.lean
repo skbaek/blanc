@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorGasCall
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
@@ -29,26 +30,25 @@ def burnLiquiditySamplingLine : List Ninst := [
   .reg (.dup 8),
   .push [0x26, 0xec] (by decide)]
 
-/-- The pair LP balance is sampled by the actual original caller before fee68.
-No representation, chosen fee result, or caller gas schedule is needed here. -/
-theorem burn_fee_caller_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_fee_caller_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {b1 discarded b0 token1 token0 r1 r0 toWord extρ : B256}
     (cut : CursorStateAt code cert root BurnInitialBalanceSite.second.afterDecodeTree b
       (b1 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
+    (bal : root.sevm.benvStat.rules.bal = none)
     (mem : PtrMem 128 192 M) :
-    Nonempty (CursorStateAt code cert root t_26ec_c68 (feeBurnWorld root.sevm b)
+    Nonempty (CursorStateAt code cert root t_26ec_c68 (feeBurnWorldH root.sevm b)
       (r1 :: r0 :: 0x15e2 :: burnFeeLocals (feeBurnLiquidity root.sevm b)
         b1 b0 token1 token0 r1 r0 toWord extρ R)
       (feeBurnMemory M root.sevm.currentTarget) (t_15e2_c37 :: K)) := by
   let sevm := root.sevm
   have scratch := feeBurnMemory_ptr mem sevm.currentTarget
-  obtain ⟨caller⟩ := cut.line cert_check success fork burnLiquiditySamplingLine rfl
+  obtain ⟨caller⟩ := cut.lineH cert_check success stateGas burnLiquiditySamplingLine rfl
     (by intro n member x equal; subst n
         simp only [burnLiquiditySamplingLine, List.mem_cons, List.not_mem_nil,
           reduceCtorEq, or_self] at member)
-    (b' := feeBurnWorld root.sevm b)
+    (b' := feeBurnWorldH root.sevm b)
     (S' := 0x26ec :: r1 :: r0 :: 0x15e2 ::
       burnFeeLocals (feeBurnLiquidity root.sevm b) b1 b0 token1 token0 r1 r0 toWord extρ R)
     (M' := feeBurnMemory M root.sevm.currentTarget) (by
@@ -101,7 +101,7 @@ theorem burn_fee_caller_cursor_state {root : Exec.Deriv} {b post : Devm}
       rw [feeBurnMemory_hash, scratch.read_self (by decide : 0 + 64 ≤ 192)] at eq
       subst d
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line
-      obtain ⟨_, rfl⟩ := ri_sload fork hs
+      obtain ⟨_, rfl⟩ := ri_sloadH bal hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line
       obtain ⟨_, rfl⟩ := ri_swap rfl hs
       dsimp only [List.set] at line
@@ -120,8 +120,9 @@ theorem burn_fee_caller_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line
       obtain ⟨gas, state⟩ := ri_push hs
       cases line
-      exact ⟨gas, by simpa only [sevm, feeBurnWorld, feeBurnLiquidity, burnFeeLocals,
+      exact ⟨gas, by simpa only [sevm, feeBurnWorldH, feeBurnLiquidity, burnFeeLocals,
         show Bytes.toB256 [0x26,0xec] = (0x26ec : B256) from rfl] using state⟩)
-  exact caller.call cert_check success fork rfl
+  exact caller.callH cert_check success stateGas rfl
+
 
 end Blanc.Lift.UniswapV2Pair

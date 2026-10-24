@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.SafeTransferWalk
 
@@ -46,12 +47,12 @@ theorem pair_transfer_initialize_line_state {sevm : Sevm} {b d : Devm}
 
 /-- The original initializer advances the supplied actual cursor, retaining its
 full world and physical moving payload image before the bounded copy. -/
-theorem pair_transfer_initialize_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem pair_transfer_initialize_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {p amount toWord tokenWord rho : B256} {n : Nat}
     (cut : CursorStateAt code cert root t_1fdb_c57 b
       (amount :: toWord :: tokenWord :: rho :: R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
     (width : p.toNat + 260 < 2 ^ 256) :
     let N := safeTransfer_dynamicPayloadMemory M p amount toWord
@@ -61,8 +62,8 @@ theorem pair_transfer_initialize_cursor_state {root : Exec.Deriv} {b post : Devm
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N K) := by
   obtain ⟨_, _, _, payloadMem, _⟩ :=
     safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  have reached := opened.line cert_check success fork pairTransferInitializeLine rfl
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  have reached := opened.lineH cert_check success stateGas pairTransferInitializeLine rfl
     (by intro inst member x equal; subst inst
         simp only [pairTransferInitializeLine, List.mem_cons, List.not_mem_nil,
           reduceCtorEq, or_self] at member)
