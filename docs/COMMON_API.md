@@ -1723,6 +1723,21 @@ The per-root block facts already transported to a mid history are in
 credits under `BodyStageCapabilities F`), `rawFrames_entered` (any `EnteredCondition`),
 `rootEntryIn` and `calldata_bound`, each through `rawFrames_mem_block`.
 
+For the original retained forest and admitted queries after a transaction cut,
+use [`Blanc/ExecutionMidHistoryInForest.lean`](../Blanc/ExecutionMidHistoryInForest.lean).
+`MidHistoryTraceIn.settledRoots`, `settledFrames_eq` and
+`settledFrames_parentIn` retain the actual suffix roots and their parent relation.
+`ApplyTransactionsTrace.TxSplit.senderQueries_after` proves the exact query drop
+for any genuine cut; `senderOccurrences_tail_indexed` preserves original indices
+and full transaction inputs. `senderQueries_cut_prefix`, `rawFrames_cut_prefix`
+and `settledFrames_cut_prefix` embed the mid history as the original full history's
+ordered suffix, with membership corollaries. The query list preserves duplicates
+and includes admitted transactions whose VM execution reverts.
+`settledRoots_caller_ne_of_senderQueries` transfers actual sender-query exclusion
+and a distinct system address to mid root callers. The start remains the cut's
+actual `afterBenv`; these APIs neither create a block-chain checkpoint there nor
+rebase deployment-world facts from the full history.
+
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
 `BerlinOnwards`, `PrePrague`, `PreCancun`, `PragueOnwards` (fork lists in
@@ -5546,8 +5561,8 @@ projects the same admitted senders to actual settled message roots.
 consumes the exact recovery-query exclusion directly. Transaction roots retain
 the original checked sender, while optional system stages retain systemAddress.
 These results need no modern fork, code invariant or eligible-authority premise
-for caller identity. Mid-history root and sender-query suffix transport remain
-separate obligations.
+for caller identity. `ExecutionMidHistoryInForest` supplies the corresponding
+mid-history roots and exact sender-query suffix transport.
 
 The following effects APIs consume the modern covered carrier:
 
@@ -6196,7 +6211,14 @@ contract-neutral.
   successful frame), `fp_run` (the big-step recursion), `fstep_sound`
   (one accepted step keeps the invariant `FpInv`), and the frame-length facts
   `mapM_length` (an `Option` `mapM` keeps length), `foldTop_length` and
-  `transfer_length_mono`.
+  `transfer_length_mono`. The `rdsKeep_sound_noStateGas`,
+  `fstep_sound_noStateGas`, `fp_run_noStateGas`, `fpRun_sound_noStateGas`
+  and `lift_sound_fp_noStateGas` variants use the executing rules'
+  `stateGas = none`. They share the original induction and checker, retaining
+  the actual `Exec` and `StepIn` witnesses; modern interfaces remain projections.
+  The USDC worked specialization `implRun_fp_noStateGas` in
+  `Blanc/Lift/Usdc/ImplFp.lean` applies that capability to the existing checked
+  annotations and the same original successful implementation run.
 - For the write-site checker's step and join soundness, use
   [`Blanc/Lift/WriteSiteStep.lean`](../Blanc/Lift/WriteSiteStep.lean) and
   [`Blanc/Lift/WriteSiteJoin.lean`](../Blanc/Lift/WriteSiteJoin.lean): `WSt.Holds`/`WSt.Sat`

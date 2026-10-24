@@ -312,8 +312,8 @@ theorem rdsOf_mem {fs : List Fact} {h : Nat} (hr : rdsOf fs = some h) : Fact.rds
 /-- The return-data fact a step keeps or installs bounds the return data after the step: a
 regular step keeps the buffer, a `CALL` leaves it below `2 ^ 160` (Jaune
 `call_returnData_length_lt_two_pow_160`, under the memory potential `Pot`). -/
-theorem rdsKeep_sound {fs : List Fact} {n : Ninst} {p out : Pattern} {sevm : Sevm} {d d' : Devm}
-    {h : Nat} (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+theorem rdsKeep_sound_noStateGas {fs : List Fact} {n : Ninst} {p out : Pattern} {sevm : Sevm} {d d' : Devm}
+    {h : Nat} (hsg : sevm.benvStat.rules.stateGas = none) (ho : ninstTransfer n p = some out)
     (run : Ninst.Run sevm d n d') (pot : Pot d)
     (hrd : ∀ h, Fact.rdsLe h ∈ fs → d.returnData.length ≤ h) (hm : Fact.rdsLe h ∈ rdsKeep n fs) :
     d'.returnData.length ≤ h := by
@@ -323,18 +323,26 @@ theorem rdsKeep_sound {fs : List Fact} {n : Ninst} {p out : Pattern} {sevm : Sev
   | swapn _ => cases ho
   | exchange _ => cases ho
   | reg r =>
-    rw [ReturnDataKeep.Ninst.Run.reg_returnData hfork.rules_stateGas_none run]
+    rw [ReturnDataKeep.Ninst.Run.reg_returnData hsg run]
     exact hrd h hm
   | exec x =>
     cases x
     case call =>
       rcases List.mem_cons.mp hm with hm | hm
       · cases hm
-        have := call_returnData_length_lt_two_pow_160 run hfork.rules_stateGas_none pot
+        have := call_returnData_length_lt_two_pow_160 run hsg pot
         unfold memCap
         omega
       · exact absurd hm rdsLe_not_mem_filter
     all_goals exact absurd hm rdsLe_not_mem_filter
+
+/-- Covered-fork projection of the actual-rules soundness theorem. -/
+theorem rdsKeep_sound {fs : List Fact} {n : Ninst} {p out : Pattern} {sevm : Sevm} {d d' : Devm}
+    {h : Nat} (hfork : CoveredFork sevm.benvStat.fork) (ho : ninstTransfer n p = some out)
+    (run : Ninst.Run sevm d n d') (pot : Pot d)
+    (hrd : ∀ h, Fact.rdsLe h ∈ fs → d.returnData.length ≤ h) (hm : Fact.rdsLe h ∈ rdsKeep n fs) :
+    d'.returnData.length ≤ h :=
+  rdsKeep_sound_noStateGas hfork.rules_stateGas_none ho run pot hrd hm
 
 /-! ## One step -/
 
@@ -343,8 +351,8 @@ above `rest`, the checker accepts `n` (`fstep`, beside `absNinst` on the abstrac
 shorter than the checker frame), and the step runs with bounded potential before and after, then
 the step observes a good free pointer at a free-pointer read, the frame stays no longer than the
 abstract stack, and `σ'` describes `d'` above the same `rest` under an updated valuation. -/
-theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List AVal} {sevm : Sevm}
-    {d d' : Devm} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem fstep_sound_noStateGas {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List AVal} {sevm : Sevm}
+    {d d' : Devm} {rest : List B256} (hsg : sevm.benvStat.rules.stateGas = none)
     (hs : fstep n σ = some σ') (ha : absNinst n a = some a') (hlen : σ.kv.length ≤ a.length)
     (inv : FpInv ν σ d rest) (run : Ninst.Run sevm d n d') (pot : Pot d) (pot' : Pot d') :
     FpObs d n ∧ σ'.kv.length ≤ a'.length ∧ ∃ ν', FpInv ν' σ' d' rest := by
@@ -385,7 +393,7 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
     let r := freshSym σ.kv σ.facts σ.fp
     have hr : r ∉ σ.kv := fun h => Nat.lt_irrefl _ (lt_freshSym_kv h)
     obtain ⟨kv'', hm''⟩ := mapM_fresh_exists (r := r) hm
-    obtain ⟨S', w, hst', hS''⟩ := transfer_val hfork ho hlenk hc hm'' hr hS hst run
+    obtain ⟨S', w, hst', hS''⟩ := transfer_val_noStateGas hsg ho hlenk hc hm'' hr hS hst run
     let ν' := Function.update ν r w
     have hνS : List.Forall₂ (fun s x => ν' s = x) σ.kv S := forall₂_update_of_not_mem hr hS
     have hνf : AllHold ν' σ.facts := AllHold.update freshSym_not_mem_syms hf
@@ -464,7 +472,7 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
           · exact hνf f (List.mem_of_mem_filter hmf)
         · exact hνf f (List.mem_of_mem_filter hmf)
         · exact hνf f hmf
-    · exact memEff_fpWord hfork ho he hνf hνS hst hνw run
+    · exact memEff_fpWord_noStateGas hsg ho he hνf hνS hst hνw run
     · intro hh hmf
       rcases List.mem_append.mp (closeLive_sub hmf) with hmf | hmf
       · rcases List.mem_append.mp hmf with hmf | hmf
@@ -472,6 +480,14 @@ theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List 
           · exact absurd hmf rdsLe_not_mem_opFacts
           · exact absurd hmf rdsLe_not_mem_rdsEff
         · exact absurd hmf (rdsLe_not_mem_gas he)
-      · exact rdsKeep_sound hfork ho run pot hrd hmf
+      · exact rdsKeep_sound_noStateGas hsg ho run pot hrd hmf
+
+/-- Covered-fork projection of the actual-rules soundness theorem. -/
+theorem fstep_sound {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a a' : List AVal} {sevm : Sevm}
+    {d d' : Devm} {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
+    (hs : fstep n σ = some σ') (ha : absNinst n a = some a') (hlen : σ.kv.length ≤ a.length)
+    (inv : FpInv ν σ d rest) (run : Ninst.Run sevm d n d') (pot : Pot d) (pot' : Pot d') :
+    FpObs d n ∧ σ'.kv.length ≤ a'.length ∧ ∃ ν', FpInv ν' σ' d' rest :=
+  fstep_sound_noStateGas hfork.rules_stateGas_none hs ha hlen inv run pot pot'
 
 end Blanc.Lift.FreePtr

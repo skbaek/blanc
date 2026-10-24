@@ -395,6 +395,7 @@ SHARED += [
 # conditions, root entry, calldata bound) (weth9-pair-historical-extension-v1): contract-neutral.
 SHARED += [
     "ExecutionMidHistoryInFacts",
+    "ExecutionMidHistoryInForest",
 ]
 
 # Fork-era schedule facts and historical environment facts for selected-domain

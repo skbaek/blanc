@@ -279,10 +279,10 @@ theorem FpInv.refine {ν : Nat → B256} {σ : FSt} {d d' : Devm} {rest : List B
 /-- **The recursion.**  A run of a tree the walk accepts, from a machine the walk's state
 describes, is a run under `FpStep`; if it returns, the current function's summary `R`
 describes the result above the same untouched base. -/
-theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem fp_run_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
     {c : Cert} {ann : List Ann} (hf : fpCert c ann = true)
-    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
+    {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none) {d : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunP P c.prog sevm d f o) :
     ∀ {a : List AVal} {σ R : FSt} {ν : Nat → B256} {rest : List B256},
       fpNode c.entries ann R a σ f = true → σ.kv.length ≤ a.length → FpInv ν σ d rest →
@@ -333,7 +333,7 @@ theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
     intro a σ R ν rest hn hlen inv
     obtain ⟨a', σ', ha, hs, hn'⟩ := fpNode_next_inv hn
     obtain ⟨hrun, pot, pot'⟩ := hP h
-    obtain ⟨hobs, hl, ν', inv'⟩ := fstep_sound hfork hs ha hlen inv hrun pot pot'
+    obtain ⟨hobs, hl, ν', inv'⟩ := fstep_sound_noStateGas hsg hs ha hlen inv hrun pot pot'
     obtain ⟨r1, r2⟩ := ih hn' hl inv'
     exact ⟨.next ⟨h, hobs⟩ r1, r2⟩
   | dest burn _ ih =>
@@ -417,17 +417,28 @@ theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
 
 /-! ## The frozen statements -/
 
+/-- Covered-fork projection of the actual-rules soundness theorem. -/
+theorem fp_run {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
+    {c : Cert} {ann : List Ann} (hf : fpCert c ann = true)
+    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunP P c.prog sevm d f o) :
+    ∀ {a : List AVal} {σ R : FSt} {ν : Nat → B256} {rest : List B256},
+      fpNode c.entries ann R a σ f = true → σ.kv.length ≤ a.length → FpInv ν σ d rest →
+      SFunc.RunP (FpStep P) c.prog sevm d f o ∧
+        ∀ d'', o = .returned d'' → ∃ μ, FpInv μ R d'' rest :=
+  fp_run_noStateGas hP hf hfork.rules_stateGas_none run
+
 /-- **Soundness of the free-pointer checker** (tree level, no bytes): every run of entry `0`
 of an accepted certificate, from empty memory, under a step relation that records the
 potential, observes a good free pointer at every free-pointer read. -/
-theorem fpRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem fpRun_sound_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
     {c : Cert} {ann : List Ann} (hf : fpCert c ann = true)
-    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {pre post : Devm}
-    (hmem : pre.memory = Mem.empty) (run : SProg.RunP P c.prog sevm pre post) :
+    {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none) {pre post : Devm}
+    (_hmem : pre.memory = Mem.empty) (run : SProg.RunP P c.prog sevm pre post) :
     SProg.RunP (FpStep P) c.prog sevm pre post := by
   -- the empty memory is not needed: the walk starts with no pointer symbol
-  clear hmem
   obtain ⟨f, hf0, r⟩ := run
   have hc0 : ∃ e, c[0]? = some (e, f) := by
     simp only [Cert.prog, List.getElem?_map] at hf0
@@ -448,11 +459,36 @@ theorem fpRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
   have inv : FpInv (fun _ => 0) FSt.init pre pre.stack :=
     ⟨[], rfl, .nil, fun _ h => by simp only [FSt.init, List.not_mem_nil] at h, FpWord.none _ _,
       fun _ h => by simp only [FSt.init, List.not_mem_nil] at h⟩
-  exact ⟨f, hf0, (fp_run hP hf hfork r hnode (Nat.zero_le _) inv).1⟩
+  exact ⟨f, hf0, (fp_run_noStateGas hP hf hsg r hnode (Nat.zero_le _) inv).1⟩
+
+/-- Covered-fork projection of the actual-rules soundness theorem. -/
+theorem fpRun_sound {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
+    {c : Cert} {ann : List Ann} (hf : fpCert c ann = true)
+    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {pre post : Devm}
+    (hmem : pre.memory = Mem.empty) (run : SProg.RunP P c.prog sevm pre post) :
+    SProg.RunP (FpStep P) c.prog sevm pre post :=
+  fpRun_sound_noStateGas hP hf hfork.rules_stateGas_none hmem run
 
 /-- **The walk-facing lifting theorem**: a successful frame of certified bytes, entered fresh
 with bounded potential, is a run of the certified program whose steps sit in the derivation,
 record the potential, and read only good free pointers. -/
+theorem lift_sound_fp_noStateGas {code : ByteArray} {c : Cert} {ann : List Ann}
+    (hc : Cert.check code c = true) (hf : fpCert c ann = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hmem : pre.memory = Mem.empty) (hpot : pre.gasMeasure < 2 ^ 256)
+    (exc : Exec 0 sevm pre (.ok post)) :
+    SProg.RunP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, exc⟩))) c.prog sevm pre post := by
+  obtain ⟨f, hf0, r⟩ := lift_sound_in_noStateGas hc hcode hsg exc
+  have pot : Pot pre := by
+    unfold Pot
+    rw [hmem]
+    exact hpot
+  obtain ⟨r', -⟩ := SFunc.RunP.withPot (fun h => StepIn.toRun h) hsg r pot
+  exact fpRun_sound_noStateGas (fun h => ⟨StepIn.toRun h.1, h.2.1, h.2.2⟩) hf hsg hmem ⟨f, hf0, r'⟩
+
+/-- Covered-fork projection, retaining both original readiness premises. -/
 theorem lift_sound_fp {code : ByteArray} {c : Cert} {ann : List Ann}
     (hc : Cert.check code c = true) (hf : fpCert c ann = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
@@ -460,12 +496,7 @@ theorem lift_sound_fp {code : ByteArray} {c : Cert} {ann : List Ann}
     (hmem : pre.memory = Mem.empty) (hpot : pre.gasMeasure < 2 ^ 256)
     (exc : Exec 0 sevm pre (.ok post)) :
     SProg.RunP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, exc⟩))) c.prog sevm pre post := by
-  obtain ⟨f, hf0, r⟩ := lift_sound_in hc hcode hfork exc
-  have pot : Pot pre := by
-    unfold Pot
-    rw [hmem]
-    exact hpot
-  obtain ⟨r', -⟩ := SFunc.RunP.withPot (fun h => StepIn.toRun h) hsg r pot
-  exact fpRun_sound (fun h => ⟨StepIn.toRun h.1, h.2.1, h.2.2⟩) hf hfork hmem ⟨f, hf0, r'⟩
+  have _ := hfork
+  exact lift_sound_fp_noStateGas hc hf hcode hsg hmem hpot exc
 
 end Blanc.Lift.FreePtr
