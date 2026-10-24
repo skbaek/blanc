@@ -834,6 +834,18 @@ through the settled-to-raw bridge; `…settledRoots` / `…settledFrames_eq` bri
 In settled frames to `rootFrames`, giving `settledFrames_contigIn` and the
 forest `settledFrames_parentIn`. No recipe is registered: use this branch and
 the named theorem.
+When no installed certificate exists (a proxy runtime that `DELEGATECALL`s),
+[`Blanc/ExecutionInCodeImageSafe.lean`](../Blanc/ExecutionInCodeImageSafe.lean):
+`…codeImage_of_safe` per wrapper (message, transaction, system / request
+stages, staged body, In-block) threads each entry world's `getCode wa = C`
+with the `…_of_safe` chain of `ExecutionNoDelSafeHistory` (same
+`SafeRawFrames wa` premise, plus `C.toList ≠ []` and `¬ isValidDelegation C`)
+and keeps it at every raw root by `Exec.rawFrameRoots_codePreserve`,
+ending in `ConfiguredHistoryTraceIn.rawFrames_codeImage_of_safe`
+(`R.devm.getCode wa = C` for every raw frame, rolled back or not) and
+`…settled_codeImage_of_safe` (`f.pre.getCode wa = C` for every settled frame)
+through the settled-to-raw bridge. No recipe is registered: use this branch
+and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):
