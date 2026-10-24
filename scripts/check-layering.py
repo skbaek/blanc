@@ -356,6 +356,12 @@ SHARED += [
     "B256CheckFacts",
 ]
 
+# Concatenation of selected-domain In-histories with the modern-to-historical
+# bridge (beacon-deposit-historical-reach-v1): contract-neutral.
+SHARED += [
+    "ExecutionHistoryInAppend",
+]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",

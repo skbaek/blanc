@@ -1500,6 +1500,25 @@ configured blocks. Its lemmas `settledFrames` (base frames are a prefix),
 `noSenderAt` and `noAuthorityAt` restrict an extension's retained frames and
 caller/authority exclusion premises to the history it extends.
 
+To concatenate two selected-domain (`In`) histories end to end, use
+`ExecutionTrace.ConfiguredHistoryTraceIn.append` in
+[`Blanc/ExecutionHistoryInAppend.lean`](../Blanc/ExecutionHistoryInAppend.lean):
+`append first second` joins D-to-P and P-to-B into D-to-B by induction on
+the second history's `.step` spine. Its lemmas `rawFrames_append` and
+`settledFrames_append` concatenate the frame lists in order, and
+`NoDelScheduled_append`, `RewardCreditsFunded_append` and
+`FrameAdmitted_append` split the per-block conjunction predicates across
+the join. To move a history across fork domains, `ConfiguredBlockTraceIn.map`
+and `ConfiguredHistoryTraceIn.map` re-predicate block and history along
+`∀ f, F f → G f` (raw and settlement-retained roots are kept by
+`map_rawFrames` / `map_settledFrames` at both levels); `toHistFork` at both
+levels specializes the re-predication along `CoveredFork.histFork`, and
+`ConfiguredHistoryTrace.toHistForkIn` chains the existing
+`ConfiguredHistoryTrace.toIn` with it, so a modern suffix joins a
+historical prefix through `append` with `toHistForkIn_rawFrames` /
+`toHistForkIn_settledFrames` identifying the kept roots. No premise assumes
+delegation, EIP-2929 access, or enabled optional passes.
+
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).

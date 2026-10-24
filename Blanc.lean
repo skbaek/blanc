@@ -37,6 +37,7 @@ import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
+import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryInStateTrace
 import Blanc.ExecutionHistoryEffects
