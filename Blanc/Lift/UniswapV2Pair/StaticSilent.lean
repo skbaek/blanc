@@ -1,17 +1,19 @@
 import Blanc.Lift.StaticSilent
+import Blanc.Lift.HistEcrecover
 import Blanc.Lift.UniswapV2Pair.StaticViewClassify
 import Jaune.MessageExecution
 
 /-!
 # The Pair never answers `isValidSignature` (Pair side of A11)
 
-`not_staticAnswered_pair`: no static child message to an account holding the certified Pair
+`not_staticAnswered_pairH`: no static child message to an account holding the certified Pair
 runtime, outside the precompile range, answers calldata that begins with the EIP-1271 selector
 `isValidSignature(bytes32,bytes)` (`0x1626ba7e`).  The child runs the Pair's code from program
-counter zero on a fresh frame, so `staticView_bytecode_inv` classifies it as one of the Pair's
+counter zero on a fresh frame, so `staticView_bytecode_invH` classifies it as one of the Pair's
 views, and no view has that selector (`staticView_selector_ne_erc1271`).
 
-The statement is the contract-neutral `NoStaticAnswer` predicate
+The statement is the contract-neutral `NoStaticAnswerH` predicate; `not_staticAnswered_pair`
+projects it to the original covered-fork `NoStaticAnswer` interface
 (`Blanc.Lift.StaticSilent`); the USDC library side takes it as the hypothesis
 `hsilent` (amendment A11).  Proved here, in the Pair's stratum, from the moved
 U7a proof.
@@ -29,14 +31,13 @@ theorem staticView_selector_ne_erc1271 (v : StaticView) :
 /-- **The Pair answers no `isValidSignature` call.**  A static child message to an account
 holding the Pair's runtime, whose code address is not a precompile, with calldata beginning
 with `0x1626ba7e`, never settles cleanly. -/
-theorem not_staticAnswered_pair : NoStaticAnswer code 0x1626ba7e := by
+theorem not_staticAnswered_pairH : NoStaticAnswerH code 0x1626ba7e := by
   intro sevm b t input out codeEq notPrecompile fork sel
   rintro ⟨parent, child, xl, dp, na, ccode, gas, -, delegation, filled, process, clean, -⟩
-  rcases delegation with ⟨-, hna, hc, hdp⟩ | ⟨d, designated, -, -, -⟩
-  swap
-  · rw [codeEq] at designated
-    rw [show getDelegatedCodeAddress code = none by decide +kernel] at designated
-    cases designated
+  have nodeleg : getDelegatedCodeAddress (b.getCode t) = none := by
+    rw [codeEq]
+    exact show getDelegatedCodeAddress code = none by decide +kernel
+  obtain ⟨hna, hc, hdp⟩ := CallCodeH.direct_of_nodeleg nodeleg delegation
   rw [hna, hc, hdp, codeEq] at process
   generalize hmsg : callMsg sevm parent gas 0 sevm.currentTarget t t true true input
     code false = msg at process
@@ -75,11 +76,17 @@ theorem not_staticAnswered_pair : NoStaticAnswer code 0x1626ba7e := by
           St.self rfl rfl
         rw [← e]
         exact run
-      obtain ⟨-, -, view, hv⟩ := staticView_bytecode_inv
+      obtain ⟨-, -, view, hv⟩ := staticView_bytecode_invH
         (sevm := initSevm (msg.withBenv benv))
-        (by rw [← hmsg]; rfl) (by show CoveredFork benv.stat.fork; rw [bstat]; exact fork)
+        (by rw [← hmsg]; rfl)
+        (by change benv.stat.rules.stateGas = none; rw [bstat]; exact fork.stateGas)
+        (by change benv.stat.rules.bal = none; rw [bstat]; exact fork.bal)
         (by rw [← hmsg]; show (true || sevm.isStatic) = true; rfl) run'
       have hdata : (initSevm (msg.withBenv benv)).data = input := by rw [← hmsg]; rfl
       exact staticView_selector_ne_erc1271 view (hv.symm.trans (sel _ hdata))
+
+/-- The Pair's historical static silence supplies the original covered-fork statement. -/
+theorem not_staticAnswered_pair : NoStaticAnswer code 0x1626ba7e :=
+  not_staticAnswered_pairH.toCovered
 
 end Blanc.Lift.UniswapV2Pair

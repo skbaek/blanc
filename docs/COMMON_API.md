@@ -7214,6 +7214,13 @@ contract-neutral.
   proves the `0x1626ba7e` instance in its own stratum; the USDC library side takes it
   as a hypothesis. Use it for selector-silence (answered-call) refutations, in
   [`Blanc/Lift/StaticSilent.lean`](../Blanc/Lift/StaticSilent.lean).
+  `NoStaticAnswerH` uses `NeutralFork` and the actual-rule `StaticAnsweredH`
+  witness; `NoStaticAnswerH.toCovered` recovers the original interface.
+  `UniswapV2Pair.not_staticAnswered_pairH` shares the same message-entry and
+  settlement proof, using `staticView_bytecode_invH` and canonical actual-flag
+  call-code resolution. The modern Pair theorem projects from it. This supplies
+  the historical silence boundary for contract-signature consumers; it does
+  not by itself migrate the USDC library or establish owner rejection.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
