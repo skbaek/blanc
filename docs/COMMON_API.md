@@ -4466,7 +4466,15 @@ children's replays using the ladder's lower-depth hypothesis and
 turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
 `Exec.Deriv.exists_firstExec_or_none` split a chain at its first external
 instruction. Worked use: WETH9,
-`Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`.
+`Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`. Over a selected fork
+domain `F` without state gas, for code whose frames spawn only by `CALL`/`STATICCALL`
+(`SpawnKindsIn F`), the In forms live in
+[`Blanc/ExecutionModelAccountingIn.lean`](../Blanc/ExecutionModelAccountingIn.lean):
+`Exec.spawn_seam_callsIn` (the seam of a call-family spawning step from
+`stateGas = none`; the create arm is excluded by the decoded instruction),
+`Exec.CoreAccountingIn.modelFrameIn`, `SpawnReplayIn F`, `spawnReplayTargetIn` and
+`ExecutionAccountingReplay.modelLadderIn` producing `AccountingLadderAdmittedIn F`.
+Worked use: `Blanc/Lift/Weth9/CommittedHistoryIn.lean` (`weth9_history_committedIn`).
 
 When the contract's own frame theorem already consumes the frame's *whole subtree* —
 re-entered frames of the same contract run inside the frame's own model transcript, so

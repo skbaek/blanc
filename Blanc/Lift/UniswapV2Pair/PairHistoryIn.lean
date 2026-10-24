@@ -30,7 +30,7 @@ theorem pair_spawnKindsIn (F : Fork → Prop)
   intro sevm pre post run hrun _ fork _ node chain x hat
   obtain ⟨κ, reach, ok⟩ := Blanc.Lift.cursor_of_parentPrefix_noStateGas cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun (hsgF fork) chain
-  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach) hat
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach cert_callOnly reach) hat
 
 /-- **The accounting ladder of the Pair over a neutral fork domain** `F`, from the historical
 supply. -/
