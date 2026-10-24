@@ -885,6 +885,20 @@ plus the entry bridges `Frame.enter_run_getStor`, `createEntry_getStor`,
 settlement storage facts `addBal_getStor_of_codenonempty`,
 `foldl_destroyAccount_getStor`, `CellProv.of_replay_nodes`. No recipe is
 registered: use this branch and the named theorem.
+For the code and the `(wa, k)` storage cell at every raw node of an
+In-history on any selected fork (no `CoveredFork`, no delegation or access
+premise; safety of the strictly earlier raw nodes only),
+[`Blanc/ExecutionHistoryCellProvenance.lean`](../Blanc/ExecutionHistoryCellProvenance.lean):
+`ConfiguredHistoryTraceIn.rawNode_cellProvenance` (checkpoint value or an
+earlier attributed raw successful `SSTORE`), its invariant forms
+`ConfiguredHistoryTraceIn.rawNode_cellInv` and
+`ConfiguredHistoryTraceIn.rawFrame_entryCellInv`; the per-level `cellProv_at`
+/ `cellProv_post` lifts for `ApplyTransactionsTrace`, `SystemMessageTrace`,
+`RequestsTrace`, the beacon, history and request stages, `StagedBodyTrace`,
+`ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn`; and the helpers
+`msgNode_code`, `txNode_code`, `StagedBodyTrace.withdrawalCell_of_code`,
+`StagedBodyTrace.withdrawalCode_of_code`, `successfulSstore?_node_owner`.
+No recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

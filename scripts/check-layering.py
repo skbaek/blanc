@@ -323,6 +323,7 @@ SHARED += [
     "ExecutionInRawNodes",
     "ExecutionCellProvenance",
     "ExecutionInCellProvenance",
+    "ExecutionHistoryCellProvenance",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
     "Lift.CheckChain",
