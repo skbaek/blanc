@@ -9,13 +9,13 @@ def burnPricedLocals (supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWor
     (R : List B256) : List B256 :=
   supply :: f :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: amount1 :: amount0 :: toWord :: extρ :: R
 
-/-- The actual caller burns cached L, retaining the original relation and literal continuation. -/
-theorem burnLP_caller_inv {K : WriterKey → Prop} {st : State}
+theorem burnLP_caller_invH {K : WriterKey → Prop} {st : State}
     {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (fresh : WriterFreshKeys K (lpMintTouched sevm.currentTarget))
     (run : SFunc.RunCutP P cert.prog sevm C
@@ -25,13 +25,13 @@ theorem burnLP_caller_inv {K : WriterKey → Prop} {st : State}
       SFunc.RunP P cert.prog sevm
         (St b (L :: sevm.currentTarget.toB256 :: 0x168d ::
           burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M burnGas)
-        t_2992_c63 (.returned (lpBurnPost sevm b
+        t_2992_c63 (.returned (lpBurnPostH sevm b
           (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
           M sevm.currentTarget.toB256 L residual)) ∧
-      LPBurnSourceResult K st sevm b
+      LPBurnSourceResultH K st sevm b
         (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
         M sevm.currentTarget.toB256 L residual ∧ sevm.isStatic = false ∧
-      SFunc.RunCutP P cert.prog sevm C (lpBurnPost sevm b
+      SFunc.RunCutP P cert.prog sevm C (lpBurnPostH sevm b
         (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
         M sevm.currentTarget.toB256 L residual) t_168d_c13 r := by
   have h := run
@@ -65,7 +65,7 @@ theorem burnLP_caller_inv {K : WriterKey → Prop} {st : State}
     have freshWord : WriterFreshKeys K (lpMintTouched sevm.currentTarget.toB256.toAdr) := by
       simpa only [toAdr_toB256] using fresh
     obtain ⟨nonstatic, residual, result, source⟩ :=
-      lpBurn63_source_inv fork mem rep freshWord (callee.mono project)
+      lpBurn63_source_invH stateGas bal mem rep freshWord (callee.mono project)
     cases result
     exact ⟨_, residual, callee, source, nonstatic, continuation⟩
   | callHalt d lookup pop callee =>
@@ -73,8 +73,37 @@ theorem burnLP_caller_inv {K : WriterKey → Prop} {st : State}
     cases lookup
     obtain ⟨_, eq⟩ := St.of_pop1 pop
     rw [eq] at callee
-    obtain ⟨_, _, _, residual, result⟩ := lpBurn63_inv fork mem (callee.mono project)
+    obtain ⟨_, _, _, residual, result⟩ := lpBurn63_invH stateGas bal mem (callee.mono project)
     cases result
+
+/-- The actual caller burns cached L, retaining the original relation and literal continuation. -/
+theorem burnLP_caller_inv {K : WriterKey → Prop} {st : State}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched sevm.currentTarget))
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
+      t_1683_c13 r) :
+    ∃ burnGas residual,
+      SFunc.RunP P cert.prog sevm
+        (St b (L :: sevm.currentTarget.toB256 :: 0x168d ::
+          burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M burnGas)
+        t_2992_c63 (.returned (lpBurnPost sevm b
+          (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
+          M sevm.currentTarget.toB256 L residual)) ∧
+      LPBurnSourceResult K st sevm b
+        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
+        M sevm.currentTarget.toB256 L residual ∧ sevm.isStatic = false ∧
+      SFunc.RunCutP P cert.prog sevm C (lpBurnPost sevm b
+        (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
+        M sevm.currentTarget.toB256 L residual) t_168d_c13 r := by
+  simpa only [LPBurnSourceResultH_of_covered fork, lpBurnPostH_of_covered fork] using
+    burnLP_caller_invH project fork.rules_stateGas_none fork.rules_bal_none mem rep fresh run
+
 
 /-- The literal caller prefix is abstract over callee gas and its returned world. -/
 private theorem burnLP_prefix_exact {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
@@ -375,12 +404,11 @@ private theorem burnFirstSupply_inv {P : Sevm → Devm → Ninst → Devm → Pr
   · exact (failed.false_of_noOk (by decide : t_15ff_c37.noOk = true)).elim
   · exact burnFirstPayment_inv project notCut body
 
-/-- Post-fee slot0 is read once; both products use the unchanged cached pre-fee L. -/
-theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem burnPricingWords_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (notCut : 13 ∉ C)
+    (bal : sevm.benvStat.rules.bal = none) (notCut : 13 ∉ C)
     (run : SFunc.RunCutP P cert.prog sevm C
       (St b (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
       t_15e2_c37 r) :
@@ -388,7 +416,7 @@ theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     B256.Nofm L b0 ∧ B256.Nofm L b1 ∧ supply ≠ 0 ∧
       0 < ((L * b0) / supply).toNat ∧ 0 < ((L * b1) / supply).toNat ∧ ∃ residual,
       SFunc.RunCutP P cert.prog sevm C
-        (St (afterSload sevm b 0)
+        (St (afterSloadH sevm b 0)
           (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
             ((L * b1) / supply) ((L * b0) / supply) toWord extρ R) M residual) t_1683_c13 r := by
   have h := run
@@ -399,7 +427,7 @@ theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   rw [show Bytes.toB256 [0] = (0 : B256) from rfl] at eq
   subst d
   obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_sload fork (project hd)
+  obtain ⟨_, eq⟩ := ri_sloadH bal (project hd)
   subst d
   obtain ⟨d, hd, h⟩ := ric_nextP h
   obtain ⟨_, eq⟩ := ri_swap rfl (project hd)
@@ -454,6 +482,26 @@ theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     obtain ⟨_, residual, returned⟩ := mul58_inv (callee.mono project)
     cases returned
 
+/-- Post-fee slot0 is read once; both products use the unchanged cached pre-fee L. -/
+theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (notCut : 13 ∉ C)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
+      t_15e2_c37 r) :
+    let supply := b.getStorVal sevm.currentTarget 0
+    B256.Nofm L b0 ∧ B256.Nofm L b1 ∧ supply ≠ 0 ∧
+      0 < ((L * b0) / supply).toNat ∧ 0 < ((L * b1) / supply).toNat ∧ ∃ residual,
+      SFunc.RunCutP P cert.prog sevm C
+        (St (afterSload sevm b 0)
+          (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
+            ((L * b1) / supply) ((L * b0) / supply) toWord extρ R) M residual) t_1683_c13 r := by
+  simpa only [afterSloadH_of_eip2929 fork.rules_access] using
+    burnPricingWords_invH project fork.rules_bal_none notCut run
+
+
 /-- Source burn pricing is derived from the actual two no-wrap products and divisor. -/
 private theorem burnPricing_source_accept {L b0 b1 supply : B256}
     (product0 : B256.Nofm L b0) (product1 : B256.Nofm L b1) (nonzero : supply ≠ 0) :
@@ -465,6 +513,43 @@ private theorem burnPricing_source_accept {L b0 b1 supply : B256}
   rw [B256.toNat_div nonzero, B256.toNat_div nonzero,
     B256.toNat_mul_eq_of_nofm product0, B256.toNat_mul_eq_of_nofm product1]
   rfl
+
+theorem burnPricing_invH {K : WriterKey → Prop} {st : State}
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (notCut : 13 ∉ C) (mem : PtrMem 128 192 M)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched sevm.currentTarget))
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
+      t_15e2_c37 r) :
+    let supply := b.getStorVal sevm.currentTarget 0
+    let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
+      ((L * b1) / supply) ((L * b0) / supply) toWord extρ R
+    B256.Nofm L b0 ∧ B256.Nofm L b1 ∧ supply ≠ 0 ∧ supply = st.totalSupply ∧
+    burnAmounts L b0 b1 supply =
+      .ok (((L * b0) / supply).toNat, ((L * b1) / supply).toNat) ∧
+    0 < ((L * b0) / supply).toNat ∧ 0 < ((L * b1) / supply).toNat ∧
+    sevm.isStatic = false ∧ ∃ burnGas residual,
+      SFunc.RunP P cert.prog sevm
+        (St (afterSloadH sevm b 0) (L :: sevm.currentTarget.toB256 :: 0x168d :: locals) M burnGas)
+        t_2992_c63 (.returned (lpBurnPostH sevm (afterSloadH sevm b 0) locals
+          M sevm.currentTarget.toB256 L residual)) ∧
+      LPBurnSourceResultH K st sevm (afterSloadH sevm b 0) locals M sevm.currentTarget.toB256 L residual ∧
+      SFunc.RunCutP P cert.prog sevm C (lpBurnPostH sevm (afterSloadH sevm b 0) locals
+        M sevm.currentTarget.toB256 L residual) t_168d_c13 r := by
+  obtain ⟨product0, product1, nonzero, positive0, positive1, gas, priced⟩ :=
+    burnPricingWords_invH project bal notCut run
+  have readRep : WriterRep K ((afterSloadH sevm b 0).getStor sevm.currentTarget) st := by
+    simpa only [afterSloadH_getStor] using rep
+  obtain ⟨burnGas, residual, callee, source, nonstatic, continuation⟩ :=
+    burnLP_caller_invH project stateGas bal mem readRep fresh priced
+  exact ⟨product0, product1, nonzero, rep.fixed.1,
+    burnPricing_source_accept product0 product1 nonzero, positive0, positive1, nonstatic,
+    burnGas, residual, callee, source, continuation⟩
 
 /-- Successful actual15e2 pricing derives finite source acceptance and the original LP63 continuation. -/
 theorem burnPricing_inv {K : WriterKey → Prop} {st : State}
@@ -493,15 +578,9 @@ theorem burnPricing_inv {K : WriterKey → Prop} {st : State}
       LPBurnSourceResult K st sevm (afterSload sevm b 0) locals M sevm.currentTarget.toB256 L residual ∧
       SFunc.RunCutP P cert.prog sevm C (lpBurnPost sevm (afterSload sevm b 0) locals
         M sevm.currentTarget.toB256 L residual) t_168d_c13 r := by
-  obtain ⟨product0, product1, nonzero, positive0, positive1, gas, priced⟩ :=
-    burnPricingWords_inv project fork notCut run
-  have readRep : WriterRep K ((afterSload sevm b 0).getStor sevm.currentTarget) st := by
-    simpa only [afterSload_getStor] using rep
-  obtain ⟨burnGas, residual, callee, source, nonstatic, continuation⟩ :=
-    burnLP_caller_inv project fork mem readRep fresh priced
-  exact ⟨product0, product1, nonzero, rep.fixed.1,
-    burnPricing_source_accept product0 product1 nonzero, positive0, positive1, nonstatic,
-    burnGas, residual, callee, source, continuation⟩
+  simpa only [LPBurnSourceResultH_of_covered fork, lpBurnPostH_of_covered fork, afterSloadH_of_eip2929 fork.rules_access] using
+    burnPricing_invH project fork.rules_stateGas_none fork.rules_bal_none notCut mem rep fresh run
+
 
 /-- The actual output guard costs14gas on its successful arm. -/
 private theorem burnGuard_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}

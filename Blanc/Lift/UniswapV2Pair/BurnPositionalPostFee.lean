@@ -13,6 +13,14 @@ def BurnThreeCalls.feeReturnLocals {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (burnInitialReserve1 sevm b) (burnInitialReserve0 sevm b)
     (Sevm.dataWord sevm 4).toAdr.toB256 0x053d [0x89afcb44]
 
+def BurnThreeCallsH.feeReturnLocals {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnThreeCallsH root sevm b w) : List B256 :=
+  burnFeeLocals (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm)
+    (Bytes.toB256 (r.initial.out1.take 32)) (Bytes.toB256 (r.initial.out0.take 32))
+    (burnInitialToken1 sevm b) (burnInitialToken0 sevm b)
+    (burnInitialReserve1 sevm b) (burnInitialReserve0 sevm b)
+    (Sevm.dataWord sevm 4).toAdr.toB256 0x053d [0x89afcb44]
+
 /-- The fee return, pricing cursor and physical state belong to one actual node. -/
 structure BurnFeeReturnData {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (r : BurnThreeCalls root sevm b) (N : Exec.Deriv) where
@@ -33,6 +41,99 @@ structure BurnFeeReturnData {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
     (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) gas
 
+structure BurnFeeReturnDataH {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnThreeCallsH root sevm b w) (N : Exec.Deriv) where
+  memory : PtrMem 128 192 N.devm.memory
+  cut : CursorStateAt code cert r.fee.occurrence.call.returned t_15e2_c37 N.devm
+    (feeOnWord (Bytes.toB256 (r.fee.out.take 32)) :: r.feeReturnLocals)
+    N.devm.memory [t_053d_c83]
+  node_eq : cut.node = N
+  guards : feeBranchAcceptsH r.initial.second.returned.sevm
+    (feeKLastWorldH r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+    (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+    (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b)
+  state : ∃ gas, N.devm = feeBranchPostH r.initial.second.returned.sevm
+    (feeKLastWorldH r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+    r.feeReturnLocals
+    (feeReplyMemory (feeBurnMemory (burnInitialReplyMemory sevm r.initial.out0 r.initial.out1)
+      r.initial.second.returned.sevm.currentTarget) r.fee.out)
+    (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+    (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) gas
+
+/-- On a covered fork, `BurnFeeReturnDataH` over the converted calls gives the modern
+`BurnFeeReturnData` with the same fields. -/
+def BurnFeeReturnDataH.toCovered {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {r : BurnThreeCalls root sevm b} {N : Exec.Deriv}
+    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFeeReturnDataH (r.toH fork) N) :
+    BurnFeeReturnData r N where
+  memory := h.memory
+  cut := h.cut
+  node_eq := h.node_eq
+  guards := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
+    have g : feeBranchAcceptsH r.initial.second.returned.sevm
+      (feeKLastWorldH r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+      (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+      (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) := h.guards
+    rwa [feeBranchAcceptsH_of_covered f, feeKLastWorldH_of_covered f] at g
+  state := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
+    have g : ∃ gas, N.devm = feeBranchPostH r.initial.second.returned.sevm
+      (feeKLastWorldH r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+      (r.toH fork).feeReturnLocals
+      (feeReplyMemory (feeBurnMemory (burnInitialReplyMemory sevm r.initial.out0 r.initial.out1)
+        r.initial.second.returned.sevm.currentTarget) r.fee.out)
+      (feeKLastWord r.initial.second.returned.sevm r.fee.occurrence.call.returned.devm)
+      (Bytes.toB256 (r.fee.out.take 32)) (burnInitialReserve0 sevm b) (burnInitialReserve1 sevm b) gas := h.state
+    simp only [feeBranchPostH_of_covered f, feeKLastWorldH_of_covered f] at g
+    exact g
+
+/-- On a covered fork, the modern `BurnFeeReturnData` gives `BurnFeeReturnDataH` over the
+converted calls with the same fields. -/
+def BurnFeeReturnData.toH {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {r : BurnThreeCalls root sevm b} {N : Exec.Deriv}
+    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFeeReturnData r N) :
+    BurnFeeReturnDataH (r.toH fork) N where
+  memory := h.memory
+  cut := h.cut
+  node_eq := h.node_eq
+  guards := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
+    have g := h.guards
+    rw [← feeBranchAcceptsH_of_covered f, ← feeKLastWorldH_of_covered f] at g
+    exact g
+  state := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [(Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm]; exact fork
+    have g := h.state
+    simp only [← feeBranchPostH_of_covered f, ← feeKLastWorldH_of_covered f] at g
+    exact g
+
+/-- At the modern call worlds and on a covered fork, `BurnFeeReturnDataH` gives the modern
+`BurnFeeReturnData` over the converted calls. -/
+def BurnFeeReturnDataH.toCoveredOf {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {r : BurnThreeCallsH root sevm b BurnSchedule.modern} {N : Exec.Deriv}
+    (fork : CoveredFork sevm.benvStat.fork) (h : BurnFeeReturnDataH r N) :
+    BurnFeeReturnData (r.toCovered fork) N where
+  memory := h.memory
+  cut := h.cut
+  node_eq := h.node_eq
+  guards := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [r.initial.returned_sevm]; exact fork
+    have g := h.guards
+    rw [feeBranchAcceptsH_of_covered f, feeKLastWorldH_of_covered f] at g
+    exact g
+  state := by
+    have f : CoveredFork r.initial.second.returned.sevm.benvStat.fork := by
+      rw [r.initial.returned_sevm]; exact fork
+    have g := h.state
+    simp only [feeBranchPostH_of_covered f, feeKLastWorldH_of_covered f] at g
+    exact g
+
 /-- Literal payout locals retain the original sampled balances and liquidity. -/
 def BurnThreeCalls.pricedLocals {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (r : BurnThreeCalls root sevm b) (N : Exec.Deriv) : List B256 :=
@@ -46,15 +147,26 @@ def BurnThreeCalls.pricedLocals {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     ((L * b1) / supply) ((L * b0) / supply)
     (Sevm.dataWord sevm 4).toAdr.toB256 0x053d [0x89afcb44]
 
-/-- The actual fee reply returns through pricing and LP burn into the first
-transfer helper, preserving the complete returned fee world and physical memory. -/
-theorem BurnThreeCalls.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnThreeCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (residual : Nat), Nonempty (BurnFeeReturnData r N) ∧
+def BurnThreeCallsH.pricedLocals {root : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnSchedule}
+    (r : BurnThreeCallsH root sevm b w) (N : Exec.Deriv) : List B256 :=
+  let supply := N.devm.getStorVal r.fee.occurrence.call.returned.sevm.currentTarget 0
+  let L := feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm
+  let b1 := Bytes.toB256 (r.initial.out1.take 32)
+  let b0 := Bytes.toB256 (r.initial.out0.take 32)
+  burnPricedLocals supply (feeOnWord (Bytes.toB256 (r.fee.out.take 32))) L b1 b0
+    (burnInitialToken1 sevm b) (burnInitialToken0 sevm b)
+    (burnInitialReserve1 sevm b) (burnInitialReserve0 sevm b)
+    ((L * b1) / supply) ((L * b0) / supply)
+    (Sevm.dataWord sevm 4).toAdr.toB256 0x053d [0x89afcb44]
+
+theorem BurnThreeCallsH.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm} {b post : Devm} {w : BurnSchedule}
+    (r : BurnThreeCallsH root sevm b w) (success : root.exn = .ok post)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) :
+    ∃ (N : Exec.Deriv) (residual : Nat), Nonempty (BurnFeeReturnDataH r N) ∧
       Nonempty (CursorStateAt code cert r.fee.occurrence.call.returned t_1fdb_c57
-        (lpBurnPost r.fee.occurrence.call.returned.sevm
-          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
+        (lpBurnPostH r.fee.occurrence.call.returned.sevm
+          (afterSloadH r.fee.occurrence.call.returned.sevm N.devm 0)
           (r.pricedLocals N) N.devm.memory
           r.fee.occurrence.call.returned.sevm.currentTarget.toB256
           (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual)
@@ -63,8 +175,8 @@ theorem BurnThreeCalls.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm}
             N.devm.getStorVal r.fee.occurrence.call.returned.sevm.currentTarget 0) ::
           (Sevm.dataWord sevm 4).toAdr.toB256 :: burnInitialToken0 sevm b ::
           0x1698 :: r.pricedLocals N)
-        (lpBurnPost r.fee.occurrence.call.returned.sevm
-          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
+        (lpBurnPostH r.fee.occurrence.call.returned.sevm
+          (afterSloadH r.fee.occurrence.call.returned.sevm N.devm 0)
           (r.pricedLocals N) N.devm.memory
           r.fee.occurrence.call.returned.sevm.currentTarget.toB256
           (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual).memory
@@ -89,18 +201,70 @@ theorem BurnThreeCalls.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm}
       (balanceReplyMemory_ptr r.initial.out0
         (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)) sevm.currentTarget)
   obtain ⟨N, memory, pricing, pricingNode, guards, gas, state⟩ := r.fee.returnCutData startSuccess
-    (by rw [startEnv]; exact fork) (feeBurnMemory_ptr mem _) bound0 bound1
+    (by rw [startEnv]; exact stateGas) (by rw [startEnv]; exact bal) (feeBurnMemory_ptr mem _) bound0 bound1
   have returnedSuccess : r.fee.occurrence.call.returned.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq
       (r.fee.occurrence.call.sameFrame.snoc r.fee.occurrence.call.edge)).trans success
   have returnedEnv : r.fee.occurrence.call.returned.sevm = sevm :=
     (Cursor.parentStep_sevm r.fee.occurrence.call.edge).trans
       (r.fee.occurrence.sevm_eq.trans startEnv)
-  have pricingCut := burn_pricing_first_transfer_cursor_state
+  have pricingCut := burn_pricing_first_transfer_cursor_stateH
     (by simpa only [burnFeeLocals] using pricing) returnedSuccess
-    (by rw [returnedEnv]; exact fork) memory
+    (by rw [returnedEnv]; exact stateGas) (by rw [returnedEnv]; exact bal) memory
   obtain ⟨residual, callee⟩ := pricingCut
   exact ⟨N, residual, ⟨⟨memory, pricing, pricingNode, guards, gas, state⟩⟩,
-    by simpa only [BurnThreeCalls.pricedLocals] using callee⟩
+    by simpa only [BurnThreeCallsH.pricedLocals] using callee⟩
+
+/-- The actual fee reply returns through pricing and LP burn into the first
+transfer helper, preserving the complete returned fee world and physical memory. -/
+theorem BurnThreeCalls.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+    (r : BurnThreeCalls root sevm b) (success : root.exn = .ok post)
+    (fork : CoveredFork sevm.benvStat.fork) :
+    ∃ (N : Exec.Deriv) (residual : Nat), Nonempty (BurnFeeReturnData r N) ∧
+      Nonempty (CursorStateAt code cert r.fee.occurrence.call.returned t_1fdb_c57
+        (lpBurnPost r.fee.occurrence.call.returned.sevm
+          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
+          (r.pricedLocals N) N.devm.memory
+          r.fee.occurrence.call.returned.sevm.currentTarget.toB256
+          (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual)
+        (((feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm *
+            Bytes.toB256 (r.initial.out0.take 32)) /
+            N.devm.getStorVal r.fee.occurrence.call.returned.sevm.currentTarget 0) ::
+          (Sevm.dataWord sevm 4).toAdr.toB256 :: burnInitialToken0 sevm b ::
+          0x1698 :: r.pricedLocals N)
+        (lpBurnPost r.fee.occurrence.call.returned.sevm
+          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
+          (r.pricedLocals N) N.devm.memory
+          r.fee.occurrence.call.returned.sevm.currentTarget.toB256
+          (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual).memory
+        [t_1698_c13, t_053d_c83]) := by
+  obtain ⟨N, residual, ⟨data⟩, ⟨cut⟩⟩ := BurnThreeCallsH.firstTransferCalleeData (r.toH fork) success
+    fork.rules_stateGas_none fork.rules_bal_none
+  have returnedFork : CoveredFork r.fee.occurrence.call.returned.sevm.benvStat.fork := by
+    rw [(Cursor.parentStep_sevm r.fee.occurrence.call.edge).trans
+      (r.fee.occurrence.sevm_eq.trans
+        ((Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm))]
+    exact fork
+  refine ⟨N, residual, ⟨data.toCovered fork⟩, ⟨?_⟩⟩
+  have cut' : CursorStateAt code cert r.fee.occurrence.call.returned t_1fdb_c57
+      (lpBurnPostH r.fee.occurrence.call.returned.sevm
+        (afterSloadH r.fee.occurrence.call.returned.sevm N.devm 0)
+        (r.pricedLocals N) N.devm.memory
+        r.fee.occurrence.call.returned.sevm.currentTarget.toB256
+        (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual)
+      (((feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm *
+          Bytes.toB256 (r.initial.out0.take 32)) /
+          N.devm.getStorVal r.fee.occurrence.call.returned.sevm.currentTarget 0) ::
+        (Sevm.dataWord sevm 4).toAdr.toB256 :: burnInitialToken0 sevm b ::
+        0x1698 :: r.pricedLocals N)
+      (lpBurnPostH r.fee.occurrence.call.returned.sevm
+        (afterSloadH r.fee.occurrence.call.returned.sevm N.devm 0)
+        (r.pricedLocals N) N.devm.memory
+        r.fee.occurrence.call.returned.sevm.currentTarget.toB256
+        (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual).memory
+      [t_1698_c13, t_053d_c83] := cut
+  rw [lpBurnPostH_of_covered returnedFork, afterSloadH_of_eip2929 returnedFork.rules_access] at cut'
+  exact cut'
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -170,6 +170,38 @@ theorem PairFeeObservation.returnState {root start : Exec.Deriv} {b post : Devm}
 
 /-- Normalize this actual return as a full cursor state, retaining the guards
 and complete physical fee state on that very node. -/
+theorem PairFeeObservationH.returnCutData {root start : Exec.Deriv} {b post Wc : Devm}
+    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
+    (r : PairFeeObservationH root start b Wc M r1 r0 ρ R (caller :: K))
+    (success : start.exn = .ok post) (stateGas : start.sevm.benvStat.rules.stateGas = none)
+    (bal : start.sevm.benvStat.rules.bal = none)
+    (mem : PtrMem 128 192 M) (bound0 : r0.toNat < 2 ^ 112)
+    (bound1 : r1.toNat < 2 ^ 112) :
+    ∃ N : Exec.Deriv, PtrMem 128 192 N.devm.memory ∧
+      ∃ cut : CursorStateAt code cert r.occurrence.call.returned caller N.devm
+        (feeOnWord (Bytes.toB256 (r.out.take 32)) :: R) N.devm.memory K,
+        cut.node = N ∧
+        feeBranchAcceptsH start.sevm (feeKLastWorldH start.sevm r.occurrence.call.returned.devm)
+          (feeKLastWord start.sevm r.occurrence.call.returned.devm)
+          (Bytes.toB256 (r.out.take 32)) r0 r1 ∧
+        ∃ gas, N.devm = feeBranchPostH start.sevm
+          (feeKLastWorldH start.sevm r.occurrence.call.returned.devm) R (feeReplyMemory M r.out)
+          (feeKLastWord start.sevm r.occurrence.call.returned.devm)
+          (Bytes.toB256 (r.out.take 32)) r0 r1 gas := by
+  obtain ⟨N, next, span, env, outcome, placed, tree, conts, guards, gas, state⟩ :=
+    r.returnState success stateGas bal mem bound0 bound1
+  have machine := pairFeePost_machineH (sevm := start.sevm)
+    (b := feeKLastWorldH start.sevm r.occurrence.call.returned.devm)
+    (R := R) (M := feeReplyMemory M r.out)
+    (K := feeKLastWord start.sevm r.occurrence.call.returned.devm)
+    (w := Bytes.toB256 (r.out.take 32)) (r0 := r0) (r1 := r1) (G := gas)
+    (feeReplyMemory_ptr r.out (feeRequestMemory_ptr mem))
+  rw [← state] at machine
+  exact ⟨N, machine.2, ⟨N, next, span,
+    Blanc.Exec.Deriv.ParentPrefix.sevm_eq span.1,
+    Blanc.Exec.Deriv.ParentPrefix.exn_eq span.1, placed, tree,
+    ⟨N.devm.gasLeft, St.self machine.1 rfl⟩, conts⟩, rfl, guards, gas, state⟩
+
 theorem PairFeeObservation.returnCutData {root start : Exec.Deriv} {b post : Devm}
     {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
     (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
@@ -187,18 +219,9 @@ theorem PairFeeObservation.returnCutData {root start : Exec.Deriv} {b post : Dev
           (feeKLastWorld start.sevm r.occurrence.call.returned.devm) R (feeReplyMemory M r.out)
           (feeKLastWord start.sevm r.occurrence.call.returned.devm)
           (Bytes.toB256 (r.out.take 32)) r0 r1 gas := by
-  obtain ⟨N, next, span, env, outcome, placed, tree, conts, guards, gas, state⟩ :=
-    r.returnState success fork mem bound0 bound1
-  have machine := pairFeePost_machine (sevm := start.sevm)
-    (b := feeKLastWorld start.sevm r.occurrence.call.returned.devm)
-    (R := R) (M := feeReplyMemory M r.out)
-    (K := feeKLastWord start.sevm r.occurrence.call.returned.devm)
-    (w := Bytes.toB256 (r.out.take 32)) (r0 := r0) (r1 := r1) (G := gas)
-    (feeReplyMemory_ptr r.out (feeRequestMemory_ptr mem))
-  rw [← state] at machine
-  exact ⟨N, machine.2, ⟨N, next, span,
-    Blanc.Exec.Deriv.ParentPrefix.sevm_eq span.1,
-    Blanc.Exec.Deriv.ParentPrefix.exn_eq span.1, placed, tree,
-    ⟨N.devm.gasLeft, St.self machine.1 rfl⟩, conts⟩, rfl, guards, gas, state⟩
+  simpa only [PairFeeObservation.toH, feeBranchAcceptsH_of_covered fork, feeBranchPostH_of_covered fork,
+    feeKLastWorldH_of_covered fork] using
+    PairFeeObservationH.returnCutData (r.toH fork) success fork.rules_stateGas_none fork.rules_bal_none
+      mem bound0 bound1
 
 end Blanc.Lift.UniswapV2Pair

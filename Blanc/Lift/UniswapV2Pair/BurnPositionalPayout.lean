@@ -1,3 +1,4 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.UniswapV2Pair.PairCheckedMulCursor
 import Blanc.Lift.UniswapV2Pair.BurnPricingWalk
 
@@ -13,15 +14,13 @@ def burnSecondPayoutGuardLine : List Ninst := [
   .reg .pop, .push [0x00] (by decide), .reg (.dup 10), .reg .gt]
 def burnPayoutTargetLine : List Ninst := [.push [0x16,0x83] (by decide)]
 
-/-- Both payout words survive the actual short-circuit checks and reach LP burn.
-The positive-word guards are those derived from this same successful suffix. -/
-theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_payout_cursor_stateH {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {product1 supply f L b1 b0 token1 token0 r1 r0 amount0 toWord extρ : B256}
     (cut : CursorStateAt code cert root t_1614_c37 b
       (product1 :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
         0 amount0 toWord extρ R) M K)
-    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (success : root.exn = .ok post) (stateGas : root.sevm.benvStat.rules.stateGas = none)
     (nonzero : supply ≠ 0) (positive0 : 0 < amount0.toNat)
     (positive1 : 0 < (product1 / supply).toNat) :
     Nonempty (CursorStateAt code cert root t_1683_c13 b
@@ -34,8 +33,8 @@ theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
   have gt0 : B256.gtCheck amount0 0 = 1 := by simp only [B256.gtCheck, word0, ite_eq_left]
   have gt1 : B256.gtCheck (product1 / supply) 0 = 1 := by
     simp only [B256.gtCheck, word1, ite_eq_left]
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨test⟩ := opened.line cert_check success fork burnSecondSupplyLine rfl
+  obtain ⟨opened⟩ := cut.destH cert_check success stateGas
+  obtain ⟨test⟩ := opened.lineH cert_check success stateGas burnSecondSupplyLine rfl
     (by intro n member x equal; subst n; simp only [burnSecondSupplyLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := 0x161b :: supply :: product1 :: supply ::
@@ -49,9 +48,9 @@ theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨gas, result⟩ := ri_push step
       cases line
       exact ⟨gas, result⟩)
-  obtain ⟨payment⟩ := test.branchSucc cert_check success fork nonzero
-  obtain ⟨opened⟩ := payment.dest cert_check success fork
-  obtain ⟨guard0⟩ := opened.line cert_check success fork burnFirstPayoutGuardLine rfl
+  obtain ⟨payment⟩ := test.branchSuccH cert_check success stateGas nonzero
+  obtain ⟨opened⟩ := payment.destH cert_check success stateGas
+  obtain ⟨guard0⟩ := opened.lineH cert_check success stateGas burnFirstPayoutGuardLine rfl
     (by intro n member x equal; subst n; simp only [burnFirstPayoutGuardLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := 0x162e :: 0 :: 1 ::
@@ -85,8 +84,8 @@ theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨gas, result⟩ := ri_push step
       cases line
       exact ⟨gas, result⟩)
-  obtain ⟨short⟩ := guard0.toZero cert_check success fork
-  obtain ⟨guard1⟩ := short.line cert_check success fork burnSecondPayoutGuardLine rfl
+  obtain ⟨short⟩ := guard0.toZeroH cert_check success stateGas
+  obtain ⟨guard1⟩ := short.lineH cert_check success stateGas burnSecondPayoutGuardLine rfl
     (by intro n member x equal; subst n; simp only [burnSecondPayoutGuardLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := 1 :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
@@ -104,8 +103,8 @@ theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨gas, result⟩ := ri_gt step
       cases line
       exact ⟨gas, by simpa only [gt1] using result⟩)
-  obtain ⟨opened⟩ := guard1.dest cert_check success fork
-  obtain ⟨target⟩ := opened.line cert_check success fork burnPayoutTargetLine rfl
+  obtain ⟨opened⟩ := guard1.destH cert_check success stateGas
+  obtain ⟨target⟩ := opened.lineH cert_check success stateGas burnPayoutTargetLine rfl
     (by intro n member x equal; subst n; simp only [burnPayoutTargetLine,
       List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := 0x1683 :: 1 :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
@@ -116,6 +115,23 @@ theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
       obtain ⟨gas, result⟩ := ri_push step
       cases line
       exact ⟨gas, result⟩)
-  exact target.branchSucc cert_check success fork (by decide : (1 : B256) ≠ 0)
+  exact target.branchSuccH cert_check success stateGas (by decide : (1 : B256) ≠ 0)
+
+/-- Both payout words survive the actual short-circuit checks and reach LP burn.
+The positive-word guards are those derived from this same successful suffix. -/
+theorem burn_payout_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc}
+    {product1 supply f L b1 b0 token1 token0 r1 r0 amount0 toWord extρ : B256}
+    (cut : CursorStateAt code cert root t_1614_c37 b
+      (product1 :: supply :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
+        0 amount0 toWord extρ R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (nonzero : supply ≠ 0) (positive0 : 0 < amount0.toNat)
+    (positive1 : 0 < (product1 / supply).toNat) :
+    Nonempty (CursorStateAt code cert root t_1683_c13 b
+      (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
+        (product1 / supply) amount0 toWord extρ R) M K) :=
+  burn_payout_cursor_stateH cut success fork.rules_stateGas_none nonzero positive0 positive1
+
 
 end Blanc.Lift.UniswapV2Pair

@@ -39,6 +39,23 @@ theorem lpBurn_source_reads {K : WriterKey → Prop} {st : State} {sevm : Sevm} 
   rw [lpBurnBalanceBase, afterSstore_getStor_self, afterSload_getStor, balance]
   exact (extended.balance_store (value := st.balanceOf fromWord.toAdr - value) tracked).fixed.1
 
+theorem lpBurn_source_readsH {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
+    {fromWord value : B256} (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched fromWord.toAdr)) :
+    lpBurnBalanceWord sevm b fromWord = st.balanceOf fromWord.toAdr ∧
+      lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+        fromWord (lpBurnBalanceWord sevm b fromWord - value) = st.totalSupply := by
+  have extended := rep.extend fresh
+  have tracked : WriterExtend K (lpMintTouched fromWord.toAdr) (.balance fromWord.toAdr) :=
+    .inr (List.mem_singleton.mpr rfl)
+  have balance : lpBurnBalanceWord sevm b fromWord = st.balanceOf fromWord.toAdr :=
+    extended.selected (.balance fromWord.toAdr) tracked
+  refine ⟨balance, ?_⟩
+  change ((lpBurnBalanceBaseH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+    fromWord (lpBurnBalanceWord sevm b fromWord - value)).getStor sevm.currentTarget).get 0 = _
+  rw [lpBurnBalanceBaseH, afterSstoreH_getStor_self, afterSloadH_getStor, balance]
+  exact (extended.balance_store (value := st.balanceOf fromWord.toAdr - value) tracked).fixed.1
+
 theorem lpBurnLP_accept {st : State} {owner : Adr} {value : B256}
     (balance : value ≤ st.balanceOf owner) (supply : value ≤ st.totalSupply) :
     st.burnLP owner value =
@@ -107,6 +124,48 @@ theorem lpBurnPost_facts {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
           [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] = _
     simp only [afterSstore_logs, afterSload_logs, lpBurnBalanceBase]
 
+theorem lpBurnPost_factsH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {fromWord value : B256} {G : Nat} :
+    (lpBurnPostH sevm b R M fromWord value G).getStor sevm.currentTarget =
+      ((b.getStor sevm.currentTarget).set (transferBalanceSlot fromWord.toAdr)
+        (lpBurnBalanceWord sevm b fromWord - value)).set 0
+        (lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+          fromWord (lpBurnBalanceWord sevm b fromWord - value) - value) ∧
+    (∀ a, a ≠ sevm.currentTarget →
+      (lpBurnPostH sevm b R M fromWord value G).getStor a = b.getStor a) ∧
+    (lpBurnPostH sevm b R M fromWord value G).logs = b.logs ++
+      [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] ∧
+    (lpBurnPostH sevm b R M fromWord value G).gasLeft = G := by
+  have stor (a : Adr) : (lpBurnPostH sevm b R M fromWord value G).getStor a =
+      (lpBurnSupplyBaseH sevm
+        (afterSloadH sevm (lpBurnBalanceBaseH sevm
+          (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr)) fromWord
+          (lpBurnBalanceWord sevm b fromWord - value)) 0)
+        fromWord value (lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+          fromWord (lpBurnBalanceWord sevm b fromWord - value) - value)).getStor a := by
+    unfold lpBurnPostH lpBurnBalancePostH lpBurnSupplyPostH
+    exact St_getStor _ _ _ _ _
+  have gas : (lpBurnPostH sevm b R M fromWord value G).gasLeft = G := by
+    unfold lpBurnPostH lpBurnBalancePostH lpBurnSupplyPostH
+    exact St.gasLeft
+  refine ⟨?_, ?_, ?_, gas⟩
+  · rw [stor]
+    simp only [lpBurnSupplyBaseH, Devm.addLog_getStor, afterSstoreH_getStor_self,
+      afterSloadH_getStor, lpBurnBalanceBaseH]
+  · intro a different
+    rw [stor]
+    simp only [lpBurnSupplyBaseH, Devm.addLog_getStor,
+      afterSstoreH_getStor_ne _ _ _ _ _ different.symm, afterSloadH_getStor, lpBurnBalanceBaseH]
+  · unfold lpBurnPostH lpBurnBalancePostH lpBurnSupplyPostH
+    change (afterSstoreH sevm
+      (afterSloadH sevm (lpBurnBalanceBaseH sevm
+        (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr)) fromWord
+        (lpBurnBalanceWord sevm b fromWord - value)) 0) 0
+      (lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+        fromWord (lpBurnBalanceWord sevm b fromWord - value) - value)).logs ++
+          [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] = _
+    simp only [afterSstoreH_logs, afterSloadH_logs, lpBurnBalanceBaseH]
+
 /-- Incoming finite representation extends only the actually touched balance row. -/
 theorem WriterRep.lpBurn_post {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
@@ -117,6 +176,17 @@ theorem WriterRep.lpBurn_post {K : WriterKey → Prop} {st : State} {sevm : Sevm
       (lpBurnSourceState st fromWord.toAdr value) := by
   have reads := lpBurn_source_reads (value := value) rep fresh
   rw [lpBurnPost_facts.1, reads.2, reads.1]
+  exact rep.lpBurn_store fresh
+
+theorem WriterRep.lpBurn_postH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched fromWord.toAdr)) :
+    WriterRep (WriterExtend K (lpMintTouched fromWord.toAdr))
+      ((lpBurnPostH sevm b R M fromWord value G).getStor sevm.currentTarget)
+      (lpBurnSourceState st fromWord.toAdr value) := by
+  have reads := lpBurn_source_readsH (value := value) rep fresh
+  rw [lpBurnPost_factsH.1, reads.2, reads.1]
   exact rep.lpBurn_store fresh
 
 /-- Finite source result and all physical storage/log/gas projections of the actual raw post. -/
@@ -136,6 +206,28 @@ def LPBurnSourceResult (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : 
     [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] ∧
   (lpBurnPost sevm b R M fromWord value G).gasLeft = G
 
+def LPBurnSourceResultH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
+    (R : List B256) (M : Mem) (fromWord value : B256) (G : Nat) : Prop :=
+  st.burnLP fromWord.toAdr value =
+    .ok (lpBurnSourceState st fromWord.toAdr value, [.transfer fromWord.toAdr 0 value]) ∧
+  WriterRep (WriterExtend K (lpMintTouched fromWord.toAdr))
+    ((lpBurnPostH sevm b R M fromWord value G).getStor sevm.currentTarget)
+    (lpBurnSourceState st fromWord.toAdr value) ∧
+  (lpBurnPostH sevm b R M fromWord value G).getStor sevm.currentTarget =
+    ((b.getStor sevm.currentTarget).set (transferBalanceSlot fromWord.toAdr)
+      (st.balanceOf fromWord.toAdr - value)).set 0 (st.totalSupply - value) ∧
+  (∀ a, a ≠ sevm.currentTarget →
+    (lpBurnPostH sevm b R M fromWord value G).getStor a = b.getStor a) ∧
+  (lpBurnPostH sevm b R M fromWord value G).logs = b.logs ++
+    [lpBurnRawLog sevm.currentTarget fromWord.toAdr value] ∧
+  (lpBurnPostH sevm b R M fromWord value G).gasLeft = G
+
+theorem LPBurnSourceResultH_of_covered {sevm : Sevm} {K : WriterKey → Prop} {st : State} {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    LPBurnSourceResultH K st sevm b R M fromWord value G = LPBurnSourceResult K st sevm b R M fromWord value G := by
+  unfold LPBurnSourceResultH LPBurnSourceResult
+  simp only [lpBurnPostH_of_covered fork]
+
 theorem lpBurn_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
@@ -154,6 +246,37 @@ theorem lpBurn_source_result {K : WriterKey → Prop} {st : State} {sevm : Sevm}
   exact ⟨lpBurnLP_accept balance supply, rep.lpBurn_post fresh, physical,
     facts.2.1, facts.2.2.1, facts.2.2.2⟩
 
+theorem lpBurn_source_resultH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {fromWord value : B256} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched fromWord.toAdr))
+    (balance : value ≤ lpBurnBalanceWord sevm b fromWord)
+    (supply : value ≤ lpBurnSupplyWordH sevm (afterSloadH sevm b (transferBalanceSlot fromWord.toAdr))
+      fromWord (lpBurnBalanceWord sevm b fromWord - value)) :
+    LPBurnSourceResultH K st sevm b R M fromWord value G := by
+  have reads := lpBurn_source_readsH (value := value) rep fresh
+  rw [reads.1] at balance
+  rw [reads.2] at supply
+  have facts := lpBurnPost_factsH (sevm := sevm) (b := b) (R := R) (M := M)
+    (fromWord := fromWord) (value := value) (G := G)
+  have physical := facts.1
+  rw [reads.2, reads.1] at physical
+  exact ⟨lpBurnLP_accept balance supply, rep.lpBurn_postH fresh, physical,
+    facts.2.1, facts.2.2.1, facts.2.2.2⟩
+
+theorem lpBurn63_source_invH {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b : Devm} {R : List B256} {M : Mem} {fromWord value ρ : B256} {G : Nat} {o : Outcome}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (mem : PtrMem 128 192 M)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (fresh : WriterFreshKeys K (lpMintTouched fromWord.toAdr))
+    (run : SFunc.Run cert.prog sevm (St b (value :: fromWord :: ρ :: R) M G) t_2992_c63 o) :
+    sevm.isStatic = false ∧ ∃ residual,
+      o = .returned (lpBurnPostH sevm b R M fromWord value residual) ∧
+      LPBurnSourceResultH K st sevm b R M fromWord value residual := by
+  obtain ⟨nonstatic, balance, supply, residual, result⟩ := lpBurn63_invH stateGas bal mem run
+  exact ⟨nonstatic, residual, result, lpBurn_source_resultH rep fresh balance supply⟩
+
 /-- The actual successful internal LP burn derives source acceptance and the finite post. -/
 theorem lpBurn63_source_inv {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     {b : Devm} {R : List B256} {M : Mem} {fromWord value ρ : B256} {G : Nat} {o : Outcome}
@@ -164,8 +287,9 @@ theorem lpBurn63_source_inv {K : WriterKey → Prop} {st : State} {sevm : Sevm}
     sevm.isStatic = false ∧ ∃ residual,
       o = .returned (lpBurnPost sevm b R M fromWord value residual) ∧
       LPBurnSourceResult K st sevm b R M fromWord value residual := by
-  obtain ⟨nonstatic, balance, supply, residual, result⟩ := lpBurn63_inv fork mem run
-  exact ⟨nonstatic, residual, result, lpBurn_source_result rep fresh balance supply⟩
+  simpa only [LPBurnSourceResultH_of_covered fork, lpBurnPostH_of_covered fork] using
+    lpBurn63_source_invH fork.rules_stateGas_none fork.rules_bal_none mem rep fresh run
+
 
 def lpBurnSourceCharge (sevm : Sevm) (b : Devm) (fromWord : B256) : Nat :=
   sloadCost sevm b (transferBalanceSlot fromWord.toAdr)

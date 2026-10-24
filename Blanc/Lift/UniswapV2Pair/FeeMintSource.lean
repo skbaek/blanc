@@ -62,6 +62,15 @@ theorem WriterRep.fee_factory_postH {K : WriterKey → Prop} {st : State} {sevm 
     feeFactoryLoadWorldH, afterSloadH_getStor]
   exact rep
 
+/-- `fee_factory_postH` at a call world given by an equation, for structures generic in it. -/
+theorem WriterRep.fee_factory_postW {K : WriterKey → Prop} {st : State} {sevm : Sevm}
+    {b d Wc : Devm} {S : List B256} {M : Mem} {out : Bytes}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (post : StaticCallPost Wc d S M 128 4 128 32 1 out) (world : Wc = feeFactoryCallWorldH sevm b) :
+    WriterRep K ((feeKLastWorldH sevm d).getStor sevm.currentTarget) st := by
+  subst world
+  exact rep.fee_factory_postH post
+
 /-- The two separately floored raw fee roots have their precise source Nat values. -/
 theorem feeRoots_source {r0 r1 K : B256}
     (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) :
@@ -244,12 +253,30 @@ def feeBranchSourceFee (st : State) (sevm : Sevm) (b : Devm) (w r0 r1 : B256) : 
       (feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1))
   else { state := st, feeOn := true, minted := 0, events := [] }
 
+/-- The fee-growth liquidity reads only storage, so it agrees across the two sload schedules. -/
+theorem feeGrowthLiquidity_afterSloadH (sevm : Sevm) (d : Devm) (k z a : B256) :
+    feeGrowthLiquidity sevm (afterSloadH sevm d k) z a = feeGrowthLiquidity sevm (afterSload sevm d k) z a := by
+  simp only [feeGrowthLiquidity, feeNumeratorWord, getStorVal_afterSloadH, getStorVal_afterSload]
+
+theorem feeBranchSourceFee_kLastH (st : State) (sevm : Sevm) (d : Devm) (w r0 r1 : B256) :
+    feeBranchSourceFee st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      feeBranchSourceFee st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold feeBranchSourceFee feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
+
 /-- Freshness is requested only on the branch that actually writes the fee recipient. -/
 def FeeMintFresh (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b : Devm)
     (w r0 r1 : B256) : Prop :=
   w.toAdr ≠ 0 → st.kLast ≠ 0 → feeLastRoot st.kLast < feeReserveRoot r0 r1 →
     feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) ≠ 0 →
       WriterFreshKeys K (lpMintTouched w.toAdr)
+
+theorem FeeMintFresh_kLastH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (d : Devm)
+    (w r0 r1 : B256) :
+    FeeMintFresh K st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      FeeMintFresh K st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold FeeMintFresh feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
 
 /-- Source acceptance is a consequence of actual fee branch guards, not an inverse premise. -/
 theorem feeBranch_source_accept {K : WriterKey → Prop} {st : State} {sevm : Sevm}
@@ -315,6 +342,13 @@ def feeBranchSourceKeys (K : WriterKey → Prop) (st : State) (sevm : Sevm) (b :
     if feeGrowthLiquidity sevm b (feeLastRoot st.kLast) (feeReserveRoot r0 r1) = 0 then K
     else WriterExtend K (lpMintTouched w.toAdr)
   else K
+
+theorem feeBranchSourceKeys_kLastH (K : WriterKey → Prop) (st : State) (sevm : Sevm) (d : Devm)
+    (w r0 r1 : B256) :
+    feeBranchSourceKeys K st sevm (feeKLastWorldH sevm d) w r0 r1 =
+      feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) w r0 r1 := by
+  unfold feeBranchSourceKeys feeKLastWorldH feeKLastWorld
+  rw [feeGrowthLiquidity_afterSloadH]
 
 /-- The full raw branch post realizes the finite source state, including no-write branches. -/
 theorem WriterRep.feeBranch_post {K : WriterKey → Prop} {st : State} {sevm : Sevm}
@@ -941,6 +975,15 @@ def feeBurnLiquidity (sevm : Sevm) (b : Devm) : B256 :=
 
 def feeBurnWorld (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm b (transferBalanceSlot sevm.currentTarget)
+
+def feeBurnWorldH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm b (transferBalanceSlot sevm.currentTarget)
+
+theorem feeBurnWorldH_of_covered {sevm : Sevm} {b : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) :
+    feeBurnWorldH sevm b = feeBurnWorld sevm b := by
+  unfold feeBurnWorldH feeBurnWorld
+  simp only [afterSloadH_of_eip2929 fork.rules_access]
 
 def burnFeeLocals (L b1 b0 token1 token0 r1 r0 toWord extρ : B256) (R : List B256) : List B256 :=
   0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R
