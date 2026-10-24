@@ -4365,6 +4365,19 @@ core. Static observation emptiness is independent of the balance bound.
 entry balance bound from an actual transferred, run-ready message. Neither
 bridge supplies a contract-specific deposit classification or entry premise.
 
+Over a selected historical fork domain `F` instead of `CoveredFork`, use the
+In twins: [`Blanc/ExecutionAccountingStepsIn.lean`](../Blanc/ExecutionAccountingStepsIn.lean)
+(`Xinst.targetBalanceMono_of_none_noStateGas`,
+`Ninst.targetBalanceMono_of_none_noStateGas`, the fork-free
+`Ninst.foreignNone_getStor_eq'`, and
+`xinstForeignSome_observed_noStateGas` at both carrier levels, all taking only
+`sevm.benvStat.rules.stateGas = none`) and
+[`Blanc/ExecutionAccountingCoreIn.lean`](../Blanc/ExecutionAccountingCoreIn.lean)
+(`Exec.CoreAccountingIn F`, `Exec.coreAccountingIn` with
+`hsgF : ∀ {f}, F f → (Fork.ruleSet f).stateGas = none`, and the `rfl` control
+`Exec.CoreAccounting.eq_coveredFork`). `messageRoot_facts` is fork-free and
+reused unchanged; discharge `hsgF` on `HistFork` with `HistFork.stateGas_none`.
+
 Two consumers exist. The beacon deposit contract observes deposit nodes
 (`Blanc/Lift/BeaconDeposit/CommittedHistory.lean`); Curve 3Crv observes the
 ordered writer invocations of its settlement-committed frames, with the storage
