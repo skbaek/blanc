@@ -904,6 +904,59 @@ members each have a checked certificate with `noSelfdestruct = true` and the
 fact that every raw frame in context `wa` runs a family code;
 `…rawFrames_codeImage_of_codes` and `…settled_codeImage_of_codes` compose it
 with the code image above. Which codes run in `wa`'s context stays a premise.
+For the raw-node chronology itself (every reached driver node in execution
+order, independently of outcome),
+[`Blanc/ExecutionInRawNodes.lean`](../Blanc/ExecutionInRawNodes.lean):
+per-level `…rawNodes` mirroring the `…rawFrames` chains with `Exec.rawNodes`
+in place of `Exec.rawFrameRoots`; `…mem_rawNodes_iff_rawFrame_parentPrefix`
+(node membership is exactly `ParentPrefix` under some listed root);
+`…rawNodes_of_mem_rawFrames` (nodes of a listed root's own run);
+`…safeRawFrames_of_rawNodes` (per-node safety into `SafeRawFrames`); and
+`ConfiguredHistoryTraceIn.exists_rawNodes_split_of_mem_rawFrames`
+(positional split of a listed root). No recipe is registered: use this branch
+and the named theorem.
+For storage-cell provenance along the raw chronology,
+[`Blanc/ExecutionCellProvenance.lean`](../Blanc/ExecutionCellProvenance.lean):
+`CellProv wa k init nodes v` (entry value kept or a listed successful
+`SSTORE` of `v`); `CellProv.mono_left` / `mono_right` / `trans` (assembly
+across concatenations); `CellProv.of_replayCell` (retained-write replay is
+provenance); `Evm.step_cont_getStor_get_noStateGas` and
+`Evm.step_spawn_enter_getStor_noStateGas` (state-gas-absence twins of the
+covered-fork per-step facts); `Exec.Deriv.successfulSstore?_sound_raw`
+(recognizer soundness at raw nodes); storage twins
+`sweepTouchedAccounts_getStor_of_nonempty`, `payRewards_getStor`,
+`ExecutionTrace.messageCallExecutionMessage_getStor`; and the level-zero
+`Exec.rawNodes_getCode`, `Exec.rawNodes_cellProv_noStateGas` (per-run,
+by induction). No recipe is registered: use this branch and the named theorem.
+For cell provenance at message and transaction level (L1-L2), each relative
+to an arbitrary entry world,
+[`Blanc/ExecutionInCellProvenance.lean`](../Blanc/ExecutionInCellProvenance.lean):
+`RetainedXlot.cellProv_at` (frame-generic, with the entry cell equation);
+`ProcessMessageTrace.cellProv_at` / `cellProv_post` and
+`ProcessCreateMessageTrace.cellProv_at` / `cellProv_post` (call/create cores
+via settlement replay); `MessageCallTrace.cellProv_at` / `cellProv_post`
+(collision/create/call arms); `TransactionTrace.cellProv_at` /
+`cellProv_post` (debit plus gas-credit, deletion-fold and sweep settlement);
+plus the entry bridges `Frame.enter_run_getStor`, `createEntry_getStor`,
+`delegation_keeps_code_entry`, `execMsg_cell_eq`,
+`not_protected_target_of_noCollision`, `prepareMessage_own_entry` and the
+settlement storage facts `addBal_getStor_of_codenonempty`,
+`foldl_destroyAccount_getStor`, `CellProv.of_replay_nodes`. No recipe is
+registered: use this branch and the named theorem.
+For the code and the `(wa, k)` storage cell at every raw node of an
+In-history on any selected fork (no `CoveredFork`, no delegation or access
+premise; safety of the strictly earlier raw nodes only),
+[`Blanc/ExecutionHistoryCellProvenance.lean`](../Blanc/ExecutionHistoryCellProvenance.lean):
+`ConfiguredHistoryTraceIn.rawNode_cellProvenance` (checkpoint value or an
+earlier attributed raw successful `SSTORE`), its invariant forms
+`ConfiguredHistoryTraceIn.rawNode_cellInv` and
+`ConfiguredHistoryTraceIn.rawFrame_entryCellInv`; the per-level `cellProv_at`
+/ `cellProv_post` lifts for `ApplyTransactionsTrace`, `SystemMessageTrace`,
+`RequestsTrace`, the beacon, history and request stages, `StagedBodyTrace`,
+`ConfiguredBlockTraceIn` and `ConfiguredHistoryTraceIn`; and the helpers
+`msgNode_code`, `txNode_code`, `StagedBodyTrace.withdrawalCell_of_code`,
+`StagedBodyTrace.withdrawalCode_of_code`, `successfulSstore?_node_owner`.
+No recipe is registered: use this branch and the named theorem.
 For installed code at settled frames of an In-history on a historical fork
 (where `CoveredFork` cannot hold),
 [`Blanc/ExecutionInOwnCode.lean`](../Blanc/ExecutionInOwnCode.lean):

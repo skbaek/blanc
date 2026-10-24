@@ -1574,6 +1574,10 @@ import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionInOwnCode
 import Blanc.ExecutionInCodeImageSafe
 import Blanc.ExecutionSafeRawFramesCodes
+import Blanc.ExecutionInRawNodes
+import Blanc.ExecutionCellProvenance
+import Blanc.ExecutionInCellProvenance
+import Blanc.ExecutionHistoryCellProvenance
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
