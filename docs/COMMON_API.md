@@ -7312,8 +7312,13 @@ contract-neutral.
   `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
   checks. `skipP_78_noStateGas` and `skipP_79_noStateGas` in
   `Blanc/Lift/Usdc/SignedPathsKit.lean` preserve the exact silent-call frames,
-  returned stacks and world-state equalities. Historical encoding, storage walks,
-  implementation permit endpoints and retained-owner consumers remain separate.
+  returned stacks and world-state equalities. `preambleP_nonstorage` preserves
+  the actual entry-to-dispatcher run without a fork premise. The encoding chain
+  `tail0_falseH`, `enc_falseH` and `site9_falseH` in SignedSites uses actual
+  state-gas/BAL absence and the same local rejection capability; it preserves
+  the original memory bounds, free-pointer observations and copy-loop proof.
+  Historical storage walks, implementation permit endpoints and retained-owner
+  consumers remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).

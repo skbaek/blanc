@@ -142,16 +142,24 @@ theorem skipP_79 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd 
 
 /-- **The entry preamble of a site walk**: the run reaches the dispatcher with the selector on
 top of the stack and the base unchanged. -/
+theorem preambleP_nonstorage (hP : SiteStep P)
+    (run : SFunc.RunCutP P Impl.cert.prog sevm [] (St b S M G) Impl.t_0000_c0 r) :
+    ∃ M' G', SFunc.RunCutP P Impl.cert.prog sevm [] (St b (Blanc.Sevm.selector sevm :: S) M' G')
+      dispTree r := by
+  repeat sx_nonstorage run
+  brP run
+  repeat sx_nonstorage run
+  brP run
+  iterate 4 sx_nonstorage run
+  rw [selector_word] at run
+  exact ⟨_, _, run⟩
+
+/-- The covered-fork projection of the entry preamble. -/
 theorem preambleP (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunCutP P Impl.cert.prog sevm [] (St b S M G) Impl.t_0000_c0 r) :
     ∃ M' G', SFunc.RunCutP P Impl.cert.prog sevm [] (St b (Blanc.Sevm.selector sevm :: S) M' G')
       dispTree r := by
-  repeat sx run
-  brP run
-  repeat sx run
-  brP run
-  iterate 4 sx run
-  rw [selector_word] at run
-  exact ⟨_, _, run⟩
+  have _ := hfork
+  exact preambleP_nonstorage hP run
 
 end Blanc.Lift.Usdc
