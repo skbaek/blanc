@@ -3,6 +3,7 @@ import Blanc.Lift.Weth9.Walks
 import Blanc.Lift.Weth9.Step
 import Blanc.Lift.Silent
 import Blanc.LadderSem
+import Blanc.LadderSemHist
 
 /-!
 # WETH9 `withdraw(wad)` preserves solvency
@@ -365,6 +366,36 @@ theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     hcode10, hp10, hcall.singleton, ?_⟩
   exact SFunc.RunP.state_of_silent hP silentSet_nil afterCall_silent afterCall_refs run
 
+/-- `Weth9.withdraw_post_gen` with no fork fact: the walk and the `CALL` discharge read none. -/
+theorem Weth9.withdraw_post_genH {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {ca : Adr}
+    {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
+    (hca : sevm.currentTarget = ca)
+    (hcallPost : ∀ {s sf : Devm} {gas dst value : B256} {xs : Stack},
+        P sevm s (.exec .call) sf → gas :: dst :: value :: xs <<+ s.stack →
+        some (s.getCode ca).toList = c.sem.image → c.Side s.getBal →
+        value ≤ s.getBal ca → c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value) →
+        c.Post ca sevm sf)
+    (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o)
+    (hpre : c.Pre ca sevm devm) :
+    c.Post ca sevm (Outcome.devm o) := by
+  obtain ⟨wad, rest, d10, sf, gw, cw, ys, -, hle, hstor10, hbal10, hcode10, hp10, hcall, hstate⟩ :=
+    Weth9.withdraw_walk_gen hP hg run
+  subst hca
+  obtain ⟨hleb, hinv⟩ := hstep (hpre.inv.left rfl) hle
+  have hpost : c.Post sevm.currentTarget sevm sf := by
+    refine hcallPost hcall hp10 ?_ ?_ ?_ ?_
+    · rw [hcode10]; exact hpre.code
+    · rw [hbal10]; exact hpre.side
+    · rw [hbal10]; exact hleb
+    · rw [hstor10, hbal10]; exact hinv
+  exact ContractSpecSem.Post.of_state_eq hpost hstate
+
 /-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
 
 Stated over any `ContractSpecSem` whose invariant admits the debit
@@ -389,18 +420,8 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
         c.Post ca sevm sf)
     (hg : prog[8]? = some g) (run : SFunc.RunP P prog sevm devm g o)
     (hpre : c.Pre ca sevm devm) :
-    c.Post ca sevm (Outcome.devm o) := by
-  obtain ⟨wad, rest, d10, sf, gw, cw, ys, -, hle, hstor10, hbal10, hcode10, hp10, hcall, hstate⟩ :=
-    Weth9.withdraw_walk_gen hP hg run
-  subst hca
-  obtain ⟨hleb, hinv⟩ := hstep (hpre.inv.left rfl) hle
-  have hpost : c.Post sevm.currentTarget sevm sf := by
-    refine hcallPost hcall hp10 ?_ ?_ ?_ ?_
-    · rw [hcode10]; exact hpre.code
-    · rw [hbal10]; exact hpre.side
-    · rw [hbal10]; exact hleb
-    · rw [hstor10, hbal10]; exact hinv
-  exact ContractSpecSem.Post.of_state_eq hpost hstate
+    c.Post ca sevm (Outcome.devm o) :=
+  Weth9.withdraw_post_genH hP hstep hca hcallPost hg run hpre
 
 /-- **WETH9 `withdraw(wad)` within a root derivation, under the admitted
 deeper-frame hypothesis.**  The run is a `StepIn R` run, so the `CALL`'s child
@@ -429,6 +450,38 @@ theorem Weth9.withdraw_post_in {R : Exec.Deriv} {entry : Sevm → Devm → Prop}
   Weth9.withdraw_post_gen (P := StepIn R) StepIn.toRun hstep hfork hca
     (fun hc hp hcode hside hle hinv =>
       ContractSpecSem.post_of_call_self_with (Q := InRoots R) hfork hca
+        (fun pc' sevm' pre' post' child hq hd hat hf hpw =>
+          ih pc' sevm' pre' post' child hd hat hf (hadm.mono hq) hpw)
+        hp hcode hside hle hinv hc)
+    hg run hpre
+
+/-- **WETH9 `withdraw(wad)` within a root derivation over a selected fork domain.**  The
+historical form of `Weth9.withdraw_post_in`: the `CALL` is discharged by
+`ContractSpecSem.post_of_call_self_withIn`, whose only rule fact is `stateGas = none`, and the
+deeper-frame hypothesis carries the domain fact `F` in place of `CoveredFork`. -/
+theorem Weth9.withdraw_post_inIn {F : Fork → Prop} {R : Exec.Deriv}
+    {entry : Sevm → Devm → Prop} {ca : Adr} {sevm : Sevm}
+    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
+      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
+      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
+        (b - wad))
+    {devm : Devm} {o : Outcome} {g : SFunc}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hF : F sevm.benvStat.fork)
+    (hca : sevm.currentTarget = ca)
+    (hadm : Exec.FrameAdmitted ca entry R.exc)
+    (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
+      sevm'.depth < sevm.depth →
+      c.sem.At ca pc' sevm' pre' →
+      F sevm'.benvStat.fork →
+      Exec.FrameAdmitted ca entry child →
+      c.PreWf ca sevm' pre' →
+      c.Post ca sevm' post')
+    (hg : prog[8]? = some g) (run : SFunc.RunP (StepIn R) prog sevm devm g o)
+    (hpre : c.Pre ca sevm devm) :
+    c.Post ca sevm (Outcome.devm o) :=
+  Weth9.withdraw_post_genH (P := StepIn R) StepIn.toRun hstep hca
+    (fun hc hp hcode hside hle hinv =>
+      ContractSpecSem.post_of_call_self_withIn (Q := InRoots R) hsg hF hca
         (fun pc' sevm' pre' post' child hq hd hat hf hpw =>
           ih pc' sevm' pre' post' child hd hat hf (hadm.mono hq) hpw)
         hp hcode hside hle hinv hc)

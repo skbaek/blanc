@@ -223,9 +223,9 @@ private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
   exact ⟨[], nil_pref, pref_trans ⟨_ :: s.stack, rfl⟩ hp29, hmem2 s.memory⟩
 
 
-theorem Weth9.deposit_effect {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
-    (hg : prog[1]? = some g) (hfork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run prog sevm devm g o) :
+/-- The effect of WETH9 `deposit()` (entry 1), with no fork fact: the lifted run alone fixes it. -/
+theorem Weth9.deposit_effectH {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    (hg : prog[1]? = some g) (run : SFunc.Run prog sevm devm g o) :
     Devm.getStor (Outcome.devm o) sevm.currentTarget =
         (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
           ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) + sevm.value) ∧
@@ -266,6 +266,15 @@ theorem Weth9.deposit_effect {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFun
   constructor
   · rw [hretStor, hpostStor, hset, hpreStor, hburnStor, hpreVal]
   · rw [hretBal, hpostBal, hsbal, hpreBal, hburnBal]
+
+theorem Weth9.deposit_effect {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
+    (hg : prog[1]? = some g) (hfork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run prog sevm devm g o) :
+    Devm.getStor (Outcome.devm o) sevm.currentTarget =
+        (Devm.getStor devm sevm.currentTarget).set (balSlot sevm.caller)
+          ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) + sevm.value) ∧
+      (Outcome.devm o).getBal = devm.getBal :=
+  Weth9.deposit_effectH hg run
 
 theorem Weth9.deposit_solvent {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFunc}
     (hg : prog[1]? = some g) (hfork : CoveredFork sevm.benvStat.fork)

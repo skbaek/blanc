@@ -93,6 +93,24 @@ theorem trackedSum_set_allow {U : Key → Prop} (hinj : KeyInj U) {s : Stor} {o 
 
 /-! ## The writer entries -/
 
+/-- **Deposit** (entry 1) preserves the footprint when the caller's balance row is tracked; no
+fork fact is read. -/
+theorem foot_depositH {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {d : Devm}
+    {o : Outcome} {g : SFunc}
+    (hg : prog[1]? = some g) (hcaller : U (.bal sevm.caller))
+    (hpre : (footSpec U).Pre sevm.currentTarget sevm d) (run : SFunc.Run prog sevm d g o) :
+    (footSpec U).Post sevm.currentTarget sevm (Outcome.devm o) := by
+  obtain ⟨hstor, hbal⟩ := Weth9.deposit_effectH hg run
+  have hsup := (footSpec_inv.mp (hpre.inv.left rfl)).1
+  have hbound : trackedSum U (Devm.getStor d sevm.currentTarget) + sevm.value.toNat < 2 ^ 256 := by
+    have h := (footSpec_inv.mp (hpre.inv.left rfl)).2
+    have hlt := B256.toNat_lt (d.getBal sevm.currentTarget)
+    omega
+  refine footPost_of hpre hbal ?_ ?_
+  · rw [hstor]
+    exact hsup.set hcaller _
+  · rw [hstor, trackedSum_deposit hinj hcaller hbound]
+
 /-- **Deposit** (entry 1) preserves the footprint when the caller's balance row is tracked. -/
 theorem foot_deposit {U : Key → Prop} (hinj : KeyInj U) {sevm : Sevm} {d : Devm}
     {o : Outcome} {g : SFunc} (hfork : CoveredFork sevm.benvStat.fork)
@@ -230,19 +248,20 @@ section Frame
 
 variable {U : Key → Prop} {sevm : Sevm}
 
-/-- **The footprint frame postcondition inside a root derivation.**  Every run of the lifted
-program from a frame precondition ends in the frame postcondition, given that the frame's keys are
-tracked; the `CALL` of `withdraw` is discharged by the admitted deeper-frame hypothesis as in
-`frame_post_in`. -/
-theorem foot_frame_post_in (hinj : KeyInj U) {R : Exec.Deriv} {entry : Sevm → Devm → Prop}
-    {pre post : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+/-- **The footprint frame postcondition over a selected fork domain.**  The historical form of
+`foot_frame_post_in`: the frame's own rule fact is `stateGas = none`, and the deeper-frame
+hypothesis carries `F` in place of `CoveredFork`; the `CALL` of `withdraw` is discharged by
+`Weth9.withdraw_post_inIn`. -/
+theorem foot_frame_post_inIn {F : Fork → Prop} (hinj : KeyInj U) {R : Exec.Deriv}
+    {entry : Sevm → Devm → Prop} {pre post : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hF : F sevm.benvStat.fork)
     (hrun : SProg.RunP (StepIn R) prog sevm pre post)
     (hkeys : ∀ k ∈ frameKeys sevm, U k)
     (hadmR : Exec.FrameAdmitted sevm.currentTarget entry R.exc)
     (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
         sevm'.depth < sevm.depth →
         (footSpec U).sem.At sevm.currentTarget pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
+        F sevm'.benvStat.fork →
         Exec.FrameAdmitted sevm.currentTarget entry child →
         (footSpec U).PreWf sevm.currentTarget sevm' pre' →
         (footSpec U).Post sevm.currentTarget sevm' post')
@@ -261,7 +280,7 @@ theorem foot_frame_post_in (hinj : KeyInj U) {R : Exec.Deriv} {entry : Sevm → 
     List.mem_cons, reduceCtorEq, Key.allow.injEq, List.not_mem_nil, or_false, or_true])
   refine frame_post_of (footSpec U) StepIn.toRun hrun ?_ ?_ ?_ ?_ ?_ hpre
   · intro d o g hg hd r
-    exact foot_deposit hinj hfork hg hcaller hd r
+    exact foot_depositH hinj hg hcaller hd r
   · intro d o g hg hd r
     obtain ⟨wad, hok⟩ := Weth9.transfer_wrapper_ok hg r
     refine foot_xfer hinj ?_ ?_ ?_ hd hok
@@ -279,8 +298,29 @@ theorem foot_frame_post_in (hinj : KeyInj U) {R : Exec.Deriv} {entry : Sevm → 
   · intro d o g hg hd r
     exact foot_approve hinj hg hco hd r
   · intro d o g hg hd r
-    exact Weth9.withdraw_post_in (c := footSpec U)
-      (fun h hle => foot_withdraw_step hinj hcaller h hle) hfork rfl hadmR ih hg r hd
+    exact Weth9.withdraw_post_inIn (c := footSpec U)
+      (fun h hle => foot_withdraw_step hinj hcaller h hle) hsg hF rfl hadmR ih hg r hd
+
+/-- **The footprint frame postcondition inside a root derivation.**  Every run of the lifted
+program from a frame precondition ends in the frame postcondition, given that the frame's keys are
+tracked; the `CALL` of `withdraw` is discharged by the admitted deeper-frame hypothesis as in
+`frame_post_in`. -/
+theorem foot_frame_post_in (hinj : KeyInj U) {R : Exec.Deriv} {entry : Sevm → Devm → Prop}
+    {pre post : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+    (hrun : SProg.RunP (StepIn R) prog sevm pre post)
+    (hkeys : ∀ k ∈ frameKeys sevm, U k)
+    (hadmR : Exec.FrameAdmitted sevm.currentTarget entry R.exc)
+    (ih : ∀ pc' sevm' pre' post' (child : Exec pc' sevm' pre' (.ok post')),
+        sevm'.depth < sevm.depth →
+        (footSpec U).sem.At sevm.currentTarget pc' sevm' pre' →
+        CoveredFork sevm'.benvStat.fork →
+        Exec.FrameAdmitted sevm.currentTarget entry child →
+        (footSpec U).PreWf sevm.currentTarget sevm' pre' →
+        (footSpec U).Post sevm.currentTarget sevm' post')
+    (hpre : (footSpec U).Pre sevm.currentTarget sevm pre) :
+    (footSpec U).Post sevm.currentTarget sevm post :=
+  foot_frame_post_inIn (F := CoveredFork) hinj hfork.rules_stateGas_none hfork hrun hkeys
+    hadmR ih hpre
 
 end Frame
 
