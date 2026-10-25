@@ -66,9 +66,34 @@ theorem transaction_constructor_message
     rw [value]
     rfl
 
+/-- The actual prepared constructor starts with no inherited deletions; its
+clean CREATE therefore gives the transaction an empty deletion set. -/
+theorem transaction_constructor_deletions
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (receiver : tx.type.receiver? = none)
+    (input : tx.data = code.toList) (value : tx.value = 0)
+    (clean : trace.messageOut.error = none) :
+    trace.messageOut.accountsToDelete = .emptyWithCapacity := by
+  obtain ⟨target, inputCode, zeroValue, codeAddress, _, _⟩ :=
+    transaction_constructor_message trace receiver input value
+  have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hsg
+  obtain ⟨installed, ⟨retained⟩, _, _, innerClean, _, deletions⟩ :=
+    trace.message.exists_clean_create_with_deletions
+      (by rw [target]; rfl) msgStateGas clean
+  rw [deletions, constructor_deletions_of_createTrace retained
+    (by rw [innerClean]; rfl) inputCode zeroValue codeAddress msgStateGas]
+  have prepared := trace.prepared
+  simp only [prepareMessage, receiver] at prepared
+  rw [← Except.ok.inj prepared]
+
 /-- The same admitted transaction installs the original proxy runtime and
 constructor storage through its actual refund, fee, deletion and touched-sweep
-settlement. The explicit deletion exclusion is still a caller obligation. -/
+settlement. The actual constructor proves the deletion exclusion. -/
 theorem constructor_effects_of_transactionTrace
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
@@ -76,12 +101,14 @@ theorem constructor_effects_of_transactionTrace
     (hsg : benv.stat.rules.stateGas = none)
     (receiver : tx.type.receiver? = none)
     (input : tx.data = code.toList) (value : tx.value = 0)
-    (clean : trace.messageOut.error = none)
-    (noDelete : trace.msg.currentTarget ∉ trace.messageOut.accountsToDelete) :
+    (clean : trace.messageOut.error = none) :
     state.getCode trace.msg.currentTarget = Proxy.code ∧
       state.getStor trace.msg.currentTarget =
         (Stor.empty.set implSlot initialImplementation).set adminSlot
           trace.sender.toB256 := by
+  have noDelete : trace.msg.currentTarget ∉ trace.messageOut.accountsToDelete := by
+    rw [transaction_constructor_deletions trace hsg receiver input value clean]
+    exact AdrSet.not_mem_empty
   obtain ⟨target, inputCode, zeroValue, codeAddress, caller, _⟩ :=
     transaction_constructor_message trace receiver input value
   have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
@@ -150,14 +177,12 @@ theorem original_constructor_effects_of_transactionTrace
     (receiver : tx.type.receiver? = none)
     (input : tx.data = code.toList) (value : tx.value = 0)
     (sender : trace.sender = originalCreator) (nonce : tx.nonce = 20)
-    (clean : trace.messageOut.error = none)
-    (noDelete : usdcProxy ∉ trace.messageOut.accountsToDelete) :
+    (clean : trace.messageOut.error = none) :
     state.getCode usdcProxy = Proxy.code ∧
       state.getStor usdcProxy =
         (Stor.empty.set implSlot initialImplementation).set adminSlot originalCreator.toB256 := by
   have target := transaction_targets_proxy trace receiver input value sender nonce
   have effects := constructor_effects_of_transactionTrace trace hsg receiver input value clean
-    (by rw [target]; exact noDelete)
   simpa only [target, sender] using effects
 
 end Blanc.Lift.Usdc.ProxyCreation

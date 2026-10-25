@@ -7757,8 +7757,14 @@ contract-neutral.
   interpreted run, source run and successful code deposit, then reuses the
   existing effects composer to obtain the installed proxy code and two-slot
   storage. `constructor_zero_of_createTrace` projects any row distinct from
-  those slots to zero. Neither takes a detached source-run or charge premise;
-  transaction settlement and the actual chain-boundary seed remain separate.
+  those slots to zero. Both reuse `constructor_witness_of_createTrace`, which
+  retains the exact raw source run, touch, charge and installed result.
+  `constructor_deletions_of_createTrace` derives preservation of inherited
+  deletions from the shared balance-silent frame theorem, with no installed-code
+  premise. In Transaction, `transaction_constructor_deletions` derives the empty
+  deletion set from actual preparation and clean CREATE; both transaction-effect
+  theorems consequently need no caller-supplied deletion exclusion. Actual
+  transaction identity, success and the chain-boundary seed remain obligations.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry

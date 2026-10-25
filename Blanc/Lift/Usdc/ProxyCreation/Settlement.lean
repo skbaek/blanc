@@ -3,6 +3,7 @@ import Blanc.Lift.Usdc.ProxyCreation.RuntimeWindow
 import Blanc.DeploymentTouch
 import Blanc.Lift.Usdc.ProxyCreation.HistoryFrame
 import Blanc.MessageExecutionInversion
+import Blanc.Lift.BalSilent
 
 /-!
 # Constructor-to-CREATE zero-row composition for the original proxy constructor
@@ -214,23 +215,28 @@ theorem constructor_message_effects
       hexec herror hcharge
   exact ⟨_, hsettle, hinstalled_code, hinstalled_stor⟩
 
-/-- A clean retained CREATE of the registered constructor installs the proxy
-runtime and its two initialized slots in that trace's actual result. -/
-theorem constructor_effects_of_createTrace
+/-- The actual clean retained CREATE supplies the constructor source run and
+its exact touch, charge and code-installation result. -/
+theorem constructor_witness_of_createTrace
     {msg : Msg} {installed : Devm}
     (trace : Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
     (clean : installed.error.isSome = false)
-    (hcode : msg.code = code)
-    (hvalue : msg.value = 0)
+    (hcode : msg.code = code) (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = none)
     (hstateGas : msg.benv.stat.rules.stateGas = none) :
-    installed.getCode msg.currentTarget = Proxy.code ∧
-    installed.getStor msg.currentTarget =
-      (Stor.empty.set implSlot initialImplementation).set adminSlot
-        msg.caller.toB256 := by
-  have actual := trace.result
+    ∃ (benv : Benv) (raw charged : Devm),
+      (processCreateMessage.msg msg).benvAfterTransfer = .ok benv ∧
+      exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw ∧
+      raw.error = none ∧
+      processCreateMessage.chargeCodeGas msg.benv.stat.rules
+        (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget raw) = .ok charged ∧
+      SFunc.Run cert.prog
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna
+        t_0000_c0 (.halted raw) ∧
+      installed = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
   rcases trace with ⟨slot, retained, process⟩
-  obtain ⟨inner, charged, innerProcess, innerClean, charge, -⟩ :=
+  obtain ⟨inner, charged, innerProcess, innerClean, charge, installedEq⟩ :=
     ProcessCreateMessage.ok_charge_of_clean process clean
   have innerResult : processMessage (processCreateMessage.msg msg) = .ok inner :=
     (show Blanc.ExecutionTrace.ProcessMessageTrace
@@ -271,10 +277,50 @@ theorem constructor_effects_of_createTrace
         Except.ok.inj (innerResult.symm.trans
           (processMessage_ok_touch_of_exec transfer hcodeAddress hexec rawClean))
       rw [touched] at charge
-      obtain ⟨result, resultEq, effects⟩ :=
-        constructor_message_effects hcode hvalue hcodeAddress transfer hexec rawClean charge source
-      have same : installed = result := Except.ok.inj (actual.symm.trans resultEq)
-      simpa only [same] using effects
+      exact ⟨benv, rawPost, charged, transfer, hexec, rawClean, charge, source, installedEq⟩
+
+/-- A clean retained CREATE of the registered constructor installs the proxy
+runtime and its two initialized slots in that trace's actual result. -/
+theorem constructor_effects_of_createTrace
+    {msg : Msg} {installed : Devm}
+    (trace : Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (hcode : msg.code = code)
+    (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = none)
+    (hstateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.getCode msg.currentTarget = Proxy.code ∧
+    installed.getStor msg.currentTarget =
+      (Stor.empty.set implSlot initialImplementation).set adminSlot
+        msg.caller.toB256 := by
+  obtain ⟨benv, raw, charged, transfer, execRun, rawClean, charge, source, _⟩ :=
+    constructor_witness_of_createTrace trace clean hcode hvalue hcodeAddress hstateGas
+  obtain ⟨result, resultEq, effects⟩ :=
+    constructor_message_effects hcode hvalue hcodeAddress transfer execRun rawClean charge source
+  have same : installed = result := Except.ok.inj (trace.result.symm.trans resultEq)
+  simpa only [same] using effects
+
+/-- The actual constructor has no external calls or SELFDESTRUCT, so a clean
+CREATE preserves exactly the message's inherited deletion set. -/
+theorem constructor_deletions_of_createTrace
+    {msg : Msg} {installed : Devm}
+    (trace : Blanc.ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (hcode : msg.code = code) (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = none)
+    (hstateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.accountsToDelete = msg.inheritedDeletions := by
+  obtain ⟨benv, raw, charged, transfer, execRun, rawClean, charge, source, installedEq⟩ :=
+    constructor_witness_of_createTrace trace clean hcode hvalue hcodeAddress hstateGas
+  have frame := SFunc.RunP.balance_deletion_frame_of_balSilent (fun h => h)
+    (S := [0, 1, 2, 3, 4]) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) source
+  have rawDeletion : raw.accountsToDelete = msg.inheritedDeletions :=
+    congrArg (fun p => p.2.1) frame
+  have chargedDeletion := congrArg Prod.fst (chargeCodeGas_delSets_ok charge)
+  rw [installedEq]
+  change charged.accountsToDelete = msg.inheritedDeletions
+  exact chargedDeletion.trans rawDeletion
 
 /-- Every row apart from the constructor's two literal slots is zero in the
 same clean retained CREATE result. -/
