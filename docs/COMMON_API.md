@@ -1985,7 +1985,10 @@ log. `Exec.boundaryOwnLogs` emits only at instruction boundaries.
 prefix plus those observations in the existing retained chronology. Its
 `CoveredFork` premise covers child initialization, CALL and CREATE resumption,
 and complete settlement failure; failed subtrees are pruned and settlement
-boundaries never duplicate child logs.
+boundaries never duplicate child logs. For message-root receipt bridges,
+`Frame.settle_logs_of_ok` preserves logs through successful frame settlement,
+and `Frame.enter_done_clean_logs_noStateGas` proves an immediate clean entry
+has no logs. These reuse the same settlement and native-entry proofs.
 
 For inclusion from a retained frame into the root endpoint, use
 `Exec.committedFrame_logs_subset_noStateGas` in
@@ -5264,7 +5267,11 @@ It identifies the actual receipt at `BLT.toBytes (.bytes index.toBytes)` with
 the same message status, message logs and final cumulative gas. Only
 `rules.stateGas = none` is required: the selected refund quotient, calldata
 floor, touched sweep and BAL policy remain intact. It does not establish chain
-inclusion, root-log correspondence or persistence through later transactions.
+inclusion or persistence through later transactions.
+`MessageCallTrace.logs_eq_settledRoots` equates the actual filtered message logs
+to each complete-settlement root post once; each post already includes its
+retained descendants. `TransactionTrace.receipt_of_settledRoots` inserts that
+same sequence in the actual receipt, preserving status and cumulative gas.
 `MessageCallTrace.logs_and_settledRoots_eq_nil_of_error` additionally proves
 that a failed actual message has no receipt logs and no settled roots, including
 CREATE code-deposit failure. The call/create core `settledRoots_eq_nil_of_error`

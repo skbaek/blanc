@@ -1,5 +1,6 @@
 import Blanc.Lift.CallerProvenance
 import Blanc.TransactionForwardH
+import Blanc.Lift.CommittedLogs
 
 /-!
 # Receipts of the actual selected transaction settlement
@@ -42,6 +43,68 @@ theorem ProcessCreateMessageTrace.settledRoots_eq_nil_of_error
         simp only [Frame.settlementCommits, ← settled, failed]
         decide
       simp only [ProcessCreateMessageTrace.settledRoots, ite_eq_right rejected]
+
+/-- A clean complete settlement retains its root log sequence exactly once. -/
+theorem ProcessMessageTrace.logs_eq_settledRoots_of_clean
+    {msg : Msg} {post : Devm} (trace : ProcessMessageTrace msg (.ok post))
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (clean : post.error.isNone = true) :
+    post.logs = trace.settledRoots.flatMap (fun root => root.post.logs) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      change RunFrame (Frame.ofCall msg) none (.ok post) at process
+      cases enter : (Frame.ofCall msg).enter with
+      | done result =>
+          simp only [RunFrame, enter, true_and] at process
+          subst result
+          exact Frame.enter_done_clean_logs_noStateGas hsg enter clean
+      | run evm =>
+          simp only [RunFrame, enter, reduceCtorEq, false_and, exists_false] at process
+  | @some pc sevm pre raw run =>
+      have settled := (RunFrame.some_inv process).2
+      have commits : Frame.settlementCommits (Frame.ofCall msg) raw = true := by
+        simp only [Frame.settlementCommits, ← settled, clean]
+      have rawCommits := Frame.raw_commits_of_settlementCommits commits
+      cases raw with
+      | error error => simp only [Execution.commits, Bool.false_eq_true] at rawCommits
+      | ok rawPost =>
+          have logs := Frame.settle_logs_of_ok settled.symm
+          simpa only [ProcessMessageTrace.settledRoots, commits, ↓reduceIte,
+            RetainedXlot.settledRoots, rawCommits, ↓reduceDIte, Exec.Frame.ofRun,
+            Exec.Frame.post, Execution.committedPost, List.flatMap_cons,
+            List.flatMap_nil, List.append_nil] using logs
+
+/-- A clean complete settlement retains its root log sequence exactly once. -/
+theorem ProcessCreateMessageTrace.logs_eq_settledRoots_of_clean
+    {msg : Msg} {post : Devm} (trace : ProcessCreateMessageTrace msg (.ok post))
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (clean : post.error.isNone = true) :
+    post.logs = trace.settledRoots.flatMap (fun root => root.post.logs) := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none =>
+      change RunFrame (Frame.ofCreate msg) none (.ok post) at process
+      cases enter : (Frame.ofCreate msg).enter with
+      | done result =>
+          simp only [RunFrame, enter, true_and] at process
+          subst result
+          exact Frame.enter_done_clean_logs_noStateGas hsg enter clean
+      | run evm =>
+          simp only [RunFrame, enter, reduceCtorEq, false_and, exists_false] at process
+  | @some pc sevm pre raw run =>
+      have settled := (RunFrame.some_inv process).2
+      have commits : Frame.settlementCommits (Frame.ofCreate msg) raw = true := by
+        simp only [Frame.settlementCommits, ← settled, clean]
+      have rawCommits := Frame.raw_commits_of_settlementCommits commits
+      cases raw with
+      | error error => simp only [Execution.commits, Bool.false_eq_true] at rawCommits
+      | ok rawPost =>
+          have logs := Frame.settle_logs_of_ok settled.symm
+          simpa only [ProcessCreateMessageTrace.settledRoots, commits, ↓reduceIte,
+            RetainedXlot.settledRoots, rawCommits, ↓reduceDIte, Exec.Frame.ofRun,
+            Exec.Frame.post, Execution.committedPost, List.flatMap_cons,
+            List.flatMap_nil, List.append_nil] using logs
 
 private theorem createRun_logs_error
     {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
@@ -124,6 +187,42 @@ theorem MessageCallTrace.logs_and_settledRoots_eq_nil_of_error
       rw [logs, coreFailed]
       rfl
 
+/-- The actual message wrapper emits exactly the complete-settlement root logs.
+Each root's post already includes its retained descendants, so roots are folded once. -/
+theorem MessageCallTrace.logs_eq_settledRoots
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (hsg : msg.benv.stat.rules.stateGas = none) :
+    out.logs = trace.settledRoots.flatMap (fun root => root.post.logs) := by
+  cases status : out.error.isNone with
+  | false =>
+      obtain ⟨logs, roots⟩ := trace.logs_and_settledRoots_eq_nil_of_error hsg status
+      rw [logs, roots]
+      rfl
+  | true =>
+      cases trace with
+      | createCollision target collision result =>
+          unfold processMessageCall processMessageCall.create at result
+          simp only [target, ↓reduceIte, hsg] at result
+          unfold messageCreateCollision at collision
+          simp only [collision, ↓reduceIte, pure] at result
+          have output := (Prod.mk.inj (Except.ok.inj result)).2
+          exact (congrArg MsgCallOutput.logs output).symm
+      | createRun target collision evm core retained result =>
+          obtain ⟨error, logs⟩ := createRun_logs_error hsg target collision core result
+          have clean : evm.error.isNone = true := by rw [← error]; exact status
+          rw [logs, clean]
+          exact retained.logs_eq_settledRoots_of_clean hsg clean
+      | callRun target delegated refund delegation execMsg execMsgEq evm core retained result =>
+          obtain ⟨error, logs⟩ := callRun_logs_error hsg target delegation execMsgEq core result
+          have clean : evm.error.isNone = true := by rw [← error]; exact status
+          have execHsg : execMsg.benv.stat.rules.stateGas = none := by
+            rw [execMsgEq, messageCallExecutionMessage_benv_stat,
+              messageCallDelegation_benv_stat delegation]
+            exact hsg
+          rw [logs, clean]
+          exact retained.logs_eq_settledRoots_of_clean execHsg clean
+
 /-- The actual transaction inserts its own message receipt under the selected
 historical settlement rules. No fixed refund quotient or sweep policy is used. -/
 theorem TransactionTrace.receipt_of_selected_settlement
@@ -157,5 +256,21 @@ theorem TransactionTrace.receipt_of_selected_settlement
   have cumulative := congrArg BlockOutput.cumulativeGasUsed output
   rw [← trie, ← cumulative]
   exact Std.TreeMap.getElem?_insert_self
+
+/-- The actual receipt stores the retained root logs once, with its actual
+status, cumulative gas and selected transaction-index key. -/
+theorem TransactionTrace.receipt_of_settledRoots
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none) :
+    bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+      some (makeReceipt tx trace.messageOut.error bout'.cumulativeGasUsed
+        (trace.settledRoots.flatMap (fun root => root.post.logs))) := by
+  have msgHsg : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hsg
+  rw [TransactionTrace.settledRoots, ← trace.message.logs_eq_settledRoots msgHsg]
+  exact trace.receipt_of_selected_settlement hsg
 
 end Blanc.ExecutionTrace
