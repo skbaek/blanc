@@ -6979,6 +6979,16 @@ contract-neutral.
   the log occurs in the same committed root. It does not require global
   implementation-slot separation; establishing the node's code remains the
   caller's obligation.
+  [`Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean`](../Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean)'s
+  `ConfiguredHistoryTraceIn.retained_proxyV1_context` couples strict earlier
+  retained-write exclusion with current Proxy/V1 code classification in one
+  committing root. It derives the unchanged implementation word and excludes
+  each current write using the same root's absence of an Upgraded log. Its
+  explicit remaining inputs are installed Proxy/V1 code and implementation
+  address at that root, own-code at the actual input root, and local separation
+  for actual writes already known to run V1. It requires no global raw-write
+  apartness; supplying that local V1 separation and the actual root/receipt
+  facts remains a separate obligation.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
@@ -7007,8 +7017,18 @@ contract-neutral.
   [`Blanc/Lift/Usdc/InitV1KeyBounds.lean`](../Blanc/Lift/Usdc/InitV1KeyBounds.lean)
   bounds the decoded old length and clearing count for any stored header.
   `helper46_reach_ne_implSlot` consumes the helper range with explicit numeric
-  hash-base bounds and the new-length cap; concrete hash evaluation and caller
-  propagation remain separate obligations.
+  hash-base bounds and the new-length cap.
+  [`Blanc/Lift/Usdc/InitV1ConcreteBounds.lean`](../Blanc/Lift/Usdc/InitV1ConcreteBounds.lean)
+  proves the exact Keccak values for initializer headers 4, 5 and 7 in the kernel.
+  Its `bounds` theorem supplies header separation, the hash-base margin and
+  the implementation-slot exclusion interval for those three headers.
+  `InitReachV1.callFrag_reach_range`, `callee_reach_range`, `wrapper_reach_range`
+  and `initV1_reach_range` propagate the actual clearing ranges through the
+  initializer; `BoundedRange` retains the three length caps derived from actual
+  staging. The original caller interfaces project that same traversal.
+  `InitV1KeyBounds.initV1_reach_ne_implSlot_concrete` combines these ranges and
+  checked hashes to exclude the implementation slot at every reached initializer
+  store, with no numerical-bound, length-cap or old-header-format premise.
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
   without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`

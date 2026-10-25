@@ -196,14 +196,24 @@ private theorem lit20 : Bytes.toB256 [0x20] = (32 : B256) := by decide
 the helper at a store of the slot, of zero or of a payload word of the string whose header at
 `p` reads `L`, or returns past the call with the slot word on top and every word but the
 scratch word kept. -/
-theorem callFrag_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem callFrag_reach_range (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {j : Fin 16} {slot tag : Bytes} {hs : slot.length ≤ 32} {ht : tag.length ≤ 32} {k : SFunc}
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {p L : B256} (hp : S[j.val]? = some p)
     (hL : memWord M p.toNat = L) (hnw : p.toNat + 32 + L.toNat < 2 ^ 256)
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St b S M G, OldInitializerV1Callee.callFrag j slot tag hs ht k, []⟩ T)
     (hT : AtSstore T) :
-    StrStore.StoreAt (Bytes.toB256 slot) ((L.toNat + 31) / 32) T ∨ ∃ b' M' G',
+    (∃ key value rest, T.d.stack = key :: value :: rest ∧
+      (key = Bytes.toB256 slot ∨ (∃ j < (L.toNat + 31) / 32,
+        key = (Bytes.toB256 slot).toBytes.keccak + j.toB256) ∨
+        (value = 0 ∧ ∃ i ≤ (L.toNat + 31) / 32,
+          ((Bytes.toB256 slot).toBytes.keccak + i.toB256).toNat ≤ key.toNat ∧
+          key.toNat < ((Bytes.toB256 slot).toBytes.keccak +
+            (Bytes.toB256 [31] +
+              (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&&
+                b.getStorVal sevm.currentTarget (Bytes.toB256 slot)) =? 0) -
+                Bytes.toB256 [1] &&& b.getStorVal sevm.currentTarget (Bytes.toB256 slot)) /
+                Bytes.toB256 [2]) / Bytes.toB256 [32]).toNat))) ∨ ∃ b' M' G',
       SolcStorageReturn.Keeps (((M.read p.toNat 32).2).write 0 (Bytes.toB256 slot).toBytes) M' ∧
       Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
         ⟨St b' (Bytes.toB256 slot :: S) M' G', k, []⟩ T := by
@@ -221,11 +231,30 @@ theorem callFrag_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
   cases hg
   have e1 : (M.read p.toNat 32).1.toB256 = L := hL
   rw [e1, lit20] at run
-  rcases helper46_reach eraseQ (OldInitializerV1Callee.nowrap hnw) run hT with
+  rcases helper46_reach_range eraseQ (OldInitializerV1Callee.nowrap hnw) run hT with
     h | ⟨f, K', b', M', G', hK, hk, run⟩
   · exact .inl h
   · cases hK
     exact .inr ⟨b', M', G', hk, run⟩
+
+theorem callFrag_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {j : Fin 16} {slot tag : Bytes} {hs : slot.length ≤ 32} {ht : tag.length ≤ 32} {k : SFunc}
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat} {p L : B256} (hp : S[j.val]? = some p)
+    (hL : memWord M p.toNat = L) (hnw : p.toNat + 32 + L.toNat < 2 ^ 256)
+    (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+      ⟨St b S M G, OldInitializerV1Callee.callFrag j slot tag hs ht k, []⟩ T)
+    (hT : AtSstore T) :
+    StrStore.StoreAt (Bytes.toB256 slot) ((L.toNat + 31) / 32) T ∨ ∃ b' M' G',
+      SolcStorageReturn.Keeps (((M.read p.toNat 32).2).write 0 (Bytes.toB256 slot).toBytes) M' ∧
+      Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+        ⟨St b' (Bytes.toB256 slot :: S) M' G', k, []⟩ T := by
+  rcases callFrag_reach_range eraseQ hp hL hnw run hT with ⟨key, value, rest, h, hkey⟩ | h
+  · refine .inl ⟨key, value, rest, h, ?_⟩
+    rcases hkey with h | h | ⟨rfl, -⟩
+    · exact .inl h
+    · exact .inr (.inr h)
+    · exact .inr (.inl rfl)
+  · exact .inr h
 
 /-- The keys of `initialize` with the three lengths read at the V1 heads. -/
 abbrev KeysV1 (sevm : Sevm) : B256 → Prop :=
@@ -239,10 +268,58 @@ theorem keysV1_eq (sevm : Sevm) : KeysInit06 sevm =
     show Bytes.toB256 [4] + Bytes.toB256 [32] = (36 : B256) by decide,
     show Bytes.toB256 [4] = (4 : B256) by decide]
 
+/-- A clearing range produced by one actual V1 string-helper call. The old word is
+existential only after the helper has supplied its actual SLOAD value. -/
+def ClearRange (slot : B256) (words : Nat) (key : B256) : Prop :=
+  ∃ old i, i ≤ words ∧ (slot.toBytes.keccak + i.toB256).toNat ≤ key.toNat ∧
+    key.toNat < (slot.toBytes.keccak +
+      (Bytes.toB256 [31] + (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&& old) =? 0) -
+        Bytes.toB256 [1] &&& old) / Bytes.toB256 [2]) / Bytes.toB256 [32]).toNat
+
+/-- V1's initializer keys, with every zero clearing store retaining its produced range. -/
+def InitRange (sevm : Sevm) (T : Conf) : Prop :=
+  ∀ key value rest, T.d.stack = key :: value :: rest →
+    KeysV1 sevm key ∨ value = 0 ∧
+      (ClearRange 4 (((lenAt sevm head1).toNat + 31) / 32) key ∨
+       ClearRange 5 (((lenAt sevm head2).toNat + 31) / 32) key ∨
+       ClearRange 7 (((lenAt sevm head3).toNat + 31) / 32) key)
+
+theorem InitRange.of_eq {key value : B256} {rest : List B256}
+    (stack : T.d.stack = key :: value :: rest)
+    (kind : KeysV1 sevm key ∨ value = 0 ∧
+      (ClearRange 4 (((lenAt sevm head1).toNat + 31) / 32) key ∨
+       ClearRange 5 (((lenAt sevm head2).toNat + 31) / 32) key ∨
+       ClearRange 7 (((lenAt sevm head3).toNat + 31) / 32) key)) : InitRange sevm T := by
+  intro key' value' rest' stack'
+  rw [stack] at stack'
+  obtain ⟨rfl, rfl, -⟩ := List.cons.inj stack'
+  exact kind
+
+theorem InitRange.of_top {key : B256} {rest : List B256}
+    (stack : T.d.stack = key :: rest) (kind : KeysV1 sevm key) : InitRange sevm T := by
+  intro key' value' rest' stack'
+  rw [stack] at stack'
+  exact .inl ((List.cons.inj stack').1 ▸ kind)
+
+theorem InitRange.to_initStore (h : InitRange sevm T) : InitStore (KeysV1 sevm) T :=
+  fun key value rest stack => (h key value rest stack).imp_right And.left
+
+theorem InitRange.capped (h : InitRange sevm T)
+    (cap1 : (lenAt sevm head1).toNat ≤ 2 ^ 160)
+    (cap2 : (lenAt sevm head2).toNat ≤ 2 ^ 160)
+    (cap3 : (lenAt sevm head3).toNat ≤ 2 ^ 160) : InitStore (KeysInit06 sevm) T := by
+  rw [keysV1_eq]
+  exact InitStore.mono (fun _ key => Init06.KeysInit.cap cap1 cap2 cap3 key) h.to_initStore
+
+/-- The wrapper additionally derives the actual three staged-string length caps. -/
+def BoundedRange (sevm : Sevm) (T : Conf) : Prop :=
+  InitRange sevm T ∧ (lenAt sevm head1).toNat ≤ 2 ^ 160 ∧
+    (lenAt sevm head2).toNat ≤ 2 ^ 160 ∧ (lenAt sevm head3).toNat ≤ 2 ^ 160
+
 /-- **The V1 callee on a reach.** From the call-16 entry stack the wrapper stages and memory
 holding the three string headers, a reach of `t_16b0_c16` to an `SSTORE` stops at a write of
 `KeysV1` or of zero. -/
-theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem callee_reach_range (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {a1 a2 a3 a4 a5 p1 p2 p3 : B256} {R : List B256} {b : Devm} {M : Mem} {G : Nat}
     (hdr1 : memWord M p1.toNat = lenAt sevm head1)
     (hdr2 : memWord M p2.toNat = lenAt sevm head2)
@@ -255,7 +332,7 @@ theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St b (a1 :: a2 :: a3 :: a4 :: a5 :: p3 :: p2 :: p1 :: retTag :: R) M G,
         ImplV1.t_16b0_c16, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysV1 sevm) T := by
+    (hT : AtSstore T) : InitRange sevm T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
     fun h => eraseQ h.1
   unfold ImplV1.t_16b0_c16 at run
@@ -286,39 +363,39 @@ theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
   -- name (slot 4)
   rw [OldInitializerV1Callee.t_17bc_shape] at run
   rsd
-  rcases callFrag_reach eraseQ (p := p1) rfl hdr1 nw1 run hT with
-    ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨b1, M1, G1, keep1, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  rcases callFrag_reach_range eraseQ (p := p1) rfl hdr1 nw1 run hT with
+    ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, i, hi, lower, upper⟩⟩ | ⟨b1, M1, G1, keep1, run⟩
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inl ⟨_, i, hi, lower, upper⟩⟩)
   obtain ⟨m2, s1⟩ := OldInitializerV1Callee.memWord_keeps keep1 h32₂ fit2
   obtain ⟨m3, -⟩ := OldInitializerV1Callee.memWord_keeps keep1 h32₃ fit3
   -- symbol (slot 5)
   rw [OldInitializerV1Callee.t_17d2_shape] at run
   rsd
   rsx
-  rcases callFrag_reach eraseQ (p := p2) rfl (m2.trans hdr2) nw2 run hT with
-    ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨b2, M2, G2, keep2, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩))))
+  rcases callFrag_reach_range eraseQ (p := p2) rfl (m2.trans hdr2) nw2 run hT with
+    ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, i, hi, lower, upper⟩⟩ | ⟨b2, M2, G2, keep2, run⟩
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩))))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inr (.inl ⟨_, i, hi, lower, upper⟩)⟩)
   obtain ⟨m3', -⟩ := OldInitializerV1Callee.memWord_keeps keep2 h32₃ (le_trans fit3 s1)
   -- currency (slot 7)
   rw [OldInitializerV1Callee.t_17e9_shape] at run
   rsd
   rsx
-  rcases callFrag_reach eraseQ (p := p3) rfl (m3'.trans (m3.trans hdr3)) nw3 run hT with
-    ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨b3, M3, G3, -, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  rcases callFrag_reach_range eraseQ (p := p3) rfl (m3'.trans (m3.trans hdr3)) nw3 run hT with
+    ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, i, hi, lower, upper⟩⟩ | ⟨b3, M3, G3, -, run⟩
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inr (.inr ⟨_, i, hi, lower, upper⟩)⟩)
   -- the packed setters, the owner setter and the initialized flag
   unfold ImplV1.t_1800_c16 at run
   rsd
   iterate 4
     repeat rsa
     rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-    · exact InitStore.of_top rfl (.inl (by decide))
+    · exact InitRange.of_top rfl (.inl (by decide))
     obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
     subst e
     clear hstep
@@ -330,7 +407,7 @@ theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
   rsd
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
@@ -341,12 +418,28 @@ theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
   rsd
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   exact (Reach.not_ret_nilS run hT).elim
+
+theorem callee_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {a1 a2 a3 a4 a5 p1 p2 p3 : B256} {R : List B256} {b : Devm} {M : Mem} {G : Nat}
+    (hdr1 : memWord M p1.toNat = lenAt sevm head1)
+    (hdr2 : memWord M p2.toNat = lenAt sevm head2)
+    (hdr3 : memWord M p3.toNat = lenAt sevm head3)
+    (h32₂ : 32 ≤ p2.toNat) (h32₃ : 32 ≤ p3.toNat)
+    (fit2 : p2.toNat + 32 ≤ M.size) (fit3 : p3.toNat + 32 ≤ M.size)
+    (nw1 : p1.toNat + 32 + (lenAt sevm head1).toNat < 2 ^ 256)
+    (nw2 : p2.toNat + 32 + (lenAt sevm head2).toNat < 2 ^ 256)
+    (nw3 : p3.toNat + 32 + (lenAt sevm head3).toNat < 2 ^ 256)
+    (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+      ⟨St b (a1 :: a2 :: a3 :: a4 :: a5 :: p3 :: p2 :: p1 :: retTag :: R) M G,
+        ImplV1.t_16b0_c16, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysV1 sevm) T := by
+  exact (callee_reach_range eraseQ hdr1 hdr2 hdr3 h32₂ h32₃ fit2 fit3 nw1 nw2 nw3 run hT).to_initStore
 
 private theorem lit4 : Bytes.toB256 [0x04] = (4 : B256) := by decide
 private theorem lit584 : Bytes.toB256 [0x05, 0x84] = retTag := by decide
@@ -360,12 +453,12 @@ private theorem e228 : (32 : B256) + 196 = 228 := by decide
 
 /-- **The V1 wrapper on a reach.** From memory whose free pointer is `p1 ≥ 96`, a reach of the
 `initialize` wrapper `t_0410_c60` to an `SSTORE` stops at a write of `KeysInit06` or of zero. -/
-theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem wrapper_reach_range (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {b : Devm} {cv : B256} {R : List B256} {M0 : Mem} {G0 : Nat} {p1 : B256}
     (hfp : memWord M0 64 = p1) (hp96 : 96 ≤ p1.toNat)
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St b (cv :: R) M0 G0, ImplV1.t_0410_c60, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+    (hT : AtSstore T) : BoundedRange sevm T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
     fun h => eraseQ h.1
   subst hfp
@@ -412,10 +505,26 @@ theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d
   have l3 : (lenAt sevm head3).toNat = (Sevm.dataWord sevm (4 + Sevm.dataWord sevm 68)).toNat :=
     rfl
   have f1 := hS.fit1
-  rw [keysV1_eq]
-  exact InitStore.below.mpr (InitStore.mono (fun _ h => Init06.KeysInit.cap (by omega)
-    (by omega) (by omega) h) (callee_reach eraseQ hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega)
-    (by omega) (by omega) (by omega) (by omega) (by omega) inside hT'))
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · have hRange : InitRange sevm T' :=
+      callee_reach_range eraseQ hS.hdr1 hS.hdr2 hS.hdr3 (by omega) (by omega)
+        (by omega) (by omega) (by omega) (by omega) (by omega) inside hT'
+    exact hRange
+  · rw [l1]
+    omega
+  · rw [l2]
+    omega
+  · rw [l3]
+    omega
+
+theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {b : Devm} {cv : B256} {R : List B256} {M0 : Mem} {G0 : Nat} {p1 : B256}
+    (hfp : memWord M0 64 = p1) (hp96 : 96 ≤ p1.toNat)
+    (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+      ⟨St b (cv :: R) M0 G0, ImplV1.t_0410_c60, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+  have h := wrapper_reach_range eraseQ hfp hp96 run hT
+  exact h.1.capped h.2.1 h.2.2.1 h.2.2.2
 
 theorem route_init : SFunc.selWalk 0x3357162b
     (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
@@ -426,11 +535,11 @@ theorem route_init : SFunc.selWalk 0x3357162b
 /-- **V1 `initialize` on a prefix reach.** A reach of the V1 code from entry `0`, with empty
 stack and memory and the `initialize` selector, to an `SSTORE` stops at a write of
 `KeysInit06` or of zero. -/
-theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem initV1_reach_range (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     (hs : Blanc.Sevm.selector sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV1.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+    (hT : AtSstore T) : BoundedRange sevm T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
     fun h => eraseQ h.1
   unfold ImplV1.t_0000_c0 at run
@@ -453,6 +562,14 @@ theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d'
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT rfl (fun _ h => by cases h)).elim
   have w := Mem.memWord_write_word Mem.empty (Bytes.toB256 [0x40]).toNat (Bytes.toB256 [0x80])
   rw [show (Bytes.toB256 [0x40]).toNat = 64 by decide] at w run
-  exact wrapper_reach eraseQ w.1 (by decide) run hT
+  exact wrapper_reach_range eraseQ w.1 (by decide) run hT
+
+theorem initV1_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    (hs : Blanc.Sevm.selector sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+      ⟨St d [] Mem.empty G, ImplV1.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+  have h := initV1_reach_range eraseQ hs run hT
+  exact h.1.capped h.2.1 h.2.2.1 h.2.2.2
 
 end Blanc.Lift.Usdc.InitReachV1

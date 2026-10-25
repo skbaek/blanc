@@ -1863,6 +1863,7 @@ import Blanc.Lift.ReachWalkSstore
 import Blanc.Lift.Usdc.ProxySstoreH
 import Blanc.Lift.Usdc.ProxyUpgradeLog
 import Blanc.Lift.Usdc.ProxyCommittedUpgradeLog
+import Blanc.Lift.Usdc.ProxyRetainedContextCodes
 import Blanc.Lift.Usdc.ProxyWritesHistory
 import Blanc.Lift.Usdc.InitReach
 import Blanc.Lift.Usdc.InitReachV2
@@ -1871,6 +1872,7 @@ import Blanc.Lift.Usdc.InitReachV2_2
 import Blanc.Lift.Usdc.InitReach06
 import Blanc.Lift.Usdc.InitReachV1
 import Blanc.Lift.Usdc.InitV1KeyBounds
+import Blanc.Lift.Usdc.InitV1ConcreteBounds
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.GovernanceHistory
 import Blanc.Lift.WriteSiteZero
