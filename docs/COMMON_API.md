@@ -2659,6 +2659,19 @@ a protected target executing arbitrary code.
   installed-cert producer into per-frame safety (`Exec.rawNodes` of a listed
   frame sit inside the whole run's `Exec.rawNodes`). No recipe is registered:
   use this branch and the named theorem.
+- For actual transaction output deletion exclusions after a genuine cut, use
+  [`Blanc/ExecutionMidHistoryInNoDel.lean`](../Blanc/ExecutionMidHistoryInNoDel.lean).
+  `ApplyTransactionsTrace.noDelScheduled_iff_outputNotDeleted` and its
+  `ConfiguredHistoryTraceIn` counterpart identify the safety and complete-settlement
+  predicates on the same outputs. `ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe`
+  transports installed code through the actual opening system calls, before-trace
+  and selected transaction to prove the arbitrary `TxSplit` suffix exclusion.
+  `MidHistoryTraceIn.outputNotDeleted_append` splits the actual suffix and later
+  blocks; `outputNotDeleted_of_full_safe` derives their exclusions from the
+  original full history's safety and checkpoint code. No cut-local deletion or
+  installed-code oracle, canonical-cut replacement, cell law or initial zero is
+  supplied. Use this chronology branch directly; the expanded output predicate
+  alone does not choose an intended cut, so no goal recipe is registered.
 - `ExecuteCode.inv_noDel`, `ProcessMessage.inv_noDel`,
   `ProcessCreateMessage.inv_noDel` and the whole-message no-deletion helpers
   in `Blanc/LadderBase.lean` require `wa ∉ msg.inheritedDeletions` at the

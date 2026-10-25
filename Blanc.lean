@@ -43,6 +43,7 @@ import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionMidHistoryInForest
+import Blanc.ExecutionMidHistoryInNoDel
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInForkFacts
 import Blanc.ExecutionHistoryInNoDel
@@ -1596,6 +1597,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9P1
 import Blanc.Composition.UniswapV2PairUsdcCallersIn
 import Blanc.Composition.UniswapV2PairUsdcOwnersIn
 import Blanc.Composition.UniswapV2PairUsdcZeroIn
+import Blanc.Composition.UniswapV2PairUsdcNoDelIn
 import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF

@@ -400,6 +400,7 @@ SHARED += [
 SHARED += [
     "ExecutionMidHistoryInFacts",
     "ExecutionMidHistoryInForest",
+    "ExecutionMidHistoryInNoDel",
 ]
 
 # Fork-era schedule facts and historical environment facts for selected-domain
@@ -1911,6 +1912,7 @@ COMPOSITION = [
     "Composition.UniswapV2PairUsdcCallersIn",
     "Composition.UniswapV2PairUsdcOwnersIn",
     "Composition.UniswapV2PairUsdcZeroIn",
+    "Composition.UniswapV2PairUsdcNoDelIn",
     "Composition.UniswapV2PairUsdcWeth9JointF",
     "Composition.UniswapV2PairUsdcWeth9MintLiveF",
     "Composition.UniswapV2PairUsdcWeth9ShareValueF",
