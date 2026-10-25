@@ -29,12 +29,13 @@ variable {Q : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf
 
 /-- The shared exit tail `7` on a reach: it drops three words, clears the old tail through
 helper `42` (zero stores only) and returns the slot word into the pending continuation. -/
-theorem tail7_reach (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem tail7_reach_range (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {K : List SFunc} {b : Devm} {x y z e slot r : B256} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach Q ImplV1.cert.prog sevm
       ⟨St b (x :: y :: z :: e :: slot :: r :: S) M G, ImplV1.t_2ef9_c7, K⟩ T)
     (hT : AtSstore T) :
-    ReachClear.ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧
+    (∃ key rest, T.d.stack = key :: 0 :: rest ∧
+      y.toNat ≤ key.toNat ∧ key.toNat < e.toNat) ∨ ∃ f K' b' G', K = f :: K' ∧
       Reach Q ImplV1.cert.prog sevm ⟨St b' (slot :: S) M G', f, K'⟩ T := by
   unfold ImplV1.t_2ef9_c7 at run
   rsd
@@ -46,7 +47,7 @@ theorem tail7_reach (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
   rsd
   iterate 3 rsx
   rw [OldInitializerV1Callee.t_2f10_c42_shape] at run
-  rcases ReachClear.legacyClear_reach erase OldInitializerV1Payload.entry50
+  rcases ReachClear.legacyClear_reach_range erase OldInitializerV1Payload.entry50
       OldInitializerV1Payload.retEntry51 rfl run hT with h | ⟨f, K', b', G', hK, run⟩
   · exact .inl h
   cases hK
@@ -55,18 +56,38 @@ theorem tail7_reach (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
   iterate 2 rsx
   exact .inr (rs_retM run hT)
 
+theorem tail7_reach (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {K : List SFunc} {b : Devm} {x y z e slot r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach Q ImplV1.cert.prog sevm
+      ⟨St b (x :: y :: z :: e :: slot :: r :: S) M G, ImplV1.t_2ef9_c7, K⟩ T)
+    (hT : AtSstore T) :
+    ReachClear.ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧
+      Reach Q ImplV1.cert.prog sevm ⟨St b' (slot :: S) M G', f, K'⟩ T := by
+  rcases tail7_reach_range erase run hT with ⟨key, rest, h, -, -⟩ | h
+  · exact .inl ⟨key, rest, h⟩
+  · exact .inr h
+
 /-- **Helper `46` on a reach.** Entered with `L :: D :: slot :: r :: S` (the string length,
 its data pointer in memory, the slot and the return tag), with `D + L` not wrapping, the reach
 stops at a store of the slot, of zero or of `keccak(slot) + j` for `j < (L + 31) / 32`; or the
 helper returns `slot :: S` into the pending continuation, with every byte of the entry memory
 but the scratch word at `0` kept. -/
-theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+theorem helper46_reach_range (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {K : List SFunc} {b : Devm} {L D slot r : B256} {S : List B256} {M : Mem} {G : Nat}
     (hnw : D.toNat + L.toNat < 2 ^ 256)
     (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
       ⟨St b (L :: D :: slot :: r :: S) M G, ImplV1.t_2e8a_c46, K⟩ T)
     (hT : AtSstore T) :
-    StrStore.StoreAt slot ((L.toNat + 31) / 32) T ∨ ∃ f K' b' M' G', K = f :: K' ∧
+    (∃ key value rest, T.d.stack = key :: value :: rest ∧
+      (key = slot ∨ (∃ j < (L.toNat + 31) / 32, key = slot.toBytes.keccak + j.toB256) ∨
+        (value = 0 ∧ ∃ i ≤ (L.toNat + 31) / 32,
+          (slot.toBytes.keccak + i.toB256).toNat ≤ key.toNat ∧
+          key.toNat < (slot.toBytes.keccak +
+            (Bytes.toB256 [31] +
+              (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&&
+                b.getStorVal sevm.currentTarget slot) =? 0) - Bytes.toB256 [1] &&&
+                b.getStorVal sevm.currentTarget slot) / Bytes.toB256 [2]) /
+              Bytes.toB256 [32]).toNat))) ∨ ∃ f K' b' M' G', K = f :: K' ∧
       SolcStorageReturn.Keeps (M.write 0 slot.toBytes) M' ∧
       Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' :=
@@ -74,7 +95,15 @@ theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
   unfold ImplV1.t_2e8a_c46 at run
   rsd
   iterate 2 rsx
-  rsld
+  obtain ⟨d', hstep, run⟩ := rs_next run hT
+  obtain ⟨key, rest, hpop, hpush⟩ := of_run_sload (erase hstep)
+  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
+    List.cons.injEq] at hpop hpush
+  obtain ⟨rfl, rfl⟩ := hpop
+  have e := St.self hpush (SolcStorageReturn.sload_memory (erase hstep))
+  simp only [St.getStorVal, St.memory] at e
+  rw [e] at run
+  clear hstep
   iterate 31 rsx
   rw [scratch_word M slot] at run
   have k0 : SolcStorageReturn.Keeps (M.write 0 slot.toBytes)
@@ -95,8 +124,9 @@ theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
     obtain ⟨g, _, hg, run⟩ := rs_jump run hT
     rw [show ImplV1.cert.prog[7]? = some ImplV1.t_2ef9_c7 from rfl] at hg
     cases hg
-    rcases tail7_reach erase run hT with ⟨x, S', h⟩ | ⟨f, K', b', G', hK, run⟩
-    · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+    rcases tail7_reach_range erase run hT with ⟨x, S', h, hlo, hhi⟩ | ⟨f, K', b', G', hK, run⟩
+    · refine .inl ⟨x, 0, S', h, .inr (.inr ⟨rfl, 0, Nat.zero_le _, ?_, hhi⟩)⟩
+      simpa only [show ((0 : Nat).toB256) = 0 from rfl, B256.add_zero] using hlo
     · exact .inr ⟨f, K', b', _, G', hK, k0.trans (SolcStorageReturn.Keeps.read _ _ _), run⟩
   · -- long string: header store at the slot, payload loop, shared tail
     unfold ImplV1.t_2ecb_c46 at run
@@ -112,34 +142,53 @@ theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n 
     · unfold ImplV1.t_2eda_c46 at run
       iterate 3 rsx
       rw [OldInitializerV1Callee.t_2edd_c46_shape] at run
-      generalize (slot.toBytes.keccak +
-          (Bytes.toB256 [31] + (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&& _) =? 0) -
-            Bytes.toB256 [1] &&& _) / Bytes.toB256 [2]) / Bytes.toB256 [32]) = E at run
+      generalize hE : (slot.toBytes.keccak +
+          (Bytes.toB256 [31] + (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&& b.getStorVal sevm.currentTarget slot) =? 0) -
+            Bytes.toB256 [1] &&& b.getStorVal sevm.currentTarget slot) / Bytes.toB256 [2]) / Bytes.toB256 [32]) = E at run
       have cnt : SolcStoragePayload.count (D + L) D.toNat = (L.toNat + 31) / 32 := by
         unfold SolcStoragePayload.count
         rw [B256.toNat_add_eq_of_nof _ _ hnw]
         congr 1
         omega
-      rcases ReachPayload.payloadB_reach erase (by intro h; cases h)
+      rcases ReachPayload.payloadB_reach_exact erase (by intro h; cases h)
           (ReachPayload.mload_rdStep eraseQ) (ReachPayload.mload_win eraseQ)
           OldInitializerV1Payload.entry52 (i := 0) (fin := D + L)
           (base0 := slot.toBytes.keccak) (p := D.toNat) (rest := E :: slot :: r :: S)
           ⟨Nat.zero_le _, by omega, by
             rw [St.stack, Nat.mul_zero, Nat.add_zero, toB256_toNat,
               show ((0 : Nat).toB256) = 0 from rfl, B256.add_zero]⟩ run hT with
-        ⟨j, v, S', hj, h⟩ | ⟨i, b', M', G', -, hk, run⟩
+        ⟨j, v, S', hj, h⟩ | ⟨i, b', M', G', hi, hk, run⟩
       · rw [cnt] at hj
-        exact .inl ⟨_, _, _, h, .inr (.inr ⟨j, hj, rfl⟩)⟩
-      · unfold ImplV1.t_2ef8_c52 at run
+        exact .inl ⟨_, _, _, h, .inr (.inl ⟨j, hj, rfl⟩)⟩
+      · rw [cnt] at hi
+        unfold ImplV1.t_2ef8_c52 at run
         rsd
-        rcases tail7_reach erase run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
-        · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+        rcases tail7_reach_range erase run hT with ⟨x, S', h, hlo, hhi⟩ | ⟨f, K', b'', G'', hK, run⟩
+        · exact .inl ⟨x, 0, S', h, .inr (.inr ⟨rfl, i, hi.le, hlo, hhi⟩)⟩
         · exact .inr ⟨f, K', b'', _, G'', hK, k0.trans hk, run⟩
     · rw [show ImplV1.cert.prog[7]? = some ImplV1.t_2ef9_c7 from rfl] at hg
       cases hg
-      rcases tail7_reach erase run hT with ⟨x, S', h⟩ | ⟨f, K', b', G', hK, run⟩
-      · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+      rcases tail7_reach_range erase run hT with ⟨x, S', h, hlo, hhi⟩ | ⟨f, K', b', G', hK, run⟩
+      · refine .inl ⟨x, 0, S', h, .inr (.inr ⟨rfl, 0, Nat.zero_le _, ?_, hhi⟩)⟩
+        simpa only [show ((0 : Nat).toB256) = 0 from rfl, B256.add_zero] using hlo
       · exact .inr ⟨f, K', b', _, G', hK, k0, run⟩
+
+theorem helper46_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {K : List SFunc} {b : Devm} {L D slot r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (hnw : D.toNat + L.toNat < 2 ^ 256)
+    (run : Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm
+      ⟨St b (L :: D :: slot :: r :: S) M G, ImplV1.t_2e8a_c46, K⟩ T)
+    (hT : AtSstore T) :
+    StrStore.StoreAt slot ((L.toNat + 31) / 32) T ∨ ∃ f K' b' M' G', K = f :: K' ∧
+      SolcStorageReturn.Keeps (M.write 0 slot.toBytes) M' ∧
+      Reach (FreePtr.PotStep Q) ImplV1.cert.prog sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
+  rcases helper46_reach_range eraseQ hnw run hT with ⟨key, value, rest, h, hkey⟩ | h
+  · refine .inl ⟨key, value, rest, h, ?_⟩
+    rcases hkey with h | h | ⟨rfl, -⟩
+    · exact .inl h
+    · exact .inr (.inr h)
+    · exact .inr (.inl rfl)
+  · exact .inr h
 
 private theorem lit20 : Bytes.toB256 [0x20] = (32 : B256) := by decide
 

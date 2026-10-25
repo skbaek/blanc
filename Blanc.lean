@@ -1638,6 +1638,7 @@ import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
+import Blanc.ExecutionRetainedNodeOrigin
 import Blanc.ExecutionHistoryCellProvenanceFrom
 import Blanc.ExecutionInRawNodeOriginFrom
 import Blanc.LadderSemHist
@@ -1684,6 +1685,8 @@ import Blanc.Lift.Usdc.Families
 import Blanc.Lift.Usdc.FiniteFootprint
 import Blanc.Lift.Usdc.FiniteFootprintF
 import Blanc.Lift.Usdc.Footprint
+import Blanc.Lift.Usdc.HistoricalMappingKeys
+import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.FootprintLedger
 import Blanc.Lift.Usdc.Governance
 import Blanc.Lift.Usdc.Hist
@@ -1867,6 +1870,7 @@ import Blanc.Lift.Usdc.InitReachV2_1
 import Blanc.Lift.Usdc.InitReachV2_2
 import Blanc.Lift.Usdc.InitReach06
 import Blanc.Lift.Usdc.InitReachV1
+import Blanc.Lift.Usdc.InitV1KeyBounds
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.GovernanceHistory
 import Blanc.Lift.WriteSiteZero

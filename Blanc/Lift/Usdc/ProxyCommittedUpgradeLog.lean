@@ -16,34 +16,28 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
-/-- Every settlement-retained successful implementation-slot write has an
-`Upgraded` log in the same committing raw root's endpoint. This includes
-same-value writes and writes whose value is later restored. Direct write
-attribution needs no code-at-entry or endpoint-change premise. -/
-theorem ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded
+/-- A settlement-retained implementation-slot write executed by the proxy emits an
+`Upgraded` log in the SAME committing raw root. The local code premise replaces
+implementation-slot separation; same-value and later-restored writes are included. -/
+theorem ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_of_proxyCode
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    {P : Adr} (apartSlot : ImplSlotApart P history.rawNodes)
+    {P : Adr}
     {R : Exec.Deriv} (member : R ∈ history.rawFrames)
     (committed : Execution.commits R.exn = true)
     {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.exc)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
-    (owner : write.owner = P) (key : write.key = implSlot) :
+    (owner : write.owner = P) (key : write.key = implSlot)
+    (nodeCode : N.sevm.code = Proxy.code) :
     ∃ entry ∈ (Execution.committedPost R.exn committed).logs,
       entry.address = P ∧ entry.topics = [Proxy.upgradedTopic] := by
   obtain ⟨frame, frameMem, chain⟩ :=
     (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.exc N).mp retained
   have frameRaw := history.committedFrame_mem_rawFrames member frameMem
-  have nodeMem : N ∈ history.rawNodes :=
-    (history.mem_rawNodes_iff_rawFrame_parentPrefix N).mpr
-      ⟨Blanc.Exec.Frame.rootDeriv frame, frameRaw, chain⟩
   have nodeTarget : N.sevm.currentTarget = P :=
     (successfulSstore?_node_owner found).2.symm.trans owner
-  have nodeCode : N.sevm.code = Proxy.code := by
-    by_contra other
-    exact (apartSlot N nodeMem nodeTarget other write found key).elim
   have sameSevm := Exec.Deriv.ParentPrefix.sevm_eq chain
   change N.sevm = frame.sevm at sameSevm
   have frameCode : frame.sevm.code = Proxy.code := by
@@ -78,6 +72,34 @@ theorem ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded
   obtain ⟨_, _, rootHsg, _, _⟩ := history.rawFrame_entryFacts capabilities R member
   exact ⟨entry, Exec.committedFrame_logs_subset_noStateGas R.exc committed rootHsg
     frame frameMem present, address.trans target, topics⟩
+
+/-- Every settlement-retained successful implementation-slot write has an
+`Upgraded` log in the same committing raw root's endpoint. This includes
+same-value writes and writes whose value is later restored. Direct write
+attribution needs no code-at-entry or endpoint-change premise. -/
+theorem ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} (apartSlot : ImplSlotApart P history.rawNodes)
+    {R : Exec.Deriv} (member : R ∈ history.rawFrames)
+    (committed : Execution.commits R.exn = true)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.exc)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (owner : write.owner = P) (key : write.key = implSlot) :
+    ∃ entry ∈ (Execution.committedPost R.exn committed).logs,
+      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic] := by
+  have nodeMem : N ∈ history.rawNodes :=
+    history.rawNodes_of_mem_rawFrames R member N
+      ((Exec.retainedNodes_sublist_rawNodes R.exc).subset retained)
+  have nodeTarget : N.sevm.currentTarget = P :=
+    (successfulSstore?_node_owner found).2.symm.trans owner
+  have nodeCode : N.sevm.code = Proxy.code := by
+    by_contra other
+    exact (apartSlot N nodeMem nodeTarget other write found key).elim
+  exact ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_of_proxyCode history capabilities bal
+    member committed retained found owner key nodeCode
 
 /-- A change of the proxy implementation slot across a committing raw frame
 has an `Upgraded` log in that frame's committed endpoint. The account has

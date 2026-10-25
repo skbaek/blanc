@@ -1017,6 +1017,15 @@ message facts `MsgRootCode`, `MsgOwn`, `messageCallDelegation_own`,
 induction over `rawNodes` that bounds the codes run in a storage context;
 `List.forall_mem_of_positional` is that induction along list positions.
 No recipe is registered: use this branch and the named theorem.
+For positional origin within one committing settlement-retained execution,
+[`Blanc/ExecutionRetainedNodeOrigin.lean`](../Blanc/ExecutionRetainedNodeOrigin.lean):
+`Exec.retainedNodes_split_origin` takes the exact retained split and gives the
+actual input root, an earlier retained node with the same static environment,
+or an earlier retained node satisfying the existing `SpawnedAt` relation.
+Complete child settlement excludes discarded child witnesses. It requires no
+code, fork, no-write or own-code premise; actual message-root own-code facts
+remain the caller's separate obligation. Use the named theorem with retained
+prefix provenance when inducting over retained contexts.
 For the same provenance restarted at a committed boundary inside the
 history (a block-body start or the boundary after any transaction, e.g. for
 a contract deployed after the checkpoint; safety only of the raw nodes
@@ -3368,6 +3377,16 @@ update under `Inj` (`trackedWord_set`), a write at a slot no tracked key uses le
 (`trackedWord_set_off`), touching fresh keys leaves the rows alone (`trackedWord_extend`), and
 `Support.set_fixed` is `Support.set` for a write at a fixed slot. Worked use: USDC's footprint
 (`Blanc/Lift/Usdc/Footprint.lean`).
+
+For old USDC blacklist writes, use `HistoricalMappingKey` in
+[`Blanc/Lift/Usdc/HistoricalMappingKeys.lean`](../Blanc/Lift/Usdc/HistoricalMappingKeys.lean).
+It embeds modern keys unchanged and adds the historical mapping at slot 3.
+[`Blanc/Lift/Usdc/V1MappingTouches.lean`](../Blanc/Lift/Usdc/V1MappingTouches.lean)'s
+`actualV1OldBlacklistKeys` collects actual successful writes from the same
+history, retaining order and duplicates. Its soundness theorem derives their
+slot identities from the checked V1 write sites. The off-implementation-slot
+consumer requires initial apartness and freshness of this exact list; modern
+balance-slot freshness does not establish historical blacklist freshness.
 
 To establish such a footprint at a concrete checkpoint world, decide it with
 [`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
@@ -6955,6 +6974,11 @@ contract-neutral.
   committing raw frame changing the implementation slot yields that log at the
   proxy address. Its premises include nonempty proxy code at the frame entry,
   `ImplSlotApart`, and the history's body-stage capabilities and BAL restriction.
+  The same module's `retained_implSstore_emitsUpgraded_of_proxyCode` instead
+  takes the actual retained node's proxy-code identity directly and proves
+  the log occurs in the same committed root. It does not require global
+  implementation-slot separation; establishing the node's code remains the
+  caller's obligation.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
@@ -6972,6 +6996,19 @@ contract-neutral.
   and strictly below the end, or the original pending continuation is reached.
   `legacyClear_reach` projects this single traversal to its original interface;
   no old-header shape or additional gas assumption is required.
+  `ReachPayload.payloadB_reach_exact` retains equality of the exit index to
+  `count fin p`; the original `payloadB_reach` projects the same traversal.
+  USDC's `InitReachV1.tail7_reach_range` and `helper46_reach_range` in
+  [`Blanc/Lift/Usdc/InitReachV1.lean`](../Blanc/Lift/Usdc/InitReachV1.lean)
+  carry the clearing interval through the old initializer helper, retaining
+  the old endpoint computed from its actual input storage word. Their original
+  interfaces remain projections. These range facts do not by themselves prove
+  that a clearing key differs from a control slot.
+  [`Blanc/Lift/Usdc/InitV1KeyBounds.lean`](../Blanc/Lift/Usdc/InitV1KeyBounds.lean)
+  bounds the decoded old length and clearing count for any stored header.
+  `helper46_reach_ne_implSlot` consumes the helper range with explicit numeric
+  hash-base bounds and the new-length cap; concrete hash evaluation and caller
+  propagation remain separate obligations.
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
   without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`
