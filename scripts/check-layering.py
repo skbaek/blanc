@@ -328,6 +328,7 @@ SHARED += [
     "ExecutionSafeRawFramesCodes",
     "ExecutionInRawNodes",
     "ExecutionCellProvenance",
+    "ExecutionRetainedCellZero",
     "ExecutionInCellProvenance",
     "ExecutionCommittedCell",
     "ExecutionHistoryCommittedCell",

@@ -962,6 +962,16 @@ settlement storage facts `addBal_getStor_of_codenonempty`,
 `foldl_destroyAccount_getStor`, `CellProv.of_replay_nodes`. No recipe is
 registered: use this branch and the named theorem.
 For cell preservation from complete-settlement roots, use
+[`Blanc/ExecutionRetainedCellZero.lean`](../Blanc/ExecutionRetainedCellZero.lean)
+when the actual retained writes are non-increasing at their own prefixes:
+`Exec.cell_zero_of_retained_nonInc_noStateGas` preserves an initial zero cell
+of any initially code-bearing observed account through a committing execution.
+The surrounding frames need no lifted code image or equality of their current
+target with that account. Only complete-settlement-retained child writes are
+examined; failed child settlement uses rollback. The selected rules must have
+no state gas. This is conditional zero preservation, not unconditional cell
+equality, and does not discharge transaction deletion or a historical seed.
+For unconditional root cell equality, use
 [`Blanc/ExecutionCommittedCell.lean`](../Blanc/ExecutionCommittedCell.lean):
 the call/create/message/transaction `cell_eq_of_settledRoots` lifts and
 `MessageCallTrace.code_eq` preserve the same installed nonempty,

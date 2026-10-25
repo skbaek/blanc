@@ -1627,6 +1627,7 @@ import Blanc.ExecutionInCodeImageSafe
 import Blanc.ExecutionSafeRawFramesCodes
 import Blanc.ExecutionInRawNodes
 import Blanc.ExecutionCellProvenance
+import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionCommittedCell
 import Blanc.ExecutionHistoryCommittedCell
