@@ -1628,6 +1628,9 @@ import Blanc.ExecutionSafeRawFramesCodes
 import Blanc.ExecutionInRawNodes
 import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionInCellProvenance
+import Blanc.ExecutionCommittedCell
+import Blanc.ExecutionHistoryCommittedCell
+import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.ExecutionHistoryCellProvenanceFrom

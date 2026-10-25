@@ -961,6 +961,26 @@ plus the entry bridges `Frame.enter_run_getStor`, `createEntry_getStor`,
 settlement storage facts `addBal_getStor_of_codenonempty`,
 `foldl_destroyAccount_getStor`, `CellProv.of_replay_nodes`. No recipe is
 registered: use this branch and the named theorem.
+For cell preservation from complete-settlement roots, use
+[`Blanc/ExecutionCommittedCell.lean`](../Blanc/ExecutionCommittedCell.lean):
+the call/create/message/transaction `cell_eq_of_settledRoots` lifts and
+`MessageCallTrace.code_eq` preserve the same installed nonempty,
+nondesignator code and actual selected cell. Failed settlement uses rollback;
+the transaction layer keeps actual output deletion exclusion explicit.
+[`Blanc/ExecutionHistoryCommittedCell.lean`](../Blanc/ExecutionHistoryCommittedCell.lean)
+lifts these laws through transaction lists, enabled or skipped system stages,
+withdrawals, requests, rewards and configured histories. `OutputNotDeleted`
+records actual transaction outputs. `SystemStagesDisabled` and its root/log
+equations apply only when the actual selected rule bits disable those stages.
+For exact transaction-position cuts, use
+[`Blanc/ExecutionHistoryCommittedCuts.lean`](../Blanc/ExecutionHistoryCommittedCuts.lean):
+`ApplyTransactionsTrace.splitAt_settledRoots_eq`, `splitAt_rootLogs_eq` and
+`splitAt_outputNotDeleted_iff` follow the canonical list cut, including empty
+root lists. `MidHistoryTraceIn.cell_eq_before_txSplit` transports a settled-after
+origin to a later before-transaction endpoint using only intervening roots and
+deletion exclusions. The actual decoded transaction identity and concrete
+rootwise cell laws remain inputs. Use this trace/boundary branch directly;
+an expanded cell equality alone does not select the intended chronology.
 For the code and the `(wa, k)` storage cell at every raw node of an
 In-history on any selected fork (no `CoveredFork`, no delegation or access
 premise; safety of the strictly earlier raw nodes only),
