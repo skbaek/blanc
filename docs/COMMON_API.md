@@ -2699,9 +2699,14 @@ a protected target executing arbitrary code.
   its compatibility wrapper.
   For the cell at every actual settlement-retained node entry, use
   [`Blanc/ExecutionRetainedCellAt.lean`](../Blanc/ExecutionRetainedCellAt.lean):
-  `Exec.retainedNode_cell_eq_of_noRetainedWriteTo_noStateGas` takes the same
-  committing run, nonempty owner entry code and `NoRetainedWriteTo`, and
-  concludes equality with that run's entry cell at each retained node.
+  `Exec.retainedNodes_cellProv_noStateGas` takes a committing run, state-gas
+  absence, nonempty owner entry code and the exact retained split
+  `before ++ node :: after`. It proves `CellProv` at the node using only the
+  strictly earlier retained `before`, with no no-write, context or safety
+  premise. Child endpoint replay witnesses stay in that child's retained
+  nodes; no raw or later writer is substituted.
+  `Exec.retainedNode_cell_eq_of_noRetainedWriteTo_noStateGas` projects this
+  producer under `NoRetainedWriteTo`, preserving its original signature.
   Completely rolled-back children contribute no nodes; their raw writes
   remain permitted. This is a per-run law, not transaction settlement or
   receipt/history continuity. Use this branch and the named theorem: an
@@ -6962,6 +6967,11 @@ contract-neutral.
   loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
   `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
   (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
+  `ReachClear.legacyClear_reach_range` additionally preserves the actual initial
+  key and end word: a reached zero-store key lies at or above the initial key
+  and strictly below the end, or the original pending continuation is reached.
+  `legacyClear_reach` projects this single traversal to its original interface;
+  no old-header shape or additional gas assumption is required.
   Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
   it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
   without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`

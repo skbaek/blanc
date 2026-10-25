@@ -700,19 +700,23 @@ theorem clear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     obtain ⟨f, K', b', G', hK, rest⟩ := rs_retM run hT
     exact .inl (.inr ⟨f, K', b', G', hK, rest⟩)
 
-/-- **The legacy clearing loop on a reach to an `SSTORE`.** As `clear_reach`, for the
-layout whose exit jumps through the shared return entry `j`. -/
-theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+/-- The legacy clearing loop reaches a zero store whose key is at least the
+initial key and strictly below the exact end word, or returns into the same
+pending continuation. -/
+theorem legacyClear_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {j : Nat} (entry : fs[k]? = some (SolcStorageClear.legacyHead back exit backBound exitBound k j))
     (retEntry : fs[j]? = some SolcStorageClear.legacyRet)
     {e t u : B256} {S : List B256} {d : Devm} {key : B256}
     (hstack : d.stack = key :: e :: t :: u :: S)
     (run : Reach P fs sevm ⟨d, SolcStorageClear.legacyHead back exit backBound exitBound k j, K⟩ T)
     (hT : AtSstore T) :
-    ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) d.memory G', f, K'⟩ T := by
-  refine reach_loop_measure (fun d' => (∃ key, d'.stack = key :: e :: t :: u :: S) ∧
-    d'.memory = d.memory) (gap e) ?_ d ⟨⟨key, hstack⟩, rfl⟩ run
-  intro d' ⟨⟨key, hstack⟩, hmem⟩ run
+    (∃ current rest, T.d.stack = current :: 0 :: rest ∧
+      key.toNat ≤ current.toNat ∧ current.toNat < e.toNat) ∨
+      ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) d.memory G', f, K'⟩ T := by
+  refine reach_loop_measure (fun d' => (∃ current,
+    d'.stack = current :: e :: t :: u :: S ∧ key.toNat ≤ current.toNat) ∧
+    d'.memory = d.memory) (gap e) ?_ d ⟨⟨key, hstack, le_refl _⟩, rfl⟩ run
+  intro d' ⟨⟨current, hstack, lower⟩, hmem⟩ run
   rw [← hmem]
   rw [St.self' d', hstack] at run
   unfold SolcStorageClear.legacyHead at run
@@ -723,7 +727,8 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     unfold SolcStorageClear.legacyBody at run
     iterate 4 rsx
     rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-    · exact .inl (.inl ⟨_, _, by rw [St.stack, show Bytes.toB256 [0x00] = (0 : B256) by decide]⟩)
+    · exact .inl (.inl ⟨current, _, by
+        rw [St.stack, show Bytes.toB256 [0x00] = (0 : B256) by decide], lower, hlt⟩)
     obtain ⟨_, _, e'⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
     subst e'
     clear hstep
@@ -732,12 +737,14 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     obtain ⟨g, _, hg, run⟩ := rs_jump run hT
     rw [entry] at hg
     cases hg
-    refine .inr ⟨St _ _ _ _, ⟨⟨_, rfl⟩, rfl⟩, ?_, run⟩
-    unfold gap
-    simp only [St.stack, List.headD_cons]
-    rw [hstack, key_next hlt]
-    simp only [List.headD_cons]
-    omega
+    refine .inr ⟨St _ _ _ _, ⟨⟨_, rfl, ?_⟩, rfl⟩, ?_, run⟩
+    · rw [key_next hlt]
+      omega
+    · unfold gap
+      simp only [St.stack, List.headD_cons]
+      rw [hstack, key_next hlt]
+      simp only [List.headD_cons]
+      omega
   · unfold SolcStorageClear.legacyExit at run
     rsd
     iterate 2 rsx
@@ -749,6 +756,21 @@ theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d 
     rsx
     obtain ⟨f, K', b', G', hK, rest⟩ := rs_retM run hT
     exact .inl (.inr ⟨f, K', b', G', hK, rest⟩)
+
+/-- **The legacy clearing loop on a reach to an `SSTORE`.** As `clear_reach`, for the
+layout whose exit jumps through the shared return entry `j`. -/
+theorem legacyClear_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {j : Nat} (entry : fs[k]? = some (SolcStorageClear.legacyHead back exit backBound exitBound k j))
+    (retEntry : fs[j]? = some SolcStorageClear.legacyRet)
+    {e t u : B256} {S : List B256} {d : Devm} {key : B256}
+    (hstack : d.stack = key :: e :: t :: u :: S)
+    (run : Reach P fs sevm ⟨d, SolcStorageClear.legacyHead back exit backBound exitBound k j, K⟩ T)
+    (hT : AtSstore T) :
+    ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' (e :: S) d.memory G', f, K'⟩ T := by
+  rcases legacyClear_reach_range erase entry retEntry hstack run hT with
+    ⟨current, rest, stack, -, -⟩ | continuation
+  · exact .inl ⟨current, rest, stack⟩
+  · exact .inr continuation
 
 end ReachClear
 
