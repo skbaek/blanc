@@ -127,57 +127,6 @@ theorem cursor_nexts_line_cont_free_forward {code : ByteArray} {c : Cert}
       exact (Blanc.Exec.Deriv.ExecFreeUntil.ofStep edge headFree).trans
         (finalFree tailFree)
 
-/-- Compatibility projection retaining the existing full-continuation statement. -/
-theorem cursor_nexts_line_cont_forward {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
-    (tree : κ.f = ns.foldr SFunc.next tail)
-    {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentPrefix F N ∧
-      N.pc = F.pc + (ns.map Ninst.size).sum ∧
-      N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N κ' ∧ κ'.f = tail ∧
-      Line.Run F.sevm F.devm ns N.devm ∧ κ'.K = κ.K := by
-  obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line, sameK, free⟩ :=
-    cursor_nexts_line_cont_free_forward checked ok ns tail tree success fork
-  exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line, sameK⟩
-
-/-- Compatibility projection of the actual linear cut, retaining its existing public statement. -/
-theorem cursor_nexts_line_forward {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
-    (tree : κ.f = ns.foldr SFunc.next tail)
-    {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentPrefix F N ∧
-      N.pc = F.pc + (ns.map Ninst.size).sum ∧
-      N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N κ' ∧ κ'.f = tail ∧
-      Line.Run F.sevm F.devm ns N.devm := by
-  obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line, sameK⟩ :=
-    cursor_nexts_line_cont_forward checked ok ns tail tree success fork
-  exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line⟩
-
-/-- A literal linear certificate prefix is crossed by composing the actual
-next cuts. The final cursor and raw location are derived, never assumed. -/
-theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
-    (tree : κ.f = ns.foldr SFunc.next tail)
-    {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentPrefix F N ∧
-      N.pc = F.pc + (ns.map Ninst.size).sum ∧
-      N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N κ' ∧ κ'.f = tail := by
-  obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line⟩ :=
-    cursor_nexts_line_forward checked ok ns tail tree success fork
-  exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree⟩
-
 /-- A checked STATICCALL cursor supplies its six actual stack operands,
 independently of the instruction's eventual child or parent outcome. -/
 theorem cursor_staticcall_operands {code : ByteArray} {c : Cert}

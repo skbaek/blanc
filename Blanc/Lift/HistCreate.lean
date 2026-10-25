@@ -324,7 +324,7 @@ theorem create2ChargeH_of_initCodeLimit {sevm : Sevm} {M : Mem} {i sz : B256}
   rw [h]
   rfl
 
-/-- `Xinst.step_create2_spawn` from the rule facts it reads: `rules.stateGas = none`, `CREATE2`
+/-- An admitted CREATE2 spawn from the rule facts it reads: `rules.stateGas = none`, `CREATE2`
 available, and the init-code size bound only where `creation.initCodeLimit` holds. -/
 theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     {v i sz salt : B256}
@@ -392,7 +392,7 @@ theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : 
       · exact hnonce h
       · exact hdepth h
 
-/-- **`CREATE2`, closed, from rule facts.**  As `create2_runCompiled`, charging
+/-- **`CREATE2`, closed, from rule facts.**  Charging
 `create2ChargeH`. -/
 theorem create2_runCompiledH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     {v i sz salt : B256} {child : Devm}

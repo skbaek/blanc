@@ -119,7 +119,7 @@ theorem cursor_reach_of_parentPrefixH_covered {code : ByteArray} {c : Cert}
       CursorOK code c N κ' :=
   cursor_reach_of_parentPrefixH checked path placed fork.rules_stateGas_none
 
-/-- `CursorOK.noExecSuffix` from `rules.stateGas = none` alone. -/
+/-- Exclusion of later external instructions from `rules.stateGas = none` alone. -/
 theorem CursorOK.noExecSuffixH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (placed : CursorOK code c F κ) (hsg : F.sevm.benvStat.rules.stateGas = none)
@@ -143,7 +143,7 @@ theorem CursorOK.noExecSuffixH_covered {code : ByteArray} {c : Cert}
       ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
   placed.noExecSuffixH checked fork.rules_stateGas_none closed tree continuations
 
-/-- `CursorOK.revertLineNoOk` from `rules.stateGas = none` alone. -/
+/-- Exclusion of a successful reverting suffix from `rules.stateGas = none` alone. -/
 theorem CursorOK.revertLineNoOkH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (placed : CursorOK code c F κ) (hsg : F.sevm.benvStat.rules.stateGas = none)
@@ -365,7 +365,7 @@ private theorem cursor_quietReturn_scopedH {code : ByteArray} {c : Cert} {E : Li
     rw [ret]
     exact .ret t pop
 
-/-- `CursorOK.quietReturn` from `rules.stateGas = none` alone. -/
+/-- A call-free internal return cut from `rules.stateGas = none` alone. -/
 theorem CursorOK.quietReturnH {code : ByteArray} {c : Cert} {F : Exec.Deriv} {κ : Cursor}
     {E : List Nat} {post : Devm} {caller : SFunc} {K : List SFunc}
     (checked : Cert.check code c = true) (placed : CursorOK code c F κ)

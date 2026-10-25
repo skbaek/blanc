@@ -167,7 +167,7 @@ theorem cursor_nexts_line_cont_free_forwardH_covered {code : ByteArray} {c : Cer
         Exec.Deriv.ExecFreeUntil F N) :=
   cursor_nexts_line_cont_free_forwardH checked ok ns tail tree success fork.rules_stateGas_none
 
-/-- `cursor_nexts_forward` from `rules.stateGas = none` alone. -/
+/-- A cursor-only literal-prefix cut from `rules.stateGas = none` alone. -/
 theorem cursor_nexts_forwardH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
@@ -244,7 +244,7 @@ theorem cursor_branch_forwardH_covered {code : ByteArray} {c : Cert}
       ((κ'.f = f ∧ N.pc = F.pc + 1) ∨ (κ'.f = g ∧ N.pc = t.toNat)) :=
   cursor_branch_forwardH checked ok tree top success fork.rules_stateGas_none
 
-/-- `cursor_next_call_occurrence_forward` from `rules.stateGas = none` alone. -/
+/-- An actual external-call occurrence cut from `rules.stateGas = none` alone. -/
 theorem cursor_next_call_occurrence_forwardH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {root F : Exec.Deriv} {κ : Cursor}
     (reached : Exec.Deriv.ParentPrefix root F) (ok : CursorOK code c F κ)

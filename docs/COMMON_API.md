@@ -5987,21 +5987,18 @@ contract-neutral.
   (from `rules.stateGas = none`; `cursor_branch_forwardH_covered` is the `CoveredFork` form)
   derives the faithful branch disjunction from the checked tree and literal
   abstract target, without choosing the branch as a premise.
-  `cursor_nexts_line_forward` composes a literal instruction list into a real
-  `ParentPrefix`, pc sum, preserved static environment/outcome, checked tail
-  cursor and `Line.Run` to the same actual endpoint.
-  `cursor_nexts_line_cont_forward` additionally preserves the identical full
-  continuation stack, including each pending tag, frame and return metadata.
-  `cursor_nexts_line_cont_free_forward` additionally derives `ExecFreeUntil`
-  when every instruction in that literal list is non-exec. It owns the single
-  list induction; the older forms project it. `CursorOK.ninstAt_of_next`
+  `cursor_nexts_line_cont_free_forward` composes a literal instruction list into
+  a real `ParentPrefix`, pc sum, preserved static environment/outcome, checked
+  tail cursor and `Line.Run` to the same actual endpoint. It preserves the full
+  continuation stack and derives `ExecFreeUntil` when the list is non-exec.
+  `CursorOK.ninstAt_of_next`
   exposes the actual decoded instruction from the checked next node and is
   shared by the single-step and exec-free cuts.
-  `cursor_nexts_forward`
-  is its cursor-only compatibility projection. These are certificate/SFunc
-  cuts, not the compiled Func prefix API. They require raw success and a
-  covered fork; they do not establish child context, settlement or ordered
-  history. The joint node/tree premises are discovered here because the
+  The cursor-only projection `cursor_nexts_forwardH` lives in
+  [`HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean) and takes
+  `rules.stateGas = none`; its `_covered` form accepts `CoveredFork`. These are
+  certificate/SFunc cuts, not the compiled Func prefix API. They require raw
+  success; they do not establish child context, settlement or ordered history. The joint node/tree premises are discovered here because the
   existential result alone is not a reliable recipe trigger.
 - To pin a complete state while retaining the internal return continuation,
   use [`Blanc/Lift/CursorExactLine.lean`](../Blanc/Lift/CursorExactLine.lean).
@@ -6016,8 +6013,9 @@ contract-neutral.
   [`Blanc/Lift/CursorStateCuts.lean`](../Blanc/Lift/CursorStateCuts.lean).
   `CursorStateAt` carries a checked actual cursor, a call-free span, a complete
   `St` state with existential residual gas, and the mapped return continuation.
-  Its `line` and `jump` methods apply source inverses to the actual primitive
-  line or `ConfStep`, deriving the successor state and tree. Its `call` method and
+  `CursorStateAt.lineH` in `HistCursorCuts.lean` and its `jump` method apply
+  source inverses to the actual primitive line or `ConfStep`, deriving the
+  successor state and tree. Its `call` method and
   `CursorStateAt.retH` retain and consume the actual mapped internal continuation,
   preserving the complete non-gas state without requiring a gas schedule.
   `memory_eq` projects the symbolic memory without unfolding a concrete state.
@@ -6031,13 +6029,15 @@ contract-neutral.
   premises are discovered here; the existential result is not a reliable
   recipe trigger.
 - To exclude later external instructions from an actual returned parent, use
-  [`Blanc/Lift/CursorNoExecSuffix.lean`](../Blanc/Lift/CursorNoExecSuffix.lean).
-  `cursor_reach_of_parentPrefix` transports its checked cursor along the supplied
-  relative same-frame prefix. `CursorOK.noExecSuffix` uses a checked closed
+  [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean).
+  `cursor_reach_of_parentPrefixH` transports its checked cursor along the supplied
+  relative same-frame prefix. `CursorOK.noExecSuffixH` uses a checked closed
   region and the actual pending continuations to exclude later external nodes.
-  `CursorOK.revertLineNoOk` rules out a literal reverting suffix under actual
+  `CursorOK.revertLineNoOkH` rules out a literal reverting suffix under actual
   success. These APIs preserve the supplied execution and do not select a
   different root or call occurrence.
+  [`Blanc/Lift/CursorNoExecSuffix.lean`](../Blanc/Lift/CursorNoExecSuffix.lean) remains
+  an import compatibility module; the historical module owns these proofs.
 - To obtain successful source suffix facts at a supplied actual checked node,
   use `CursorOK.sourceRun` in
   [`Blanc/Lift/CursorSourceRun.lean`](../Blanc/Lift/CursorSourceRun.lean).
@@ -6052,38 +6052,45 @@ contract-neutral.
   It keeps the supplied actual successful node and either its halted source
   outcome or the actual internal continuation `Exec`, complete returned state,
   checked caller cursor and structural subderivation relation. That relation
-  alone does not assert a call-free predecessor gap; use `quietReturn` for a
+  alone does not assert a call-free predecessor gap; use `quietReturnH` for a
   body whose checked region excludes external instructions.
 - To cross a checked reply flag and decode a physical memory word, use
-  [`Blanc/Lift/CursorBalanceReply.lean`](../Blanc/Lift/CursorBalanceReply.lean).
-  `CursorStateAt.callFlag` derives success from the same actual suffix and
-  crosses the literal flag guard. `CursorStateAt.returnWord` derives the
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean).
+  `CursorStateAt.callFlagH` derives success from the same actual suffix and
+  crosses the literal flag guard. `CursorStateAt.returnWordH` derives the
   complete returndata width from that same checked node, then crosses the
   width guard and memory decoder. Both retain the complete world, symbolic
   memory, and mapped continuation. Consumers supply their literal source
   shapes and closed reverting arms; call identity remains with the actual
   occurrence carrier. Instantiate the pointer and allocated size explicitly
   when the physical memory is a nested image.
+  Literal `returnWordGuardLine` and `callFlagGuardLine` definitions remain in
+  [`Blanc/Lift/CursorBalanceReply.lean`](../Blanc/Lift/CursorBalanceReply.lean).
 - To bind a GAS word and external call to an actual parent execution, use
-  [`Blanc/Lift/CursorGasCall.lean`](../Blanc/Lift/CursorGasCall.lean).
-  `CursorStateAt.gasCall` derives the actual remaining gas from the supplied
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean).
+  `CursorStateAt.gasCallH` derives the actual remaining gas from the supplied
   cursor and returns a `CallOccurrenceStep` owned by the supplied original
   root. It keeps the relative call-free gap, full request state, actual filled
   slot, returned cursor, and mapped continuation. Its same-frame prefix may
   start at an earlier returned parent; no gas schedule is assumed.
+  [`Blanc/Lift/CursorGasCall.lean`](../Blanc/Lift/CursorGasCall.lean) remains an import
+  compatibility module; the historical module owns the forwarder.
 - To return through a supplied checked call-free internal body, use
-  [`Blanc/Lift/CursorQuietReturn.lean`](../Blanc/Lift/CursorQuietReturn.lean).
-  `CursorOK.quietReturn` walks the actual parent derivation and stops at the
+  [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean).
+  `CursorOK.quietReturnH` walks the actual parent derivation and stops at the
   first return through its supplied mapped continuation. It returns a relative
   `ExecFreeUntil`, the checked actual caller cursor and remaining continuation,
   and a source run whose complete returned state is that actual parent node.
   Only the body and locally pushed continuations must lie in the checked
   exec-free, nonhalting region; the caller may make further external calls.
   The direct actual trace needs no source-selected endpoint or gas schedule.
+  [`Blanc/Lift/CursorQuietReturn.lean`](../Blanc/Lift/CursorQuietReturn.lean) remains an
+  import compatibility module; the historical module owns the return proof.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
-  `cursor_next_call_occurrence_forward` derives a `CallOccurrenceStep root x`
+  `cursor_next_call_occurrence_forwardH` in `HistCursorCuts.lean` derives a
+  `CallOccurrenceStep root x`
   from the supplied same-frame prefix, checked cursor and successful suffix.
   The carrier keeps the exact `NinstOccurrence`, decoded external instruction,
   same-frame `ParentStep` and complete returned `Devm`; its
@@ -6853,16 +6860,17 @@ contract-neutral.
   the settled world exactly — given the consumer's registered `Cert.check` of its input, in
   [`Blanc/Lift/Clone1167.lean`](../Blanc/Lift/Clone1167.lean). A modeled harness: a consumer labels
   its registered input synthetic (worked use: `Lift/VyperNonreentrantDeployed/Vulnerable/Reach/Deploy.lean`).
-- Contract-neutral composition of the `CREATE2` opcode under a covered fork lives in
-  [`Blanc/Lift/Create2Deploy.lean`](../Blanc/Lift/Create2Deploy.lean).
+- Shared `CREATE2` address and state helpers live in
+  [`Blanc/Lift/Create2Deploy.lean`](../Blanc/Lift/Create2Deploy.lean); opcode composition
+  from explicit rule facts lives in [`HistCreate.lean`](../Blanc/Lift/HistCreate.lean).
   `create2AddressOfHash` computes the CREATE2 address from an init-code digest
   (with `create2NewAddress_eq_ofHash` its identity against Jaune's
   `create2NewAddress`). An admitted `CREATE2` (non-static, affordable endowment,
   creator nonce below the maximum, positive depth, empty target) steps to
-  `.spawn` via `Xinst.step_create2_spawn`, creating the frame over `create2Prepared`
+  `.spawn` via `Xinst.step_create2_spawnH`, creating the frame over `create2Prepared`
   at that address. When the creation message succeeds without error
   (`processCreateMessage … = .ok child`, `child.error = none`),
-  `create2_runCompiled` closes the spawn into a compiled step (`Ninst.RunCompiled`)
+  `create2_runCompiledH` closes the spawn into a compiled step (`Ninst.RunCompiled`)
   to `create2Post` with the new address on the stack and the child's world installed.
   Worked use: `pair_create2` in
   [`Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean`](../Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean).

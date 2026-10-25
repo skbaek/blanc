@@ -5,10 +5,9 @@ import Blanc.Lift.CursorBalanceReply
 /-!
 # Historical GAS-to-call and call-reply cursor forwarders
 
-`CursorStateAt.gasCall`, `CursorStateAt.returnWord` and `CursorStateAt.callFlag` contain no call
-semantics of their own: they forward `CoveredFork` to the cursor cuts, which read only
-`rules.stateGas = none`. The `…H` forms take that fact alone through `HistCursorCuts` and
-`HistCursorReturn`; each `_covered` form recovers the modern statement verbatim.
+The forwarders take `rules.stateGas = none` through `HistCursorCuts` and
+`HistCursorReturn`. Each `_covered` form recovers the modern statement from
+`CoveredFork` without duplicating the actual cursor walk.
 
 Nothing here mentions a contract.
 -/
@@ -16,7 +15,7 @@ Nothing here mentions a contract.
 namespace Blanc.Lift
 open Jaune
 
-/-- `CursorStateAt.gasCall` from `rules.stateGas = none` alone. -/
+/-- An actual GAS-to-call cut from `rules.stateGas = none` alone. -/
 theorem CursorStateAt.gasCallH {code : ByteArray} {c : Cert}
     {root start : Exec.Deriv} {b post : Devm} {S : List B256}
     {M : Mem} {K : List SFunc} {x : Xinst} {tail : SFunc}
@@ -80,7 +79,7 @@ theorem CursorStateAt.gasCallH_covered {code : ByteArray} {c : Cert}
       cursor.K.map Cont.f = K :=
   cut.gasCallH checked reached success fork.rules_stateGas_none
 
-/-- `CursorStateAt.returnWord` from `rules.stateGas = none` alone. -/
+/-- Physical return-word decoding from `rules.stateGas = none` alone. -/
 theorem CursorStateAt.returnWordH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
     {returnTree shortTree decodeTree tail : SFunc} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {a x y z p : B256} {n : Nat}
@@ -172,7 +171,7 @@ theorem CursorStateAt.returnWordH_covered {code : ByteArray} {c : Cert} {start :
   cut.returnWordH checked success fork.rules_stateGas_none destination le shape decode mem fit
     bound noShort
 
-/-- `CursorStateAt.callFlag` from `rules.stateGas = none` alone. -/
+/-- An actual successful call-flag guard from `rules.stateGas = none` alone. -/
 theorem CursorStateAt.callFlagH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
     {f failedTree returnTree : SFunc} {b post : Devm} {R : List B256}
     {M : Mem} {K : List SFunc} {flag a x y : B256}

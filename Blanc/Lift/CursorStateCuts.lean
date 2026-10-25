@@ -29,29 +29,6 @@ theorem CursorStateAt.memory_eq {code : ByteArray} {c : Cert} {start : Exec.Deri
   obtain ⟨G, state⟩ := cut.state
   rw [state, St.memory]
 
-/-- A literal non-exec line uses its existing inverse at the actual state.
-The inverse classifies a primitive line, not a supplied reached endpoint. -/
-theorem CursorStateAt.line {code : ByteArray} {c : Cert} {start : Exec.Deriv}
-    {f tail : SFunc} {b b' : Devm} {S S' : List B256} {M M' : Mem} {K : List SFunc}
-    (cut : CursorStateAt code c start f b S M K)
-    (checked : Cert.check code c = true) {post : Devm}
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
-    (ns : List Ninst) (shape : f = ns.foldr SFunc.next tail)
-    (nonexec : ∀ n ∈ ns, ∀ x : Xinst, n ≠ .exec x)
-    (inverse : ∀ {G d}, Line.Run start.sevm (St b S M G) ns d →
-      ∃ G', d = St b' S' M' G') :
-    Nonempty (CursorStateAt code c start tail b' S' M' K) := by
-  obtain ⟨N, κ', _, _, sameSevm, sameExn, ok, tree, primitive, sameK, free⟩ :=
-    cursor_nexts_line_cont_free_forward checked cut.placed ns tail
-      (cut.tree.trans shape) (cut.exn_eq.trans success) (cut.sevm_eq ▸ fork)
-  obtain ⟨G, state⟩ := cut.state
-  have line : Line.Run start.sevm (St b S M G) ns N.devm := by
-    rw [← cut.sevm_eq, ← state]
-    exact primitive
-  exact ⟨⟨N, κ', cut.free.trans (free nonexec), sameSevm.trans cut.sevm_eq,
-    sameExn.trans cut.exn_eq, ok, tree, inverse line,
-    by rw [sameK]; exact cut.continuations⟩⟩
-
 /-- A checked jump cut applies a local source-state inverse to the actual
 `ConfStep`. Both the successor tree and machine state are derived from it. -/
 theorem CursorStateAt.jump {code : ByteArray} {c : Cert} {start : Exec.Deriv}
@@ -86,29 +63,6 @@ section ControlCuts
 
 variable {code : ByteArray} {c : Cert} {start : Exec.Deriv} {b : Devm}
   {S : List B256} {M : Mem} {K : List SFunc} {post : Devm}
-
-/-- A checked destination preserves the entire non-gas state and pending trees. -/
-theorem CursorStateAt.dest {f : SFunc}
-    (cut : CursorStateAt code c start (.dest f) b S M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) :
-    Nonempty (CursorStateAt code c start f b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpdestAt_of_dest cut.tree)
-  intro G d f' K' step
-  cases step with
-  | dest burn => exact ⟨rfl, rfl, _, St.of_burn burn⟩
-
-/-- The actual taken branch is selected by its concrete nonzero flag. -/
-theorem CursorStateAt.branchSucc {f g : SFunc} {target flag : B256}
-    (cut : CursorStateAt code c start (.branch f g) b (target :: flag :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork) (nonzero : flag ≠ 0) :
-    Nonempty (CursorStateAt code c start g b S M K) := by
-  apply cut.jump checked success fork (cut.placed.jumpiAt_of_branch cut.tree)
-  intro G d f' K' step
-  cases step with
-  | zero _ pop => exact (nonzero (St.of_pop2 pop).2.1).elim
-  | succ _ _ _ pop => exact ⟨rfl, rfl, _, (St.of_pop2 pop).2.2⟩
 
 /-- An internal call retains its actual suspended continuation tree. -/
 theorem CursorStateAt.call {f g : SFunc} {k : Nat} {target : B256}
