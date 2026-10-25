@@ -1,5 +1,6 @@
 import Blanc.Lift.CallerProvenance
-import Blanc.TransactionForwardH
+import Blanc.TransactionForward
+import Blanc.ExecutionMessageEffects
 import Blanc.Lift.CommittedLogs
 
 /-!
@@ -7,7 +8,8 @@ import Blanc.Lift.CommittedLogs
 
 Receipt values retain the actual transaction status and cumulative gas used.
 The selected refund quotient, calldata floor and touched-account sweep remain
-unchanged. This module does not prove chain inclusion or later-key persistence.
+unchanged. Later transactions preserve a receipt when their encoded index keys
+are distinct from its key. This module does not prove chain inclusion.
 -/
 
 namespace Blanc.ExecutionTrace
@@ -272,5 +274,54 @@ theorem TransactionTrace.receipt_of_settledRoots
     exact hsg
   rw [TransactionTrace.settledRoots, ← trace.message.logs_eq_settledRoots msgHsg]
   exact trace.receipt_of_selected_settlement hsg
+
+/-- An actual transaction preserves every receipt at a different encoded key.
+This uses the existing all-fork insertion theorem, with no settlement restriction. -/
+theorem TransactionTrace.receipt_preserved_of_key_ne
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {key : Bytes} (different : BLT.toBytes (.bytes index.toBytes) ≠ key) :
+    bout'.receiptsTrie[key]? = bout.receiptsTrie[key]? := by
+  obtain ⟨receipt, inserted⟩ := processTransaction_receiptsTrie trace.result
+  change bout'.receiptsTrie = _ at inserted
+  rw [inserted, Std.TreeMap.getElem?_insert]
+  split
+  · rename_i same
+    exact False.elim (different (Std.LawfulEqCmp.eq_of_compare same))
+  · rfl
+
+/-- An actual suffix replay preserves a chosen receipt if no suffix transaction
+uses its encoded key. Index separation must be proved by the caller. -/
+theorem ApplyTransactionsTrace.receipt_preserved_of_keys_ne
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    {key : Bytes}
+    (different : ∀ item ∈ txs, BLT.toBytes (.bytes item.1.toBytes) ≠ key) :
+    finalBout.receiptsTrie[key]? = bout.receiptsTrie[key]? := by
+  induction trace with
+  | nil => rfl
+  | cons head tail ih =>
+      have headDifferent := different _ (List.mem_cons_self ..)
+      have tailDifferent := fun item member => different item (List.mem_cons_of_mem _ member)
+      exact (ih tailDifferent).trans (head.receipt_preserved_of_key_ne headDifferent)
+
+/-- The receipt of this exact transaction survives its actual suffix replay.
+Its cumulative gas remains the value at this transaction's settlement. -/
+theorem TransactionTrace.receipt_of_settledRoots_after_suffix
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {txs : List (Nat × Tx)} {finalBenv : Benv} {finalBout : BlockOutput}
+    (suffix : ApplyTransactionsTrace txs (benv.withState state) bout' finalBenv finalBout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (different : ∀ item ∈ txs, BLT.toBytes (.bytes item.1.toBytes) ≠
+      BLT.toBytes (.bytes index.toBytes)) :
+    finalBout.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+      some (makeReceipt tx trace.messageOut.error bout'.cumulativeGasUsed
+        (trace.settledRoots.flatMap (fun root => root.post.logs))) := by
+  rw [suffix.receipt_preserved_of_keys_ne different]
+  exact trace.receipt_of_settledRoots hsg
 
 end Blanc.ExecutionTrace

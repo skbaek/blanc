@@ -5269,7 +5269,7 @@ It identifies the actual receipt at `BLT.toBytes (.bytes index.toBytes)` with
 the same message status, message logs and final cumulative gas. Only
 `rules.stateGas = none` is required: the selected refund quotient, calldata
 floor, touched sweep and BAL policy remain intact. It does not establish chain
-inclusion or persistence through later transactions.
+inclusion by itself.
 `MessageCallTrace.logs_eq_settledRoots` equates the actual filtered message logs
 to each complete-settlement root post once; each post already includes its
 retained descendants. `TransactionTrace.receipt_of_settledRoots` inserts that
@@ -5279,6 +5279,14 @@ that a failed actual message has no receipt logs and no settled roots, including
 CREATE code-deposit failure. The call/create core `settledRoots_eq_nil_of_error`
 lemmas test their final error marker; they do not assert that internal raw logs
 were erased.
+For later transactions, `TransactionTrace.receipt_preserved_of_key_ne` reuses
+the all-fork exact insertion theorem; `ApplyTransactionsTrace.receipt_preserved_of_keys_ne`
+transports the lookup through the actual suffix replay. Both require explicit
+encoded-key separation, not merely an unproved inference from unequal indices.
+`TransactionTrace.receipt_of_settledRoots_after_suffix` combines that transport
+with the original receipt, retaining the original transaction's cumulative gas.
+Deriving key separation from an indexed block and authenticating the block's
+receipt commitment remain separate obligations.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality.
 
