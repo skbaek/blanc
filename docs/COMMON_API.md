@@ -7426,7 +7426,14 @@ contract-neutral.
   Its `mid_retainedRowWrite_nonInc` removes the V2_2 owner residual from the
   existing classifier while retaining the same root, frame, write and parent
   prefix, and the original full-history R3/R4 populations. This is a local
-  retained-write inequality; complete-root zero transport is separate.
+  retained-write inequality. `mid_root_allowance_zero` in
+  [`UniswapV2PairUsdcZeroIn.lean`](../Blanc/Composition/UniswapV2PairUsdcZeroIn.lean)
+  consumes it through `Exec.cell_zero_of_retained_nonInc_noStateGas`, deriving
+  root code from the full deployed world and caller exclusion from the genuine
+  mid-cut Pair replay. Its incoming-zero premise is an implication for each
+  actual retained root, not a supplied zero at every history boundary. The
+  original full-history sender/native-query exclusions and R4 remain explicit;
+  transaction deletion, history transport and the initial seed remain separate.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).

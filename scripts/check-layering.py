@@ -1910,6 +1910,7 @@ COMPOSITION = [
     "Composition.UniswapV2PairUsdcWeth9P1",
     "Composition.UniswapV2PairUsdcCallersIn",
     "Composition.UniswapV2PairUsdcOwnersIn",
+    "Composition.UniswapV2PairUsdcZeroIn",
     "Composition.UniswapV2PairUsdcWeth9JointF",
     "Composition.UniswapV2PairUsdcWeth9MintLiveF",
     "Composition.UniswapV2PairUsdcWeth9ShareValueF",
