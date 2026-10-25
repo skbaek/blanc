@@ -1531,7 +1531,9 @@ and constructor families cover every modelled wrapper layer:
   supplies `ExecutionTrace.MessageCallTrace.exists_clean_create`: for an actual
   retained creation-message trace under `stateGas = none`, its output's
   `error = none` excludes collision and exposes the same retained CREATE core,
-  core result equation, clean marker and world-state equality. Outer
+  core result equation, clean marker and world-state equality.
+  `exists_clean_create_with_deletions` additionally identifies the actual
+  output deletion set with that same CREATE result. Outer
   `Except.ok` alone is insufficient. This supplies neither receipt inclusion
   nor transaction settlement or historical occurrence. Its existential result
   has no selective direct goal-head recipe.
@@ -7840,7 +7842,10 @@ contract-neutral.
   entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
   [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
   (`BalSilentSet`, `SFunc.RunP.getBal_of_balSilent`) in
-  [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean), a quiet entry set
+  [`Blanc/Lift/BalSilent.lean`](../Blanc/Lift/BalSilent.lean). Its stronger
+  `SFunc.RunP.balance_deletion_frame_of_balSilent` also preserves both
+  deletion-tracking sets through the same induction, with the old balance
+  theorem as a projection; no fork or installed-code premise is added. A quiet entry set
   that may make static calls (the SHA-256 precompile) but writes no storage and
   emits no log (`QuietSet`, `SFunc.Run.world_of_quiet`) in
   [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), which also proves that a static

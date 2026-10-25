@@ -43,15 +43,15 @@ def BalSilentSet (fs : List SFunc) (S : List Nat) : Bool :=
     | some g => g.balSilent && g.refs.all (· ∈ S)
     | none => false
 
-theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst}
+theorem Ninst.Run.balance_deletion_frame_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (hn : n.balSilent = true) (run : Ninst.Run sevm pre n post) :
-    post.getBal = pre.getBal := by
+    (post.getBal, Devm.delSets post) = (pre.getBal, Devm.delSets pre) := by
   cases n with
   | reg r =>
       rcases run with ⟨xl, -, pc, hrun⟩
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
       have hrun' : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post := hrun.2.symm
-      exact (Rinst.preserves_bal hrun').symm
+      exact Prod.ext (Rinst.preserves_bal hrun').symm (Rinst.inv_delSets hrun').symm
   | exec x => simp only [Ninst.balSilent, Bool.false_eq_true] at hn
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
@@ -60,10 +60,11 @@ theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst
         split at hrun <;> exact (Step.run_ofExecution.mp hrun).1
       subst xl
       have hrel := Ninst.push_effectRec_of_instructionFrame
-        (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
+        (R := fun a b : Devm => (a.getBal, Devm.delSets a) = (b.getBal, Devm.delSets b))
+        (fun _ _ h => Prod.ext (funext (getBal_eq_of_state_eq h.state)) h.delSets)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact funext (getBal_eq_of_state_eq hrel.symm)
+      exact hrel.symm
   | dupn imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -71,10 +72,11 @@ theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst
         exact hrun.1
       subst xl
       have hrel := Ninst.dupn_effectRec_of_instructionFrame
-        (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
+        (R := fun a b : Devm => (a.getBal, Devm.delSets a) = (b.getBal, Devm.delSets b))
+        (fun _ _ h => Prod.ext (funext (getBal_eq_of_state_eq h.state)) h.delSets)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact funext (getBal_eq_of_state_eq hrel.symm)
+      exact hrel.symm
   | swapn imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -82,10 +84,11 @@ theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst
         exact hrun.1
       subst xl
       have hrel := Ninst.swapn_effectRec_of_instructionFrame
-        (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
+        (R := fun a b : Devm => (a.getBal, Devm.delSets a) = (b.getBal, Devm.delSets b))
+        (fun _ _ h => Prod.ext (funext (getBal_eq_of_state_eq h.state)) h.delSets)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact funext (getBal_eq_of_state_eq hrel.symm)
+      exact hrel.symm
   | exchange imm =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -93,30 +96,37 @@ theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst
         exact hrun.1
       subst xl
       have hrel := Ninst.exchange_effectRec_of_instructionFrame
-        (R := fun a b : Devm => a.state = b.state) (fun _ _ h => h.state)
+        (R := fun a b : Devm => (a.getBal, Devm.delSets a) = (b.getBal, Devm.delSets b))
+        (fun _ _ h => Prod.ext (funext (getBal_eq_of_state_eq h.state)) h.delSets)
         (pc := pc) (sevm := sevm) (pre := pre) (xl := .none) (out := .ok post)
         trivial hrun
-      exact funext (getBal_eq_of_state_eq hrel.symm)
+      exact hrel.symm
 
-private theorem linst_getBal {sevm : Sevm} {pre post : Devm} {l : Linst}
+/-- A balance-silent instruction preserves every ether balance. -/
+theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (hn : n.balSilent = true) (run : Ninst.Run sevm pre n post) :
+    post.getBal = pre.getBal :=
+  congrArg Prod.fst (Ninst.Run.balance_deletion_frame_of_balSilent hn run)
+
+private theorem linst_balance_deletion_frame {sevm : Sevm} {pre post : Devm} {l : Linst}
     (hl : (if l = .selfdestruct then false else true) = true)
     (run : Linst.Run sevm pre l (.ok post)) :
-    post.getBal = pre.getBal := by
+    (post.getBal, Devm.delSets post) = (pre.getBal, Devm.delSets pre) := by
   have hnot : l ≠ .selfdestruct := by
     intro h
     subst l
     simp only [↓reduceIte, Bool.false_eq_true] at hl
   have hframe := Linst.run_instructionFrame sevm pre l hnot
   rw [run] at hframe
-  exact funext (getBal_eq_of_state_eq hframe.state.symm)
+  exact Prod.ext (funext (getBal_eq_of_state_eq hframe.state.symm)) hframe.delSets.symm
 
-/-- **A balance-silent run moves no ether.** -/
-theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm → Prop}
+/-- A balance-silent run preserves balances and both deletion-tracking sets. -/
+theorem SFunc.RunP.balance_deletion_frame_of_balSilent {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {S : List Nat}
     (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
     {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
     (run : SFunc.RunP P fs sevm devm f o) :
-    (Outcome.devm o).getBal = devm.getBal := by
+    ((Outcome.devm o).getBal, Devm.delSets (Outcome.devm o)) = (devm.getBal, Devm.delSets devm) := by
   have closed : ∀ {k g}, k ∈ S → fs[k]? = some g →
       g.balSilent = true ∧ g.refs.all (· ∈ S) = true := by
     intro k g hk hget
@@ -124,7 +134,9 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
     rw [hget] at h
     simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   have popBal : ∀ {xs : List B256} {a b : Devm}, Devm.PopBurn xs a b →
-      b.getBal = a.getBal := fun pop => funext (getBal_eq_of_state_eq pop.state.symm)
+      (b.getBal, Devm.delSets b) = (a.getBal, Devm.delSets a) := fun pop =>
+        Prod.ext (funext (getBal_eq_of_state_eq pop.state.symm))
+          (Prod.ext pop.accountsToDelete.symm pop.createdAccounts.symm)
   induction run with
   | zero d pop run ih =>
       have hff := hf
@@ -148,14 +160,15 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
       have htarget := closed (of_decide_eq_true hfr.1) lookup
       exact (ih htarget.1 htarget.2).trans (popBal pop)
   | last hrun =>
-      exact linst_getBal (by simpa only [Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not,
+      exact linst_balance_deletion_frame (by simpa only [Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not,
         Bool.not_true, decide_eq_false_iff_not, balSilent] using hf) hrun
   | next hrun run ih =>
       have hfn := hf
       simp only [SFunc.balSilent, Bool.and_eq_true] at hfn
-      exact (ih hfn.2 hrefs).trans (Ninst.Run.getBal_of_balSilent hfn.1 (hP hrun))
+      exact (ih hfn.2 hrefs).trans (Ninst.Run.balance_deletion_frame_of_balSilent hfn.1 (hP hrun))
   | dest burn run ih =>
-      exact (ih hf hrefs).trans (funext (getBal_eq_of_state_eq burn.state.symm))
+      exact (ih hf hrefs).trans (Prod.ext (funext (getBal_eq_of_state_eq burn.state.symm))
+          (Prod.ext burn.accountsToDelete.symm burn.createdAccounts.symm))
   | jump d lookup pop run ih =>
       have hfr := hrefs
       simp only [SFunc.refs, List.all_cons, Bool.and_eq_true] at hfr
@@ -178,6 +191,15 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
   | pcAt hrun _ run ih =>
       exact (ih (by simpa only [balSilent] using hf) (by simpa only [List.all_eq_true,
         decide_eq_true_eq, refs] using hrefs)).trans
-        (Ninst.Run.getBal_of_balSilent (n := .reg .pc) rfl (hP hrun))
+        (Ninst.Run.balance_deletion_frame_of_balSilent (n := .reg .pc) rfl (hP hrun))
+
+/-- **A balance-silent run moves no ether.** -/
+theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc} {S : List Nat}
+    (hS : BalSilentSet fs S = true) {sevm : Sevm} {devm : Devm} {f : SFunc}
+    {o : Outcome} (hf : f.balSilent = true) (hrefs : f.refs.all (· ∈ S) = true)
+    (run : SFunc.RunP P fs sevm devm f o) :
+    (Outcome.devm o).getBal = devm.getBal :=
+  congrArg Prod.fst (SFunc.RunP.balance_deletion_frame_of_balSilent hP hS hf hrefs run)
 
 end Blanc.Lift
