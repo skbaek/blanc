@@ -5257,6 +5257,17 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
 
+For the receipt of an existing admitted `TransactionTrace` under historical
+settlement, use `TransactionTrace.receipt_of_selected_settlement` in
+[`Blanc/ExecutionSettledReceiptLogs.lean`](../Blanc/ExecutionSettledReceiptLogs.lean).
+It identifies the actual receipt at `BLT.toBytes (.bytes index.toBytes)` with
+the same message status, message logs and final cumulative gas. Only
+`rules.stateGas = none` is required: the selected refund quotient, calldata
+floor, touched sweep and BAL policy remain intact. It does not establish chain
+inclusion, root-log correspondence or persistence through later transactions.
+The joint trace/key query is documented here rather than dispatched from an
+arbitrary expanded receipt equality.
+
 For rules outside the covered forks (any schedule with `rules.stateGas = none` and
 `rules.bal = none`, including the touched-sweep forks and refund quotient 2), use
 [`Blanc/TransactionForwardH.lean`](../Blanc/TransactionForwardH.lean):

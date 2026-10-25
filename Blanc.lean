@@ -33,6 +33,7 @@ import Blanc.ExecutionSelectedTransactionStateTrace
 import Blanc.ExecutionStagedBodyStateTrace
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionTraceCreateResult
+import Blanc.ExecutionSettledReceiptLogs
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
