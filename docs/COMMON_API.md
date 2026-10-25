@@ -5313,8 +5313,12 @@ with the original receipt, retaining the original transaction's cumulative gas.
 For a positive index below 128, including deployment indices 22 and 38,
 `TransactionTrace.receipt_of_settledRoots_after_later_indices` derives encoded-key
 separation from strictly later suffix indices via `RlpConcrete.receipt_key_ne_of_small`.
-The actual indexed suffix and authentication of the block's receipt commitment
-remain separate obligations.
+For an actual `ApplyTransactionsTrace.TxSplit` on `xs.putIndex`,
+`TxSplit.later_indices` derives this ordering from `putIndex_aux_mem_drop_index_ge`,
+and `TxSplit.receipt_of_settledRoots_after_suffix` retains the selected receipt
+through its actual suffix, preserving the selected transaction's cumulative gas.
+The selected position must be positive and below 128. Final block-stage transport
+and authentication of the block's receipt commitment remain separate obligations.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality.
 

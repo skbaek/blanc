@@ -1,5 +1,6 @@
 import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionSettledReceiptLogs
 
 /-!
 # Indexed complete-settlement root and cell cuts
@@ -13,6 +14,41 @@ post-state, the `afterBenv` endpoint of the existing cut.
 namespace Blanc.ExecutionTrace
 
 open Jaune
+
+/-- Every retained index after dropping `i` from an indexed list is at
+least the indexing offset plus `i`. -/
+theorem putIndex_aux_mem_drop_index_ge {α : Type} (xs : List α) (offset i : Nat) :
+    ∀ item ∈ (Jaune.List.putIndex.aux offset xs).drop i, offset + i ≤ item.1 := by
+  induction xs generalizing offset i with
+  | nil =>
+      intro item member
+      simp only [Jaune.List.putIndex.aux, List.drop_nil, List.not_mem_nil] at member
+  | cons x xs ih =>
+      cases i with
+      | zero =>
+          intro item member
+          simp only [Jaune.List.putIndex.aux, List.drop_zero, List.mem_cons] at member
+          rcases member with rfl | member
+          · omega
+          · have bound := ih (offset + 1) 0 item member
+            omega
+      | succ i =>
+          intro item member
+          simp only [Jaune.List.putIndex.aux, List.drop_succ_cons] at member
+          have bound := ih (offset + 1) i item member
+          omega
+
+/-- On a decoded indexed block list, every actual suffix index is strictly
+later than this cut's selected index. This discharges receipt persistence order. -/
+theorem ApplyTransactionsTrace.TxSplit.later_indices
+    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i) :
+    ∀ item ∈ xs.putIndex.drop (i + 1), cut.index < item.1 := by
+  intro item member
+  have bound := putIndex_aux_mem_drop_index_ge xs 0 (i + 1) item member
+  rw [cut.putIndex_eq.1]
+  omega
 
 /-- The canonical positional cut splits complete-settlement roots exactly. -/
 theorem ApplyTransactionsTrace.splitAt_settledRoots_eq
@@ -290,5 +326,22 @@ theorem MidHistoryTraceIn.settledFrames_eq
   | step prior block ih =>
       simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
         ih, block.settledFrames_eq, rootFrames, List.flatMap_append]
+
+/-- For a positive small block position, the same selected transaction receipt
+survives its actual indexed suffix. The cumulative gas is the head's own value. -/
+theorem ApplyTransactionsTrace.TxSplit.receipt_of_settledRoots_after_suffix
+    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i)
+    (hsg : benv.stat.rules.stateGas = none) (positive : 0 < i) (small : i < 128) :
+    finalBout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
+        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
+  have headSg : cut.benv.stat.rules.stateGas = none := by
+    rw [cut.before.stat_eq]
+    exact hsg
+  exact cut.head.receipt_of_settledRoots_after_later_indices cut.after headSg
+    (by rw [cut.putIndex_eq.1]; exact positive)
+    (by rw [cut.putIndex_eq.1]; exact small) cut.later_indices
 
 end Blanc.ExecutionTrace
