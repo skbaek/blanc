@@ -32,6 +32,7 @@ import Blanc.ExecutionTrace
 import Blanc.ExecutionSelectedTransactionStateTrace
 import Blanc.ExecutionStagedBodyStateTrace
 import Blanc.ExecutionMessageEffects
+import Blanc.ExecutionTraceCreateResult
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
@@ -1752,6 +1753,7 @@ import Blanc.Lift.Usdc.ProxyCreation.ConstantsCheck
 import Blanc.Lift.Usdc.ProxyCreation.Prefix
 import Blanc.Lift.Usdc.ProxyCreation.Effects
 import Blanc.Lift.Usdc.ProxyCreation.Settlement
+import Blanc.Lift.Usdc.ProxyCreation.Transaction
 import Blanc.Lift.Usdc.ProxyCreation.HistoryFrame
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt

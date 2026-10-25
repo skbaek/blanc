@@ -1527,6 +1527,14 @@ and constructor families cover every modelled wrapper layer:
   CREATE, and message-call execution. `ProcessMessageTrace.result`,
   `ProcessCreateMessageTrace.result`, and `MessageCallTrace.result` recover the
   exact deterministic wrapper equations retained by those carriers.
+- [`Blanc/ExecutionTraceCreateResult.lean`](../Blanc/ExecutionTraceCreateResult.lean)
+  supplies `ExecutionTrace.MessageCallTrace.exists_clean_create`: for an actual
+  retained creation-message trace under `stateGas = none`, its output's
+  `error = none` excludes collision and exposes the same retained CREATE core,
+  core result equation, clean marker and world-state equality. Outer
+  `Except.ok` alone is insufficient. This supplies neither receipt inclusion
+  nor transaction settlement or historical occurrence. Its existential result
+  has no selective direct goal-head recipe.
 - `ExecutionTrace.messageCreateCollision`, `messageCallDelegation`, and
   `messageCallExecutionMessage` name the three message-call routing cuts.
   Authorization and resolution use Jaune's actual fork-gated helpers rather
