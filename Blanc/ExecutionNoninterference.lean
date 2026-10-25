@@ -58,6 +58,20 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
 /-- Absence of a retained successful write to one cell at an entry-code-nonempty
 owner preserves that cell in every committing outcome of the invocation frame
 closure. -/
+theorem Exec.committedCell_eq_of_noRetainedWriteTo_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (owner : Adr) (key : B256)
+    (hcode : (pre.getCode owner).toList ≠ [])
+    (noWrite : Exec.NoRetainedWriteTo run owner key) :
+    (Devm.getStor (Execution.committedPost out committed) owner).get key =
+      (Devm.getStor pre owner).get key := by
+  rw [(Exec.storageReplay_committedPost_noStateGas run committed hsg).2 owner hcode key]
+  exact Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo _ noWrite
+
+/-- Covered-fork compatibility for retained-write cell noninterference. -/
 theorem Exec.committedCell_eq_of_noRetainedWriteTo
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
@@ -68,8 +82,8 @@ theorem Exec.committedCell_eq_of_noRetainedWriteTo
     (noWrite : Exec.NoRetainedWriteTo run owner key) :
     (Devm.getStor (Execution.committedPost out committed) owner).get key =
       (Devm.getStor pre owner).get key := by
-  rw [(Exec.storageReplay_committedPost run committed hfork).2 owner hcode key]
-  exact Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo _ noWrite
+  exact Exec.committedCell_eq_of_noRetainedWriteTo_noStateGas run committed
+    hfork.rules_stateGas_none owner key hcode noWrite
 
 /-- Same-frame continuation never changes the static execution environment. -/
 theorem Exec.Deriv.ParentStep.sevm_eq

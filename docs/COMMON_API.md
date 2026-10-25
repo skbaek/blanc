@@ -2693,7 +2693,19 @@ a protected target executing arbitrary code.
   `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, and
   `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
   To conclude cell preservation with `Exec.committedCell_eq_of_noRetainedWriteTo`,
-  also supply nonempty entry code at the observed owner.
+  also supply nonempty entry code at the observed owner. Its
+  `Exec.committedCell_eq_of_noRetainedWriteTo_noStateGas` generalization needs
+  only the actual selected rules' state-gas absence; the covered theorem is
+  its compatibility wrapper.
+  For the cell at every actual settlement-retained node entry, use
+  [`Blanc/ExecutionRetainedCellAt.lean`](../Blanc/ExecutionRetainedCellAt.lean):
+  `Exec.retainedNode_cell_eq_of_noRetainedWriteTo_noStateGas` takes the same
+  committing run, nonempty owner entry code and `NoRetainedWriteTo`, and
+  concludes equality with that run's entry cell at each retained node.
+  Completely rolled-back children contribute no nodes; their raw writes
+  remain permitted. This is a per-run law, not transaction settlement or
+  receipt/history continuity. Use this branch and the named theorem: an
+  expanded cell equality alone does not identify the intended retained run.
 - Reentrancy-lock exclusion over the all-outcome frame tree:
   [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
   `LockExclusion.LockSpec.lock_exclusion` says an active lock frame's spawned

@@ -2,6 +2,7 @@ import Blanc.Lift.Usdc.ProxyUpgradeLog
 import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.CommittedFrameLogs
+import Blanc.ExecutionRetainedCellAt
 
 /-!
 # A retained implementation-slot write entails an Upgraded log
@@ -113,5 +114,32 @@ theorem ConfiguredHistoryTraceIn.implSlot_change_emitsUpgraded
   exact ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded history
     capabilities bal apartSlot member committed
     retained found owner key
+
+/-- Absence of a matching `Upgraded` log in this SAME committed root fixes
+the implementation slot at every settlement-retained node entry. Temporary
+and later-restored writes are excluded by the retained-write log producer;
+reverted raw writes and the final receipt-absence bridge remain separate. -/
+theorem ConfiguredHistoryTraceIn.retainedNode_implSlot_eq_of_noUpgraded
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} (apartSlot : ImplSlotApart P history.rawNodes)
+    {R : Exec.Deriv} (member : R ∈ history.rawFrames)
+    (committed : Execution.commits R.exn = true)
+    (hcode : (R.devm.getCode P).toList ≠ [])
+    (noUpgraded : ¬ ∃ entry ∈ (Execution.committedPost R.exn committed).logs,
+      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic])
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.exc) :
+    (N.devm.getStor P).get implSlot = (R.devm.getStor P).get implSlot := by
+  have noWrite : Exec.NoRetainedWriteTo R.exc P implSlot := by
+    intro write present matching
+    obtain ⟨node, nodeRetained, found⟩ := List.mem_filterMap.mp present
+    obtain ⟨owner, key⟩ := Exec.StorageWrite.matches_eq_true.mp matching
+    exact noUpgraded (ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded history
+      capabilities bal apartSlot member committed nodeRetained found owner key)
+  obtain ⟨_, _, hsg, _, _⟩ := history.rawFrame_entryFacts capabilities R member
+  exact Exec.retainedNode_cell_eq_of_noRetainedWriteTo_noStateGas R.exc committed hsg
+    P implSlot hcode noWrite retained
 
 end Blanc.Lift.Usdc

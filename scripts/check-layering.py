@@ -329,6 +329,7 @@ SHARED += [
     "ExecutionInRawNodes",
     "ExecutionCellProvenance",
     "ExecutionRetainedCellZero",
+    "ExecutionRetainedCellAt",
     "ExecutionInCellProvenance",
     "ExecutionCommittedCell",
     "ExecutionHistoryCommittedCell",
