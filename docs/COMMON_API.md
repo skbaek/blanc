@@ -5265,6 +5265,11 @@ the same message status, message logs and final cumulative gas. Only
 `rules.stateGas = none` is required: the selected refund quotient, calldata
 floor, touched sweep and BAL policy remain intact. It does not establish chain
 inclusion, root-log correspondence or persistence through later transactions.
+`MessageCallTrace.logs_and_settledRoots_eq_nil_of_error` additionally proves
+that a failed actual message has no receipt logs and no settled roots, including
+CREATE code-deposit failure. The call/create core `settledRoots_eq_nil_of_error`
+lemmas test their final error marker; they do not assert that internal raw logs
+were erased.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality.
 
