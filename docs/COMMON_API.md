@@ -3512,6 +3512,11 @@ fee equality; it does not turn a successful word-fee guard into Nat payment.
 
 For concrete RLP encoding and parsing, use
 [`Blanc/RlpConcrete.lean`](../Blanc/RlpConcrete.lean).
+`RlpConcrete.nat_bytes_roundtrip` recovers the entire natural from Jaune's
+variable-width encoding. `receipt_key_small` evaluates a positive index below
+128 to its one-byte RLP atom; `receipt_key_ne_of_small` distinguishes that key
+from every unequal natural index, without bounding the other index. These
+specialized receipt-key facts do not assert unrestricted RLP injectivity.
 `RlpConcrete.splitAt_append` retains an arbitrary payload and suffix;
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
 `decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
@@ -5285,8 +5290,11 @@ transports the lookup through the actual suffix replay. Both require explicit
 encoded-key separation, not merely an unproved inference from unequal indices.
 `TransactionTrace.receipt_of_settledRoots_after_suffix` combines that transport
 with the original receipt, retaining the original transaction's cumulative gas.
-Deriving key separation from an indexed block and authenticating the block's
-receipt commitment remain separate obligations.
+For a positive index below 128, including deployment indices 22 and 38,
+`TransactionTrace.receipt_of_settledRoots_after_later_indices` derives encoded-key
+separation from strictly later suffix indices via `RlpConcrete.receipt_key_ne_of_small`.
+The actual indexed suffix and authentication of the block's receipt commitment
+remain separate obligations.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality.
 
