@@ -155,7 +155,7 @@ theorem BurnScheduleH.of_covered {sevm : Sevm} (fork : CoveredFork sevm.benvStat
   ⟨fun s d same => by subst same; exact (feeBurnWorldH_of_covered fork).symm,
     fun s d same => by
       subst same
-      show feeFactoryCallWorld s (feeBurnWorld s d) = feeFactoryCallWorldH s (feeBurnWorldH s d)
+      dsimp only [BurnSchedule.modern, burnFeeCallWorldOf, burnFeeCallWorldOfH]
       rw [feeBurnWorldH_of_covered fork, feeFactoryCallWorldH_of_covered fork],
     by
       funext d a
@@ -205,9 +205,13 @@ def BurnThreeCallsH.toCovered {sevm : Sevm} {root : Exec.Deriv} {b : Devm}
     (fork : CoveredFork sevm.benvStat.fork) (h : BurnThreeCallsH root sevm b BurnSchedule.modern) :
     BurnThreeCalls root sevm b where
   initial := h.initial.toCovered fork
-  fee := h.fee.toCovered (by
-    show CoveredFork h.initial.second.returned.sevm.benvStat.fork
-    rw [h.initial.returned_sevm]; exact fork)
+  fee := by
+    have forkRet : CoveredFork h.initial.second.returned.sevm.benvStat.fork := by
+      rw [h.initial.returned_sevm]
+      exact fork
+    have fee := h.fee
+    dsimp only [BurnSchedule.modern, burnFeeCallWorldOf] at fee
+    simpa only [BurnInitialPairH.toCovered] using fee.toCovered forkRet
 
 theorem burn_three_occurrences_of_successH {sevm : Sevm} {b post : Devm} {G : Nat}
     {w : BurnSchedule} (worlds : BurnScheduleH sevm w) (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
