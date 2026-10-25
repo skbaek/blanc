@@ -118,7 +118,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
+SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
@@ -157,7 +157,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticcallObservation", "StaticcallOperands", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionModelAccountingIn", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn", "ExecutionWholeFrameAccountingIn",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
@@ -336,6 +336,7 @@ SHARED += [
     "ExecutionHistoryCommittedCuts",
     "ExecutionHistoryCellProvenance",
     "ExecutionInRawNodeOrigin",
+    "ExecutionInRootOwnCode",
     "ExecutionRetainedNodeOrigin",
     "ExecutionHistoryCellProvenanceFrom",
     "ExecutionInRawNodeOriginFrom",

@@ -18,6 +18,7 @@ import Blanc.FakeExponentialEval
 import Blanc.WordFakeExponentialEval
 import Blanc.MemoryImage
 import Blanc.BytesWrite
+import Blanc.BytePattern
 import Blanc.MemoryLayout
 import Blanc.ExecutionSettlement
 import Blanc.MessageExecution
@@ -89,6 +90,7 @@ import Blanc.ExecutionWarmth
 import Blanc.ExecutionErrorKeep
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionCodeAt
+import Blanc.ExecutionExistingAccount
 import Blanc.ExecutionDeletionSafety
 import Blanc.ExecutionNoDelProducer
 import Blanc.ExecutionNoDelSafeHistory
@@ -1638,6 +1640,7 @@ import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
+import Blanc.ExecutionInRootOwnCode
 import Blanc.ExecutionRetainedNodeOrigin
 import Blanc.ExecutionHistoryCellProvenanceFrom
 import Blanc.ExecutionInRawNodeOriginFrom

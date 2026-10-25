@@ -1,4 +1,5 @@
 import Blanc.ExecutionRetainedNodeOrigin
+import Blanc.ExecutionInRootOwnCode
 import Blanc.Lift.Usdc.ProxyCommittedUpgradeLog
 
 /-! Coupled Proxy/V1 context and implementation-slot exclusion within one retained root. -/
@@ -157,5 +158,30 @@ theorem ConfiguredHistoryTraceIn.retained_proxyV1_context
   intro N retained
   obtain ⟨before, after, split⟩ := List.append_of_mem retained
   exact all before N after split
+
+/-- Actual complete-settlement outer roots supply their own-code and raw-entry
+facts. The installed code, implementation word and known-V1 separation remain explicit. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P I : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code) (impl : R.pre.getCode I = ImplV1.code)
+    (slot : ((R.pre.getStor P).get implSlot).toAdr = I)
+    (noUpgraded : ¬ ∃ entry ∈ R.post.logs,
+      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic])
+    (v1Apart : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      N.sevm.code = ImplV1.code → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key ≠ implSlot) :
+    ∀ N ∈ Exec.retainedNodes R.run,
+      (N.devm.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∧
+      (N.sevm.currentTarget = P → N.sevm.code = Proxy.code ∨ N.sevm.code = ImplV1.code) ∧
+      ∀ write : Exec.StorageWrite, Exec.Deriv.successfulSstore? N = some write →
+        write.owner = P → write.key ≠ implSlot := by
+  exact ConfiguredHistoryTraceIn.retained_proxyV1_context history capabilities bal
+    (R := Exec.Frame.rootDeriv R)
+    (history.mem_rawFrames_of_mem_settledRoots R member) R.committed
+    (history.settledRoots_rootOwnCode R member) proxy impl slot noUpgraded v1Apart
 
 end Blanc.Lift.Usdc

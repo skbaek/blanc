@@ -64,6 +64,14 @@ registry has identified the likely vocabulary.
   `Blanc.getElem?_append_mid` (an element of a middle block at `A.length + j`). Both are the substrate the
   branches below are stated over, so read the declaration and its module
   documentation there rather than expecting a need-first branch for it.
+- Exact byte-pattern offsets: [`Blanc/BytePattern.lean`](../Blanc/BytePattern.lean)'s
+  `BytePattern.occurrences` scans successive suffixes in increasing order.
+  `mem_occurrences_iff` characterizes matches of a nonempty pattern without a
+  caller-supplied offset bound; `bounds_of_match` supplies the fit bound.
+  `match_iff_eq_of_singleton` and `eq_of_singleton` turn a singleton scan into
+  unique-position facts. Empty patterns yield no offsets. Every byte offset is
+  considered, including instruction immediates; these facts alone say nothing
+  about parsing or execution.
 - Fork coverage: `CoveredFork f` (`f ∈ coveredForks`) in `Blanc/Semantics.lean`.
   Consume it only through `CoveredFork.stateGas_none`, `bal_none`,
   `rules_stateGas_none`, `rules_bal_none`, `rules_access`, `rules_push0`,
@@ -1026,6 +1034,14 @@ Complete child settlement excludes discarded child witnesses. It requires no
 code, fork, no-write or own-code premise; actual message-root own-code facts
 remain the caller's separate obligation. Use the named theorem with retained
 prefix provenance when inducting over retained contexts.
+For the own-code fact at an actual settled outer root, use
+[`Blanc/ExecutionInRootOwnCode.lean`](../Blanc/ExecutionInRootOwnCode.lean):
+`ConfiguredHistoryTraceIn.settledRoots_rootOwnCode` derives `RootOwnCode`
+for that root's `rootDeriv` directly from message entry, authorization and
+CREATE collision handling. It needs no installed-world invariant or extra
+stage capability. `mem_rawFrames_of_mem_settledRoots` supplies the same root's
+raw-frame membership. This applies to outer message roots; delegated
+descendants still need the positional origin classification above.
 For the same provenance restarted at a committed boundary inside the
 history (a block-body start or the boundary after any transaction, e.g. for
 a contract deployed after the checkpoint; safety only of the raw nodes
@@ -2562,6 +2578,19 @@ Both preserve `Execution.NoDel`, including live error payloads, from the input
 a protected target executing arbitrary code.
 
 ### I2. The property concerns a complete execution or child frames
+
+For an account that already has nonempty code, use
+[`Blanc/ExecutionExistingAccount.lean`](../Blanc/ExecutionExistingAccount.lean).
+`Exec.not_created_of_installedCode` preserves its exclusion from
+`createdAccounts` through both raw outcome channels, with no commitment,
+terminal-safety, deletion-set or fork-capability premise. `Exec.accountPreserve`
+composes the common `Devm.AccountPreserve` relation through the existing
+execution-effect traversal. The `true` mode carries code equality and
+created-account exclusion; the `false` mode supplies the unchanged code-only
+compatibility APIs. Message/CREATE handling uses the actual collision guard.
+This does not exclude scheduling deletion: retained deletion safety still
+needs the terminal and complete-settlement argument. Use the named theorem;
+a bare set-membership goal does not identify this execution-specific route.
 
 - `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
   `Exec.effectForkTerminal` in `Blanc/CommonProofs.lean` let terminal as well
@@ -6999,6 +7028,11 @@ contract-neutral.
   for actual writes already known to run V1. It requires no global raw-write
   apartness; supplying that local V1 separation and the actual root/receipt
   facts remains a separate obligation.
+  For an actual `R ∈ history.settledRoots`, use
+  `ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context`. It supplies
+  raw-frame membership, commitment and conditional own-code from that same
+  root. Installed Proxy/V1 code, the implementation word, the same-root
+  absence of Upgraded logs and local known-V1 write separation remain explicit.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`

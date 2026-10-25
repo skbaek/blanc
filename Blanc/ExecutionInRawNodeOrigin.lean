@@ -221,6 +221,26 @@ def MsgOwn (msg : Msg) : Prop :=
     msg.codeAddress = some msg.currentTarget ∧
       msg.code = msg.benv.state.getCode msg.currentTarget
 
+/-- An actually entered message runs its own target's entry code whenever that
+code is nonempty and is not a delegation designator. -/
+theorem Frame.enter_run_rootOwnCode {frame : Frame} {pc : Nat} {sevm : Sevm}
+    {pre : Devm} {execution : Execution} (run : Exec pc sevm pre execution)
+    (enter : frame.enter = .run ⟨pc, sevm, pre⟩) (root : MsgRootCode frame.inner) :
+    RootOwnCode ⟨pc, sevm, pre, execution, run⟩ := by
+  intro wa target hne hnd
+  have hcode : sevm.code = frame.inner.code := Frame.enter_run_code enter
+  have htarget : sevm.currentTarget = frame.inner.currentTarget :=
+    Frame.enter_run_currentTarget enter
+  have hget : ∀ a, pre.getCode a = frame.inner.benv.state.getCode a :=
+    Frame.enter_run_getCode enter
+  change sevm.currentTarget = wa at target
+  change (pre.getCode wa).toList ≠ [] at hne
+  change ¬ isValidDelegation (pre.getCode wa) at hnd
+  change sevm.code = pre.getCode wa
+  rw [hget] at hne hnd ⊢
+  rw [hcode]
+  exact root wa (htarget ▸ target) hne hnd
+
 theorem RetainedXlot.rawNodes_origin {slot : Xlot} (retained : RetainedXlot slot)
     {frame : Frame} {out : Except (EvmError × State × AdrSet × Tra) Devm}
     (hrun : RunFrame frame slot out) (hroot : MsgRootCode frame.inner) :
@@ -229,20 +249,7 @@ theorem RetainedXlot.rawNodes_origin {slot : Xlot} (retained : RetainedXlot slot
   | none => exact OriginList.nil
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
-      refine Exec.rawNodes_origin run ?_
-      intro wa target hne hnd
-      have hcode : sevm.code = frame.inner.code := Frame.enter_run_code henter
-      have htarget : sevm.currentTarget = frame.inner.currentTarget :=
-        Frame.enter_run_currentTarget henter
-      have hget : ∀ a, pre.getCode a = frame.inner.benv.state.getCode a :=
-        Frame.enter_run_getCode henter
-      change sevm.currentTarget = wa at target
-      change (pre.getCode wa).toList ≠ [] at hne
-      change ¬ isValidDelegation (pre.getCode wa) at hnd
-      change sevm.code = pre.getCode wa
-      rw [hget] at hne hnd ⊢
-      rw [hcode]
-      exact hroot wa (htarget ▸ target) hne hnd
+      exact Exec.rawNodes_origin run (Frame.enter_run_rootOwnCode run henter hroot)
 
 theorem ProcessMessageTrace.rawNodes_origin {msg : Msg}
     {out : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -250,17 +257,22 @@ theorem ProcessMessageTrace.rawNodes_origin {msg : Msg}
     OriginList trace.rawNodes :=
   trace.retained.rawNodes_origin trace.run hroot
 
-theorem ProcessCreateMessageTrace.rawNodes_origin {msg : Msg}
-    {out : Except (EvmError × State × AdrSet × Tra) Devm}
-    (trace : ProcessCreateMessageTrace msg out)
+/-- The actual collision check excludes installed code at a CREATE root's target. -/
+theorem processCreateMessage_msg_rootCode {msg : Msg}
     (collision : accountHasCodeOrNonce msg.benv.state msg.currentTarget = false) :
-    OriginList trace.rawNodes := by
-  refine trace.retained.rawNodes_origin trace.run ?_
+    MsgRootCode (processCreateMessage.msg msg) := by
   intro wa target hne _
   have hne' : (msg.benv.state.getCode wa).toList ≠ [] := by
     rw [← processCreateMessage.msg_getCode msg wa]
     exact hne
   exact absurd target (ne_wa_of_not_hasCodeOrNonce hne' collision)
+
+theorem ProcessCreateMessageTrace.rawNodes_origin {msg : Msg}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out)
+    (collision : accountHasCodeOrNonce msg.benv.state msg.currentTarget = false) :
+    OriginList trace.rawNodes :=
+  trace.retained.rawNodes_origin trace.run (processCreateMessage_msg_rootCode collision)
 
 /-- The EIP-7702 authorization prefix keeps a message running its own target's
 code. -/
