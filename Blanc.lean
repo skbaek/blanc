@@ -1687,6 +1687,7 @@ import Blanc.Lift.Usdc.FiniteFootprintF
 import Blanc.Lift.Usdc.Footprint
 import Blanc.Lift.Usdc.HistoricalMappingKeys
 import Blanc.Lift.Usdc.V1MappingTouches
+import Blanc.Lift.Usdc.V1ApproveMappingTouches
 import Blanc.Lift.Usdc.FootprintLedger
 import Blanc.Lift.Usdc.Governance
 import Blanc.Lift.Usdc.Hist

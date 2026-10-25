@@ -3388,6 +3388,16 @@ slot identities from the checked V1 write sites. The off-implementation-slot
 consumer requires initial apartness and freshness of this exact list; modern
 balance-slot freshness does not establish historical blacklist freshness.
 
+For V1 `approve`, use
+[`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
+`actualV1ApproveKeys`. It collects the allowance key of each actual successful
+store at the requested target with exact V1 code and the approve selector,
+preserving history order and duplicates. The checked V1 site fixes the caller
+and calldata spender; the recognizer does not test equality with the written
+key. Its separation consumer requires initial apartness and freshness of this
+same list. Both collectors share `v1_store_site` and `v1Mapping_site_iff`;
+selectors with multiple mapping sites still require finer source attribution.
+
 To establish such a footprint at a concrete checkpoint world, decide it with
 [`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
 `rows : List (κ × B256)` (each key with its precomputed slot word; the tracked set is `rowKeys rows`),
