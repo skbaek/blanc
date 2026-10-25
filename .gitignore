@@ -13,3 +13,6 @@ __pycache__/
 # PATH lives in PATH/.worktrees/<goal>, so it needs no assumption about the
 # layout above the repository and no write access outside it.
 /.worktrees/
+
+# Private frozen L5 validation archive; never staged or published.
+/.l5-frozen-archive/
