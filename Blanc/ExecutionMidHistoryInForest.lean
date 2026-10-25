@@ -2,6 +2,7 @@ import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionSenderRootCallers
 import Blanc.ExecutionHistoryInAppend
+import Blanc.ExecutionHistoryCommittedCuts
 
 /-!
 # Original retained roots and sender queries after a transaction cut
@@ -13,27 +14,6 @@ are the original transaction suffix and later blocks, with no new block-chain ch
 namespace Blanc.ExecutionTrace
 
 open Jaune
-
-/-- The actual retained message roots after the cut, then in each later block. -/
-def MidHistoryTraceIn.settledRoots {F : Fork → Prop} {cfg : ChainConfig} :
-    {start : Benv} → {future : BlockChain} →
-      MidHistoryTraceIn F cfg start future → List Exec.Frame
-  | _, _, .tail block cut => cut.after.settledRoots ++ block.bodyTrace.requests.settledRoots
-  | _, _, .step prior block => prior.settledRoots ++ block.settledRoots
-
-/-- The original root expansion is the exact mid-history retained frame list. -/
-theorem MidHistoryTraceIn.settledFrames_eq {F : Fork → Prop} {cfg : ChainConfig}
-    {start : Benv} {future : BlockChain} (mid : MidHistoryTraceIn F cfg start future) :
-    mid.settledFrames = rootFrames mid.settledRoots := by
-  induction mid with
-  | tail block cut =>
-    simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
-      rootFrames, List.flatMap_append]
-    rw [cut.after.settledFrames_eq, block.bodyTrace.requests.settledFrames_eq]
-  | step prior block ih =>
-    simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
-      rootFrames, List.flatMap_append]
-    rw [ih, block.settledFrames_eq]
 
 /-- A mid-history retained frame is an actual root or a child of an earlier retained frame. -/
 theorem MidHistoryTraceIn.settledFrames_parentIn {F : Fork → Prop} {cfg : ChainConfig}

@@ -1770,8 +1770,9 @@ credits under `BodyStageCapabilities F`), `rawFrames_entered` (any `EnteredCondi
 
 For the original retained forest and admitted queries after a transaction cut,
 use [`Blanc/ExecutionMidHistoryInForest.lean`](../Blanc/ExecutionMidHistoryInForest.lean).
-`MidHistoryTraceIn.settledRoots`, `settledFrames_eq` and
-`settledFrames_parentIn` retain the actual suffix roots and their parent relation.
+It imports the canonical `MidHistoryTraceIn.settledRoots` and `settledFrames_eq`
+from [`Blanc/ExecutionHistoryCommittedCuts.lean`](../Blanc/ExecutionHistoryCommittedCuts.lean);
+`settledFrames_parentIn` adds the actual suffix roots' parent relation.
 `ApplyTransactionsTrace.TxSplit.senderQueries_after` proves the exact query drop
 for any genuine cut; `senderOccurrences_tail_indexed` preserves original indices
 and full transaction inputs. `senderQueries_cut_prefix`, `rawFrames_cut_prefix`
