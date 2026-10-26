@@ -7571,6 +7571,56 @@ open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
 -- EIP-7002: block_word_fifo
 example
     {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap) :
+    BlockWordFifo deployment history block :=
+  block_word_fifo deployment admission history block otherInstalled senders authorities avoid occurrences
+
+-- EIP-7002: block_word_fifo_or_overflow
+example
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) :
+    BlockWordFifo deployment history block ∨
+      wordOccurrenceCap < ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+        submissionFramePayments).length :=
+  block_word_fifo_or_overflow deployment admission history block otherInstalled senders authorities avoid
+
+-- EIP-7002: block_word_fifo_of_blockCount
+example
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (blocks : (ConfiguredHistoryTrace.step history block).blockCount ≤ 2 ^ 190) :
+    BlockWordFifo deployment history block :=
+  block_word_fifo_of_blockCount deployment admission history block otherInstalled senders authorities avoid blocks
+
+-- EIP-7002: block_word_fifo_of_checkpoint
+example
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post)
     (installed : SystemCodeInstalled checkpoint.state)
@@ -7582,8 +7632,17 @@ example
     (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
     (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap) :
-    BlockWordFifo history block :=
-  block_word_fifo history block installed senders authorities avoid systemEmpty init occurrences
+    CheckpointBlockWordFifo history block :=
+  block_word_fifo_of_checkpoint history block installed senders authorities avoid systemEmpty init occurrences
+
+-- EIP-7002: blockWordFifo_iff_checkpoint
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (initialized : deployment.Initialized) :
+    BlockWordFifo deployment history block ↔ CheckpointBlockWordFifo history block :=
+  blockWordFifo_iff_checkpoint deployment history block initialized
 
 end Blanc.Lift.WithdrawalRequest
 
@@ -7962,10 +8021,12 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     {history : ConfiguredHistoryTrace cfg checkpoint pre}
     {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
     r.BoundaryModel ↔
+      (RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial) ∧
       (WordHistory initial r.model r.submissions r.pastOutputs) ∧
       (RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
         withdrawalRequestPredeployAddress).get r.model) :=
-  ⟨fun h => ⟨h.wordHistory, h.represents⟩, fun ⟨h0, h1⟩ => ⟨h0, h1⟩⟩
+  ⟨fun h => ⟨h.origin, h.wordHistory, h.represents⟩,
+    fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
 
 -- EIP-7002 definition: BlockWordReplay.Emission
 example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
@@ -7986,10 +8047,12 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     {history : ConfiguredHistoryTrace cfg checkpoint pre}
     {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
     r.AfterReset ↔
+      (RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial) ∧
       (WordHistory initial (Blanc.WithdrawalRequest.system r.model) r.submissions r.outputs) ∧
       (RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
         (Blanc.WithdrawalRequest.system r.model)) :=
-  ⟨fun h => ⟨h.wordHistory, h.represents⟩, fun ⟨h0, h1⟩ => ⟨h0, h1⟩⟩
+  ⟨fun h => ⟨h.origin, h.wordHistory, h.represents⟩,
+    fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
 
 -- EIP-7002 definition: BlockWordReplay.Fifo
 example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
@@ -8031,15 +8094,157 @@ example (state : Blanc.WithdrawalRequest.State) :
   ⟨fun h => ⟨h.excessLe, h.countLe, h.headLe, h.tailLe, h.length, h.sumLt, h.slotLt, h.slots⟩,
     fun ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ => ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩⟩
 
--- EIP-7002 definition: BlockWordFifo
+-- EIP-7002 definition: CheckpointBlockWordFifo
 example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post) :
-    BlockWordFifo history block ↔
+    CheckpointBlockWordFifo history block ↔
       ∃ r : BlockWordReplay history block,
         r.BoundaryModel ∧ r.Emission ∧ r.AfterReset ∧ r.Fifo ∧ r.Provenance ∧
         WordBookkeepingSafe r.model ∧
         WordBookkeepingSafe (Blanc.WithdrawalRequest.system r.model) :=
+  Iff.rfl
+
+
+-- EIP-7002 definition: Creation.CanonicalDeploymentInput
+example (msg : Msg) :
+    Creation.CanonicalDeploymentInput msg ↔
+      (msg.target = none) ∧
+      (msg.currentTarget = withdrawalRequestPredeployAddress) ∧
+      (msg.code = Creation.creationCode) ∧
+      (msg.value = 0) ∧
+      (123017 ≤ msg.gas) ∧
+      (messageCreateCollision msg = false) :=
+  ⟨fun h => ⟨h.target, h.address, h.code, h.value, h.gas, h.collision⟩,
+    fun ⟨h0, h1, h2, h3, h4, h5⟩ => ⟨h0, h1, h2, h3, h4, h5⟩⟩
+
+-- EIP-7002 constructor: Creation.DeploymentCut.mk
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) (position : Nat)
+    (cut : block.bodyTrace.transactions.TxSplit position)
+    (input : Creation.CanonicalDeploymentInput cut.head.msg) (fork : block.fork = .cancun) :
+    Creation.DeploymentCut block :=
+  ⟨position, cut, input, fork⟩
+
+-- EIP-7002 constructor: DeploymentHistory.mk
+example (cfg : ChainConfig) (checkpoint before after : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork cfg before after)
+    (deployment : Creation.DeploymentCut block)
+    (following : ConfiguredHistoryTraceIn HistFork cfg after checkpoint) :
+    DeploymentHistory cfg checkpoint :=
+  ⟨before, after, block, deployment, following⟩
+
+-- EIP-7002 definition: DeploymentHistory.prefix
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) :
+    deployment.prefix =
+      (MidHistoryTraceIn.tail deployment.block deployment.deployment.cut).append
+        deployment.following :=
+  rfl
+
+-- EIP-7002 definition: DeploymentHistory.Admission
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) :
+    deployment.Admission ↔
+      deployment.prefix.AllCancun ∧
+      deployment.prefix.NoSenderAt systemAddress ∧
+      deployment.prefix.BeaconCodeInstalled ∧
+      (∀ root ∈ deployment.prefix.rawFrames, root.sevm.codeAddress = none →
+        root.sevm.currentTarget ≠ systemAddress) ∧
+      (deployment.deployment.cut.afterBenv.state.getCode systemAddress = ByteArray.empty) :=
+  ⟨fun h => ⟨h.forks, h.senders, h.beacon, h.avoid, h.systemEmpty⟩,
+    fun ⟨h0, h1, h2, h3, h4⟩ => ⟨h0, h1, h2, h3, h4⟩⟩
+
+-- EIP-7002 definition: MidHistoryTraceIn.AllCancun (tail)
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) :
+    (MidHistoryTraceIn.tail block cut).AllCancun ↔ block.fork = .cancun :=
+  Iff.rfl
+
+-- EIP-7002 definition: MidHistoryTraceIn.AllCancun (step)
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {current future : BlockChain}
+    (prior : MidHistoryTraceIn F cfg start current)
+    (block : ConfiguredBlockTraceIn F cfg current future) :
+    (prior.step block).AllCancun ↔ prior.AllCancun ∧ block.fork = .cancun :=
+  Iff.rfl
+
+-- EIP-7002 definition: MidHistoryTraceIn.NoSenderAt (tail)
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (a : Adr) :
+    (MidHistoryTraceIn.tail block cut).NoSenderAt a ↔ cut.after.NoSenderAt a :=
+  Iff.rfl
+
+-- EIP-7002 definition: MidHistoryTraceIn.NoSenderAt (step)
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {current future : BlockChain}
+    (prior : MidHistoryTraceIn F cfg start current)
+    (block : ConfiguredBlockTraceIn F cfg current future) (a : Adr) :
+    (prior.step block).NoSenderAt a ↔
+      prior.NoSenderAt a ∧ block.bodyTrace.transactions.NoSenderAt a :=
+  Iff.rfl
+
+-- EIP-7002 definition: MidHistoryTraceIn.BeaconCodeInstalled (tail)
+example {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) :
+    (MidHistoryTraceIn.tail block cut).BeaconCodeInstalled ↔ True :=
+  Iff.rfl
+
+-- EIP-7002 definition: MidHistoryTraceIn.BeaconCodeInstalled (step)
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {current future : BlockChain}
+    (prior : MidHistoryTraceIn F cfg start current)
+    (block : ConfiguredBlockTraceIn F cfg current future) :
+    (prior.step block).BeaconCodeInstalled ↔
+      prior.BeaconCodeInstalled ∧
+      current.state.getCode beaconRootsAddress = beaconRootsCode :=
+  Iff.rfl
+
+-- EIP-7002 definition: DeploymentHistory.Initialized
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) :
+    deployment.Initialized ↔
+      deployment.prefix.AllCancun ∧
+      (deployment.deployment.cut.index = deployment.deployment.position ∧
+        deployment.block.bodyTrace.decodedTxs[deployment.deployment.position]? =
+          some deployment.deployment.cut.tx) ∧
+      (deployment.deployment.cut.afterBenv.state.getCode withdrawalRequestPredeployAddress =
+        Blanc.withdrawalRequestCode) ∧
+      (RepresentsStorage
+        (deployment.deployment.cut.afterBenv.state.getStor withdrawalRequestPredeployAddress).get
+        initial) ∧
+      (checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) ∧
+      (RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial) ∧
+      (deployment.prefix.settledFrames.flatMap balanceFrameObservation = []) ∧
+      (checkpoint.state.getCode systemAddress = ByteArray.empty) :=
+  ⟨fun h => ⟨h.prefixCancun, h.transactionIdentity, h.deployedCode, h.deployedStorage, h.checkpointCode,
+      h.checkpointStorage, h.noDynamicTargets, h.systemEmpty⟩,
+    fun ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ => ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩⟩
+
+-- EIP-7002: DeploymentHistory.initialized
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission) :
+    deployment.Initialized :=
+  deployment.initialized admission
+
+-- EIP-7002 definition: OtherSystemCodeInstalled
+example (state : Jaune.State) :
+    OtherSystemCodeInstalled state ↔
+      (state.getCode beaconRootsAddress = beaconRootsCode) ∧
+      (state.getCode historyStorageAddress = historyStorageCode) ∧
+      (state.getCode consolidationRequestPredeployAddress = consolidationRequestCode) :=
+  ⟨fun h => ⟨h.beaconRoots, h.historyStorage, h.consolidation⟩,
+    fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
+
+-- EIP-7002 definition: BlockWordFifo
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post) :
+    BlockWordFifo deployment history block ↔
+      deployment.Initialized ∧
+      deployment.prefix.settledFrames.flatMap submissionFramePayments = [] ∧
+      CheckpointBlockWordFifo history block :=
   Iff.rfl
 
 end Blanc.Lift.WithdrawalRequest
@@ -8062,7 +8267,7 @@ example :
     RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
     ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap ∧
-    ¬ BlockWordFifo history block) :=
+    ¬ CheckpointBlockWordFifo history block) :=
   Iff.rfl
 
 end Blanc.Lift.WithdrawalRequest
@@ -8162,6 +8367,65 @@ example
       (emitted modelD).take (q % 16 + 1) =
         (modelB.queue.drop (16 * depth)).take (q % 16 + 1) :=
   block_word_delivery historyB blockB historyD blockD extension installed senders authorities avoid systemEmpty init occurrences modelB repB queued exactDepth
+
+-- EIP-7002: block_word_queue_after_from_deployment
+example
+    {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap)
+    (modelB : Blanc.WithdrawalRequest.State)
+    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get modelB) :
+    ∃ modelD : Blanc.WithdrawalRequest.State,
+      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get modelD ∧
+      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
+      (16 * depth ≤ modelB.queue.length →
+        ∃ later, modelD.queue = modelB.queue.drop (16 * depth) ++ later) :=
+  block_word_queue_after_from_deployment deployment admission historyB blockB historyD blockD extension otherInstalled senders authorities avoid occurrences modelB repB
+
+-- EIP-7002: block_word_delivery_from_deployment
+example
+    {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap)
+    (modelB : Blanc.WithdrawalRequest.State)
+    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get modelB)
+    {q : Nat} {entry : Blanc.WithdrawalRequest.Entry} (queued : modelB.queue[q]? = some entry)
+    (exactDepth : depth = q / 16) :
+    ∃ modelD : Blanc.WithdrawalRequest.State,
+      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get modelD ∧
+      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
+      (emitted modelD)[q % 16]? = some entry ∧
+      (emitted modelD).take (q % 16 + 1) =
+        (modelB.queue.drop (16 * depth)).take (q % 16 + 1) :=
+  block_word_delivery_from_deployment deployment admission historyB blockB historyD blockD extension otherInstalled senders authorities avoid occurrences modelB repB queued exactDepth
 
 end Blanc.Lift.WithdrawalRequest
 
