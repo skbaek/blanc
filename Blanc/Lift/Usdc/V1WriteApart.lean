@@ -5,8 +5,9 @@ import Blanc.Lift.Usdc.V1MinterMappingTouches
 import Blanc.Lift.Usdc.V1MintMappingTouches
 import Blanc.Lift.Usdc.V1BurnMappingTouches
 import Blanc.Lift.Usdc.V1TransferMappingTouches
+import Blanc.Lift.Usdc.V1TransferFromMappingTouches
 
-/-! Actual V1 stores outside transferFrom, separated using the exact collected mapping keys. -/
+/-! Actual V1 stores separated using the exact collected mapping keys. -/
 
 namespace Blanc.Lift.Usdc
 
@@ -92,5 +93,46 @@ theorem ConfiguredHistoryTraceIn.v1_write_ne_implSlot_or_transferFrom
       ⟨atSite, _, _⟩ | ⟨atSite, _, _⟩
     · exact .inl (transferApart .caller atSite selected)
     · exact .inl (transferApart .recipient atSite selected)
+
+
+/-- Freshness over the seven exact V1 mapping-key collectors of this history.
+This bundles finite key obligations; it does not assume write separation. -/
+structure V1MappingFreshKeys {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (P : Adr)
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (initial : HistoricalMappingKey → Prop) : Prop where
+  blacklist : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1OldBlacklistKeys P history)
+  approve : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1ApproveKeys P history)
+  minter : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1MinterKeys P history)
+  mint : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1MintKeys P history)
+  burn : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1BurnBalanceKeys P history)
+  transfer : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1TransferKeys P history)
+  transferFrom : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV1TransferFromKeys P history)
+
+/-- Every actual V1 write at the proxy avoids its implementation slot, including
+transferFrom and initializer payload/old-tail writes. No selector is excluded. -/
+theorem ConfiguredHistoryTraceIn.v1_write_ne_implSlot
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P : Adr}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys P history initial)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = ImplV1.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot := by
+  rcases ConfiguredHistoryTraceIn.v1_write_ne_implSlot_or_transferFrom history capabilities
+    initialApart fresh.blacklist fresh.approve fresh.minter fresh.mint fresh.burn fresh.transfer
+    member target code found with apart | selected
+  · exact apart
+  exact ConfiguredHistoryTraceIn.v1TransferFrom_successfulSstore_ne_implSlot history capabilities
+    initialApart fresh.transferFrom member target code selected found
 
 end Blanc.Lift.Usdc

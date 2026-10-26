@@ -3548,10 +3548,20 @@ history's own raw-frame admission; the bound includes old-tail clearing stores.
 `V1WriteFamilies` checks every certified root site and reduces actual V1 stores
 to fixed-slot apartness or an initializer/mapping selector. This selects a
 source family without classifying mapping rows by digest equality.
-`ConfiguredHistoryTraceIn.v1_write_ne_implSlot_or_transferFrom` composes the
-initializer, blacklist, approve, minter, mint, burn and ordinary transfer
-producers. It consumes initial apartness and freshness of each exact actual
-collector and leaves transferFrom explicit as the remaining family.
+`ConfiguredHistoryTraceIn.v1_write_ne_implSlot` in
+[`V1WriteApart.lean`](../Blanc/Lift/Usdc/V1WriteApart.lean) closes every family,
+including transferFrom. `V1MappingFreshKeys` bundles freshness of the seven
+exact actual mapping collectors; initial apartness remains explicit.
+The earlier `v1_write_ne_implSlot_or_transferFrom` interface is retained.
+[`V1RetainedContext.lean`](../Blanc/Lift/Usdc/V1RetainedContext.lean)'s
+`settledRoot_v1_write_ne_implSlot` derives the retained-root premise from
+same-history raw membership. `settledRoot_proxyV1_context_of_freshKeys`
+then supplies the coupled retained code/slot context, and
+`settledRoot_proxyV1_preserves_of_freshKeys` preserves both deletion exclusion
+and the exact implementation word at settlement. These consumers retain the
+actual root-entry Proxy/V1 code, implementation address, absent retained upgrade
+log and initial NoDel premises; they do not yet propagate those entry facts
+between successive roots or authenticate a historical creation cut.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
@@ -3606,6 +3616,23 @@ same original prefix, including early writes before a later failure.
 their actual frame, and their prefix order; `mem_actualV1TransferKeys_of_site`
 is complete for either site. `v1Transfer_write_ne_implSlot` uses freshness of
 exactly that collected list and an explicitly separated initial footprint.
+
+For V1 transferFrom, use
+[`Blanc/Lift/Usdc/V1TransferFromMappingTouches.lean`](../Blanc/Lift/Usdc/V1TransferFromMappingTouches.lean)'s
+`actualV1TransferFromKeys`. Its exact `filterMap` recognizes target, code,
+selector, source pc and successful SSTORE, never the written digest. It covers
+the calldata owner's balance, recipient's balance and owner/caller allowance.
+`V1TransferFromReach.successfulSstore_source` supplies each computed key and
+successful own-prefix hash, plus the allowance's linked inner→outer→store
+chronology. Its early balance-store alternatives need no later hash or call
+success. `ConfiguredHistoryTraceIn.actualV1TransferFromKeys_sound` retains the
+original frame, store and hash in the same history;
+`v1TransferFrom_allowance_ordered_hashes` exposes both original nested hash
+witnesses and their order. `mem_actualV1TransferFromKeys_of_successfulSstore`
+collects every selected successful row, while
+`v1TransferFrom_successfulSstore_ne_implSlot` derives separation directly from
+initial apartness and freshness of exactly this producer list. No key
+injectivity, final-state invariant or never-signer premise is inferred.
 
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s

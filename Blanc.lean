@@ -1703,12 +1703,15 @@ import Blanc.Lift.Usdc.V1BlacklistReach
 import Blanc.Lift.Usdc.V1InitializerHistory
 import Blanc.Lift.Usdc.V1WriteFamilies
 import Blanc.Lift.Usdc.V1WriteApart
+import Blanc.Lift.Usdc.V1RetainedContext
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach
 import Blanc.Lift.Usdc.V1BurnMappingTouches
 import Blanc.Lift.Usdc.V1MintReach
 import Blanc.Lift.Usdc.V1MintMappingTouches
+import Blanc.Lift.Usdc.V1TransferFromReach
+import Blanc.Lift.Usdc.V1TransferFromMappingTouches
 import Blanc.Lift.Usdc.V1TransferReach
 import Blanc.Lift.Usdc.V1TransferMappingTouches
 import Blanc.Lift.Usdc.V1ApproveMappingTouches
