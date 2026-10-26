@@ -2814,6 +2814,13 @@ a bare set-membership goal does not identify this execution-specific route.
   predicates on the same outputs. `ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe`
   transports installed code through the actual opening system calls, before-trace
   and selected transaction to prove the arbitrary `TxSplit` suffix exclusion.
+  `ConfiguredBlockTraceIn.code_and_outputNotDeleted_after_txSplit_of_safe` also
+  returns the proxy-independent installed code at the exact after-cut state;
+  `MidHistoryTraceIn.code_and_outputNotDeleted_of_full_safe` pairs that code
+  with the actual suffix/later deletion exclusion. The original deletion-only
+  APIs are projections with unchanged premises. These routes depend jointly on
+  the supplied full chronology, cut and safety carrier, so discovery remains
+  through this named registry branch rather than a general code-equality recipe.
   `MidHistoryTraceIn.outputNotDeleted_append` splits the actual suffix and later
   blocks; `outputNotDeleted_of_full_safe` derives their exclusions from the
   original full history's safety and checkpoint code. No cut-local deletion or
@@ -7848,7 +7855,14 @@ contract-neutral.
   mid-cut Pair replay. Its incoming-zero premise is an implication for each
   actual retained root, not a supplied zero at every history boundary. The
   original full-history sender/native-query exclusions and R4 remain explicit;
-  transaction deletion, history transport and the initial seed remain separate.
+  `mid_history_allowance_zero` in
+  [`UniswapV2PairUsdcHistoryZeroIn.lean`](../Blanc/Composition/UniswapV2PairUsdcHistoryZeroIn.lean)
+  composes that root law over the exact after-cut suffix and later blocks using
+  the existing `MidHistoryTraceIn.cell_property_of_settledRoots`. Its proxy code
+  at the cut and output deletion exclusions come from
+  `mid_proxy_code_and_outputNotDeleted` and the same original full world.
+  The single actual after-cut zero seed remains explicit; no root-by-root zero,
+  replacement block-end cut or additional proxy installation is assumed.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).

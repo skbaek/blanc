@@ -1940,6 +1940,7 @@ COMPOSITION = [
     "Composition.UniswapV2PairUsdcOwnersIn",
     "Composition.UniswapV2PairUsdcZeroIn",
     "Composition.UniswapV2PairUsdcNoDelIn",
+    "Composition.UniswapV2PairUsdcHistoryZeroIn",
     "Composition.UniswapV2PairUsdcWeth9JointF",
     "Composition.UniswapV2PairUsdcWeth9MintLiveF",
     "Composition.UniswapV2PairUsdcWeth9ShareValueF",

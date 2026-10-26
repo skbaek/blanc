@@ -1608,6 +1608,7 @@ import Blanc.Composition.UniswapV2PairUsdcCallersIn
 import Blanc.Composition.UniswapV2PairUsdcOwnersIn
 import Blanc.Composition.UniswapV2PairUsdcZeroIn
 import Blanc.Composition.UniswapV2PairUsdcNoDelIn
+import Blanc.Composition.UniswapV2PairUsdcHistoryZeroIn
 import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF

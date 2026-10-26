@@ -42,13 +42,14 @@ theorem ConfiguredHistoryTraceIn.noDelScheduled_iff_outputNotDeleted
 /-- Safety of a retained block excludes deletion in an arbitrary genuine cut's
 actual suffix. The installed code is transported through the opening system
 calls, the cut's own before-trace and its selected transaction. -/
-theorem ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe
+theorem ConfiguredBlockTraceIn.code_and_outputNotDeleted_after_txSplit_of_safe
     {wa : Adr} {C : ByteArray} (hCdel : ¬ isValidDelegation C)
     (hCne : C.toList ≠ []) {F : Fork → Prop} {cfg : ChainConfig}
     {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
     {i : Nat} (cut : block.bodyTrace.transactions.TxSplit i)
     (capabilities : BodyStageCapabilities F) (installed : pre.state.getCode wa = C)
-    (safe : SafeRawFrames wa block.rawFrames) : cut.after.OutputNotDeleted wa := by
+    (safe : SafeRawFrames wa block.rawFrames) :
+    cut.afterBenv.state.getCode wa = C ∧ cut.after.OutputNotDeleted wa := by
   have hsg := capabilities.stateGas_none block.forkIn
   have safeBody : SafeRawFrames wa
       (block.bodyTrace.beacon.rawFrames ++ block.bodyTrace.history.rawFrames ++
@@ -74,9 +75,21 @@ theorem ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe
     exact AdrSet.not_mem_empty
   have headCode := (cut.head.noDel_of_safe hCdel hCne cutSg beforeCode cutCreated
     (SafeRawFrames.of_append_right (SafeRawFrames.of_append_left safeCut))).2.2
+  refine ⟨headCode, ?_⟩
   exact (cut.after.noDelScheduled_iff_outputNotDeleted wa).mp
     (cut.after.noDel_of_safe hCdel hCne cutSg headCode cutCreated
       (SafeRawFrames.of_append_right safeCut)).1
+
+/-- Compatibility projection of the same cut-code and deletion proof. -/
+theorem ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe
+    {wa : Adr} {C : ByteArray} (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ []) {F : Fork → Prop} {cfg : ChainConfig}
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
+    {i : Nat} (cut : block.bodyTrace.transactions.TxSplit i)
+    (capabilities : BodyStageCapabilities F) (installed : pre.state.getCode wa = C)
+    (safe : SafeRawFrames wa block.rawFrames) : cut.after.OutputNotDeleted wa := by
+  exact (block.code_and_outputNotDeleted_after_txSplit_of_safe hCdel hCne cut
+    capabilities installed safe).2
 
 /-- Appending later whole blocks retains both actual deletion obligations. -/
 theorem MidHistoryTraceIn.outputNotDeleted_append
@@ -95,6 +108,34 @@ theorem MidHistoryTraceIn.outputNotDeleted_append
 
 /-- Full-history safety supplies actual output deletion exclusions for the
 same genuine after-cut replay. No deletion premise is supplied at the cut. -/
+theorem MidHistoryTraceIn.code_and_outputNotDeleted_of_full_safe
+    {wa : Adr} {C : ByteArray} (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ []) {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint pre completed future : BlockChain} {i : Nat}
+    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn F cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg completed future)
+    (capabilities : BodyStageCapabilities F) (installed : checkpoint.state.getCode wa = C)
+    (safe : SafeRawFrames wa ((prior.step block).append later).rawFrames) :
+    cut.afterBenv.state.getCode wa = C ∧
+      ((MidHistoryTraceIn.tail block cut).append later).OutputNotDeleted wa := by
+  have safeJoined : SafeRawFrames wa ((prior.rawFrames ++ block.rawFrames) ++ later.rawFrames) := by
+    simpa only [ConfiguredHistoryTraceIn.rawFrames_append,
+      ConfiguredHistoryTraceIn.rawFrames] using safe
+  have safePrior := SafeRawFrames.of_append_left (SafeRawFrames.of_append_left safeJoined)
+  have safeBlock := SafeRawFrames.of_append_right (SafeRawFrames.of_append_left safeJoined)
+  have preCode := (prior.noDel_of_safe hCdel hCne capabilities installed safePrior).2
+  have suffix := block.code_and_outputNotDeleted_after_txSplit_of_safe hCdel hCne cut
+    capabilities preCode safeBlock
+  have fullNoDel := (((prior.step block).append later).noDel_of_safe hCdel hCne
+    capabilities installed safe).1
+  have laterNoDel := ((prior.step block).NoDelScheduled_append later wa).mp fullNoDel
+  refine ⟨suffix.1, ?_⟩
+  exact ((MidHistoryTraceIn.tail block cut).outputNotDeleted_append later wa).mpr
+    ⟨suffix.2, (later.noDelScheduled_iff_outputNotDeleted wa).mp laterNoDel.2⟩
+
+/-- Compatibility projection retaining the original full-history interface. -/
 theorem MidHistoryTraceIn.outputNotDeleted_of_full_safe
     {wa : Adr} {C : ByteArray} (hCdel : ¬ isValidDelegation C)
     (hCne : C.toList ≠ []) {F : Fork → Prop} {cfg : ChainConfig}
@@ -106,19 +147,8 @@ theorem MidHistoryTraceIn.outputNotDeleted_of_full_safe
     (capabilities : BodyStageCapabilities F) (installed : checkpoint.state.getCode wa = C)
     (safe : SafeRawFrames wa ((prior.step block).append later).rawFrames) :
     ((MidHistoryTraceIn.tail block cut).append later).OutputNotDeleted wa := by
-  have safeJoined : SafeRawFrames wa ((prior.rawFrames ++ block.rawFrames) ++ later.rawFrames) := by
-    simpa only [ConfiguredHistoryTraceIn.rawFrames_append,
-      ConfiguredHistoryTraceIn.rawFrames] using safe
-  have safePrior := SafeRawFrames.of_append_left (SafeRawFrames.of_append_left safeJoined)
-  have safeBlock := SafeRawFrames.of_append_right (SafeRawFrames.of_append_left safeJoined)
-  have preCode := (prior.noDel_of_safe hCdel hCne capabilities installed safePrior).2
-  have suffix := block.outputNotDeleted_after_txSplit_of_safe hCdel hCne cut
-    capabilities preCode safeBlock
-  have fullNoDel := (((prior.step block).append later).noDel_of_safe hCdel hCne
-    capabilities installed safe).1
-  have laterNoDel := ((prior.step block).NoDelScheduled_append later wa).mp fullNoDel
-  exact ((MidHistoryTraceIn.tail block cut).outputNotDeleted_append later wa).mpr
-    ⟨suffix, (later.noDelScheduled_iff_outputNotDeleted wa).mp laterNoDel.2⟩
+  exact (code_and_outputNotDeleted_of_full_safe hCdel hCne prior block cut later
+    capabilities installed safe).2
 
 /-- Casting only the transaction-list index leaves the actual root list unchanged. -/
 theorem ApplyTransactionsTrace.settledRoots_cast
