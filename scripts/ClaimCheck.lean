@@ -8069,16 +8069,13 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
     r.Provenance ↔
       (r.frames.map Prod.fst =
-        ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
-          submissionFramePayments).map Prod.fst) ∧
-      (r.frames.map Prod.fst =
         ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
           submissionFramePayments).map Prod.fst) ∧
       (∀ pair ∈ r.frames,
         pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
       (r.frames.map Prod.snd = r.outputs ++ (Blanc.WithdrawalRequest.system r.model).queue) :=
-  ⟨fun h => ⟨h.historyFrames, h.stepFrames, h.payloads, h.entries⟩,
-    fun ⟨h0, h1, h2, h3⟩ => ⟨h0, h1, h2, h3⟩⟩
+  ⟨fun h => ⟨h.stepFrames, h.payloads, h.entries⟩,
+    fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
 
 -- EIP-7002 definition: WordBookkeepingSafe
 example (state : Blanc.WithdrawalRequest.State) :

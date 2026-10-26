@@ -47,7 +47,7 @@ theorem not_blockWordFifo_of_drained {cfg : ChainConfig} {checkpoint pre post : 
       RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
         withdrawalRequestPredeployAddress).get s ∧ s.queue = []) :
     ¬ CheckpointBlockWordFifo history block := by
-  rintro ⟨r, boundary, -, -, -, provenance, -, -⟩
+  rintro ⟨r, boundary, -, -, -, -, -, -⟩
   obtain ⟨s, srep, sempty⟩ := drained
   -- the model at the request boundary has an empty queue
   have modelEmpty := boundary.represents.queue_length_eq srep
@@ -59,10 +59,12 @@ theorem not_blockWordFifo_of_drained {cfg : ChainConfig} {checkpoint pre post : 
   simp only [List.length_append, List.length_map, BlockWordReplay.submissions,
     BlockWordReplay.pastOutputs] at conservedLen
   -- the block committed at least one submission
-  have framesLen := congrArg List.length provenance.historyFrames
+  have prefixFrames := (WordStorageReplay.submissionFrames r.replay.split.1).1
+  rw [List.map_append, r.pastObserves, r.transactionsObserve, ← List.flatMap_append,
+    observed_submissionFramePayments] at prefixFrames
+  have framesLen := congrArg List.length prefixFrames
   have entriesLen := congrArg List.length (wordSubmissionFrames_entries (r.past ++ r.transactions))
-  simp only [List.length_map, List.flatMap_append, List.length_append,
-    BlockWordReplay.frames] at framesLen entriesLen
+  simp only [List.length_map, List.flatMap_append, List.length_append] at framesLen entriesLen
   have someLen : 0 < (block.bodyTrace.transactions.settledFrames.flatMap
       submissionFramePayments).length := List.length_pos_iff.mpr committed
   -- no earlier block produced an output

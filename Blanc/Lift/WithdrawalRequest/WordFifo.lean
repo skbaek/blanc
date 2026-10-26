@@ -425,13 +425,6 @@ submission-payment frame of the trace, whose caller and calldata are its
 entry's caller and `(pubkey, amount)` payload; in trace terms, those frames'
 entries are all outputs followed by the remaining queue. -/
 structure Provenance (r : BlockWordReplay history block) : Prop where
-  /-- The submission frames are the submission-payment frames of the earlier
-  history and this block's transactions (follows from `BlockWordReplay.replay`,
-  `pastObserves` and `transactionsObserve` by `WordStorageReplay.submissionFrames`
-  and `observed_submissionFramePayments`). -/
-  historyFrames : r.frames.map Prod.fst =
-    ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
-      submissionFramePayments).map Prod.fst
   /-- The submission frames are the submission-payment frames of the history
   extended by this block. -/
   stepFrames : r.frames.map Prod.fst =
@@ -515,9 +508,7 @@ theorem block_word_fifo_of_checkpoint
     simp only [wordModelSubmissions, List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
       resetKind, List.append_nil]
   rw [resetSubmissions] at fullHistory conservation
-  have prefixFrames := prefixReplay.submissionFrames
-  rw [List.map_append, pastMap, transactionMap, ← List.flatMap_append,
-    observed_submissionFramePayments] at prefixFrames
+  have prefixPayloads := prefixReplay.submissionFrames.2
   have fullFrames := (history_word_submission_frames (.step history block) replay observed).1
   rw [resetFrames] at fullFrames
   have entries := wordSubmissionFrames_entries (past ++ transactionEvents)
@@ -527,7 +518,7 @@ theorem block_word_fifo_of_checkpoint
   rw [block.bodyTrace.transaction_requests_eq_nil, List.nil_append] at payload
   exact ⟨⟨past, transactionEvents, reset, replay, pastMap, transactionMap, resetKind, resetPre⟩,
     ⟨init, prefixHistory, prefixRep⟩, ⟨payload.1, payload.2.1, payload.2.2⟩, ⟨init, fullHistory, fullRep⟩,
-    conservation, ⟨prefixFrames.1, fullFrames, prefixFrames.2, entries.trans conservation⟩,
+    conservation, ⟨fullFrames, prefixPayloads, entries.trans conservation⟩,
     ⟨excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt, prefixSlots⟩,
     ⟨fullExcessLe, fullCountLe, fullHeadLe, fullTailLe, fullLengthEq, fullSumLt, fullSlotLt,
       fullSlots⟩⟩
