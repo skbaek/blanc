@@ -3544,6 +3544,19 @@ separate fixed-PC classification. Both collectors share `v1_store_site` and
 `v1Mapping_site_iff`; selectors with multiple mapping sites still require
 finer source attribution.
 
+For V1 `burn`, use
+[`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
+`actualV1BurnBalanceKeys`. The recognizer selects actual successful balance
+stores at 0x1f27, preserving history order and duplicates without comparing
+the digest. `V1BurnReach.successfulSstore_source` follows the checked selector,
+guards and two subtraction returns, classifying the supply store at 0x1ed1
+separately from the caller's base-9 balance write. The balance arm retains
+the successful hash at 0x1f24 and its exact caller/base input before that store;
+the earlier supply-store arm requires no later hash. The history soundness
+and completeness theorems bind this exact collector, and implementation-slot
+separation requires its explicit initial apartness and freshness. No final
+call success or hash injectivity is assumed.
+
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
 `actualV1MinterKeys`. It recognizes each of the four successful store PCs
@@ -6959,6 +6972,10 @@ contract-neutral.
   [`ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); selectors and
   `orsx`/`orsd`/`orsld` in [`ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean)
   preserve the observations through the same shared walk implementations.
+  `ObservedReach.rs_retM` returns through the actual pending continuation,
+  retaining memory and the remaining edge observations; `rs_retM` projects
+  the existing observation-free interface. Its joint return-prefix and
+  SSTORE-target premises do not give a reliable generic goal-only trigger.
   `ObservedKeccak` keeps the original runtime witness, full edge observation,
   exact read input and source shape. Its `.of_next` and `.actual` adapters in
   [`Blanc/Lift/CursorKeccak.lean`](../Blanc/Lift/CursorKeccak.lean) retain the successful

@@ -208,17 +208,25 @@ theorem rs_ret {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K�
       obtain ⟨-, e⟩ := St.of_pop1 pop
       exact ⟨_, _, _, _, _, rfl, e ▸ rest⟩
 
-/-- `rs_ret`, keeping the memory. -/
-theorem rs_retM {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
+/-- Return to the pending continuation, preserving memory and the remaining edge observations. -/
+theorem ObservedReach.rs_retM {t : B256}
+    (run : ObservedReach P observe fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
     (hT : AtSstore T) :
-    ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' S M G', f, K'⟩ T := by
-  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, step, rest⟩
+    ∃ f K' b' G', K = f :: K' ∧ ObservedReach P observe fs sevm ⟨St b' S M G', f, K'⟩ T := by
+  rcases Relation.ReflTransGen.cases_head run with rfl | ⟨c, ⟨step, _⟩, rest⟩
   · obtain ⟨f', hx⟩ := hT
     cases hx
   · cases step with
     | ret t' pop =>
       obtain ⟨-, e⟩ := St.of_pop1 pop
       exact ⟨_, _, _, _, rfl, e ▸ rest⟩
+
+/-- `rs_ret`, keeping the memory. -/
+theorem rs_retM {t : B256} (run : Reach P fs sevm ⟨St b (t :: S) M G, .ret, K⟩ T)
+    (hT : AtSstore T) :
+    ∃ f K' b' G', K = f :: K' ∧ Reach P fs sevm ⟨St b' S M G', f, K'⟩ T := by
+  obtain ⟨f, K', b', G', same, rest⟩ := ObservedReach.rs_retM (ObservedReach.of_reach run) hT
+  exact ⟨f, K', b', G', same, rest.forget⟩
 
 /-- A `callNext` on a reach to an `SSTORE` enters the callee with its continuation pending. -/
 theorem ObservedReach.rs_callIn {k : Nat} {f : SFunc} {t : B256}
