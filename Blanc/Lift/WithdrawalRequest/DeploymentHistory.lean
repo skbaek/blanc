@@ -26,14 +26,14 @@ structure DeploymentHistory (cfg : ChainConfig) (checkpoint : BlockChain) where
   deployment : Creation.DeploymentCut block
   following : ConfiguredHistoryTraceIn HistFork cfg after checkpoint
 
-namespace DeploymentHistory
-
 /-- The exact post-deployment remainder: suffix transactions and later stages of the
 same deployment block, followed by this witness's retained configured history. -/
-def «prefix» {cfg : ChainConfig} {checkpoint : BlockChain}
+def DeploymentHistory.prefix {cfg : ChainConfig} {checkpoint : BlockChain}
     (history : DeploymentHistory cfg checkpoint) :
     MidHistoryTraceIn HistFork cfg history.deployment.cut.afterBenv checkpoint :=
   (MidHistoryTraceIn.tail history.block history.deployment.cut).append history.following
+
+namespace DeploymentHistory
 
 /-- Explicit preactivation input/environment conditions. Canonical EIP-7002 code and INIT
 are absent: construction and retained execution derive them. Beacon code is required only

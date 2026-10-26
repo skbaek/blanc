@@ -373,6 +373,8 @@ SHARED += [
 SHARED += [
     "ExecutionMidHistoryIn",
     "ExecutionAccountingMidHistoryIn",
+    "ExecutionMidHistoryInCallerExclusion",
+    "ExecutionMidHistoryInBeaconCode",
 ]
 
 # Block-local facts transported to mid-block In-histories (reward funding, entered
@@ -732,6 +734,9 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.ModelBlockRequests",
                            "Lift.WithdrawalRequest.WordHistory",
                            "Lift.WithdrawalRequest.WordFifo", "Lift.WithdrawalRequest.WordDelivery",
+                           "Lift.WithdrawalRequest.InhibitedHistory",
+                           "Lift.WithdrawalRequest.InhibitedObservations",
+                           "Lift.WithdrawalRequest.DeploymentHistory",
                            "Lift.WithdrawalRequest.ResetOccurrence",
                            "Lift.WithdrawalRequest.ExactFeeDomain",
                            "Lift.WithdrawalRequest.NatLiveness",
@@ -754,6 +759,8 @@ CONTRACTS = {
                            "Lift.SystemDrainer.Cert", "Lift.SystemDrainer.Check",
                            "Lift.SystemDrainer.Jumps",
                            "Lift.WithdrawalRequest.Creation.Address",
+                           "Lift.WithdrawalRequest.Creation.Block",
+                           "Lift.WithdrawalRequest.Creation.Transaction",
                            "Lift.WithdrawalRequest.Creation.Cert",
                            "Lift.WithdrawalRequest.Creation.Check",
                            "Lift.WithdrawalRequest.Creation.Deploy",
