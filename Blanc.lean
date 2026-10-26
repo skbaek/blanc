@@ -1650,6 +1650,8 @@ import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ExecutionHistoryCommittedCuts
+import Blanc.ExecutionIndexedReceipts
+import Blanc.RlpBytesInjective
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.ExecutionInRootOwnCode

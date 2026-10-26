@@ -3909,6 +3909,13 @@ variable-width encoding. `receipt_key_small` evaluates a positive index below
 128 to its one-byte RLP atom; `receipt_key_ne_of_small` distinguishes that key
 from every unequal natural index, without bounding the other index. These
 specialized receipt-key facts do not assert unrestricted RLP injectivity.
+For arbitrary byte payloads, [`Blanc/RlpBytesInjective.lean`](../Blanc/RlpBytesInjective.lean)
+provides `encode_bytes_injective`. Its length argument uses
+`nat_bytes_length_mono`, so it needs no payload bound or assumption that an
+extremely long encoding has a valid unwrapped parser tag. `receipt_key_injective`
+and `receipt_key_ne` then distinguish every natural index, including zero and
+indices at or above 128. These are byte-payload encoder facts, not injectivity
+of arbitrary nested BLT values or a parser/canonicality theorem.
 `RlpConcrete.splitAt_append` retains an arbitrary payload and suffix;
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
 `decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
@@ -5700,10 +5707,26 @@ withdrawal and final access-list fields to the body's final output.
 therefore read the selected receipt at the actual final body/block output,
 retaining the head's status and cumulative gas. They require `0 < i < 128`
 and the selected no-state-gas rule; they assume no trie endpoint equality.
+For all positions, use [`Blanc/ExecutionIndexedReceipts.lean`](../Blanc/ExecutionIndexedReceipts.lean):
+`TransactionTrace.receipt_of_settledRoots_after_distinct_indices` proves encoded
+key separation from distinct natural indices with the unrestricted byte encoder.
+`TxSplit.receipt_of_settledRoots`, `StagedBodyTrace.receipt_of_txSplit`, and
+`ConfiguredBlockTraceIn.receipt_of_txSplit` carry the original selected receipt
+through its actual suffix and final body output without a positive or small-index
+premise. The older bounded signatures remain available to existing consumers.
+`ConfiguredBlockTraceIn.txSplit_logs_eq_of_receipt` identifies an actual looked-up
+receipt's logs with the selected transaction's outer root logs, folded once;
+`txSplit_root_logs_of_receipt` transports any log predicate to those roots.
+`ApplyTransactionsTrace.exists_splitAt_of_mem_settledRoots` derives every root's
+original indexed transaction occurrence. `ConfiguredBlockTraceIn.root_logs_of_receipts`
+therefore transports a predicate on every in-range actual receipt to every root
+when the actual system stages are disabled. It includes index zero and all later
+positions; it does not assume a separate per-root log property.
 Actual indexed inclusion and authentication of the block's receipt commitment
-remain separate obligations.
+remain separate obligations. A whole-block receipt condition is not an exact
+interval condition when the first or last block is only partially consumed.
 The joint trace/key query is documented here rather than dispatched from an
-arbitrary expanded receipt equality.
+arbitrary expanded receipt equality or quantified log predicate.
 
 For rules outside the covered forks (any schedule with `rules.stateGas = none` and
 `rules.bal = none`, including the touched-sweep forks and refund quotient 2), use
