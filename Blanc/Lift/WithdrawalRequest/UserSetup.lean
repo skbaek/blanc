@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.Dispatch
 import Blanc.Lift.CreationOps
 import Blanc.Lift.PackedSha
+import Blanc.Lift.HistAccessWalk
 
 /-!
 The user path's slot-zero inhibitor guard and initialization of the fee loop.
@@ -83,13 +84,13 @@ private theorem init_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   refine rx_swap1 ?_
   exact rx_push0 (h_push0 := CoveredFork.rules_push0 hfork) (by change 4 < 1024; decide) tail
 
-/-- Success excludes the inhibitor and reaches the initialized loop with slot zero warmed. -/
-theorem user_setup_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
-    (hfork : CoveredFork sevm.benvStat.fork)
+/-- Success excludes the inhibitor under the selected historical SLOAD schedule. -/
+theorem user_setup_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+    (bal : sevm.benvStat.rules.bal = none)
     (run : SFunc.Run prog sevm (St b [] M G) t_001a_c0 o) :
     b.getStorVal sevm.currentTarget 0 ≠ B256.max ∧
     ∃ G', SFunc.Run prog sevm
-      (St (afterSload sevm b 0) [0, 17, 1, b.getStorVal sevm.currentTarget 0, 17] M G')
+      (St (afterSloadH sevm b 0) [0, 17, 1, b.getStorVal sevm.currentTarget 0, 17] M G')
       t_004d_c0 o := by
   cases run with
   | next hp k =>
@@ -101,7 +102,7 @@ theorem user_setup_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome
       rw [zero_push] at k
       cases k with
       | next hl k =>
-        obtain ⟨_, rfl⟩ := ri_sload hfork hl
+        obtain ⟨_, rfl⟩ := ri_sloadH bal hl
         cases k with
         | next hd k =>
           obtain ⟨_, rfl⟩ := ri_dup (w := b.getStorVal sevm.currentTarget 0) rfl hd
@@ -124,6 +125,17 @@ theorem user_setup_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome
                     exact (by decide : (1 : B256) ≠ 0) flag
                   exact ⟨active, init_inv ((St.of_pop2 pop).2.2 ▸ tail)⟩
                 | succ _ _ _ _ tail => exact False.elim (revert_tail_no_run tail)
+
+/-- Success excludes the inhibitor and reaches the initialized loop with slot zero warmed. -/
+theorem user_setup_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run prog sevm (St b [] M G) t_001a_c0 o) :
+    b.getStorVal sevm.currentTarget 0 ≠ B256.max ∧
+    ∃ G', SFunc.Run prog sevm
+      (St (afterSload sevm b 0) [0, 17, 1, b.getStorVal sevm.currentTarget 0, 17] M G')
+      t_004d_c0 o := by
+  simpa only [afterSloadH_of_eip2929 hfork.rules_access] using
+    user_setup_invH hfork.rules_bal_none run
 
 /-- A non-inhibited exact loop continuation transports through the complete user setup. -/
 theorem user_setup_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
@@ -162,5 +174,34 @@ theorem exec_user_setup {sevm : Sevm} {pre post : Devm}
   obtain ⟨_, run⟩ := exec_dispatch hcode hfork hstack exec
   simp only [dispatchTail, ite_eq_right user] at run
   exact user_setup_inv hfork run
+
+/-- The short dispatch and inhibitor guard exclude successful user execution under
+the selected historical rules, independently of calldata and memory shape. -/
+theorem exec_user_inhibited_no_okH {sevm : Sevm} {pre post : Devm}
+    (code : sevm.code = Blanc.withdrawalRequestCode)
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (stack : pre.stack = [])
+    (user : sevm.caller ≠ systemAddress)
+    (inhibited : pre.getStorVal sevm.currentTarget 0 = B256.max)
+    (exec : Exec 0 sevm pre (.ok post)) : False := by
+  obtain ⟨_, run⟩ := exec_dispatch_noStateGas code stateGas stack exec
+  simp only [dispatchTail, ite_eq_right user] at run
+  exact (user_setup_invH bal run).1 inhibited
+
+/-- Before Prague, Cancun already executes the canonical runtime's inhibitor guard:
+an ordinary caller with the deployment inhibitor still set cannot succeed. -/
+theorem exec_user_inhibited_no_ok_cancun {sevm : Sevm} {pre post : Devm}
+    (code : sevm.code = Blanc.withdrawalRequestCode)
+    (fork : sevm.benvStat.fork = .cancun) (stack : pre.stack = [])
+    (user : sevm.caller ≠ systemAddress)
+    (inhibited : pre.getStorVal sevm.currentTarget 0 = B256.max)
+    (exec : Exec 0 sevm pre (.ok post)) : False := by
+  apply exec_user_inhibited_no_okH code ?_ ?_ stack user inhibited exec
+  · change sevm.benvStat.fork.ruleSet.stateGas = none
+    rw [fork]
+    rfl
+  · change sevm.benvStat.fork.ruleSet.bal = none
+    rw [fork]
+    rfl
 
 end Blanc.Lift.WithdrawalRequest

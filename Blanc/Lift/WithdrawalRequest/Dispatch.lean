@@ -81,18 +81,26 @@ theorem dispatch_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome
   · simp only [ite_eq_right h, dispatchTail] at tail ⊢
     exact rx_branch_zero tail
 
-/-- Every successful canonical-code execution from an empty stack enters its selected tail. -/
-theorem exec_dispatch {sevm : Sevm} {pre post : Devm}
+/-- Successful dispatch needs only the selected absence of state gas. -/
+theorem exec_dispatch_noStateGas {sevm : Sevm} {pre post : Devm}
     (hcode : sevm.code = Blanc.withdrawalRequestCode)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstack : pre.stack = [])
+    (hsg : sevm.benvStat.rules.stateGas = none) (hstack : pre.stack = [])
     (exec : Exec 0 sevm pre (.ok post)) :
     ∃ G, SFunc.Run prog sevm (St pre [] pre.memory G) (dispatchTail sevm) (.halted post) := by
-  obtain ⟨f, hf, run⟩ := lift_sound cert_check (hcode.trans code_eq.symm) hfork exec
+  obtain ⟨f, hf, run⟩ := lift_sound_noStateGas cert_check (hcode.trans code_eq.symm) hsg exec
   change prog[0]? = some f at hf
   rw [prog_root] at hf
   cases hf
   rw [St.self hstack rfl] at run
   exact dispatch_inv run
+
+/-- Every successful canonical-code execution from an empty stack enters its selected tail. -/
+theorem exec_dispatch {sevm : Sevm} {pre post : Devm}
+    (hcode : sevm.code = Blanc.withdrawalRequestCode)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstack : pre.stack = [])
+    (exec : Exec 0 sevm pre (.ok post)) :
+    ∃ G, SFunc.Run prog sevm (St pre [] pre.memory G) (dispatchTail sevm) (.halted post) :=
+  exec_dispatch_noStateGas hcode hfork.rules_stateGas_none hstack exec
 
 /-- A selected exact tail continuation constructs execution of the canonical bytes. -/
 theorem exec_of_dispatch {sevm : Sevm} {b post : Devm} {M : Mem} {G : Nat}
