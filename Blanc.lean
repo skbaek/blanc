@@ -848,6 +848,7 @@ import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.WordBudget
 import Blanc.Lift.WithdrawalRequest.WordHistory
 import Blanc.Lift.WithdrawalRequest.WordFifo
+import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.WordDelivery
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so

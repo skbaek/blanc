@@ -734,6 +734,7 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.ModelBlockRequests",
                            "Lift.WithdrawalRequest.WordHistory",
                            "Lift.WithdrawalRequest.WordFifo", "Lift.WithdrawalRequest.WordDelivery",
+                           "Lift.WithdrawalRequest.HistoryFifo",
                            "Lift.WithdrawalRequest.InhibitedHistory",
                            "Lift.WithdrawalRequest.InhibitedObservations",
                            "Lift.WithdrawalRequest.DeploymentHistory",
