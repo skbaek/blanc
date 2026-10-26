@@ -3537,6 +3537,18 @@ key. Its separation consumer requires initial apartness and freshness of this
 same list. Both collectors share `v1_store_site` and `v1Mapping_site_iff`;
 selectors with multiple mapping sites still require finer source attribution.
 
+For V1 `removeMinter` and `configureMinter`, use
+[`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
+`actualV1MinterKeys`. It recognizes each of the four successful store PCs
+separately, preserving order and duplicates without testing the written digest.
+`ConfiguredHistoryTraceIn.actualV1MinterKeys_sound` retains the original store
+and its successful earlier hash, exact input, and membership in the same
+history. The first store requires no later hash or final call success.
+`mem_actualV1MinterKeys_of_site` collects every matching actual row;
+`ConfiguredHistoryTraceIn.v1Minter_write_ne_implSlot` requires initial apartness
+and freshness of exactly this list. It reuses the modern minter and minter
+allowance keys without changing the modern collectors.
+
 To establish such a footprint at a concrete checkpoint world, decide it with
 [`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean): for a finite row list
 `rows : List (κ × B256)` (each key with its precomputed slot word; the tracked set is `rowKeys rows`),

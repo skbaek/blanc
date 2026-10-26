@@ -1425,6 +1425,7 @@ CONTRACTS = {
         "Lift.Usdc.V1MinterReach",
         "Lift.Usdc.V1ConfigureMinterReach",
         "Lift.Usdc.V1MinterHashOccurrences",
+        "Lift.Usdc.V1MinterMappingTouches",
         "Lift.Usdc.ImplV1.Check",
         "Lift.Usdc.ImplV1.CheckPart0",
         "Lift.Usdc.ImplV1.CheckPart1",

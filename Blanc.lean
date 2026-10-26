@@ -1736,6 +1736,7 @@ import Blanc.Lift.Usdc.ImplV1.MinterPcSources
 import Blanc.Lift.Usdc.V1MinterReach
 import Blanc.Lift.Usdc.V1ConfigureMinterReach
 import Blanc.Lift.Usdc.V1MinterHashOccurrences
+import Blanc.Lift.Usdc.V1MinterMappingTouches
 import Blanc.Lift.Usdc.ImplV1.Check
 import Blanc.Lift.Usdc.ImplV1.CheckPart0
 import Blanc.Lift.Usdc.ImplV1.CheckPart1
