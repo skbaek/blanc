@@ -1387,6 +1387,7 @@ CONTRACTS = {
         "Lift.Usdc.Footprint",
         "Lift.Usdc.HistoricalMappingKeys",
         "Lift.Usdc.V1MappingTouches",
+        "Lift.Usdc.V1ApproveReach",
         "Lift.Usdc.V1ApproveMappingTouches",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",

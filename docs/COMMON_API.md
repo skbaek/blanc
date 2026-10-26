@@ -3534,8 +3534,15 @@ store at the requested target with exact V1 code and the approve selector,
 preserving history order and duplicates. The checked V1 site fixes the caller
 and calldata spender; the recognizer does not test equality with the written
 key. Its separation consumer requires initial apartness and freshness of this
-same list. Both collectors share `v1_store_site` and `v1Mapping_site_iff`;
-selectors with multiple mapping sites still require finer source attribution.
+same list. `ConfiguredHistoryTraceIn.actualV1ApproveKeys_hashes` additionally
+retains the original frame prefix and both successful nested-mapping hashes,
+with exact caller/base-10 and spender/inner-digest inputs before the store.
+Its producer in [`Blanc/Lift/Usdc/V1ApproveReach.lean`](../Blanc/Lift/Usdc/V1ApproveReach.lean)
+walks the checked dispatcher, guards and body; no final call success or hash
+injectivity is assumed. The hash PCs are the actual witnessed PCs, not a
+separate fixed-PC classification. Both collectors share `v1_store_site` and
+`v1Mapping_site_iff`; selectors with multiple mapping sites still require
+finer source attribution.
 
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
