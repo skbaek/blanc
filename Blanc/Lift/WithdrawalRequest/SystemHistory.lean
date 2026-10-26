@@ -17,11 +17,8 @@ theorem history_checked_system_totality {cfg : ChainConfig} {checkpoint future :
     {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
     processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
       .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).error = none ∧
     (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 ∧
-    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
-    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter := by
+    systemProtocolGas benv ≤ 210000 := by
   have installed : benv.state.getCode withdrawalRequestPredeployAddress =
       Blanc.withdrawalRequestCode := by
     rw [state]

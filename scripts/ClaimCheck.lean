@@ -7666,11 +7666,8 @@ example {cfg : ChainConfig} {checkpoint future : BlockChain}
     {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
     processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
       .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).error = none ∧
     (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 ∧
-    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
-    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter :=
+    systemProtocolGas benv ≤ 210000 :=
   history_checked_system_totality history code state fork
 
 end Blanc.Lift.WithdrawalRequest

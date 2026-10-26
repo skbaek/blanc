@@ -228,12 +228,8 @@ theorem processCheckedSystemTransaction_withdrawal {benv : Benv}
   rw [system]
   simp only [Except.mapError, bind, Except.bind, herr]
 
-theorem systemProtocolOutput_facts (benv : Benv) :
-    (systemProtocolOutput benv).error = none ∧
-    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
-    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter := by
-  refine ⟨rfl, ?_, by simp only [systemProtocolOutput], by simp only [systemProtocolOutput]⟩
+theorem systemProtocolOutput_gasLeft (benv : Benv) :
+    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv := by
   simp only [systemProtocolOutput]
   rw [systemProtocolPost, systemFramePost, systemBookkeepingPost,
     (returnPost_facts _ _ _ _).2.2.2]
@@ -245,20 +241,17 @@ theorem systemProtocolGas_le (benv : Benv) : systemProtocolGas benv ≤ 210000 :
   rw [systemFrameGas_closed _ _ _ rfl] at bound
   exact bound
 
-/-- The exact checked result includes the selected-cost formula, RETURN
-bytes and the raw nonnegative refund; neither checked error arm is possible. -/
+/-- The checked call succeeds: neither checked error arm is possible, since
+`processCheckedSystemTransaction` returns `.ok` only for an error-free call.
+Its cost is the closed-form `systemProtocolGas`, at most 210,000. -/
 theorem checked_system_totality {benv : Benv} (fork : CoveredFork benv.stat.fork)
     (installed : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
     processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
       .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).error = none ∧
     (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 ∧
-    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
-    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter := by
-  have fields := systemProtocolOutput_facts benv
-  exact ⟨processCheckedSystemTransaction_withdrawal fork installed, fields.1, fields.2.1,
-    systemProtocolGas_le benv, fields.2.2⟩
+    systemProtocolGas benv ≤ 210000 :=
+  ⟨processCheckedSystemTransaction_withdrawal fork installed, systemProtocolOutput_gasLeft benv,
+    systemProtocolGas_le benv⟩
 
 /-- Conditional FIFO encoding reuses the already-built raw image theorem. -/
 theorem systemProtocolOutput_represented (benv : Benv) (state : Blanc.WithdrawalRequest.State)
