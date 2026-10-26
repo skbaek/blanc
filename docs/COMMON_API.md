@@ -4958,6 +4958,19 @@ consumer needs canonical interpreter ingress as one conjunct:
   `NoAuthorityAt`, and trace-local CREATE avoidance (`ApplyTransactionsTrace.noSender_nil`
   supplies `NoSenderAt a` vacuously for an empty transaction list). Calls to the empty-code
   address remain allowed; system frames are outside the conclusion.
+  The same shared proofs expose `Exec.rawFrameRoots_caller_excluded_noStateGas`,
+  `TransactionTrace.caller_excluded_noStateGas` and
+  `ApplyTransactionsTrace.caller_excluded_noStateGas`; existing covered-fork
+  interfaces are compatibility wrappers. For selected historical traces, use
+  [`Blanc/ExecutionHistoryInCallerExclusion.lean`](../Blanc/ExecutionHistoryInCallerExclusion.lean)'s
+  `ConfiguredHistoryTraceIn.txRawFrames_caller_excluded_of_empty`.
+  Its `txRawFrames_caller_excluded_prePrague_of_senderQueries` specialization
+  derives disabled delegation and the sender fold from the actual selected
+  forks and original admitted query population. It requires initial empty code
+  and actual entered-creation avoidance; sender exclusion does not prove them.
+  This is transaction-frame coverage, with no system-frame or exact partial-cut
+  scope claim. These quantified context-dependent conclusions have no reliable
+  automatic recipe trigger; use this branch to choose the required carrier.
   `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine

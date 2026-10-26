@@ -419,6 +419,7 @@ SHARED += [
     "ExecutionHistoryInSystemCodeKeep",
     "ExecutionHistoryInWarmth",
     "ExecutionHistoryInCodeAt",
+    "ExecutionHistoryInCallerExclusion",
     "ExecutionHistoryInSystemFrames",
 ]
 

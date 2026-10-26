@@ -52,7 +52,7 @@ private theorem RetainedXlot.caller_excluded_of_runFrame
     {frame : Frame} {slot : Xlot}
     {out : Except (EvmError × State × AdrSet × Tra) Devm} {a : Adr}
     (retained : RetainedXlot slot) (run : RunFrame frame slot out)
-    (fork : CoveredFork frame.inner.benv.stat.fork)
+    (hsg : frame.inner.benv.stat.rules.stateGas = Option.none)
     (caller : frame.inner.caller ≠ a)
     (code : frame.inner.codeAddress = Option.none ∨
       (frame.inner.currentTarget = a → frame.inner.benv.state.getCode a = ByteArray.empty →
@@ -65,8 +65,8 @@ private theorem RetainedXlot.caller_excluded_of_runFrame
   | none => intro root member; simp only [RetainedXlot.rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution raw =>
     have enter := (RunFrame.some_inv run).1
-    have rootFork : CoveredFork sevm.benvStat.fork := by
-      rw [Frame.enter_run_benvStat enter]; exact fork
+    have rootSg : sevm.benvStat.rules.stateGas = Option.none := by
+      rw [Frame.enter_run_benvStat enter]; exact hsg
     have rootCaller : sevm.caller ≠ a := by
       rw [Frame.enter_run_caller enter]; exact caller
     have rootMember : (⟨pc, sevm, pre, execution, raw⟩ : Exec.Deriv) ∈
@@ -82,13 +82,13 @@ private theorem RetainedXlot.caller_excluded_of_runFrame
         exact own ((Frame.enter_run_currentTarget enter).symm.trans target)
           ((Frame.enter_run_getCode enter a).symm.trans (empty _ rootMember))
     exact fun root member =>
-      (Exec.rawFrameRoots_caller_excluded raw rootFork rootCaller rootCode empty avoid
+      (Exec.rawFrameRoots_caller_excluded_noStateGas raw rootSg rootCaller rootCode empty avoid
         root member).1
 
 private theorem MessageCallTrace.caller_excluded
     {msg : Msg} {state : State} {out : MsgCallOutput} {a : Adr}
     (trace : MessageCallTrace msg state out)
-    (fork : CoveredFork msg.benv.stat.fork) (caller : msg.caller ≠ a)
+    (hsg : msg.benv.stat.rules.stateGas = Option.none) (caller : msg.caller ≠ a)
     (createAddress : msg.target.isNone = true → msg.codeAddress = none)
     (callCode : msg.target.isNone = false →
       msg.codeAddress = some msg.currentTarget ∧
@@ -103,17 +103,17 @@ private theorem MessageCallTrace.caller_excluded
     simp only [MessageCallTrace.rawFrames, List.not_mem_nil] at member
   | createRun target collision evm core coreTrace result =>
     exact RetainedXlot.caller_excluded_of_runFrame coreTrace.retained coreTrace.run
-      (by change CoveredFork (processCreateMessage.msg msg).benv.stat.fork
-          rw [processCreateMessage.msg_benvStat]; exact fork)
+      (by change (processCreateMessage.msg msg).benv.stat.rules.stateGas = Option.none
+          rw [processCreateMessage.msg_benvStat]; exact hsg)
       caller (Or.inl (createAddress target)) empty avoid
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
     subst execMsgEq
     have own := messageCallDelegation_code_own delegation
       (callCode target).1 (callCode target).2
     exact RetainedXlot.caller_excluded_of_runFrame coreTrace.retained coreTrace.run
-      (by change CoveredFork (messageCallExecutionMessage delegated).benv.stat.fork
+      (by change (messageCallExecutionMessage delegated).benv.stat.rules.stateGas = Option.none
           rw [messageCallExecutionMessage_benv_stat,
-          messageCallDelegation_benv_stat delegation]; exact fork)
+          messageCallDelegation_benv_stat delegation]; exact hsg)
       (by change (messageCallExecutionMessage delegated).caller ≠ a
           rw [messageCallExecutionMessage_caller_eq,
           messageCallDelegation_caller_eq delegation]; exact caller)
@@ -122,11 +122,11 @@ private theorem MessageCallTrace.caller_excluded
       empty avoid
 
 /-- Every raw transaction caller is excluded from an address that stayed empty and was not created. -/
-theorem TransactionTrace.caller_excluded
+theorem TransactionTrace.caller_excluded_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput} {a : Adr}
     (trace : TransactionTrace benv bout tx index state bout')
-    (fork : CoveredFork benv.stat.fork) (sender : trace.sender ≠ a)
+    (hsg : benv.stat.rules.stateGas = Option.none) (sender : trace.sender ≠ a)
     (empty : ∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty)
     (avoid : ∀ root ∈ trace.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
@@ -147,7 +147,7 @@ theorem TransactionTrace.caller_excluded
       intro _
       exact ⟨rfl, rfl⟩
   exact MessageCallTrace.caller_excluded trace.message
-    (by rw [prepareMessage_benv trace.prepared]; exact fork)
+    (by rw [prepareMessage_benv trace.prepared]; exact hsg)
     (by rw [trace.msg_caller]; exact sender)
     (prepareMessage_fields trace.prepared).2 callCode empty avoid
 
@@ -165,10 +165,10 @@ theorem ApplyTransactionsTrace.noSender_nil {txs : List (Nat × Tx)} {benv final
   cases t
   trivial
 
-private theorem ApplyTransactionsTrace.caller_excluded
+theorem ApplyTransactionsTrace.caller_excluded_noStateGas
     {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput} {a : Adr}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
-    (fork : CoveredFork benv.stat.fork) (senders : trace.NoSenderAt a)
+    (hsg : benv.stat.rules.stateGas = Option.none) (senders : trace.NoSenderAt a)
     (empty : ∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty)
     (avoid : ∀ root ∈ trace.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
@@ -178,10 +178,10 @@ private theorem ApplyTransactionsTrace.caller_excluded
     intro root member
     simp only [ApplyTransactionsTrace.rawFrames, List.not_mem_nil] at member
   | cons head tail ih =>
-    have headCallers := head.caller_excluded fork senders.1
+    have headCallers := head.caller_excluded_noStateGas hsg senders.1
       (fun root member => empty root (List.mem_append_left _ member))
       (fun root member => avoid root (List.mem_append_left _ member))
-    have tailCallers := ih fork senders.2
+    have tailCallers := ih hsg senders.2
       (fun root member => empty root (List.mem_append_right _ member))
       (fun root member => avoid root (List.mem_append_right _ member))
     intro root member
@@ -189,6 +189,29 @@ private theorem ApplyTransactionsTrace.caller_excluded
     rcases member with member | member
     · exact headCallers root member
     · exact tailCallers root member
+
+/-- Covered-fork compatibility wrapper. -/
+theorem TransactionTrace.caller_excluded
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {a : Adr}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (fork : CoveredFork benv.stat.fork) (sender : trace.sender ≠ a)
+    (empty : ∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty)
+    (avoid : ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
+    ∀ root ∈ trace.rawFrames, root.sevm.caller ≠ a :=
+  TransactionTrace.caller_excluded_noStateGas trace fork.rules_stateGas_none sender empty avoid
+
+/-- Covered-fork compatibility wrapper. -/
+private theorem ApplyTransactionsTrace.caller_excluded
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput} {a : Adr}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (fork : CoveredFork benv.stat.fork) (senders : trace.NoSenderAt a)
+    (empty : ∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty)
+    (avoid : ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
+    ∀ root ∈ trace.rawFrames, root.sevm.caller ≠ a :=
+  ApplyTransactionsTrace.caller_excluded_noStateGas trace fork.rules_stateGas_none senders empty avoid
 
 /-- Transaction senders are read from the checked transaction traces of each configured block. -/
 def ConfiguredHistoryTrace.NoSenderAt (a : Adr) :
