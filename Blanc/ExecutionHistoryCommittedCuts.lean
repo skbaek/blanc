@@ -1,0 +1,547 @@
+import Blanc.ExecutionHistoryCommittedCell
+import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionSettledReceiptLogs
+
+/-!
+# Indexed complete-settlement root and cell cuts
+
+Cuts use the actual transaction-list position. The canonical `splitAt` proof
+supplies the root equation; equality of flattened frames is not used to infer
+it. Before means before the selected transaction; after means its settled
+post-state, the `afterBenv` endpoint of the existing cut.
+-/
+
+namespace Blanc.ExecutionTrace
+
+open Jaune
+
+/-- Every retained index after dropping `i` from an indexed list is at
+least the indexing offset plus `i`. -/
+theorem putIndex_aux_mem_drop_index_ge {α : Type} (xs : List α) (offset i : Nat) :
+    ∀ item ∈ (Jaune.List.putIndex.aux offset xs).drop i, offset + i ≤ item.1 := by
+  induction xs generalizing offset i with
+  | nil =>
+      intro item member
+      simp only [Jaune.List.putIndex.aux, List.drop_nil, List.not_mem_nil] at member
+  | cons x xs ih =>
+      cases i with
+      | zero =>
+          intro item member
+          simp only [Jaune.List.putIndex.aux, List.drop_zero, List.mem_cons] at member
+          rcases member with rfl | member
+          · omega
+          · have bound := ih (offset + 1) 0 item member
+            omega
+      | succ i =>
+          intro item member
+          simp only [Jaune.List.putIndex.aux, List.drop_succ_cons] at member
+          have bound := ih (offset + 1) i item member
+          omega
+
+/-- On a decoded indexed block list, every actual suffix index is strictly
+later than this cut's selected index. This discharges receipt persistence order. -/
+theorem ApplyTransactionsTrace.TxSplit.later_indices
+    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i) :
+    ∀ item ∈ xs.putIndex.drop (i + 1), cut.index < item.1 := by
+  intro item member
+  have bound := putIndex_aux_mem_drop_index_ge xs 0 (i + 1) item member
+  rw [cut.putIndex_eq.1]
+  omega
+
+/-- The canonical positional cut splits complete-settlement roots exactly. -/
+theorem ApplyTransactionsTrace.splitAt_settledRoots_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) :
+    trace.settledRoots = (trace.splitAt i lt).before.settledRoots ++
+      (trace.splitAt i lt).head.settledRoots ++ (trace.splitAt i lt).after.settledRoots := by
+  induction trace generalizing i with
+  | nil => exact absurd lt (Nat.not_lt_zero i)
+  | cons head tail ih =>
+      cases i with
+      | zero => rfl
+      | succ i =>
+          let cut := tail.splitAt i (Nat.lt_of_succ_lt_succ lt)
+          change head.settledRoots ++ tail.settledRoots =
+            (head.settledRoots ++ cut.before.settledRoots) ++
+              cut.head.settledRoots ++ cut.after.settledRoots
+          rw [ih i (Nat.lt_of_succ_lt_succ lt)]
+          simp only [List.append_assoc]
+          rfl
+
+/-- The same canonical cut splits every actual transaction deletion exclusion. -/
+theorem ApplyTransactionsTrace.splitAt_outputNotDeleted_iff
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) (wa : Adr) :
+    trace.OutputNotDeleted wa ↔
+      (trace.splitAt i lt).before.OutputNotDeleted wa ∧
+      wa ∉ (trace.splitAt i lt).head.messageOut.accountsToDelete ∧
+      (trace.splitAt i lt).after.OutputNotDeleted wa := by
+  induction trace generalizing i with
+  | nil => exact absurd lt (Nat.not_lt_zero i)
+  | cons head tail ih =>
+      cases i with
+      | zero =>
+          change (wa ∉ head.messageOut.accountsToDelete ∧ tail.OutputNotDeleted wa) ↔
+            True ∧ wa ∉ head.messageOut.accountsToDelete ∧ tail.OutputNotDeleted wa
+          simp only [true_and]
+      | succ i =>
+          let cut := tail.splitAt i (Nat.lt_of_succ_lt_succ lt)
+          change (wa ∉ head.messageOut.accountsToDelete ∧ tail.OutputNotDeleted wa) ↔
+            (wa ∉ head.messageOut.accountsToDelete ∧ cut.before.OutputNotDeleted wa) ∧
+              wa ∉ cut.head.messageOut.accountsToDelete ∧ cut.after.OutputNotDeleted wa
+          rw [ih i (Nat.lt_of_succ_lt_succ lt)]
+          simp only [and_assoc]
+          rfl
+
+/-- Flattening root posts once respects the exact canonical positional cut. -/
+theorem ApplyTransactionsTrace.splitAt_rootLogs_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) :
+    trace.settledRoots.flatMap (fun R => R.post.logs) =
+      (trace.splitAt i lt).before.settledRoots.flatMap (fun R => R.post.logs) ++
+      (trace.splitAt i lt).head.settledRoots.flatMap (fun R => R.post.logs) ++
+      (trace.splitAt i lt).after.settledRoots.flatMap (fun R => R.post.logs) := by
+  rw [trace.splitAt_settledRoots_eq i lt]
+  simp only [List.flatMap_append]
+
+/-- The selected transaction's before and settled-after cell endpoints are
+identified by the canonical list position, even when its root list is empty. -/
+theorem ApplyTransactionsTrace.splitAt_cell_property_boundaries
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) (k : B256)
+    (hsg : benv.stat.rules.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : benv.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : trace.OutputNotDeleted wa)
+    (property : B256 → Prop)
+    (roots : ∀ R ∈ trace.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k))
+    (initial : property ((benv.state.getStor wa).get k)) :
+    let cut := trace.splitAt i lt
+    property ((cut.benv.state.getStor wa).get k) ∧
+      property ((cut.afterBenv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C ∧ cut.afterBenv.state.getCode wa = C := by
+  let cut := trace.splitAt i lt
+  have deleted := (trace.splitAt_outputNotDeleted_iff i lt wa).1 notDeleted
+  have splitRoots : trace.settledRoots = cut.before.settledRoots ++
+      cut.head.settledRoots ++ cut.after.settledRoots := trace.splitAt_settledRoots_eq i lt
+  have beforeRoots : ∀ R ∈ cut.before.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k) := by
+    intro R member
+    apply roots R
+    rw [splitRoots]
+    exact List.mem_append_left _ (List.mem_append_left _ member)
+  have headRoots : ∀ R ∈ cut.head.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k) := by
+    intro R member
+    apply roots R
+    rw [splitRoots]
+    exact List.mem_append_left _ (List.mem_append_right _ member)
+  obtain ⟨beforeCell, beforeCode⟩ := cut.before.cell_property_of_settledRoots k hsg hC hCne hCdel
+    deleted.1 property beforeRoots initial
+  have headSg : cut.benv.stat.rules.stateGas = none := by
+    rw [cut.before.stat_eq]
+    exact hsg
+  obtain ⟨headCell, headCode⟩ := cut.head.cell_property_of_settledRoots k headSg beforeCode
+    hCne hCdel deleted.2.1 property headRoots beforeCell
+  exact ⟨beforeCell, headCell, beforeCode, headCode⟩
+
+/-- Complete-settlement roots in the exact post-transaction remainder. -/
+def MidHistoryTraceIn.settledRoots {F : Fork → Prop} {cfg : ChainConfig} :
+    {start : Benv} → {future : BlockChain} →
+    MidHistoryTraceIn F cfg start future → List Exec.Frame
+  | _, _, .tail block cut => cut.after.settledRoots ++ block.bodyTrace.requests.settledRoots
+  | _, _, .step prior block => prior.settledRoots ++ block.settledRoots
+
+/-- The same complete-settlement roots recompose when whole blocks are appended. -/
+theorem MidHistoryTraceIn.append_settledRoots
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {current future : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start current)
+    (history : ConfiguredHistoryTraceIn F cfg current future) :
+    (mid.append history).settledRoots = mid.settledRoots ++ history.settledRoots := by
+  induction history with
+  | refl => simp only [MidHistoryTraceIn.append, ConfiguredHistoryTraceIn.settledRoots,
+      List.append_nil]
+  | step prior block ih =>
+      simp only [MidHistoryTraceIn.append, MidHistoryTraceIn.settledRoots,
+        ConfiguredHistoryTraceIn.settledRoots, ih, List.append_assoc]
+
+/-- Exact root-log recomposition across a mid-history/whole-history join. -/
+theorem MidHistoryTraceIn.append_rootLogs
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {current future : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start current)
+    (history : ConfiguredHistoryTraceIn F cfg current future) :
+    (mid.append history).settledRoots.flatMap (fun R => R.post.logs) =
+      mid.settledRoots.flatMap (fun R => R.post.logs) ++
+        history.settledRoots.flatMap (fun R => R.post.logs) := by
+  rw [mid.append_settledRoots history, List.flatMap_append]
+
+/-- A configured block's canonical indexed cut keeps the exact system prefix,
+selected transaction and post-transaction remainder in order. -/
+theorem ConfiguredBlockTraceIn.settledRoots_splitAt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) (i : Nat)
+    (lt : i < block.bodyTrace.decodedTxs.putIndex.length) :
+    let cut := block.bodyTrace.transactions.splitAt i lt
+    block.settledRoots = block.bodyTrace.beacon.settledRoots ++
+      block.bodyTrace.history.settledRoots ++ cut.before.settledRoots ++
+      cut.head.settledRoots ++ (MidHistoryTraceIn.tail block cut).settledRoots := by
+  dsimp only
+  rw [ConfiguredBlockTraceIn.settledRoots, StagedBodyTrace.settledRoots,
+    block.bodyTrace.transactions.splitAt_settledRoots_eq i lt]
+  simp only [MidHistoryTraceIn.settledRoots, List.append_assoc]
+
+/-- Actual deletion exclusions for the suffix transactions and later blocks. -/
+def MidHistoryTraceIn.OutputNotDeleted (wa : Adr) {F : Fork → Prop} {cfg : ChainConfig} :
+    {start : Benv} → {future : BlockChain} →
+    MidHistoryTraceIn F cfg start future → Prop
+  | _, _, .tail _ cut => cut.after.OutputNotDeleted wa
+  | _, _, .step prior block =>
+      prior.OutputNotDeleted wa ∧ block.bodyTrace.transactions.OutputNotDeleted wa
+
+/-- A history starting at the selected transaction's settled-after endpoint
+transports its cell through the actual suffix, finalization and later blocks. -/
+theorem MidHistoryTraceIn.cell_property_of_settledRoots
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : history.OutputNotDeleted wa)
+    (property : B256 → Prop)
+    (roots : ∀ R ∈ history.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k))
+    (initial : property ((start.state.getStor wa).get k)) :
+    property ((future.state.getStor wa).get k) ∧
+      future.state.getCode wa = C := by
+  induction history with
+  | tail block cut =>
+      have suffixSg : cut.afterBenv.stat.rules.stateGas = none := by
+        rw [block.txSplit_stat cut]
+        exact stateGas block.fork block.forkIn
+      obtain ⟨suffixCell, suffixCode⟩ := cut.after.cell_property_of_settledRoots k suffixSg hC
+        hCne hCdel notDeleted property (fun R member => roots R (List.mem_append_left _ member)) initial
+      obtain ⟨tailCell, tailCode⟩ := block.bodyTrace.cell_property_after_transactions_of_settledRoots
+        k (stateGas block.fork block.forkIn) suffixCode hCne hCdel property
+        (fun R member => roots R (List.mem_append_right _ member)) suffixCell
+      have postState := congrArg BlockChain.state block.postEq
+      rw [postState]
+      exact ⟨tailCell, tailCode⟩
+  | step prior block ih =>
+      simp only [MidHistoryTraceIn.OutputNotDeleted] at notDeleted
+      obtain ⟨priorCell, priorCode⟩ := ih hC notDeleted.1
+        (fun R member => roots R (List.mem_append_left _ member)) initial
+      obtain ⟨blockCell, blockCode⟩ := block.cell_property_of_settledRoots k
+        (stateGas block.fork block.forkIn) priorCode hCne hCdel notDeleted.2 property
+        (fun R member => roots R (List.mem_append_right _ member)) priorCell
+      exact ⟨blockCell, blockCode⟩
+
+/-- Roots before the selected transaction: the actual system prefix followed
+by the retained transaction prefix. This excludes the selected transaction. -/
+def ConfiguredBlockTraceIn.rootsBeforeTxSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) : List Exec.Frame :=
+  block.bodyTrace.beacon.settledRoots ++ block.bodyTrace.history.settledRoots ++
+    cut.before.settledRoots
+
+/-- A canonical indexed block cut decomposes into before, selected transaction
+and settled-after remainder, with no identification by empty raw lists. -/
+theorem ConfiguredBlockTraceIn.settledRoots_before_head_after
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) (i : Nat)
+    (lt : i < block.bodyTrace.decodedTxs.putIndex.length) :
+    let cut := block.bodyTrace.transactions.splitAt i lt
+    block.settledRoots = block.rootsBeforeTxSplit cut ++ cut.head.settledRoots ++
+      (MidHistoryTraceIn.tail block cut).settledRoots := by
+  dsimp only [ConfiguredBlockTraceIn.rootsBeforeTxSplit]
+  rw [block.settledRoots_splitAt i lt]
+
+/-- The cell at the exact before-transaction boundary follows from laws on
+that prefix alone. No root after the boundary, including the head, is assumed. -/
+theorem ConfiguredBlockTraceIn.cell_property_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (hsg : block.fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : pre.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : cut.before.OutputNotDeleted wa)
+    (property : B256 → Prop)
+    (roots : ∀ R ∈ block.rootsBeforeTxSplit cut,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k))
+    (initial : property ((pre.state.getStor wa).get k)) :
+    property ((cut.benv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C := by
+  have beaconRoots : ∀ R ∈ block.bodyTrace.beacon.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k) :=
+    fun R member => roots R (List.mem_append_left _ (List.mem_append_left _ member))
+  have historyRoots : ∀ R ∈ block.bodyTrace.history.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k) :=
+    fun R member => roots R (List.mem_append_left _ (List.mem_append_right _ member))
+  have beforeRoots : ∀ R ∈ cut.before.settledRoots,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k) :=
+    fun R member => roots R (List.mem_append_right _ member)
+  obtain ⟨beaconCell, beaconCode⟩ := block.bodyTrace.beacon.cell_property_of_settledRoots k hsg
+    hC hCne hCdel property beaconRoots initial
+  obtain ⟨historyCell, historyCode⟩ := block.bodyTrace.history.cell_property_of_settledRoots k hsg
+    beaconCode hCne hCdel property historyRoots beaconCell
+  obtain ⟨beforeCell, beforeCode⟩ := cut.before.cell_property_of_settledRoots k hsg
+    historyCode hCne hCdel notDeleted property beforeRoots historyCell
+  exact ⟨beforeCell, beforeCode⟩
+
+/-- From a settled-after origin to a later exact before-transaction boundary,
+only roots in the intervening mid history and final block prefix are needed. -/
+theorem MidHistoryTraceIn.cell_property_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : mid.OutputNotDeleted wa ∧ cut.before.OutputNotDeleted wa)
+    (property : B256 → Prop)
+    (roots : ∀ R ∈ mid.settledRoots ++ block.rootsBeforeTxSplit cut,
+      property ((R.pre.getStor wa).get k) → property ((R.post.getStor wa).get k))
+    (initial : property ((start.state.getStor wa).get k)) :
+    property ((cut.benv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C := by
+  obtain ⟨midCell, midCode⟩ := mid.cell_property_of_settledRoots k stateGas hC hCne hCdel
+    notDeleted.1 property (fun R member => roots R (List.mem_append_left _ member)) initial
+  obtain ⟨beforeCell, beforeCode⟩ := block.cell_property_before_txSplit cut k
+    (stateGas block.fork block.forkIn) midCode hCne hCdel notDeleted.2 property
+    (fun R member => roots R (List.mem_append_right _ member)) midCell
+  exact ⟨beforeCell, beforeCode⟩
+
+/-- The new mid-history roots agree with the existing retained-frame carrier.
+The direction is derived structurally, not inverted from flattened frames. -/
+theorem MidHistoryTraceIn.settledFrames_eq
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future) :
+    history.settledFrames = rootFrames history.settledRoots := by
+  induction history with
+  | tail block cut =>
+      simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
+        cut.after.settledFrames_eq, block.bodyTrace.requests.settledFrames_eq,
+        rootFrames, List.flatMap_append]
+  | step prior block ih =>
+      simp only [MidHistoryTraceIn.settledFrames, MidHistoryTraceIn.settledRoots,
+        ih, block.settledFrames_eq, rootFrames, List.flatMap_append]
+
+/-- For a positive small block position, the same selected transaction receipt
+survives its actual indexed suffix. The cumulative gas is the head's own value. -/
+theorem ApplyTransactionsTrace.TxSplit.receipt_of_settledRoots_after_suffix
+    {xs : List Tx} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace xs.putIndex benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i)
+    (hsg : benv.stat.rules.stateGas = none) (positive : 0 < i) (small : i < 128) :
+    finalBout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
+        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
+  have headSg : cut.benv.stat.rules.stateGas = none := by
+    rw [cut.before.stat_eq]
+    exact hsg
+  exact cut.head.receipt_of_settledRoots_after_later_indices cut.after headSg
+    (by rw [cut.putIndex_eq.1]; exact positive)
+    (by rw [cut.putIndex_eq.1]; exact small) cut.later_indices
+
+/-- The exact indexed transaction's retained-root receipt reaches the actual
+final body output through its suffix and the actual post-transaction stages. -/
+theorem StagedBodyTrace.receipt_of_txSplit_settledRoots
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (body : StagedBodyTrace benv txs ommers wds state bout) {i : Nat}
+    (cut : body.transactions.TxSplit i)
+    (hsg : benv.stat.rules.stateGas = none) (positive : 0 < i) (small : i < 128) :
+    bout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
+        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
+  rw [body.receiptsTrie_eq_transactionBout]
+  exact cut.receipt_of_settledRoots_after_suffix hsg positive small
+
+/-- The same actual receipt at the configured block's final output. This
+supplies no independent block/transaction inclusion or commitment witness. -/
+theorem ConfiguredBlockTraceIn.receipt_of_txSplit_settledRoots
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (hsg : block.fork.ruleSet.stateGas = none) (positive : 0 < i) (small : i < 128) :
+    block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some (makeReceipt cut.tx cut.head.messageOut.error cut.txBout.cumulativeGasUsed
+        (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
+  exact block.bodyTrace.receipt_of_txSplit_settledRoots cut hsg positive small
+
+/-- Equality compatibility instance of predicate transport. -/
+theorem ApplyTransactionsTrace.splitAt_cell_boundaries
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) (k : B256)
+    (hsg : benv.stat.rules.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : benv.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : trace.OutputNotDeleted wa)
+    (roots : ∀ R ∈ trace.settledRoots,
+      (R.post.getStor wa).get k = (R.pre.getStor wa).get k) :
+    let cut := trace.splitAt i lt
+    (cut.benv.state.getStor wa).get k = (benv.state.getStor wa).get k ∧
+      (cut.afterBenv.state.getStor wa).get k = (benv.state.getStor wa).get k ∧
+      cut.benv.state.getCode wa = C ∧ cut.afterBenv.state.getCode wa = C := by
+  exact trace.splitAt_cell_property_boundaries i lt k hsg hC hCne hCdel notDeleted
+    (fun value => value = ((benv.state.getStor wa).get k))
+    (fun R member value => (roots R member).trans value) rfl
+
+/-- Equality compatibility instance of predicate transport. -/
+theorem MidHistoryTraceIn.cell_eq_of_settledRoots
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : history.OutputNotDeleted wa)
+    (roots : ∀ R ∈ history.settledRoots,
+      (R.post.getStor wa).get k = (R.pre.getStor wa).get k) :
+    (future.state.getStor wa).get k = (start.state.getStor wa).get k ∧
+      future.state.getCode wa = C := by
+  exact history.cell_property_of_settledRoots k stateGas hC hCne hCdel notDeleted
+    (fun value => value = ((start.state.getStor wa).get k))
+    (fun R member value => (roots R member).trans value) rfl
+
+/-- Equality compatibility instance of predicate transport. -/
+theorem ConfiguredBlockTraceIn.cell_eq_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (hsg : block.fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : pre.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : cut.before.OutputNotDeleted wa)
+    (roots : ∀ R ∈ block.rootsBeforeTxSplit cut,
+      (R.post.getStor wa).get k = (R.pre.getStor wa).get k) :
+    (cut.benv.state.getStor wa).get k = (pre.state.getStor wa).get k ∧
+      cut.benv.state.getCode wa = C := by
+  exact block.cell_property_before_txSplit cut k hsg hC hCne hCdel notDeleted
+    (fun value => value = ((pre.state.getStor wa).get k))
+    (fun R member value => (roots R member).trans value) rfl
+
+/-- Equality compatibility instance of predicate transport. -/
+theorem MidHistoryTraceIn.cell_eq_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : mid.OutputNotDeleted wa ∧ cut.before.OutputNotDeleted wa)
+    (roots : ∀ R ∈ mid.settledRoots ++ block.rootsBeforeTxSplit cut,
+      (R.post.getStor wa).get k = (R.pre.getStor wa).get k) :
+    (cut.benv.state.getStor wa).get k = (start.state.getStor wa).get k ∧
+      cut.benv.state.getCode wa = C := by
+  exact mid.cell_property_before_txSplit block cut k stateGas hC hCne hCdel notDeleted
+    (fun value => value = ((start.state.getStor wa).get k))
+    (fun R member value => (roots R member).trans value) rfl
+
+/-- Actual per-root relations compose from the actual entry to this endpoint. -/
+theorem ApplyTransactionsTrace.splitAt_cell_rel_boundaries
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (i : Nat)
+    (lt : i < txs.length) (k : B256)
+    (hsg : benv.stat.rules.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : benv.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : trace.OutputNotDeleted wa)
+    (rel : B256 → B256 → Prop) (reflexive : ∀ a, rel a a)
+    (transitive : ∀ {a b c}, rel a b → rel b c → rel a c)
+    (roots : ∀ R ∈ trace.settledRoots,
+      rel ((R.pre.getStor wa).get k) ((R.post.getStor wa).get k)) :
+    let cut := trace.splitAt i lt
+    rel ((benv.state.getStor wa).get k) ((cut.benv.state.getStor wa).get k) ∧
+      rel ((benv.state.getStor wa).get k) ((cut.afterBenv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C ∧ cut.afterBenv.state.getCode wa = C := by
+  exact trace.splitAt_cell_property_boundaries i lt k hsg hC hCne hCdel notDeleted
+    (fun value => rel ((benv.state.getStor wa).get k) value)
+    (fun R member known => transitive known (roots R member)) (reflexive _)
+
+/-- Actual per-root relations compose from the actual entry to this endpoint. -/
+theorem MidHistoryTraceIn.cell_rel_of_settledRoots
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (history : MidHistoryTraceIn F cfg start future) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : history.OutputNotDeleted wa)
+    (rel : B256 → B256 → Prop) (reflexive : ∀ a, rel a a)
+    (transitive : ∀ {a b c}, rel a b → rel b c → rel a c)
+    (roots : ∀ R ∈ history.settledRoots,
+      rel ((R.pre.getStor wa).get k) ((R.post.getStor wa).get k)) :
+    rel ((start.state.getStor wa).get k) ((future.state.getStor wa).get k) ∧
+      future.state.getCode wa = C := by
+  exact history.cell_property_of_settledRoots k stateGas hC hCne hCdel notDeleted
+    (fun value => rel ((start.state.getStor wa).get k) value)
+    (fun R member known => transitive known (roots R member)) (reflexive _)
+
+/-- Actual per-root relations compose from the actual entry to this endpoint. -/
+theorem ConfiguredBlockTraceIn.cell_rel_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (hsg : block.fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : pre.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : cut.before.OutputNotDeleted wa)
+    (rel : B256 → B256 → Prop) (reflexive : ∀ a, rel a a)
+    (transitive : ∀ {a b c}, rel a b → rel b c → rel a c)
+    (roots : ∀ R ∈ block.rootsBeforeTxSplit cut,
+      rel ((R.pre.getStor wa).get k) ((R.post.getStor wa).get k)) :
+    rel ((pre.state.getStor wa).get k) ((cut.benv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C := by
+  exact block.cell_property_before_txSplit cut k hsg hC hCne hCdel notDeleted
+    (fun value => rel ((pre.state.getStor wa).get k) value)
+    (fun R member known => transitive known (roots R member)) (reflexive _)
+
+/-- Actual per-root relations compose from the actual entry to this endpoint. -/
+theorem MidHistoryTraceIn.cell_rel_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : mid.OutputNotDeleted wa ∧ cut.before.OutputNotDeleted wa)
+    (rel : B256 → B256 → Prop) (reflexive : ∀ a, rel a a)
+    (transitive : ∀ {a b c}, rel a b → rel b c → rel a c)
+    (roots : ∀ R ∈ mid.settledRoots ++ block.rootsBeforeTxSplit cut,
+      rel ((R.pre.getStor wa).get k) ((R.post.getStor wa).get k)) :
+    rel ((start.state.getStor wa).get k) ((cut.benv.state.getStor wa).get k) ∧
+      cut.benv.state.getCode wa = C := by
+  exact mid.cell_property_before_txSplit block cut k stateGas hC hCne hCdel notDeleted
+    (fun value => rel ((start.state.getStor wa).get k) value)
+    (fun R member known => transitive known (roots R member)) (reflexive _)
+
+/-- Conditional root-zero laws preserve an actual initial zero cell. -/
+theorem MidHistoryTraceIn.cell_zero_before_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (k : B256)
+    (stateGas : ∀ fork, F fork → fork.ruleSet.stateGas = none)
+    {wa : Adr} {C : ByteArray} (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notDeleted : mid.OutputNotDeleted wa ∧ cut.before.OutputNotDeleted wa)
+    (roots : ∀ R ∈ mid.settledRoots ++ block.rootsBeforeTxSplit cut,
+      (R.pre.getStor wa).get k = 0 → (R.post.getStor wa).get k = 0)
+    (initial : ((start.state.getStor wa).get k) = 0) :
+    (cut.benv.state.getStor wa).get k = 0 ∧
+      cut.benv.state.getCode wa = C := by
+  exact mid.cell_property_before_txSplit block cut k stateGas hC hCne hCdel notDeleted
+    (fun value => value = 0) roots initial
+
+end Blanc.ExecutionTrace

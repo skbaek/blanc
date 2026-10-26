@@ -31,6 +31,13 @@ import Blanc.PinnedPauseTarget
 import Blanc.RevertPayload
 import Blanc.StaticStores
 import Blanc.Upgrade
+import Blanc.Lift.WriteSiteZero
+import Blanc.ExecutionSenderOccurrences
+import Blanc.DeploymentTouch
+import Blanc.StaticcallObservation
+import Blanc.StaticcallOperands
+import Blanc.Lift.EcrecoverCall
+import Blanc.Lift.RecoveryOccurrence
 
 namespace Blanc
 
@@ -807,6 +814,135 @@ example (msg : Msg)
   blanc_suggest
   exact MessageExecution.processMessage_eq_settle_exec msg hentry hdisable
 
+-- EXPECT: touch-preserving-message-settlement
+example {msg : Msg} {benv : Benv} {raw : Devm}
+    (htransfer : msg.benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = none)
+    (hexec : exec (initEvm (msg.withBenv benv)) = .ok raw)
+    (herror : raw.error = none) :
+    processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  expect_recipe_offered "touch-preserving-message-settlement"
+  blanc_suggest
+  exact processMessage_ok_touch_of_exec htransfer hcodeAddress hexec herror
+
+-- EXPECT: touch-preserving-message-settlement
+example (msg : Msg) {benv : Benv} {raw charged : Devm}
+    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (hcodeAddress : msg.codeAddress = none)
+    (hexec : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw)
+    (herror : raw.error = none)
+    (hcharge : processCreateMessage.chargeCodeGas msg.benv.stat.rules
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) = .ok charged) :
+    processCreateMessage msg =
+      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) := by
+  expect_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  expect_recipe_offered "touch-preserving-message-settlement"
+  blanc_suggest
+  exact processCreateMessage_ok_touch_of_exec_and_charge msg
+    htransfer hcodeAddress hexec herror hcharge
+
+-- Nearby shapes exercise only production dispatch; no semantic promise is
+-- inferred from a syntactically suitable goal.
+example (msg : Msg) (raw : Devm)
+    (h : .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) =
+      processMessage msg) :
+    .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) =
+      processMessage msg := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    (processMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) ∧ True := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact ⟨h, True.intro⟩
+
+example (msg : Msg) (failure : EvmError × State × AdrSet × Tra)
+    (h : processMessage msg = .error failure) :
+    processMessage msg = .error failure := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) (h : processMessage msg = .ok raw) :
+    processMessage msg = .ok raw := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) (h : processCreateMessage msg = .ok raw) :
+    processCreateMessage msg = .ok raw := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = .ok (raw.setCode msg.currentTarget ⟨⟨raw.output⟩⟩)) :
+    processMessage msg = .ok (raw.setCode msg.currentTarget ⟨⟨raw.output⟩⟩) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processCreateMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    processCreateMessage msg =
+      .ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      id (.ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget))) :
+    processMessage msg =
+      id (.ok (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg =
+      .ok (id (raw.recordTouch msg.benv.stat.rules true msg.currentTarget))) :
+    processMessage msg =
+      .ok (id (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm) :
+    (raw.recordTouch msg.benv.stat.rules true msg.currentTarget).output =
+      raw.output := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  rfl
+
+-- Fully qualified name identity: both impostors retain the real application
+-- arity and leaf spelling, but are not the constructors/operations selected.
+namespace TouchDiscoveryForgery
+
+def Except.ok (ε α : Type) (value : α) : _root_.Except ε α :=
+  _root_.Except.ok value
+
+def Devm.recordTouch (rules : ForkRules) (cond : Bool) (adr : Adr) (raw : Devm) :
+    Devm := raw.recordTouch rules cond adr
+
+end TouchDiscoveryForgery
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = TouchDiscoveryForgery.Except.ok
+      (EvmError × State × AdrSet × Tra) Devm
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget)) :
+    processMessage msg = TouchDiscoveryForgery.Except.ok
+      (EvmError × State × AdrSet × Tra) Devm
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
+example (msg : Msg) (raw : Devm)
+    (h : processMessage msg = .ok (TouchDiscoveryForgery.Devm.recordTouch
+      msg.benv.stat.rules true msg.currentTarget raw)) :
+    processMessage msg = .ok (TouchDiscoveryForgery.Devm.recordTouch
+      msg.benv.stat.rules true msg.currentTarget raw) := by
+  expect_no_recipe_trigger "goal-shape:touch-preserving-message-settlement"
+  exact h
+
 -- EXPECT: devm-common-update-laws
 example (devm : Devm) (index : Nat) (value : Bytes) :
     (devm.memWrite index value).memory = devm.memory.write index value := by
@@ -1008,6 +1144,61 @@ example {fs : List Func} {sevm : Sevm} {devm : Devm} {f : Func}
   expect_recipe_trigger "goal-head:Func.ExecSat"
   blanc_suggest
   exact h
+
+-- STATICCALL-OPERANDS-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  trivial
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-OPERANDS-POSITIVE
+example {sevm : Sevm} {pre : Devm} {frame : Frame} {resume : Resume}
+    (spawn : Xinst.step sevm pre .staticcall = .spawn frame resume) :
+    StaticcallSpawnOperands sevm pre frame resume := by
+  expect_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact Xinst.step_staticcall_spawn_operands spawn
+
+-- The new local heads remain selective even on an unrelated proposition.
+-- STATICCALL-OBSERVATION-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  trivial
+
+-- STATICCALL-ROUTING-TRUE-NEGATIVE
+example : True := by
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  trivial
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-OBSERVATION-POSITIVE
+example {pc : Nat} {sevm : Sevm} {pre : Devm} {slot : Xlot} {out : Execution}
+    (filled : slot.Filled)
+    (run : Ninst.StepRun pc sevm pre Ninst.staticcall slot out) :
+    StaticcallObservation pc sevm pre slot out := by
+  expect_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallRouting"
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact Ninst.staticcall_observation filled run
+
+-- EXPECT: call-boundary-outcomes
+-- STATICCALL-ROUTING-POSITIVE
+example {msg : Msg} {slot : Xlot}
+    {settled : Except (EvmError × State × AdrSet × Tra) Devm}
+    (zero : msg.value = 0) (filled : slot.Filled)
+    (process : ProcessMessage msg slot settled) :
+    StaticcallRouting msg slot settled := by
+  expect_recipe_trigger "goal-head:StaticcallRouting"
+  expect_no_recipe_trigger "goal-head:StaticcallObservation"
+  expect_no_recipe_trigger "goal-head:StaticcallSpawnOperands"
+  expect_recipe_offered "call-boundary-outcomes"
+  blanc_suggest
+  exact staticcall_routing_of_process zero filled process
 
 -- EXPECT: constant-error-guard
 example {fs : List Func} {sevm : Sevm} {devm : Devm} {reason : String}
@@ -1309,6 +1500,105 @@ example (a : Devm) : a.gasLeft = a.gasLeft := by
   expect_no_recipe_trigger "goal-head:Devm.EqModGas"
   rfl
 
+-- EXPECT: write-site-zero-preservation
+example {K : B256 → Prop} {sevm : Sevm} {pre post : Devm}
+    (obs : Lift.WriteSite.GuardObs K False sevm pre (.reg .sstore))
+    (run : Ninst.Run sevm pre (.reg .sstore) post)
+    (seed : Lift.WriteSite.ZeroSlots K sevm.currentTarget pre) :
+    Lift.WriteSite.ZeroSlots K sevm.currentTarget post := by
+  expect_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  expect_recipe_offered "write-site-zero-preservation"
+  blanc_suggest
+  exact Lift.WriteSite.GuardObs.sstore_zero obs run seed
+
+-- An expanded forall is deliberately outside this exact-head recipe.
+example {K : B256 → Prop} {a : Adr} {d : Devm}
+    (seed : Lift.WriteSite.ZeroSlots K a d) :
+    ∀ slot, K slot → d.getStorVal a slot = 0 := by
+  expect_no_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  exact seed
+
+-- Unrelated proposition heads must not receive zero-preservation advice.
+example : True := by
+  expect_no_recipe_trigger "goal-head:Lift.WriteSite.ZeroSlots"
+  trivial
+
+-- EXPECT: admitted-sender-query-exclusion
+example {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    {a : Adr} (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future) {a : Adr}
+    (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+example {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ExecutionTrace.ConfiguredHistoryTraceIn F cfg checkpoint future) {a : Adr}
+    (exclude : ∀ query ∈ trace.senderQueries, query.recover ≠ .ok a) :
+    trace.NoSenderAt a := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt"
+  expect_recipe_offered "admitted-sender-query-exclusion"
+  blanc_suggest
+  exact trace.noSenderAt_of_senderQueries exclude
+
+-- Exact heads only: an unrelated proposition receives none of this advice.
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt"
+  trivial
+
+example : True := by
+  expect_no_recipe_offered "admitted-sender-query-exclusion"
+  trivial
+
+
+-- EXPECT: ecrecover-return-layout
+example : Lift.EcrecoverCall.ReturnChecks
+    ⟨[0x51, 0x00], by decide, [0x51, 0xad], by decide,
+      .last .revert, .last .revert⟩ := by
+  expect_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  expect_recipe_offered "ecrecover-return-layout"
+  blanc_suggest
+  exact ⟨rfl, rfl, rfl, rfl⟩
+
+-- A different proposition head does not denote the layout checks.
+example : True := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  trivial
+
+-- Do not discover a check hidden inside a compound proposition.
+example (layout : Lift.EcrecoverCall.ReturnLayout)
+    (checks : Lift.EcrecoverCall.ReturnChecks layout) :
+    True ∧ Lift.EcrecoverCall.ReturnChecks layout := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  exact ⟨True.intro, checks⟩
+
+-- The neighboring data carrier is not a ReturnChecks goal.
+example (layout : Lift.EcrecoverCall.ReturnLayout) : Lift.EcrecoverCall.ReturnLayout := by
+  expect_no_recipe_trigger "goal-head:Lift.EcrecoverCall.ReturnChecks"
+  exact layout
+
+example : True := by
+  expect_no_recipe_offered "ecrecover-return-layout"
+  trivial
+
 -- EXPECT: historical-fork-domain
 example {number timestamp : Nat} {fork : Fork}
     (lookup : mainnetChainConfig.forkAt number timestamp = .ok fork) :
@@ -1393,5 +1683,34 @@ example {code : ByteArray} {c : Lift.Cert} {ms : List Lift.MemMap} {b : Bool}
   expect_no_recipe_trigger "goal-head:Blanc.Lift.NodeClaim0NoStateGas"
   expect_no_recipe_offered "lift-node-no-state-gas"
   exact modern
+
+-- EXPECT: actual-recovery-invocation
+example {root : Exec.Deriv} (step : Lift.CallOccurrenceStep root .staticcall)
+    {g ii is oi os : B256} {xs : Stack}
+    (fork : CoveredFork step.occurrence.node.sevm.benvStat.fork)
+    (operands : (g :: 1 :: ii :: is :: oi :: os :: xs) <<+
+      step.occurrence.node.devm.stack)
+    (undelegated : getDelegatedCodeAddress (step.occurrence.node.devm.getCode 1) = none)
+    (success : ∃ flag rest, step.returned.devm.stack = flag :: rest ∧ flag ≠ 0) :
+    Nonempty (Lift.RecoveryInvocation step g ii is oi os) := by
+  expect_recipe_trigger "goal-shape:recovery-invocation"
+  expect_recipe_offered "actual-recovery-invocation"
+  blanc_suggest
+  exact Lift.recoveryInvocation_of_successFlag step fork operands undelegated success
+
+-- Nonempty alone and a different dependent argument must not offer this recipe.
+example : Nonempty Nat := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  expect_no_recipe_offered "actual-recovery-invocation"
+  exact ⟨0⟩
+
+example (layout : Lift.EcrecoverCall.ReturnLayout) :
+    Nonempty Lift.EcrecoverCall.ReturnLayout := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  exact ⟨layout⟩
+
+example : True := by
+  expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  trivial
 
 end Blanc

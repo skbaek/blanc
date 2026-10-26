@@ -410,6 +410,19 @@ def Exec.Deriv.successfulSstore? (node : Exec.Deriv) : Option Exec.StorageWrite 
       | _, _ => none
   | _ => none
 
+/-- A recognized successful raw SSTORE has the same decoded instruction and stack operands. -/
+theorem Exec.Deriv.successfulSstore?_decoded {m : Exec.Deriv} {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? m = some w) :
+    Ninst.At m.sevm.code m.pc (.reg .sstore) ∧ ∃ rest, m.devm.stack = w.key :: w.value :: rest := by
+  unfold Exec.Deriv.successfulSstore? at found
+  split at found
+  · split at found
+    · rename_i _ k v rest hinst hstack
+      cases found
+      exact ⟨hinst, rest, hstack⟩
+    · cases found
+  · cases found
+
 /-- Successful retained SSTORE events in the canonical global chronology. -/
 def Exec.retainedStorageWrites
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

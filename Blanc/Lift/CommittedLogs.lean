@@ -282,6 +282,12 @@ private theorem Frame_settle_logs
   rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok] at settle
   exact Frame_settleMsg_logs settle
 
+/-- Successful frame settlement preserves the raw result's log sequence. -/
+theorem Frame.settle_logs_of_ok
+    {frame : Frame} {pre post : Devm}
+    (settle : frame.settle (.ok pre) = .ok post) :
+    post.logs = pre.logs := Frame_settle_logs settle
+
 private theorem Resume_create_logs
     {parent child post : Devm} {address : Adr}
     (resume : (Resume.create parent address).run (.ok child) = .ok post) :
@@ -575,6 +581,15 @@ private theorem Frame_enter_done_clean_logs_noStateGas
                   rw [prec] at settled rawLogs
                   exact ((Frame_settle_logs settled).trans rawLogs.symm).trans initialLogs
             · cases started
+
+/-- A clean immediate frame result has no execution-root logs when state gas
+is disabled, including an immediate precompile result. -/
+theorem Frame.enter_done_clean_logs_noStateGas
+    {frame : Frame} {child : Devm}
+    (hsg : frame.inner.benv.stat.rules.stateGas = none)
+    (enter : frame.enter = .done (.ok child))
+    (clean : child.error.isNone = true) : child.logs = [] :=
+  Frame_enter_done_clean_logs_noStateGas hsg enter clean
 
 private theorem Frame_enter_done_clean_logs
     {frame : Frame} {child : Devm}

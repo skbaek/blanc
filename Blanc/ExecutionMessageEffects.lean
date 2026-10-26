@@ -132,15 +132,17 @@ theorem ProcessMessage.nonce_ne_zero_of_body {msg : Msg} {slot : Xlot} {post : D
       · rw [ProcessMessage.ok_state_eq_of_not_commits process committed]
         exact nonce
 
-/-- Clean code-deposit settlement changes the inner world only by installing target code. -/
-theorem ProcessCreateMessage.ok_setCode_state_of_clean
+/-- Clean CREATE settlement retains its same-slot inner message, successful
+code-deposit charge and exact installed result. -/
+theorem ProcessCreateMessage.ok_charge_of_clean
     {msg : Msg} {slot : Xlot} {post : Devm}
     (hprocess : ProcessCreateMessage msg slot (.ok post))
     (herror : post.error.isSome = false) :
-    ∃ inner : Devm,
+    ∃ inner charged : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
       inner.error.isSome = false ∧
-      ∃ code, post.state = inner.state.setCode msg.currentTarget code := by
+      processCreateMessage.chargeCodeGas msg.benv.stat.rules inner = .ok charged ∧
+      post = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
   rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
     ⟨result, hinner, hsettle⟩
   cases result with
@@ -179,13 +181,10 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
         | ok charged =>
             rw [hcharge] at hsettle
             have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_, ⟨⟨charged.output⟩⟩, ?_⟩
+            refine ⟨inner, charged, hinner, ?_, hcharge, heq⟩
             · cases h : inner.error with
               | none => rfl
               | some error => rw [h] at hinnerNone; cases hinnerNone
-            · rw [heq]
-              change charged.state.setCode msg.currentTarget _ = _
-              rw [chargeCodeGas_state_ok hcharge]
       · rw [ite_eq_right hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
@@ -195,6 +194,22 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
           | none => rfl
           | some error => rw [h] at herror; cases herror
         exact (hinnerNone (by rw [errorNone]; rfl)).elim
+
+/-- Clean code-deposit settlement changes the inner world only by installing target code. -/
+theorem ProcessCreateMessage.ok_setCode_state_of_clean
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (hprocess : ProcessCreateMessage msg slot (.ok post))
+    (herror : post.error.isSome = false) :
+    ∃ inner : Devm,
+      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
+      inner.error.isSome = false ∧
+      ∃ code, post.state = inner.state.setCode msg.currentTarget code := by
+  obtain ⟨inner, charged, hinner, clean, charge, installed⟩ :=
+    ProcessCreateMessage.ok_charge_of_clean hprocess herror
+  refine ⟨inner, hinner, clean, ⟨⟨charged.output⟩⟩, ?_⟩
+  rw [installed]
+  change charged.state.setCode msg.currentTarget _ = _
+  rw [chargeCodeGas_state_ok charge]
 
 /-- Code-deposit settlement leaves every nonce equal to its inner message's nonce. -/
 theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean

@@ -1,4 +1,4 @@
-import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.HistAccessFacts
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.Create2Deploy
 import Blanc.Lift.HistAccessWalkFacts
@@ -60,21 +60,6 @@ def sstoreCostH (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
   sstoreRegimeGasCost sevm.benvStat.rules.sstore sevm.benvStat.rules.access
     (storageAccessCostH sevm devm key) value
     (devm.getOrigStorVal sevm sevm.currentTarget key) (devm.getStorVal sevm.currentTarget key)
-
-theorem afterSloadH_state (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSloadH sevm base key).state = base.state := by
-  unfold afterSloadH afterSload
-  split
-  · split <;> rfl
-  · rfl
-
-theorem afterSstoreH_state (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstoreH sevm base key value).state =
-      base.state.setStorVal sevm.currentTarget key value := by
-  unfold afterSstoreH storageAccessH
-  split
-  · rfl
-  · split <;> rfl
 
 /-- One exact `SLOAD` under the frame's actual access schedule, from `rules.stateGas = none`. -/
 theorem Ninst.runCompiled_sload_selectedH

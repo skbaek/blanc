@@ -27,4 +27,13 @@ theorem implRun_fp {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok p
       post :=
   lift_sound_fp Impl.cert_check impl_fpCert code fork hsg hmem hpot run
 
+/-- The implementation's observed run under the actual rules without state gas. -/
+theorem implRun_fp_noStateGas {sevm : Sevm} {pre post : Devm}
+    (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
+    (hsg : sevm.benvStat.rules.stateGas = none) (hmem : pre.memory = Mem.empty)
+    (hpot : pre.gasMeasure < 2 ^ 256) :
+    SProg.RunP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩)))
+      Impl.cert.prog sevm pre post :=
+  lift_sound_fp_noStateGas Impl.cert_check impl_fpCert code hsg hmem hpot run
+
 end Blanc.Lift.Usdc

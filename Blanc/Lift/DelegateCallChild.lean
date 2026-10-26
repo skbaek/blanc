@@ -2,6 +2,7 @@ import Blanc.Lift.SpawnExact
 import Blanc.Lift.StepMemory
 import Blanc.Lift.InvWalk
 import Blanc.MessageExecutionInversion
+import Blanc.Lift.HistEcrecover
 
 /-!
 # A `DELEGATECALL` step, inverted to its child frame (contract-neutral)
@@ -20,6 +21,49 @@ open Jaune Blanc
 
 /-- A successful `DELEGATECALL` step is a `genericCall` step over the operand-free machine (stack
 `S`, the step's memory) with its memory extended over the two windows. -/
+theorem delegatecall_generic_noStateGas {sevm : Sevm} {d d' : Devm} {xl : Xlot}
+    {g w ii is oi os : B256} {S : List B256} (hsg : sevm.benvStat.rules.stateGas = none)
+    (hs : d.stack = g :: w :: ii :: is :: oi :: os :: S)
+    (undelegated : getDelegatedCodeAddress (d.getCode w.toAdr) = none)
+    (xrun : XStep.Run (Xinst.step sevm d .delegatecall) xl (.ok d')) :
+    ∃ (v : Devm) (gas : Nat), v.stack = S ∧ v.memory = d.memory ∧ v.state = d.state ∧
+      XStep.Run (genericCall.step sevm (v.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)])
+        gas sevm.value sevm.caller sevm.currentTarget w.toAdr false false ii.toNat is.toNat oi.toNat
+        os.toNat (d.getCode w.toAdr) false) xl (.ok d') := by
+  let base := match sevm.benvStat.rules.access with
+    | .eip2929 => addAccessedAddress (d.withStack S) w.toAdr
+    | .flat _ => d.withStack S
+  have hstate : base.state = d.state := by
+    dsimp only [base]
+    cases sevm.benvStat.rules.access <;> rfl
+  have hstack : base.stack = S := by
+    dsimp only [base]
+    cases sevm.benvStat.rules.access <;> rfl
+  have hmemory : base.memory = d.memory := by
+    dsimp only [base]
+    cases sevm.benvStat.rules.access <;> rfl
+  rcases hacc : sevm.benvStat.rules.accessDelegation base w.toAdr with
+    ⟨dp, na, code, dagc, accessed⟩
+  have hfields := accessDelegation_fields hacc
+  have hcode := callCodeH_of_accessDelegation hstate hacc
+  obtain ⟨rfl, rfl, rfl⟩ := CallCodeH.direct_of_nodeleg undelegated hcode
+  dsimp only [base] at hacc
+  simp only [Xinst.step, hsg, Bind.bind, Except.bind,
+    Devm.pop_cons hs, Devm.withStack_popToNat, Devm.withStack_popToAdr] at xrun
+  cases hac : sevm.benvStat.rules.access <;> simp only [hac] at hacc xrun
+  all_goals
+    rw [hacc] at xrun
+    split at xrun
+    · cases XStep.run_ofExcept_error xrun
+    rename_i v hc
+    simp only [XStep.ofExcept, Pure.pure, Except.pure] at xrun
+    have hb := Devm.burn_of_chargeGas hc
+    refine ⟨v, _, ?_, ?_, ?_, xrun⟩
+    · exact hb.stack.symm.trans (hfields.2.1.trans hstack)
+    · exact hb.memory.symm.trans (hfields.2.2.1.trans hmemory)
+    · exact hb.state.symm.trans (hfields.1.trans hstate)
+
+/-- A covered-fork projection of the actual-rule delegate-call reduction. -/
 theorem delegatecall_generic {sevm : Sevm} {d d' : Devm} {xl : Xlot}
     {g w ii is oi os : B256} {S : List B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hs : d.stack = g :: w :: ii :: is :: oi :: os :: S)
@@ -28,29 +72,8 @@ theorem delegatecall_generic {sevm : Sevm} {d d' : Devm} {xl : Xlot}
     ∃ (v : Devm) (gas : Nat), v.stack = S ∧ v.memory = d.memory ∧ v.state = d.state ∧
       XStep.Run (genericCall.step sevm (v.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)])
         gas sevm.value sevm.caller sevm.currentTarget w.toAdr false false ii.toNat is.toNat oi.toNat
-        os.toNat (d.getCode w.toAdr) false) xl (.ok d') := by
-  have hacc : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress (d.withStack S) w.toAdr)
-      w.toAdr = ⟨false, w.toAdr, d.getCode w.toAdr, 0, addAccessedAddress (d.withStack S) w.toAdr⟩ := by
-    dsimp only [GasSchedule.accessDelegation]
-    rw [show (addAccessedAddress (d.withStack S) w.toAdr).state.getCode w.toAdr =
-      d.getCode w.toAdr from rfl, undelegated]
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled hdeleg, Bind.bind, Except.bind,
-    Devm.pop_cons hs, Devm.withStack_popToNat, Devm.withStack_popToAdr, hacc] at xrun
-  split at xrun
-  · cases XStep.run_ofExcept_error xrun
-  rename_i v hc
-  simp only [XStep.ofExcept, Pure.pure, Except.pure] at xrun
-  have hb := Devm.burn_of_chargeGas hc
-  refine ⟨v, _, ?_, ?_, ?_, xrun⟩
-  · rw [← hb.stack]
-    rfl
-  · rw [← hb.memory]
-    rfl
-  · rw [← hb.state]
-    rfl
+        os.toNat (d.getCode w.toAdr) false) xl (.ok d') :=
+  delegatecall_generic_noStateGas hfork.rules_stateGas_none hs undelegated xrun
 
 /-- A call frame that moves no value into a non-precompile code address is entered. -/
 theorem Frame.ofCall_enter_not_done {m : Msg} {r : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -65,8 +88,8 @@ theorem Frame.ofCall_enter_not_done {m : Msg} {r : Except (EvmError × State × 
 flag comes from a successful child derivation running `w`'s code on the input window, from an
 empty machine over `b`'s code and the frame's block statics, and the output window holds the
 prefix of the child's output. -/
-theorem ri_delegatecall_child {sevm : Sevm} {b d : Devm} {g w ii is oi os : B256}
-    {S : List B256} {M : Mem} {G : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+theorem ri_delegatecall_child_noStateGas {sevm : Sevm} {b d : Devm} {g w ii is oi os : B256}
+    {S : List B256} {M : Mem} {G : Nat} (hsg : sevm.benvStat.rules.stateGas = none)
     (undelegated : getDelegatedCodeAddress (b.getCode w.toAdr) = none)
     (notPre : ¬ sevm.benvStat.rules.isPrecomp w.toAdr)
     (run : Ninst.Run sevm (St b (g :: w :: ii :: is :: oi :: os :: S) M G) (.exec .delegatecall) d) :
@@ -80,8 +103,8 @@ theorem ri_delegatecall_child {sevm : Sevm} {b d : Devm} {g w ii is oi os : B256
   have xrun : XStep.Run (Xinst.step sevm (St b (g :: w :: ii :: is :: oi :: os :: S) M G)
       .delegatecall) xl (.ok d) := by
     simpa only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] using stepRun
-  obtain ⟨v, gas, hvs, hvm, hvst, h⟩ := delegatecall_generic (d := St b (g :: w :: ii :: is :: oi :: os :: S) M G)
-    hfork rfl undelegated xrun
+  obtain ⟨v, gas, hvs, hvm, hvst, h⟩ := delegatecall_generic_noStateGas (d := St b (g :: w :: ii :: is :: oi :: os :: S) M G)
+    hsg rfl undelegated xrun
   unfold genericCall.step at h
   split at h
   · simp only [Bind.bind, Except.bind] at h
@@ -147,5 +170,19 @@ theorem ri_delegatecall_child {sevm : Sevm} {b d : Devm} {g w ii is oi os : B256
         show (v.memory.extends _).write _ _ = _
         rw [hvm]
         rfl
+
+/-- The covered-fork projection preserves the same actual child and output window. -/
+theorem ri_delegatecall_child {sevm : Sevm} {b d : Devm} {g w ii is oi os : B256}
+    {S : List B256} {M : Mem} {G : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+    (undelegated : getDelegatedCodeAddress (b.getCode w.toAdr) = none)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp w.toAdr)
+    (run : Ninst.Run sevm (St b (g :: w :: ii :: is :: oi :: os :: S) M G) (.exec .delegatecall) d) :
+    ∃ flag, d.stack = flag :: S ∧ (flag = 0 ∨ ∃ (csevm : Sevm) (cpre x : Devm),
+      Nonempty (Exec 0 csevm cpre (.ok x)) ∧ csevm.code = b.getCode w.toAdr ∧
+      csevm.data = (M.read ii.toNat is.toNat).1 ∧ csevm.benvStat = sevm.benvStat ∧
+      cpre.memory = Mem.empty ∧ cpre.stack = [] ∧ (∀ a, cpre.getCode a = b.getCode a) ∧
+      d.memory = (M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat
+        (x.output.take os.toNat)) :=
+  ri_delegatecall_child_noStateGas hfork.rules_stateGas_none undelegated notPre run
 
 end Blanc.Lift

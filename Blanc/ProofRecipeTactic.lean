@@ -23,6 +23,33 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-head:StaticcallSpawnOperands" =>
+      return head == some `Blanc.StaticcallSpawnOperands
+  | "goal-head:StaticcallObservation" =>
+      return head == some `Blanc.StaticcallObservation
+  | "goal-head:StaticcallRouting" =>
+      return head == some `Blanc.StaticcallRouting
+  | "goal-shape:touch-preserving-message-settlement" =>
+      -- Advice for exact outer success forms; the theorem retains the actual
+      -- entry, execution, error and code-charge obligations.
+      match target.consumeMData with
+      | .app (.app (.app (.const name _) _) lhs) rhs =>
+          if name != `Eq then return false
+          let lhs := lhs.consumeMData
+          let rhs := rhs.consumeMData
+          unless rhs.getAppFn.isConstOf `Except.ok do return false
+          match rhs.getAppArgs with
+          | #[_, _, payload] =>
+              let payload := payload.consumeMData
+              return lhs.getAppArgs.size == 1 &&
+                ((lhs.getAppFn.isConstOf `Jaune.processMessage &&
+                    payload.getAppFn.isConstOf `Jaune.Devm.recordTouch &&
+                    payload.getAppArgs.size == 4) ||
+                  (lhs.getAppFn.isConstOf `Jaune.processCreateMessage &&
+                    payload.getAppFn.isConstOf `Jaune.Devm.setCode &&
+                    payload.getAppArgs.size == 3))
+          | _ => return false
+      | _ => return false
   | "goal-head:Blanc.Lift.NodeClaimNoStateGas" =>
       return head == some `Blanc.Lift.NodeClaimNoStateGas
   | "goal-head:Blanc.Lift.NodeClaim0NoStateGas" =>
@@ -48,10 +75,28 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
           | some value => return instruction == value.consumeMData
           | none => return false
       | _ => pure false
+  | "goal-head:Lift.EcrecoverCall.ReturnChecks" =>
+      return head == some `Blanc.Lift.EcrecoverCall.ReturnChecks
   | "goal-head:Devm.EqModGas" =>
       return head == some `Blanc.Devm.EqModGas
   | "goal-head:Lift.StaticWordChild" =>
       return head == some `Blanc.Lift.StaticWordChild
+  | "goal-head:Lift.WriteSite.ZeroSlots" =>
+      return head == some `Blanc.Lift.WriteSite.ZeroSlots
+  | "goal-head:ExecutionTrace.ApplyTransactionsTrace.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ApplyTransactionsTrace.NoSenderAt
+  | "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt
+  | "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt" =>
+      return head == some `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt
+  | "goal-shape:recovery-invocation" =>
+      -- Only a direct Nonempty whose direct argument has this exact head.
+      -- No unfolding, context search, or general Nonempty advice.
+      match target.consumeMData with
+      | .app (.const name _) argument =>
+          return name == `Nonempty &&
+            proofRecipeHeadName? argument == some `Blanc.Lift.RecoveryInvocation
+      | _ => return false
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>

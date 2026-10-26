@@ -18,6 +18,40 @@ structure CallOccurrenceStep (root : Exec.Deriv) (x : Xinst) where
   edge : Exec.Deriv.ParentStep returned occurrence.node
   result : occurrence.stepResult = .ok returned.devm
 
+/-- Move the same actual call to an earlier same-frame root. All computational
+fields, including the filled recursive slot and complete step result, are kept. -/
+def CallOccurrenceStep.reRoot {root tail : Exec.Deriv} {x : Xinst}
+    (reached : Exec.Deriv.ParentPrefix root tail) (step : CallOccurrenceStep tail x) :
+    CallOccurrenceStep root x where
+  occurrence :=
+    { node := step.occurrence.node
+      instruction := step.occurrence.instruction
+      slot := step.occurrence.slot
+      stepResult := step.occurrence.stepResult
+      reached := by
+        obtain ⟨before, decomposition⟩ :=
+          Exec.Deriv.ParentPrefix.rawNodes_decomposition reached
+        rw [decomposition]
+        exact List.mem_append_right before step.occurrence.reached
+      decoded := step.occurrence.decoded
+      filled := step.occurrence.filled
+      stepRun := step.occurrence.stepRun }
+  returned := step.returned
+  instruction := step.instruction
+  sameFrame := reached.trans step.sameFrame
+  edge := step.edge
+  result := step.result
+
+/-- Re-rooting changes only the root-indexed reachability evidence. -/
+theorem CallOccurrenceStep.reRoot_identity {root tail : Exec.Deriv} {x : Xinst}
+    (reached : Exec.Deriv.ParentPrefix root tail) (step : CallOccurrenceStep tail x) :
+    (step.reRoot reached).occurrence.node = step.occurrence.node ∧
+    (step.reRoot reached).occurrence.instruction = step.occurrence.instruction ∧
+    (step.reRoot reached).occurrence.slot = step.occurrence.slot ∧
+    (step.reRoot reached).occurrence.stepResult = step.occurrence.stepResult ∧
+    (step.reRoot reached).returned = step.returned := by
+  exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+
 /-- Comparing a primitive witness at an occurrence fixes both its recursive
 slot and its complete step result. -/
 theorem occurrence_stepRun_unique {root : Exec.Deriv}

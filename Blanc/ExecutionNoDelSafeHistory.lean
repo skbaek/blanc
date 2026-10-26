@@ -290,14 +290,14 @@ def ConfiguredHistoryTraceIn.NoDelScheduled {F : Fork → Prop} {cfg : ChainConf
 
 /-- The create arm settles at the core state and schedules the core's deletions only on
 success. -/
-private theorem processMessageCall_createRun_noDel {wa : Adr}
+theorem processMessageCall_createRun_noDel_of_clean {wa : Adr}
     {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none)
     (target : msg.target.isNone = true)
     (collision : messageCreateCollision msg = false)
     (core : processCreateMessage msg = .ok evm)
     (result : processMessageCall msg = .ok ⟨state, out⟩)
-    (hnd : wa ∉ evm.accountsToDelete) :
+    (hnd : evm.error.isNone = true → wa ∉ evm.accountsToDelete) :
     state = evm.state ∧ wa ∉ out.accountsToDelete := by
   unfold processMessageCall at result
   simp only [target, ↓reduceIte] at result
@@ -310,18 +310,31 @@ private theorem processMessageCall_createRun_noDel {wa : Adr}
     ((Except.bimap_id_eq_ok actualMap).symm.trans core)
   subst actual
   split at tail
-  · rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
+  · rename_i clean
+    rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
     have hout := Prod.mk.inj (Except.ok.inj output)
     refine ⟨hout.1.symm, ?_⟩
     rw [← hout.2]
-    exact hnd
+    exact hnd clean
   · have hout := Prod.mk.inj (Except.ok.inj tail)
     refine ⟨hout.1.symm, ?_⟩
     rw [← hout.2]
     exact AdrSet.not_mem_empty
 
+/-- Compatibility projection with unconditional core exclusion. -/
+private theorem processMessageCall_createRun_noDel {wa : Adr}
+    {msg : Msg} {evm : Devm} {state : State} {out : MsgCallOutput}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (target : msg.target.isNone = true)
+    (collision : messageCreateCollision msg = false)
+    (core : processCreateMessage msg = .ok evm)
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hnd : wa ∉ evm.accountsToDelete) :
+    state = evm.state ∧ wa ∉ out.accountsToDelete :=
+  processMessageCall_createRun_noDel_of_clean hsg target collision core result (fun _ => hnd)
+
 /-- The call arm settles at the core state and schedules the core's deletions only on success. -/
-private theorem processMessageCall_callRun_noDel {wa : Adr}
+theorem processMessageCall_callRun_noDel_of_clean {wa : Adr}
     {msg delegated execMsg : Msg} {refund : Nat}
     {evm : Devm} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none)
@@ -330,7 +343,7 @@ private theorem processMessageCall_callRun_noDel {wa : Adr}
     (execMsgEq : execMsg = messageCallExecutionMessage delegated)
     (core : processMessage execMsg = .ok evm)
     (result : processMessageCall msg = .ok ⟨state, out⟩)
-    (hnd : wa ∉ evm.accountsToDelete) :
+    (hnd : evm.error.isNone = true → wa ∉ evm.accountsToDelete) :
     state = evm.state ∧ wa ∉ out.accountsToDelete := by
   unfold processMessageCall at result
   simp only [target, Bool.false_eq_true, ↓reduceIte] at result
@@ -346,19 +359,34 @@ private theorem processMessageCall_callRun_noDel {wa : Adr}
     ((Except.bimap_id_eq_ok actualMap).symm.trans coreExec)
   subst actual
   split at tail
-  · rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
+  · rename_i clean
+    rcases Except.bind_eq_ok tail with ⟨_, _, output⟩
     have hout := Prod.mk.inj (Except.ok.inj output)
     refine ⟨hout.1.symm, ?_⟩
     rw [← hout.2]
-    exact hnd
+    exact hnd clean
   · have hout := Prod.mk.inj (Except.ok.inj tail)
     refine ⟨hout.1.symm, ?_⟩
     rw [← hout.2]
     exact AdrSet.not_mem_empty
 
+/-- Compatibility projection with unconditional core exclusion. -/
+private theorem processMessageCall_callRun_noDel {wa : Adr}
+    {msg delegated execMsg : Msg} {refund : Nat}
+    {evm : Devm} {state : State} {out : MsgCallOutput}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (target : msg.target.isNone = false)
+    (delegation : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
+    (execMsgEq : execMsg = messageCallExecutionMessage delegated)
+    (core : processMessage execMsg = .ok evm)
+    (result : processMessageCall msg = .ok ⟨state, out⟩)
+    (hnd : wa ∉ evm.accountsToDelete) :
+    state = evm.state ∧ wa ∉ out.accountsToDelete :=
+  processMessageCall_callRun_noDel_of_clean hsg target delegation execMsgEq core result (fun _ => hnd)
+
 /-- The EIP-7702 authorization prefix keeps `wa`'s undesignated nonempty code, its creation and
 inherited-deletion exclusions, and the executing message's own-code relation. -/
-private theorem messageCallDelegation_installed {wa : Adr} {msg delegated : Msg} {refund : Nat}
+theorem messageCallDelegation_installed {wa : Adr} {msg delegated : Msg} {refund : Nat}
     (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
     (h : Msg.NoDel wa msg) (hnd : ¬ isValidDelegation (msg.benv.state.getCode wa))
     (h_inherited : wa ∉ msg.inheritedDeletions)
@@ -405,7 +433,7 @@ private theorem messageCallExecutionMessage_code_installed {wa : Adr} {C : ByteA
     simp only [ForkRules.delegatedCodeAddress, code, none, ite_self, reduceCtorEq] at resolved
 
 /-- A transaction's top-level message runs its call target's own code. -/
-private theorem prepareMessage_own {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
+theorem prepareMessage_own {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     (h : prepareMessage benv tenv tx = .ok msg) :
     msg.target.isNone = false →
       msg.codeAddress = some msg.currentTarget ∧

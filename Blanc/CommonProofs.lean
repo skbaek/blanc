@@ -2117,21 +2117,38 @@ theorem Linst.run_instructionFrame
     Execution.Rel Devm.InstructionFrame pre (Linst.run sevm pre l) :=
   Execution.Rel.of_worldFrame (Linst.run_worldFrame sevm pre l h_not_selfdestruct)
 
+def Execution.getCode : Execution → Adr → ByteArray
+  | Except.error ⟨_, devm⟩, adr => devm.getCode adr
+  | Except.ok devm, adr => devm.getCode adr
+
+/-- The created-account set carried by either raw execution outcome. -/
+def Execution.createdAccounts : Execution → AdrSet
+  | .ok d => d.createdAccounts
+  | .error (_, d) => d.createdAccounts
+
+lemma Rinst.run_code_created {pc sevm devm r exn}
+    (run : Rinst.run ⟨pc, sevm, devm⟩ r = exn) (a : Adr) :
+    Execution.getCode exn a = devm.getCode a ∧
+      Execution.createdAccounts exn = devm.createdAccounts := by
+  rcases eq_or_ne r .sstore with rfl | hs
+  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm
+    rw [run] at hf
+    cases exn <;> exact ⟨(hf.getCode_eq a).symm, hf.createdAccounts.symm⟩
+  rcases eq_or_ne r .tstore with rfl | ht
+  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm
+    rw [run] at hf
+    cases exn <;> refine ⟨?_, hf.createdAccounts.symm⟩ <;>
+      simpa only [Execution.getCode, Devm.getCode, Devm.getAcct, id_eq] using
+        congrFun (congrArg (fun st => fun address => (st.get address).code) hf.state).symm a
+  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht
+    rw [run] at hf
+    cases exn <;> exact ⟨(hf.getCode a).symm, hf.createdAccounts.symm⟩
+
 lemma Rinst.preserves_getCode
     {pc sevm devm r devm'}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = .ok devm') (a : Adr) :
     devm'.getCode a = devm.getCode a := by
-  rcases eq_or_ne r .sstore with rfl | hs
-  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
-    exact (hf.getCode_eq a).symm
-  rcases eq_or_ne r .tstore with rfl | ht
-  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
-    simpa only [Devm.getCode, Devm.getAcct, id_eq] using congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
-  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (hf.getCode a).symm
-
-def Execution.getCode : Execution → Adr → ByteArray
-  | Except.error ⟨_, devm⟩, adr => devm.getCode adr
-  | Except.ok devm, adr => devm.getCode adr
+  exact (Rinst.run_code_created run a).1
 
 lemma chargeStateGas_getCode_gen {amount devm exn} (h : chargeStateGas amount devm = exn) (a : Adr) : Execution.getCode exn a = devm.getCode a := by
   cases exn with
@@ -2261,6 +2278,52 @@ lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = e
   | ok d =>
     exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) hp).getCode a |>.symm
 
+
+lemma addAccessedAddress_createdAccounts (pre : Devm) (address : Adr) :
+    (addAccessedAddress pre address).createdAccounts = pre.createdAccounts := rfl
+
+lemma Devm.push_createdAccounts_eq {value : B256} {pre : Devm} {out : Execution}
+    (h : pre.push value = out) : Execution.createdAccounts out = pre.createdAccounts := by
+  have frame := Devm.push_instructionFrame value pre
+  rw [h] at frame
+  cases out <;> exact frame.createdAccounts.symm
+
+lemma Devm.popToAdr_createdAccounts_eq {d d' : Devm} {a : Adr}
+    (h : d.popToAdr = .ok (a, d')) : d'.createdAccounts = d.createdAccounts := by
+  have frame := Devm.popToAdr_instructionFrame d
+  rw [h] at frame
+  exact frame.createdAccounts.symm
+
+lemma Devm.popToAdr_createdAccounts_err {d : Devm} {e : EvmError × Devm}
+    (h : d.popToAdr = .error e) : e.2.createdAccounts = d.createdAccounts := by
+  have frame := Devm.popToAdr_instructionFrame d
+  rw [h] at frame
+  exact frame.createdAccounts.symm
+
+lemma chargeGas_createdAccounts_eq {cost : Nat} {d : Devm} {out : Execution}
+    (h : chargeGas cost d = out) : Execution.createdAccounts out = d.createdAccounts := by
+  have frame := chargeGas_instructionFrame cost d
+  rw [h] at frame
+  cases out <;> exact frame.createdAccounts.symm
+
+lemma chargeStateGas_createdAccounts_eq {amount : Nat} {d : Devm} {out : Execution}
+    (h : chargeStateGas amount d = out) :
+    Execution.createdAccounts out = d.createdAccounts := by
+  have frame := chargeStateGas_instructionFrame amount d
+  rw [h] at frame
+  cases out <;> exact frame.createdAccounts.symm
+
+lemma Devm.subBal_createdAccounts_eq {d d' : Devm} {a : Adr} {v : B256}
+    (h : d.subBal a v = some d') : d'.createdAccounts = d.createdAccounts := by
+  dsimp only [Devm.subBal, Option.bind_eq_bind] at h
+  cases state : d.state.subBal a v with
+  | none => rw [state] at h; contradiction
+  | some st =>
+    rw [state] at h
+    dsimp only [Option.bind_some] at h
+    cases h
+    rfl
+
 def Xlot.InvGetCode : Xlot → Prop
   | .none => True
   | .some ⟨evm, exn⟩ =>
@@ -2268,11 +2331,17 @@ def Xlot.InvGetCode : Xlot → Prop
       (evm.dyna.getCode adr).toList ≠ [] →
       evm.dyna.getCode adr = Execution.getCode exn adr
 
+lemma applyPrecompResult_code_created (evm : Evm) (res : PrecompResult) (ex : Execution)
+    (h_ex : applyPrecompResult evm res = ex) (a : Adr) :
+    Execution.getCode ex a = evm.dyna.getCode a ∧
+      Execution.createdAccounts ex = evm.dyna.createdAccounts := by
+  revert h_ex
+  cases res <;> (intro h_ex; subst h_ex; exact ⟨rfl, rfl⟩)
+
 lemma applyPrecompResult_getCode (evm : Evm) (res : PrecompResult) (ex : Execution)
     (h_ex : applyPrecompResult evm res = ex) (a : Adr) :
     Execution.getCode ex a = evm.dyna.getCode a := by
-  revert h_ex
-  cases res <;> (intro h_ex; subst h_ex; rfl)
+  exact (applyPrecompResult_code_created evm res ex h_ex a).1
 
 lemma executePrecomp_preserves_getCode (evm : Evm) (adr : Adr) (ex : Execution)
     (h_ex : executePrecomp evm adr = ex) (a : Adr) :
@@ -2283,6 +2352,42 @@ def MsgResult.getCode (exn : Except (EvmError × State × AdrSet × Tra) Devm) (
   match exn with
   | .ok d => d.getCode a
   | .error ⟨_, state, _, _⟩ => state.getCode a
+
+def MsgResult.createdAccounts : Except (EvmError × State × AdrSet × Tra) Devm → AdrSet
+  | .ok d => d.createdAccounts
+  | .error (_, _, created, _) => created
+
+/-- Shared proof mode: code-only compatibility, or code plus created exclusion. -/
+def Xlot.InvAccountPreserve (track : Bool) : Xlot → Prop
+  | .none => True
+  | .some (evm, out) => ∀ a, (evm.dyna.getCode a).toList ≠ [] →
+      Execution.getCode out a = evm.dyna.getCode a ∧
+      (track = true → a ∉ evm.dyna.createdAccounts → a ∉ Execution.createdAccounts out)
+
+lemma Xlot.invAccountPreserve_false {xl : Xlot} (h : Xlot.InvGetCode xl) :
+    Xlot.InvAccountPreserve false xl := by
+  cases xl with
+  | none => trivial
+  | some pair =>
+    intro a code
+    exact ⟨(h a code).symm, by intro impossible; cases impossible⟩
+
+def MsgResult.AccountPreserve (track : Bool) (base : Benv)
+    (out : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
+  ∀ a, (base.state.getCode a).toList ≠ [] →
+    MsgResult.getCode out a = base.state.getCode a ∧
+      (track = true → a ∉ base.createdAccounts → a ∉ MsgResult.createdAccounts out)
+
+def MsgResult.AccountPreserveExcept (track : Bool) (base : Benv) (target : Adr)
+    (out : Except (EvmError × State × AdrSet × Tra) Devm) : Prop :=
+  ∀ a, a ≠ target → (base.state.getCode a).toList ≠ [] →
+    MsgResult.getCode out a = base.state.getCode a ∧
+      (track = true → a ∉ base.createdAccounts → a ∉ MsgResult.createdAccounts out)
+
+def Execution.AccountPreserve (track : Bool) (base : Devm) (out : Execution) : Prop :=
+  ∀ a, (base.getCode a).toList ≠ [] →
+    Execution.getCode out a = base.getCode a ∧
+      (track = true → a ∉ base.createdAccounts → a ∉ Execution.createdAccounts out)
 
 /-! ## Step 7.2 — message-level code-effect masters
 
@@ -2307,26 +2412,38 @@ def Execution.CodePreserve (base : Devm) (exn : Execution) : Prop :=
 
 /-- Writer leaf: `handleError` reshuffles error payloads into ok results and
 selects states, but never installs new code. -/
-lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
-    MsgResult.getCode (executeCode.handleError exn) a = Execution.getCode exn a := by
+lemma executeCode.handleError_code_created (exn : Execution) (a : Adr) :
+    MsgResult.getCode (executeCode.handleError exn) a = Execution.getCode exn a ∧
+      MsgResult.createdAccounts (executeCode.handleError exn) = Execution.createdAccounts exn := by
   cases exn with
-  | ok d => rfl
+  | ok d => exact ⟨rfl, rfl⟩
   | error p =>
     rcases p with ⟨err, evm⟩
-    cases err <;> rfl
+    cases err <;> exact ⟨rfl, rfl⟩
+
+lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
+    MsgResult.getCode (executeCode.handleError exn) a = Execution.getCode exn a := by
+  exact (executeCode.handleError_code_created exn a).1
+
+lemma executeCode.handleErrorWith_code_created (sg : Option StateGasRules)
+    (exn : Execution) (a : Adr) :
+    MsgResult.getCode (executeCode.handleErrorWith sg exn) a =
+      Execution.getCode exn a ∧
+      MsgResult.createdAccounts (executeCode.handleErrorWith sg exn) = Execution.createdAccounts exn := by
+  cases sg with
+  | none => exact executeCode.handleError_code_created exn a
+  | some _ =>
+      cases exn with
+      | ok d => exact ⟨rfl, rfl⟩
+      | error p =>
+          rcases p with ⟨err, evm⟩
+          cases err <;> exact ⟨rfl, rfl⟩
 
 lemma executeCode.handleErrorWith_getCode (sg : Option StateGasRules)
     (exn : Execution) (a : Adr) :
     MsgResult.getCode (executeCode.handleErrorWith sg exn) a =
       Execution.getCode exn a := by
-  cases sg with
-  | none => exact executeCode.handleError_getCode exn a
-  | some _ =>
-      cases exn with
-      | ok d => rfl
-      | error p =>
-          rcases p with ⟨err, evm⟩
-          cases err <;> rfl
+  exact (executeCode.handleErrorWith_code_created sg exn a).1
 
 /-- Writer leaf: rollback installs the selected state, so its code map is that
 state's code map. -/
@@ -2670,62 +2787,98 @@ lemma processCreateMessage.msg_benvStat (msg : Msg) :
 /-- Master: `executeCode` preserves the code of every nonempty-code address.
 The suspended child's oracle invariant (`inv`) supplies the interpreted-code
 case; `handleError_getCode` covers precompile and error selection. -/
-lemma ExecuteCode.codePreserve
+lemma ExecuteCode.accountPreserve {track : Bool}
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : (Blanc.Xlot.InvGetCode xl))
+    (inv : (Blanc.Xlot.InvAccountPreserve track xl))
     (run : ExecuteCode msg xl exn) :
-    MsgResult.CodePreserve msg.benv.state exn := by
+    MsgResult.AccountPreserve track msg.benv exn := by
   intro a ha
   unfold ExecuteCode at run
   rcases henter : executeCode.enter msg with evm | raw <;> rw [henter] at run
   · rcases run with ⟨raw, h_xl, h_err⟩
     subst h_err
-    rw [executeCode.handleErrorWith_getCode]
+    rw [(executeCode.handleErrorWith_code_created _ _ a).1,
+      (executeCode.handleErrorWith_code_created _ _ a).2]
     rw [h_xl] at inv
-    dsimp only [ExceptT.stM_eq, Xlot.InvGetCode, ne_eq] at inv
+    dsimp only [ExceptT.stM_eq, Xlot.InvAccountPreserve, ne_eq] at inv
     rw [executeCode.enter_inl henter] at inv
-    exact (inv a ha).symm
+    exact inv a ha
   · rcases run with ⟨h_xl, h_err⟩
     subst h_err
-    rw [executeCode.handleErrorWith_getCode]
+    rw [(executeCode.handleErrorWith_code_created _ _ a).1,
+      (executeCode.handleErrorWith_code_created _ _ a).2]
     obtain ⟨adr, hraw⟩ := executeCode.enter_inr henter
     rw [hraw]
-    exact executePrecomp_preserves_getCode (initEvm msg) adr _ rfl a
+    refine ⟨executePrecomp_preserves_getCode (initEvm msg) adr _ rfl a, ?_⟩
+    intro _ notCreated
+    rw [(applyPrecompResult_code_created (initEvm msg)
+      (precompileRun (initEvm msg) adr) (executePrecomp (initEvm msg) adr) rfl a).2]
+    exact notCreated
+
+lemma ExecuteCode.codePreserve
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
+    (inv : (Blanc.Xlot.InvGetCode xl))
+    (run : ExecuteCode msg xl exn) :
+    MsgResult.CodePreserve msg.benv.state exn := by
+  intro a code
+  exact (ExecuteCode.accountPreserve (Xlot.invAccountPreserve_false inv) run a code).1
+
+lemma benvAfterTransfer_ok_createdAccounts {msg : Msg} {benv : Benv}
+    (h : msg.benvAfterTransfer = .ok benv) :
+    benv.createdAccounts = msg.benv.createdAccounts := by
+  by_cases zero : msg.value = 0
+  · rw [Msg.benvAfterTransfer_of_value_zero zero] at h
+    cases h
+    rfl
+  by_cases transfer : msg.shouldTransferValue = true
+  · obtain ⟨st, subtract, rfl⟩ := of_benvAfterTransfer transfer zero h
+    rfl
+  · rw [of_benvAfterTransfer_no transfer h]
+
+lemma ProcessMessage.accountPreserve {track : Bool}
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
+    (inv : (Blanc.Xlot.InvAccountPreserve track xl))
+    (run : ProcessMessage msg xl exn) :
+    MsgResult.AccountPreserve track msg.benv exn := by
+  intro a ha
+  obtain ⟨r0, hbody, rfl⟩ := ProcessMessage.iff_body.mp run
+  unfold FrameBody at hbody
+  rcases h_benv : msg.benvAfterTransfer with e | benv <;> rw [h_benv] at hbody
+  · rw [hbody.2]
+    dsimp only [processMessage.settle, Except.bind_error, MsgResult.getCode, MsgResult.createdAccounts]
+    dsimp only [Msg.benvAfterTransfer] at h_benv
+    split at h_benv
+    · cases h_sub : msg.benv.subBal msg.caller msg.value
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, Except.error.injEq] at h_benv
+        subst h_benv
+        exact ⟨rfl, fun _ notCreated => notCreated⟩
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, reduceCtorEq] at h_benv
+    · contradiction
+  · have h_benv_created := benvAfterTransfer_ok_createdAccounts h_benv
+    have h_benv_code := benvAfterTransfer_ok_getCode h_benv a
+    have ha' : ( (msg.withBenv benv).benv.state.getCode a ).toList ≠ [] := by
+      dsimp only [Msg.withBenv, ne_eq]
+      rw [h_benv_code]
+      exact ha
+    have h_exec_cond := ExecuteCode.accountPreserve inv hbody a ha'
+    dsimp only [Msg.withBenv] at h_exec_cond
+    rw [h_benv_code, h_benv_created] at h_exec_cond
+    unfold processMessage.settle
+    rcases r0 with e' | evm
+    · exact h_exec_cond
+    · dsimp only [bind, Except.bind]
+      split
+      · exact ⟨Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a,
+          h_exec_cond.2⟩
+      · exact h_exec_cond
 
 lemma ProcessMessage.codePreserve
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : (Blanc.Xlot.InvGetCode xl))
     (run : ProcessMessage msg xl exn) :
     MsgResult.CodePreserve msg.benv.state exn := by
-  intro a ha
-  obtain ⟨r0, hbody, rfl⟩ := ProcessMessage.iff_body.mp run
-  unfold FrameBody at hbody
-  rcases h_benv : msg.benvAfterTransfer with e | benv <;> rw [h_benv] at hbody
-  · rw [hbody.2]
-    dsimp only [processMessage.settle, Except.bind_error, MsgResult.getCode]
-    dsimp only [Msg.benvAfterTransfer] at h_benv
-    split at h_benv
-    · cases h_sub : msg.benv.subBal msg.caller msg.value
-      · simp only [bind, Except.bind, Option.toExcept, h_sub, Except.error.injEq] at h_benv
-        subst h_benv
-        rfl
-      · simp only [bind, Except.bind, Option.toExcept, h_sub, reduceCtorEq] at h_benv
-    · contradiction
-  · have h_benv_code := benvAfterTransfer_ok_getCode h_benv a
-    have ha' : ( (msg.withBenv benv).benv.state.getCode a ).toList ≠ [] := by
-      dsimp only [Msg.withBenv, ne_eq]
-      rw [h_benv_code]
-      exact ha
-    have h_exec_cond := ExecuteCode.codePreserve inv hbody a ha'
-    dsimp only [Msg.withBenv] at h_exec_cond
-    rw [h_benv_code] at h_exec_cond
-    unfold processMessage.settle
-    rcases r0 with e' | evm
-    · exact h_exec_cond
-    · dsimp only [bind, Except.bind]
-      split
-      · exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
-      · exact h_exec_cond
+  intro a code
+  exact (ProcessMessage.accountPreserve (Xlot.invAccountPreserve_false inv) run a code).1
 
 lemma ProcessMessage.preserves_getCode_gen
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -2741,6 +2894,15 @@ lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) 
   show ((evm.state.setCode a code).get b).code = (evm.state.get b).code
   rw [State.setCode, State.setAccount_get_ne _ h]
 
+namespace AdrSet
+
+theorem not_mem_insert {a b : Adr} {s : AdrSet} (hne : a ≠ b) (hs : a ∉ s) :
+    a ∉ s.insert b := by
+  simp only [Std.HashSet.mem_insert, not_or]
+  exact ⟨by simpa only [beq_iff_eq, ne_eq] using Ne.symm hne, hs⟩
+
+end AdrSet
+
 /-- Master: `processCreateMessage` preserves the code of every nonempty-code
 address *other than* the create target.  Create preparation
 (`processCreateMessage.msg_getCode`) and the interpreted body
@@ -2748,21 +2910,34 @@ address *other than* the create target.  Create preparation
 (`chargeCodeGas_getCode_gen`); create completion writes only `msg.currentTarget`
 through `setCode` (`setCode_getCode`, excluded by `a ≠ msg.currentTarget`); the
 halt/error paths select states via rollback (`Devm.rollback_getCode`). -/
-lemma ProcessCreateMessage.codePreserve
+
+lemma processCreateMessage.chargeCodeGas_createdAccounts {rules : ForkRules}
+    {pre : Devm} {out : Execution} (h : processCreateMessage.chargeCodeGas rules pre = out) :
+    Execution.createdAccounts out = pre.createdAccounts := by
+  have frame := processCreateMessage.chargeCodeGas_instructionFrame rules pre
+  rw [h] at frame
+  cases out <;> exact frame.createdAccounts.symm
+
+lemma ProcessCreateMessage.accountPreserveExcept {track : Bool}
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
-    (inv : (Blanc.Xlot.InvGetCode xl))
+    (inv : Xlot.InvAccountPreserve track xl)
     (run : ProcessCreateMessage msg xl exn) :
-    MsgResult.CodePreserveExcept msg.benv.state msg.currentTarget exn := by
+    MsgResult.AccountPreserveExcept track msg.benv msg.currentTarget exn := by
   intro a h_a ha
   have h_benv_code := processCreateMessage.msg_getCode msg a
   have ha' : ((processCreateMessage.msg msg).benv.state.getCode a).toList ≠ [] := by
     rw [h_benv_code]; exact ha
   obtain ⟨ex', h_exec, rfl⟩ := ProcessCreateMessage.iff_processMessage.mp run
-  have h_exec_cond := ProcessMessage.codePreserve inv h_exec a ha'
-  rw [h_benv_code] at h_exec_cond
+  have h_exec_cond := ProcessMessage.accountPreserve inv h_exec a ha'
+  have h_created : track = true → a ∉ msg.benv.createdAccounts →
+      a ∉ MsgResult.createdAccounts ex' := by
+    intro enabled fresh
+    exact h_exec_cond.2 enabled (AdrSet.not_mem_insert h_a fresh)
+  have h_code := h_exec_cond.1
+  rw [h_benv_code] at h_code
   unfold processCreateMessage.settle
   rcases ex' with x | evm
-  · exact h_exec_cond
+  · exact ⟨h_code, h_created⟩
   · dsimp only [bind, Except.bind]
     split
     · rename_i h_none
@@ -2770,25 +2945,46 @@ lemma ProcessCreateMessage.codePreserve
       | error err =>
         rcases err with ⟨err_msg, err_evm⟩
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
+        have h_ca := processCreateMessage.chargeCodeGas_createdAccounts h_charge
         change err_evm.state.getCode a = evm.state.getCode a at h_getCode
+        change err_evm.createdAccounts = evm.createdAccounts at h_ca
+        have h_created_err : track = true → a ∉ msg.benv.createdAccounts →
+            a ∉ err_evm.createdAccounts := by
+          rw [h_ca]; exact h_created
         cases err_msg with
         | halt reason =>
             simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt]
             split
-            · rfl
-            · rfl
+            · exact ⟨rfl, h_created_err⟩
+            · exact ⟨rfl, h_created_err⟩
         | _ =>
             simp only [MsgResult.getCode]
-            rw [h_getCode]; exact h_exec_cond
+            refine ⟨?_, ?_⟩
+            · rw [h_getCode]; exact h_code
+            · exact h_created_err
       | ok devm_charge =>
-        dsimp only [MsgResult.getCode]
-        have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
-        dsimp only [Execution.getCode] at h_getCode
-        rw [setCode_getCode h_a.symm]
-        rw [h_getCode]
-        exact h_exec_cond
+        refine ⟨?_, ?_⟩
+        · dsimp only [MsgResult.getCode]
+          have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
+          dsimp only [Execution.getCode] at h_getCode
+          rw [setCode_getCode h_a.symm]
+          rw [h_getCode]
+          exact h_code
+        · have h_ca := processCreateMessage.chargeCodeGas_createdAccounts h_charge
+          change devm_charge.createdAccounts = evm.createdAccounts at h_ca
+          change track = true → a ∉ msg.benv.createdAccounts → a ∉ devm_charge.createdAccounts
+          rw [h_ca]; exact h_created
     · rename_i h_some
-      exact Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a
+      exact ⟨Devm.rollback_getCode evm msg.benv.state msg.tenv.transientStorage a, h_created⟩
+
+lemma ProcessCreateMessage.codePreserve
+    {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
+    (inv : (Blanc.Xlot.InvGetCode xl))
+    (run : ProcessCreateMessage msg xl exn) :
+    MsgResult.CodePreserveExcept msg.benv.state msg.currentTarget exn := by
+  intro a different code
+  exact (ProcessCreateMessage.accountPreserveExcept
+    (Xlot.invAccountPreserve_false inv) run a different code).1
 
 lemma createMsg_benv_state_getCode
     {sevm : Sevm} {devm : Devm} {createGas : Nat} {endowment : B256}
@@ -2805,26 +3001,80 @@ lemma createMsgAmsterdam_benv_state_getCode
 
 /-- The CREATE-family return path preserves code at every address other than
 the freshly created one, given the child frame preserved it. -/
-lemma Resume.create_getCode {parent : Devm} {newAddress a : Adr}
+lemma Resume.create_accountPreserve {track : Bool} {parent : Devm} {newAddress a : Adr}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (h : MsgResult.getCode r a = parent.getCode a) :
+    (h : MsgResult.getCode r a = parent.getCode a)
+    (hca : track = true → a ∉ parent.createdAccounts → a ∉ MsgResult.createdAccounts r) :
     Execution.getCode ((Resume.create parent newAddress).run r) a =
-      parent.getCode a := by
+      parent.getCode a ∧
+      (track = true → a ∉ parent.createdAccounts →
+        a ∉ Execution.createdAccounts ((Resume.create parent newAddress).run r)) := by
   unfold Resume.run liftToExecution
   rcases r with ⟨err, state, ac, tra⟩ | child <;>
     dsimp only [bind, Except.bind]
   · dsimp only [MsgResult.getCode] at h
     dsimp only [Execution.getCode]
-    change state.getCode a = parent.getCode a
-    exact h
+    exact ⟨h, hca⟩
   · dsimp only [MsgResult.getCode] at h
     split
-    · rw [Devm.push_getCode_gen rfl a]
+    · rw [Devm.push_createdAccounts_eq rfl, Devm.push_getCode_gen rfl a]
       dsimp only [incorporateChildOnError]
-      exact h
-    · rw [Devm.push_getCode_gen rfl a]
+      exact ⟨h, hca⟩
+    · rw [Devm.push_createdAccounts_eq rfl, Devm.push_getCode_gen rfl a]
       dsimp only [incorporateChildOnSuccess]
-      exact h
+      exact ⟨h, hca⟩
+
+lemma Resume.create_getCode {parent : Devm} {newAddress a : Adr}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode ((Resume.create parent newAddress).run r) a =
+      parent.getCode a := by
+  exact (Resume.create_accountPreserve (track := false) h
+    (by intro impossible; cases impossible)).1
+
+lemma Resume.createAmsterdam_accountPreserve {track : Bool} {state : StateGasRules} {parent : Devm}
+    {newAddress a : Adr} {nac : Bool}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a)
+    (hca : track = true → a ∉ parent.createdAccounts → a ∉ MsgResult.createdAccounts r) :
+    Execution.getCode
+      ((Resume.createAmsterdam state parent newAddress nac).run r) a =
+      parent.getCode a ∧
+      (track = true → a ∉ parent.createdAccounts →
+        a ∉ Execution.createdAccounts ((Resume.createAmsterdam state parent newAddress nac).run r)) := by
+  unfold Resume.run liftToExecution
+  rcases r with ⟨err, state, ac, tra⟩ | child <;>
+    dsimp only [bind, Except.bind, Except.assert]
+  · dsimp only [MsgResult.getCode] at h
+    dsimp only [Execution.getCode]
+    exact ⟨h, hca⟩
+  · dsimp only [MsgResult.getCode] at h
+    split
+    · -- Error path: guard, optional refund credit, status push.
+      by_cases hP : child.AmsterdamFailedChildSettled
+      · rw [ite_eq_left hP]
+        dsimp only
+        split
+        · rw [Devm.push_createdAccounts_eq rfl, Devm.push_getCode_gen rfl a,
+            Devm.creditStateGasRefund_getCode]
+          dsimp only [incorporateChildAmsterdamOnError]
+          exact ⟨h, hca⟩
+        · rw [Devm.push_createdAccounts_eq rfl, Devm.push_getCode_gen rfl a]
+          dsimp only [incorporateChildAmsterdamOnError]
+          exact ⟨h, hca⟩
+      · rw [ite_eq_right hP]
+        dsimp only [Execution.getCode]
+        exact ⟨h, hca⟩
+    · -- Success path: guard, incorporation, status push.
+      by_cases hP : child.AmsterdamChildUncommitted
+      · rw [ite_eq_left hP]
+        dsimp only
+        rw [Devm.push_createdAccounts_eq rfl, Devm.push_getCode_gen rfl a]
+        dsimp only [incorporateChildAmsterdamOnSuccess]
+        exact ⟨h, hca⟩
+      · rw [ite_eq_right hP]
+        dsimp only [Execution.getCode]
+        exact ⟨h, hca⟩
 
 lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
     {newAddress a : Adr} {nac : Bool}
@@ -2833,46 +3083,14 @@ lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
     Execution.getCode
       ((Resume.createAmsterdam state parent newAddress nac).run r) a =
       parent.getCode a := by
-  unfold Resume.run liftToExecution
-  rcases r with ⟨err, state, ac, tra⟩ | child <;>
-    dsimp only [bind, Except.bind, Except.assert]
-  · dsimp only [MsgResult.getCode] at h
-    dsimp only [Execution.getCode]
-    change state.getCode a = parent.getCode a
-    exact h
-  · dsimp only [MsgResult.getCode] at h
-    split
-    · -- Error path: guard, optional refund credit, status push.
-      by_cases hP : child.AmsterdamFailedChildSettled
-      · rw [ite_eq_left hP]
-        dsimp only
-        split
-        · rw [Devm.push_getCode_gen rfl a,
-            Devm.creditStateGasRefund_getCode]
-          dsimp only [incorporateChildAmsterdamOnError]
-          exact h
-        · rw [Devm.push_getCode_gen rfl a]
-          dsimp only [incorporateChildAmsterdamOnError]
-          exact h
-      · rw [ite_eq_right hP]
-        dsimp only [Execution.getCode]
-        exact h
-    · -- Success path: guard, incorporation, status push.
-      by_cases hP : child.AmsterdamChildUncommitted
-      · rw [ite_eq_left hP]
-        dsimp only
-        rw [Devm.push_getCode_gen rfl a]
-        dsimp only [incorporateChildAmsterdamOnSuccess]
-        exact h
-      · rw [ite_eq_right hP]
-        dsimp only [Execution.getCode]
-        exact h
+  exact (Resume.createAmsterdam_accountPreserve (track := false) h
+    (by intro impossible; cases impossible)).1
 
-lemma GenericCreate.codePreserve
+lemma GenericCreate.accountPreserve {track : Bool}
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
-    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
+    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : Xlot.InvAccountPreserve track xl)
     (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
-    Execution.CodePreserve devm exn := by
+    Execution.AccountPreserve track devm exn := by
   intro a ha
   unfold GenericCreate genericCreate.step at run
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
@@ -2883,34 +3101,34 @@ lemma GenericCreate.codePreserve
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
     split at heq <;> cases heq
-    rfl
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- static-context assertion failed
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
     split at heq <;> cases heq
-    rfl
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- balance / max-nonce / depth-zero early exit, push failed
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
-    rfl
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- balance / max-nonce / depth-zero early exit, push succeeded
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
-    rfl
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- address-collision early exit, push failed
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
     rw [addAccessedAddress_getCode]
-    exact Devm.incrNonce_getCode
+    exact ⟨Devm.incrNonce_getCode, fun _ fresh => fresh⟩
   -- address-collision early exit, push succeeded
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
     rw [addAccessedAddress_getCode]
-    exact Devm.incrNonce_getCode
+    exact ⟨Devm.incrNonce_getCode, fun _ fresh => fresh⟩
   -- the child frame is entered
   · obtain ⟨r, hframe, rfl⟩ := run
     rename_i h_collision
@@ -2942,17 +3160,28 @@ lemma GenericCreate.codePreserve
             · contradiction
       rw [h_eq, h_empty] at ha
       exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
-    rw [Resume.create_getCode ?_, h_parent a]
-    exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+    have result := ProcessCreateMessage.accountPreserveExcept inv hframe a h_a_ne
       (by rw [createMsg_benv_state_getCode, h_parent a]; exact ha)
+    rw [createMsg_benv_state_getCode] at result
+    have returned := Resume.create_accountPreserve (newAddress := newAddress) result.1 result.2
+    rw [h_parent a] at returned
+    exact returned
 
-lemma GenericCreateAmsterdam.codePreserve
+lemma GenericCreate.codePreserve
+    {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
+    {memoryIndex memorySize : Nat} {xl : Xlot} {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
+    (run : GenericCreate sevm devm endowment newAddress memoryIndex memorySize xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a code
+  exact (GenericCreate.accountPreserve (Xlot.invAccountPreserve_false inv) run a code).1
+
+lemma GenericCreateAmsterdam.accountPreserve {track : Bool}
     {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
     {newAddress : Adr} {memoryIndex memorySize : Nat} {xl : Xlot}
-    {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
+    {exn : Execution} (inv : Xlot.InvAccountPreserve track xl)
     (run : GenericCreateAmsterdam sevm state devm endowment newAddress
       memoryIndex memorySize xl exn) :
-    Execution.CodePreserve devm exn := by
+    Execution.AccountPreserve track devm exn := by
   intro a ha
   unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
@@ -2961,30 +3190,54 @@ lemma GenericCreateAmsterdam.codePreserve
   all_goals first
     | obtain ⟨-, rfl⟩ := run
       rename_i heq
-      rw [Devm.push_getCode_gen heq a, Devm.balReadAccount_getCode]
-      rfl
+      rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a, Devm.balReadAccount_getCode,
+        Devm.balReadAccount_createdAccounts]
+      exact ⟨rfl, fun _ fresh => fresh⟩
     | obtain ⟨-, rfl⟩ := run
       rename_i heq
-      dsimp only [Execution.getCode]
-      rw [((chargeStateGas_worldEq_of_error heq).getCode a).symm,
-        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
-        Devm.balReadAccount_getCode]
-      rfl
+      refine ⟨?_, ?_⟩
+      · dsimp only [Execution.getCode]
+        rw [((chargeStateGas_worldEq_of_error heq).getCode a).symm,
+          Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.balReadAccount_getCode]
+        rfl
+      · have hc := chargeStateGas_createdAccounts_eq heq
+        intro enabled fresh
+        rw [hc]
+        simp only [Devm.balReadAccount_createdAccounts, addAccessedAddress_createdAccounts]
+        exact fresh
     | obtain ⟨-, rfl⟩ := run
-      rename_i hchg _ _ _ hpush
-      rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
-        Devm.withholdCreateGas_getCode,
-        ((chargeStateGas_worldEq_of_ok hchg).getCode a).symm,
-        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
-        Devm.balReadAccount_getCode]
-      rfl
+      rename_i v hchg _ _ _ hpush
+      rw [Devm.push_createdAccounts_eq hpush]
+      refine ⟨?_, ?_⟩
+      · rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
+          Devm.withholdCreateGas_getCode,
+          ((chargeStateGas_worldEq_of_ok hchg).getCode a).symm,
+          Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.balReadAccount_getCode]
+        rfl
+      · intro enabled fresh
+        change a ∉ v.createdAccounts
+        have hc := chargeStateGas_createdAccounts_eq hchg
+        change v.createdAccounts = _ at hc
+        rw [hc]
+        simp only [Devm.balReadAccount_createdAccounts, addAccessedAddress_createdAccounts]
+        exact fresh
     | obtain ⟨-, rfl⟩ := run
       rename_i hpush
-      rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
-        Devm.withholdCreateGas_getCode,
-        Devm.balReadAccount_getCode, addAccessedAddress_getCode,
-        Devm.balReadAccount_getCode]
-      rfl
+      rw [Devm.push_createdAccounts_eq hpush]
+      refine ⟨?_, ?_⟩
+      · rw [Devm.push_getCode_gen hpush a, Devm.incrNonce_getCode,
+          Devm.withholdCreateGas_getCode,
+          Devm.balReadAccount_getCode, addAccessedAddress_getCode,
+          Devm.balReadAccount_getCode]
+        rfl
+      · intro enabled fresh
+        change a ∉ (Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+            sevm.currentTarget (devm.withReturnData [])) newAddress)).createdAccounts
+        simp only [Devm.balReadAccount_createdAccounts, addAccessedAddress_createdAccounts]
+        exact fresh
     | refine Exists.elim run (fun r hr => ?_)
       obtain ⟨hframe, rfl⟩ := hr
       rename_i v hchg hnc
@@ -3020,9 +3273,25 @@ lemma GenericCreateAmsterdam.codePreserve
           exact h0
         rw [h_eq, h_empty] at ha
         exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
-      rw [Resume.createAmsterdam_getCode ?_, h_parent a]
-      exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+      have result := ProcessCreateMessage.accountPreserveExcept inv hframe a h_a_ne
         (by rw [createMsgAmsterdam_benv_state_getCode, h_parent a]; exact ha)
+      rw [createMsgAmsterdam_benv_state_getCode] at result
+      have returned := Resume.createAmsterdam_accountPreserve
+        (state := state) (newAddress := newAddress)
+        (nac := decide ((Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+            sevm.currentTarget (devm.withReturnData [])) newAddress)).getAcct newAddress).Empty)
+        result.1 result.2
+      rw [h_parent a] at returned
+      refine ⟨returned.1, ?_⟩
+      intro enabled fresh
+      apply returned.2 enabled
+      change a ∉ v.createdAccounts
+      have hc := chargeStateGas_createdAccounts_eq hchg
+      change v.createdAccounts = _ at hc
+      rw [hc]
+      simp only [Devm.balReadAccount_createdAccounts, addAccessedAddress_createdAccounts]
+      exact fresh
     | refine Exists.elim run (fun r hr => ?_)
       obtain ⟨hframe, rfl⟩ := hr
       rename_i hnc
@@ -3070,9 +3339,36 @@ lemma GenericCreateAmsterdam.codePreserve
           exact h0
         rw [h_eq, h_empty] at ha
         exact ha (by unfold ByteArray.toList ByteArray.toList.loop; rfl)
-      rw [Resume.createAmsterdam_getCode ?_, h_parent a]
-      exact ProcessCreateMessage.codePreserve inv hframe a h_a_ne
+      have result := ProcessCreateMessage.accountPreserveExcept inv hframe a h_a_ne
         (by rw [createMsgAmsterdam_benv_state_getCode, h_parent a]; exact ha)
+      rw [createMsgAmsterdam_benv_state_getCode] at result
+      have returned := Resume.createAmsterdam_accountPreserve
+        (state := state) (newAddress := newAddress)
+        (nac := decide ((Devm.balReadAccount sevm.benvStat.rules newAddress
+          (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+            sevm.currentTarget (devm.withReturnData [])) newAddress)).getAcct newAddress).Empty)
+        result.1 result.2
+      rw [h_parent a] at returned
+      refine ⟨returned.1, ?_⟩
+      intro enabled fresh
+      apply returned.2 enabled
+      change a ∉ (Devm.balReadAccount sevm.benvStat.rules newAddress
+        (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules
+          sevm.currentTarget (devm.withReturnData [])) newAddress)).createdAccounts
+      simp only [Devm.balReadAccount_createdAccounts, addAccessedAddress_createdAccounts]
+      exact fresh
+
+
+lemma GenericCreateAmsterdam.codePreserve
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {memoryIndex memorySize : Nat} {xl : Xlot}
+    {exn : Execution} (inv : (Blanc.Xlot.InvGetCode xl))
+    (run : GenericCreateAmsterdam sevm state devm endowment newAddress
+      memoryIndex memorySize xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a code
+  exact (GenericCreateAmsterdam.accountPreserve
+    (Xlot.invAccountPreserve_false inv) run a code).1
 
 lemma callMsg_benv_state_getCode
     {sevm : Sevm} {evm1 : Devm} {gas : Nat} {value : B256}
@@ -3095,11 +3391,14 @@ lemma callMsgAmsterdam_benv_state_getCode
 /-- The CALL-family return path preserves code at every address, given the child
 frame preserved it: `memWrite` touches memory only, and `incorporateChild*`
 installs the child's state, whose code map the child preserved. -/
-lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Nat}
+lemma Resume.call_accountPreserve {track : Bool} {parent : Devm} {a : Adr} {outputIndex outputSize : Nat}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (h : MsgResult.getCode r a = parent.getCode a) :
+    (h : MsgResult.getCode r a = parent.getCode a)
+    (hca : track = true → a ∉ parent.createdAccounts → a ∉ MsgResult.createdAccounts r) :
     Execution.getCode ((Resume.call parent outputIndex outputSize).run r) a =
-      parent.getCode a := by
+      parent.getCode a ∧
+      (track = true → a ∉ parent.createdAccounts →
+        a ∉ Execution.createdAccounts ((Resume.call parent outputIndex outputSize).run r)) := by
   have hmw : ∀ (d : Devm) (o : Bytes),
       (d.memWrite outputIndex o).getCode a = d.getCode a := fun d o =>
     (liftMachPure_worldEq (Mach.memWrite · outputIndex o) d).getCode a |>.symm
@@ -3108,34 +3407,55 @@ lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Na
     dsimp only [bind, Except.bind]
   · dsimp only [MsgResult.getCode] at h
     dsimp only [Execution.getCode]
-    change state.getCode a = parent.getCode a
-    exact h
+    exact ⟨h, hca⟩
   · dsimp only [MsgResult.getCode] at h
     split
     · rcases hpush : (incorporateChildOnError parent child child.output).push 0 with
         e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
-      · exact hp.trans h
-      · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
-        rw [hmw]
-        exact hp.trans h
+      all_goals have hpc := Devm.push_createdAccounts_eq hpush
+      · exact ⟨hp.trans h, by rw [hpc]; exact hca⟩
+      · refine ⟨?_, ?_⟩
+        · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
+          rw [hmw]
+          exact hp.trans h
+        · change track = true → a ∉ parent.createdAccounts → a ∉ evm2.createdAccounts
+          change evm2.createdAccounts = _ at hpc
+          rw [hpc]; exact hca
     · rcases hpush : (incorporateChildOnSuccess parent child child.output).push 1 with
         e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
-      · exact hp.trans h
-      · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
-        rw [hmw]
-        exact hp.trans h
+      all_goals have hpc := Devm.push_createdAccounts_eq hpush
+      · exact ⟨hp.trans h, by rw [hpc]; exact hca⟩
+      · refine ⟨?_, ?_⟩
+        · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
+          rw [hmw]
+          exact hp.trans h
+        · change track = true → a ∉ parent.createdAccounts → a ∉ evm2.createdAccounts
+          change evm2.createdAccounts = _ at hpc
+          rw [hpc]; exact hca
+
+
+lemma Resume.call_getCode {parent : Devm} {a : Adr} {outputIndex outputSize : Nat}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode ((Resume.call parent outputIndex outputSize).run r) a =
+      parent.getCode a := by
+  exact (Resume.call_accountPreserve (track := false) h
+    (by intro impossible; cases impossible)).1
 
 /-- The Amsterdam CALL-family return path preserves code at every address,
 given the child frame preserved it: the guards fail with the child itself, the
 refund credit touches gas only, and `incorporateChildAmsterdam*` installs the
 child's state. -/
-lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
+lemma Resume.callAmsterdam_accountPreserve {track : Bool} {state : StateGasRules} {parent : Devm}
     {a : Adr} {outputIndex outputSize : Nat} {nac : Bool}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (h : MsgResult.getCode r a = parent.getCode a) :
+    (h : MsgResult.getCode r a = parent.getCode a)
+    (hca : track = true → a ∉ parent.createdAccounts → a ∉ MsgResult.createdAccounts r) :
     Execution.getCode
       ((Resume.callAmsterdam state parent outputIndex outputSize nac).run r) a =
-      parent.getCode a := by
+      parent.getCode a ∧
+      (track = true → a ∉ parent.createdAccounts →
+        a ∉ Execution.createdAccounts ((Resume.callAmsterdam state parent outputIndex outputSize nac).run r)) := by
   have hmw : ∀ (d : Devm) (o : Bytes),
       (d.memWrite outputIndex o).getCode a = d.getCode a := fun d o =>
     (liftMachPure_worldEq (Mach.memWrite · outputIndex o) d).getCode a |>.symm
@@ -3144,8 +3464,7 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
     dsimp only [bind, Except.bind, Except.assert]
   · dsimp only [MsgResult.getCode] at h
     dsimp only [Execution.getCode]
-    change state.getCode a = parent.getCode a
-    exact h
+    exact ⟨h, hca⟩
   · dsimp only [MsgResult.getCode] at h
     split
     · -- Error path: guard, optional refund credit, status push, memory write.
@@ -3158,21 +3477,31 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
               (incorporateChildAmsterdamOnError parent child
                 child.output)).push 0 with
             e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
-          · exact hp.trans h
-          · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
-            rw [hmw]
-            exact hp.trans h
+          all_goals have hpc := Devm.push_createdAccounts_eq hpush
+          · exact ⟨hp.trans h, by rw [hpc]; exact hca⟩
+          · refine ⟨?_, ?_⟩
+            · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
+              rw [hmw]
+              exact hp.trans h
+            · change track = true → a ∉ parent.createdAccounts → a ∉ evm2.createdAccounts
+              change evm2.createdAccounts = _ at hpc
+              rw [hpc]; exact hca
         · rw [ite_eq_right hnac]
           rcases hpush : (incorporateChildAmsterdamOnError parent child
               child.output).push 0 with
             e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
-          · exact hp.trans h
-          · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
-            rw [hmw]
-            exact hp.trans h
+          all_goals have hpc := Devm.push_createdAccounts_eq hpush
+          · exact ⟨hp.trans h, by rw [hpc]; exact hca⟩
+          · refine ⟨?_, ?_⟩
+            · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
+              rw [hmw]
+              exact hp.trans h
+            · change track = true → a ∉ parent.createdAccounts → a ∉ evm2.createdAccounts
+              change evm2.createdAccounts = _ at hpc
+              rw [hpc]; exact hca
       · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
-        exact h
+        exact ⟨h, hca⟩
     · -- Success path: guard, incorporation, status push, memory write.
       by_cases hP : child.AmsterdamChildUncommitted
       · rw [ite_eq_left hP]
@@ -3180,13 +3509,31 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
         rcases hpush : (incorporateChildAmsterdamOnSuccess parent child
             child.output).push 1 with
           e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
-        · exact hp.trans h
-        · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
-          rw [hmw]
-          exact hp.trans h
+        all_goals have hpc := Devm.push_createdAccounts_eq hpush
+        · exact ⟨hp.trans h, by rw [hpc]; exact hca⟩
+        · refine ⟨?_, ?_⟩
+          · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
+            rw [hmw]
+            exact hp.trans h
+          · change track = true → a ∉ parent.createdAccounts → a ∉ evm2.createdAccounts
+            change evm2.createdAccounts = _ at hpc
+            rw [hpc]; exact hca
       · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
-        exact h
+        exact ⟨h, hca⟩
+
+
+lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
+    {a : Adr} {outputIndex outputSize : Nat} {nac : Bool}
+    {r : Except (EvmError × State × AdrSet × Tra) Devm}
+    (h : MsgResult.getCode r a = parent.getCode a) :
+    Execution.getCode
+      ((Resume.callAmsterdam state parent outputIndex outputSize nac).run r) a =
+      parent.getCode a := by
+  exact (Resume.callAmsterdam_accountPreserve (track := false) h
+    (by intro impossible; cases impossible)).1
+
+
 
 /-- On the successful path the CREATE-family return installs the child's
 world; the status push leaves it alone. -/
@@ -3238,14 +3585,14 @@ lemma Resume.call_state {parent child : Devm} {oi os : Nat} {sf : Devm}
   · exact key (incorporateChildOnError parent child child.output) rfl 0 h
   · exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
 
-lemma GenericCall.codePreserve
+lemma GenericCall.accountPreserve {track : Bool}
     {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
     {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
     {input_index input_size output_index output_size : Nat} {code : ByteArray}
     {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
-    (inv : (Blanc.Xlot.InvGetCode xl))
+    (inv : Xlot.InvAccountPreserve track xl)
     (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
-    Execution.CodePreserve devm exn := by
+    Execution.AccountPreserve track devm exn := by
   intro a ha
   unfold GenericCall genericCall.step at run
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
@@ -3254,20 +3601,77 @@ lemma GenericCall.codePreserve
   -- depth-zero early exit, push failed
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
-    rfl
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- depth-zero early exit, push succeeded
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
-    rw [Devm.push_getCode_gen heq a]
-    rfl
+    rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a]
+    exact ⟨rfl, fun _ fresh => fresh⟩
   -- the child frame is entered
   · obtain ⟨r, hframe, rfl⟩ := run
-    rw [Resume.call_getCode ?_]
-    · rfl
-    · rw [ProcessMessage.codePreserve inv hframe a
-        (by rw [callMsg_benv_state_getCode]; exact ha)]
-      exact callMsg_benv_state_getCode a
+    have result := ProcessMessage.accountPreserve inv hframe a
+      (by rw [callMsg_benv_state_getCode]; exact ha)
+    rw [callMsg_benv_state_getCode] at result
+    exact Resume.call_accountPreserve result.1 result.2
+
+lemma GenericCall.codePreserve
+    {sevm : Sevm} {devm : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles : Bool} {xl : Xlot} {exn : Execution}
+    (inv : (Blanc.Xlot.InvGetCode xl))
+    (run : GenericCall sevm devm gas value caller target codeAddress shouldTransferValue isStaticcall input_index input_size output_index output_size code disablePrecompiles xl exn) :
+    Execution.CodePreserve devm exn := by
+  intro a code
+  exact (GenericCall.accountPreserve (Xlot.invAccountPreserve_false inv) run a code).1
+
+lemma GenericCallAmsterdam.accountPreserve {track : Bool}
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
+    {value : B256} {caller target codeAddress : Adr}
+    {shouldTransferValue isStaticcall : Bool}
+    {input_index input_size output_index output_size : Nat} {code : ByteArray}
+    {disablePrecompiles newAccountCharged insufficientBalance : Bool}
+    {xl : Xlot} {exn : Execution}
+    (inv : Xlot.InvAccountPreserve track xl)
+    (run : GenericCallAmsterdam sevm state devm gas reservoir value caller
+      target codeAddress shouldTransferValue isStaticcall input_index
+      input_size output_index output_size code disablePrecompiles
+      newAccountCharged insufficientBalance xl exn) :
+    Execution.AccountPreserve track devm exn := by
+  intro a ha
+  unfold GenericCallAmsterdam genericCallAmsterdam.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  -- early exit, push failed
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    by_cases hnac : newAccountCharged = true
+    · rw [ite_eq_left hnac] at heq
+      rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
+        Devm.restoreChildGas_getCode]
+      exact ⟨rfl, fun _ fresh => fresh⟩
+    · rw [ite_eq_right hnac] at heq
+      rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
+      exact ⟨rfl, fun _ fresh => fresh⟩
+  -- early exit, push succeeded
+  · obtain ⟨-, rfl⟩ := run
+    rename_i heq
+    by_cases hnac : newAccountCharged = true
+    · rw [ite_eq_left hnac] at heq
+      rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
+        Devm.restoreChildGas_getCode]
+      exact ⟨rfl, fun _ fresh => fresh⟩
+    · rw [ite_eq_right hnac] at heq
+      rw [Devm.push_createdAccounts_eq heq, Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
+      exact ⟨rfl, fun _ fresh => fresh⟩
+  -- the child frame is entered
+  · obtain ⟨r, hframe, rfl⟩ := run
+    have result := ProcessMessage.accountPreserve inv hframe a
+      (by rw [callMsgAmsterdam_benv_state_getCode]; exact ha)
+    rw [callMsgAmsterdam_benv_state_getCode] at result
+    exact Resume.callAmsterdam_accountPreserve result.1 result.2
 
 lemma GenericCallAmsterdam.codePreserve
     {sevm : Sevm} {state : StateGasRules} {devm : Devm} {gas reservoir : Nat}
@@ -3282,41 +3686,8 @@ lemma GenericCallAmsterdam.codePreserve
       input_size output_index output_size code disablePrecompiles
       newAccountCharged insufficientBalance xl exn) :
     Execution.CodePreserve devm exn := by
-  intro a ha
-  unfold GenericCallAmsterdam genericCallAmsterdam.step at run
-  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
-  repeat' split at run
-  all_goals simp only [XStep.ofExcept, XStep.Run] at run
-  -- early exit, push failed
-  · obtain ⟨-, rfl⟩ := run
-    rename_i heq
-    by_cases hnac : newAccountCharged = true
-    · rw [ite_eq_left hnac] at heq
-      rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
-        Devm.restoreChildGas_getCode]
-      rfl
-    · rw [ite_eq_right hnac] at heq
-      rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
-      rfl
-  -- early exit, push succeeded
-  · obtain ⟨-, rfl⟩ := run
-    rename_i heq
-    by_cases hnac : newAccountCharged = true
-    · rw [ite_eq_left hnac] at heq
-      rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
-        Devm.restoreChildGas_getCode]
-      rfl
-    · rw [ite_eq_right hnac] at heq
-      rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
-      rfl
-  -- the child frame is entered
-  · obtain ⟨r, hframe, rfl⟩ := run
-    have hmg : MsgResult.getCode r a = (devm.withReturnData []).getCode a := by
-      rw [ProcessMessage.codePreserve inv hframe a
-        (by rw [callMsgAmsterdam_benv_state_getCode]; exact ha)]
-      exact callMsgAmsterdam_benv_state_getCode a
-    rw [Resume.callAmsterdam_getCode hmg]
-    rfl
+  intro a code
+  exact (GenericCallAmsterdam.accountPreserve (Xlot.invAccountPreserve_false inv) run a code).1
 
 /-- A call-type step whose `Except` prefix failed carries that failure. -/
 lemma XStep.run_ofExcept_error {e : EvmError × Devm} {xl : Xlot} {ex : Execution}
@@ -4816,20 +5187,14 @@ lemma Rinst.preserves_getCode_err
     {pc sevm devm r err}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = Except.error err) (a : Adr) :
     err.2.getCode a = devm.getCode a := by
-  rcases eq_or_ne r .sstore with rfl | hs
-  · have hf := Rinst.sstore_run_stateWriteFrame pc devm sevm; rw [run] at hf
-    exact (Devm.StateWriteFrame.getCode_eq hf a).symm
-  rcases eq_or_ne r .tstore with rfl | ht
-  · have hf := Rinst.tstore_run_transientWriteFrame pc devm sevm; rw [run] at hf
-    exact congrFun (congrArg (fun s => fun a => (s.get a).code) hf.state).symm a
-  · have hf := Rinst.run_instructionFrame pc sevm devm r hs ht; rw [run] at hf; exact (Devm.InstructionFrame.getCode hf a).symm
+  exact (Rinst.run_code_created run a).1
 
 lemma Rinst.preserves_getCode_gen
     {pc sevm devm r exn}
     (run : Rinst.run ⟨pc, sevm, devm⟩ r = exn) (a : Adr)
     (_ne : (devm.getCode a).toList ≠ []) :
     Execution.getCode exn a = devm.getCode a := by
-  cases exn <;> first | exact Rinst.preserves_getCode_err run a | exact Rinst.preserves_getCode run a
+  exact (Rinst.run_code_created run a).1
 
 def JumpResult.getCode (ex : Except (EvmError × Devm) (Nat × Devm)) (a : Adr) : ByteArray :=
   match ex with
@@ -4911,9 +5276,10 @@ lemma creditSelfdestructRefund_delSets (rules : ForkRules) (scheduled : Prop)
   unfold creditSelfdestructRefund
   split <;> rfl
 
-lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+lemma Linst.selfdestruct_preserves_code_created {sevm : Sevm} {devm : Devm} {exn : Execution}
     (run : Linst.Run sevm devm .selfdestruct exn) :
-    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
+    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr ∧
+      Execution.createdAccounts exn = devm.createdAccounts := by
   intro adr
   dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
     Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
@@ -4925,7 +5291,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
     revert run
     cases h1 : devm.popToAdr <;> dsimp only [Devm.balReadAccount_accessedAddresses, ite_not]
     case error err =>
-      intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
+      intro run; rw [← run]; exact ⟨Devm.popToAdr_getCode_err h1 adr, Devm.popToAdr_createdAccounts_err h1⟩
     case ok res1 =>
       have h_br2 : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).getCode adr = res1.2.getCode adr :=
         Devm.balReadAccount_getCode.trans Devm.balReadAccount_getCode
@@ -4937,11 +5303,20 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
           split
           · exact addAccessedAddress_getCode.trans h_br2
           · exact h_br2
+      have h_acc_ca : (match sevm.benvStat.rules.access with | .eip2929 => (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)) | .flat _ => ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1.createdAccounts = res1.2.createdAccounts := by
+        cases haccess : sevm.benvStat.rules.access with
+        | flat _ => simp only [Devm.balReadAccount_createdAccounts]
+        | eip2929 =>
+          dsimp only
+          split <;> change (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+            (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).createdAccounts =
+              res1.2.createdAccounts
+          all_goals simp only [Devm.balReadAccount_createdAccounts]
       cases h2 : chargeGas _ _ <;> dsimp only
       case error err =>
         intro run; rw [← run]
-        change err.2.getCode adr = devm.getCode adr
-        exact (chargeGas_getCode_err h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+        change err.2.getCode adr = devm.getCode adr ∧ err.2.createdAccounts = devm.createdAccounts
+        exact ⟨(chargeGas_getCode_err h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr)), (chargeGas_createdAccounts_eq h2).trans (h_acc_ca.trans (Devm.popToAdr_createdAccounts_eq h1))⟩
       case ok res2 =>
         cases h3 : assertDynamic sevm res2
         case error err =>
@@ -4950,14 +5325,14 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
           split at h3
           · contradiction
           · simp only [Except.error.injEq] at h3; subst h3
-            change res2.getCode adr = devm.getCode adr
-            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+            change res2.getCode adr = devm.getCode adr ∧ res2.createdAccounts = devm.createdAccounts
+            exact ⟨(chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr)), (chargeGas_createdAccounts_eq h2).trans (h_acc_ca.trans (Devm.popToAdr_createdAccounts_eq h1))⟩
         case ok _ =>
           cases h4 : res2.subBal _ _ <;> dsimp only [Option.toExcept]
           case none =>
             intro run; rw [← run]
-            change res2.getCode adr = devm.getCode adr
-            exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
+            change res2.getCode adr = devm.getCode adr ∧ res2.createdAccounts = devm.createdAccounts
+            exact ⟨(chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr)), (chargeGas_createdAccounts_eq h2).trans (h_acc_ca.trans (Devm.popToAdr_createdAccounts_eq h1))⟩
           case some res3 =>
             have h_sub : res3.getCode adr = res2.getCode adr := by
               dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
@@ -4983,12 +5358,26 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
                   sevm.currentTarget)) else .ok credited) = exn → _
             split
             · intro run; rw [← run]
-              change (creditSelfdestructRefund _ _ _).getCode adr = _
-              rw [creditSelfdestructRefund_getCode]
-              change (credited.setBal sevm.currentTarget 0).getCode adr = _
-              exact (State.setBal_getCode credited.state sevm.currentTarget adr 0).trans hcredit
+              constructor
+              · change (creditSelfdestructRefund _ _ _).getCode adr = _
+                rw [creditSelfdestructRefund_getCode]
+                change (credited.setBal sevm.currentTarget 0).getCode adr = _
+                exact (State.setBal_getCode credited.state sevm.currentTarget adr 0).trans hcredit
+              · change (creditSelfdestructRefund _ _ _).createdAccounts = _
+                rw [show (creditSelfdestructRefund sevm.benvStat.rules
+                    (sevm.currentTarget ∈ credited.accountsToDelete)
+                    (addAccountToDelete (credited.setBal sevm.currentTarget 0) sevm.currentTarget)).createdAccounts =
+                    credited.createdAccounts from congrArg Prod.snd (creditSelfdestructRefund_delSets _ _ _)]
+                exact (congrArg Prod.snd (Devm.creditBeneficiary_delSets _ _ _ _)).trans
+                  ((Devm.subBal_createdAccounts_eq h4).trans
+                    ((chargeGas_createdAccounts_eq h2).trans
+                      (h_acc_ca.trans (Devm.popToAdr_createdAccounts_eq h1))))
             · intro run; rw [← run]
-              exact hcredit
+              refine ⟨hcredit, ?_⟩
+              exact (congrArg Prod.snd (Devm.creditBeneficiary_delSets _ _ _ _)).trans
+                ((Devm.subBal_createdAccounts_eq h4).trans
+                  ((chargeGas_createdAccounts_eq h2).trans
+                    (h_acc_ca.trans (Devm.popToAdr_createdAccounts_eq h1))))
   · -- Amsterdam lane: static check first, priced access, state charges, logging sweep.
     rename_i state
     intro run
@@ -5001,11 +5390,11 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
       split at h0
       · contradiction
       · simp only [Except.error.injEq] at h0; subst h0
-        rfl
+        exact ⟨rfl, rfl⟩
     case ok _ =>
       cases h1 : devm.popToAdr <;> dsimp only [ite_not]
       case error err =>
-        intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
+        intro run; rw [← run]; exact ⟨Devm.popToAdr_getCode_err h1 adr, Devm.popToAdr_createdAccounts_err h1⟩
       case ok res1 =>
         cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp only [ite_not]
         case error err =>
@@ -5016,7 +5405,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
             contradiction
           · simp only [hle, ite_false] at hg
             simp only [Except.error.injEq] at hg; subst hg
-            exact Devm.popToAdr_getCode_eq h1 adr
+            exact ⟨Devm.popToAdr_getCode_eq h1 adr, Devm.popToAdr_createdAccounts_eq h1⟩
         case ok _ =>
           have h_warm : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getCode adr = res1.2.getCode adr := by
             split
@@ -5024,20 +5413,26 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
             · rfl
           have h_wb : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getCode adr = res1.2.getCode adr :=
             Devm.balReadAccount_getCode.trans (Devm.balReadAccount_getCode.trans h_warm)
+          have h_wb_ca : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget
+              (Devm.balReadAccount sevm.benvStat.rules res1.1
+                (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).createdAccounts =
+              res1.2.createdAccounts := by
+            simp only [Devm.balReadAccount_createdAccounts]
+            split <;> rfl
           cases hchg : chargeGas _ _ <;> dsimp only [ite_not]
           case error err =>
             intro run; rw [← run]
-            exact (chargeGas_getCode_err hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))
+            exact ⟨(chargeGas_getCode_err hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)), (chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1))⟩
           case ok res2 =>
             cases hstg : chargeStateGas _ _ <;> dsimp only [ite_not]
             case error err =>
               intro run; rw [← run]
-              exact (chargeStateGas_getCode_err hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))
+              exact ⟨(chargeStateGas_getCode_err hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))), (chargeStateGas_createdAccounts_eq hstg).trans ((chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1)))⟩
             case ok res2b =>
               cases h4 : res2b.subBal _ _ <;> dsimp only [Option.toExcept, ite_not]
               case none =>
                 intro run; rw [← run]
-                exact (chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))
+                exact ⟨(chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))), (chargeStateGas_createdAccounts_eq hstg).trans ((chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1)))⟩
               case some res3 =>
                 have h_sub : res3.getCode adr = res2b.getCode adr := by
                   dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
@@ -5053,28 +5448,48 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
                   dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
                 have h_emit : ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr = (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr :=
                   ((Devm.emitTransferLog_instructionFrame _ _ _ _).getCode adr).symm
+                have h_emit_ca : ((res3.addBal res1.1
+                    (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1
+                      else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog
+                    sevm.currentTarget res1.1
+                    (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1
+                      else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts =
+                    res3.createdAccounts :=
+                  (Devm.emitTransferLog_instructionFrame _ _ _ _).createdAccounts.symm
                 by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
                 · simp only [h_if, ite_eq_left]
                   intro run; rw [← run]
                   have h_del : (addAccountToDelete ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr := by
                     rfl
-                  exact h_del.trans (h_emit.trans (h_add.trans (h_sub.trans ((chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))))))
-                · simp only [h_if]
+                  exact ⟨h_del.trans (h_emit.trans (h_add.trans (h_sub.trans ((chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))))))), h_emit_ca.trans ((Devm.subBal_createdAccounts_eq h4).trans ((chargeStateGas_createdAccounts_eq hstg).trans ((chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1)))))⟩
+                · simp only [h_if, ite_false]
                   intro run; rw [← run]
-                  exact h_emit.trans (h_add.trans (h_sub.trans ((chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))))))
+                  exact ⟨h_emit.trans (h_add.trans (h_sub.trans ((chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))))), h_emit_ca.trans ((Devm.subBal_createdAccounts_eq h4).trans ((chargeStateGas_createdAccounts_eq hstg).trans ((chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1)))))⟩
+
+lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
+    (run : Linst.Run sevm devm .selfdestruct exn) :
+    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
+  intro adr
+  exact (Linst.selfdestruct_preserves_code_created run adr).1
 
 /-- Pointwise equality of code maps: the frame every non-create step keeps. -/
 def Devm.CodeFrame (before after : Devm) : Prop :=
   ∀ a : Adr, after.getCode a = before.getCode a
 
+theorem Linst.run_code_created {sevm : Sevm} {devm : Devm} {l : Linst}
+    {exn : Execution} (run : Linst.Run sevm devm l exn) :
+    ∀ a : Adr, Execution.getCode exn a = devm.getCode a ∧
+      Execution.createdAccounts exn = devm.createdAccounts := by
+  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
+  · exact Linst.selfdestruct_preserves_code_created run
+  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
+    rw [run] at hf
+    cases exn <;> exact fun a => ⟨(hf.getCode a).symm, hf.createdAccounts.symm⟩
+
 theorem Linst.run_codeFrame {sevm : Sevm} {devm : Devm} {l : Linst}
     {exn : Execution} (run : Linst.Run sevm devm l exn) :
     Execution.Rel Devm.CodeFrame devm exn := by
-  rcases eq_or_ne l .selfdestruct with rfl | h_not_selfdestruct
-  · cases exn <;> exact Linst.selfdestruct_preserves_getCode run
-  · have hf := Linst.run_instructionFrame sevm devm l h_not_selfdestruct
-    rw [run] at hf
-    cases exn <;> exact fun a => (hf.getCode a).symm
+  cases exn <;> exact fun a => (Linst.run_code_created run a).1
 
 /-- Relational invariant carried by a filled recursive execution slot. -/
 def Xlot.Rel (R : Devm → Devm → Prop) : Xlot → Prop
@@ -5365,6 +5780,50 @@ theorem Func.effect {R : Devm → Devm → Prop}
 def Devm.CodePreserve (pre post : Devm) : Prop :=
   ∀ a : Adr, (pre.getCode a).toList ≠ [] → post.getCode a = pre.getCode a
 
+/-- Code preservation, optionally carrying exclusion from the created set. -/
+def Devm.AccountPreserve (track : Bool) (pre post : Devm) : Prop :=
+  ∀ a : Adr, (pre.getCode a).toList ≠ [] →
+    post.getCode a = pre.getCode a ∧
+      (track = true → a ∉ pre.createdAccounts → a ∉ post.createdAccounts)
+
+lemma accountPreserve_refl_trans (track : Bool) :
+    ReflexiveRel (Devm.AccountPreserve track) ∧ TransitiveRel (Devm.AccountPreserve track) := by
+  constructor
+  · intro pre a _
+    exact ⟨rfl, fun _ fresh => fresh⟩
+  · intro pre mid post first second a code
+    have hfirst := first a code
+    have hmid : (mid.getCode a).toList ≠ [] := by rw [hfirst.1]; exact code
+    have hsecond := second a hmid
+    exact ⟨hsecond.1.trans hfirst.1, fun enabled fresh =>
+      hsecond.2 enabled (hfirst.2 enabled fresh)⟩
+
+lemma Devm.InstructionFrame.accountPreserve {track : Bool} {pre post : Devm}
+    (frame : Devm.InstructionFrame pre post) : Devm.AccountPreserve track pre post := by
+  intro a _
+  exact ⟨(frame.getCode a).symm, by rw [frame.createdAccounts]; exact fun _ fresh => fresh⟩
+
+lemma Execution.accountPreserve_code {pre : Devm} {out : Execution}
+    (h : Execution.Rel (Devm.AccountPreserve false) pre out) :
+    Execution.Rel Devm.CodePreserve pre out := by
+  cases out <;> exact fun a code => (h a code).1
+
+lemma Xlot.accountPreserve_false_of_rel {xl : Xlot}
+    (h : Xlot.Rel Devm.CodePreserve xl) : Xlot.Rel (Devm.AccountPreserve false) xl := by
+  cases xl with
+  | none => trivial
+  | some slot =>
+    rcases slot with ⟨evm, out⟩
+    cases out <;> exact fun a code => ⟨h a code, by intro impossible; cases impossible⟩
+
+lemma Xlot.invAccountPreserve_of_rel {track : Bool} {xl : Xlot}
+    (h : Xlot.Rel (Devm.AccountPreserve track) xl) : Xlot.InvAccountPreserve track xl := by
+  cases xl with
+  | none => trivial
+  | some slot =>
+    rcases slot with ⟨evm, out⟩
+    cases out <;> exact h
+
 lemma codePreserve_refl_trans :
     ReflexiveRel Devm.CodePreserve ∧ TransitiveRel Devm.CodePreserve := by
   constructor
@@ -5395,11 +5854,16 @@ lemma Xlot.rel_of_invGetCode {xl : Xlot}
     | error e => exact fun a ha => (h a ha).symm
     | ok d => exact fun a ha => (h a ha).symm
 
+lemma Rinst.accountPreserve_effect (track : Bool) (r : Rinst) :
+    Rinst.Effect (Devm.AccountPreserve track) r := by
+  intro pc sevm pre out run
+  have result := Rinst.run_code_created run
+  cases out <;> exact fun a _ => ⟨(result a).1, fun _ fresh => (congrArg (fun created => a ∉ created) (result a).2).mpr fresh⟩
+
 lemma Rinst.codePreserve_effect (r : Rinst) :
     Rinst.Effect Devm.CodePreserve r := by
-  intro pc sevm pre out hrun
-  have h := Rinst.preserves_getCode_gen hrun
-  cases out <;> exact fun a ha => h a ha
+  intro pc sevm pre out run
+  exact Execution.accountPreserve_code (Rinst.accountPreserve_effect false r run)
 
 /-- Canonical relational code-preservation master for `Xinst`.  This carries the
 full per-constructor case analysis, composing the world-silent primitive frames
@@ -5407,18 +5871,20 @@ full per-constructor case analysis, composing the world-silent primitive frames
 masters `GenericCall.codePreserve` / `GenericCreate.codePreserve`.  The legacy
 observation theorem `Xinst.preserves_getCode_gen` is a projection of this master via
 the `Xlot.InvGetCode` / `Xlot.Rel Devm.CodePreserve` bridge. -/
-lemma Xinst.codePreserve_effectRec (x : Xinst) :
-    Xinst.EffectRec Devm.CodePreserve x := by
+lemma Xinst.accountPreserve_effectRec (track : Bool) (x : Xinst) :
+    Xinst.EffectRec (Devm.AccountPreserve track) x := by
   intro sevm devm xl exn hxl run
-  have inv : (Blanc.Xlot.InvGetCode xl) := Xlot.invGetCode_of_rel hxl
+  have inv := Xlot.invAccountPreserve_of_rel hxl
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
-      Execution.CodePreserve d exn →
-      Execution.Rel Devm.CodePreserve devm exn := by
+      Execution.AccountPreserve track d exn →
+      Execution.Rel (Devm.AccountPreserve track) devm exn := by
     intro d hf h
     have key : ∀ a : Adr, (devm.getCode a).toList ≠ [] →
-        Execution.getCode exn a = devm.getCode a := by
+        Execution.getCode exn a = devm.getCode a ∧
+          (track = true → a ∉ devm.createdAccounts → a ∉ Execution.createdAccounts exn) := by
       intro a ha
       rw [hf.getCode a] at ha ⊢
+      rw [hf.createdAccounts]
       exact h a ha
     cases exn with
     | error e => exact fun a ha => key a ha
@@ -5434,15 +5900,21 @@ lemma Xinst.codePreserve_effectRec (x : Xinst) :
     rw [hs] at run
   -- the whole step stayed inside the instruction frame
   · obtain ⟨-, rfl⟩ := run
-    exact Outcome.Rel.mono (fun _ _ hfr a _ => (hfr.getCode a).symm) hframe
+    exact Outcome.Rel.mono (fun _ _ hfr => hfr.accountPreserve) hframe
   -- dispatched to the CREATE family
-  · exact lift hf (GenericCreate.codePreserve inv run)
+  · exact lift hf (GenericCreate.accountPreserve inv run)
   -- dispatched to the CALL family
-  · exact lift hf (GenericCall.codePreserve inv run)
+  · exact lift hf (GenericCall.accountPreserve inv run)
   -- dispatched to the Amsterdam CREATE family
-  · exact lift hf (GenericCreateAmsterdam.codePreserve inv run)
+  · exact lift hf (GenericCreateAmsterdam.accountPreserve inv run)
   -- dispatched to the Amsterdam CALL family
-  · exact lift hf (GenericCallAmsterdam.codePreserve inv run)
+  · exact lift hf (GenericCallAmsterdam.accountPreserve inv run)
+
+lemma Xinst.codePreserve_effectRec (x : Xinst) :
+    Xinst.EffectRec Devm.CodePreserve x := by
+  intro sevm devm xl exn hxl run
+  exact Execution.accountPreserve_code
+    (Xinst.accountPreserve_effectRec false x (Xlot.accountPreserve_false_of_rel hxl) run)
 
 lemma Ninst.push_instructionFrame_effectRec
     {xs : Bytes} {hxs : xs.length ≤ 32} :
@@ -5581,34 +6053,53 @@ lemma Ninst.exchange_codePreserve_effectRec {imm : UInt8} :
   exact Ninst.exchange_effectRec_of_instructionFrame (R := Devm.CodePreserve)
     (fun _ _ hf a _ => (hf.getCode a).symm)
 
+lemma Ninst.accountPreserve_effectRec (track : Bool) (n : Ninst) :
+    Ninst.EffectRec (Devm.AccountPreserve track) n := by
+  cases n with
+  | reg r => exact Ninst.effectRec_reg (Rinst.accountPreserve_effect track r)
+  | exec x => exact Ninst.effectRec_exec (Xinst.accountPreserve_effectRec track x)
+  | push xs hxs =>
+    exact Ninst.push_effectRec_of_instructionFrame
+      (fun _ _ frame => frame.accountPreserve)
+  | dupn imm =>
+    exact Ninst.dupn_effectRec_of_instructionFrame
+      (fun _ _ frame => frame.accountPreserve)
+  | swapn imm =>
+    exact Ninst.swapn_effectRec_of_instructionFrame
+      (fun _ _ frame => frame.accountPreserve)
+  | exchange imm =>
+    exact Ninst.exchange_effectRec_of_instructionFrame
+      (fun _ _ frame => frame.accountPreserve)
+
 lemma Ninst.codePreserve_effectRec (n : Ninst) :
     Ninst.EffectRec Devm.CodePreserve n := by
-  cases n with
-  | reg r =>
-    exact Ninst.effectRec_reg (Rinst.codePreserve_effect r)
-  | exec x =>
-    exact Ninst.effectRec_exec (Xinst.codePreserve_effectRec x)
-  | push xs hxs =>
-    exact Ninst.push_codePreserve_effectRec
-  | dupn imm =>
-    exact Ninst.dupn_codePreserve_effectRec
-  | swapn imm =>
-    exact Ninst.swapn_codePreserve_effectRec
-  | exchange imm =>
-    exact Ninst.exchange_codePreserve_effectRec
+  intro pc sevm pre xl out hxl run
+  exact Execution.accountPreserve_code
+    (Ninst.accountPreserve_effectRec false n (Xlot.accountPreserve_false_of_rel hxl) run)
+
+lemma Jinst.accountPreserve_effect (track : Bool) (j : Jinst) :
+    Jinst.Effect (Devm.AccountPreserve track) j := by
+  intro evm out run
+  have frame := Jinst.run_instructionFrame evm j
+  rw [run] at frame
+  cases out <;> exact frame.accountPreserve
 
 lemma Jinst.codePreserve_effect (j : Jinst) :
     Jinst.Effect Devm.CodePreserve j := by
-  intro evm out hrun
-  have hf := Jinst.run_instructionFrame evm j
-  rw [hrun] at hf
-  cases out <;> exact fun a _ => (hf.getCode a).symm
+  intro evm out run
+  have result := Jinst.accountPreserve_effect false j run
+  cases out <;> exact fun a code => (result a code).1
+
+lemma Linst.accountPreserve_effect (track : Bool) (l : Linst) :
+    Linst.Effect (Devm.AccountPreserve track) l := by
+  intro sevm pre out run
+  have result := Linst.run_code_created run
+  cases out <;> exact fun a _ => ⟨(result a).1, fun _ fresh => (congrArg (fun created => a ∉ created) (result a).2).mpr fresh⟩
 
 lemma Linst.codePreserve_effect (l : Linst) :
     Linst.Effect Devm.CodePreserve l := by
-  intro sevm pre out hrun
-  have hf := Linst.run_codeFrame hrun
-  cases out <;> exact fun a _ => hf a
+  intro sevm pre out run
+  exact Execution.accountPreserve_code (Linst.accountPreserve_effect false l run)
 
 lemma Exec.preserves_getCode {pc} {sevm} {devm} {exn}
     (run : Exec pc sevm devm exn) :
@@ -10006,10 +10497,6 @@ end DispatchLogFrame
 
 namespace AdrSet
 
-theorem not_mem_insert {a b : Adr} {s : AdrSet} (hne : a ≠ b) (hs : a ∉ s) :
-    a ∉ s.insert b := by
-  simp only [Std.HashSet.mem_insert, not_or]
-  exact ⟨by simpa only [beq_iff_eq, ne_eq] using Ne.symm hne, hs⟩
 
 theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ : a ∉ m₂) :
     a ∉ m₁.union m₂ := by

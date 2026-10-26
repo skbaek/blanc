@@ -106,39 +106,60 @@ theorem skipP_110 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd
   exact ⟨b', M', G', hs, run⟩
 
 /-- Crossing `_domainSeparator` (entry 78, frame `[ret]`, one return word). -/
-theorem skipP_78 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd ρ : B256}
+theorem skipP_78_noStateGas (hP : SiteStep P) (hsg : sevm.benvStat.rules.stateGas = none) {dd ρ : B256}
     (run : SFunc.RunCutP P Impl.cert.prog sevm C (St b (dd :: ρ :: S) M G) (.callNext 78 f) r) :
     ∃ b' y M' G', b'.state = b.state ∧ SFunc.RunCutP P Impl.cert.prog sevm C (St b' (y :: S) M' G') f r := by
-  obtain ⟨b', Y, M', G', hs, hlen, run⟩ := ricP_call_silent (fun h => (hP h).1) Impl.cert_check
-    hfork dom78_ok.1 dom78_ok.2.1 (k := 78) (by decide) (by decide) (e := ⟨0x4276, [.ret], 1⟩)
+  obtain ⟨b', Y, M', G', hs, hlen, run⟩ := ricP_call_silent_noStateGas (fun h => (hP h).1) Impl.cert_check
+    hsg dom78_ok.1 dom78_ok.2.1 (k := 78) (by decide) (by decide) (e := ⟨0x4276, [.ret], 1⟩)
     rfl rfl (ρ := ρ) run (List.Forall₂.cons rfl .nil)
   obtain ⟨y, rfl⟩ : ∃ y, Y = [y] := match Y, hlen with | [y], _ => ⟨y, rfl⟩
   exact ⟨b', y, M', G', hs, run⟩
 
+/-- The covered-fork projection of the silent entry crossing. -/
+theorem skipP_78 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd ρ : B256}
+    (run : SFunc.RunCutP P Impl.cert.prog sevm C (St b (dd :: ρ :: S) M G) (.callNext 78 f) r) :
+    ∃ b' y M' G', b'.state = b.state ∧ SFunc.RunCutP P Impl.cert.prog sevm C (St b' (y :: S) M' G') f r :=
+  skipP_78_noStateGas hP hfork.rules_stateGas_none run
+
 /-- Crossing `_hashTypedDataV4` (entry 79, frame `[_, _, ret]`, one return word). -/
-theorem skipP_79 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd x y ρ : B256}
+theorem skipP_79_noStateGas (hP : SiteStep P) (hsg : sevm.benvStat.rules.stateGas = none) {dd x y ρ : B256}
     (run : SFunc.RunCutP P Impl.cert.prog sevm C (St b (dd :: x :: y :: ρ :: S) M G)
       (.callNext 79 f) r) :
     ∃ b' z M' G', b'.state = b.state ∧ SFunc.RunCutP P Impl.cert.prog sevm C (St b' (z :: S) M' G') f r := by
-  obtain ⟨b', Y, M', G', hs, hlen, run⟩ := ricP_call_silent (fun h => (hP h).1) Impl.cert_check
-    hfork dom78_ok.2.2.1 dom78_ok.2.2.2 (k := 79) (by decide) (by decide)
+  obtain ⟨b', Y, M', G', hs, hlen, run⟩ := ricP_call_silent_noStateGas (fun h => (hP h).1) Impl.cert_check
+    hsg dom78_ok.2.2.1 dom78_ok.2.2.2 (k := 79) (by decide) (by decide)
     (e := ⟨0x508b, [.unk, .unk, .ret], 1⟩) rfl rfl (ρ := ρ) run
     (List.Forall₂.cons trivial (.cons trivial (.cons rfl .nil)))
   obtain ⟨z, rfl⟩ : ∃ z, Y = [z] := match Y, hlen with | [z], _ => ⟨z, rfl⟩
   exact ⟨b', z, M', G', hs, run⟩
 
+/-- The covered-fork projection of the silent entry crossing. -/
+theorem skipP_79 (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork) {dd x y ρ : B256}
+    (run : SFunc.RunCutP P Impl.cert.prog sevm C (St b (dd :: x :: y :: ρ :: S) M G)
+      (.callNext 79 f) r) :
+    ∃ b' z M' G', b'.state = b.state ∧ SFunc.RunCutP P Impl.cert.prog sevm C (St b' (z :: S) M' G') f r :=
+  skipP_79_noStateGas hP hfork.rules_stateGas_none run
+
 /-- **The entry preamble of a site walk**: the run reaches the dispatcher with the selector on
 top of the stack and the base unchanged. -/
+theorem preambleP_nonstorage (hP : SiteStep P)
+    (run : SFunc.RunCutP P Impl.cert.prog sevm [] (St b S M G) Impl.t_0000_c0 r) :
+    ∃ M' G', SFunc.RunCutP P Impl.cert.prog sevm [] (St b (Blanc.Sevm.selector sevm :: S) M' G')
+      dispTree r := by
+  repeat sx_nonstorage run
+  brP run
+  repeat sx_nonstorage run
+  brP run
+  iterate 4 sx_nonstorage run
+  rw [selector_word] at run
+  exact ⟨_, _, run⟩
+
+/-- The covered-fork projection of the entry preamble. -/
 theorem preambleP (hP : SiteStep P) (hfork : CoveredFork sevm.benvStat.fork)
     (run : SFunc.RunCutP P Impl.cert.prog sevm [] (St b S M G) Impl.t_0000_c0 r) :
     ∃ M' G', SFunc.RunCutP P Impl.cert.prog sevm [] (St b (Blanc.Sevm.selector sevm :: S) M' G')
       dispTree r := by
-  repeat sx run
-  brP run
-  repeat sx run
-  brP run
-  iterate 4 sx run
-  rw [selector_word] at run
-  exact ⟨_, _, run⟩
+  have _ := hfork
+  exact preambleP_nonstorage hP run
 
 end Blanc.Lift.Usdc

@@ -30,21 +30,78 @@ def LibRejects (pair : Adr) : Prop :=
     pre.getCode pair = UniswapV2Pair.code → ¬ sevm.benvStat.rules.isPrecomp pair →
     32 ≤ post.output.length ∧ Bytes.toB256 (post.output.takeD 32 0) = 0
 
+/-- The library's rejection seam under the actual rules of a neutral fork. -/
+def LibRejectsH (pair : Adr) : Prop :=
+  ∀ {sevm : Sevm} {pre post : Devm}, Exec 0 sevm pre (.ok post) → sevm.code = Lib.code →
+    NeutralFork sevm.benvStat.fork → pre.memory = Mem.empty → pre.stack = [] →
+    Bytes.toB256 (sevm.data.sliceD 4 32 0) = pair.toB256 →
+    pre.getCode pair = UniswapV2Pair.code → ¬ sevm.benvStat.rules.isPrecomp pair →
+    32 ≤ post.output.length ∧ Bytes.toB256 (post.output.takeD 32 0) = 0
+
+/-- Rejection for actual children sharing this environment's block context. -/
+def LibRejectsAt (pair : Adr) (sevm : Sevm) : Prop :=
+  ∀ {child : Sevm} {pre post : Devm}, child.benvStat = sevm.benvStat →
+    Exec 0 child pre (.ok post) → child.code = Lib.code →
+    pre.memory = Mem.empty → pre.stack = [] →
+    Bytes.toB256 (child.data.sliceD 4 32 0) = pair.toB256 →
+    pre.getCode pair = UniswapV2Pair.code → ¬ child.benvStat.rules.isPrecomp pair →
+    32 ≤ post.output.length ∧ Bytes.toB256 (post.output.takeD 32 0) = 0
+
+/-- Restrict modern rejection through an actual child's block-context equality. -/
+theorem LibRejects.at_of_covered {pair : Adr} {sevm : Sevm}
+    (rejects : LibRejects pair) (fork : CoveredFork sevm.benvStat.fork) :
+    LibRejectsAt pair sevm := by
+  intro child pre post stat run code hmem hstack hword hpair notPre
+  have childFork : CoveredFork child.benvStat.fork := by rw [stat]; exact fork
+  exact rejects run code childFork hmem hstack hword hpair notPre
+
+/-- Restrict historical rejection through the same actual block-context equality. -/
+theorem LibRejectsH.at_of_neutral {pair : Adr} {sevm : Sevm}
+    (rejects : LibRejectsH pair) (fork : NeutralFork sevm.benvStat.fork) :
+    LibRejectsAt pair sevm := by
+  intro child pre post stat run code hmem hstack hword hpair notPre
+  have childFork : NeutralFork child.benvStat.fork := by rw [stat]; exact fork
+  exact rejects run code childFork hmem hstack hword hpair notPre
+
 namespace LibSeam
 
-/-- U7a's library lemma, in the seam's shape (amendment A11: the Pair-silence
-hypothesis `hsilent`, discharged in composition). -/
-theorem lib_rejects_pair {pair : Adr}
-    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) : LibRejects pair := by
+private theorem rejects_of_raw {F : Fork → Prop} {pair : Adr}
+    (rejects : ∀ {sevm : Sevm} {b post : Devm} {G : Nat},
+      Exec 0 sevm (St b [] Mem.empty G) (.ok post) → sevm.code = Lib.code →
+      F sevm.benvStat.fork →
+      b.getCode (Sevm.dataWord sevm 4).toAdr = UniswapV2Pair.code →
+      ¬ sevm.benvStat.rules.isPrecomp (Sevm.dataWord sevm 4).toAdr →
+      32 ≤ post.output.length ∧ post.output.take 32 = List.replicate 32 0) :
+    ∀ {sevm : Sevm} {pre post : Devm}, Exec 0 sevm pre (.ok post) →
+      sevm.code = Lib.code → F sevm.benvStat.fork →
+      pre.memory = Mem.empty → pre.stack = [] →
+      Bytes.toB256 (sevm.data.sliceD 4 32 0) = pair.toB256 →
+      pre.getCode pair = UniswapV2Pair.code → ¬ sevm.benvStat.rules.isPrecomp pair →
+      32 ≤ post.output.length ∧ Bytes.toB256 (post.output.takeD 32 0) = 0 := by
   intro sevm pre post run code fork hmem hstack hword hpair notPre
   have hdw : (Sevm.dataWord sevm 4).toAdr = pair := by
     rw [Sevm.dataWord, show (4 : B256).toNat = 4 from rfl, hword, toAdr_toB256]
   rw [St.self hstack hmem] at run
-  obtain ⟨hlen, htake⟩ := Usdc.lib_rejects_pair run code fork
-    (by rw [hdw]; exact hpair) (by rw [hdw]; exact notPre) hsilent
+  obtain ⟨hlen, htake⟩ := rejects run code fork
+    (by rw [hdw]; exact hpair) (by rw [hdw]; exact notPre)
   refine ⟨hlen, ?_⟩
   rw [List.takeD_eq_take _ hlen, htake]
   decide
+
+/-- U7a's library lemma, in the seam's shape (amendment A11: the Pair-silence
+hypothesis `hsilent`, discharged in composition). -/
+theorem lib_rejects_pair {pair : Adr}
+    (hsilent : NoStaticAnswer UniswapV2Pair.code 0x1626ba7e) : LibRejects pair :=
+  rejects_of_raw (F := CoveredFork)
+    (fun run code fork hcode notPre =>
+      Usdc.lib_rejects_pair run code fork hcode notPre hsilent)
+
+/-- The historical raw rejection theorem, in the same fresh-frame seam shape. -/
+theorem lib_rejects_pairH {pair : Adr}
+    (hsilent : NoStaticAnswerH UniswapV2Pair.code 0x1626ba7e) : LibRejectsH pair :=
+  rejects_of_raw (F := NeutralFork)
+    (fun run code fork hcode notPre =>
+      Usdc.lib_rejects_pairH run code fork hcode notPre hsilent)
 
 end LibSeam
 

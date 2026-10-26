@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.ImplFp
 import Blanc.Lift.Usdc.SignedPathsAuth
 import Blanc.Lift.Usdc.SignedPathsPermit
+import Blanc.Lift.Usdc.AllowLocalityV2_2
 
 /-!
 # F7b: no successful implementation frame is signed by the Pair (`impl_signed_not_ok`)
@@ -18,6 +19,24 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.FreePtr
 
+/-- The dispatcher cut remains observed in the original successful execution. -/
+private theorem impl_dispatcher_observed_noStateGas {sevm : Sevm} {pre post : Devm}
+    (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hmem : pre.memory = Mem.empty) (hstack : pre.stack = [])
+    (hpot : pre.gasMeasure < 2 ^ 256) :
+    ∃ (M' : Mem) (G' : Nat),
+      SFunc.RunCutP (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩)))
+        Impl.cert.prog sevm [] (St pre [Blanc.Sevm.selector sevm] M' G')
+        dispTree (.done (.halted post)) := by
+  have hP : SiteStep (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩))) := siteStep_fp
+  obtain ⟨f, hf, frun⟩ := implRun_fp_noStateGas run code hsg hmem hpot
+  obtain rfl : f = Impl.t_0000_c0 := (Option.some.inj hf).symm
+  have h := SFunc.runP_iff_runCutP_nil.mp frun
+  generalize FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩)) = Q at hP h ⊢
+  rw [St.self (d := pre) hstack rfl] at h
+  exact preambleP_nonstorage hP h
+
 /-- **No successful implementation frame is signed by the Pair** (the two library call sites:
 entry 111's `_requireValidSignature`, copy loop 117; permit's inline call in entry 9, copy loop
 80): the free pointer read before each encoding is good (F5), the walk from that read to the
@@ -34,12 +53,8 @@ theorem impl_signed_not_ok {P pair : Adr} {sevm : Sevm} {pre post : Devm}
     (rejects : LibRejects pair) (signed : (usdcBookS P).signer sevm = some pair) : False := by
   subst target
   have hP : SiteStep (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩))) := siteStep_fp
-  obtain ⟨f, hf, frun⟩ := implRun_fp run code fork hsg hmem hpot
-  obtain rfl : f = Impl.t_0000_c0 := (Option.some.inj hf).symm
-  have h := SFunc.runP_iff_runCutP_nil.mp frun
+  obtain ⟨M', G', h⟩ := impl_dispatcher_observed_noStateGas run code hsg hmem hstack hpot
   generalize FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩)) = Q at hP h
-  rw [St.self (d := pre) hstack rfl] at h
-  obtain ⟨M', G', h⟩ := preambleP hP fork h
   change usdcSigner sevm = some pair at signed
   unfold usdcSigner at signed
   split at signed
@@ -68,5 +83,28 @@ theorem impl_signed_not_ok {P pair : Adr} {sevm : Sevm} {pre post : Devm}
     · exact path_cancelBytes hP fork rejects notPre libCode pairCode sel hsg' h
     · exact path_cancelVrs hP fork rejects notPre libCode pairCode sel hsg' h
   · cases signed
+
+/-- Neither canonical permit route succeeds with the Pair as its owner, under the
+actual frame's historical rules and local library rejection capability. -/
+theorem impl_permit_pair_not_okH {pair : Adr} {sevm : Sevm} {pre post : Devm}
+    (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
+    (fork : NeutralFork sevm.benvStat.fork)
+    (hmem : pre.memory = Mem.empty) (hstack : pre.stack = [])
+    (hpot : pre.gasMeasure < 2 ^ 256)
+    (libCode : pre.getCode usdcLib = Lib.code)
+    (pairCode : pre.getCode pair = UniswapV2Pair.code)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair)
+    (rejects : LibRejectsAt pair sevm)
+    (owners : Blanc.Sevm.selector sevm ∈ selV2_2.owners)
+    (owner : (Sevm.dataWord sevm 4).toAdr = pair) : False := by
+  have hP : SiteStep (FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩))) := siteStep_fp
+  obtain ⟨M', G', h⟩ :=
+    impl_dispatcher_observed_noStateGas run code fork.stateGas hmem hstack hpot
+  generalize FpStep (PotStep (StepIn ⟨0, sevm, pre, .ok post, run⟩)) = Q at hP h
+  rcases List.mem_cons.mp owners with bytes | rest
+  · exact path_permitBytesH hP fork.stateGas fork.bal rejects notPre
+      libCode pairCode bytes owner h
+  · exact path_permitVrsH hP fork.stateGas fork.bal rejects notPre
+      libCode pairCode (List.mem_singleton.mp rest) owner h
 
 end Blanc.Lift.Usdc

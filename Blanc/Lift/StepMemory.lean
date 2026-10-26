@@ -62,31 +62,58 @@ theorem genericCall_memory {sevm : Sevm} {devm d' : Devm} {gas : Nat} {value : B
   CallEffects.genericCall_memory h
 
 /-- `CALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
+theorem run_call_memory_noStateGas {sevm : Sevm} {d d' : Devm} {g c v ii is oi os : B256} {rest : List B256}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hs : d.stack = g :: c :: v :: ii :: is :: oi :: os :: rest)
+    (run : Ninst.Run sevm d (.exec .call) d') :
+    ∃ ys : Bytes, ys.length ≤ os.toNat ∧
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call_run_effects hsg hs run).2
+
+/-- Covered-fork projection of the actual-rules memory theorem. -/
 theorem run_call_memory {sevm : Sevm} {d d' : Devm} {g c v ii is oi os : B256} {rest : List B256}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hs : d.stack = g :: c :: v :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .call) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
-  (CallEffects.call_run_effects hfork.rules_stateGas_none hs run).2
+  run_call_memory_noStateGas hfork.rules_stateGas_none hs run
 
 /-- `DELEGATECALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
+theorem run_delegatecall_memory_noStateGas {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
+    {rest : List B256} (hsg : sevm.benvStat.rules.stateGas = none)
+    (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
+    (run : Ninst.Run sevm d (.exec .delegatecall) d') :
+    ∃ ys : Bytes, ys.length ≤ os.toNat ∧
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call6_run_effects (Or.inl rfl) hsg hs run).2
+
+/-- Covered-fork projection of the actual-rules memory theorem. -/
 theorem run_delegatecall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
     {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .delegatecall) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
-  (CallEffects.call6_run_effects (Or.inl rfl) hfork.rules_stateGas_none hs run).2
+  run_delegatecall_memory_noStateGas hfork.rules_stateGas_none hs run
 
 /-- `STATICCALL` writes at most `os` bytes at `oi` over its (extended) memory. -/
+theorem run_staticcall_memory_noStateGas {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
+    {rest : List B256} (hsg : sevm.benvStat.rules.stateGas = none)
+    (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
+    (run : Ninst.Run sevm d (.exec .staticcall) d') :
+    ∃ ys : Bytes, ys.length ≤ os.toNat ∧
+      d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
+  (CallEffects.call6_run_effects (Or.inr rfl) hsg hs run).2
+
+/-- Covered-fork projection of the actual-rules memory theorem. -/
 theorem run_staticcall_memory {sevm : Sevm} {d d' : Devm} {g c ii is oi os : B256}
     {rest : List B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hs : d.stack = g :: c :: ii :: is :: oi :: os :: rest)
     (run : Ninst.Run sevm d (.exec .staticcall) d') :
     ∃ ys : Bytes, ys.length ≤ os.toNat ∧
       d'.memory = (d.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write oi.toNat ys :=
-  (CallEffects.call6_run_effects (Or.inr rfl) hfork.rules_stateGas_none hs run).2
+  run_staticcall_memory_noStateGas hfork.rules_stateGas_none hs run
 
 /-- The `CREATE`-family return path leaves the parent's memory as it was. -/
 theorem resume_create_memory {parent child sf : Devm} {a : Adr}
@@ -115,13 +142,13 @@ theorem genericCreate_memory {sevm : Sevm} {devm d' : Devm} {e : B256} {a : Adr}
        · exact (resume_create_memory hr.symm).trans rfl)
 
 /-- `CREATE2` only extends memory. -/
-theorem run_create2_memory {sevm : Sevm} {d d' : Devm} {e mi ms salt : B256} {rest : List B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hs : d.stack = e :: mi :: ms :: salt :: rest)
+theorem run_create2_memory_noStateGas {sevm : Sevm} {d d' : Devm} {e mi ms salt : B256} {rest : List B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hs : d.stack = e :: mi :: ms :: salt :: rest)
     (run : Ninst.Run sevm d (.exec .create2) d') :
     d'.memory = d.memory.extends [(mi.toNat, ms.toNat)] := by
   obtain ⟨xl, -, pc, h⟩ := run
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    hfork.rules_stateGas_none, Bind.bind, Except.bind,
+    hsg, Bind.bind, Except.bind,
     Devm.pop_cons hs, Devm.withStack_pop, Devm.withStack_popToNat] at h
   split at h
   swap
@@ -133,6 +160,25 @@ theorem run_create2_memory {sevm : Sevm} {d d' : Devm} {e mi ms salt : B256} {re
   change d5.memory.extends _ = _
   rw [← (Devm.burn_of_chargeGas hc).memory]
   rfl
+
+/-- Covered-fork projection of the actual-rules memory theorem. -/
+theorem run_create2_memory {sevm : Sevm} {d d' : Devm} {e mi ms salt : B256} {rest : List B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hs : d.stack = e :: mi :: ms :: salt :: rest)
+    (run : Ninst.Run sevm d (.exec .create2) d') :
+    d'.memory = d.memory.extends [(mi.toNat, ms.toNat)] :=
+  run_create2_memory_noStateGas hfork.rules_stateGas_none hs run
+
+/-- A successful `SELFBALANCE` step preserves memory under the actual rules. -/
+theorem run_selfbalance_memory {sevm : Sevm} {d d' : Devm}
+    (run : Ninst.Run sevm d (.reg .selfbalance) d') : d'.memory = d.memory := by
+  rcases of_run_reg run with ⟨pc, h⟩
+  simp only [Rinst.run, Rinst.runCore] at h
+  split at h
+  · rcases Except.bind_eq_ok h with ⟨d1, gas, push⟩
+    rw [← (Devm.push_of_push push).memory]
+    change d1.memory = d.memory
+    exact (Devm.burn_of_chargeGas gas).memory.symm
+  · cases h
 
 theorem run_balance_memory {sevm : Sevm} {d d' : Devm}
     (run : Ninst.Run sevm d (.reg .balance) d') : d'.memory = d.memory := by

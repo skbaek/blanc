@@ -52,6 +52,18 @@ private theorem Exec.step_noDel_of_safe {wa : Adr} {pc : Nat} {sevm : Sevm}
         exact hgi
       · exact Or.inl heq
 
+/-- Public step interface for terminal-safe no-deletion, with the actual
+selected recursive child obligation kept explicit. -/
+theorem Exec.noDel_step_of_safe {wa : Adr} {pc : Nat} {sevm : Sevm}
+    {pre : Devm} {slot : Xlot} {out : Execution}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (h : Devm.NoDel wa pre)
+    (safeNode : sevm.currentTarget = wa → ¬ Linst.At sevm.code pc .selfdestruct)
+    (inv : Xlot.InvNoDel wa slot)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, pre⟩) slot out) :
+    Execution.NoDel wa out :=
+  Exec.step_noDel_of_safe hsg h safeNode inv hrun
+
 /-- Six-constructor induction over the driver tree. The motive carries the
 state-gas absence, the run-indexed raw-node safety and the input no-deletion
 as arguments, so each child induction hypothesis has exactly the conditional

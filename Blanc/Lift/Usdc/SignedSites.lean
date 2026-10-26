@@ -104,6 +104,17 @@ macro "sx " h:ident : tactic => `(tactic|
      subst e; clear hd))
 
 set_option hygiene false in
+/-- One nonstorage step of a signed-site walk (`stepX` instructions and `JUMPDEST`). -/
+macro "sx_nonstorage " h:ident : tactic => `(tactic|
+  first
+  | (have h' := ric_destP $h; clear $h; obtain ⟨_, $h:ident⟩ := h')
+  | (have h' := ric_nextP $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+     obtain ⟨_, e⟩ := ri_stepX_nonstorage (by intro same; cases same)
+       (by intro same; cases same) (hP hd).1 rfl
+     try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
+     subst e; clear hd))
+
+set_option hygiene false in
 /-- One step of a signed-site walk by an `ri_*` inversion `t` outside `stepX`. -/
 macro "sop " h:ident " => " t:term : tactic => `(tactic|
   (have h' := ric_nextP $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
@@ -121,6 +132,33 @@ theorem read_size_ge (M : Mem) {i n : Nat} (hn : 0 < n) : i + n ≤ (M.read i n)
 
 /-- **After a successful library call**: the return-data guard, then the read of the result word at
 the free pointer; a zero word sends the frame down `F`'s failing arm. -/
+theorem tail3_false_nonstorage {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+    {sevm : Sevm} {C : List Nat} {c0 c1 : UInt8} {R3 F : SFunc} (h3 : R3.noOk = true)
+    (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
+      ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
+    {b : Devm} {x0 x1 x2 x3 p : B256} {R : List B256}
+    {M : Mem} {G : Nat} {r : Seg} (h64 : memWord M 64 = p)
+    (hpw : memWord M p.toNat = 0)
+    (run : SFunc.RunCutP P fs sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) (callTree3 c0 c1 R3 F)
+      r) : False := by
+  unfold callTree3 at run
+  iterate 7 sx_nonstorage run
+  rw [lit64] at run
+  obtain ⟨_, hd, run⟩ := ric_nextP run
+  obtain ⟨_, e⟩ := ri_returndatasize (hP hd).1
+  subst e
+  iterate 5 sx_nonstorage run
+  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact SFunc.RunCutP.false_of_noOk run h3
+  iterate 3 sx_nonstorage run
+  have hw : Bytes.toB256 (((M.read 64 32).2).read (Bytes.toB256 (M.read 64 32).1).toNat 32).1 = 0 := by
+    have e1 : Bytes.toB256 (M.read 64 32).1 = p := h64
+    rw [e1]
+    exact (memWord_read_snd _ _ _ _).trans hpw
+  rw [hw] at run
+  exact hF run
+
+/-- The original covered-fork interface to the nonstorage result-word tail. -/
 theorem tail3_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
     {sevm : Sevm} {C : List Nat} {c0 c1 : UInt8} {R3 F : SFunc} (h3 : R3.noOk = true)
     (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
@@ -130,33 +168,24 @@ theorem tail3_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteSt
     (hpw : memWord M p.toNat = 0)
     (run : SFunc.RunCutP P fs sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) (callTree3 c0 c1 R3 F)
       r) : False := by
-  unfold callTree3 at run
-  iterate 7 sx run
-  rw [lit64] at run
-  obtain ⟨_, hd, run⟩ := ric_nextP run
-  obtain ⟨_, e⟩ := ri_returndatasize (hP hd).1
-  subst e
-  iterate 5 sx run
-  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact SFunc.RunCutP.false_of_noOk run h3
-  iterate 3 sx run
-  have hw : Bytes.toB256 (((M.read 64 32).2).read (Bytes.toB256 (M.read 64 32).1).toNat 32).1 = 0 := by
-    have e1 : Bytes.toB256 (M.read 64 32).1 = p := h64
-    rw [e1]
-    exact (memWord_read_snd _ _ _ _).trans hpw
-  rw [hw] at run
-  exact hF run
+  have _ := hfork
+  exact tail3_false_nonstorage hP h3 hF h64 hpw run
 
 /-- A write keeps every word its window misses (below the old size). -/
 theorem memWord_write_off {μ : Mem} {o n : Nat} {ys : Bytes} (h : o + 32 ≤ μ.size)
     (hd : o + 32 ≤ n ∨ n + ys.length ≤ o) : memWord (μ.write n ys) o = memWord μ o :=
   memWord_congr fun j _ => (Mem.write_agree μ n ys).2 _ (by omega) (by omega)
 
-/-- The library address is no precompile on a covered fork. -/
+/-- The library address is no precompile under any actual fork. -/
+theorem usdcLib_not_precompile_any (fork : Fork) :
+    ¬ (Fork.ruleSet fork).isPrecomp usdcLib := by
+  cases fork <;> decide
+
+/-- Covered-fork projection of the actual fixed-address exclusion. -/
 theorem usdcLib_not_precompile {fork : Fork} (covered : CoveredFork fork) :
-    ¬ (Fork.ruleSet fork).isPrecomp usdcLib :=
-  covered.cases (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp usdcLib)
-    (by decide) (by decide) (by decide) (by decide)
+    ¬ (Fork.ruleSet fork).isPrecomp usdcLib := by
+  have _ := covered
+  exact usdcLib_not_precompile_any fork
 
 /-- The word at byte `4` of a read window of at least 36 bytes. -/
 theorem read_word4 (M : Mem) {q n : Nat} (hn : 36 ≤ n) :
@@ -167,6 +196,53 @@ theorem read_word4 (M : Mem) {q n : Nat} (hn : 36 ≤ n) :
 /-- **The library `DELEGATECALL` of a signed site**: with the free pointer `q` at the free-pointer
 word and the Pair's address at `q + 4`, the library child (if it succeeds) returns the zero word,
 which the call writes at `q`; either way the frame cannot succeed. -/
+theorem tail2_false_noStateGas {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+    {sevm : Sevm} {C : List Nat} {b0 b1 c0 c1 : UInt8} {R2 R3 F : SFunc} (h2 : R2.noOk = true)
+    (h3 : R3.noOk = true)
+    (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
+      ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
+    (hsg : sevm.benvStat.rules.stateGas = none) {pair : Adr} (rejects : LibRejectsAt pair sevm)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {b : Devm} {x q n os E y z : B256}
+    {R : List B256} {M : Mem} {G : Nat} {r : Seg} (hlib : b.getCode usdcLib = Lib.code)
+    (hpair : b.getCode pair = UniswapV2Pair.code) (h64 : memWord M 64 = q) (hq : 128 ≤ q.toNat)
+    (hsig : memWord M (q.toNat + 4) = pair.toB256) (hsz : q.toNat + 36 ≤ M.size)
+    (hn : 36 ≤ n.toNat) (hos : os.toNat = 32)
+    (run : SFunc.RunCutP P fs sevm C
+      (St b (x :: usdcLib.toB256 :: q :: n :: q :: os :: E :: y :: z :: R) M G)
+      (callTree2 b0 b1 c0 c1 R2 R3 F) r) : False := by
+  unfold callTree2 at run
+  iterate 2 sx_nonstorage run
+  obtain ⟨_, hd, run⟩ := ric_nextP run
+  obtain ⟨_, _, e⟩ := ri_gas (hP hd).1
+  subst e
+  clear hd
+  obtain ⟨d, hd, run⟩ := ric_nextP run
+  have hcodeW : b.getCode usdcLib.toB256.toAdr = Lib.code := by rw [usdcLib_word]; exact hlib
+  obtain ⟨flag, hst, hcase⟩ := ri_delegatecall_child_noStateGas hsg (by rw [hcodeW]; exact lib_undelegated)
+    (by rw [usdcLib_word]; exact usdcLib_not_precompile_any sevm.benvStat.fork) (hP hd).1
+  clear hd
+  rw [St.self hst rfl] at run
+  iterate 4 sx_nonstorage run
+  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact SFunc.RunCutP.false_of_noOk run h2
+  rcases hcase with rfl | ⟨csevm, cpre, out, ⟨ex⟩, hcode, hdata, hstat, hmem0, hstk0, hgc, hmem⟩
+  · exact hw (by decide)
+  obtain ⟨hlen, hzero⟩ := rejects hstat ex (by rw [hcode, hcodeW]) hmem0 hstk0
+    (by rw [hdata, read_word4 M hn]; exact hsig) (by rw [hgc]; exact hpair)
+    (by rw [hstat]; exact notPre)
+  have htake : out.output.take os.toNat = (0 : B256).toBytes := by
+    have hl : (out.output.takeD 32 0).length = 32 := List.takeD_length _ _ _
+    rw [hos, ← List.takeD_eq_take _ hlen, ← hzero, Bytes.toBytes_toB256_of_length hl]
+  rw [htake] at hmem
+  have hsz' : q.toNat + 36 ≤ (M.extends [(q.toNat, n.toNat), (q.toNat, os.toNat)]).size :=
+    le_trans hsz (memExtsSize_ge _ _)
+  refine tail3_false_nonstorage hP h3 hF (M := d.memory) (p := q) ?_ ?_ run
+  · rw [hmem, memWord_write_off (by omega) (.inl (by omega))]
+    exact h64
+  · rw [hmem]
+    exact (Mem.memWord_write_word _ _ _).1
+
+/-- Covered-fork projection using rejection restricted to the same environment. -/
 theorem tail2_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
     {sevm : Sevm} {C : List Nat} {b0 b1 c0 c1 : UInt8} {R2 R3 F : SFunc} (h2 : R2.noOk = true)
     (h3 : R3.noOk = true)
@@ -180,42 +256,51 @@ theorem tail2_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteSt
     (hn : 36 ≤ n.toNat) (hos : os.toNat = 32)
     (run : SFunc.RunCutP P fs sevm C
       (St b (x :: usdcLib.toB256 :: q :: n :: q :: os :: E :: y :: z :: R) M G)
-      (callTree2 b0 b1 c0 c1 R2 R3 F) r) : False := by
-  unfold callTree2 at run
-  iterate 2 sx run
-  obtain ⟨_, hd, run⟩ := ric_nextP run
-  obtain ⟨_, _, e⟩ := ri_gas (hP hd).1
-  subst e
-  clear hd
-  obtain ⟨d, hd, run⟩ := ric_nextP run
-  have hcodeW : b.getCode usdcLib.toB256.toAdr = Lib.code := by rw [usdcLib_word]; exact hlib
-  obtain ⟨flag, hst, hcase⟩ := ri_delegatecall_child hfork (by rw [hcodeW]; exact lib_undelegated)
-    (by rw [usdcLib_word]; exact usdcLib_not_precompile hfork) (hP hd).1
-  clear hd
-  rw [St.self hst rfl] at run
-  iterate 4 sx run
-  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact SFunc.RunCutP.false_of_noOk run h2
-  rcases hcase with rfl | ⟨csevm, cpre, out, ⟨ex⟩, hcode, hdata, hstat, hmem0, hstk0, hgc, hmem⟩
-  · exact hw (by decide)
-  have cfork : CoveredFork csevm.benvStat.fork := by rw [hstat]; exact hfork
-  obtain ⟨hlen, hzero⟩ := rejects ex (by rw [hcode, hcodeW]) cfork hmem0 hstk0
-    (by rw [hdata, read_word4 M hn]; exact hsig) (by rw [hgc]; exact hpair)
-    (by rw [hstat]; exact notPre)
-  have htake : out.output.take os.toNat = (0 : B256).toBytes := by
-    have hl : (out.output.takeD 32 0).length = 32 := List.takeD_length _ _ _
-    rw [hos, ← List.takeD_eq_take _ hlen, ← hzero, Bytes.toBytes_toB256_of_length hl]
-  rw [htake] at hmem
-  have hsz' : q.toNat + 36 ≤ (M.extends [(q.toNat, n.toNat), (q.toNat, os.toNat)]).size :=
-    le_trans hsz (memExtsSize_ge _ _)
-  refine tail3_false hP h3 hF hfork (M := d.memory) (p := q) ?_ ?_ run
-  · rw [hmem, memWord_write_off (by omega) (.inl (by omega))]
-    exact h64
-  · rw [hmem]
-    exact (Mem.memWord_write_word _ _ _).1
+      (callTree2 b0 b1 c0 c1 R2 R3 F) r) : False :=
+  tail2_false_noStateGas hP h2 h3 hF hfork.rules_stateGas_none
+    (rejects.at_of_covered hfork) notPre hlib hpair h64 hq hsig hsz hn hos run
 
 /-- **A signed call site from its entry** (`callTree`, entry 11 / entry 9): the end pointer `E`
 lies at least 36 bytes above the free pointer `p`, and the Pair's address is at `p + 4`. -/
+theorem tail1_falseH {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+    {sevm : Sevm} {C : List Nat} {a0 a1 b0 b1 c0 c1 : UInt8} {R1 R2 R3 F : SFunc}
+    (h1 : R1.noOk = true) (h2 : R2.noOk = true) (h3 : R3.noOk = true)
+    (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
+      ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none) {pair : Adr} (rejects : LibRejectsAt pair sevm)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {b : Devm}
+    {x E w0 w1 w2 w3 w4 sel p : B256} {R : List B256} {M : Mem} {G : Nat} {r : Seg}
+    (hlib : b.getCode usdcLib = Lib.code) (hpair : b.getCode pair = UniswapV2Pair.code)
+    (h64 : memWord M 64 = p) (hp : 128 ≤ p.toNat) (hsig : memWord M (p.toNat + 4) = pair.toB256)
+    (hsz : p.toNat + 36 ≤ M.size) (hE : p.toNat + 36 ≤ E.toNat)
+    (run : SFunc.RunCutP P fs sevm C
+      (St b (x :: E :: w0 :: w1 :: w2 :: w3 :: w4 :: sel :: usdcLib.toB256 :: R) M G)
+      (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F) r) : False := by
+  unfold callTree at run
+  iterate 11 sx_nonstorage run
+  rw [lit64, show Bytes.toB256 (M.read 64 32).1 = p from h64] at run
+  iterate 6 sx_nonstorage run
+  obtain ⟨_, hd, run⟩ := ric_nextP run
+  obtain ⟨_, e⟩ := ri_extcodesizeH bal (hP hd).1
+  subst e
+  clear hd
+  iterate 4 sx_nonstorage run
+  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact SFunc.RunCutP.false_of_noOk run h1
+  have hgc : ∀ a, (accountAccessH sevm b (usdcLib.toB256).toAdr).getCode a = b.getCode a :=
+    fun a => by
+      show (accountAccessH sevm b _).state.getCode a = b.state.getCode a
+      rw [accountAccessH_state]
+  have hsz96 : 96 ≤ M.size := by omega
+  refine tail2_false_noStateGas hP h2 h3 hF hsg rejects notPre (by rw [hgc]; exact hlib)
+    (by rw [hgc]; exact hpair) ?_ hp ?_ ?_ ?_ (by decide) run
+  · exact h64
+  · exact hsig
+  · exact le_trans hsz (Mem.read_agree (b := default) (S := []) (G := 0) M 64 32 0 0).1
+  · rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]
+    omega
+
+/-- The original covered-fork call-site entry interface. -/
 theorem tail1_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
     {sevm : Sevm} {C : List Nat} {a0 a1 b0 b1 c0 c1 : UInt8} {R1 R2 R3 F : SFunc}
     (h1 : R1.noOk = true) (h2 : R2.noOk = true) (h3 : R3.noOk = true)
@@ -229,34 +314,66 @@ theorem tail1_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteSt
     (hsz : p.toNat + 36 ≤ M.size) (hE : p.toNat + 36 ≤ E.toNat)
     (run : SFunc.RunCutP P fs sevm C
       (St b (x :: E :: w0 :: w1 :: w2 :: w3 :: w4 :: sel :: usdcLib.toB256 :: R) M G)
-      (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F) r) : False := by
-  unfold callTree at run
-  iterate 11 sx run
-  rw [lit64, show Bytes.toB256 (M.read 64 32).1 = p from h64] at run
-  iterate 6 sx run
-  obtain ⟨_, hd, run⟩ := ric_nextP run
-  obtain ⟨_, e⟩ := ri_extcodesize hfork (hP hd).1
-  subst e
-  clear hd
-  iterate 4 sx run
-  rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact SFunc.RunCutP.false_of_noOk run h1
-  have hgc : ∀ a, (temporalAccountAccessBase b (usdcLib.toB256).toAdr).getCode a = b.getCode a :=
-    fun a => by
-      show (temporalAccountAccessBase b _).state.getCode a = b.state.getCode a
-      rw [temporalAccountAccessBase_state]
-  have hsz96 : 96 ≤ M.size := by omega
-  refine tail2_false hP h2 h3 hF hfork rejects notPre (by rw [hgc]; exact hlib)
-    (by rw [hgc]; exact hpair) ?_ hp ?_ ?_ ?_ (by decide) run
-  · exact h64
-  · exact hsig
-  · exact le_trans hsz (Mem.read_agree (b := default) (S := []) (G := 0) M 64 32 0 0).1
-  · rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega))]
-    omega
+      (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F) r) : False :=
+  tail1_falseH hP h1 h2 h3 hF hfork.rules_stateGas_none hfork.rules_bal_none
+    (rejects.at_of_covered hfork) notPre hlib hpair h64 hp hsig hsz hE run
 
 /-- **The copy loop's exit**: from the loop's exit state (`len = L`, destination `dst`, both below
 `memCap`, `dst` at least 36 bytes above the free pointer), the tail mask write lands at or above
 `dst`, and both arms reach the call site with an end pointer at or above `dst`. -/
+theorem tail0_falseH {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+    {sevm : Sevm} {C : List Nat} {m0 m1 a0 a1 b0 b1 c0 c1 : UInt8} {k2 : Nat}
+    {R1 R2 R3 F : SFunc}
+    (hk2 : fs[k2]? = some (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)) (hk2C : k2 ∉ C)
+    (h1 : R1.noOk = true) (h2 : R2.noOk = true) (h3 : R3.noOk = true)
+    (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
+      ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none) {pair : Adr} (rejects : LibRejectsAt pair sevm)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {b : Devm}
+    {i s1 s2 s3 L s5 dst w0 w1 w2 w3 w4 sel p : B256} {R : List B256} {M : Mem} {G : Nat}
+    {r : Seg} (hlib : b.getCode usdcLib = Lib.code) (hpair : b.getCode pair = UniswapV2Pair.code)
+    (h64 : memWord M 64 = p) (hp : 128 ≤ p.toNat) (hsig : memWord M (p.toNat + 4) = pair.toB256)
+    (hsz : p.toNat + 36 ≤ M.size) (hdst : p.toNat + 36 ≤ dst.toNat) (hdcap : dst.toNat ≤ memCap)
+    (hL : L.toNat ≤ memCap)
+    (run : SFunc.RunCutP P fs sevm C
+      (St b (i :: s1 :: s2 :: s3 :: L :: s5 :: dst :: w0 :: w1 :: w2 :: w3 :: w4 :: sel ::
+        usdcLib.toB256 :: R) M G)
+      (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)) r) : False := by
+  unfold exitTree at run
+  iterate 16 sx_nonstorage run
+  have hE : (L + dst).toNat = L.toNat + dst.toNat :=
+    add_toNat_small (by unfold memCap at hdcap hL; omega)
+  rcases ric_branchToP hk2C hk2 run with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · unfold maskTree at run
+    iterate 10 sx_nonstorage run
+    obtain ⟨_, hd, run⟩ := ric_nextP run
+    obtain ⟨_, e⟩ := ri_exp (hP hd).1
+    subst e
+    clear hd
+    iterate 9 sx_nonstorage run
+    have hX : (Bytes.toB256 [31] &&& L).toNat ≤ L.toNat := by
+      rw [B256.toNat_and]
+      exact Nat.and_le_right
+    generalize Bytes.toB256 [31] &&& L = X at hX run
+    have ha : (L + dst - X).toNat = L.toNat + dst.toNat - X.toNat := by
+      rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega)), hE]
+    generalize L + dst - X = a at ha run
+    have ha32 : (Bytes.toB256 [32] + a).toNat = 32 + a.toNat :=
+      add_toNat_small (by rw [lit32]; unfold memCap at hdcap hL; omega)
+    have hrs := (Mem.read_agree (b := default) (S := []) (G := 0) M a.toNat 32 0 0).1
+    have h64' := (memWord_read_snd M _ a.toNat 32).trans h64
+    have hsig' := (memWord_read_snd M _ a.toNat 32).trans hsig
+    generalize (M.read a.toNat 32).2 = M1 at hrs run h64' hsig'
+    refine tail1_falseH hP h1 h2 h3 hF hsg bal rejects notPre hlib hpair ?_ hp ?_ ?_ (by omega) run
+    · rw [memWord_write_off (by omega) (.inl (by omega))]
+      exact h64'
+    · rw [memWord_write_off (by omega) (.inl (by omega))]
+      exact hsig'
+    · exact le_trans hsz (le_trans hrs (Mem.write_agree _ _ _).1)
+  · exact tail1_falseH hP h1 h2 h3 hF hsg bal rejects notPre hlib hpair h64 hp hsig hsz
+      (by omega) run
+
+/-- The original covered-fork exit-tree interface. -/
 theorem tail0_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
     {sevm : Sevm} {C : List Nat} {m0 m1 a0 a1 b0 b1 c0 c1 : UInt8} {k2 : Nat}
     {R1 R2 R3 F : SFunc}
@@ -274,41 +391,9 @@ theorem tail0_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteSt
     (run : SFunc.RunCutP P fs sevm C
       (St b (i :: s1 :: s2 :: s3 :: L :: s5 :: dst :: w0 :: w1 :: w2 :: w3 :: w4 :: sel ::
         usdcLib.toB256 :: R) M G)
-      (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)) r) : False := by
-  unfold exitTree at run
-  iterate 16 sx run
-  have hE : (L + dst).toNat = L.toNat + dst.toNat :=
-    add_toNat_small (by unfold memCap at hdcap hL; omega)
-  rcases ric_branchToP hk2C hk2 run with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · unfold maskTree at run
-    iterate 10 sx run
-    obtain ⟨_, hd, run⟩ := ric_nextP run
-    obtain ⟨_, e⟩ := ri_exp (hP hd).1
-    subst e
-    clear hd
-    iterate 9 sx run
-    have hX : (Bytes.toB256 [31] &&& L).toNat ≤ L.toNat := by
-      rw [B256.toNat_and]
-      exact Nat.and_le_right
-    generalize Bytes.toB256 [31] &&& L = X at hX run
-    have ha : (L + dst - X).toNat = L.toNat + dst.toNat - X.toNat := by
-      rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr (by omega)), hE]
-    generalize L + dst - X = a at ha run
-    have ha32 : (Bytes.toB256 [32] + a).toNat = 32 + a.toNat :=
-      add_toNat_small (by rw [lit32]; unfold memCap at hdcap hL; omega)
-    have hrs := (Mem.read_agree (b := default) (S := []) (G := 0) M a.toNat 32 0 0).1
-    have h64' := (memWord_read_snd M _ a.toNat 32).trans h64
-    have hsig' := (memWord_read_snd M _ a.toNat 32).trans hsig
-    generalize (M.read a.toNat 32).2 = M1 at hrs run h64' hsig'
-    refine tail1_false hP h1 h2 h3 hF hfork rejects notPre hlib hpair ?_ hp ?_ ?_ (by omega) run
-    · rw [memWord_write_off (by omega) (.inl (by omega))]
-      exact h64'
-    · rw [memWord_write_off (by omega) (.inl (by omega))]
-      exact hsig'
-    · exact le_trans hsz (le_trans hrs (Mem.write_agree _ _ _).1)
-  · exact tail1_false hP h1 h2 h3 hF hfork rejects notPre hlib hpair h64 hp hsig hsz
-      (by omega) run
-
+      (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)) r) : False :=
+  tail0_falseH hP hk2 hk2C h1 h2 h3 hF hfork.rules_stateGas_none hfork.rules_bal_none
+    (rejects.at_of_covered hfork) notPre hlib hpair h64 hp hsig hsz hdst hdcap hL run
 
 /-- A literal plus a word that does not overflow. -/
 theorem lit_add {xs : Bytes} {c : Nat} {y : B256} (hx : (Bytes.toB256 xs).toNat = c)
@@ -351,7 +436,7 @@ theorem nameMem {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc
 /-- **A signed site from the free-pointer read** (`encTree`): the read sees a good free pointer
 `p`, the encoding writes `isValidSignatureNow(signer, h, sig)`'s head at `p`, the loop copies the
 signature to `dst = p + 0x84`, and the call site is reached with the cleaned signer at `p + 4`. -/
-theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+theorem enc_falseH {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
     {sevm : Sevm} {C : List Nat} {e0 e1 r0 r1 m0 m1 a0 a1 b0 b1 c0 c1 : UInt8} {k k2 : Nat}
     {R1 R2 R3 F : SFunc}
     (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k
@@ -360,7 +445,7 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
     (h1 : R1.noOk = true) (h2 : R2.noOk = true) (h3 : R3.noOk = true)
     (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
       ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
-    (hfork : CoveredFork sevm.benvStat.fork) {pair : Adr} (rejects : LibRejects pair)
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none) {pair : Adr} (rejects : LibRejectsAt pair sevm)
     (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {b : Devm} {sig h signer sel : B256}
     {R : List B256} {M : Mem} {G : Nat} {r : Seg} (hlib : b.getCode usdcLib = Lib.code)
     (hpair : b.getCode pair = UniswapV2Pair.code) (hsigner : signer.toAdr = pair)
@@ -368,12 +453,12 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
       (encTree (copyLoopTree e0 e1 r0 r1 k
         (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)))) r) : False := by
   unfold encTree at run
-  sx run
+  sx_nonstorage run
   have h' := ric_nextP run
   clear run
   obtain ⟨_, hd, run⟩ := h'
   have good := (hP hd).2.2.2 rfl (congrArg some (by decide : Bytes.toB256 [64] = 64))
-  obtain ⟨_, e⟩ := ri_stepX hfork (hP hd).1 rfl
+  obtain ⟨_, e⟩ := ri_stepX_nonstorage (by intro same; cases same) (by intro same; cases same) (hP hd).1 rfl
   subst e
   clear hd
   rw [lit64] at run
@@ -383,7 +468,7 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
   have h64 : memWord (M.read 64 32).2 64 = memWord M 64 := rfl
   generalize memWord M 64 = p at good run h64
   generalize (M.read 64 32).2 = M1 at hM1 run h64
-  iterate 4 sx run
+  iterate 4 sx_nonstorage run
   sop run => ri_shl
   obtain ⟨hplo, hpcap⟩ := good
   unfold fpLo at hplo
@@ -401,14 +486,14 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
   have e84 : (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [32] + (Bytes.toB256 [32] +
       (Bytes.toB256 [4] + p))))).toNat = 132 + p.toNat := by
     rw [lit_add lit32 (by rw [e64]; omega), e64]; omega
-  iterate 2 sx run
+  iterate 2 sx_nonstorage run
   obtain ⟨W0, hW0, run⟩ := nameMem run
   have w0 : memWord W0 64 = p ∧ 96 ≤ W0.size := by
     rw [hW0]
     exact ⟨by rw [memWord_write_off hM1 (.inl (by omega))]; exact h64,
       le_trans hM1 (Mem.write_agree _ _ _).1⟩
   clear hW0
-  iterate 8 sx run
+  iterate 8 sx_nonstorage run
   obtain ⟨W1, hW1, run⟩ := nameMem run
   have w1 : Words p (Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
       255, 255, 255, 255, 255, 255, 255] &&& signer) W1 := by
@@ -420,20 +505,20 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
   clear hW1
   generalize hsw : (Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
       255, 255, 255, 255, 255, 255, 255] &&& signer) = sw at w1
-  iterate 5 sx run
+  iterate 5 sx_nonstorage run
   obtain ⟨W2, hW2, run⟩ := nameMem run
   have w2 : Words p sw W2 := by rw [hW2, e24]; exact w1.write hplo (by omega) _
   clear hW2
-  iterate 10 sx run
+  iterate 10 sx_nonstorage run
   obtain ⟨W3, hW3, run⟩ := nameMem run
   have w3 : Words p sw W3 := by rw [hW3, e44]; exact w2.write hplo (by omega) _
   clear hW3
-  iterate 5 sx run
+  iterate 5 sx_nonstorage run
   have h' := ric_nextP run
   clear run
   obtain ⟨_, hd, run⟩ := h'
   have pot := (hP hd).2.2.1
-  obtain ⟨_, e⟩ := ri_stepX hfork (hP hd).1 rfl
+  obtain ⟨_, e⟩ := ri_stepX_nonstorage (by intro same; cases same) (by intro same; cases same) (hP hd).1 rfl
   subst e
   clear hd
   obtain ⟨W5, hW5, run⟩ := nameMem run
@@ -446,16 +531,36 @@ theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep
         (Bytes.toB256 (W3.read sig.toNat 32).1)).2
       omega⟩
   clear hW5 pot
-  iterate 14 sx run
+  iterate 14 sx_nonstorage run
   have hP' : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d' :=
     fun h => ⟨(hP h).1, (hP h).2.1, (hP h).2.2.1⟩
-  obtain ⟨i', M', G', hle, hi', hag, run⟩ := copy_loop_keep hP' hk hkC hfork
+  obtain ⟨i', M', G', hle, hi', hag, run⟩ := copy_loop_keep_nonstorage hP' hk hkC
     (by rw [show (Bytes.toB256 [0]).toNat = 0 from rfl]; exact Nat.zero_le _)
     (by rw [e84]; omega) run
   have w := (w5.1.read sig.toNat 32).agree hag (by rw [e84]; omega) hplo
   have hsw' : sw = pair.toB256 := by rw [← hsw, ff20_and_word, hsigner]
-  exact tail0_false hP hk2 hk2C h1 h2 h3 hF hfork rejects notPre hlib hpair w.fp hplo
+  exact tail0_falseH hP hk2 hk2C h1 h2 h3 hF hsg bal rejects notPre hlib hpair w.fp hplo
     (hsw' ▸ w.sg) w.sz (by rw [e84]; omega) (by rw [e84]; omega) (le_trans hle hi') run
+
+/-- The original covered-fork encoding interface. -/
+theorem enc_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {fs : List SFunc}
+    {sevm : Sevm} {C : List Nat} {e0 e1 r0 r1 m0 m1 a0 a1 b0 b1 c0 c1 : UInt8} {k k2 : Nat}
+    {R1 R2 R3 F : SFunc}
+    (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k
+      (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)))) (hkC : k ∉ C)
+    (hk2 : fs[k2]? = some (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)) (hk2C : k2 ∉ C)
+    (h1 : R1.noOk = true) (h2 : R2.noOk = true) (h3 : R3.noOk = true)
+    (hF : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg},
+      ¬ SFunc.RunCutP P fs sevm C (St b (0 :: S) M G) F r)
+    (hfork : CoveredFork sevm.benvStat.fork) {pair : Adr} (rejects : LibRejects pair)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {b : Devm} {sig h signer sel : B256}
+    {R : List B256} {M : Mem} {G : Nat} {r : Seg} (hlib : b.getCode usdcLib = Lib.code)
+    (hpair : b.getCode pair = UniswapV2Pair.code) (hsigner : signer.toAdr = pair)
+    (run : SFunc.RunCutP P fs sevm C (St b (sig :: h :: signer :: sel :: usdcLib.toB256 :: R) M G)
+      (encTree (copyLoopTree e0 e1 r0 r1 k
+        (exitTree m0 m1 k2 (callTree a0 a1 b0 b1 c0 c1 R1 R2 R3 F)))) r) : False :=
+  enc_falseH hP hk hkC hk2 hk2C h1 h2 h3 hF hfork.rules_stateGas_none hfork.rules_bal_none
+    (rejects.at_of_covered hfork) notPre hlib hpair hsigner run
 
 /-! ## The two sites -/
 
@@ -572,8 +677,8 @@ theorem site111_call_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP :
 /-- **Site 2, `permit`'s inline library call** (entry 8 from `_hashTypedDataV4`'s return,
 `t_47d3_c8`, copy loop 80, call site entry 9): with the digest `s0`, the signature `s2` and the
 owner `s6` naming the Pair, no cut run of the node reaches anything. -/
-theorem site9_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {sevm : Sevm}
-    (hfork : CoveredFork sevm.benvStat.fork) {pair : Adr} (rejects : LibRejects pair)
+theorem site9_falseH {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {sevm : Sevm}
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none) {pair : Adr} (rejects : LibRejectsAt pair sevm)
     (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {C : List Nat} (h80 : 80 ∉ C) (h9 : 9 ∉ C)
     {b : Devm} {s0 s1 s2 s3 s4 s5 s6 : B256} {R : List B256} {M : Mem} {G : Nat} {r : Seg}
     (hlib : b.getCode usdcLib = Lib.code) (hpair : b.getCode pair = UniswapV2Pair.code)
@@ -581,14 +686,26 @@ theorem site9_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteSt
     (run : SFunc.RunCutP P Impl.cert.prog sevm C
       (St b (s0 :: s1 :: s2 :: s3 :: s4 :: s5 :: s6 :: R) M G) Impl.t_47d3_c8 r) : False := by
   rw [t8_enc] at run
-  iterate 8 sx run
+  iterate 8 sx_nonstorage run
   rw [libLit] at run
   obtain ⟨n1, n2, n3, n4⟩ := noOk_9
-  refine enc_false hP prog_80 h80 prog_9 h9 n1 n2 n3 ?_ hfork rejects notPre hlib hpair hsigner run
+  refine enc_falseH hP prog_80 h80 prog_9 h9 n1 n2 n3 ?_ hsg bal rejects notPre hlib hpair hsigner run
   intro b S M G r h
-  iterate 1 sx h
+  iterate 1 sx_nonstorage h
   rcases ric_branchP h with ⟨-, _, h⟩ | ⟨hw, _, _⟩
   · exact SFunc.RunCutP.false_of_noOk h n4
   · exact hw rfl
+
+/-- The original covered-fork permit-site interface. -/
+theorem site9_false {P : Sevm → Devm → Ninst → Devm → Prop} (hP : SiteStep P) {sevm : Sevm}
+    (hfork : CoveredFork sevm.benvStat.fork) {pair : Adr} (rejects : LibRejects pair)
+    (notPre : ¬ sevm.benvStat.rules.isPrecomp pair) {C : List Nat} (h80 : 80 ∉ C) (h9 : 9 ∉ C)
+    {b : Devm} {s0 s1 s2 s3 s4 s5 s6 : B256} {R : List B256} {M : Mem} {G : Nat} {r : Seg}
+    (hlib : b.getCode usdcLib = Lib.code) (hpair : b.getCode pair = UniswapV2Pair.code)
+    (hsigner : s6.toAdr = pair)
+    (run : SFunc.RunCutP P Impl.cert.prog sevm C
+      (St b (s0 :: s1 :: s2 :: s3 :: s4 :: s5 :: s6 :: R) M G) Impl.t_47d3_c8 r) : False :=
+  site9_falseH hP hfork.rules_stateGas_none hfork.rules_bal_none
+    (rejects.at_of_covered hfork) notPre h80 h9 hlib hpair hsigner run
 
 end Blanc.Lift.Usdc

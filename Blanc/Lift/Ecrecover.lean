@@ -27,6 +27,29 @@ def ecrecoverOutput (data : Bytes) : Bytes :=
   | .ok _ output => output
   | .error _ _ => []
 
+/-- On arbitrary input, the precompile returns either no bytes or one
+canonical address word. This does not assert successful authentication. -/
+theorem ecrecoverOutput_spectrum (data : Bytes) :
+    ecrecoverOutput data = [] ∨
+      ∃ adr : Adr, ecrecoverOutput data = adr.toB256.toBytes := by
+  have paid : gasEcrecover ≤ (ecrecoverEvm data).dyna.gasLeft := Nat.le_refl _
+  have shape : executeEcrecover (ecrecoverEvm data) = .ok gasEcrecover [] ∨
+      ∃ adr : Adr, executeEcrecover (ecrecoverEvm data) =
+        .ok gasEcrecover adr.toB256.toBytes := by
+    unfold executeEcrecover PrecompResult.chargeGas
+    rw [ite_eq_left paid]
+    dsimp only
+    split
+    · exact Or.inl rfl
+    · split
+      · exact Or.inl rfl
+      · split
+        · exact Or.inl rfl
+        · exact Or.inr ⟨_, rfl⟩
+  rcases shape with empty | ⟨adr, address⟩
+  · exact Or.inl (by unfold ecrecoverOutput; rw [empty])
+  · exact Or.inr ⟨adr, by unfold ecrecoverOutput; rw [address]⟩
+
 /-- With its fixed charge paid, the precompile returns the output of its own input. -/
 theorem executeEcrecover_eq {evm : Evm} (hgas : gasEcrecover ≤ evm.dyna.gasLeft) :
     executeEcrecover evm = .ok gasEcrecover (ecrecoverOutput evm.sta.data) := by

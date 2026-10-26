@@ -1,6 +1,6 @@
+import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.SyncWalk
-import Blanc.Lift.HistCursorCuts
 
 /-! Actual shared Pair dispatcher prefixes to the upper and lower selector comparisons. -/
 
@@ -34,6 +34,56 @@ def pairSelectorLine : List Ninst := [
   (.reg .gt),
   (.push [0x00, 0xf9] (by decide))]
 
+/-- The literal pc-zero line, with the actual call-value flag retained. -/
+theorem pair_initial_line_state {sevm : Sevm} {b d : Devm} {G : Nat}
+    (line : Line.Run sevm (St b [] Mem.empty G) pairInitialLine d) :
+    ∃ G', d = St b [16, B256.eqCheck sevm.value 0, sevm.value] getterInitMemory G' := by
+  dsimp only [pairInitialLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_val (w := 128) rfl (ri_push step)
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_mstore_nat 64 rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_callvalue step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_val (w := 16) (by decide) (ri_push step)
+  cases line
+  exact ⟨g', by simpa only [getterInitMemory, show Bytes.toB256 [0x00, 0x10] = (16 : B256) from rfl] using state⟩
+
+/-- The literal size line retains the machine's modular calldata-size flag. -/
+theorem pair_size_line_state {sevm : Sevm} {b d : Devm} {G : Nat} {w : B256}
+    (line : Line.Run sevm (St b [w] getterInitMemory G) pairSizeLine d) :
+    ∃ G', d = St b [0x1b9, B256.ltCheck sevm.data.length.toB256 4] getterInitMemory G' := by
+  dsimp only [pairSizeLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldatasize step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_lt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
+  cases line
+  exact ⟨g', state⟩
+
+/-- The selector prefix retains the actual selector and comparison flag. -/
+theorem pair_selector_line_state {sevm : Sevm} {b d : Devm} {G : Nat} {sel : B256}
+    (selector : Blanc.Sevm.selector sevm = sel)
+    (line : Line.Run sevm (St b [] getterInitMemory G) pairSelectorLine d) :
+    ∃ G', d = St b [0xf9, B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel,
+      sel] getterInitMemory G' := by
+  dsimp only [pairSelectorLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line
+  obtain ⟨_, rfl⟩ := ri_val (w := sel) selector (ri_shr step)
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line
+  obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
+  cases line
+  exact ⟨g', state⟩
+
+/-- The selected upper or lower comparison is reached by an actual frame-free prefix.
+Its full world and initialized memory are retained; residual gas is derived. -/
 theorem pair_dispatch_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     {sel : B256} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = sel)
@@ -53,46 +103,20 @@ theorem pair_dispatch_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : 
   obtain ⟨guard⟩ := initial.lineH cert_check rfl stateGas pairInitialLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairInitialLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [16, 1, 0]) (M' := getterInitMemory) (by
       intro g d line
-      dsimp only [pairInitialLine] at line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_val (w := 128) rfl (ri_push step)
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_mstore_nat 64 rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_callvalue step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_val (w := 16) (by decide) (ri_push step)
-      cases line
-      exact ⟨g', by simpa only [getterInitMemory, root, paid, show B256.eqCheck (0 : B256) 0 = 1 from by decide] using state⟩)
+      obtain ⟨g', state⟩ := pair_initial_line_state line
+      exact ⟨g', by simpa only [root, paid, show B256.eqCheck (0 : B256) 0 = 1 from by decide] using state⟩)
   obtain ⟨opened⟩ := guard.branchSuccH cert_check rfl stateGas (by decide)
   obtain ⟨entry⟩ := opened.destH cert_check rfl stateGas
   obtain ⟨sizeGuard⟩ := entry.lineH cert_check rfl stateGas pairSizeLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairSizeLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0x1b9, 0]) (M' := getterInitMemory) (by
       intro g d line
-      dsimp only [pairSizeLine] at line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldatasize step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_val (w := 0) (ltCheck_zero_of_le size) (ri_lt step)
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
-      cases line
-      exact ⟨g', state⟩)
+      obtain ⟨g', state⟩ := pair_size_line_state line
+      exact ⟨g', by simpa only [root, ltCheck_zero_of_le size] using state⟩)
   obtain ⟨lead⟩ := sizeGuard.branchZeroH cert_check rfl stateGas
   obtain ⟨comparison⟩ := lead.lineH cert_check rfl stateGas pairSelectorLine (by rfl)
     (by intro n member x equal; subst n; simp only [pairSelectorLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0xf9, B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel, sel]) (M' := getterInitMemory) (by
       intro g d line
-      dsimp only [pairSelectorLine] at line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line
-      obtain ⟨_, rfl⟩ := ri_val (w := sel) selector (ri_shr step)
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line
-      obtain ⟨_, rfl⟩ := ri_gt step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
-      cases line
-      exact ⟨g', state⟩)
+      exact pair_selector_line_state selector line)
   by_cases high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
   · rw [high] at comparison
     obtain ⟨compareA⟩ := comparison.branchZeroH cert_check rfl stateGas
@@ -100,6 +124,7 @@ theorem pair_dispatch_selector_cursor_stateH {sevm : Sevm} {b post : Devm} {G : 
   · obtain ⟨compareA⟩ := comparison.branchSuccH cert_check rfl stateGas high
     exact ⟨by simpa only [high, ite_false] using compareA⟩
 
+/-- Compatibility projection of the actual upper comparison prefix. -/
 theorem pair_dispatch_comparison_cursor_stateH {sevm : Sevm} {b post : Devm} {G : Nat}
     {sel : B256} (codeEq : sevm.code = code) (stateGas : sevm.benvStat.rules.stateGas = none)
     (selector : Blanc.Sevm.selector sevm = sel)

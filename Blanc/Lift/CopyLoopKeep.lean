@@ -298,11 +298,10 @@ theorem J_shape {b : Devm} {src dst len : B256} {R : List B256} {M0 : Mem}
 
 /-- **Crossing the solc word-copy loop** under the potential: the loop leaves every byte below
 the destination alone and grows nothing it does not write; it exits with `len ≤ i'`. -/
-theorem copy_loop_keep {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem copy_loop_keep_nonstorage {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
     {fs : List SFunc} {sevm : Sevm} {C : List Nat} {k : Nat} {e0 e1 r0 r1 : UInt8}
     {exitT : SFunc} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k exitT)) (hkC : k ∉ C)
-    (hfork : CoveredFork sevm.benvStat.fork)
     {b : Devm} {i src dst len : B256} {R : List B256} {M : Mem} {G : Nat} {r : Seg}
     (hi : i.toNat ≤ memCap) (hdst : dst.toNat ≤ memCap)
     (run : SFunc.RunCutP P fs sevm C (St b (i :: src :: dst :: len :: R) M G)
@@ -485,5 +484,20 @@ theorem copy_loop_keep {P : Sevm → Devm → Ninst → Devm → Prop}
     | pcAt _ _ _ _ =>
       rcases J_shape hJ with ⟨_, h⟩ | ⟨_, _, h⟩ | ⟨_, _, h⟩ | ⟨_, h⟩ <;> cases h
   exact main run (J.h0 M G i (Mem.AgreeOutside.refl M _ _) hi)
+
+/-- Covered-fork compatibility projection of the fork-free copy-loop memory theorem. -/
+theorem copy_loop_keep {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d' ∧ Pot d ∧ Pot d')
+    {fs : List SFunc} {sevm : Sevm} {C : List Nat} {k : Nat} {e0 e1 r0 r1 : UInt8}
+    {exitT : SFunc} (hk : fs[k]? = some (copyLoopTree e0 e1 r0 r1 k exitT)) (hkC : k ∉ C)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    {b : Devm} {i src dst len : B256} {R : List B256} {M : Mem} {G : Nat} {r : Seg}
+    (hi : i.toNat ≤ memCap) (hdst : dst.toNat ≤ memCap)
+    (run : SFunc.RunCutP P fs sevm C (St b (i :: src :: dst :: len :: R) M G)
+      (copyLoopTree e0 e1 r0 r1 k exitT) r) :
+    ∃ i' M' G', len.toNat ≤ i'.toNat ∧ i'.toNat ≤ memCap ∧
+      Mem.AgreeOutside M M' dst.toNat (2 ^ 256) ∧
+      SFunc.RunCutP P fs sevm C (St b (i' :: src :: dst :: len :: R) M' G') exitT r := by
+  exact copy_loop_keep_nonstorage hP hk hkC hi hdst run
 
 end Blanc.Lift.FreePtr

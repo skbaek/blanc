@@ -1,5 +1,6 @@
 import Blanc.Lift.Sound
 import Blanc.Lift.Reach
+import Blanc.Lift.ObservedReach
 import Jaune.ExecChronology
 
 /-!
@@ -893,6 +894,51 @@ theorem CursorOK.exec_call_or_staticcall {code : ByteArray} {c : Cert} {n : Exec
     rw [hf] at h
     simp only [SFunc.callOnly, ninstCallOnly, Bool.false_and, Bool.false_eq_true] at h
 
+/-- A full synthetic edge with its actual raw driver, successor and cuts before the stop. -/
+def Cursor.RawEdgeAt (code : ByteArray) (c : Cert) (R stop : Exec.Deriv)
+    (before after : Conf) : Prop :=
+  ∃ (node next : Exec.Deriv) (here there : Cursor),
+    Exec.Deriv.ParentPrefix R node ∧ Exec.Deriv.ParentStep next node ∧
+    Exec.Deriv.ParentPrefix next stop ∧ node.sevm = R.sevm ∧
+    before = here.conf node.devm ∧ after = there.conf next.devm ∧
+    SStep c here there ∧ CursorOK code c node here ∧ CursorOK code c next there
+
+/-- The original cursor induction retains each actual raw edge at the same full synthetic edge. -/
+theorem observed_reach_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) {R N : Exec.Deriv}
+    (hpc : R.pc = 0) (hcode : R.sevm.code = code)
+    (hfork : R.sevm.benvStat.rules.stateGas = none) (hp : Exec.Deriv.ParentPrefix R N) :
+    ∃ κ, ObservedReach (StepIn R) (Cursor.RawEdgeAt code c R N) c.prog R.sevm
+      ((Cursor.start c).conf R.devm) (κ.conf N.devm) ∧ CursorOK code c N κ := by
+  suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
+      ∀ κ₀, CursorOK code c F κ₀ → F.sevm.benvStat.rules.stateGas = none → F.sevm = R.sevm →
+      Exec.Deriv.ParentPrefix R F →
+      (∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc) →
+      ∃ κ, ObservedReach (StepIn R) (Cursor.RawEdgeAt code c R n) c.prog R.sevm
+        (κ₀.conf F.devm) (κ.conf n.devm) ∧ CursorOK code c n κ from
+    h hp _ (cursor_start hc hpc hcode) hfork rfl (.refl R)
+      (fun r hr => List.mem_cons_of_mem _ hr)
+  intro F n hp
+  induction hp with
+  | refl root => exact fun κ₀ ok _ _ _ _ => ⟨κ₀, .refl, ok⟩
+  | step head tail ih =>
+    intro κ₀ ok hfork hsevm hreached hdesc
+    obtain ⟨κ₁, static, hstep, ok₁⟩ := cursor_stepS_noStateGas hc ok head hfork
+    have hsevm₁ := Cursor.parentStep_sevm head
+    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [hsevm₁]; exact hfork)
+      (hsevm₁.trans hsevm) (hreached.snoc head)
+      (fun r hr => hdesc r (by
+        cases head with
+        | cont => simpa only [Exec.rawFrameDescendants] using hr
+        | doneOk => simpa only [Exec.rawFrameDescendants] using hr
+        | runOk =>
+          simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
+          exact Or.inr (Or.inr hr)))
+    refine ⟨κ, .head ⟨?_, ?_⟩ hreach, ok'⟩
+    · rw [← hsevm]
+      exact hstep.mono fun h => h.mono fun _ _ _ _ _ he r hr => hdesc r (he r hr)
+    · exact ⟨_, _, κ₀, κ₁, hreached, head, tail, hsevm, rfl, rfl, static, ok, ok₁⟩
+
 /-- **The stateful prefix form of the lift.**  Every node `N` of the same-frame
 chain of a frame `R` entered at pc `0` of certified bytes — whatever `R`'s
 eventual outcome — is reached from entry `0` in `R`'s own state by synthetic
@@ -903,31 +949,8 @@ theorem reach_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert} (hc : Cer
     (hfork : R.sevm.benvStat.rules.stateGas = none) (hp : Exec.Deriv.ParentPrefix R N) :
     ∃ κ, Reach (StepIn R) c.prog R.sevm ((Cursor.start c).conf R.devm) (κ.conf N.devm) ∧
       CursorOK code c N κ := by
-  suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
-      ∀ κ₀, CursorOK code c F κ₀ → F.sevm.benvStat.rules.stateGas = none → F.sevm = R.sevm →
-      (∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc) →
-      ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf n.devm) ∧
-        CursorOK code c n κ from
-    h hp _ (cursor_start hc hpc hcode) hfork rfl (fun r hr => List.mem_cons_of_mem _ hr)
-  intro F n hp
-  induction hp with
-  | refl root => exact fun κ₀ ok _ _ _ => ⟨κ₀, .refl, ok⟩
-  | step head _ ih =>
-    intro κ₀ ok hfork hsevm hdesc
-    obtain ⟨κ₁, -, hstep, ok₁⟩ := cursor_stepS_noStateGas hc ok head hfork
-    have hsevm₁ := Cursor.parentStep_sevm head
-    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [hsevm₁]; exact hfork)
-      (hsevm₁.trans hsevm)
-      (fun r hr => hdesc r (by
-        cases head with
-        | cont => simpa only [Exec.rawFrameDescendants] using hr
-        | doneOk => simpa only [Exec.rawFrameDescendants] using hr
-        | runOk =>
-          simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-          exact Or.inr (Or.inr hr)))
-    refine ⟨κ, .head ?_ hreach, ok'⟩
-    rw [← hsevm]
-    exact hstep.mono fun h => h.mono fun _ _ _ _ _ he r hr => hdesc r (he r hr)
+  obtain ⟨κ, reach, ok⟩ := observed_reach_of_parentPrefix_noStateGas hc hpc hcode hfork hp
+  exact ⟨κ, reach.forget, ok⟩
 
 theorem reach_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {R N : Exec.Deriv} (hpc : R.pc = 0) (hcode : R.sevm.code = code)

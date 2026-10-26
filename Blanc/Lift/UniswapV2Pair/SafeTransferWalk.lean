@@ -2298,11 +2298,11 @@ theorem safeTransfer_dynamicCall_inv {P : Sevm → Devm → Ninst → Devm → P
 
 /-- Successful continuation settles the moving CALL without changing its
 prepaid parent memory or constraining the token child's world effects. -/
-theorem safeTransfer_dynamicCall_post_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem safeTransfer_dynamicCall_post_invH {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {p amount toWord tokenWord rho : B256} {n : Nat}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (hsg : sevm.benvStat.rules.stateGas = none) (mem : PtrMem p n M)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
     (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
     (run : SFunc.RunCutP P cert.prog sevm C
@@ -2331,7 +2331,7 @@ theorem safeTransfer_dynamicCall_post_inv {P : Sevm → Devm → Ninst → Devm 
     simp only [memExtsSize]
     rw [memExtSize_of_le preMem.n32 (by rw [nat164]; omega),
       memExtSize_of_le preMem.n32 (by rw [nat164]; omega)]
-  have settled := safeTransfer_call_inv project fork notAlloc notGuard step tail
+  have settled := safeTransfer_call_invH project hsg notAlloc notGuard step tail
   have memory : d.memory = N := by
     rw [settled.2.1]
     change (N.extends [((p + 164).toNat, 68), ((p + 164).toNat, 0)]).write
@@ -2343,8 +2343,82 @@ theorem safeTransfer_dynamicCall_post_inv {P : Sevm → Devm → Ninst → Devm 
   rw [memory]
   exact preMem
 
+theorem safeTransfer_dynamicCall_post_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
+    let N := safeTransfer_dynamicCallMemory M p amount toWord
+    ∃ forwarded callGas d,
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N callGas) (.exec .call) d ∧
+      SFunc.RunCutP P cert.prog sevm C d safeTransfer_afterCall r ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
+      d.memory = N ∧ d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
+      PtrMem (p + 164) N.size d.memory ∧ p.toNat + 260 ≤ N.size := by
+  exact safeTransfer_dynamicCall_post_invH project fork.rules_stateGas_none mem lower width notCopyCut notAlloc notGuard run
+
 /-- The moving helper's decoder receives its own full physical CALL reply,
 independently of the reply that produced its entry pointer. -/
+theorem safeTransfer_dynamicReply_invH {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (hsg : sevm.benvStat.rules.stateGas = none) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
+    let N := safeTransfer_dynamicCallMemory M p amount toWord
+    ∃ forwarded callGas d decoderGas,
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N callGas) (.exec .call) d ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
+      d.memory = N ∧ d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
+      PtrMem (p + 164) N.size d.memory ∧ p.toNat + 260 ≤ N.size ∧
+      SFunc.RunCutP P cert.prog sevm C
+        (St d (d.returnData.length.toB256 ::
+          (if d.returnData.length.toB256 = 0 then 96 else p + 164) ::
+          1 :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+          (if d.returnData.length.toB256 = 0 then d.memory else
+            ((d.memory.write 64
+                (p + 164 + ((d.returnData.length.toB256 + 63) &&& ~~~31)).toBytes).write
+              (p + 164).toNat d.returnData.length.toB256.toBytes).write
+                (p + 164 + 32).toNat d.returnData) decoderGas) t_2148_c16 r := by
+  obtain ⟨forwarded, callGas, d, step, tail, stack, memory, output, replyWidth, postMem, fit⟩ :=
+    safeTransfer_dynamicCall_post_invH project hsg mem lower width notCopyCut notAlloc notGuard run
+  have image : d = St d (1 :: (68 + (p + 164)) ::
+      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) d.memory d.gasLeft :=
+    St.self stack rfl
+  have normalized : SFunc.RunCutP P cert.prog sevm C
+      (St d (1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) d.memory d.gasLeft)
+      safeTransfer_afterCall r := by
+    rw [← image]
+    exact tail
+  obtain ⟨decoderGas, decoded⟩ := safeTransfer_afterCall_inv project notAlloc normalized
+  rw [show Bytes.toB256 (d.memory.read 64 32).1 = p + 164 from postMem.word,
+    postMem.read_self postMem.ge] at decoded
+  have copied : d.returnData.sliceD 0 d.returnData.length.toB256.toNat 0 = d.returnData := by
+    rw [B256.toNat_toB256_of_lt replyWidth]
+    exact Bytes.sliceD_zero_length rfl
+  rw [copied] at decoded
+  exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩
+
 theorem safeTransfer_dynamicReply_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {p amount toWord tokenWord rho : B256} {n : Nat}
@@ -2374,27 +2448,7 @@ theorem safeTransfer_dynamicReply_inv {P : Sevm → Devm → Ninst → Devm → 
                 (p + 164 + ((d.returnData.length.toB256 + 63) &&& ~~~31)).toBytes).write
               (p + 164).toNat d.returnData.length.toB256.toBytes).write
                 (p + 164 + 32).toNat d.returnData) decoderGas) t_2148_c16 r := by
-  obtain ⟨forwarded, callGas, d, step, tail, stack, memory, output, replyWidth, postMem, fit⟩ :=
-    safeTransfer_dynamicCall_post_inv project fork mem lower width notCopyCut notAlloc notGuard run
-  have image : d = St d (1 :: (68 + (p + 164)) ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) d.memory d.gasLeft :=
-    St.self stack rfl
-  have normalized : SFunc.RunCutP P cert.prog sevm C
-      (St d (1 :: (68 + (p + 164)) ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) d.memory d.gasLeft)
-      safeTransfer_afterCall r := by
-    rw [← image]
-    exact tail
-  obtain ⟨decoderGas, decoded⟩ := safeTransfer_afterCall_inv project notAlloc normalized
-  rw [show Bytes.toB256 (d.memory.read 64 32).1 = p + 164 from postMem.word,
-    postMem.read_self postMem.ge] at decoded
-  have copied : d.returnData.sliceD 0 d.returnData.length.toB256.toNat 0 = d.returnData := by
-    rw [B256.toNat_toB256_of_lt replyWidth]
-    exact Bytes.sliceD_zero_length rfl
-  rw [copied] at decoded
-  exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩
+  exact safeTransfer_dynamicReply_invH project fork.rules_stateGas_none mem lower width notCopyCut notAlloc notGuard run
 
 /-- The already reached physical optional-bool decoder returns its own full
 reply image. This inverse does not select or rerun an external call. -/
@@ -2488,6 +2542,38 @@ theorem safeTransfer_decodedReturned_inv {P : Sevm → Devm → Ninst → Devm �
 
 /-- A complete moving helper returns exactly its own full optional reply
 allocation and derives the token's optional-bool acceptance from the bytecode. -/
+theorem safeTransfer_dynamicReturned_invH {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (hsg : sevm.benvStat.rules.stateGas = none) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (run : SFunc.RunP P cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
+    ∃ forwarded callGas d residual,
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        (safeTransfer_dynamicCallMemory M p amount toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
+      d.memory = safeTransfer_dynamicCallMemory M p amount toWord ∧ d.output = b.output ∧
+      d.returnData.length < 2 ^ 256 ∧
+      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      out = St d R (if d.returnData = [] then d.memory else
+        Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual := by
+  obtain ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩ :=
+    safeTransfer_dynamicReply_invH project hsg mem lower width (by decide : 71 ∉ [])
+      (by decide : 16 ∉ []) (by decide : 17 ∉ [])
+      ((SFunc.runP_iff_runCutP_nil (P := P)).mp run)
+  obtain ⟨residual, accepted, returned⟩ := safeTransfer_decodedReturned_inv project
+    postMem lower width fit replyWidth decoded
+  exact ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
+    accepted, returned⟩
+
 theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
     {p amount toWord tokenWord rho : B256} {n : Nat}
@@ -2511,14 +2597,7 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       out = St d R (if d.returnData = [] then d.memory else
         Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual := by
-  obtain ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩ :=
-    safeTransfer_dynamicReply_inv project fork mem lower width (by decide : 71 ∉ [])
-      (by decide : 16 ∉ []) (by decide : 17 ∉ [])
-      ((SFunc.runP_iff_runCutP_nil (P := P)).mp run)
-  obtain ⟨residual, accepted, returned⟩ := safeTransfer_decodedReturned_inv project
-    postMem lower width fit replyWidth decoded
-  exact ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
-    accepted, returned⟩
+  exact safeTransfer_dynamicReturned_invH project fork.rules_stateGas_none mem lower width run
 
 /-- Ordered staging size of the dynamic `_safeTransfer` pre-CALL segment: the
 exact read/write access order of `safeTransfer_initialize_exact` (14 accesses),
