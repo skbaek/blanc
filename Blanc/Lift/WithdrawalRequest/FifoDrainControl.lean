@@ -4,7 +4,7 @@ import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 /-!
 # E5(ii): what a mid-block drain does to the FIFO conclusion
 
-`block_word_fifo` concludes `BlockWordFifo`: every committed submission is, in order,
+`block_word_fifo_of_checkpoint` concludes `CheckpointBlockWordFifo`: every committed submission is, in order,
 an earlier block's output, this block's emitted prefix, or still queued.  If the
 queue is empty at this block's request boundary although the block committed a
 submission and no earlier block did, the conclusion is false: the submission was
@@ -34,7 +34,7 @@ theorem _root_.Blanc.WithdrawalRequest.RepresentsStorage.queue_length_eq {storag
 /-- **A drained request boundary refutes the block FIFO.**  If no submission was
 committed before the block, the block committed at least one, and the predeploy storage
 at the block's request boundary represents a state with an empty queue, then
-`BlockWordFifo` fails for that block: the committed submission is neither an earlier
+`CheckpointBlockWordFifo` fails for that block: the committed submission is neither an earlier
 output, nor emitted by this block's system call, nor still queued. -/
 theorem not_blockWordFifo_of_drained {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
@@ -46,7 +46,7 @@ theorem not_blockWordFifo_of_drained {cfg : ChainConfig} {checkpoint pre post : 
     (drained : ∃ s : Blanc.WithdrawalRequest.State,
       RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
         withdrawalRequestPredeployAddress).get s ∧ s.queue = []) :
-    ¬ BlockWordFifo history block := by
+    ¬ CheckpointBlockWordFifo history block := by
   rintro ⟨r, boundary, -, -, -, provenance, -, -⟩
   obtain ⟨s, srep, sempty⟩ := drained
   -- the model at the request boundary has an empty queue
@@ -149,8 +149,8 @@ theorem block_submissions_eq_transactions {cfg : ChainConfig} {checkpoint pre po
     consolidationEmpty, resetEmpty, List.nil_append, List.append_nil]
 
 /-- **The E5(ii) negative control, as a proposition**: a configured history meeting every
-hypothesis of `block_word_fifo` except `systemEmpty` (code at SYSTEM_ADDRESS instead) whose
-block fails `BlockWordFifo`. -/
+hypothesis of `block_word_fifo_of_checkpoint` except `systemEmpty` (code at SYSTEM_ADDRESS instead) whose
+block fails `CheckpointBlockWordFifo`. -/
 def SystemEmptyLoadBearing : Prop :=
   ∃ (cfg : ChainConfig) (checkpoint pre post : BlockChain)
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
@@ -164,11 +164,11 @@ def SystemEmptyLoadBearing : Prop :=
     RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
     ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap ∧
-    ¬ BlockWordFifo history block
+    ¬ CheckpointBlockWordFifo history block
 
 /-- **E5(ii), the statement.**  The SYSTEM_ADDRESS exclusion `systemEmpty` is load-bearing
-for `block_word_fifo` once one configured history satisfies every other hypothesis of
-`block_word_fifo` (installed system code, no sender or authority at SYSTEM_ADDRESS, no
+for `block_word_fifo_of_checkpoint` once one configured history satisfies every other hypothesis of
+`block_word_fifo_of_checkpoint` (installed system code, no sender or authority at SYSTEM_ADDRESS, no
 code-free root frame targeting it, INIT, the occurrence cap), has code at SYSTEM_ADDRESS,
 commits a submission in a block after none before, and reaches that block's request
 boundary with the queue drained.  The witness (block assembly) instantiates the premises;

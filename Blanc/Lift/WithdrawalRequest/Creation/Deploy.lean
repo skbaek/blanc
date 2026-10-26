@@ -11,14 +11,15 @@ namespace Blanc.Lift.WithdrawalRequest.Creation
 open Jaune Blanc.Lift Blanc.WithdrawalRequest
 
 /-- Canonical construction under its actual selected rule capabilities, including Cancun.
-The runtime, initial storage and settlement bookkeeping are execution results. -/
+The runtime, initial storage and settlement bookkeeping are execution results. The gas
+requirement covers the 22217 constructor bound plus the 100800 runtime deposit. -/
 theorem create_initialH (msg : Msg)
     (hsg : msg.benv.stat.rules.stateGas = none)
     (hpush0 : msg.benv.stat.rules.op.push0 = true)
     (hflat : ∀ g, msg.benv.stat.rules.access = .flat g → g.sload ≤ 2100)
     (hsize : 504 ≤ msg.benv.stat.rules.code.maxCodeSize)
     (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
-    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 250000 ≤ msg.gas) :
+    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 123017 ≤ msg.gas) :
     ∃ post, processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget = Blanc.withdrawalRequestCode ∧
       RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none ∧
@@ -118,14 +119,14 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
       (by intro g hg; rw [hfork.rules_access] at hg; cases hg)
       (hfork.cases (motive := fun f => 504 ≤ (Fork.ruleSet f).code.maxCodeSize)
         (by decide) (by decide) (by decide) (by decide))
-      haddress hcode hstatic hvalue hgas
+      haddress hcode hstatic hvalue (Nat.le_trans (by decide) hgas)
   exact ⟨post, hrun, hcode', hstorage, herror⟩
 
 /-- Cancun construction derives the same canonical runtime and inhibitor initialization.
 The inherited-deletion and zero-refund facts belong to this same execution result. -/
 theorem create_initial_cancun (msg : Msg) (hfork : msg.benv.stat.fork = .cancun)
     (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
-    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 250000 ≤ msg.gas) :
+    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 123017 ≤ msg.gas) :
     ∃ post, processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget = Blanc.withdrawalRequestCode ∧
       RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none ∧
@@ -188,7 +189,7 @@ theorem deploy_initial_cancun :
   have target : (deployMsg .cancun).currentTarget = withdrawalRequestPredeployAddress := deployer_address
   refine ⟨target, ?_⟩
   obtain ⟨post, hcreate, hcode, hstorage, herror, hdelete, hrefund⟩ :=
-    create_initial_cancun (deployMsg .cancun) rfl rfl rfl rfl rfl (Nat.le_refl _)
+    create_initial_cancun (deployMsg .cancun) rfl rfl rfl rfl rfl (by decide)
   rw [target] at hcode hstorage
   exact ⟨post, hcreate, hcode, hstorage, herror, hdelete, hrefund⟩
 

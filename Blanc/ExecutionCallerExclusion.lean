@@ -48,13 +48,13 @@ theorem Frame.enter_run_caller {frame : Frame} {child : Evm}
   obtain ⟨_, _, rfl⟩ := Frame.enter_run_inv enter
   rfl
 
-theorem Xinst.step_create_spawn_codeAddress
+theorem Xinst.step_create_spawn_codeAddress_noStateGas
     {sevm : Sevm} {devm : Devm} {x : Xinst} {frame : Frame} {resume : Resume}
-    (fork : CoveredFork sevm.benvStat.fork) (create : x = .create ∨ x = .create2)
+    (fork : sevm.benvStat.rules.stateGas = none) (create : x = .create ∨ x = .create2)
     (spawn : Xinst.step sevm devm x = .spawn frame resume) :
     frame.inner.codeAddress = none := by
   rcases create with rfl | rfl <;>
-    simp only [Xinst.step, fork.rules_stateGas_none, Bind.bind, Except.bind,
+    simp only [Xinst.step, fork, Bind.bind, Except.bind,
       Pure.pure, Except.pure] at spawn
   all_goals repeat' split at spawn
   all_goals simp only [XStep.ofExcept, reduceCtorEq] at spawn
@@ -82,10 +82,10 @@ theorem Evm.step_empty_code_not_spawn {pc : Nat} {sevm : Sevm} {pre : Devm}
   cases eq
 
 /-- One entered child preserves caller exclusion and the empty-target invariant. -/
-theorem Evm.step_spawn_caller_excluded {a : Adr} {pc nextPc : Nat}
+theorem Evm.step_spawn_caller_excluded_noStateGas {a : Adr} {pc nextPc : Nat}
     {sevm : Sevm} {pre : Devm} {frame : Frame} {resume : Resume} {child : Evm}
     (spawn : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : sevm.benvStat.rules.stateGas = none)
     (enter : frame.enter = .run child) (caller : sevm.caller ≠ a)
     (targetCode : sevm.currentTarget = a → sevm.code = ByteArray.empty)
     (childEmpty : child.dyna.getCode a = ByteArray.empty)
@@ -113,11 +113,11 @@ theorem Evm.step_spawn_caller_excluded {a : Adr} {pc nextPc : Nat}
   | create =>
     exact False.elim (avoid (by
       rw [Frame.enter_run_codeAddress enter]
-      exact Xinst.step_create_spawn_codeAddress fork (Or.inl rfl) instruction) target)
+      exact Xinst.step_create_spawn_codeAddress_noStateGas fork (Or.inl rfl) instruction) target)
   | create2 =>
     exact False.elim (avoid (by
       rw [Frame.enter_run_codeAddress enter]
-      exact Xinst.step_create_spawn_codeAddress fork (Or.inr rfl) instruction) target)
+      exact Xinst.step_create_spawn_codeAddress_noStateGas fork (Or.inr rfl) instruction) target)
   | call =>
     rw [Frame.enter_run_code enter,
       Xinst.step_directCall_spawn_code (Or.inl rfl) instruction (by
@@ -135,9 +135,9 @@ theorem Evm.step_spawn_caller_excluded {a : Adr} {pc nextPc : Nat}
     exact False.elim (parentTarget ((Xinst.step_spawn_context_target
       (Or.inr rfl) instruction).symm.trans frameTarget))
 
-private theorem Exec.rawFrameDescendants_caller_excluded {a : Adr}
+private theorem Exec.rawFrameDescendants_caller_excluded_noStateGas {a : Adr}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec pc sevm pre out) (fork : sevm.benvStat.rules.stateGas = none)
     (caller : sevm.caller ≠ a)
     (targetCode : sevm.currentTarget = a → sevm.code = ByteArray.empty)
     (empty : ∀ root ∈ Exec.rawFrameDescendants run, root.devm.getCode a = ByteArray.empty)
@@ -166,10 +166,10 @@ private theorem Exec.rawFrameDescendants_caller_excluded {a : Adr}
     have childRoot : (⟨child.pc, child.sta, child.dyna, raw, childRun⟩ : Exec.Deriv) ∈
         Exec.rawFrameDescendants (Exec.runErr step enter childRun resumeRun) :=
       by rw [Exec.rawFrameDescendants]; exact List.mem_cons_self
-    obtain ⟨childCaller, childCode⟩ := Evm.step_spawn_caller_excluded step fork enter caller
+    obtain ⟨childCaller, childCode⟩ := Evm.step_spawn_caller_excluded_noStateGas step fork enter caller
       targetCode (empty _ (by simpa only [Exec.rawFrameDescendants] using childRoot))
       (avoid _ (by simpa only [Exec.rawFrameDescendants] using childRoot))
-    have descendants := ih (Evm.step_spawn_child_fork step enter fork) childCaller childCode
+    have descendants := ih (by rw [Evm.step_spawn_child_benvStat step enter]; exact fork) childCaller childCode
       (fun root member => empty root (List.mem_cons_of_mem _ member))
       (fun root member => avoid root (List.mem_cons_of_mem _ member))
     intro root member
@@ -183,10 +183,10 @@ private theorem Exec.rawFrameDescendants_caller_excluded {a : Adr}
     have childRoot : (⟨child.pc, child.sta, child.dyna, raw, childRun⟩ : Exec.Deriv) ∈
         Exec.rawFrameDescendants (Exec.runOk step enter childRun resumeRun next) :=
       by rw [Exec.rawFrameDescendants]; exact List.mem_cons_self
-    obtain ⟨childCaller, childCode⟩ := Evm.step_spawn_caller_excluded step fork enter caller
+    obtain ⟨childCaller, childCode⟩ := Evm.step_spawn_caller_excluded_noStateGas step fork enter caller
       targetCode (empty _ (by simpa only [Exec.rawFrameDescendants] using childRoot))
       (avoid _ (by simpa only [Exec.rawFrameDescendants] using childRoot))
-    have childDescendants := ihChild (Evm.step_spawn_child_fork step enter fork)
+    have childDescendants := ihChild (by rw [Evm.step_spawn_child_benvStat step enter]; exact fork)
       childCaller childCode
       (fun root member => empty root
         (List.mem_cons_of_mem _ (List.mem_append_left _ member)))
@@ -206,6 +206,50 @@ private theorem Exec.rawFrameDescendants_caller_excluded {a : Adr}
       · exact nextDescendants root nextMember
 
 /-- Root and descendant callers are excluded using actual empty-code and CREATE witnesses. -/
+theorem Exec.rawFrameRoots_caller_excluded_noStateGas {a : Adr}
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (fork : sevm.benvStat.rules.stateGas = none)
+    (caller : sevm.caller ≠ a)
+    (targetCode : sevm.currentTarget = a → sevm.code = ByteArray.empty)
+    (empty : ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = ByteArray.empty)
+    (avoid : ∀ root ∈ Exec.rawFrameRoots run,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
+    ∀ root ∈ Exec.rawFrameRoots run,
+      root.sevm.caller ≠ a ∧
+        (root.sevm.currentTarget = a → root.sevm.code = ByteArray.empty) := by
+  simp only [Exec.rawFrameRoots] at empty avoid
+  have descendants := Exec.rawFrameDescendants_caller_excluded_noStateGas run fork caller targetCode
+    (fun root member => empty root (List.mem_cons_of_mem _ member))
+    (fun root member => avoid root (List.mem_cons_of_mem _ member))
+  intro root member
+  simp only [Exec.rawFrameRoots, List.mem_cons] at member
+  rcases member with rfl | member
+  · exact ⟨caller, targetCode⟩
+  · exact descendants root member
+
+/-- Modern compatibility interface for the selected-rule creation fact. -/
+theorem Xinst.step_create_spawn_codeAddress
+    {sevm : Sevm} {devm : Devm} {x : Xinst} {frame : Frame} {resume : Resume}
+    (fork : CoveredFork sevm.benvStat.fork) (create : x = .create ∨ x = .create2)
+    (spawn : Xinst.step sevm devm x = .spawn frame resume) :
+    frame.inner.codeAddress = none :=
+  Xinst.step_create_spawn_codeAddress_noStateGas fork.rules_stateGas_none create spawn
+
+/-- Modern compatibility interface for actual child caller exclusion. -/
+theorem Evm.step_spawn_caller_excluded {a : Adr} {pc nextPc : Nat}
+    {sevm : Sevm} {pre : Devm} {frame : Frame} {resume : Resume} {child : Evm}
+    (spawn : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (enter : frame.enter = .run child) (caller : sevm.caller ≠ a)
+    (targetCode : sevm.currentTarget = a → sevm.code = ByteArray.empty)
+    (childEmpty : child.dyna.getCode a = ByteArray.empty)
+    (avoid : child.sta.codeAddress = none → child.sta.currentTarget ≠ a) :
+    child.sta.caller ≠ a ∧
+      (child.sta.currentTarget = a → child.sta.code = ByteArray.empty) :=
+  Evm.step_spawn_caller_excluded_noStateGas spawn fork.rules_stateGas_none enter caller
+    targetCode childEmpty avoid
+
+/-- Modern compatibility interface for raw-root caller exclusion. -/
 theorem Exec.rawFrameRoots_caller_excluded {a : Adr}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (fork : CoveredFork sevm.benvStat.fork)
@@ -216,15 +260,8 @@ theorem Exec.rawFrameRoots_caller_excluded {a : Adr}
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
     ∀ root ∈ Exec.rawFrameRoots run,
       root.sevm.caller ≠ a ∧
-        (root.sevm.currentTarget = a → root.sevm.code = ByteArray.empty) := by
-  simp only [Exec.rawFrameRoots] at empty avoid
-  have descendants := Exec.rawFrameDescendants_caller_excluded run fork caller targetCode
-    (fun root member => empty root (List.mem_cons_of_mem _ member))
-    (fun root member => avoid root (List.mem_cons_of_mem _ member))
-  intro root member
-  simp only [Exec.rawFrameRoots, List.mem_cons] at member
-  rcases member with rfl | member
-  · exact ⟨caller, targetCode⟩
-  · exact descendants root member
+        (root.sevm.currentTarget = a → root.sevm.code = ByteArray.empty) :=
+  Exec.rawFrameRoots_caller_excluded_noStateGas run fork.rules_stateGas_none caller targetCode
+    empty avoid
 
 end Blanc

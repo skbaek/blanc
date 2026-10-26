@@ -40,6 +40,8 @@ import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
+import Blanc.ExecutionMidHistoryInCallerExclusion
+import Blanc.ExecutionMidHistoryInBeaconCode
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInForkFacts
 import Blanc.ExecutionHistoryInNoDel

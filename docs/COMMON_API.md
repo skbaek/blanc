@@ -4169,15 +4169,62 @@ consumer needs canonical interpreter ingress as one conjunct:
   `Exec.ok_error_eq` ([`Blanc/ExecutionErrorKeep.lean`](../Blanc/ExecutionErrorKeep.lean))
   says an execution ending `.ok post` keeps the error field it started with (the
   `ExecutionWarmth` walk for `Devm.ErrKeep`); `initDevm` starts at `none`. For transaction caller
-  exclusion, `Exec.rawFrameRoots_caller_excluded` in
+  exclusion, `Exec.rawFrameRoots_caller_excluded_noStateGas` in
   [`Blanc/ExecutionCallerExclusion.lean`](../Blanc/ExecutionCallerExclusion.lean)
-  tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code.
+  tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code from
+  selected `rules.stateGas = none`. Its public spawn steps are
+  `Xinst.step_create_spawn_codeAddress_noStateGas` and
+  `Evm.step_spawn_caller_excluded_noStateGas`; entered children retain the selected
+  capability through their actual block-environment equality. The original
+  `Exec.rawFrameRoots_caller_excluded`, `Xinst.step_create_spawn_codeAddress` and
+  `Evm.step_spawn_caller_excluded` retain their modern `CoveredFork` signatures.
+  `RetainedXlot.caller_excluded_of_runFrame_noStateGas`,
+  `MessageCallTrace.caller_excluded_noStateGas`,
+  `TransactionTrace.caller_excluded_noStateGas` and
+  `ApplyTransactionsTrace.caller_excluded_noStateGas` in
+  [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
+  carry that selected-rule fact through actual retained frames, message delegation,
+  checked senders and transaction lists. They require actual empty-code and CREATE
+  avoidance witnesses; they derive no such environmental restrictions from deployment.
+  `TransactionTrace.caller_excluded` keeps its modern compatibility signature.
   `ConfiguredHistoryTrace.txRawFrames_caller_excluded` in
   [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
   derives that exclusion from initially empty code, retained `NoSenderAt`,
   `NoAuthorityAt`, and trace-local CREATE avoidance (`ApplyTransactionsTrace.noSender_nil`
   supplies `NoSenderAt a` vacuously for an empty transaction list). Calls to the empty-code
   address remain allowed; system frames are outside the conclusion.
+  For a Cancun prefix starting after a transaction, use
+  `MidHistoryTraceIn.frameAdmitted_caller_ne_cancun` in
+  [`Blanc/ExecutionMidHistoryInCallerExclusion.lean`](../Blanc/ExecutionMidHistoryInCallerExclusion.lean).
+  Its `AllCancun` reads the cut block and every later block's actual selected fork;
+  `NoSenderAt` reads only the suffix's and later blocks' checked senders.
+  From initially empty code at the excluded address and actual raw CREATE avoidance,
+  `callers_and_code_empty_cancun` derives target-restricted caller exclusion and
+  empty endpoint code. There is no authority premise because Cancun disables delegation.
+  `BeaconCodeInstalled` is a separate residual code-installation condition at each
+  later whole-block opening; the cut's remaining stages have no beacon call.
+  The protected target must differ from the beacon-roots address. Actual canonical
+  beacon code confines protocol frames through `BeaconStageTrace.rawFrames_target_of_code`
+  and `SpawnFreeReach`; disabled history/request stages contribute no invented calls.
+  The standalone block and suffix producers are
+  `ConfiguredBlockTraceIn.callers_and_code_empty_cancun` and
+  `ConfiguredBlockTraceIn.tail_callers_and_code_empty_cancun`.
+  `StagedBodyTrace.afterTransactions_codeAt_noStateGas` keeps code through actual
+  withdrawals, request calls and rewards from the transaction-fold boundary, with
+  request CREATE avoidance; `requests_rawFrames_empty_cancun` supplies the selected
+  disabled-request fact. Deployment does not establish the empty-code, checked-sender,
+  CREATE-avoidance or beacon-installation environmental premises.
+  To derive the per-block beacon condition from one actual checkpoint, use
+  `MidHistoryTraceIn.beaconCodeInstalled_of_checkpoint_cancun` in
+  [`Blanc/ExecutionMidHistoryInBeaconCode.lean`](../Blanc/ExecutionMidHistoryInBeaconCode.lean).
+  It requires CREATE avoidance at the beacon account and also returns the actual
+  endpoint beacon code. Its generic `ConfiguredBlockTraceIn.tail_codeAt_keep_cancun`
+  and `codeAt_keep_cancun` preserve any nonempty, non-delegating code through the
+  actual suffix or whole block using Cancun's selected settlement rules.
+  `MidHistoryTraceIn.frameAdmitted_caller_ne_of_beacon_checkpoint_cancun` combines
+  that producer with caller admission. This replaces per-block installation with
+  one checkpoint plus explicit beacon CREATE avoidance; it does not derive these
+  independent conditions from another contract's deployment.
   `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
