@@ -1392,6 +1392,8 @@ CONTRACTS = {
         "Lift.Usdc.V1BurnMappingTouches",
         "Lift.Usdc.V1MintReach",
         "Lift.Usdc.V1MintMappingTouches",
+        "Lift.Usdc.V1TransferReach",
+        "Lift.Usdc.V1TransferMappingTouches",
         "Lift.Usdc.V1ApproveMappingTouches",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",

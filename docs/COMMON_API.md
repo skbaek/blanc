@@ -3569,6 +3569,18 @@ preserves actual history order and duplicates, never compares the written digest
 and has same-history soundness, completeness and explicit exact-list freshness
 consumers for implementation-slot separation.
 
+For V1 ordinary transfers, use
+[`Blanc/Lift/Usdc/V1TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V1TransferMappingTouches.lean)'s
+`actualV1TransferKeys`. It selects both actual successful balance writes by
+selector and source PC, preserving raw-history order and duplicates without
+recognizing a digest. `V1TransferReach.successfulSstore_source` proves the
+caller and calldata-recipient keys and each successful 64-byte hash on the
+same original prefix, including early writes before a later failure.
+`ConfiguredHistoryTraceIn.actualV1TransferKeys_sound` retains both occurrences,
+their actual frame, and their prefix order; `mem_actualV1TransferKeys_of_site`
+is complete for either site. `v1Transfer_write_ne_implSlot` uses freshness of
+exactly that collected list and an explicitly separated initial footprint.
+
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
 `actualV1MinterKeys`. It recognizes each of the four successful store PCs
