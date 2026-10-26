@@ -420,6 +420,7 @@ SHARED += [
     "ExecutionHistoryInWarmth",
     "ExecutionHistoryInCodeAt",
     "ExecutionHistoryInCallerExclusion",
+    "ExecutionSenderQueryCuts",
     "ExecutionHistoryInSystemFrames",
 ]
 

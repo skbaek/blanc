@@ -1867,6 +1867,25 @@ and a distinct system address to mid root callers. The start remains the cut's
 actual `afterBenv`; these APIs neither create a block-chain checkpoint there nor
 rebase deployment-world facts from the full history.
 
+For an interval ending before another actual transaction cut, use
+[`Blanc/ExecutionSenderQueryCuts.lean`](../Blanc/ExecutionSenderQueryCuts.lean).
+`ConfiguredHistoryTraceIn.senderQueries_between_txSplits` identifies exactly the
+first suffix, intermediate blocks and final prefix, retaining query order and
+duplicates. `noSenderAt_between_txSplits_of_senderQueries` supplies precisely
+those three sender folds; `txRawFrames_caller_excluded_between_txSplits` consumes
+them with independent entry-code emptiness and creation-avoidance producers.
+`settledRoots_caller_excluded_between_txSplits` transfers that result to every
+committed frame under the original interval's complete roots, using the actual
+disabled system stages. Its origin bridges are
+`ApplyTransactionsTrace.mem_rawFrames_of_mem_root_committed` and
+`ConfiguredHistoryTraceIn.mem_txRawFrames_of_mem_settledFrames_of_disabled`.
+The existing forest owner also supplies `TxSplit.senderQueries_before` for the
+strict prefix and `TxSplit.senderQueries_from` for the selected admission plus
+suffix. No unrelated transaction before the first cut is required. The selected
+last transaction remains outside the interval. These quantified interval
+conclusions have no reliable single goal-head recipe; the existing admitted
+sender-query recipe remains the route for each direct `NoSenderAt` subgoal.
+
 Fork-era schedule facts for historical extraction live in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean):
 `BerlinOnwards`, `PrePrague`, `PreCancun`, `PragueOnwards` (fork lists in

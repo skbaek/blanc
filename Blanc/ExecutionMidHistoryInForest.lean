@@ -71,6 +71,29 @@ theorem ApplyTransactionsTrace.TxSplit.senderQueries_after
     exact congrArg BenvStat.chainId cut.before.stat_eq
   rw [chain, List.map_drop]
 
+/-- The original before-trace consumes exactly the strict query prefix. -/
+theorem ApplyTransactionsTrace.TxSplit.senderQueries_before
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i) :
+    cut.before.senderQueries = trace.senderQueries.take i := by
+  rw [senderQueries_eq_inputs cut.before, senderQueries_eq_inputs trace, List.map_take]
+
+/-- Starting at the selected transaction retains its actual admission query,
+then every suffix query, even when its VM execution fails or reverts. -/
+theorem ApplyTransactionsTrace.TxSplit.senderQueries_from
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout} {i : Nat}
+    (cut : trace.TxSplit i) :
+    trace.senderQueries.drop i =
+      (SenderOccurrence.ofTransaction cut.head).query :: cut.after.senderQueries := by
+  rw [senderQueries_eq_inputs trace, senderQueries_eq_inputs cut.after, ← List.map_drop,
+    cut.at_eq, List.map_cons]
+  have chain : cut.benv.stat.chainId = benv.stat.chainId :=
+    congrArg BenvStat.chainId cut.before.stat_eq
+  simp only [SenderOccurrence.query, SenderOccurrence.ofTransaction, Benv.beginTransaction,
+    Benv.withState, chain]
+
 /-- The tail retains every suffix transaction with its original index and full input. -/
 theorem MidHistoryTraceIn.senderOccurrences_tail_indexed
     {F : Fork → Prop} {cfg : ChainConfig} {pre completed : BlockChain}
