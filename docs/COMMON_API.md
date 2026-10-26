@@ -3590,8 +3590,17 @@ same-history root inclusion and absent retained upgrade logs remain explicit;
 settlement and configured segments whose rule bits disable system stages.
 Withdrawals, rewards and finalization use the existing shared cell transport.
 Every retained root's entry control is derived from the segment's initial
-control. Exact after-C/before-D cuts, schedule-derived stage bits and receipt
-evidence for the absence of upgrade logs still require their own binding.
+control. For genuine transaction boundaries,
+[`V1MidHistoryContinuity.lean`](../Blanc/Lift/Usdc/V1MidHistoryContinuity.lean)'s
+`v1_tail_preserves` begins at the original `TxSplit.afterBenv`, including a
+proxy created by that selected transaction. `v1_mid_preserves` appends actual
+later blocks; `v1_before_txSplit_preserves` stops at the original before-trace.
+`v1_between_txSplits_preserves` composes these into the exact after-C/before-D
+interval, deriving deletion exclusions and every intervening root's entry
+control from the initial state. Its conditions exclude the final selected
+transaction and its suffix. Historical C/D identities, constructor state,
+schedule-derived stage bits and receipt evidence for absent upgrade logs still
+require their own binding.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s

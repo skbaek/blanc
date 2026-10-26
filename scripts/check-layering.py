@@ -1394,6 +1394,7 @@ CONTRACTS = {
         "Lift.Usdc.V1RetainedContext",
         "Lift.Usdc.V1TransactionContinuity",
         "Lift.Usdc.V1HistoryContinuity",
+        "Lift.Usdc.V1MidHistoryContinuity",
         "Lift.Usdc.V1MappingTouches",
         "Lift.Usdc.V1ApproveReach",
         "Lift.Usdc.V1BurnReach",
