@@ -658,3 +658,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/CursorKeccakOrder.lean](../Blanc/Lift/CursorKeccakOrder.lean) — `ObservedKeccakPair.actual`
 - Registered symbols: `declaration:Blanc.Lift.ObservedReach.withPrefix`, `declaration:Blanc.Lift.ObservedKeccak.of_next_linked`, `declaration:Blanc.Lift.ObservedKeccakPair`, `declaration:Blanc.Lift.ObservedKeccakPair.actual`, `declaration:Blanc.Lift.KeccakPairBefore`, `declaration:Blanc.Lift.KeccakPairBefore.forget`
 - Review: `proof-infrastructure` on `2026-10-27`
+
+## `mainnet-pre-cancun-stages`
+
+- Status: `active`
+- Triggers: `goal-head:ExecutionTrace.StagedBodyTrace.SystemStagesDisabled`, `goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.SystemStagesDisabled`
+- Preferred path: For an actual mainnet block before mainnetCancunTimestamp, use ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt. For an actual configured mainnet history ending at a tip before that timestamp, use ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun; accepted-header chronology derives every earlier block bound. mainnetChainConfig_preCancun_of_timestamp_lt connects the actual forkAt result to the era.
+- Boundary: The schedule must be mainnetChainConfig and the timestamp must be the actual block or final chain tip. A block-number bound alone is insufficient for the mixed activation schedule. The predicate goal does not establish either premise, authenticate a historical block, or disable stages on Cancun and later forks.
+- Owner module: [Blanc/ExecutionHistoryInEraBounds.lean](../Blanc/ExecutionHistoryInEraBounds.lean)
+- Canonical example: [Blanc/ExecutionHistoryInEraBounds.lean](../Blanc/ExecutionHistoryInEraBounds.lean) — `ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
+- Registered symbols: `module:Blanc/ExecutionHistoryInEraBounds.lean`, `declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
+- Review: `proof-infrastructure` on `2026-10-27`

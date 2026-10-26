@@ -997,6 +997,16 @@ lifts these laws through transaction lists, enabled or skipped system stages,
 withdrawals, requests, rewards and configured histories. `OutputNotDeleted`
 records actual transaction outputs. `SystemStagesDisabled` and its root/log
 equations apply only when the actual selected rule bits disable those stages.
+For mainnet, [`Blanc/ExecutionHistoryInEraBounds.lean`](../Blanc/ExecutionHistoryInEraBounds.lean)
+derives those bits from the actual schedule selection:
+`mainnetChainConfig_preCancun_of_timestamp_lt` identifies its era,
+`ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt` handles
+one block, and `ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
+uses the final tip's timestamp and accepted-header chronology for every block
+in the original history. The `mainnet-pre-cancun-stages` recipe recognizes the
+staged-body and configured-history predicate heads. Mainnet configuration and
+the actual timestamp bound remain necessary; block numbers alone do not bound
+a mixed block/time schedule.
 The same layers expose `cell_property_of_settledRoots`: an actual entry
 `P cell` plus each complete-settlement root's conditional `P pre → P post`
 produces the endpoint property, preserving the same code, state-gas and actual
@@ -3598,9 +3608,14 @@ later blocks; `v1_before_txSplit_preserves` stops at the original before-trace.
 `v1_between_txSplits_preserves` composes these into the exact after-C/before-D
 interval, deriving deletion exclusions and every intervening root's entry
 control from the initial state. Its conditions exclude the final selected
-transaction and its suffix. Historical C/D identities, constructor state,
-schedule-derived stage bits and receipt evidence for absent upgrade logs still
-require their own binding.
+transaction and its suffix. In
+[`V1MainnetContinuity.lean`](../Blanc/Lift/Usdc/V1MainnetContinuity.lean),
+`v1_between_txSplits_preserves_mainnet` derives all stage bits from the final
+block's actual pre-Cancun timestamp, mainnet selection and accepted-header
+chronology. Historical-domain capabilities and absent state gas/BAL are supplied
+by their existing theorems. Historical C/D identities, constructor state, the
+endpoint timestamp and receipt evidence for absent upgrade logs still require
+their own binding.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s

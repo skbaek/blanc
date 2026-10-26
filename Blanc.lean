@@ -1648,6 +1648,7 @@ import Blanc.ExecutionCommittedCell
 import Blanc.ExecutionSettledRootEntry
 import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionHistoryCommittedCell
+import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
@@ -1708,6 +1709,7 @@ import Blanc.Lift.Usdc.V1RetainedContext
 import Blanc.Lift.Usdc.V1TransactionContinuity
 import Blanc.Lift.Usdc.V1HistoryContinuity
 import Blanc.Lift.Usdc.V1MidHistoryContinuity
+import Blanc.Lift.Usdc.V1MainnetContinuity
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach

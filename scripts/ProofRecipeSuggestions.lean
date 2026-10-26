@@ -1,3 +1,4 @@
+import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ProofRecipeTactic
 import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.CallProfileTransport
@@ -1723,6 +1724,29 @@ example {code : ByteArray} {cert : Lift.Cert} {root stop : Exec.Deriv} {i o : By
 
 example : True := by
   expect_no_recipe_trigger "goal-head:Lift.KeccakPairBefore"
+  trivial
+
+-- EXPECT: mainnet-pre-cancun-stages
+example {F : Fork → Prop} {pre post : BlockChain}
+    (block : ExecutionTrace.ConfiguredBlockTraceIn F mainnetChainConfig pre post)
+    (early : block.block.header.timestamp < mainnetCancunTimestamp) :
+    block.bodyTrace.SystemStagesDisabled := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.StagedBodyTrace.SystemStagesDisabled"
+  expect_recipe_offered "mainnet-pre-cancun-stages"
+  exact block.systemStagesDisabled_of_mainnet_timestamp_lt early
+
+-- EXPECT: mainnet-pre-cancun-stages
+example {F : Fork → Prop} {pre post : BlockChain}
+    (history : ExecutionTrace.ConfiguredHistoryTraceIn F mainnetChainConfig pre post)
+    {tip : Block} (last : post.blocks.getLast? = some tip)
+    (early : tip.header.timestamp < mainnetCancunTimestamp) : history.SystemStagesDisabled := by
+  expect_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.SystemStagesDisabled"
+  exact history.systemStagesDisabled_of_mainnet_tip_before_cancun last early
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.StagedBodyTrace.SystemStagesDisabled"
+  expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.SystemStagesDisabled"
+  expect_no_recipe_offered "mainnet-pre-cancun-stages"
   trivial
 
 end Blanc

@@ -1546,3 +1546,15 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-27"
+
+[[recipe]]
+id = "mainnet-pre-cancun-stages"
+status = "active"
+triggers = ["goal-head:ExecutionTrace.StagedBodyTrace.SystemStagesDisabled", "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.SystemStagesDisabled"]
+preferred_path = "For an actual mainnet block before mainnetCancunTimestamp, use ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt. For an actual configured mainnet history ending at a tip before that timestamp, use ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun; accepted-header chronology derives every earlier block bound. mainnetChainConfig_preCancun_of_timestamp_lt connects the actual forkAt result to the era."
+boundary = "The schedule must be mainnetChainConfig and the timestamp must be the actual block or final chain tip. A block-number bound alone is insufficient for the mixed activation schedule. The predicate goal does not establish either premise, authenticate a historical block, or disable stages on Cancun and later forks."
+owner_module = "Blanc/ExecutionHistoryInEraBounds.lean"
+canonical_example = "Blanc/ExecutionHistoryInEraBounds.lean:ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun"
+symbols = ["module:Blanc/ExecutionHistoryInEraBounds.lean", "declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun"]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-27"
