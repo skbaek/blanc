@@ -1698,6 +1698,9 @@ import Blanc.Lift.Usdc.FiniteFootprintF
 import Blanc.Lift.Usdc.Footprint
 import Blanc.Lift.Usdc.HistoricalMappingKeys
 import Blanc.Lift.Usdc.V1BlacklistReach
+import Blanc.Lift.Usdc.V1InitializerHistory
+import Blanc.Lift.Usdc.V1WriteFamilies
+import Blanc.Lift.Usdc.V1WriteApart
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach

@@ -3534,6 +3534,18 @@ both original selectors through the blacklister guard and packed Boolean
 update; no final-call success or hash-injectivity premise is needed. The
 existing key-only interfaces project this stronger source proof.
 
+`ConfiguredHistoryTraceIn.v1Initializer_write_ne_implSlot` applies the concrete
+initializer range proof directly to actual raw-history stores. Fresh stack and
+memory, the entry gas bound and the no-state-gas capability come from the
+history's own raw-frame admission; the bound includes old-tail clearing stores.
+`V1WriteFamilies` checks every certified root site and reduces actual V1 stores
+to fixed-slot apartness or an initializer/mapping selector. This selects a
+source family without classifying mapping rows by digest equality.
+`ConfiguredHistoryTraceIn.v1_write_ne_implSlot_or_transferFrom` composes the
+initializer, blacklist, approve, minter, mint, burn and ordinary transfer
+producers. It consumes initial apartness and freshness of each exact actual
+collector and leaves transferFrom explicit as the remaining family.
+
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
 `actualV1ApproveKeys`. It collects the allowance key of each actual successful
