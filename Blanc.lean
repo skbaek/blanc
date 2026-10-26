@@ -1723,6 +1723,8 @@ import Blanc.Lift.Usdc.V1ReceiptAllowanceZero
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
+import Blanc.Lift.Usdc.V1ApproveRetainedLog
+import Blanc.Lift.Usdc.V1ApproveRetainedLogReceipt
 import Blanc.Lift.Usdc.V1BurnReach
 import Blanc.Lift.Usdc.V1BurnMappingTouches
 import Blanc.Lift.Usdc.V1MintReach

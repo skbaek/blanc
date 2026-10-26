@@ -1408,6 +1408,8 @@ CONTRACTS = {
         "Lift.Usdc.V1ConstructorReceiptZero",
         "Lift.Usdc.V1MappingTouches",
         "Lift.Usdc.V1ApproveReach",
+        "Lift.Usdc.V1ApproveRetainedLog",
+        "Lift.Usdc.V1ApproveRetainedLogReceipt",
         "Lift.Usdc.V1BurnReach",
         "Lift.Usdc.V1BurnMappingTouches",
         "Lift.Usdc.V1MintReach",
