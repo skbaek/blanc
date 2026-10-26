@@ -1010,6 +1010,21 @@ and each root's conditional zero preservation, never all root entries zero.
 List/history `outputNotDeleted_iff_noDelScheduled` connects existing
 `ExecutionNoDelSafeHistory` deletion producers to the unchanged
 `OutputNotDeleted` obligations; no new raw-world or code-family premise is added.
+For a coupled cell/deletion law, use
+[`Blanc/ExecutionSettledRootEntry.lean`](../Blanc/ExecutionSettledRootEntry.lean).
+`RetainedXlot.settledRoots_entry_getCode_getStor` and the CALL/CREATE variants
+derive protected code and storage at the actual outer root entry.
+`MessageCallTrace.settledRoots_entry_code_cell` and the transaction variant
+carry those facts through authorization, code resolution and nonce/fee debit.
+`TransactionTrace.cell_noDel_of_settledRoots` and
+`ApplyTransactionsTrace.cell_noDel_of_settledRoots` provide the root callback
+with derived entry code and cell property before asking for deletion and cell
+preservation. The ordered fold returns actual deletion exclusions, endpoint code
+and property, and every original settled root's entry facts. Descendant entries
+are not identified with the transaction input. The beacon/history
+`state_eq_of_disabled` adapters expose each skipped opening stage's actual
+state identity. Use this explicit trace/cell
+branch directly; there is no distinct reliable single goal-head recipe trigger.
 For exact transaction-position cuts, use
 [`Blanc/ExecutionHistoryCommittedCuts.lean`](../Blanc/ExecutionHistoryCommittedCuts.lean):
 `ApplyTransactionsTrace.splitAt_settledRoots_eq`, `splitAt_rootLogs_eq` and
@@ -3562,6 +3577,21 @@ and the exact implementation word at settlement. These consumers retain the
 actual root-entry Proxy/V1 code, implementation address, absent retained upgrade
 log and initial NoDel premises; they do not yet propagate those entry facts
 between successive roots or authenticate a historical creation cut.
+`settledRoot_proxyV1_implSlot_eq_of_freshKeys` exposes the cell conclusion
+without an incoming NoDel premise. In
+[`V1TransactionContinuity.lean`](../Blanc/Lift/Usdc/V1TransactionContinuity.lean),
+`v1_transaction_preserves` and `v1_transactions_preserve` derive both installed
+entry codes and the implementation word through the actual ordered transaction
+sequence. V1's existing installed certificate preserves the implementation
+account itself. Initial code/slot, block-created exclusions, exact-list freshness,
+same-history root inclusion and absent retained upgrade logs remain explicit;
+[`V1HistoryContinuity.lean`](../Blanc/Lift/Usdc/V1HistoryContinuity.lean)'s
+`v1_block_preserves` and `v1_history_preserves` extend this to actual block
+settlement and configured segments whose rule bits disable system stages.
+Withdrawals, rewards and finalization use the existing shared cell transport.
+Every retained root's entry control is derived from the segment's initial
+control. Exact after-C/before-D cuts, schedule-derived stage bits and receipt
+evidence for the absence of upgrade logs still require their own binding.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s

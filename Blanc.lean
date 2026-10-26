@@ -1645,6 +1645,7 @@ import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionRetainedCellAt
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionCommittedCell
+import Blanc.ExecutionSettledRootEntry
 import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryCommittedCuts
@@ -1704,6 +1705,8 @@ import Blanc.Lift.Usdc.V1InitializerHistory
 import Blanc.Lift.Usdc.V1WriteFamilies
 import Blanc.Lift.Usdc.V1WriteApart
 import Blanc.Lift.Usdc.V1RetainedContext
+import Blanc.Lift.Usdc.V1TransactionContinuity
+import Blanc.Lift.Usdc.V1HistoryContinuity
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach

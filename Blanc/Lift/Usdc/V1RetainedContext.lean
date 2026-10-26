@@ -50,23 +50,16 @@ theorem ConfiguredHistoryTraceIn.settledRoot_proxyV1_context_of_freshKeys
     (ConfiguredHistoryTraceIn.settledRoot_v1_write_ne_implSlot history capabilities
       initialApart fresh member)
 
-/-- The same selected root preserves both deletion exclusion and its actual
-implementation word. Entry code/slot and absence of a retained upgrade log
-remain explicit; no assumption is made about discarded child effects. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_proxyV1_preserves_of_freshKeys
+/-- Retained write exclusion preserves the actual implementation word at settlement.
+This cell law does not require an incoming deletion-set assumption. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_proxyV1_implSlot_eq_of_freshKeys
     (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
     {I : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
     (proxy : R.pre.getCode P = Proxy.code) (impl : R.pre.getCode I = ImplV1.code)
     (slot : ((R.pre.getStor P).get implSlot).toAdr = I)
     (noUpgraded : ¬ ∃ entry ∈ R.post.logs,
-      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic])
-    (initialNoDel : Devm.NoDel P R.pre) :
-    Devm.NoDel P R.post ∧
-      (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot := by
-  have v1Apart := ConfiguredHistoryTraceIn.settledRoot_v1_write_ne_implSlot
-    history capabilities initialApart fresh member
-  have noDel := ConfiguredHistoryTraceIn.settledRoot_proxyV1_noDel
-    history capabilities bal member proxy impl slot noUpgraded v1Apart initialNoDel
+      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic]) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot := by
   have classified := ConfiguredHistoryTraceIn.settledRoot_proxyV1_context_of_freshKeys
     history capabilities initialApart fresh bal member proxy impl slot noUpgraded
   have noWrite : Exec.NoRetainedWriteTo R.run P implSlot := by
@@ -82,6 +75,26 @@ theorem ConfiguredHistoryTraceIn.settledRoot_proxyV1_preserves_of_freshKeys
     exact (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
   have cell := Exec.committedCell_eq_of_noRetainedWriteTo_noStateGas R.run R.committed
     rootFacts.2.2.1 P implSlot nonempty noWrite
-  exact ⟨noDel, cell⟩
+  exact cell
+
+/-- The same selected root preserves both deletion exclusion and its actual
+implementation word. Entry code/slot and absence of a retained upgrade log
+remain explicit; no assumption is made about discarded child effects. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_proxyV1_preserves_of_freshKeys
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code) (impl : R.pre.getCode I = ImplV1.code)
+    (slot : ((R.pre.getStor P).get implSlot).toAdr = I)
+    (noUpgraded : ¬ ∃ entry ∈ R.post.logs,
+      entry.address = P ∧ entry.topics = [Proxy.upgradedTopic])
+    (initialNoDel : Devm.NoDel P R.pre) :
+    Devm.NoDel P R.post ∧
+      (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot := by
+  have v1Apart := ConfiguredHistoryTraceIn.settledRoot_v1_write_ne_implSlot
+    history capabilities initialApart fresh member
+  exact ⟨ConfiguredHistoryTraceIn.settledRoot_proxyV1_noDel
+    history capabilities bal member proxy impl slot noUpgraded v1Apart initialNoDel,
+    ConfiguredHistoryTraceIn.settledRoot_proxyV1_implSlot_eq_of_freshKeys
+      history capabilities initialApart fresh bal member proxy impl slot noUpgraded⟩
 
 end Blanc.Lift.Usdc
