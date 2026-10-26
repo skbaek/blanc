@@ -7907,58 +7907,139 @@ end Blanc.Lift.Witness
 namespace Blanc.Lift.WithdrawalRequest
 open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
 
+-- EIP-7002 constructor: BlockWordReplay.mk
+example : ∀ {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post}
+    (past transactions : List WordReplayEvent) (reset : WordReplayEvent),
+    WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+      ((past ++ transactions) ++ [reset]) (post.state.getStor withdrawalRequestPredeployAddress) →
+    past.map WordReplayEvent.frame = history.settledFrames.flatMap balanceFrameObservation →
+    transactions.map WordReplayEvent.frame =
+      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation →
+    reset.kind = .system →
+    reset.frame.pre.state = block.bodyTrace.requestBenv.state →
+    BlockWordReplay history block :=
+  @BlockWordReplay.mk
+
+-- EIP-7002 definition: BlockWordReplay.model
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.model = (r.past ++ r.transactions).foldl wordModelUpdate initial :=
+  rfl
+
+-- EIP-7002 definition: BlockWordReplay.submissions
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.submissions = wordModelSubmissions (r.past ++ r.transactions) :=
+  rfl
+
+-- EIP-7002 definition: BlockWordReplay.pastOutputs
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.pastOutputs = wordModelOutputs initial r.past :=
+  rfl
+
+-- EIP-7002 definition: BlockWordReplay.outputs
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.outputs = r.pastOutputs ++ emitted r.model :=
+  rfl
+
+-- EIP-7002 definition: BlockWordReplay.frames
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.frames = wordSubmissionFrames (r.past ++ r.transactions) :=
+  rfl
+
+-- EIP-7002 definition: BlockWordReplay.BoundaryModel
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.BoundaryModel ↔
+      (WordHistory initial r.model r.submissions r.pastOutputs) ∧
+      (RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get r.model) :=
+  ⟨fun h => ⟨h.wordHistory, h.represents⟩, fun ⟨h0, h1⟩ => ⟨h0, h1⟩⟩
+
+-- EIP-7002 definition: BlockWordReplay.Emission
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.Emission ↔
+      (block.bodyTrace.requests.withdrawalOut.returnData = systemOutput r.model) ∧
+      (block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+        optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+        optionalRequestEntry 1 (systemOutput r.model) ++
+        optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData) ∧
+      (optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
+        emitted r.model = []) :=
+  ⟨fun h => ⟨h.withdrawal, h.requests, h.omittedIff⟩, fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
+
+-- EIP-7002 definition: BlockWordReplay.AfterReset
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.AfterReset ↔
+      (WordHistory initial (Blanc.WithdrawalRequest.system r.model) r.submissions r.outputs) ∧
+      (RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
+        (Blanc.WithdrawalRequest.system r.model)) :=
+  ⟨fun h => ⟨h.wordHistory, h.represents⟩, fun ⟨h0, h1⟩ => ⟨h0, h1⟩⟩
+
+-- EIP-7002 definition: BlockWordReplay.Fifo
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.Fifo ↔
+      r.submissions.map Submission.entry =
+        r.outputs ++ (Blanc.WithdrawalRequest.system r.model).queue :=
+  Iff.rfl
+
+-- EIP-7002 definition: BlockWordReplay.Provenance
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
+    r.Provenance ↔
+      (r.frames.map Prod.fst =
+        ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
+          submissionFramePayments).map Prod.fst) ∧
+      (r.frames.map Prod.fst =
+        ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+          submissionFramePayments).map Prod.fst) ∧
+      (∀ pair ∈ r.frames,
+        pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
+      (r.frames.map Prod.snd = r.outputs ++ (Blanc.WithdrawalRequest.system r.model).queue) :=
+  ⟨fun h => ⟨h.historyFrames, h.stepFrames, h.payloads, h.entries⟩,
+    fun ⟨h0, h1, h2, h3⟩ => ⟨h0, h1, h2, h3⟩⟩
+
+-- EIP-7002 definition: WordBookkeepingSafe
+example (state : Blanc.WithdrawalRequest.State) :
+    WordBookkeepingSafe state ↔
+      (effectiveExcess state ≤ wordOccurrenceCap) ∧
+      (state.count ≤ wordOccurrenceCap) ∧
+      (state.head ≤ state.tail) ∧
+      (state.tail ≤ wordOccurrenceCap) ∧
+      (state.queue.length = state.tail - state.head) ∧
+      (effectiveExcess state + state.count < 2 ^ 256) ∧
+      (queueBase state.tail + 2 < 2 ^ 256) ∧
+      (QueueSlotsSafe state) :=
+  ⟨fun h => ⟨h.excessLe, h.countLe, h.headLe, h.tailLe, h.length, h.sumLt, h.slotLt, h.slots⟩,
+    fun ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩ => ⟨h0, h1, h2, h3, h4, h5, h6, h7⟩⟩
+
 -- EIP-7002 definition: BlockWordFifo
 example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post) :
     BlockWordFifo history block ↔
-      (∃ past transactionEvents : List WordReplayEvent, ∃ reset : WordReplayEvent,
-    WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
-      ((past ++ transactionEvents) ++ [reset])
-      (post.state.getStor withdrawalRequestPredeployAddress) ∧
-    past.map WordReplayEvent.frame = history.settledFrames.flatMap balanceFrameObservation ∧
-    transactionEvents.map WordReplayEvent.frame =
-      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ∧
-    reset.kind = .system ∧
-    reset.frame.pre.state = block.bodyTrace.requestBenv.state ∧
-    let model := (past ++ transactionEvents).foldl wordModelUpdate initial
-    WordHistory initial model (wordModelSubmissions (past ++ transactionEvents))
-      (wordModelOutputs initial past) ∧
-    RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
-      withdrawalRequestPredeployAddress).get model ∧
-    block.bodyTrace.requests.withdrawalOut.returnData = systemOutput model ∧
-    block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
-      optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
-      optionalRequestEntry 1 (systemOutput model) ++
-      optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData ∧
-    (optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
-      emitted model = []) ∧
-    WordHistory initial (Blanc.WithdrawalRequest.system model)
-      (wordModelSubmissions ((past ++ transactionEvents) ++ [reset]))
-      (wordModelOutputs initial past ++ emitted model) ∧
-    (wordModelSubmissions ((past ++ transactionEvents) ++ [reset])).map Submission.entry =
-      (wordModelOutputs initial past ++ emitted model) ++
-        (Blanc.WithdrawalRequest.system model).queue ∧
-    let submissions := wordSubmissionFrames (past ++ transactionEvents)
-    submissions.map Prod.fst =
-      ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
-        submissionFramePayments).map Prod.fst ∧
-    submissions.map Prod.fst =
-      ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
-        submissionFramePayments).map Prod.fst ∧
-    (∀ pair ∈ submissions,
-      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
-    submissions.map Prod.snd = (wordModelOutputs initial past ++ emitted model) ++
-      (Blanc.WithdrawalRequest.system model).queue ∧
-    RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
-      (Blanc.WithdrawalRequest.system model) ∧
-    effectiveExcess model ≤ wordOccurrenceCap ∧ model.count ≤ wordOccurrenceCap ∧
-    model.head ≤ model.tail ∧ model.tail ≤ wordOccurrenceCap ∧
-    model.queue.length = model.tail - model.head ∧
-    effectiveExcess model + model.count < 2 ^ 256 ∧ queueBase model.tail + 2 < 2 ^ 256 ∧
-    effectiveExcess (Blanc.WithdrawalRequest.system model) ≤ wordOccurrenceCap ∧
-    (Blanc.WithdrawalRequest.system model).tail ≤ wordOccurrenceCap ∧
-    QueueSlotsSafe model ∧ QueueSlotsSafe (Blanc.WithdrawalRequest.system model)) :=
+      ∃ r : BlockWordReplay history block,
+        r.BoundaryModel ∧ r.Emission ∧ r.AfterReset ∧ r.Fifo ∧ r.Provenance ∧
+        WordBookkeepingSafe r.model ∧
+        WordBookkeepingSafe (Blanc.WithdrawalRequest.system r.model) :=
   Iff.rfl
 
 end Blanc.Lift.WithdrawalRequest
