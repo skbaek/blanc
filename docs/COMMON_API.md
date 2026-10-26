@@ -3622,6 +3622,18 @@ the last-block prefix. It derives the retained-root absence needed for the same
 V1 continuity conclusion, with no separate per-root absence premise. The first
 and last selected transactions stay outside the scan; historical identities,
 constructor state and factual receipt-log absence are still caller obligations.
+`V1RetainedAllowanceZero`'s `settledRoot_v1_allowanceWrite_nonInc` and
+`settledRoot_v1_allowance_zero` reuse the retained Proxy/V1 context to classify
+actual stores and preserve a tracked zero row. They require no code restriction
+on discarded execution. V1's only caller exception is approve; initializer
+stores consume the existing calldata-key separation proof. In
+`V1ReceiptAllowanceZero`, `v1_allowance_zero_between_txSplits_from_receipts`
+composes these laws with the exact-cut cell fold, deriving zero at the later
+before-state from zero at the original after-state. Receipt absence supplies
+all root code/slot and deletion facts. Caller exclusion, row separation and the
+actual constructor seed remain producer obligations; the final selected
+transaction and its settlement are outside this result. These contract-specific
+consumers do not add a generic recipe for arbitrary equality goals.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
