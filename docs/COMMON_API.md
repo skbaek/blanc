@@ -3615,7 +3615,13 @@ block's actual pre-Cancun timestamp, mainnet selection and accepted-header
 chronology. Historical-domain capabilities and absent state gas/BAL are supplied
 by their existing theorems. Historical C/D identities, constructor state, the
 endpoint timestamp and receipt evidence for absent upgrade logs still require
-their own binding.
+their own binding. [`V1ReceiptContinuity.lean`](../Blanc/Lift/Usdc/V1ReceiptContinuity.lean)'s
+`v1_between_txSplits_preserves_from_receipts` consumes absence of proxy Upgraded
+logs from the actual first-block suffix, every actual intermediate receipt, and
+the last-block prefix. It derives the retained-root absence needed for the same
+V1 continuity conclusion, with no separate per-root absence premise. The first
+and last selected transactions stay outside the scan; historical identities,
+constructor state and factual receipt-log absence are still caller obligations.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
@@ -5725,8 +5731,28 @@ positions; it does not assume a separate per-root log property.
 Actual indexed inclusion and authentication of the block's receipt commitment
 remain separate obligations. A whole-block receipt condition is not an exact
 interval condition when the first or last block is only partially consumed.
+For those endpoints, [`Blanc/ExecutionReceiptRanges.lean`](../Blanc/ExecutionReceiptRanges.lean)
+provides `ApplyTransactionsTrace.root_logs_of_receipts_after_suffix`: an actual
+consumed segment's receipt predicates survive its actual suffix without requiring
+the suffix receipts to satisfy them. `putIndex_aux_pairwise` and
+`putIndex_aux_mem_index_lt` derive positional separation and bounds.
+`ConfiguredBlockTraceIn.after_txSplit_root_logs_of_receipts` consumes only indices
+strictly after the original selected transaction; `before_txSplit_root_logs_of_receipts`
+consumes only indices strictly before it, keeping the original head and suffix.
+[`Blanc/ExecutionHistoryReceiptLogs.lean`](../Blanc/ExecutionHistoryReceiptLogs.lean)
+defines `ConfiguredBlockTraceIn.receiptLogsBetween lo hi` by reading actual final
+receipt tries at actual transaction positions, lower-inclusive and upper-exclusive.
+`mem_receiptLogsBetween` retains every log from an actual in-range receipt;
+`root_logs_of_receiptLogsBetween` and `ConfiguredHistoryTraceIn.root_logs_of_receiptLogs`
+connect those scans to the original roots. `ConfiguredHistoryTraceIn.receiptLogs`
+reads every actual intervening block. `root_logs_between_txSplits_of_receipts`
+composes the first suffix, whole intermediate history and final prefix into exactly
+the roots of the original after/before interval. Its mainnet specialization,
+`root_logs_between_txSplits_of_mainnet_receipts`, derives stage premises from the
+actual final pre-Cancun timestamp and accepted-header chronology. These scans
+establish semantic transport, not independent archive/commitment authentication.
 The joint trace/key query is documented here rather than dispatched from an
-arbitrary expanded receipt equality or quantified log predicate.
+arbitrary expanded receipt equality, list membership or quantified log predicate.
 
 For rules outside the covered forks (any schedule with `rules.stateGas = none` and
 `rules.bal = none`, including the touched-sweep forks and refund quotient 2), use

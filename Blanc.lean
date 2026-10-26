@@ -1651,6 +1651,8 @@ import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionIndexedReceipts
+import Blanc.ExecutionReceiptRanges
+import Blanc.ExecutionHistoryReceiptLogs
 import Blanc.RlpBytesInjective
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
@@ -1712,6 +1714,7 @@ import Blanc.Lift.Usdc.V1TransactionContinuity
 import Blanc.Lift.Usdc.V1HistoryContinuity
 import Blanc.Lift.Usdc.V1MidHistoryContinuity
 import Blanc.Lift.Usdc.V1MainnetContinuity
+import Blanc.Lift.Usdc.V1ReceiptContinuity
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach
