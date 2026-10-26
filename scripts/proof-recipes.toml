@@ -1527,3 +1527,22 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-23"
+
+[[recipe]]
+id = "ordered-observed-keccak-pair"
+status = "active"
+triggers = ["goal-head:Lift.KeccakPairBefore"]
+preferred_path = "Apply ObservedKeccakPair.actual to a pair observed with Cursor.RawEdgeAt on the same root and stop. Construct the joined observations with ObservedKeccak.of_next_linked for the first hash and ObservedReach.withPrefix on its remaining run before observing the second hash."
+boundary = "Two independent successful hash observations are insufficient: the pair must retain the observed segment from the first successor to the second instruction. The conclusion records exact inputs and actual successful occurrences before the original stop; it supplies no hash injectivity, freshness, final-frame success or numeric pc ordering."
+owner_module = "Blanc/Lift/CursorKeccakOrder.lean"
+canonical_example = "Blanc/Lift/CursorKeccakOrder.lean:ObservedKeccakPair.actual"
+symbols = [
+  "declaration:Blanc.Lift.ObservedReach.withPrefix",
+  "declaration:Blanc.Lift.ObservedKeccak.of_next_linked",
+  "declaration:Blanc.Lift.ObservedKeccakPair",
+  "declaration:Blanc.Lift.ObservedKeccakPair.actual",
+  "declaration:Blanc.Lift.KeccakPairBefore",
+  "declaration:Blanc.Lift.KeccakPairBefore.forget",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-27"

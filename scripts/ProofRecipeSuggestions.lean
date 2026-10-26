@@ -1,4 +1,5 @@
 import Blanc.ProofRecipeTactic
+import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.CallProfileTransport
 import Blanc.Lift.FrameWalk
 import Blanc.MachineDataFacts
@@ -1711,6 +1712,17 @@ example (layout : Lift.EcrecoverCall.ReturnLayout) :
 
 example : True := by
   expect_no_recipe_trigger "goal-shape:recovery-invocation"
+  trivial
+
+-- EXPECT: ordered-observed-keccak-pair
+example {code : ByteArray} {cert : Lift.Cert} {root stop : Exec.Deriv} {i o : Bytes}
+    (pair : Lift.ObservedKeccakPair (Lift.StepIn root) (Lift.Cursor.RawEdgeAt code cert root stop)
+      cert.prog root.sevm i o) : Lift.KeccakPairBefore root stop i o := by
+  expect_recipe_trigger "goal-head:Lift.KeccakPairBefore"
+  exact pair.actual
+
+example : True := by
+  expect_no_recipe_trigger "goal-head:Lift.KeccakPairBefore"
   trivial
 
 end Blanc

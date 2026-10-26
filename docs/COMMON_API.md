@@ -7026,6 +7026,20 @@ contract-neutral.
   original stop. `KeccakBefore` packages that actual successful occurrence,
   its pc, exact input, 0/64 stack and ordered raw-prefix edge before the stop.
   These facts do not produce a hash census or freshness.
+  For two hashes whose relative order matters, use
+  [`Blanc/Lift/CursorKeccakOrder.lean`](../Blanc/Lift/CursorKeccakOrder.lean).
+  `ObservedKeccak.of_next_linked` retains the first hash's after-configuration;
+  `ObservedReach.withPrefix` carries the remaining segment into the second
+  observation. `ObservedKeccakPair.actual` converts that joined pair to
+  `KeccakPairBefore`: successful original occurrences with the first successor
+  preceding the second occurrence and the second successor preceding the stop.
+  `ObservedKeccakPair.forget` projects the individual observations. The proof
+  uses `Cursor.RawEdgeAt.gasMeasure_lt`, `ObservedReach.raw_gasMeasure_le`,
+  `parentPrefix_of_gasMeasure_le` and `keccakOccurrence_of_parentPrefix` to
+  relate the observed segment to actual derivation positions. No hash
+  injectivity, final-frame success or numeric pc order is assumed.
+  `KeccakPairBefore.forget` projects both individual earlier-occurrence witnesses.
+  The `ordered-observed-keccak-pair` recipe matches the ordered package goal.
 - To identify the pc of an already supplied checked cursor from a literal
   byte prefix, use [`Blanc/Lift/CursorCheckPrefix.lean`](../Blanc/Lift/CursorCheckPrefix.lean).
   `bytesAt_append` joins adjacent checked slices; `checkNode_bytesAt_prefix`

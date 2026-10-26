@@ -647,3 +647,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/RecoveryOccurrence.lean](../Blanc/Lift/RecoveryOccurrence.lean) — `recoveryInvocation_of_successFlag`
 - Registered symbols: `module:Blanc/Lift/RecoveryOccurrence.lean`, `declaration:Blanc.Lift.RecoveryInvocation`, `declaration:Blanc.Lift.recoveryInvocation_of_successFlag`, `declaration:Blanc.Lift.RecoveryInvocation.executed`, `declaration:Blanc.Lift.RecoveryInvocation.answer_ne_of_excluded`
 - Review: `proof-infrastructure` on `2026-10-23`
+
+## `ordered-observed-keccak-pair`
+
+- Status: `active`
+- Triggers: `goal-head:Lift.KeccakPairBefore`
+- Preferred path: Apply ObservedKeccakPair.actual to a pair observed with Cursor.RawEdgeAt on the same root and stop. Construct the joined observations with ObservedKeccak.of_next_linked for the first hash and ObservedReach.withPrefix on its remaining run before observing the second hash.
+- Boundary: Two independent successful hash observations are insufficient: the pair must retain the observed segment from the first successor to the second instruction. The conclusion records exact inputs and actual successful occurrences before the original stop; it supplies no hash injectivity, freshness, final-frame success or numeric pc ordering.
+- Owner module: [Blanc/Lift/CursorKeccakOrder.lean](../Blanc/Lift/CursorKeccakOrder.lean)
+- Canonical example: [Blanc/Lift/CursorKeccakOrder.lean](../Blanc/Lift/CursorKeccakOrder.lean) — `ObservedKeccakPair.actual`
+- Registered symbols: `declaration:Blanc.Lift.ObservedReach.withPrefix`, `declaration:Blanc.Lift.ObservedKeccak.of_next_linked`, `declaration:Blanc.Lift.ObservedKeccakPair`, `declaration:Blanc.Lift.ObservedKeccakPair.actual`, `declaration:Blanc.Lift.KeccakPairBefore`, `declaration:Blanc.Lift.KeccakPairBefore.forget`
+- Review: `proof-infrastructure` on `2026-10-27`

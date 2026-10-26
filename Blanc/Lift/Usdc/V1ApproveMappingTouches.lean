@@ -102,6 +102,28 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr}
 
+/-- The collector retains inner-hash, outer-hash and store order from one actual frame prefix. -/
+theorem ConfiguredHistoryTraceIn.v1ApproveKey?_ordered_hashes
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) {key : HistoricalMappingKey}
+    (collected : v1ApproveKey? P node = some key) :
+    ∃ root ∈ history.rawFrames, Exec.Deriv.ParentPrefix root node ∧
+      ∃ write, Exec.Deriv.successfulSstore? node = some write ∧
+        write.owner = P ∧ write.key = key.slot ∧ V1ApproveReach.OrderedHashSource root node := by
+  obtain ⟨target, code, selected, ⟨write, found⟩, keyEq⟩ :=
+    v1ApproveKey?_eq_some_iff.mp collected
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities root inFrames
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  rw [same] at code selected
+  obtain ⟨slot, hashes⟩ := V1ApproveReach.successfulSstore_ordered_hashes pc code hsg chain selected found
+  refine ⟨root, inFrames, chain, write, found,
+    (successfulSstore?_node_owner found).2.trans target, ?_, hashes⟩
+  rw [keyEq, same]
+  exact slot
+
 /-- The collector's store and both nested hashes come from one actual frame prefix. -/
 theorem ConfiguredHistoryTraceIn.v1ApproveKey?_hashes
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -111,18 +133,9 @@ theorem ConfiguredHistoryTraceIn.v1ApproveKey?_hashes
     ∃ root ∈ history.rawFrames, Exec.Deriv.ParentPrefix root node ∧
       ∃ write, Exec.Deriv.successfulSstore? node = some write ∧
         write.owner = P ∧ write.key = key.slot ∧ V1ApproveReach.HashSource root node := by
-  obtain ⟨target, code, selected, ⟨write, found⟩, keyEq⟩ :=
-    v1ApproveKey?_eq_some_iff.mp collected
-  obtain ⟨root, inFrames, chain⟩ :=
-    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
-  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities root inFrames
-  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
-  rw [same] at code selected
-  obtain ⟨slot, hashes⟩ := V1ApproveReach.successfulSstore_hashes pc code hsg chain selected found
-  refine ⟨root, inFrames, chain, write, found,
-    (successfulSstore?_node_owner found).2.trans target, ?_, hashes⟩
-  rw [keyEq, same]
-  exact slot
+  obtain ⟨root, inFrames, chain, write, found, owner, slot, hashes⟩ :=
+    ConfiguredHistoryTraceIn.v1ApproveKey?_ordered_hashes history capabilities member collected
+  exact ⟨root, inFrames, chain, write, found, owner, slot, KeccakPairBefore.forget hashes⟩
 
 /-- The same history supplies the actual frame and store at the recognized key. -/
 theorem ConfiguredHistoryTraceIn.v1ApproveKey?_sound
@@ -155,6 +168,19 @@ theorem ConfiguredHistoryTraceIn.actualV1ApproveKeys_sound
   obtain ⟨write, found, owner, slot⟩ :=
     ConfiguredHistoryTraceIn.v1ApproveKey?_sound history capabilities inNodes collected
   exact ⟨node, inNodes, write, collected, found, owner, slot⟩
+
+/-- Every collected approve key retains its actual root and the ordered successful hash pair. -/
+theorem ConfiguredHistoryTraceIn.actualV1ApproveKeys_ordered_hashes
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {key : HistoricalMappingKey}
+    (member : key ∈ actualV1ApproveKeys P history) :
+    ∃ node ∈ history.rawNodes, v1ApproveKey? P node = some key ∧
+      ∃ root ∈ history.rawFrames, Exec.Deriv.ParentPrefix root node ∧
+        ∃ write, Exec.Deriv.successfulSstore? node = some write ∧
+          write.owner = P ∧ write.key = key.slot ∧ V1ApproveReach.OrderedHashSource root node := by
+  obtain ⟨node, inNodes, collected⟩ := (mem_actualV1ApproveKeys history).mp member
+  exact ⟨node, inNodes, collected,
+    ConfiguredHistoryTraceIn.v1ApproveKey?_ordered_hashes history capabilities inNodes collected⟩
 
 /-- Every collected approve key retains the actual root, store and two successful hashes. -/
 theorem ConfiguredHistoryTraceIn.actualV1ApproveKeys_hashes

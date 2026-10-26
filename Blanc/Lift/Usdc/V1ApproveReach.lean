@@ -1,4 +1,4 @@
-import Blanc.Lift.CursorKeccak
+import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.Usdc.ImplV1.Check
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.CursorOccurrenceNoStateGas
@@ -20,15 +20,29 @@ def ObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
   ObservedKeccak Q observe sevm
     (spender.toB256.toBytes ++ (mapSlot sevm.caller.toB256 10).toBytes) (fun _ => True)
 
+/-- The same allowance key, retaining the segment from the inner hash to the outer hash. -/
+def OrderedObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
+    (observe : Conf → Conf → Prop) (sevm : Sevm) (spender : Adr) (T : Conf) : Prop :=
+  (∃ rest, T.d.stack = mapSlot spender.toB256 (mapSlot sevm.caller.toB256 10) :: rest) ∧
+  ObservedKeccakPair Q observe ImplV1.cert.prog sevm
+    (sevm.caller.toB256.toBytes ++ (10 : B256).toBytes)
+    (spender.toB256.toBytes ++ (mapSlot sevm.caller.toB256 10).toBytes)
+
+theorem OrderedObservedSource.forget {Q : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {spender : Adr} {T : Conf}
+    (source : OrderedObservedSource Q observe sevm spender T) :
+    ObservedSource Q observe sevm spender T :=
+  ⟨source.1, source.2.forget⟩
+
 /-- Abstract the guard memory before following the two nested hashes. -/
-theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem body_reach_ordered {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {a : Adr} {x z value : B256} {S : List B256}
     {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV1.cert.prog sevm
       ⟨St b (a.toB256 :: x :: z :: value :: a.toB256 :: S) M G, ImplV1.t_0e61_c10, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm a T := by
+    OrderedObservedSource Q observe sevm a T := by
   unfold ImplV1.t_0e61_c10 at run
   orsd
   iterate 8 orsx
@@ -38,13 +52,14 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   iterate 10 orsx
   rw [show Bytes.toB256 [32] + Bytes.toB256 [0] = (Bytes.toB256 [32] : B256) from by decide +kernel,
     show Bytes.toB256 [32] + Bytes.toB256 [32] = (Bytes.toB256 [64] : B256) from by decide +kernel] at run
-  obtain ⟨_, firstHash, run⟩ := ObservedKeccak.of_next erase run hT
+  obtain ⟨_, firstHash, run⟩ := ObservedKeccak.of_next_linked erase run hT
     (input := sevm.caller.toB256.toBytes ++ (10 : B256).toBytes)
     (shape := fun _ => True)
     (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
   simp only [show (Bytes.toB256 [0]).toNat = 0 from by decide +kernel,
-    show (Bytes.toB256 [32]).toNat = 32 from by decide +kernel] at run
-  rw [Mem.read_two_word_writes_at_raw] at run
+    show (Bytes.toB256 [32]).toNat = 32 from by decide +kernel] at run firstHash
+  rw [Mem.read_two_word_writes_at_raw] at run firstHash
+  have run := run.withPrefix
   iterate 6 orsx
   rw [show Bytes.toB256 [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
       0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff] = ff20 from rfl,
@@ -61,8 +76,19 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [Mem.read_two_word_writes_at_raw] at run
   iterate 2 orsx
   rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
-  · exact ⟨⟨_, rfl⟩, firstHash, secondHash⟩
+  · exact ⟨⟨_, rfl⟩, _, firstHash, secondHash⟩
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+
+/-- Project the individual observations from the ordered body proof. -/
+theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {a : Adr} {x z value : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV1.cert.prog sevm
+      ⟨St b (a.toB256 :: x :: z :: value :: a.toB256 :: S) M G, ImplV1.t_0e61_c10, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ObservedSource Q observe sevm a T :=
+  (body_reach_ordered erase run hT cont).forget
 
 /-- V1's checked dispatcher selects its original approve wrapper. -/
 theorem route_approve : SFunc.selWalk 0x095ea7b3
@@ -72,13 +98,13 @@ theorem route_approve : SFunc.selWalk 0x095ea7b3
   decide +kernel
 
 /-- Follow the actual selected prefix, preserving observations at its reached store. -/
-theorem approve_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem approve_reach_ordered {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {T : Conf}
     (selected : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (run : ObservedReach Q observe ImplV1.cert.prog sevm
       ⟨St b S M G, ImplV1.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : ObservedSource Q observe sevm (Sevm.dataWord sevm 4).toAdr T := by
+    (hT : AtSstore T) : OrderedObservedSource Q observe sevm (Sevm.dataWord sevm 4).toAdr T := by
   unfold ImplV1.t_0000_c0 at run
   iterate 7 orsx
   rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
@@ -135,7 +161,17 @@ theorem approve_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   iterate 13 orsx
   rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
-  exact body_reach_observed erase run hT cont
+  exact body_reach_ordered erase run hT cont
+
+/-- Project the individual observations from the ordered dispatcher proof. -/
+theorem approve_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {T : Conf}
+    (selected : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : ObservedReach Q observe ImplV1.cert.prog sevm
+      ⟨St b S M G, ImplV1.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : ObservedSource Q observe sevm (Sevm.dataWord sevm 4).toAdr T :=
+  (approve_reach_ordered erase selected run hT).forget
 
 /-- Both successful hashes belong to the same actual raw prefix before the store. -/
 def HashSource (root node : Exec.Deriv) : Prop :=
@@ -145,15 +181,22 @@ def HashSource (root node : Exec.Deriv) : Prop :=
       ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++
         (mapSlot root.sevm.caller.toB256 10).toBytes) outerPc
 
+/-- The successful inner hash finishes before the successful outer hash begins. -/
+def OrderedHashSource (root node : Exec.Deriv) : Prop :=
+  KeccakPairBefore root node
+    (root.sevm.caller.toB256.toBytes ++ (10 : B256).toBytes)
+    ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++
+      (mapSlot root.sevm.caller.toB256 10).toBytes)
+
 /-- An actual recognized store supplies its key and both successful earlier hash occurrences. -/
-theorem successfulSstore_hashes {root node : Exec.Deriv}
+theorem successfulSstore_ordered_hashes {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = ImplV1.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
     (selected : Blanc.Sevm.selector root.sevm = 0x095ea7b3)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256
-      (mapSlot root.sevm.caller.toB256 10) ∧ HashSource root node := by
+      (mapSlot root.sevm.caller.toB256 10) ∧ OrderedHashSource root node := by
   obtain ⟨decoded, rest, stack⟩ := Exec.Deriv.successfulSstore?_decoded found
   obtain ⟨κ, reach, ok⟩ :=
     observed_reach_of_parentPrefix_noStateGas ImplV1.cert_check pc code hsg chain
@@ -163,17 +206,21 @@ theorem successfulSstore_hashes {root node : Exec.Deriv}
   change ObservedReach (StepIn root) (Cursor.RawEdgeAt ImplV1.code ImplV1.cert root node)
     ImplV1.cert.prog root.sevm ⟨root.devm, ImplV1.t_0000_c0, []⟩ (κ.conf node.devm) at walk
   rw [St.self' root.devm] at walk
-  obtain ⟨⟨other, keyStack⟩, innerHash, outerHash⟩ :=
-    approve_reach_observed (fun h => StepIn.toRun h) selected walk target
+  obtain ⟨⟨other, keyStack⟩, hashes⟩ :=
+    approve_reach_ordered (fun h => StepIn.toRun h) selected walk target
   have keyEq := (List.cons.inj (stack.symm.trans keyStack)).1
-  obtain ⟨inner, innerNext, innerCursor, innerInst, innerResult, innerReached, innerEdge,
-    innerSuffix, _, _, innerStack, innerRead⟩ := innerHash.actual
-  obtain ⟨outer, outerNext, outerCursor, outerInst, outerResult, outerReached, outerEdge,
-    outerSuffix, _, _, outerStack, outerRead⟩ := outerHash.actual
-  exact ⟨keyEq, inner.node.pc, outer.node.pc,
-    ⟨inner, innerNext, rfl, innerInst, innerResult, innerReached, innerEdge,
-      innerSuffix, innerStack, innerRead⟩,
-    ⟨outer, outerNext, rfl, outerInst, outerResult, outerReached, outerEdge,
-      outerSuffix, outerStack, outerRead⟩⟩
+  exact ⟨keyEq, hashes.actual⟩
+
+/-- Compatibility projection retaining the two individual earlier-occurrence witnesses. -/
+theorem successfulSstore_hashes {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = ImplV1.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    (selected : Blanc.Sevm.selector root.sevm = 0x095ea7b3)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256
+      (mapSlot root.sevm.caller.toB256 10) ∧ HashSource root node := by
+  obtain ⟨key, hashes⟩ := successfulSstore_ordered_hashes pc code hsg chain selected found
+  exact ⟨key, KeccakPairBefore.forget hashes⟩
 
 end Blanc.Lift.Usdc.V1ApproveReach

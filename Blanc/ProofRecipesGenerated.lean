@@ -481,6 +481,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/RecoveryOccurrence.lean", "declaration:Blanc.Lift.RecoveryInvocation", "declaration:Blanc.Lift.recoveryInvocation_of_successFlag", "declaration:Blanc.Lift.RecoveryInvocation.executed", "declaration:Blanc.Lift.RecoveryInvocation.answer_ne_of_excluded"]
     boundary := "Only direct Nonempty with direct argument head Blanc.Lift.RecoveryInvocation matches; unrelated Nonempty and unfolded aliases do not. A successful invocation may return empty bytes. This does not prove that concrete old bytecode consumes an owner address, relevance, a full recovery-query census, root commitment, historical fork coverage or cryptographic exclusion. The concrete consumer must establish the actual success flag and operand/route premises; no invocation is inferred merely from empty returned bytes."
   },
+  {
+    id := "ordered-observed-keccak-pair"
+    status := "active"
+    triggers := ["goal-head:Lift.KeccakPairBefore"]
+    preferredPath := "Apply ObservedKeccakPair.actual to a pair observed with Cursor.RawEdgeAt on the same root and stop. Construct the joined observations with ObservedKeccak.of_next_linked for the first hash and ObservedReach.withPrefix on its remaining run before observing the second hash."
+    symbols := ["declaration:Blanc.Lift.ObservedReach.withPrefix", "declaration:Blanc.Lift.ObservedKeccak.of_next_linked", "declaration:Blanc.Lift.ObservedKeccakPair", "declaration:Blanc.Lift.ObservedKeccakPair.actual", "declaration:Blanc.Lift.KeccakPairBefore", "declaration:Blanc.Lift.KeccakPairBefore.forget"]
+    boundary := "Two independent successful hash observations are insufficient: the pair must retain the observed segment from the first successor to the second instruction. The conclusion records exact inputs and actual successful occurrences before the original stop; it supplies no hash injectivity, freshness, final-frame success or numeric pc ordering."
+  },
 ]
 
 end Blanc.ProofRecipes

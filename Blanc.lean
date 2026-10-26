@@ -1233,6 +1233,7 @@ import Blanc.Lift.CursorCutsToward
 import Blanc.Lift.CursorCheckPrefix
 import Blanc.Lift.ObservedReach
 import Blanc.Lift.CursorKeccak
+import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.CursorStateToward
 import Blanc.Lift.ReachLine
 import Blanc.Lift.CursorReturnToward
