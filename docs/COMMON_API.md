@@ -3526,6 +3526,13 @@ history, retaining order and duplicates. Its soundness theorem derives their
 slot identities from the checked V1 write sites. The off-implementation-slot
 consumer requires initial apartness and freshness of this exact list; modern
 balance-slot freshness does not establish historical blacklist freshness.
+`ConfiguredHistoryTraceIn.actualV1OldBlacklistKeys_hash` additionally retains
+the original frame, actual successful base-3 hash, its exact 64-byte
+calldata-account/base input, and its successful edge before the same store.
+`V1BlacklistReach.successfulSstore_hash` supplies this witness by following
+both original selectors through the blacklister guard and packed Boolean
+update; no final-call success or hash-injectivity premise is needed. The
+existing key-only interfaces project this stronger source proof.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s

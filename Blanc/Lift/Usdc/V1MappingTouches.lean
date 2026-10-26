@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.HistoricalMappingKeys
 import Blanc.Lift.Usdc.AllowanceRawHistory
+import Blanc.Lift.Usdc.V1BlacklistReach
 
 /-!
 Old blacklist mapping keys are collected only at actual successful V1 stores.
@@ -101,14 +102,7 @@ theorem v1OldBlacklist_store_key {G node : Exec.Deriv} (pc : G.pc = 0)
     (selected : v1OldBlacklistSelector (Sevm.selector G.sevm))
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     write.key = mapSlot (Sevm.dataWord G.sevm 4).toAdr.toB256 3 := by
-  obtain ⟨site, member, den, guards⟩ := v1_store_site pc code hsg chain found
-  have slot := (v1OldBlacklist_site_iff member guards).mpr selected
-  rw [slot] at den
-  have key := den (show (Term.kecc ownerWordT (.const 3)).known = true from by decide)
-  change write.key = mapSlot (ownerWordT.eval (Env.root G.sevm)) 3 at key
-  unfold ownerWordT at key
-  rw [addrMaskT_eval] at key
-  exact key
+  exact (V1BlacklistReach.successfulSstore_hash pc code hsg chain selected found).1
 
 theorem v1OldBlacklistKey?_eq_some_iff {P : Adr} {node : Exec.Deriv}
     {key : HistoricalMappingKey} :
@@ -157,6 +151,31 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr}
 
+/-- The recognized row, store and earlier successful hash belong to one actual frame. -/
+theorem ConfiguredHistoryTraceIn.v1OldBlacklistKey?_hash
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) {key : HistoricalMappingKey}
+    (collected : v1OldBlacklistKey? P node = some key) :
+    ∃ root ∈ history.rawFrames, ∃ write : Exec.StorageWrite,
+      Exec.Deriv.ParentPrefix root node ∧
+      Exec.Deriv.successfulSstore? node = some write ∧ write.owner = P ∧
+      key = .oldBlacklist3 (Sevm.dataWord root.sevm 4).toAdr ∧ write.key = key.slot ∧
+      ∃ hashPc, KeccakBefore root node
+        ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (3 : B256).toBytes) hashPc := by
+  obtain ⟨target, code, selected, ⟨write, found⟩, keyEq⟩ :=
+    v1OldBlacklistKey?_eq_some_iff.mp collected
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities root inFrames
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  rw [same] at code selected keyEq
+  obtain ⟨slot, hash⟩ := V1BlacklistReach.successfulSstore_hash pc code hsg chain selected found
+  refine ⟨root, inFrames, write, chain, found,
+    (successfulSstore?_node_owner found).2.trans target, keyEq, ?_, hash⟩
+  rw [keyEq]
+  exact slot
+
 /-- A recognized node in this history has an actual write at the returned key.
 The same raw frame supplies pc-zero entry and the state-gas capability. -/
 theorem ConfiguredHistoryTraceIn.v1OldBlacklistKey?_sound
@@ -166,16 +185,9 @@ theorem ConfiguredHistoryTraceIn.v1OldBlacklistKey?_sound
     (collected : v1OldBlacklistKey? P node = some key) :
     ∃ write, Exec.Deriv.successfulSstore? node = some write ∧
       write.owner = P ∧ write.key = key.slot := by
-  obtain ⟨target, code, selected, ⟨write, found⟩, keyEq⟩ :=
-    v1OldBlacklistKey?_eq_some_iff.mp collected
-  obtain ⟨G, inFrames, chain⟩ :=
-    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
-  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities G inFrames
-  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
-  rw [same] at code selected
-  refine ⟨write, found, (successfulSstore?_node_owner found).2.trans target, ?_⟩
-  rw [keyEq, HistoricalMappingKey.slot, same]
-  exact v1OldBlacklist_store_key pc code hsg chain selected found
+  obtain ⟨root, inFrames, write, chain, found, owner, keyEq, slot, hash⟩ :=
+    ConfiguredHistoryTraceIn.v1OldBlacklistKey?_hash history capabilities member collected
+  exact ⟨write, found, owner, slot⟩
 
 theorem mem_actualV1OldBlacklistKeys
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -197,6 +209,33 @@ theorem ConfiguredHistoryTraceIn.actualV1OldBlacklistKeys_sound
   obtain ⟨write, found, owner, slot⟩ :=
     ConfiguredHistoryTraceIn.v1OldBlacklistKey?_sound history capabilities inNodes collected
   exact ⟨node, inNodes, write, collected, found, owner, slot⟩
+
+/-- Every collected key retains its successful hash in the same original history. -/
+theorem ConfiguredHistoryTraceIn.actualV1OldBlacklistKeys_hash
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {key : HistoricalMappingKey}
+    (member : key ∈ actualV1OldBlacklistKeys P history) :
+    ∃ node ∈ history.rawNodes, ∃ root ∈ history.rawFrames,
+      ∃ (write : Exec.StorageWrite) (occurrence : Exec.NinstOccurrence root) (next : Exec.Deriv),
+      v1OldBlacklistKey? P node = some key ∧ Exec.Deriv.ParentPrefix root node ∧
+      Exec.Deriv.successfulSstore? node = some write ∧ write.owner = P ∧
+      key = .oldBlacklist3 (Sevm.dataWord root.sevm 4).toAdr ∧ write.key = key.slot ∧
+      occurrence.node ∈ history.rawNodes ∧
+      occurrence.instruction = .reg .keccak256 ∧ occurrence.stepResult = .ok next.devm ∧
+      Exec.Deriv.ParentPrefix root occurrence.node ∧ Exec.Deriv.ParentStep next occurrence.node ∧
+      Exec.Deriv.ParentPrefix next node ∧
+      (∃ rest, occurrence.node.devm.stack = 0 :: 64 :: rest) ∧
+      (occurrence.node.devm.memory.read 0 64).1 =
+        (Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (3 : B256).toBytes := by
+  obtain ⟨node, inNodes, collected⟩ := (mem_actualV1OldBlacklistKeys history).mp member
+  obtain ⟨root, inFrames, write, chain, found, owner, keyEq, slot, hashPc, hash⟩ :=
+    ConfiguredHistoryTraceIn.v1OldBlacklistKey?_hash history capabilities inNodes collected
+  obtain ⟨occurrence, next, _, instruction, result, reachedHash, edge, suffix, stack, input⟩ := hash
+  have inHistory := (history.mem_rawNodes_iff_rawFrame_parentPrefix occurrence.node).mpr
+    ⟨root, inFrames, reachedHash⟩
+  exact ⟨node, inNodes, root, inFrames, write, occurrence, next,
+    collected, chain, found, owner, keyEq, slot, inHistory,
+    instruction, result, reachedHash, edge, suffix, stack, input⟩
 
 theorem mem_actualV1OldBlacklistKeys_of_site
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future) {node : Exec.Deriv}

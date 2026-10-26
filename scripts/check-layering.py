@@ -1386,6 +1386,7 @@ CONTRACTS = {
         "Lift.Usdc.FiniteFootprint",
         "Lift.Usdc.Footprint",
         "Lift.Usdc.HistoricalMappingKeys",
+        "Lift.Usdc.V1BlacklistReach",
         "Lift.Usdc.V1MappingTouches",
         "Lift.Usdc.V1ApproveReach",
         "Lift.Usdc.V1BurnReach",
