@@ -7973,7 +7973,7 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     {block : ConfiguredBlockTrace cfg pre post} (r : BlockWordReplay history block) :
     r.Emission ↔
       (block.bodyTrace.requests.withdrawalOut.returnData = systemOutput r.model) ∧
-      (block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+      (block.blockOutput.requests =
         optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
         optionalRequestEntry 1 (systemOutput r.model) ++
         optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData) ∧

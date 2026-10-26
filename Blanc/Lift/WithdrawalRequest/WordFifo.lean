@@ -381,8 +381,10 @@ is emitted. -/
 structure Emission (r : BlockWordReplay history block) : Prop where
   /-- The system call returns the model's emitted entries' records. -/
   withdrawal : block.bodyTrace.requests.withdrawalOut.returnData = systemOutput r.model
-  /-- The block's request list carries them as its type-1 entry. -/
-  requests : block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+  /-- The block's request list carries them as its type-1 entry, between the
+  optional deposit and consolidation batches. The transaction prefix is empty
+  by `AppliedBodyTrace.transaction_requests_eq_nil`. -/
+  requests : block.blockOutput.requests =
     optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
     optionalRequestEntry 1 (systemOutput r.model) ++
     optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData
@@ -514,6 +516,7 @@ theorem block_word_fifo
   rw [prefixReplay.fold_eq, prefixOutputs] at *
   rw [replay.fold_eq, finalModel, fullOutputs] at *
   have payload := block_requests_of_request_rep history block code _ prefixRep
+  rw [block.bodyTrace.transaction_requests_eq_nil, List.nil_append] at payload
   exact ⟨⟨past, transactionEvents, reset, replay, pastMap, transactionMap, resetKind, resetPre⟩,
     ⟨prefixHistory, prefixRep⟩, ⟨payload.1, payload.2.1, payload.2.2⟩, ⟨fullHistory, fullRep⟩,
     conservation, ⟨prefixFrames.1, fullFrames, prefixFrames.2, entries.trans conservation⟩,

@@ -1560,7 +1560,12 @@ for a nonempty payload and no entry for an empty one;
 `optionalRequestEntry_eq_nil_iff` identifies the empty case.
 `append_optionalRequestEntry` is the conditional-append equation
 used by the trace theorem. No premise excludes type-1 entries from the incoming
-prefix or empties consolidation output. Payload validity, withdrawal FIFO
+prefix or empties consolidation output. For an actual block body,
+`ExecutionTrace.AppliedBodyTrace.transaction_requests_eq_nil` discharges the
+empty-prefix fact: transactions start from `BlockOutput.init`, and
+`ExecutionTrace.ApplyTransactionsTrace.requests_eq` proves that their fold
+preserves the request list. Thus callers may omit the prefix without adding
+an assumption. Payload validity, withdrawal FIFO
 provenance, configured-history correspondence and contract refinement remain
 separate obligations. This projected requests equality has no carrier-specific
 goal head, so discovery stays here rather than in an execution recipe.
