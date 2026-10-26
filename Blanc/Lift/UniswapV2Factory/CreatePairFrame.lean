@@ -335,8 +335,9 @@ maximum, an empty Pair `CREATE2` address, `getPair` unset in both directions, an
 storage equal to the transaction-start snapshot, runs to a machine with the frame's error, the
 certified Pair runtime at the Pair address, storage at the initialized checkpoint over the factory,
 the domain separator of the frame's chain id and the Pair address, and the sorted tokens; the Pair
-address is not added to the accounts to delete, and the refund counter stays non-negative. -/
-theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
+address is not added to the accounts to delete, and the refund counter stays non-negative.
+No new account deletion is scheduled, and every account other than the factory and Pair is unchanged. -/
+theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hfork : sevm.benvStat.fork = .muirGlacier) (hcode : sevm.code = code)
     (htarget : sevm.currentTarget = UniswapV2Pair.Creation.factory)
     (hvalue : sevm.value = 0) (hdata : sevm.data = createPairData)
@@ -356,9 +357,10 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
         (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256
           UniswapV2Pair.Creation.pairAddress)
         UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 ∧
-      (UniswapV2Pair.Creation.pairAddress ∉ b.accountsToDelete →
-        UniswapV2Pair.Creation.pairAddress ∉ post.accountsToDelete) ∧
-      (0 ≤ b.refundCounter → 0 ≤ post.refundCounter) := by
+      (∀ a, a ∉ b.accountsToDelete → a ∉ post.accountsToDelete) ∧
+      (0 ≤ b.refundCounter → 0 ≤ post.refundCounter) ∧
+      (∀ a, a ≠ sevm.currentTarget → a ≠ UniswapV2Pair.Creation.pairAddress →
+        post.state.get a = b.state.get a) := by
   have rules := muirRules hfork
   have hflat5 : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 5000 := fun g h => by
     rw [rules, show (Fork.ruleSet .muirGlacier).access = .flat istanbulAccessGas from rfl] at h
@@ -480,7 +482,7 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
     rw [framePost, returnPost_state]
     show (sfxB10 sevm Q).state.get a = _
     rw [sfxB10_state_ne sevm Q ha, hQdef, hQstate]
-  refine ⟨framePost sevm b G0, hrun, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨framePost sevm b G0, hrun, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [framePost, (returnPost_facts _ _ _ _).2.1, St_error]
     show (sfxB10 sevm Q).error = _
     rw [sfxB10_error, hQdef, hQerr, hPdef, hPerr, hB1]
@@ -525,12 +527,12 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
       rw [hdata]; decide
     rw [ht0, ht1] at hck
     exact hck
-  · intro hb hmem
+  · intro a hb hmem
     have hatd : (framePost sevm b G0).accountsToDelete = Q.accountsToDelete := by
       rw [framePost, (returnPost_meta _ _ _ _).1]
       exact sfxB10_accountsToDelete sevm Q
     rw [hatd, hQdef, hQatd, hIatd, ite_eq_right hsrd] at hmem
-    have hP : UniswapV2Pair.Creation.pairAddress ∉ P.accountsToDelete := by
+    have hP : a ∉ P.accountsToDelete := by
       rw [hPdef, hPatd, hCatd, hCDatd, ite_eq_right hsrd]
       intro h
       rcases Std.HashSet.mem_union_iff.mp h with h | h <;>
@@ -546,5 +548,41 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
       rw [hPdef]; exact hPrc
     have hB1r : B1.refundCounter = b.refundCounter := afterSloadH_refundCounter _ _ _
     omega
+
+  · intro a otherFactory otherPair
+    rw [hpost a otherFactory, hIkeep a otherPair, hPdef, hPstate,
+      hCkeep a otherPair, hB1state]
+    unfold State.incrNonce
+    exact State.setAccount_get_ne _ (Ne.symm otherFactory) _
+
+/-- Compatibility projection of the full creation-frame effects. -/
+theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
+    (hfork : sevm.benvStat.fork = .muirGlacier) (hcode : sevm.code = code)
+    (htarget : sevm.currentTarget = UniswapV2Pair.Creation.factory)
+    (hvalue : sevm.value = 0) (hdata : sevm.data = createPairData)
+    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
+    (hinstalled : b.state.getCode sevm.currentTarget = code)
+    (hempty : Create2TargetEmpty b UniswapV2Pair.Creation.pairAddress)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
+    (hv5 : b.getStorVal sevm.currentTarget fk5 = 0)
+    (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
+    (hG : 2600000 ≤ G0) (hG64 : G0 < 2 ^ 64) :
+    ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) post ∧
+      post.error = b.error ∧
+      (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
+      UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.factory
+        (UniswapV2Pair.Creation.domainSeparator sevm.benvStat.chainId.toB256
+          UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 ∧
+      (UniswapV2Pair.Creation.pairAddress ∉ b.accountsToDelete →
+        UniswapV2Pair.Creation.pairAddress ∉ post.accountsToDelete) ∧
+      (0 ≤ b.refundCounter → 0 ≤ post.refundCounter) := by
+  obtain ⟨post, run, err, installed, initialized, notDeleted, refund, _⟩ :=
+    createPair_frame_effects hfork hcode htarget hvalue hdata hstatic hdepth hinstalled
+      hempty hnonce hv1 hv5 horig hG hG64
+  exact ⟨post, run, err, installed, initialized,
+    notDeleted UniswapV2Pair.Creation.pairAddress, refund⟩
 
 end Blanc.Lift.UniswapV2Factory

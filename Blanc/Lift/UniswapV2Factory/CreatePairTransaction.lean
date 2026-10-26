@@ -36,8 +36,9 @@ validates and admits, whose sender can pay `gas × price`, and whose gas covers 
 plus 2,600,000 (below `2^64`), over a state holding the certified factory runtime at the factory
 (nonce below the maximum), an empty Pair `CREATE2` address and no `getPair` entry for the two
 tokens in either direction, is processed by `processTransaction`; the settled state holds the
-certified Pair runtime at the Pair address with storage at the initialized checkpoint. -/
-theorem pair_createPair_transaction_muirGlacier
+certified Pair runtime at the Pair address with storage at the initialized checkpoint.
+Every other installed account retains its code and storage through settlement. -/
+theorem pair_createPair_transaction_muirGlacier_effects
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {gasPrice intrinsicGas calldataFloorGas effectiveGasPrice : Nat} {sender : Adr}
     {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
@@ -63,7 +64,11 @@ theorem pair_createPair_transaction_muirGlacier
         UniswapV2Pair.Creation.factory
         (UniswapV2Pair.Creation.domainSeparator benv.stat.chainId.toB256
           UniswapV2Pair.Creation.pairAddress)
-        UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 := by
+        UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 ∧
+      ∀ a, a ≠ UniswapV2Pair.Creation.factory →
+        a ≠ UniswapV2Pair.Creation.pairAddress →
+        (benv.state.getCode a).toList ≠ [] →
+        post.getCode a = benv.state.getCode a ∧ post.getStor a = benv.state.getStor a := by
   have hmuir : benv.stat.fork = .muirGlacier :=
     Except.ok.inj (hfork.symm.trans UniswapV2Pair.pair_deployment_fork)
   have hrules : benv.stat.rules = Fork.ruleSet .muirGlacier := by rw [BenvStat.rules, hmuir]
@@ -118,8 +123,8 @@ theorem pair_createPair_transaction_muirGlacier
   have hmsgRules : msg.benv.stat.rules = Fork.ruleSet .muirGlacier := hrules
   have hentry : msg.benvAfterTransfer = .ok msg.benv := Msg.benvAfterTransfer_of_value_zero hmsgValue
   -- The factory frame, from the message's initial machine.
-  obtain ⟨post, hrun, herr, hcodeP, hinit, hatd, hrc⟩ :=
-    createPair_frame (sevm := initSevm msg) (b := initDevm msg) (G0 := msg.gas)
+  obtain ⟨post, hrun, herr, hcodeP, hinit, hatd, hrc, hforeign⟩ :=
+    createPair_frame_effects (sevm := initSevm msg) (b := initDevm msg) (G0 := msg.gas)
       hmuir hmsgCode rfl hmsgValue hdata rfl (show (1024 : Nat) ≠ 0 by decide)
       (by show (debit.get UniswapV2Pair.Creation.factory).code = code; rw [hdebitF]; exact hfactory)
       (by
@@ -159,7 +164,74 @@ theorem pair_createPair_transaction_muirGlacier
       show UniswapV2Pair.Creation.pairAddress ∉
         (post.recordTouch msg.benv.stat.rules true msg.currentTarget).accountsToDelete
       rw [(recordTouch_meta _ _ _ _).1]
-      exact hatd (Std.HashSet.not_mem_emptyWithCapacity))
-  exact ⟨settled, bout', htx, hc, hs⟩
+      exact hatd UniswapV2Pair.Creation.pairAddress Std.HashSet.not_mem_emptyWithCapacity)
+  refine ⟨settled, bout', htx, hc, hs, ?_⟩
+  intro a otherFactory otherPair installed
+  have hneA : sender ≠ a := by
+    intro eq
+    have hz : (benv.state.get sender).code.size = 0 := by
+      simpa only [ByteArray.isEmpty, beq_iff_eq] using hsenderCode
+    apply installed
+    change (benv.state.get a).code.toList = []
+    rw [← eq]
+    exact List.length_eq_zero_iff.mp (by
+      simpa only [ByteArray.size_eq_length_toList] using hz)
+  have hdebitA : debit.get a = benv.state.get a := debit_get_ne hneA
+  have hpostA : post.state.get a = benv.state.get a :=
+    (hforeign a otherFactory otherPair).trans hdebitA
+  have hcodeA : (post.recordTouch msg.benv.stat.rules true msg.currentTarget).state.getCode a =
+      benv.state.getCode a := by
+    rw [Devm.recordTouch_state]
+    change (post.state.get a).code = (benv.state.get a).code
+    rw [hpostA]
+  have hstorA : (post.recordTouch msg.benv.stat.rules true msg.currentTarget).state.getStor a =
+      benv.state.getStor a := by
+    rw [Devm.recordTouch_state]
+    change (post.state.get a).stor = (benv.state.get a).stor
+    rw [hpostA]
+  obtain ⟨settledA, boutA, htxA, hcA, hsA⟩ := processTransaction_installed_of_stagesH
+    hsg (by rw [hrules]; rfl) hvalid hchecked hdebit hprepared hcall
+    (Int.toNat?_eq_some_of_nonneg (Int.natCast_nonneg _))
+    (by rw [hcodeA]; exact installed)
+    (by
+      show a ∉ (post.recordTouch msg.benv.stat.rules true msg.currentTarget).accountsToDelete
+      rw [(recordTouch_meta _ _ _ _).1]
+      exact hatd a Std.HashSet.not_mem_emptyWithCapacity)
+  have same : settledA = settled := (Prod.mk.inj (Except.ok.inj (htxA.symm.trans htx))).1
+  subst settledA
+  exact ⟨hcA.trans hcodeA, hsA.trans hstorA⟩
+
+/-- Compatibility projection of the transaction effects theorem to the initialized Pair. -/
+theorem pair_createPair_transaction_muirGlacier
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {gasPrice intrinsicGas calldataFloorGas effectiveGasPrice : Nat} {sender : Adr}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    (hfork : mainnetChainConfig.forkAt 10008355 1588710145 = .ok benv.stat.fork)
+    (htype : tx.type = .zero gasPrice (some UniswapV2Pair.Creation.factory))
+    (hdata : tx.data = createPairData) (hvalue : tx.value = 0) (hnonce : tx.nonce = 205)
+    (hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas))
+    (hchecked : checkTransaction benv.beginTransaction
+      (ExecutionTrace.transactionPreludeBout bout tx index) tx =
+        .ok (sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed))
+    (hfunds : (tx.gas * effectiveGasPrice).toB256 ≤ benv.state.bal sender)
+    (hgas : intrinsicGas + 2600000 ≤ tx.gas) (hgasb : tx.gas < 2 ^ 64)
+    (hfactory : benv.state.getCode UniswapV2Pair.Creation.factory = code)
+    (hfnonce : (benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (hpairNonce : (benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (hpairCode : (benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (hpairStor : (benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
+    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0)
+    (hslot5 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0) :
+    ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
+      (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
+      UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.factory
+        (UniswapV2Pair.Creation.domainSeparator benv.stat.chainId.toB256
+          UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 := by
+  obtain ⟨post, bout', result, installed, initialized, _⟩ :=
+    pair_createPair_transaction_muirGlacier_effects hfork htype hdata hvalue hnonce hvalid
+      hchecked hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+  exact ⟨post, bout', result, installed, initialized⟩
 
 end Blanc.Lift.UniswapV2Factory

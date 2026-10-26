@@ -1696,6 +1696,7 @@ CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Factory.CreatePairFrame",
     "Lift.UniswapV2Factory.CreatePairTransaction",
     "Lift.UniswapV2Factory.CreatePairHistory",
+    "Lift.UniswapV2Factory.CreatePairForeignHistory",
 ])
 
 # The FrameSkip worked example over the Pair's code (usdc-weth9-pair-composition-v1): Pair family.

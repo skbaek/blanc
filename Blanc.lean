@@ -1951,6 +1951,7 @@ import Blanc.Lift.UniswapV2Factory.CreatePairSpawns
 import Blanc.Lift.UniswapV2Factory.CreatePairFrame
 import Blanc.Lift.UniswapV2Factory.CreatePairTransaction
 import Blanc.Lift.UniswapV2Factory.CreatePairHistory
+import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 import Blanc.Lift.UniswapV2Factory.CallShapeH
 import Blanc.Lift.HistAccessWalkFacts
 import Blanc.Lift.HistShaWalk

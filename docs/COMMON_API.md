@@ -5810,6 +5810,21 @@ two for an account the message installs and does not schedule for deletion. Work
 `Blanc/Lift/Weth9/DeployTransaction.lean` (`weth9_creation_transaction_byzantium`) and
 `Blanc/Lift/UniswapV2Pair/CreationTransaction.lean` (`pair_creation_transaction_settles_muirGlacier`).
 
+Another worked use is
+[`Blanc/Lift/UniswapV2Factory/CreatePairTransaction.lean`](../Blanc/Lift/UniswapV2Factory/CreatePairTransaction.lean):
+`pair_createPair_transaction_muirGlacier_effects` retains the initialized Pair
+and preserves code/storage at every other installed account except the factory.
+It uses `createPair_frame_effects` for foreign-account equality and absence of
+new deletions, derives sender inequality from admission with delegation disabled,
+and applies `processTransaction_installed_of_stagesH` to the same actual result.
+The original frame and transaction theorems remain compatibility projections.
+[`Blanc/Lift/UniswapV2Factory/CreatePairForeignHistory.lean`](../Blanc/Lift/UniswapV2Factory/CreatePairForeignHistory.lean)
+exports `createPair_block_preserves_foreign_installed` on the original retained
+`TxSplit 38` at the Pair's deployment block and timestamp. Its full storage
+equality transports an already-established foreign cell invariant across that
+transaction; it does not establish the pre-transaction invariant or a prior
+lifetime exclusion for the Pair address.
+
 The raw `debit_get_self` account equation requires the sender nonce to differ
 from `UInt64.max`; transaction admission supplies this nonwrap fact.
 `debit_get_self_of_protected` is the same equation for a sender that is
