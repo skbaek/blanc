@@ -47,27 +47,30 @@ theorem not_blockWordFifo_of_drained {cfg : ChainConfig} {checkpoint pre post : 
       RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
         withdrawalRequestPredeployAddress).get s ∧ s.queue = []) :
     ¬ BlockWordFifo history block := by
-  rintro ⟨past, transactionEvents, reset, replay, pastMap, -, -, -, fifo⟩
-  obtain ⟨hist, rep, -, -, -, -, -, frames, -⟩ := fifo
+  rintro ⟨r, boundary, -, -, -, provenance, -, -⟩
   obtain ⟨s, srep, sempty⟩ := drained
   -- the model at the request boundary has an empty queue
-  have modelEmpty := rep.queue_length_eq srep
+  have modelEmpty := boundary.represents.queue_length_eq srep
   rw [sempty, List.length_nil] at modelEmpty
   have initialQueue : (initial : Blanc.WithdrawalRequest.State).queue = [] := rfl
-  have conserved := hist.conservation
+  have conserved := boundary.wordHistory.conservation
   rw [initialQueue, List.nil_append] at conserved
   have conservedLen := congrArg List.length conserved
-  simp only [List.length_append, List.length_map] at conservedLen
+  simp only [List.length_append, List.length_map, BlockWordReplay.submissions,
+    BlockWordReplay.pastOutputs] at conservedLen
   -- the block committed at least one submission
-  have framesLen := congrArg List.length frames
-  have entriesLen := congrArg List.length (wordSubmissionFrames_entries (past ++ transactionEvents))
-  simp only [List.length_map, List.flatMap_append, List.length_append] at framesLen entriesLen
+  have framesLen := congrArg List.length provenance.historyFrames
+  have entriesLen := congrArg List.length (wordSubmissionFrames_entries (r.past ++ r.transactions))
+  simp only [List.length_map, List.flatMap_append, List.length_append,
+    BlockWordReplay.frames] at framesLen entriesLen
   have someLen : 0 < (block.bodyTrace.transactions.settledFrames.flatMap
       submissionFramePayments).length := List.length_pos_iff.mpr committed
   -- no earlier block produced an output
+  have replay := r.replay
+  have pastMap := r.pastObserves
   rw [List.append_assoc] at replay
   have pastReplay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
-      past _ := replay.split.1
+      r.past _ := replay.split.1
   have pastFrames := history_word_submission_frames history pastReplay pastMap
   rw [before, List.length_nil] at pastFrames
   have pastModel := WordStorageReplay.wordModel pastReplay WordHistory.start init (by
