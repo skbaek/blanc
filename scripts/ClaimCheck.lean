@@ -98,6 +98,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope
 import Blanc.Lift.WithdrawalRequest.WordFifo
+import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.WordDelivery
 import Blanc.Composition.WithdrawalRequestDrainControl
 import Blanc.Lift.WithdrawalRequest.SystemHistory
@@ -18624,3 +18625,69 @@ example (sevm : Sevm) (pre : Devm) (s : State) (w : RliWords) : RliWordsPin sevm
   rfl
 
 end Blanc.Lift.Curve3Pool
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- The public FIFO statement and every concrete observer it uses.
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint final)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : history.NoSenderAt systemAddress)
+    (authorities : history.NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ history.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : (submissions history).length ≤ wordOccurrenceCap) :
+    HistoryFifo history :=
+  history_fifo deployment admission history otherInstalled senders authorities avoid occurrences
+
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    HistoryFifo history ↔ submissions history = emissions history ++ remainingQueue history := Iff.rfl
+
+example (frame : Exec.Frame) : submissionRecord frame =
+    frame.sevm.caller.toBytes ++ frame.sevm.data.take 48 ++ (frame.sevm.data.drop 48).reverse := rfl
+
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    submissions history = (history.settledFrames.flatMap submissionFramePayments).map
+      (fun pair => submissionRecord pair.1) := rfl
+
+example (bytes : Bytes) : withdrawalRecords bytes =
+    (List.range ((bytes.length + 75) / 76)).map
+      (fun i => (bytes.drop (76 * i)).take 76) := rfl
+
+example (requests : List Bytes) : withdrawalRequestRecords requests =
+    requests.flatMap (fun request => match request with
+      | tag :: payload => if tag = 1 then withdrawalRecords payload else []
+      | [] => []) := rfl
+
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (hcfg : cfg.Valid) (hctx : checkpoint.ValidContext)
+    (hid : cfg.chainId = checkpoint.chainId) :
+    emissions (ConfiguredHistoryTrace.refl hcfg hctx hid) = [] := rfl
+
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post) :
+    emissions (ConfiguredHistoryTrace.step history block) =
+      emissions history ++ withdrawalRequestRecords block.blockOutput.requests := rfl
+
+example (storage : B256 → B256) (index : Nat) : storedQueueRecord storage index =
+    (storage (queueSlot index 0)).toAdr.toBytes ++
+      (storage (queueSlot index 1)).toBytes ++
+      (storage (queueSlot index 2)).toBytes.take 16 ++
+      ((storage (queueSlot index 2)).toBytes.drop 16 |>.take 8).reverse := rfl
+
+example (storage : B256 → B256) : storedQueue storage =
+    (List.range ((storage 3).toNat - (storage 2).toNat)).map
+      (fun i => storedQueueRecord storage ((storage 2).toNat + i)) := rfl
+
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    remainingQueue history =
+      storedQueue (final.state.getStor withdrawalRequestPredeployAddress).get := rfl
+
+end Blanc.Lift.WithdrawalRequest
