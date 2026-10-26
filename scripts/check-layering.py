@@ -1565,6 +1565,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxyCreation.Effects",
         "Lift.Usdc.ProxyCreation.Settlement",
         "Lift.Usdc.ProxyCreation.Transaction",
+        "Lift.Usdc.ProxyCreation.HistoryCut",
         "Lift.Usdc.ProxyCreation.HistoryFrame",
         "Lift.Usdc.ProxyForward",
         "Lift.Usdc.ProxyHalt",

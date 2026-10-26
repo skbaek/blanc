@@ -1815,6 +1815,7 @@ import Blanc.Lift.Usdc.ProxyCreation.Prefix
 import Blanc.Lift.Usdc.ProxyCreation.Effects
 import Blanc.Lift.Usdc.ProxyCreation.Settlement
 import Blanc.Lift.Usdc.ProxyCreation.Transaction
+import Blanc.Lift.Usdc.ProxyCreation.HistoryCut
 import Blanc.Lift.Usdc.ProxyCreation.HistoryFrame
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ProxyHalt

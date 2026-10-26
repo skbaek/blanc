@@ -8461,6 +8461,20 @@ contract-neutral.
   deletion set from actual preparation and clean CREATE; both transaction-effect
   theorems consequently need no caller-supplied deletion exclusion. Actual
   transaction identity, success and the chain-boundary seed remain obligations.
+  `ProxyCreation.original_constructor_effects_after_cut22` in
+  [`Blanc/Lift/Usdc/ProxyCreation/HistoryCut.lean`](../Blanc/Lift/Usdc/ProxyCreation/HistoryCut.lean)
+  applies those effects to the selected head of a configured block's actual
+  `TxSplit 22`, at `cut.afterBenv.state` immediately after settlement.
+  `original_constructor_seed_after_cut22` packages that code, exact two-slot
+  storage and tracked zero allowance rows as `OriginalConstructorSeed`, using
+  explicit separation from the implementation and admin slots.
+  `original_constructor_seed_of_receipt_cut22` derives that same head's clean
+  message outcome from a successful receipt at the final block output, through
+  the existing bounded receipt-preservation API. Constructor receiver, input,
+  value, recovered sender and nonce remain explicit; identifying the supplied
+  block with historical C, authenticating its receipt commitment and placing
+  it in the consumed history remain caller obligations. No C-to-D continuity
+  or pre-D governance restriction follows from this seed adapter.
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry
