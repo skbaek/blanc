@@ -6385,6 +6385,10 @@ contract-neutral.
   `afterSloadH_refundCounter`, `afterSstoreH_accountsToDelete`, and
   `afterSstoreH_refundCounter_legacy` under the legacy `SSTORE` refund schedule for a nonzero
   write) in [`Blanc/Lift/HistAccessMeta.lean`](../Blanc/Lift/HistAccessMeta.lean);
+  the symbolic settlement projection cuts `liftCreatePost_meta` (deletion set, refund,
+  created accounts) and `recordTouch_meta` (the same fields and gas) in
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean) keep concrete constructor
+  images out of definitional unfolding;
   a zero-value `CALL` into a known child under a flat (pre-Berlin) access schedule with delegation
   disabled (`Xinst.step_call_zero_flat`, `Ninst.runCompiled_call_zero_child_flat`, the child
   settled with its target's EIP-161 touch) and a top-level call message settled from its raw

@@ -1,6 +1,8 @@
 import Blanc.Lift.Deploy
 import Blanc.Lift.Vyper
 import Blanc.ForwardCall
+import Blanc.Lift.HistCreate
+import Blanc.Lift.HistAccessMeta
 import Blanc.BytesWrite
 import Blanc.Lift.WithdrawalRequest.Creation.Input
 import Blanc.Lift.WithdrawalRequest.CodeFacts
@@ -14,7 +16,7 @@ open Jaune Blanc.Lift
 def constructorMemory : Mem := Mem.empty.write 0 Blanc.withdrawalRequestCode.toList
 
 def constructorPost (sevm : Sevm) (b : Devm) (G : Nat) : Devm :=
-  returnPost (St (afterSstore sevm b 0 B256.max) [0, 504] constructorMemory G) 0 504 []
+  returnPost (St (afterSstoreH sevm b 0 B256.max) [0, 504] constructorMemory G) 0 504 []
 
 theorem runtime_length : Blanc.withdrawalRequestCode.toList.length = 504 := by
   rw [ByteArray.toList_eq_toList_data, Array.length_toList]
@@ -35,7 +37,7 @@ theorem constructorMemory_read : (constructorMemory.read 0 504).1 = Blanc.withdr
   rw [← runtime_length]
   exact Mem.read_write_zero Mem.empty withdrawalRequestCode_sem_facts.2
 
-def constructorGas (sevm : Sevm) (b : Devm) : Nat := 117 + sstoreCost sevm b 0 B256.max
+def constructorGas (sevm : Sevm) (b : Devm) : Nat := 117 + sstoreCostH sevm b 0 B256.max
 
 theorem constructor_codecopy_charge (b : Devm) (G : Nat) :
     gVerylow + gasCopy * ceilDiv (504 : B256).toNat 32 +
@@ -53,13 +55,34 @@ theorem constructorPost_facts (sevm : Sevm) (b : Devm) (G : Nat) :
     (constructorPost sevm b G).error = b.error ∧
     (constructorPost sevm b G).getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 0 B256.max ∧
     (constructorPost sevm b G).gasLeft = G := by
-  have h := returnPost_facts (St (afterSstore sevm b 0 B256.max) [0, 504] constructorMemory G) 0 504 []
+  have h := returnPost_facts (St (afterSstoreH sevm b 0 B256.max) [0, 504] constructorMemory G) 0 504 []
   refine ⟨?_, ?_, ?_, h.2.2.2⟩
   · exact h.1.trans constructorMemory_read
-  · exact h.2.1.trans (Blanc.afterSstore_error sevm b 0 B256.max)
-  · exact (h.2.2.1 sevm.currentTarget).trans (Blanc.afterSstore_getStor_self sevm b 0 B256.max)
+  · exact h.2.1.trans (afterSstoreH_error sevm b 0 B256.max)
+  · exact (h.2.2.1 sevm.currentTarget).trans (afterSstoreH_getStor_self sevm b 0 B256.max)
 
-theorem constructorGas_le (sevm : Sevm) (b : Devm) : constructorGas sevm b ≤ 22217 := by
-  exact Nat.add_le_add_left (sstoreCost_le sevm b 0 B256.max) 117
+theorem constructorGas_le (sevm : Sevm) (b : Devm)
+    (hflat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100) :
+    constructorGas sevm b ≤ 22217 := by
+  exact Nat.add_le_add_left (sstoreCostH_le hflat) 117
+
+/-- The constructor schedules no deletion; its one write starts from an original zero slot. -/
+theorem constructorPost_accountsToDelete (sevm : Sevm) (b : Devm) (G : Nat) :
+    (constructorPost sevm b G).accountsToDelete = b.accountsToDelete := by
+  change (afterSstoreH sevm b 0 B256.max).accountsToDelete = _
+  exact afterSstoreH_accountsToDelete sevm b 0 B256.max
+
+/-- Initializing the inhibitor from empty original storage produces no refund. -/
+theorem constructorPost_refundCounter (sevm : Sevm) (b : Devm) (G : Nat)
+    (horig : b.getOrigStorVal sevm sevm.currentTarget 0 = 0) :
+    (constructorPost sevm b G).refundCounter = b.refundCounter := by
+  change (afterSstoreH sevm b 0 B256.max).refundCounter = _
+  rw [afterSstoreH_refundCounter, horig]
+  have hmax : B256.max ≠ 0 := by decide
+  have hzero : (0 : B256) ≠ B256.max := Ne.symm hmax
+  unfold sstoreRefundH
+  split <;> simp only [sstoreLegacyRefundCounter, sstoreFlatRefundCounter,
+    sstoreNewRefundCounter, hmax, hzero, ne_eq, not_true_eq_false, false_and,
+    and_false, ↓reduceIte, ite_self]
 
 end Blanc.Lift.WithdrawalRequest.Creation

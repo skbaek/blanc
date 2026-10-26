@@ -10,12 +10,19 @@ namespace Blanc.Lift.WithdrawalRequest.Creation
 
 open Jaune Blanc.Lift Blanc.WithdrawalRequest
 
-theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+/-- Canonical construction under its actual selected rule capabilities, including Cancun.
+The runtime, initial storage and settlement bookkeeping are execution results. -/
+theorem create_initialH (msg : Msg)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hpush0 : msg.benv.stat.rules.op.push0 = true)
+    (hflat : ∀ g, msg.benv.stat.rules.access = .flat g → g.sload ≤ 2100)
+    (hsize : 504 ≤ msg.benv.stat.rules.code.maxCodeSize)
     (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
     (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 250000 ≤ msg.gas) :
     ∃ post, processCreateMessage msg = .ok post ∧
       post.getCode msg.currentTarget = Blanc.withdrawalRequestCode ∧
-      RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none := by
+      RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none ∧
+      post.accountsToDelete = msg.inheritedDeletions ∧ post.refundCounter = 0 := by
   obtain ⟨benv, htransfer⟩ := benvAfterTransfer_exists_zero (msg := processCreateMessage.msg msg) hvalue
   let sevm := initSevm (createSeed msg benv)
   let b := initDevm (createSeed msg benv)
@@ -23,14 +30,17 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   have hstat : sevm.benvStat = msg.benv.stat := by
     change benv.stat = (processCreateMessage.msg msg).benv.stat
     exact benvAfterTransfer_stat htransfer
+  have hflatSevm : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100 := by
+    rw [hstat]
+    exact hflat
   have hcost : constructorGas sevm b ≤ msg.gas :=
-    Nat.le_trans (constructorGas_le sevm b) (Nat.le_trans (by decide) hgas)
+    Nat.le_trans (constructorGas_le sevm b hflatSevm) (Nat.le_trans (by decide) hgas)
   have hremaining : 100800 ≤ G := by
     apply Nat.le_sub_of_add_le
-    exact Nat.le_trans (Nat.add_le_add_left (constructorGas_le sevm b) 100800)
+    exact Nat.le_trans (Nat.add_le_add_left (constructorGas_le sevm b hflatSevm) 100800)
       (Nat.le_trans (by decide) hgas)
   have hsentry : gCallStipend < G := Nat.lt_of_lt_of_le (by decide) hremaining
-  have hrun := constructor_run sevm b G (hstat ▸ hfork) hstatic hcode hsentry
+  have hrun := constructor_runH sevm b G (hstat ▸ hsg) (hstat ▸ hpush0) hstatic hcode hsentry
   have hpre : St b [] Mem.empty (G + constructorGas sevm b) = b :=
     pre_eq_St rfl rfl (Nat.sub_add_cancel hcost)
   rw [hpre] at hrun
@@ -52,11 +62,13 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     exact hremaining
   have hmax : (constructorPost sevm b G).output.length ≤ msg.benv.stat.rules.code.maxCodeSize := by
     rw [facts.1, runtime_length]
-    exact CoveredFork.cases (motive := fun f => 504 ≤ (Fork.ruleSet f).code.maxCodeSize)
-      hfork (by decide) (by decide) (by decide) (by decide)
-  obtain ⟨post, hcreate, hinstalled, hstorage, hposterror⟩ := liftCreate_ok cert_check jumps_ok msg
-    haddress hcode hfork htransfer hrun herror hprefix hdeposit hmax
-  refine ⟨post, hcreate, ?_, ?_, hposterror⟩
+    exact hsize
+  obtain ⟨post, hcreate, hinstalled, hstorage, hposterror⟩ := liftCreate_okH cert_check jumps_ok msg
+    haddress hcode hsg htransfer hrun herror hprefix hdeposit hmax
+  have hnamed := liftCreate_postH cert_check jumps_ok msg haddress hcode hsg htransfer
+    hrun herror hprefix hdeposit hmax
+  have hpostEq := Except.ok.inj (hcreate.symm.trans hnamed)
+  refine ⟨post, hcreate, ?_, ?_, hposterror, ?_, ?_⟩
   · rw [facts.1] at hinstalled
     rw [ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at hinstalled
     exact congrArg ByteArray.mk (Array.toList_inj.mp hinstalled)
@@ -72,6 +84,64 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     change RepresentsStorage (constructorPost sevm b G |>.getStor sevm.currentTarget).get initial
     rw [facts.2.2.1, hempty]
     exact initial_storage
+  · rw [hpostEq, (liftCreatePost_meta _ _).1, (recordTouch_meta _ _ _ _).1,
+      constructorPost_accountsToDelete]
+    rfl
+  · have h0 : (processCreateMessage.msg msg).benvAfterTransfer =
+        .ok (processCreateMessage.msg msg).benv :=
+      Msg.benvAfterTransfer_of_value_zero hvalue0
+    have hbenv_eq : benv = (processCreateMessage.msg msg).benv :=
+      Except.ok.inj (htransfer.symm.trans h0)
+    have hmem : sevm.currentTarget ∈ b.createdAccounts := by
+      have h1 : b.createdAccounts = benv.createdAccounts := rfl
+      rw [h1, hbenv_eq]
+      show msg.currentTarget ∈ (processCreateMessage.msg msg).benv.createdAccounts
+      unfold processCreateMessage.msg addCreatedAccount
+      show msg.currentTarget ∈ (msg.benv.createdAccounts.insert msg.currentTarget)
+      exact Std.HashSet.mem_insert_self
+    have horig : b.getOrigStorVal sevm sevm.currentTarget 0 = 0 := by
+      unfold Devm.getOrigStorVal
+      rw [ite_eq_left hmem]
+    rw [hpostEq, (liftCreatePost_meta _ _).2.1, (recordTouch_meta _ _ _ _).2.1,
+      constructorPost_refundCounter sevm b G horig]
+    rfl
+
+/-- Existing covered-fork callers retain the canonical creation interface. -/
+theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+    (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
+    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 250000 ≤ msg.gas) :
+    ∃ post, processCreateMessage msg = .ok post ∧
+      post.getCode msg.currentTarget = Blanc.withdrawalRequestCode ∧
+      RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none := by
+  obtain ⟨post, hrun, hcode', hstorage, herror, _, _⟩ :=
+    create_initialH msg hfork.rules_stateGas_none hfork.rules_push0
+      (by intro g hg; rw [hfork.rules_access] at hg; cases hg)
+      (hfork.cases (motive := fun f => 504 ≤ (Fork.ruleSet f).code.maxCodeSize)
+        (by decide) (by decide) (by decide) (by decide))
+      haddress hcode hstatic hvalue hgas
+  exact ⟨post, hrun, hcode', hstorage, herror⟩
+
+/-- Cancun construction derives the same canonical runtime and inhibitor initialization.
+The inherited-deletion and zero-refund facts belong to this same execution result. -/
+theorem create_initial_cancun (msg : Msg) (hfork : msg.benv.stat.fork = .cancun)
+    (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
+    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 250000 ≤ msg.gas) :
+    ∃ post, processCreateMessage msg = .ok post ∧
+      post.getCode msg.currentTarget = Blanc.withdrawalRequestCode ∧
+      RepresentsStorage (post.getStor msg.currentTarget).get initial ∧ post.error = none ∧
+      post.accountsToDelete = msg.inheritedDeletions ∧ post.refundCounter = 0 := by
+  apply create_initialH msg
+  · rw [BenvStat.rules, hfork]; rfl
+  · rw [BenvStat.rules, hfork]; rfl
+  · rw [BenvStat.rules, hfork]
+    intro g hg
+    cases hg
+  · rw [BenvStat.rules, hfork]; decide
+  · exact haddress
+  · exact hcode
+  · exact hstatic
+  · exact hvalue
+  · exact hgas
 
 /-- A closed zero-value CREATE message with the recorded sender and nonce-zero target.
 The gas grant is the retained deployment input's 250000; transaction validation is separate. -/
@@ -106,5 +176,20 @@ theorem deploy_initial (fork : Fork) (hfork : CoveredFork fork) :
   obtain ⟨post, hcreate, hcode, hstorage, herror⟩ := create_initial (deployMsg fork) hfork rfl rfl rfl rfl (Nat.le_refl _)
   rw [target] at hcode hstorage
   exact ⟨post, hcreate, hcode, hstorage, herror⟩
+
+/-- The closed recorded constructor also reaches INIT under Cancun. -/
+theorem deploy_initial_cancun :
+    (deployMsg .cancun).currentTarget = withdrawalRequestPredeployAddress ∧
+    ∃ post, processCreateMessage (deployMsg .cancun) = .ok post ∧
+      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      RepresentsStorage (post.getStor withdrawalRequestPredeployAddress).get initial ∧
+      post.error = none ∧ post.accountsToDelete = (deployMsg .cancun).inheritedDeletions ∧
+      post.refundCounter = 0 := by
+  have target : (deployMsg .cancun).currentTarget = withdrawalRequestPredeployAddress := deployer_address
+  refine ⟨target, ?_⟩
+  obtain ⟨post, hcreate, hcode, hstorage, herror, hdelete, hrefund⟩ :=
+    create_initial_cancun (deployMsg .cancun) rfl rfl rfl rfl rfl (Nat.le_refl _)
+  rw [target] at hcode hstorage
+  exact ⟨post, hcreate, hcode, hstorage, herror, hdelete, hrefund⟩
 
 end Blanc.Lift.WithdrawalRequest.Creation
