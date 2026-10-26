@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
+import Blanc.Lift.Usdc.HistoryAnchorBody
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 
 /-!
@@ -167,5 +168,90 @@ theorem original_pair_allowance_seed_of_constructor_receipt
     receiver input value sender nonce receiptAt succeeded slotsApart impl noUpgraded
     proxyApart rowSep initApart (.inl noCaller) hnumber htime htype hdata hvalue hnonce
     hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+
+/-- Connect both exact frozen body identities to the actual after-D seed.
+The original C/D cuts supply their decoded fields, including the D gas bound;
+caller-supplied per-field equalities are no longer needed. Body identity,
+original receipt authentication, sender, state and historical write-safety
+obligations remain explicit internal conditions, not adopted final ENV facts. -/
+theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (rootsIn : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
+    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈
+      first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+        later.receiptLogs ++ last.receiptLogsBetween 0 38,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
+    (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ UniswapV2Pair.Creation.pairAddress) ∨
+      (∀ entry ∈ first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+          later.receiptLogs ++ last.receiptLogsBetween 0 38,
+        V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress Tr entry))
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfunds : (beforeCut.tx.gas * beforeCut.head.effectiveGasPrice).toB256 ≤
+      beforeCut.benv.state.bal beforeCut.head.sender)
+    (hgas : beforeCut.head.intrinsicGas + 2600000 ≤ beforeCut.tx.gas)
+    (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
+    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
+      (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
+      ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
+        (allowSlot UniswapV2Pair.Creation.pairAddress g) = 0 := by
+  obtain ⟨_, cnonce, creceiver, cvalue, cinput, _⟩ :=
+    HistoryAnchorBody.c_original_cut_fields first afterCut cBody
+  have dtx := (HistoryAnchorBody.d_original_cut last beforeCut dBody).2
+  have dtype : beforeCut.tx.type =
+      .zero 4000000000 (some UniswapV2Pair.Creation.factory) := by
+    rw [dtx]
+    rfl
+  have ddata : beforeCut.tx.data = UniswapV2Factory.createPairData := by
+    rw [dtx]
+    decide +kernel
+  have dvalue : beforeCut.tx.value = 0 := by
+    rw [dtx]
+    rfl
+  have dnonce : beforeCut.tx.nonce = 205 := by
+    rw [dtx]
+    rfl
+  have dgas : beforeCut.tx.gas < 2 ^ 64 := by
+    rw [dtx]
+    decide +kernel
+  exact original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
+    history initialApart fresh first afterCut later last beforeCut rootsIn
+    creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart impl noUpgraded
+    proxyApart rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
+    hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

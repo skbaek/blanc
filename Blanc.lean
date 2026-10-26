@@ -1960,3 +1960,5 @@ import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 import Blanc.Lift.UniswapV2Factory.CallShapeH
 import Blanc.Lift.HistAccessWalkFacts
 import Blanc.Lift.HistShaWalk
+
+import Blanc.Lift.Usdc.HistoryAnchorBody

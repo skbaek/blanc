@@ -1828,6 +1828,16 @@ transaction fold at `i` into `before`, the actual `head : TransactionTrace`
 and `after`, with `rawFrames_eq` / `settledFrames_eq`; `splitAt` builds one
 for every `i < txs.length`, `TxSplit.putIndex_eq` identifies `index` and `tx`
 on a decoded block list, and `afterBenv` is the boundary right after `i`.
+For exact legacy-body identification,
+[`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
+provides `decodeTxs_inr`, `StagedBodyTrace.decodedTxs_eq_of_inr`, and
+`StagedBodyTrace.txSplit_tx_eq_of_inr`. An explicit full ordered body equality
+and selected-list position identify the supplied original cut's transaction;
+they supply no historical observation, sender, receipt, or state fact.
+The common owner also derives structural `DecidableEq` instances for
+`Jaune.Auth`, `Jaune.TxType`, and `Jaune.Tx` for finite kernel certificates.
+The equality head is shared by unrelated goals, so discovery remains this
+manual registry route rather than a broad proof-recipe trigger.
 `ConfiguredBlockTraceIn.txSplit_stat`, `txSplit_notCreated` and
 `txSplit_bound` derive the selected fork, the empty created set and the
 withdrawal-inclusive no-wrap bound at the cut from the block.
@@ -3971,6 +3981,12 @@ of arbitrary nested BLT values or a parser/canonicality theorem.
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
 `decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
 apply Jaune's actual parser equations while keeping payload bytes abstract.
+The additive owner
+[`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
+also provides `RlpConcrete.decode_bytes_long_one` and
+`RlpConcrete.decode_list_long_one` for one-byte long-length headers.
+They preserve the exact payload and suffix, and the list equation retains
+the supplied actual recursive child parse.
 `decode_byte`, `decode_empty_bytes`, `decode_empty_list`, and
 `decode_bytes_three` cover the small field headers; `parse_cons` composes
 the actual first-item and remaining-list equations.

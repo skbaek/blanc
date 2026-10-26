@@ -1617,6 +1617,31 @@ CONTRACTS = {
     ],
 }
 
+# Frozen byte producer and its conditional original-cut consumer.
+SHARED += ["ExecutionBodyTransactionCut"]
+CONTRACTS["usdc"].extend([
+    "Lift.Usdc.HistoryAnchorBody",
+    "Lift.Usdc.HistoryAnchorBodyGenerated",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC00",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC01",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC02",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC03",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC04",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC05",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC06",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC07",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC08",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedC09",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD00",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD01",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD02",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD03",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD04",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD05",
+    "Lift.Usdc.HistoryAnchorBodyGeneratedD06",
+    "Lift.Usdc.HistoryAnchorBodyInput",
+])
+
 # The closed WETH9 applicability witness stays within its contract family.
 CONTRACTS["weth9"].extend([
     "Lift.Weth9.ClosedSigningData",
