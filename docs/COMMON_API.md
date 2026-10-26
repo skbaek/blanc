@@ -3557,6 +3557,18 @@ and completeness theorems bind this exact collector, and implementation-slot
 separation requires its explicit initial apartness and freshness. No final
 call success or hash injectivity is assumed.
 
+For V1 `mint`, use
+[`Blanc/Lift/Usdc/V1MintMappingTouches.lean`](../Blanc/Lift/Usdc/V1MintMappingTouches.lean)'s
+`actualV1MintKeys`. Its two recognized source PCs select the calldata recipient's
+base-9 balance row and the caller's base-13 minter-allowance row. The actual
+prefix producer `V1MintReach.successfulSstore_source` separates the supply
+write at 0x1bcc, balance write at 0x1c61 and allowance write at 0x1cb7; the
+mapping arms retain the successful hash at 0x1c5e or 0x1cb4, respectively.
+Each earlier write requires no later hash or final call success. The collector
+preserves actual history order and duplicates, never compares the written digest,
+and has same-history soundness, completeness and explicit exact-list freshness
+consumers for implementation-slot separation.
+
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
 `actualV1MinterKeys`. It recognizes each of the four successful store PCs

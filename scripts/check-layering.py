@@ -1390,6 +1390,8 @@ CONTRACTS = {
         "Lift.Usdc.V1ApproveReach",
         "Lift.Usdc.V1BurnReach",
         "Lift.Usdc.V1BurnMappingTouches",
+        "Lift.Usdc.V1MintReach",
+        "Lift.Usdc.V1MintMappingTouches",
         "Lift.Usdc.V1ApproveMappingTouches",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",
