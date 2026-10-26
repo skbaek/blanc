@@ -192,6 +192,42 @@ theorem retained_caller_write_excluded {cfg : ChainConfig} {checkpoint future : 
 
 /-- Caller-keyed allowance stores are excluded on the actual post-cut mid history.
 USDC world facts retain the original full chronology; Pair replay starts at afterBenv. -/
+theorem mid_retained_caller_write_excluded_of_mid_senderQueries
+    {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
+    {pair P : Adr} {W : List UsdcDeployedEntry}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (prior : ConfiguredHistoryTraceIn HistFork cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfg completed future)
+    (world : UsdcDeployedWorld ((prior.step block).append later).BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W ((prior.step block).append later).rawNodes)
+    (apartSlot : ImplSlotApart P ((prior.step block).append later).rawNodes) (apart : pair ≠ P)
+    (excluded : ∀ query ∈ ((MidHistoryTraceIn.tail block cut).append later).senderQueries,
+      query.recover ≠ .ok pair)
+    (notSystem : pair ≠ systemAddress)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (cut.afterBenv.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairMidTouchedKeysIn pair
+      ((MidHistoryTraceIn.tail block cut).append later))) :
+    ∀ (G : Exec.Frame), G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+        Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+        Exec.Deriv.successfulSstore? m = some w →
+        Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair := by
+  let full := (prior.step block).append later
+  let mid := (MidHistoryTraceIn.tail block cut).append later
+  have rootCallers : ∀ R ∈ mid.settledRoots, R.sevm.caller ≠ pair :=
+    mid.settledRoots_caller_ne_of_senderQueries excluded notSystem
+  apply retained_caller_write_excluded_of_forest full world upgrades apartSlot apart
+    (fun _ _ _ split => mid.settledFrames_parentIn split) rootCallers
+    (MidHistoryTraceIn.settledFrames_subset_full prior block cut later)
+  intro A member target mutable G child childMutable
+  exact (UniswapV2Pair.pair_mid_history_children_shapeHist mid installed initial fresh
+    A member target mutable G child childMutable).2.2
+
+/-- Full-history compatibility wrapper; only the original post-cut sender queries
+are consumed by the caller proof. -/
 theorem mid_retained_caller_write_excluded
     {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
     {pair P : Adr} {W : List UsdcDeployedEntry}
@@ -215,17 +251,10 @@ theorem mid_retained_caller_write_excluded
         Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
         Exec.Deriv.successfulSstore? m = some w →
         Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair := by
-  let full := (prior.step block).append later
-  let mid := (MidHistoryTraceIn.tail block cut).append later
-  have rootCallers : ∀ R ∈ mid.settledRoots, R.sevm.caller ≠ pair :=
-    mid.settledRoots_caller_ne_of_senderQueries
-      (fun query member => excluded query
-        (MidHistoryTraceIn.senderQueries_subset_full prior block cut later member)) notSystem
-  apply retained_caller_write_excluded_of_forest full world upgrades apartSlot apart
-    (fun _ _ _ split => mid.settledFrames_parentIn split) rootCallers
-    (MidHistoryTraceIn.settledFrames_subset_full prior block cut later)
-  intro A member target mutable G child childMutable
-  exact (UniswapV2Pair.pair_mid_history_children_shapeHist mid installed initial fresh
-    A member target mutable G child childMutable).2.2
+  exact mid_retained_caller_write_excluded_of_mid_senderQueries
+    prior block cut later world upgrades apartSlot apart
+    (fun query member => excluded query
+      (MidHistoryTraceIn.senderQueries_subset_full prior block cut later member))
+    notSystem installed initial fresh
 
 end Blanc.Composition.UniswapV2PairUsdcCallers

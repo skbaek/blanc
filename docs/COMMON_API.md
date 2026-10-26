@@ -4183,11 +4183,13 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   intermediate case. The library's no-SSTORE theorem excludes that case only
   at the original successful write. Actual root caller exclusion, the deployed
   USDC world, and installed Pair/representation/freshness remain inputs.
-  `mid_retained_caller_write_excluded` uses the actual transaction cut and later
-  blocks: full-history sender queries supply root exclusion, Pair replay starts
-  at `cut.afterBenv`, and USDC world/library facts stay on the original full
-  chronology. It shares the same retained-parent and successful-write proof;
-  actual cut state and finite touched-key freshness remain inputs.
+  `mid_retained_caller_write_excluded_of_mid_senderQueries` uses only the actual
+  after-cut sender queries for root exclusion. Pair replay starts at
+  `cut.afterBenv`; USDC world/library facts stay on the original full chronology.
+  It shares the same retained-parent and successful-write proof; actual cut
+  state and finite touched-key freshness remain inputs. The original
+  `mid_retained_caller_write_excluded` is a compatibility wrapper that restricts
+  its full-history exclusion through `senderQueries_subset_full`.
   `MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner` consumes that
   mid-history caller exclusion through the same retained-write classifier.
   It retains the original root, committed parent and write witnesses while
@@ -8060,6 +8062,16 @@ contract-neutral.
   scope; no broader pre-deployment F2′ restriction or supplied
   `NoPairExceptionWrites` premise is introduced. Actual cut identity, initial
   zero and finite freshness remain explicit instance obligations.
+  For an exclusion supplied on the exact post-deployment interval, use
+  `mid_root_allowance_zero_of_mid_senderQueries`,
+  `mid_history_allowance_zero_of_mid_senderQueries`, and
+  `pairUsdcAllowQuiet_of_mid_history_of_mid_senderQueries` in those same modules.
+  Their sender premise is precisely the original after-cut suffix followed by
+  later blocks, including failed/reverted transactions. It excludes neither
+  the selected deployment transaction nor an earlier transaction. The original
+  APIs remain full-history compatibility wrappers. Native-query exclusion, R4,
+  full-world and upgrade premises are unchanged; this restriction of one
+  consumer does not redefine R3 for other consumed intervals.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
