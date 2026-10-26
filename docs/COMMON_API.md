@@ -7863,6 +7863,14 @@ contract-neutral.
   `mid_proxy_code_and_outputNotDeleted` and the same original full world.
   The single actual after-cut zero seed remains explicit; no root-by-root zero,
   replacement block-end cut or additional proxy installation is assumed.
+  `pairUsdcAllowQuiet_of_mid_history` in
+  [`UniswapV2PairUsdcWeth9P1.lean`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)
+  specializes those tracked rows to the exact `PairTouchedSpenders` of the
+  consumed post-checkpoint trace and returns its existing `PairUsdcAllowQuiet`
+  premise. It retains the same original full-history world/upgrades and R3/R4
+  scope; no broader pre-deployment F2′ restriction or supplied
+  `NoPairExceptionWrites` premise is introduced. Actual cut identity, initial
+  zero and finite freshness remain explicit instance obligations.
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
