@@ -1606,6 +1606,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9P1
+import Blanc.Composition.UniswapV2PairUsdcOriginSeed
 import Blanc.Composition.UniswapV2PairUsdcCallersIn
 import Blanc.Composition.UniswapV2PairUsdcOwnersIn
 import Blanc.Composition.UniswapV2PairUsdcZeroIn
@@ -1719,6 +1720,7 @@ import Blanc.Lift.Usdc.V1MidHistoryContinuity
 import Blanc.Lift.Usdc.V1MainnetContinuity
 import Blanc.Lift.Usdc.V1ReceiptContinuity
 import Blanc.Lift.Usdc.V1ReceiptAllowanceZero
+import Blanc.Lift.Usdc.V1ConstructorReceiptZero
 import Blanc.Lift.Usdc.V1MappingTouches
 import Blanc.Lift.Usdc.V1ApproveReach
 import Blanc.Lift.Usdc.V1BurnReach

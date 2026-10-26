@@ -3653,6 +3653,20 @@ all root code/slot and deletion facts. Caller exclusion, row separation and the
 actual constructor seed remain producer obligations; the final selected
 transaction and its settlement are outside this result. These contract-specific
 consumers do not add a generic recipe for arbitrary equality goals.
+`V1ConstructorReceiptZero`'s
+`original_v1_seed_before_cut38_of_constructor_receipt` supplies that zero seed
+from the actual successful constructor receipt at index22. It derives proxy
+code and the initial implementation word from `OriginalConstructorSeed`, then
+returns V1 control and tracked zero rows before the original index38 cut.
+[`UniswapV2PairUsdcOriginSeed.lean`](../Blanc/Composition/UniswapV2PairUsdcOriginSeed.lean)'s
+`original_pair_allowance_seed_of_constructor_receipt` carries those facts
+through the same actual factory transaction using foreign-account preservation.
+Its result is the settled after-D state, with no supplied zero-at-C or zero-at-D
+hypothesis. It derives the pre-Cancun bound from D's anchored timestamp.
+These are internal composition interfaces: actual historical authentication,
+initial V1 implementation code, finite separation and genuine pre-D approve
+safety remain producer obligations. Caller exclusion is not a new final
+assumption and does not follow from R3 or Pair target emptiness.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
