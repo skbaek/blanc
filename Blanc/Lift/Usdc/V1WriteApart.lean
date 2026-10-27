@@ -428,6 +428,73 @@ theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualV1Keys
     (ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history capabilities spenders
       observed faithful fixedApart) member found owner tracked
 
+/-- Restrict the classified history while retaining the original full-history
+finite key populations. Raw-frame inclusion supplies original node membership;
+no filtered replacement key list or additional code coverage before the scope is assumed. -/
+theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys_on
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
+    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    {scopeCfg : ChainConfig} {scopeStart scopeEnd : BlockChain}
+    (scope : ConfiguredHistoryTraceIn F scopeCfg scopeStart scopeEnd)
+    (framesIn : scope.rawFrames ⊆ history.rawFrames)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    (codes : UsdcNodeCodes P scope.rawNodes)
+    (proxyApart : ProxyRowsApart P pair Tr scope.rawNodes)
+    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2CoveredKeys P history) = true)
+    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2_1CoveredKeys P history) = true)
+    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV22CoveredKeys P history) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
+    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true) :
+    UsdcRawRowWriteClass P pair Tr scope.rawFrames scope.rawNodes := by
+  have v1Class := ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history capabilities
+    spenders observed v1Faithful v1FixedApart
+  intro node scopeMember write found owner tracked
+  have target : node.sevm.currentTarget = P :=
+    (successfulSstore?_node_owner found).2.symm.trans owner
+  obtain ⟨root, rootIn, chain⟩ :=
+    (scope.mem_rawNodes_iff_rawFrame_parentPrefix node).mp scopeMember
+  have rootInFull := framesIn rootIn
+  have member : node ∈ history.rawNodes :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mpr ⟨root, rootInFull, chain⟩
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  have rootTarget : root.sevm.currentTarget = P := by rw [← same]; exact target
+  refine ⟨root, rootIn, chain, rootTarget, ?_⟩
+  obtain ⟨pc, _, stateGas, _, _⟩ := history.rawFrame_entryFacts capabilities root rootInFull
+  have family := codes node scopeMember target
+  rcases family with proxy | v1 | v2 | v21 | v22 | library
+  · exact absurd tracked (proxyApart node scopeMember target proxy write found)
+  · have rootCode : root.sevm.code = ImplV1.code := by rw [← same]; exact v1
+    exact (v1Class root rootInFull rootTarget rootCode node chain write found tracked).imp
+      (fun allowed => .inl ⟨rootCode, allowed⟩) id
+  · obtain ⟨spender, inTr, key⟩ := tracked
+    have classified := ConfiguredHistoryTraceIn.v2_allowance_write_locality history
+      capabilities spenders v2Faithful modernFixedApart member target v2 found
+      (observed spender inTr) key
+    rw [same] at v2 classified
+    exact classified.imp (fun allowed => .inr (.inl ⟨v2, allowed⟩)) id
+  · obtain ⟨spender, inTr, key⟩ := tracked
+    have classified := ConfiguredHistoryTraceIn.v2_1_allowance_write_locality history
+      capabilities neutral spenders v21Faithful modernFixedApart member target v21 found
+      (observed spender inTr) key
+    rw [same] at v21 classified
+    exact classified.imp (fun allowed => .inr (.inr (.inl ⟨v21, allowed⟩))) id
+  · obtain ⟨spender, inTr, key⟩ := tracked
+    have classified := ConfiguredHistoryTraceIn.v22_allowance_write_locality history
+      capabilities spenders v22Faithful modernFixedApart member target v22 found
+      (observed spender inTr) key
+    rw [same] at v22 classified
+    exact classified.imp (fun allowed => .inr (.inr (.inr ⟨v22, allowed⟩))) id
+  · have rootCode : root.sevm.code = Lib.code := by rw [← same]; exact library
+    exact (lib_no_sstore_node pc stateGas chain rootCode found).elim
+
 /-- All four implementation families use their original finite successful-store
 populations. No descriptor-wide modern separation or assumed raw classifier remains.
 The exact finite checks, proxy separation and selected code population stay explicit. -/
@@ -451,42 +518,8 @@ theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys
     (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
       (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true) :
     UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes := by
-  have v1Class := ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history capabilities
-    spenders observed v1Faithful v1FixedApart
-  intro node member write found owner tracked
-  have target : node.sevm.currentTarget = P :=
-    (successfulSstore?_node_owner found).2.symm.trans owner
-  obtain ⟨root, rootIn, chain⟩ :=
-    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
-  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
-  have rootTarget : root.sevm.currentTarget = P := by rw [← same]; exact target
-  refine ⟨root, rootIn, chain, rootTarget, ?_⟩
-  obtain ⟨pc, _, stateGas, _, _⟩ := history.rawFrame_entryFacts capabilities root rootIn
-  have family := codes node member target
-  rcases family with proxy | v1 | v2 | v21 | v22 | library
-  · exact absurd tracked (proxyApart node member target proxy write found)
-  · have rootCode : root.sevm.code = ImplV1.code := by rw [← same]; exact v1
-    exact (v1Class root rootIn rootTarget rootCode node chain write found tracked).imp
-      (fun allowed => .inl ⟨rootCode, allowed⟩) id
-  · obtain ⟨spender, inTr, key⟩ := tracked
-    have classified := ConfiguredHistoryTraceIn.v2_allowance_write_locality history
-      capabilities spenders v2Faithful modernFixedApart member target v2 found
-      (observed spender inTr) key
-    rw [same] at v2 classified
-    exact classified.imp (fun allowed => .inr (.inl ⟨v2, allowed⟩)) id
-  · obtain ⟨spender, inTr, key⟩ := tracked
-    have classified := ConfiguredHistoryTraceIn.v2_1_allowance_write_locality history
-      capabilities neutral spenders v21Faithful modernFixedApart member target v21 found
-      (observed spender inTr) key
-    rw [same] at v21 classified
-    exact classified.imp (fun allowed => .inr (.inr (.inl ⟨v21, allowed⟩))) id
-  · obtain ⟨spender, inTr, key⟩ := tracked
-    have classified := ConfiguredHistoryTraceIn.v22_allowance_write_locality history
-      capabilities spenders v22Faithful modernFixedApart member target v22 found
-      (observed spender inTr) key
-    rw [same] at v22 classified
-    exact classified.imp (fun allowed => .inr (.inr (.inr ⟨v22, allowed⟩))) id
-  · have rootCode : root.sevm.code = Lib.code := by rw [← same]; exact library
-    exact (lib_no_sstore_node pc stateGas chain rootCode found).elim
+  exact ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys_on history history
+    (fun _ member => member) capabilities neutral codes proxyApart spenders observed
+    v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
 
 end Blanc.Lift.Usdc

@@ -844,4 +844,293 @@ theorem pairUsdcAllowQuiet_of_mid_history_of_actualKeys
     installed initial fresh notPre rawClass initApart excluded oldReady
     tracked (seedZero g tracked)
 
+/-- Original connected receipts derive the zero seed; all four implementation
+classifiers consume the original full-history finite key populations. Restricting
+to the deployed suffix changes neither those lists nor the full R3/R4 exclusions. -/
+theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
+    {checkpoint B future : BlockChain} {cfg : ChainConfig}
+    {initial : HistoricalMappingKey → Prop} {W : List UsdcDeployedEntry}
+    {v1Origin v1Completed origin completed pre post : BlockChain}
+    (beforeV1 : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint v1Origin)
+    (v1Block : ConfiguredBlockTraceIn HistFork mainnetChainConfig v1Origin v1Completed)
+    (v1Cut : v1Block.bodyTrace.transactions.TxSplit 30)
+    (v1ToC : ConfiguredHistoryTraceIn HistFork mainnetChainConfig v1Completed origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (postD : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post B)
+    (trace : ConfiguredHistoryTrace cfg B future)
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (v1Fresh : V1MappingFreshKeys usdcProxy ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
+    (dBloom : last.block.header.bloom = HistoricalBloomExclusion.observedDBloom)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace))
+    (constructorOutput : v1Cut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈ later.receiptLogs,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV1MappingKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      v1FixedWriteSlots = true)
+    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV2CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV2_1CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV22CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      modernFixedWriteSlots = true)
+    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ UniswapV2Pair.Creation.pairAddress) ∨
+      (∀ entry ∈ later.receiptLogs,
+        V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace) entry))
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    {dReceipt : Fin 5 × Receipt}
+    (dReceiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some dReceipt)
+    (dSucceeded : dReceipt.2.succeeded = true)
+    (dLogs : dReceipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩])
+    (world : UsdcDeployedWorld ((later.step last).append postD).BoundaryAt usdcProxy W completed.state)
+    (upgrades : UpgradesWithinFrom usdcProxy W ((later.step last).append postD).rawNodes)
+    (apartSlot : ImplSlotApart usdcProxy ((later.step last).append postD).rawNodes)
+    (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
+      query.recover ≠ .ok UniswapV2Pair.Creation.pairAddress)
+    (pairFresh : UniswapV2Pair.WriterFreshKeys (fun _ => False)
+      (UniswapV2Pair.pairMidTouchedKeysIn UniswapV2Pair.Creation.pairAddress
+        ((MidHistoryTraceIn.tail last beforeCut).append postD)))
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)
+        usdcProxy UniswapV2Pair.Creation.pairAddress,
+      executeEcrecover query.actualEvm ≠
+        .ok gasEcrecover UniswapV2Pair.Creation.pairAddress.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).settledFrames →
+      G.sevm.currentTarget = usdcProxy →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = UniswapV2Pair.Creation.pairAddress →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
+    PairUsdcAllowQuiet UniswapV2Pair.Creation.pairAddress usdcProxy trace := by
+  let full := (((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD
+  let front := ((beforeV1.step v1Block).append v1ToC).step first
+  let deployed := (later.step last).append postD
+  have rawEq : full.rawFrames = front.rawFrames ++ deployed.rawFrames := by
+    simp only [full, front, deployed, ConfiguredHistoryTraceIn.rawFrames_append,
+      ConfiguredHistoryTraceIn.rawFrames, List.append_assoc]
+  have settledEq : full.settledFrames = front.settledFrames ++ deployed.settledFrames := by
+    simp only [full, front, deployed, ConfiguredHistoryTraceIn.settledFrames_append,
+      ConfiguredHistoryTraceIn.settledFrames, List.append_assoc]
+  have v1Class : V1RawWriteClass usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace) full.rawFrames :=
+    ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys full BodyStageCapabilities.historical
+      (pairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (fun g observed => (mem_pairTouchedSpenders trace).mpr observed) v1Faithful v1FixedApart
+  obtain ⟨_, _, seed⟩ := original_pair_allowance_seed_of_v1_constructor_output_of_v1Class
+    full initialApart v1Fresh v1Block v1Cut v1ToC first afterCut later last beforeCut
+    (fun R member => ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+      ((beforeV1.step v1Block).append v1ToC) first afterCut later last beforeCut postD member)
+    cBody dBody cBloom dBloom receiptAt succeeded slotsApart constructorOutput
+    noUpgraded v1Class initApart approveEvidence hnumber htime hfactory
+    dReceiptAt dSucceeded dLogs
+  obtain ⟨installed, initialized⟩ := original_pair_checkpoint_of_receipt
+    last beforeCut dBody hnumber htime hfactory dReceiptAt dSucceeded dLogs
+  have proxyApart := ConfiguredHistoryTraceIn.proxyRowsApart (P := usdcProxy)
+    deployed BodyStageCapabilities.historical (fun selected => selected.bal_none) slotsApart
+  have codes := ConfiguredHistoryTraceIn.usdc_nodeCodes deployed
+    BodyStageCapabilities.historical (fun selected => selected.bal_none) world upgrades apartSlot
+  have rawClass : UsdcRawRowWriteClass usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      deployed.rawFrames deployed.rawNodes := by
+    exact ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys_on full deployed
+      (fun _ member => by rw [rawEq]; exact List.mem_append_right _ member)
+      BodyStageCapabilities.historical (fun _ selected => HistFork.neutral selected)
+      codes proxyApart (pairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (fun g observed => (mem_pairTouchedSpenders trace).mpr observed)
+      v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
+  have excludedPost : ∀ query : RetainedOldOwnerNativeQuery deployed usdcProxy
+      UniswapV2Pair.Creation.pairAddress,
+      executeEcrecover query.actualEvm ≠
+        .ok gasEcrecover UniswapV2Pair.Creation.pairAddress.toB256.toBytes := by
+    intro query
+    let original : RetainedOldOwnerNativeQuery full usdcProxy
+        UniswapV2Pair.Creation.pairAddress :=
+      { query with
+        before := front.settledFrames ++ query.before
+        position := by rw [settledEq, query.position, List.append_assoc] }
+    exact excluded original
+  intro g tracked
+  exact UniswapV2PairUsdcOwners.mid_history_allowance_zero_of_rawClass
+    later last beforeCut postD world upgrades apartSlot (by decide)
+    senderExcluded (by decide)
+    (by rw [UniswapV2Pair.pairSem_image, installed]) initialized pairFresh
+    (by intro f _; cases f <;> decide) rawClass
+    (fun G member target => initApart G
+      (by rw [rawEq]; exact List.mem_append_right _ member) target)
+    excludedPost
+    (fun G member => oldReady G
+      (by rw [settledEq]; exact List.mem_append_right _ member)) tracked (seed g tracked)
+
+/-- The actual-key original-history P1 endpoint derives the initial V1 world
+from the constructor and original receipt, preserving the later supplied runtime
+boundaries and all original historical authentication obligations. -/
+theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_constructor_bootstrap
+    {checkpoint B future : BlockChain} {cfg : ChainConfig}
+    {initial : HistoricalMappingKey → Prop} {W : List UsdcDeployedEntry}
+    {v1Origin v1Completed origin completed pre post : BlockChain}
+    (beforeV1 : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint v1Origin)
+    (v1Block : ConfiguredBlockTraceIn HistFork mainnetChainConfig v1Origin v1Completed)
+    (v1Cut : v1Block.bodyTrace.transactions.TxSplit 30)
+    (v1ToC : ConfiguredHistoryTraceIn HistFork mainnetChainConfig v1Completed origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (postD : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post B)
+    (trace : ConfiguredHistoryTrace cfg B future)
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (v1Fresh : V1MappingFreshKeys usdcProxy ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
+    (dBloom : last.block.header.bloom = HistoricalBloomExclusion.observedDBloom)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace))
+    (constructorOutput : v1Cut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈ later.receiptLogs,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV1MappingKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      v1FixedWriteSlots = true)
+    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV2CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV2_1CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      (actualV22CoveredKeys usdcProxy
+        ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)) = true)
+    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      modernFixedWriteSlots = true)
+    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ UniswapV2Pair.Creation.pairAddress) ∨
+      (∀ entry ∈ later.receiptLogs,
+        V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace) entry))
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    {dReceipt : Fin 5 × Receipt}
+    (dReceiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some dReceipt)
+    (dSucceeded : dReceipt.2.succeeded = true)
+    (dLogs : dReceipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩])
+    (boundary : ∀ e ∈ W, ((later.step last).append postD).BoundaryAt e.base e.pre)
+    (installed : ∀ e ∈ W, e.base.getCode e.adr = e.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (apart : ∀ e ∈ W, e.adr ≠ usdcProxy)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ originalV1WorldEntries completed.state W,
+        l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre)
+    (upgrades : UpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
+      ((later.step last).append postD).rawNodes)
+    (apartSlot : ImplSlotApart usdcProxy ((later.step last).append postD).rawNodes)
+    (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
+      query.recover ≠ .ok UniswapV2Pair.Creation.pairAddress)
+    (pairFresh : UniswapV2Pair.WriterFreshKeys (fun _ => False)
+      (UniswapV2Pair.pairMidTouchedKeysIn UniswapV2Pair.Creation.pairAddress
+        ((MidHistoryTraceIn.tail last beforeCut).append postD)))
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD)
+        usdcProxy UniswapV2Pair.Creation.pairAddress,
+      executeEcrecover query.actualEvm ≠
+        .ok gasEcrecover UniswapV2Pair.Creation.pairAddress.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).settledFrames →
+      G.sevm.currentTarget = usdcProxy →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = UniswapV2Pair.Creation.pairAddress →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
+    PairUsdcAllowQuiet UniswapV2Pair.Creation.pairAddress usdcProxy trace := by
+  let full := (((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD
+  have impl := ImplV1Lifetime.code_before_c22_of_creation_cut v1Block v1Cut v1ToC
+    first afterCut BodyStageCapabilities.historical constructorOutput
+  have early : last.block.header.timestamp < mainnetCancunTimestamp := by
+    rw [htime]
+    decide
+  have rootsIn : ∀ R ∈ (MidHistoryTraceIn.tail first afterCut).settledRoots,
+      R ∈ full.settledRoots := by
+    intro R member
+    apply ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+      ((beforeV1.step v1Block).append v1ToC) first afterCut later last beforeCut postD
+    apply List.mem_append_left
+    rw [MidHistoryTraceIn.append_settledRoots]
+    exact List.mem_append_left _ member
+  obtain ⟨_, proxy, implementation, word⟩ := original_proxy_block_end_of_constructor_receipt
+    full initialApart v1Fresh first afterCut later last rootsIn early cBody cBloom
+    receiptAt succeeded slotsApart impl
+  have world := original_v1_deployed_world ((later.step last).append postD) W
+    proxy implementation word boundary installed impls apart lib
+  exact pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
+    beforeV1 v1Block v1Cut v1ToC first afterCut later last beforeCut postD trace
+    initialApart v1Fresh cBody dBody cBloom dBloom receiptAt succeeded slotsApart
+    constructorOutput noUpgraded v1Faithful v1FixedApart
+    v2Faithful v21Faithful v22Faithful modernFixedApart initApart approveEvidence
+    hnumber htime hfactory dReceiptAt dSucceeded dLogs world upgrades apartSlot
+    senderExcluded pairFresh excluded oldReady
+
 end Blanc.Composition.UniswapV2PairUsdcWeth9
