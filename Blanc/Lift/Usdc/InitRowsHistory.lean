@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.InitReachV1
+import Blanc.Lift.Usdc.InitV1KeyBounds
 import Blanc.Lift.Usdc.ProxyWritesHistory
 
 /-!
@@ -205,10 +205,85 @@ theorem initFrame_sstore {G N : Exec.Deriv} (hpc : G.pc = 0)
     · rw [List.mem_singleton] at hs
       exact use (InitReachV2_2.initV2_reach eraseP hs run hT) e fun _ h => .inr (.inl ⟨hs, h⟩)
 
+/-- Every actual initializer store avoids the implementation slot, except possibly
+the explicitly identified mapping writes of `initializeV2_2`. No separation of
+unexecuted calldata keys is assumed. -/
+theorem initFrame_sstore_ne_implSlot_or_migration {G N : Exec.Deriv} (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (fresh : Exec.FreshEntry G.sevm G.devm)
+    (gas : G.devm.gasMeasure < 2 ^ 256) (init : UsdcInitFrame G)
+    (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? N = some w) :
+    w.key ≠ implSlot ∨ G.sevm.code = Impl.code ∧ initSelWord G.sevm = 0x430239b4 ∧
+      InitReachV2_2.MigrationKey G.sevm w.key := by
+  obtain ⟨hat, rest, hstack⟩ := successfulSstore?_decoded found
+  obtain ⟨stack, memory⟩ := fresh
+  have erase : ∀ {s d n d'}, StepIn G s d n d' → Ninst.Run s d n d' := fun h => StepIn.toRun h
+  have eraseP : ∀ {s d n d'}, FreePtr.PotStep (StepIn G) s d n d' → Ninst.Run s d n d' :=
+    fun h => StepIn.toRun h.1
+  have use : ∀ {T : Conf},
+      (∀ key value S, T.d.stack = key :: value :: S → key ≠ implSlot) →
+      T.d = N.devm → w.key ≠ implSlot := by
+    intro T safe e
+    exact safe w.key w.value rest (e ▸ hstack)
+  rcases init with ⟨code, sel⟩ | ⟨code, sel⟩ | ⟨code, sel⟩ | ⟨code, sel⟩
+  · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot ImplV1.cert_check hpc code hsg stack memory
+      gas chain hat
+    have hs : Blanc.Sevm.selector G.sevm = 0x3357162b := by
+      rw [← selV1T_root]
+      exact List.mem_singleton.mp sel
+    exact .inl (use (InitV1KeyBounds.initV1_reach_ne_implSlot_concrete erase hs run hT) e)
+  · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2.cert_check hpc code hsg stack memory
+      gas chain hat
+    change selV2T.eval _ ∈ [0x3357162b, 0xd608ea64] at sel
+    rw [selV2T_root_selWord] at sel
+    rcases List.mem_cons.mp sel with hs | hs
+    · exact .inl (use (Init06.init_reach_V2_ne_implSlot erase hs run hT) e)
+    · rw [List.mem_singleton] at hs
+      exact .inl (use (InitReachV2.initV2_reach_ne_implSlot eraseP hs run hT) e)
+  · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2_1.cert_check hpc code hsg stack
+      memory gas chain hat
+    change selV2T.eval _ ∈ [0x3357162b, 0xd608ea64] at sel
+    rw [selV2T_root_selWord] at sel
+    rcases List.mem_cons.mp sel with hs | hs
+    · exact .inl (use (Init06.init_reach_V2_1_ne_implSlot erase hs run hT) e)
+    · rw [List.mem_singleton] at hs
+      exact .inl (use (InitReachV2_1.initV2_reach_ne_implSlot eraseP hs run hT) e)
+  · obtain ⟨T, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
+      gas chain hat
+    change selV2T.eval _ ∈ [0x3357162b, 0x430239b4, 0xd608ea64] at sel
+    rw [selV2T_root_selWord] at sel
+    rcases List.mem_cons.mp sel with hs | hs
+    · exact .inl (use (Init06.init_reach_V2_2_ne_implSlot erase hs run hT) e)
+    rcases List.mem_cons.mp hs with hs | hs
+    · rcases InitReachV2_2.initV2_2_reach_ne_implSlot_or_mapping eraseP hs run hT
+          w.key w.value rest (e ▸ hstack) with safe | mapping
+      · exact .inl safe
+      · exact .inr ⟨code, hs, mapping⟩
+    · rw [List.mem_singleton] at hs
+      exact .inl (use (InitReachV2_2.initV2_reach_ne_implSlot eraseP hs run hT) e)
+
 section History
 
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr} {W : List UsdcDeployedEntry} {pair : Adr} {Tr : Adr → Prop}
+
+/-- History admission supplies the entry conditions for the exact initializer
+classifier, at every raw store and without requiring the frame to succeed. -/
+theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_migration
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) (init : UsdcInitFrame node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ node.sevm.code = Impl.code ∧
+      initSelWord node.sevm = 0x430239b4 ∧ InitReachV2_2.MigrationKey node.sevm write.key := by
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+  obtain ⟨pc, -, hsg, fresh, gas⟩ := history.rawFrame_entryFacts capabilities root inFrames
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  have rootInit : UsdcInitFrame root := by
+    simpa only [UsdcInitFrame, same] using init
+  rw [same]
+  exact initFrame_sstore_ne_implSlot_or_migration pc hsg fresh gas rootInit chain found
 
 /-- **`InitRowWritesNonInc` from the frame-local key separation.** -/
 theorem ConfiguredHistoryTraceIn.initRowWritesNonInc

@@ -330,4 +330,46 @@ theorem InitReachV2_2.initV2_reach_ne_implSlot
     ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot :=
   (InitReachV2_2.initV2_reach_range erase sel run hT).ne_implSlot
 
+namespace InitReachV2_2
+
+/-- The only nonliteral, nonstring keys remaining in the V2.2 migration. -/
+def MigrationKey (sevm : Sevm) (key : B256) : Prop :=
+  LoopKeys sevm (arrPtr sevm) (min (arrLen sevm).toNat (2 ^ 32)) key ∨
+    key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∨
+    key = mapSlot sevm.currentTarget.toB256 3
+
+/-- Symbol headers, payloads, clearing and the version word avoid the implementation
+slot. Any remaining store is one of the migration's actual decoded mapping keys. -/
+theorem InitRange22.ne_implSlot_or_mapping {sevm : Sevm} {T : Conf}
+    (range : InitRange22 sevm T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key ≠ implSlot ∨ MigrationKey sevm key := by
+  intro key value rest stack
+  have cap : min (strLen sevm) (2 ^ 32) ≤ 2 ^ 160 :=
+    (Nat.min_le_right _ _).trans (Nat.pow_le_pow_right (by decide) (by decide))
+  rcases range key value rest stack with allowed | clear
+  · rcases allowed with fixed | payload | loop | own9 | own3 | version
+    · exact .inl (fixed ▸ (by decide : (5 : B256) ≠ implSlot))
+    · exact .inl (InitV1KeyBounds.range_nat_key_ne_implSlot (value := value)
+        (by decide : (5 : B256) ∈ [4, 5, 7]) cap (.inr (.inl payload)))
+    · exact .inr (.inl loop)
+    · exact .inr (.inr (.inl own9))
+    · exact .inr (.inr (.inr own3))
+    · exact .inl (version ▸ (by decide : (18 : B256) ≠ implSlot))
+  · exact .inl (InitV1KeyBounds.range_nat_key_ne_implSlot
+      (by decide : (5 : B256) ∈ [4, 5, 7]) cap (.inr (.inr clear)))
+
+/-- The actual V2.2 initializer prefix reduces slot exclusion to its mapping stores. -/
+theorem initV2_2_reach_ne_implSlot_or_mapping
+    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key ≠ implSlot ∨ MigrationKey sevm key :=
+  (initV2_2_reach_range erase sel run hT).ne_implSlot_or_mapping
+
+end InitReachV2_2
+
 end Blanc.Lift.Usdc

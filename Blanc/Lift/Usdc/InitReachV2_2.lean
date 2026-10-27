@@ -142,12 +142,12 @@ theorem lt_of_ltCheck {x y : B256} (h : B256.ltCheck x y ≠ 0) : x.toNat < y.to
     exact B256.lt_iff_toNat_lt_toNat.mp hl
   · exact (h rfl).elim
 
-theorem pass22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem pass22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i : Nat} {sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
     (hi : i ≤ aL.toNat)
     (run : Reach P Impl.cert.prog sevm ⟨St b (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G,
       Impl.t_255a_c101, []⟩ T) (hT : AtSstore T) :
-    InitStore (LoopKeys sevm aP aL.toNat) T ∨
+    (∀ key v S, T.d.stack = key :: v :: S → LoopKeys sevm aP aL.toNat key) ∨
       (∃ b' M' G', i + 1 ≤ aL.toNat ∧ Reach P Impl.cert.prog sevm
         ⟨St b' ((i + 1).toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_255a_c101, []⟩ T) ∨
       ∃ b' M' G', Reach P Impl.cert.prog sevm
@@ -173,14 +173,18 @@ theorem pass22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
   cases hg
   rcases blacklist_reach erase run hT with h | ⟨f, K', b', M', G', hK, run⟩
-  · refine .inl fun key v S' hs => .inl ⟨i, hlt, .inr (h key v S' hs)⟩
+  · refine .inl fun key v S' hs => ⟨i, hlt, .inr (h key v S' hs)⟩
   cases hK
   repeat rsa
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · refine .inl (InitStore.of_top rfl ⟨i, hlt, .inl ?_⟩)
+  · refine .inl ?_
+    intro key v S' hs
+    simp only [St.stack, List.cons.injEq] at hs
+    rw [← hs.1]
+    refine ⟨i, hlt, .inl ?_⟩
     exact mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide)
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
@@ -193,37 +197,81 @@ theorem pass22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     exact toB256_add_toB256 (a := i) (b := 1) (by have := B256.toNat_lt aL; omega)] at run
   exact .inr (.inl ⟨_, _, _, hlt, run⟩)
 
+theorem pass22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {i : Nat} {sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (hi : i ≤ aL.toNat)
+    (run : Reach P Impl.cert.prog sevm ⟨St b (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_255a_c101, []⟩ T) (hT : AtSstore T) :
+    InitStore (LoopKeys sevm aP aL.toNat) T ∨
+      (∃ b' M' G', i + 1 ≤ aL.toNat ∧ Reach P Impl.cert.prog sevm
+        ⟨St b' ((i + 1).toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_255a_c101, []⟩ T) ∨
+      ∃ b' M' G', Reach P Impl.cert.prog sevm
+        ⟨St b' (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
+  rcases pass22_keys erase hi run hT with keys | next
+  · exact .inl fun key v S hs => .inl (keys key v S hs)
+  · exact .inr next
+
 /-- The keys the code after the loop writes: the contract's own `_deprecatedBlacklisted` and
 `balanceAndBlacklistStates` rows and the version slot `18`. -/
 def AfterKeys (sevm : Sevm) (key : B256) : Prop :=
   key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∨
     key = mapSlot sevm.currentTarget.toB256 3 ∨ key = 18
 
-theorem after22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem after22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
-      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : InitStore (AfterKeys sevm) T := by
+      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S → AfterKeys sevm key := by
   repeat rsa
   obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
   cases hg
   rcases blacklist_reach erase run hT with h | ⟨f, K', b', M', G', hK, run⟩
-  · exact fun key v S' hs => .inl (.inl (h key v S' hs))
+  · exact fun key v S' hs => .inl (h key v S' hs)
   cases hK
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl
-      (.inr (.inl (mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide))))
+  · intro key v S' hs
+    simp only [St.stack, List.cons.injEq] at hs
+    rw [← hs.1]
+    exact .inr (.inl (mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide)))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inr (.inr (by decide)))
+  · intro key v S' hs
+    simp only [St.stack, List.cons.injEq] at hs
+    rw [← hs.1]
+    exact .inr (.inr (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   exact (Reach.not_ret_nilS run hT).elim
+
+theorem after22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : InitStore (AfterKeys sevm) T := by
+  intro key v S hs
+  exact .inl (after22_keys erase run hT key v S hs)
+
+theorem loop22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP aL aP r : B256} {S : List B256} {i : Nat} (hi : i ≤ aL.toNat) {b : Devm} {M : Mem}
+    {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St b (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_255a_c101, []⟩ T) (hT : AtSstore T) :
+    (∀ key v S, T.d.stack = key :: v :: S → LoopKeys sevm aP aL.toNat key) ∨
+      ∃ j b' M' G', Reach P Impl.cert.prog sevm
+        ⟨St b' (j :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
+  refine reach_loop_index (fun j d => j ≤ aL.toNat ∧ ∃ b M G,
+      d = St b (j.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G) aL.toNat (fun _ _ h => h.1) ?_
+    i _ ⟨hi, b, M, G, rfl⟩ run
+  intro j d ⟨hj, b, M, G, hd⟩ run
+  subst hd
+  rcases pass22_keys erase hj run hT with h | ⟨b', M', G', hj', run⟩ | ⟨b', M', G', run⟩
+  · exact .inl (.inl h)
+  · exact .inr ⟨_, ⟨hj', b', M', G', rfl⟩, run⟩
+  · exact .inl (.inr ⟨_, b', M', G', run⟩)
 
 theorem loop22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {sL sP aL aP r : B256} {S : List B256} {i : Nat} (hi : i ≤ aL.toNat) {b : Devm} {M : Mem}
@@ -233,15 +281,9 @@ theorem loop22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     InitStore (LoopKeys sevm aP aL.toNat) T ∨
       ∃ j b' M' G', Reach P Impl.cert.prog sevm
         ⟨St b' (j :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
-  refine reach_loop_index (fun j d => j ≤ aL.toNat ∧ ∃ b M G,
-      d = St b (j.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G) aL.toNat (fun _ _ h => h.1) ?_
-    i _ ⟨hi, b, M, G, rfl⟩ run
-  intro j d ⟨hj, b, M, G, hd⟩ run
-  subst hd
-  rcases pass22 erase hj run hT with h | ⟨b', M', G', hj', run⟩ | ⟨b', M', G', run⟩
-  · exact .inl (.inl h)
-  · exact .inr ⟨_, ⟨hj', b', M', G', rfl⟩, run⟩
-  · exact .inl (.inr ⟨_, b', M', G', run⟩)
+  rcases loop22_keys erase hi run hT with keys | next
+  · exact .inl fun key v S hs => .inl (keys key v S hs)
+  · exact .inr next
 
 /-- The keys `initializeV2_2` writes: the symbol (slot `5` and its payload words), the
 blacklisting loop's rows, and the rows the code after the loop writes. -/
@@ -249,11 +291,35 @@ def BodyKeys (sevm : Sevm) (sLen : Nat) (aP : B256) (aLen : Nat) (key : B256) : 
   key = 5 ∨ (∃ j : Nat, j < (sLen + 31) / 32 ∧ key = (5 : B256).toBytes.keccak + j.toB256) ∨
     LoopKeys sevm aP aLen key ∨ AfterKeys sevm key
 
-theorem body22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+/-- Exact initialized keys or an actual zero-clearing interval of the old symbol. -/
+def BodyRange22 (sevm : Sevm) (sLen : Nat) (aP : B256) (aLen : Nat) (T : Conf) : Prop :=
+  ∀ key v S, T.d.stack = key :: v :: S →
+    BodyKeys sevm sLen aP aLen key ∨
+      v = 0 ∧ StrStore.ClearRange 5 ((sLen + 31) / 32) key
+
+theorem BodyRange22.of_eq {sLen aLen : Nat} {aP key v : B256} {S : List B256}
+    (h : T.d.stack = key :: v :: S)
+    (hk : BodyKeys sevm sLen aP aLen key ∨
+      v = 0 ∧ StrStore.ClearRange 5 ((sLen + 31) / 32) key) :
+    BodyRange22 sevm sLen aP aLen T := by
+  intro key' v' S' h'
+  rw [h] at h'
+  simp only [List.cons.injEq] at h'
+  obtain ⟨rfl, rfl, -⟩ := h'
+  exact hk
+
+theorem BodyRange22.to_initStore {sLen aLen : Nat} {aP : B256}
+    (h : BodyRange22 sevm sLen aP aLen T) : InitStore (BodyKeys sevm sLen aP aLen) T :=
+  fun key v S hs => (h key v S hs).imp_right And.left
+
+theorem BodyRange22.below {sLen aLen : Nat} {aP : B256} {L : List SFunc} :
+    BodyRange22 sevm sLen aP aLen (T.below L) ↔ BodyRange22 sevm sLen aP aLen T := Iff.rfl
+
+theorem body22_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
     (bound : sP + sL + 32 ≤ 2 ^ 256)
     (run : Reach P Impl.cert.prog sevm ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G,
-      Impl.t_2538_c55, []⟩ T) (hT : AtSstore T) : InitStore (BodyKeys sevm sL aP aL.toNat) T := by
+      Impl.t_2538_c55, []⟩ T) (hT : AtSstore T) : BodyRange22 sevm sL aP aL.toNat T := by
   rsd
   rsx
   rsld
@@ -264,18 +330,25 @@ theorem body22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
   rw [helper_eq] at hg
   cases hg
-  rcases StrStoreCd.reach erase entries bound run hT with
-    ⟨key, v, S', h, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨f, K', b', M', G', hK, run⟩
-  · exact InitStore.of_eq h (.inl (.inl (hk.trans (by decide))))
-  · exact InitStore.of_eq h (.inr hv)
-  · exact InitStore.of_eq h (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  rcases StrStoreCd.reach_range erase entries bound run hT with
+    ⟨key, v, S', h, hk | ⟨j, hj, hk⟩ | ⟨hv, hr⟩⟩ | ⟨f, K', b', M', G', hK, run⟩
+  · exact BodyRange22.of_eq h (.inl (.inl (hk.trans (by decide))))
+  · exact BodyRange22.of_eq h (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  · exact BodyRange22.of_eq h (.inr ⟨hv, hr⟩)
   cases hK
   rsd
   iterate 2 rsx
   rw [head_eq] at run
-  rcases loop22 erase (i := 0) (Nat.zero_le _) run hT with h | ⟨j, b', M', G', run⟩
-  · exact h.mono fun k hk => .inr (.inr (.inl hk))
-  · exact (after22 erase run hT).mono fun k hk => .inr (.inr (.inr hk))
+  rcases loop22_keys erase (i := 0) (Nat.zero_le _) run hT with h | ⟨j, b', M', G', run⟩
+  · exact fun key v S hs => .inl (.inr (.inr (.inl (h key v S hs))))
+  · exact fun key v S hs => .inl (.inr (.inr (.inr (after22_keys erase run hT key v S hs))))
+
+theorem body22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
+    (bound : sP + sL + 32 ≤ 2 ^ 256)
+    (run : Reach P Impl.cert.prog sevm ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G,
+      Impl.t_2538_c55, []⟩ T) (hT : AtSstore T) : InitStore (BodyKeys sevm sL aP aL.toNat) T :=
+  (body22_range erase bound run hT).to_initStore
 
 /-- The decoded array's data pointer and length words. -/
 def arrPtr (sevm : Sevm) : B256 :=
@@ -294,10 +367,18 @@ array lengths capped at the decoder's bound `2 ^ 32` (a longer one reverts befor
 def KeysInitV2_2 (sevm : Sevm) : B256 → Prop :=
   BodyKeys sevm (min (strLen sevm) (2 ^ 32)) (arrPtr sevm) (min (arrLen sevm).toNat (2 ^ 32))
 
-theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+/-- Frame-local V2.2 initializer range, with both actual decoder caps. -/
+def InitRange22 (sevm : Sevm) (T : Conf) : Prop :=
+  BodyRange22 sevm (min (strLen sevm) (2 ^ 32)) (arrPtr sevm)
+    (min (arrLen sevm).toNat (2 ^ 32)) T
+
+theorem InitRange22.to_initStore (h : InitRange22 sevm T) :
+    InitStore (KeysInitV2_2 sevm) T := BodyRange22.to_initStore h
+
+theorem wrap22_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T := by
+    (hT : AtSstore T) : InitRange22 sevm T := by
   rsd
   iterate 10 rsx
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
@@ -356,10 +437,16 @@ theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   have hs : min (strLen sevm) (2 ^ 32) = strLen sevm := Nat.min_eq_left (by unfold strLen; omega)
   have ha : min (arrLen sevm).toNat (2 ^ 32) = (arrLen sevm).toNat :=
     Nat.min_eq_left (by unfold arrLen; omega)
-  unfold KeysInitV2_2
+  unfold InitRange22
   rw [hs, ha]
-  exact InitStore.below.mpr (body22 erase
+  exact BodyRange22.below.mpr (body22_range erase
     (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT')
+
+theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T :=
+  (wrap22_reach_range erase run hT).to_initStore
 
 theorem route_initV2_2 : selTree.selWalk 0x430239b4 =
     .inl (Bytes.toB256 [0x43, 0x02, 0x39, 0xb4], 162) := by
@@ -368,14 +455,20 @@ theorem route_initV2_2 : selTree.selWalk 0x430239b4 =
 /-- **V2_2 `initializeV2_2` on a prefix reach.** A reach of the V2_2 code from entry `0`, with
 empty stack and the `initializeV2_2` selector, to an `SSTORE` stops at a write of
 `KeysInitV2_2` or of zero. -/
-theorem initV2_2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem initV2_2_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T := by
+    (hT : AtSstore T) : InitRange22 sevm T := by
   rw [root_eq] at run
   obtain ⟨g, b, G', hg, run⟩ := dispatch06_reach erase sel route_initV2_2 run hT
   rw [show Impl.cert.prog[162]? = some Impl.t_0851_c162 from rfl] at hg
   cases hg
-  exact wrap22_reach erase run hT
+  exact wrap22_reach_range erase run hT
+
+theorem initV2_2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T :=
+  (initV2_2_reach_range erase sel run hT).to_initStore
 
 end Blanc.Lift.Usdc.InitReachV2_2
