@@ -3838,7 +3838,10 @@ cancellation, blacklist and established configure/mint aliases and attributes ca
 leaving existing allowed exceptions, actual
 nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
 reduction toward the full classifier; the owner and remaining mapping cases
-and check truth stay open. Both V2_2 packed-blacklist selectors are discharged;
+and check truth stay open. The covered list also includes both inherited initializers
+and the two V2.1 authorization collectors; their original-store coverage removes
+both V2.1 authorization selectors from the residual mapping-writer list.
+Both V2_2 packed-blacklist selectors are discharged;
 `initializeV2_1` is not promoted to an allowed exception.
 
 For `cancelAuthorization` in all three modern versions, including both V2_2
@@ -3992,6 +3995,18 @@ original store, root and earlier successful hash; the complement is already
 non-increasing. No comparison between a written key and a proposed digest
 selects a source. `actualModernTransferFromKeys` combines these exact populations
 by version, and the modern-family reduction now handles every transferFrom case.
+
+The V2.1 signed-transfer and receive-authorization collectors in
+[`V2_1TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2_1TransferWithAuthorizationMappingTouches.lean)
+and [`V2_1ReceiveWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2_1ReceiveWithAuthorizationMappingTouches.lean)
+derive all three reached stores from the original entry and the actual validity
+and recovery helper returns. The receive route retains its caller guard.
+The authorization flag has its ordered owner/base-16 and nonce/inner hash pair;
+each balance store has its original account/base-9 hash. Recognition tests the
+actual target, code, selector, store pc and successful store, never a digest.
+Their `actual...Keys_sound` and `actual...Keys_complete` theorems retain raw
+occurrences, including repeated keys. Finite separation truth and historical
+input binding remain separate obligations.
 
 [`V21InitializerReach`](../Blanc/Lift/Usdc/V21InitializerReach.lean) follows
 inherited `initializeV2_1` through its original dispatcher and optional transfer,
